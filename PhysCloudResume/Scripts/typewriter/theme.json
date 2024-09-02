@@ -1,0 +1,45 @@
+{
+  "title": "typewriter",
+  "description": "A monospaced theme.",
+  "author": "Christopher Culbreath <cc@physicscloud.net>",
+  "engine": "handlebars",
+  "helpers": ["helpers/*.js"],
+  "partials": [{
+    "name": "sectionHead",
+    "path": "typewriter/partials/section-head.hbs"
+  },
+  {
+  "name": "typewriterCitations",
+  "path": "typewriter/partials/typewriter-citations.hbs"
+  }
+],
+  "inherits": {
+    "md": "basis"
+  },
+  "fonts": {
+    "all": {
+      "default": [
+        "OperatorMono"
+      ],
+      "title": ["Cooper"]
+    },
+    "doc": {
+      "default": {
+        "name": "Calibri",
+        "size": 20
+      },
+      "heading1": {
+        "name": "Calibri",
+        "size": 20
+      },
+      "heading3": {
+        "name": "Calibri",
+        "size": 20
+      },
+      "title": {
+        "name": "Calibri",
+        "size": 20
+      }
+    }
+  }
+}
