@@ -1,0 +1,56 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "treenode_import",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "The unique identifier for the node."
+        },
+        "name": {
+            "type": "string",
+            "description": "The name of the node."
+        },
+        "value": {
+            "type": "string",
+            "description": "The value associated with the node. This is the only field that will be modified externally."
+        },
+        "children": {
+            "type": "array",
+            "description": "An array of child nodes, preserving the tree structure.",
+            "items": {
+                "$ref": "#/definitions/ExportableNode"
+            }
+        }
+    },
+    "required": ["id", "name", "value"],
+    "additionalProperties": false,
+    "definitions": {
+        "ExportableNode": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "The unique identifier for the child node."
+                },
+                "name": {
+                    "type": "string",
+                    "description": "The name of the child node."
+                },
+                "value": {
+                    "type": "string",
+                    "description": "The value associated with the child node."
+                },
+                "children": {
+                    "type": "array",
+                    "description": "An array of child nodes under this node, recursively preserving the tree structure.",
+                    "items": {
+                        "$ref": "#/definitions/ExportableNode"
+                    }
+                }
+            },
+            "required": ["id", "name", "value"],
+            "additionalProperties": false
+        }
+    }
+}
