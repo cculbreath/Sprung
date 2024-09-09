@@ -9,41 +9,56 @@ import PDFKit
 import SwiftUI
 
 struct ResumePDFView: View {
-    var resume: Resume
+  @Bindable var resume: Resume
+  @State private var needsUpdate: Bool = false
 
-    var body: some View {
-        VStack {
-            if let pdfView = resume.displayPDF() {
-                PDFKitWrapper(pdfView: pdfView)
-                    .frame(
-                        maxWidth: CGFloat.infinity, maxHeight: CGFloat.infinity)
-            } else {
-                Text("No PDF available.")
+  var body: some View {
+    @State var isUpdating = resume.isUpdating
+
+    VStack {
+      if let pdfData = resume.pdfData {
+        PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
+          .frame(maxWidth: .infinity, maxHeight: .infinity).overlay(alignment: .topTrailing){
+            if isUpdating {
+              ProgressView().scaleEffect(0.5, anchor: .center).padding(.top, 2).padding(.trailing, 2)
             }
-        }
-        .onAppear {
-            if resume.pdfData == nil {
-                if let fileURL = Bundle.main.url(
-                    forResource: "resume", withExtension: "pdf")
-                {
-                    resume.loadPDF(from: fileURL)
-                }
-            }
-        }
+          }
+      } else {
+        Text("No PDF available")
+      }
     }
+    .onAppear {
+      if resume.pdfData == nil {
+        if let fileURL = FileHandler.readPdfUrl() {
+          resume.loadPDF(from: fileURL)
+        }
+      }
+    }
+    .onChange(of: resume.pdfData) {
+      needsUpdate.toggle()  // Update the view when pdfData changes
+    }
+  }
+}
+
+func pdfViewer(pdfData: Data) -> PDFView {
+  let pdfDoc = PDFDocument(data: pdfData)
+  let pdfView = PDFView()
+  pdfView.document = pdfDoc
+  pdfView.autoScales = true
+  return pdfView
 }
 
 struct PDFKitWrapper: NSViewRepresentable {
-    let pdfView: PDFView
+  let pdfView: PDFView
 
-    func makeNSView(context: Context) -> PDFView {
-        return pdfView
-    }
+  func makeNSView(context: Context) -> PDFView {
+    return pdfView
+  }
 
-    func updateNSView(_ nsView: PDFView, context: Context) {
-        // Update the NSView if needed
-    }
+  func updateNSView(_ nsView: PDFView, context: Context) {
+    // Update the NSView if needed
+    nsView.document = pdfView.document
+  }
 
-    // Define the associated type explicitly
-    typealias NSViewType = PDFView
+  typealias NSViewType = PDFView
 }
