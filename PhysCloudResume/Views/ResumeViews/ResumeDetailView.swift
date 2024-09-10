@@ -3,18 +3,23 @@ import SwiftUI
 
 struct ResumeDetailView: View {
   @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-  @Binding var selRes: Resume
+  @Binding var selRes: Resume?
   @Binding var tab: TabList
   let rootNode: TreeNode
   @Binding var isWide: Bool
-
+  @State var dummypopup: Bool = false
   var body: some View {
 
     ScrollView {
       VStack(alignment: .leading, spacing: 10) {
 
         //        AiPanelView(res: $selRes)  // Pass the unwrapped Binding
-        ResRefView(selRes: $selRes, tab: $tab)  // Pass the unwrapped Binding
+        ResRefView(
+          refPopup: $dummypopup,
+          isSourceExpanded: false,
+          selRes: $selRes,
+          tab: $tab
+        )  // Pass the unwrapped Binding
       }
       nodeView(rootNode)
     }
@@ -60,7 +65,7 @@ struct NodeWithChildrenView: View {
           HeaderTextRow()
         } else {
           AlignedTextRow(
-            leadingText: node.name, trailingText: nil,
+            leadingText: "\(node.name)", trailingText: nil,
             nodeStatus: node.status
           )
         }
@@ -227,7 +232,7 @@ struct NodeLeafView: View {
           }
         } else {
           AlignedTextRow(
-            leadingText: "\(node.name) \(node.myIndex)", trailingText: node.value,
+            leadingText: "\(node.myIndex) \(node.name)", trailingText: node.value,
             nodeStatus: node.status)
 
           Spacer()
@@ -269,11 +274,9 @@ struct NodeLeafView: View {
     .cornerRadius(5)
   }
   private func deleteNode(node: TreeNode) {
-    do {
-      try node.deleteNode(context: context)  // Call the deletion function on the node
-    } catch {
-      print("Failed to delete node: \(error)")
-    }
+
+      TreeNode.deleteTreeNode(node: node, context: context)  // Call the deletion function on the node
+
   }
   private func startEditing() {
     tempValue = node.value

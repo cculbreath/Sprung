@@ -4,13 +4,15 @@ import SwiftData
   var jobApps: [JobApp] = []
   var selectedApp: JobApp?
   var form = JobAppForm()
+  var resStore: ResStore?
 
   private var modelContext: ModelContext?
   init() {
 
   }
-  func initialize(context: ModelContext) {
+  func initialize(context: ModelContext, resStore: ResStore) {
     modelContext = context
+    self.resStore = resStore
     loadJobApps()  // Load data from the database when the store is initialized
   }
 
@@ -42,10 +44,18 @@ import SwiftData
   }
   func deleteJobApp(_ jobApp: JobApp) {
     if let index = jobApps.firstIndex(of: jobApp) {
-      jobApps.remove(at: index)
-      modelContext!.delete(jobApp)
-      saveContext()
+      if let resStore = resStore {
+        jobApp.resumes.forEach { resume in
+          resStore.deleteRes(resume)
+        }
+        jobApps.remove(at: index)
+        modelContext!.delete(jobApp)
+        saveContext()  //Error thrown here}
+      } else {
+        print("ResStore ref not here!")
+      }
     }
+
   }
   private func populateFormFromObj(_ jobApp: JobApp) {
     form.populateFormFromObj(jobApp)

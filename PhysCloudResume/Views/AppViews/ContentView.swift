@@ -19,6 +19,13 @@ struct ContentView: View {
       ) { selApp in
         Text(selApp.job_position)
           .tag(selApp)
+          .contextMenu {
+            Button(role: .destructive) {
+              jobAppStore.deleteJobApp(selApp)
+            } label: {
+              Label("Delete", systemImage: "trash")
+            }
+          }
       }
       .listStyle(.sidebar)
       .navigationTitle("Job Applications")
@@ -59,14 +66,16 @@ struct ContentView: View {
       )
     }
     .onAppear {
-      jobAppStore.initialize(context: modelContext)
       resRefStore.initialize(context: modelContext)
       resStore.initialize(context: modelContext)
+      jobAppStore.initialize(context: modelContext, resStore: resStore)
 
     }
     .environment(jobAppStore).environment(resRefStore).environment(resStore)
   }
 }
+
+
 
 struct BlackOnHoverButtonStyle: ButtonStyle {
   @State private var isHovered = false

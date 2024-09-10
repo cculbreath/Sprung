@@ -5,7 +5,6 @@ struct buildToolbar: ToolbarContent {
   @Environment(ResStore.self) private var resStore: ResStore
   @Environment(ResRefStore.self) private var resRefStore: ResRefStore
 
-
   @Binding var selectedTab: TabList
   @Binding var selRes: Resume?
   @State var saveIsHovering: Bool = false
@@ -25,14 +24,14 @@ struct buildToolbar: ToolbarContent {
       )
 
       switch selectedTab {
-      case .listing:
-        listingToolbarItem()
-      case .resume:
-        resumeToolbarContent(selRes: $selRes)
-      case .coverLetter, .submitApp:
-        emptyToolbarItem()
-      case .none:
-        emptyToolbarItem()
+        case .listing:
+          listingToolbarItem()
+        case .resume:
+          resumeToolbarContent(selRes: $selRes)  // This stays the same
+        case .coverLetter, .submitApp:
+          emptyToolbarItem()
+        case .none:
+          emptyToolbarItem()
       }
     }
   }
@@ -95,50 +94,58 @@ struct buildToolbar: ToolbarContent {
   @ToolbarContentBuilder
   func resumeToolbarContent(selRes: Binding<Resume?>) -> some ToolbarContent {
     if let selectedApp = jobAppStore.selectedApp {
-      var myRes = selRes.wrappedValue ?? {
-        resStore
-          .create(jobApp: selectedApp, sources: resRefStore.defaultSources)
-      }()
-      ToolbarItem(placement: .automatic) {
-        Spacer()
-      }
-    
-      let unwrappedSelRes = Binding(
-        get: { selRes.wrappedValue ?? selectedApp.resumes.first! },  // Getter: Retrieves the value or defaults
-        set: { selRes.wrappedValue = $0 }  // Setter: Updates the binding
+      // Ensure selRes has a value if it is nil
+      let unwrappedSelRes = Binding<Resume?>(
+        get: { selRes.wrappedValue ?? selectedApp.resumes.first },  // Return the first resume or nil
+        set: { selRes.wrappedValue = $0 }  // Update the binding
       )
+      emptyToolbarItem()
+      // ToolbarItem: Picker for resume selection
       ToolbarItem(placement: .automatic) {
         Picker(
           "Load existing résumé draft",
           selection: unwrappedSelRes
         ) {
-          Text("None").tag(nil as Resume?)  // Handle the nil case explicitly
+          Text("None").tag(nil as Resume?)
           ForEach(selectedApp.resumes, id: \.self) { resume in
             Text("Created at \(resume.createdDateString)")
-              .tag(Optional(resume))  // Handle the non-nil cases
+              .tag(Optional(resume))
               .help("Select a resume to customize")
           }
-        }.frame(maxHeight: .infinity, alignment: .trailing)
-        Divider()
-      }
-      ToolbarItem(placement: .automatic) {
-
-
-        CustomStepper(value: $attention, range: 0...4).padding(.vertical, 0).overlay{
-          Text("Attention Grab").font(.caption2).padding(.vertical, 0).lineLimit(1)  // Ensure it stays on one line
-            .minimumScaleFactor(0.9).fontWeight(.light).offset(y: 18)
-        }.offset(y: -1).padding(.trailing, 2).padding(.leading, 6)
-
+        }
+        .frame(maxHeight: .infinity, alignment: .trailing)
       }
 
-
-
+      // ToolbarItem: Custom Stepper for attention control
       ToolbarItem(placement: .automatic) {
-        if (selRes.wrappedValue?.rootNode) != nil {
+        CustomStepper(value: $attention, range: 0...4)
+          .padding(.vertical, 0)
+          .overlay {
+            Text("Attention Grab")
+              .font(.caption2)
+              .padding(.vertical, 0)
+              .lineLimit(1)
+              .minimumScaleFactor(0.9)
+              .fontWeight(.light)
+              .offset(y: 18)
+          }
+          .offset(y: -1)
+          .padding(.trailing, 2)
+          .padding(.leading, 6)
+      }
+
+      // ToolbarItem: AiFunctionView or fallback text
+      ToolbarItem(placement: .automatic) {
+        if selRes.wrappedValue?.rootNode != nil {
           AiFunctionView(res: unwrappedSelRes, attn: $attention)
         } else {
-          Text("Somehow, no app :(")  // Fallback text
+          Text(":(")
         }
+      }
+    } else {
+      // Optional: Provide default toolbar content in case there's no selectedApp
+      ToolbarItem(placement: .automatic) {
+        Text("No job application selected")
       }
     }
   }

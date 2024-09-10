@@ -4,12 +4,12 @@ import SwiftUI
 struct ResRefView: View {
   @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
   @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-
-  @State var isSourceExpanded: Bool = false
+  @Binding var refPopup: Bool
+  @State var isSourceExpanded: Bool
   @State var isSheetPresented: Bool = false
   var isSourceHovering = false
   var buttonHover: Bool = false
-  @Binding var selRes: Resume
+  @Binding var selRes: Resume?
   @Binding var tab: TabList
   @State var newSourceName: String = ""
   @State var newSourceContent: String = ""
@@ -29,16 +29,18 @@ struct ResRefView: View {
         Text("Résumé Source Documents")
           .font(.headline)
         Spacer()
-        if !(selRes.hasValidRefsEnabled) {
-          HStack {
-            Spacer().frame(minWidth: 10)
-            Text("Choose one resume source and one JSON source")
-              .foregroundColor(.purple)
-              .font(.caption)
-              .multilineTextAlignment(.trailing).fontWeight(.light).frame(minWidth: 150)
-            Image(systemName: "exclamationmark.triangle").foregroundColor(.purple).fontWeight(
-              .light
-            ).font(.system(size: 20))
+        if let selRes = selRes {
+          if !(selRes.hasValidRefsEnabled) {
+            HStack {
+              Spacer().frame(minWidth: 10)
+              Text("Choose one resume source and one JSON source")
+                .foregroundColor(.purple)
+                .font(.caption)
+                .multilineTextAlignment(.trailing).fontWeight(.light).frame(minWidth: 150)
+              Image(systemName: "exclamationmark.triangle").foregroundColor(.purple).fontWeight(
+                .light
+              ).font(.system(size: 20))
+            }
           }
         }
       }
@@ -62,7 +64,7 @@ struct ResRefView: View {
         LazyVStack(alignment: .leading, spacing: 0) {
           ForEach(resRefStore.resRefs, id: \.self) { child in
             Divider()
-            SourceRowView(sourceNode: child, res: selRes, tab: $tab)
+            SourceRowView(sourceNode: child, res: $selRes, tab: $tab)
               .transition(.move(edge: .top))
           }
           HStack {
@@ -154,6 +156,13 @@ struct ResRefView: View {
                       resRefStore
                         .addResRef(newSource, res: selRes)
                       isSheetPresented = false
+                      if (resRefStore.areRefsOk) {
+                        print("refs okay")
+                        $refPopup.wrappedValue = false
+                      }
+                      else {
+                        print("refs not okay")
+                      }
                     }
                     .buttonStyle(.borderedProminent)
                     Spacer()
@@ -175,11 +184,16 @@ struct SourceRowView: View {
   @State var sourceNode: ResRef
   @State private var isButtonHovering = false
   @State private var isRowHovering = false
-  @Bindable var res: Resume
+  @Binding var res: Resume?
   //    @Query var sourceNodes: [ResRef]
   @Binding var tab: TabList
   var isChecked: Bool {
-    return res.enabledSources.contains(sourceNode)
+    if res == nil {
+      return false
+    }
+    else {
+      return res!.enabledSources.contains(sourceNode)
+    }
   }
 
   var body: some View {
@@ -187,7 +201,7 @@ struct SourceRowView: View {
       HStack(spacing: 15) {
         ToggleTextRow(
           leadingText: sourceNode.content,
-          res: res,
+          res: $res,
           sourceNode: sourceNode
         )
         VStack(alignment: .leading) {
@@ -233,28 +247,35 @@ struct SourceRowView: View {
 
 struct ToggleTextRow: View {
   let leadingText: String
-  @Bindable var res: Resume
+  @Binding var res: Resume?
   @State var sourceNode: ResRef
 
   var body: some View {
-    Toggle(
-      "",
-      isOn: Binding<Bool>(
-        get: { res.enabledSources.contains(sourceNode) },
-        set: { newValue in
-          if newValue {
-            if !res.enabledSources.contains(sourceNode) {
-              res.enabledSources.append(sourceNode)
+    if let res = res {
+      Toggle(
+        "",
+        isOn: Binding<Bool>(
+          get: { res.enabledSources.contains(sourceNode) },
+          set: { newValue in
+            if newValue {
+              if !res.enabledSources.contains(sourceNode) {
+                res.enabledSources.append(sourceNode)
+              }
+            } else {
+              if let index = res.enabledSources.firstIndex(of: sourceNode) {
+                res.enabledSources.remove(at: index)
+              }
             }
-          } else {
-            if let index = res.enabledSources.firstIndex(of: sourceNode) {
-              res.enabledSources.remove(at: index)
-            }
+            //          res.enabledSources.forEach { print($0.name + $0.type.rawValue) }  // This should now run when the toggle is changed
           }
-//          res.enabledSources.forEach { print($0.name + $0.type.rawValue) }  // This should now run when the toggle is changed
-        }
+        )
       )
-    )
-    .toggleStyle(.switch)
+      .toggleStyle(.switch)
+    }
+    
+    else{
+      EmptyView()
+    }
   }
 }
+

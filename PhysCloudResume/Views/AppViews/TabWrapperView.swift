@@ -3,10 +3,14 @@ import SwiftUI
 
 struct TabWrapperView: View {
   @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(ResStore.self) private var resStore: ResStore
+  @Environment(ResRefStore.self) private var resRefStore: ResRefStore  // Added resRefStore
+
+
   @State private var listingButtons: SaveButtons = SaveButtons(
     edit: false, save: false, cancel: false)
   @State private var selectedTab: TabList = TabList.listing
-  //    @State var llm: LLM
+  @State private var refPopup: Bool = false
 
   var body: some View {
     let selResBinding = Binding(
@@ -54,10 +58,27 @@ struct TabWrapperView: View {
         selRes: selResBinding,
         listingButtons: $listingButtons
       )
-    }  //.environment(llm)
+    }.onAppear {
+      if selResBinding.wrappedValue == nil, let selectedApp = jobAppStore.selectedApp {
+        if resRefStore.areRefsOk {
+          selResBinding.wrappedValue = resStore.create(
+            jobApp: selectedApp,
+            sources: resRefStore.defaultSources
+          )
+        }
+        else { refPopup = true}
+      }
+    }.sheet(isPresented: $refPopup){
+      ResRefView(
+        refPopup: $refPopup,
+        isSourceExpanded: true,
+        selRes: selResBinding,
+        tab: $selectedTab
+      )
+      .padding()
+    }
   }
 }
-
 struct DummyView: View {
   var myText: String
   var body: some View {
@@ -66,13 +87,7 @@ struct DummyView: View {
   }
 }
 
-enum TabList: String {
-  case listing = "Job Listing"
-  case resume = "Customize Résumé"
-  case coverLetter = "Compose Cover Letter"
-  case submitApp = "Submit Application"
-  case none = "None"
-}
+
 
 struct SaveButtons {
   var edit: Bool = false

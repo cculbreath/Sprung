@@ -19,10 +19,10 @@ enum LeafStatus: String, Codable, Hashable {
 
   private(set) var myIndex: Int = -1
   private var childIndexer = 0
-  @Relationship(deleteRule: .cascade, inverse: \TreeNode.parent) private(set)
     var children: [TreeNode]? = nil
+  @Relationship(deleteRule: .cascade, inverse:\TreeNode.children)
   weak var parent: TreeNode? = nil
-  var resume: Resume
+  @Relationship(deleteRule: .noAction) var resume: Resume
   var status: LeafStatus
   private(set) var nodeDepth: Int
 
@@ -150,30 +150,18 @@ enum LeafStatus: String, Codable, Hashable {
     // Save the context to persist changes
     try context.save()
   }
-  func deleteNode(context: ModelContext) throws {
-    // Ensure the node has a parent
-    guard let parent = self.parent else {
-      print("Cannot delete root node")
-      return
+  static func deleteTreeNode(node: TreeNode, context: ModelContext) {
+    // First, recursively delete all children
+    if let children = node.children {
+      for child in children {
+        deleteTreeNode(node: child, context: context)
+      }
     }
-
-    // Find the index of the current node in its parent's children array
-    if let index = parent.children?.firstIndex(of: self) {
-      // Remove the node from its parent's children array
-      parent.children?.remove(at: index)
-
-      // Remove the reference to the parent
-      self.parent = nil
-
-      // Delete the node from the SwiftData context
-      context.delete(self)
-
-      // Save changes to the context
-      try context.save()
-    } else {
-      print("Node not found in parent's children array")
-    }
+    // Then delete the node itself
+    context.delete(node)
   }
+
+  
   func deepCopy(newResume: Resume) -> TreeNode {
     // Create a copy of the current node with the new resume
     let copyNode = TreeNode(

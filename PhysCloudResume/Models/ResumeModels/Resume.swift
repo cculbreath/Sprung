@@ -6,10 +6,10 @@ import SwiftUI
 @Model class Resume: Identifiable, Hashable {
   var id: String = ""
   var rootNode: TreeNode?
-  @Relationship(deleteRule: .cascade, inverse: \TreeNode.resume) var nodes: [TreeNode] = []
+  var nodes: [TreeNode] = []
   var dateCreated: Date
   weak var jobApp: JobApp?
-  var enabledSources: [ResRef]
+  @Relationship(inverse: \ResRef.enabledResumes) var enabledSources: [ResRef]
   var createdDateString: String {
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -50,14 +50,14 @@ import SwiftUI
 
     // Create a temporary variable for rootNode
   }
-  func initialize(jsonText: String) {
-    // Use the temporary variable to store the result of buildTree
-    if let jsonData = jsonText.data(using: .utf8) {  // Convert the string to Data using UTF-8 encoding
-      self.rootNode = self.buildTree(from: jsonData, res: self)
-    } else {
-      print("Cannot convert jsonText to Data")
-    }
-  }
+//  func initialize(jsonText: String) {
+//    // Use the temporary variable to store the result of buildTree
+//    if let jsonData = jsonText.data(using: .utf8) {  // Convert the string to Data using UTF-8 encoding
+//      self.rootNode = self.buildTree(from: jsonData, res: self)
+//    } else {
+//      print("Cannot convert jsonText to Data")
+//    }
+//  }
 
 
 
