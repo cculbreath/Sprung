@@ -88,7 +88,7 @@ extension Resume {
             TreeNode(
               name: "Labels", value: "",
               status: LeafStatus.isNotLeaf, resume: res))
-          for (label) in labelsArray {
+          for (index, label) in labelsArray.enumerated() {
             labels.addChild(
               TreeNode(
                 name: "", value: label, status: LeafStatus.saved, resume: res
@@ -101,7 +101,7 @@ extension Resume {
             TreeNode(
               name: "Skills and Expertise", value: "",
               status: LeafStatus.isNotLeaf, resume: res))
-          for (skill) in skillsArray {
+          for (index, skill) in skillsArray.enumerated() {
             skills.addChild(
               TreeNode(
                 name: "", value: skill, status: LeafStatus.saved, resume: res
@@ -116,7 +116,7 @@ extension Resume {
               name: "Employment", value: "",
               status: LeafStatus.isNotLeaf, resume: res))
 
-          for (job) in jobDict {
+          for (index, job) in jobDict.enumerated() {
             let jobNode =
               employment
               .addChild(
@@ -166,7 +166,7 @@ extension Resume {
               status: LeafStatus.isNotLeaf, resume: res
             )
           )
-          for schoolDict in educationArray {
+          for (index, schoolDict) in educationArray.enumerated() {
             if let institutionName = schoolDict["institution"]
               as? String
             {
@@ -200,7 +200,7 @@ extension Resume {
               status: LeafStatus.isNotLeaf, resume: res
 
             ))
-          for language in languagesArray {
+          for (index, language) in languagesArray.enumerated() {
             languageNode.addChild(
               TreeNode(
                 name: "",
@@ -217,7 +217,7 @@ extension Resume {
               status: LeafStatus.isNotLeaf, resume: res)
           )
 
-          for projectDict in projectsArray {
+          for (index, projectDict) in projectsArray.enumerated() {
             guard let projectTitle = projectDict["title"] as? String else {
               print("Skipping project with no title.")
               continue
@@ -231,7 +231,7 @@ extension Resume {
             )
 
             if let examples = projectDict["examples"] as? [[String: String]] {
-              for example in examples {
+              for (index, example) in examples.enumerated() {
                 if let exampleName = example["name"],
                   let exampleDescription = example["description"]
                 {
@@ -265,7 +265,7 @@ extension Resume {
               status: LeafStatus.isNotLeaf, resume: res
             )
           )
-          for publication in publicationsArray {
+          for (index, publication) in publicationsArray.enumerated() {
             if let journalStr = publication["journal"] as? String {
               if let yearStr = publication["year"] as? String {
                 let nameString = "\(journalStr), \(yearStr)"
@@ -289,10 +289,10 @@ extension Resume {
                   case let authorArray as [String]:
                     let authorNode = paperNode.addChild(
                       TreeNode(
-                        name: "Authors",
+                        name: "authors",
                         value: "",
                         status: LeafStatus.isNotLeaf, resume: res))
-                    for author in authorArray {
+                    for (index, author) in authorArray.enumerated() {
                       authorNode
                         .addChild(
                           TreeNode(
@@ -343,152 +343,274 @@ extension Resume {
   }
 
   func rebuildJSON() -> String {
-    var json: [String: Any] = [:]
+    var jsonString = "{\n"
 
     if let myRootNode = self.rootNode {
-      // Add back the meta field
-      json["meta"] = ["format": "FRESH@0.6.0", "version": "0.1.0"]
-
-      // Recursive function to traverse the tree
-      func traverseTreeNode(_ node: TreeNode) -> Any? {
-        var result: [String: Any] = [:]
-
-        // Sort children by myIndex
-        let sortedChildren = node.children?.sorted { $0.myIndex < $1.myIndex } ?? []
-
-        for child in sortedChildren {
-          if !child.name.isEmpty {
-            if child.status == .isNotLeaf {
-              result[child.name] = traverseTreeNode(child)
-            } else {
-              result[child.name] = child.value
-            }
-          }
+      // 1. Add "meta" dynamically
+      jsonString += """
+        "meta": {
+            "format": "FRESH@0.6.0",
+            "version": "0.1.0"
+        },
+        """
+      // 1b. Missing Labels
+      if let labelsNode = myRootNode.children?.first(where: {
+        $0.name == "Labels"
+      }) {
+        let labelsArray = labelsNode.children?.sorted(by: { $0.myIndex < $1.myIndex })
+          .compactMap { $0.value as String }
+        if let labelsArray = labelsArray, !labelsArray.isEmpty {
+          jsonString += """
+            "labels": [
+            \(labelsArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
         }
-        return result.isEmpty ? node.value : result
+      }
+      // 2. Traverse and add section-labels dynamically
+      jsonString += """
+        "section-labels": {
+        """
+      if let sectionLabelsNode = myRootNode.children?.first(where: { $0.name == "Section Labels" })
+      {
+        jsonString +=
+          sectionLabelsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap({ child in
+            guard let value = child.value as? String else { return nil }
+            return "\"\(child.name)\": \"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+          }).joined(separator: ",\n") ?? ""
+      }
+      jsonString += "\n},"
+
+      // 3. Traverse and add contact information dynamically
+      if let contactInfoNode = myRootNode.children?.first(where: { $0.name == "Contact Info" }) {
+        jsonString += """
+          "contact": {
+          """
+        jsonString +=
+          contactInfoNode.children?.compactMap({ child in
+            if child.name == "location" {
+              let locationString =
+                child.children?.compactMap({ locChild in
+                  guard let value = locChild.value as? String else { return nil }
+                  return
+                    "\"\(locChild.name)\": \"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+                }).joined(separator: ",\n") ?? ""
+              return "\"\(child.name)\": {\n\(locationString)\n}"
+            } else if let value = child.value as? String {
+              return "\"\(child.name)\": \"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+            }
+            return nil
+          }).joined(separator: ",\n") ?? ""
+        jsonString += "\n},"
       }
 
-      // Process rootNode's children
-      let sortedRootChildren = myRootNode.children?.sorted { $0.myIndex < $1.myIndex } ?? []
-      for child in sortedRootChildren {
-        switch child.name {
-          case "Section Labels":
-            json["section-labels"] = traverseTreeNode(child)
-          case "Contact Info":
-            json["contact"] = traverseTreeNode(child)
-          case "Summary":
-            if let summaryArray = child.children?.compactMap({ $0.value }), !summaryArray.isEmpty {
-              json["summary"] = summaryArray
-            }
-          case "Labels":
-            if let labelsArray = child.children?.compactMap({ $0.value }), !labelsArray.isEmpty {
-              json["labels"] = labelsArray
-            }
-          case "Skills and Expertise":
-            if let skillsArray = child.children?.compactMap({ $0.value }), !skillsArray.isEmpty {
-              json["skills-and-expertise"] = skillsArray
-            }
-          case "Employment":
-            var employmentArray: [[String: Any]] = []
-            for jobNode in child.children ?? [] {
-              var jobDict: [String: Any] = [:]
-              if !jobNode.name.isEmpty { jobDict["employer"] = jobNode.name }
-              for jobDetail in jobNode.children ?? [] {
-                if jobDetail.name == "highlights",
-                   let highlightsArray = jobDetail.children?.compactMap({ $0.value }),
-                   !highlightsArray.isEmpty {
+      // 4. Traverse and add summary dynamically
+      if let summaryNode = myRootNode.children?.first(where: { $0.name == "Summary" }) {
+        let summaryArray = summaryNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap
+        { $0.value as? String }
+        if let summaryArray = summaryArray, !summaryArray.isEmpty {
+          jsonString += """
+            "summary": [
+            \(summaryArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
+        }
+      }
+
+      // 5. Traverse and add employment dynamically (sorted by myIndex)
+      if let employmentNode = myRootNode.children?.first(where: { $0.name == "Employment" }) {
+        jsonString += """
+          "employment": [
+          """
+        let employmentArray =
+          employmentNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+            jobNode -> String? in
+            var jobDict: [String: Any] = [:]
+            if !jobNode.name.isEmpty { jobDict["employer"] = jobNode.name }
+            for jobDetail in jobNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+              if jobDetail.name == "highlights" {
+                let highlightsArray = jobDetail.children?.sorted(by: { $0.myIndex < $1.myIndex })
+                  .compactMap { $0.value as? String }
+                if let highlightsArray = highlightsArray, !highlightsArray.isEmpty {
                   jobDict[jobDetail.name] = highlightsArray
-                } else if !jobDetail.name.isEmpty {
-                  jobDict[jobDetail.name] = jobDetail.value
                 }
-              }
-              if !jobDict.isEmpty {
-                employmentArray.append(jobDict)
+              } else if !jobDetail.name.isEmpty, let value = jobDetail.value as? String {
+                jobDict[jobDetail.name] = value
               }
             }
-            json["employment"] = employmentArray
-          case "Education":
-            var educationArray: [[String: Any]] = []
-            for schoolNode in child.children ?? [] {
-              var schoolDict: [String: Any] = [:]
-              if !schoolNode.name.isEmpty { schoolDict["institution"] = schoolNode.name }
-              for schoolDetail in schoolNode.children ?? [] {
-                if !schoolDetail.name.isEmpty {
-                  schoolDict[schoolDetail.name] = schoolDetail.value
+            if !jobDict.isEmpty {
+              let jobJSON = jobDict.map { key, value -> String in
+                if let arrayValue = value as? [String] {
+                  return
+                    "\"\(key)\": [\n\(arrayValue.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))\n]"
+                } else if let stringValue = value as? String {
+                  return
+                    "\"\(key)\": \"\(stringValue.replacingOccurrences(of: "\"", with: "\\\""))\""
                 }
-              }
-              if !schoolDict.isEmpty {
-                educationArray.append(schoolDict)
-              }
+                return ""
+              }.joined(separator: ",\n")
+              return "{\n\(jobJSON)\n}"
             }
-            json["education"] = educationArray
-          case "Languages and Frameworks":
-            if let languagesArray = child.children?.compactMap({ $0.value }), !languagesArray.isEmpty {
-              json["languages"] = languagesArray
-            }
-          case "Projects and Hobbies":
-            var projectsArray: [[String: Any]] = []
-            for projectNode in child.children ?? [] {
-              var projectDict: [String: Any] = [:]
-              if !projectNode.name.isEmpty { projectDict["title"] = projectNode.name }
+            return nil
+          }.joined(separator: ",\n") ?? ""
+        jsonString += employmentArray
+        jsonString += "\n],"
+      }
 
-              var examplesArray: [[String: String]] = []
-              for example in projectNode.children ?? [] {
-                var exampleDict: [String: String] = [:]
-                for detail in example.children ?? [] {
-                  if detail.name.lowercased() == "name", !detail.value.isEmpty {
-                    exampleDict["name"] = detail.value
-                  } else if detail.name.lowercased() == "description", !detail.value.isEmpty {
-                    exampleDict["description"] = detail.value
-                  }
-                }
-                if !exampleDict.isEmpty {
-                  examplesArray.append(exampleDict)
-                }
+      // 6. Traverse and add education dynamically (sorted by myIndex)
+      if let educationNode = myRootNode.children?.first(where: { $0.name == "Education" }) {
+        jsonString += """
+          "education": [
+          """
+        let educationArray =
+          educationNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+            schoolNode -> String? in
+            var schoolDict: [String: Any] = [:]
+            if !schoolNode.name.isEmpty { schoolDict["institution"] = schoolNode.name }
+            for schoolDetail in schoolNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+              if !schoolDetail.name.isEmpty, let value = schoolDetail.value as? String {
+                schoolDict[schoolDetail.name] = value
               }
+            }
+            if !schoolDict.isEmpty {
+              let schoolJSON = schoolDict.map { key, value -> String in
+                return "\"\(key)\": \"\(value as! String)\""
+              }.joined(separator: ",\n")
+              return "{\n\(schoolJSON)\n}"
+            }
+            return nil
+          }.joined(separator: ",\n") ?? ""
+        jsonString += educationArray
+        jsonString += "\n],"
+      }
 
-              if !examplesArray.isEmpty {
-                projectDict["examples"] = examplesArray
-                projectsArray.append(projectDict)
-              }
-            }
-            json["projects-and-hobbies"] = projectsArray
-          case "Publications":
-            var publicationsArray: [[String: Any]] = []
-            for publicationNode in child.children ?? [] {
-              var publicationDict: [String: Any] = [:]
-              if !publicationNode.name.isEmpty { publicationDict["title"] = publicationNode.name }
-              for publicationDetail in publicationNode.children ?? [] {
-                if publicationDetail.name == "Authors",
-                   let authorsArray = publicationDetail.children?.compactMap({ $0.value }),
-                   !authorsArray.isEmpty {
-                  publicationDict["authors"] = authorsArray
-                } else if !publicationDetail.name.isEmpty {
-                  publicationDict[publicationDetail.name] = publicationDetail.value
-                }
-              }
-              if !publicationDict.isEmpty {
-                publicationsArray.append(publicationDict)
-              }
-            }
-            json["publications"] = publicationsArray
-          case "More Information":
-            if let moreInfoValue = child.children?.first?.value, !moreInfoValue.isEmpty {
-              json["more-info"] = moreInfoValue
-            }
-          default:
-            break
+      // 7. Traverse and add skills-and-expertise dynamically
+      if let skillsNode = myRootNode.children?.first(where: { $0.name == "Skills and Expertise" }) {
+        let skillsArray = skillsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+          $0.value as? String
+        }
+        if let skillsArray = skillsArray, !skillsArray.isEmpty {
+          jsonString += """
+            "skills-and-expertise": [
+            \(skillsArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
         }
       }
+
+      // 8. Traverse and add languages dynamically
+      if let languagesNode = myRootNode.children?.first(where: {
+        $0.name == "Languages and Frameworks"
+      }) {
+        let languagesArray = languagesNode.children?.sorted(by: { $0.myIndex < $1.myIndex })
+          .compactMap { $0.value as? String }
+        if let languagesArray = languagesArray, !languagesArray.isEmpty {
+          jsonString += """
+            "languages": [
+            \(languagesArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
+        }
+      }
+
+      // 9. Traverse and add projects-and-hobbies dynamically
+      if let projectsNode = myRootNode.children?.first(where: { $0.name == "Projects and Hobbies" }) {
+        jsonString += """
+    "projects-and-hobbies": [
+    """
+
+        let projectsArray = projectsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap { projectNode -> String? in
+          var projectString = ""
+
+          // Set the project title
+          if !projectNode.name.isEmpty {
+            projectString += "\"title\": \"\(projectNode.name)\""
+          }
+
+          // Handle examples
+          var examplesArray: [String] = []
+          for example in projectNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+            var exampleString = "{"
+            // Extract both "name" and "description" from the node's children
+             let exampleName = example.name
+            if !exampleName.isEmpty {
+              exampleString += "\"name\": \"\(exampleName.replacingOccurrences(of: "\"", with: "\\\""))\", "
+            }
+            if let descriptionNode = example.children?.first(where: { $0.name.lowercased() == "description" }), let description = descriptionNode.value as? String {
+              exampleString += "\"description\": \"\(description.replacingOccurrences(of: "\"", with: "\\\""))\""
+            }
+            exampleString += "}"
+            examplesArray.append(exampleString)
+          }
+
+          // Add examples to project
+          if !examplesArray.isEmpty {
+            projectString += ", \"examples\": [\n" + examplesArray.joined(separator: ",\n") + "\n]"
+          }
+
+          // Wrap the project in curly braces
+          return "{\n\(projectString)\n}"
+
+        }.joined(separator: ",\n") ?? ""
+
+        jsonString += projectsArray
+        jsonString += "\n],"
+      }
+      // 10. Traverse and add publications dynamically
+      if let publicationsNode = myRootNode.children?.first(where: { $0.name == "Publications" }) {
+        jsonString += """
+          "publications": [
+          """
+        let publicationsArray =
+          publicationsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+            pubNode -> String? in
+            var pubDict: [String: Any] = [:]
+            if !pubNode.name.isEmpty { pubDict["title"] = pubNode.name }
+            for pubDetail in pubNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+              if pubDetail.name == "authors" {
+                let authorsArray = pubDetail.children?.sorted(by: { $0.myIndex < $1.myIndex })
+                  .compactMap { $0.value as String }
+                if let authorsArray = authorsArray, !authorsArray.isEmpty {
+                  pubDict[pubDetail.name] = authorsArray
+                }
+              } else if !pubDetail.name.isEmpty, let value = pubDetail.value as? String {
+                pubDict[pubDetail.name] = value
+              }
+            }
+            if !pubDict.isEmpty {
+              let pubJSON = pubDict.map { key, value -> String in
+                if let arrayValue = value as? [String] {
+                  return
+                    "\"\(key)\": [\n\(arrayValue.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))\n]"
+                } else if let stringValue = value as? String {
+                  return
+                    "\"\(key)\": \"\(stringValue.replacingOccurrences(of: "\"", with: "\\\""))\""
+                }
+                return ""
+              }.joined(separator: ",\n")
+              return "{\n\(pubJSON)\n}"
+            }
+            return nil
+          }.joined(separator: ",\n") ?? ""
+        jsonString += publicationsArray
+        jsonString += "\n],"
+      }
+
+      // 11. Traverse and add more-info dynamically
+      if let moreInfoNode = myRootNode.children?.first(where: { $0.name == "More Information" }) {
+        if let moreInfoValue = moreInfoNode.children?.first?.value as? String,
+          !moreInfoValue.isEmpty
+        {
+          jsonString += """
+            "more-info": "\(moreInfoValue.replacingOccurrences(of: "\"", with: "\\\""))"
+            """
+        }
+      }
+
+      // 12. Final addition of closing brace
+      jsonString += "\n}"
     }
 
-    // Serialize the rebuilt JSON
-    do {
-      let jsonData = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted])
-      return String(data: jsonData, encoding: .utf8) ?? ""
-    } catch {
-      print("Error serializing JSON: \(error)")
-      return ""
-    }
+    return jsonString
   }
 }

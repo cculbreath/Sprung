@@ -43,11 +43,15 @@ final class ResRefStore {
   func deleteResRef(_ resRef: ResRef) {
     if let index = resRefs.firstIndex(of: resRef) {
       resRefs.remove(at: index)
+      
       modelContext!.delete(resRef)
       saveContext()
     }
   }
-
+  var areRefsOk: Bool {
+    return resRefs.contains { $0.type == .resumeSource && $0.enabledByDefault } &&
+    resRefs.contains { $0.type == .jsonSource && $0.enabledByDefault }
+  }
   //Form functionality incomplete
   //    private func populateFormFromObj(_ resRef: JobApp) {
   //        form.populateFormFromObj(jobApp)

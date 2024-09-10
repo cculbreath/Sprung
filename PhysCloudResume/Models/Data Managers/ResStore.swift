@@ -38,24 +38,49 @@ final class ResStore {
 
   @discardableResult
   func create(jobApp: JobApp, sources: [ResRef]) -> Resume? {
+    if let modelContext = modelContext {
+      print("Model context available")
+      print("Creating resume for job application: \(jobApp)")
 
-    // Now you can use `url` to read the file, load its contents, etc.
+      let resume = Resume(jobApp: jobApp, enabledSources: sources)!
+      print("Resume object created")
 
-    let resume = Resume(
-      jobApp: jobApp,
-      enabledSources: sources)!
-    if let jsonSource = sources.filter { $0.type == .jsonSource }.first {
-      resume.initialize(jsonText: jsonSource.content)
+      if let jsonSource = sources.filter({ $0.type == .jsonSource }).first {
+        print("JSON source found: \(jsonSource)")
 
-      self.addResume(res: resume, to: jobApp)
-      return resume
+        // Build the tree and attach it to the resume
+        guard let jsonData = jsonSource.content.data(using: .utf8) else {
+          print("Error converting JSON content to data")
+          return nil
+        }
+
+        resume.rootNode = resume.buildTree(from: jsonData, res: resume)
+        print("Resume tree built from JSON data")
+
+        // Insert resume into the model context and save
+        modelContext.insert(resume)
+
+        do {
+          try modelContext.save()
+          print("Model context saved after processing JSON data")
+        } catch {
+          print("Error saving context: \(error)")
+          return nil
+        }
+
+        print("Resume successfully saved and processed")
+        self.addResume(res: resume, to: jobApp)
+        print("Resume added to job application")
+        return resume
+      } else {
+        print("No JSON source found")
+        return nil
+      }
     } else {
-     return nil
-
+      print("Model context not available")
+      return nil
     }
-
   }
-
   func createDuplicate(res: Resume) -> Resume {
 
     let newResume = Resume(
@@ -68,14 +93,19 @@ final class ResStore {
 
   }
 
-  func deleteResRef(_ res: Resume) {
+  func deleteRes(_ res: Resume) {
     if let index = resumes.firstIndex(of: res) {
+      if let rootNode = res.rootNode {
+        TreeNode.deleteTreeNode(node: rootNode, context: modelContext!) // Recursively delete rootNode and its children
+      }
       resumes.remove(at: index)
       modelContext!.delete(res)
       saveContext()
     }
+    else {
+      print("no rootnode")
+    }
   }
-
   //Form functionality incomplete
   //    private func populateFormFromObj(_ resRef: JobApp) {
   //        form.populateFormFromObj(jobApp)

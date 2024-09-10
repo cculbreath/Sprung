@@ -8,12 +8,12 @@
 import SwiftUI
 
 struct ResumeSplitView: View {
-  @Binding var selRes: Resume
+  @Binding var selRes: Resume?
   @Binding var isWide: Bool
   @Binding var tab: TabList
   var body: some View {
     HSplitView {
-      if let rootNode = selRes.rootNode {
+      if let selRes = selRes, let rootNode = selRes.rootNode {
 
         ResumeDetailView(
           selRes: $selRes,
@@ -32,13 +32,14 @@ struct ResumeSplitView: View {
         }
         .layoutPriority(1)  // Ensures this view gets priority in layout
       }
-      ResumePDFView(resume: selRes)
-        .frame(
-          minWidth: 300, idealWidth: 400,
-          maxWidth: .infinity, maxHeight: .infinity
-        )
-        .layoutPriority(1)  // Less priority, but still resizable
-
+      if let selRes = selRes {
+        ResumePDFView(resume: selRes)
+          .frame(
+            minWidth: 300, idealWidth: 400,
+            maxWidth: .infinity, maxHeight: .infinity
+          )
+          .layoutPriority(1)  // Less priority, but still resizable
+      }
     }
   }
 }

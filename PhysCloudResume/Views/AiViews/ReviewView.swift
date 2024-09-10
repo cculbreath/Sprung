@@ -9,7 +9,7 @@ struct ReviewView: View {
   @Binding var currentFeedbackNode: FeedbackNode?
   @Binding var currentRevNode: ProposedRevisionNode?
   @Binding var sheetOn: Bool
-  @Binding var selRes: Resume
+  @Binding var selRes: Resume?
   @State private var updateNodes: [[String: String]] = []
   @Binding var aiResub: Bool
   @State var isEditingResponse: Bool = false
@@ -17,211 +17,224 @@ struct ReviewView: View {
   @State var isMoreCommenting: Bool = false
 
   var body: some View {
-    if aiResub {
-      VStack {
-        Text("Submitting Feedback to AI").padding()
-        ProgressView().padding()
-      }
-    } else {
-      VStack {
-        if let currentRevNode = currentRevNode, let currentFeedbackNode = currentFeedbackNode {
-          VStack(spacing: 4) {
-            ZStack {
-              LinearGradient(
-                gradient: Gradient(colors: [.cyan, .blue]),
-                startPoint: .top, endPoint: .bottom
-              )
-              .mask {
-                RoundedRectangle(
-                  cornerRadius: 18, style: .continuous)
-              }
-              .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
-              Image(systemName: "sparkles")
-                .imageScale(.large)
-                .foregroundStyle(.white)
-                .font(.system(.largeTitle, weight: .light))
-                .rotationEffect(.degrees(90), anchor: .center)
-                .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 3)
-            }
-            .frame(width: 50, height: 50)
-            .clipped()
-            .padding(.bottom, 8)
-            Text("Evaluate Proposed Revisions")
-              .font(.system(.title, weight: .semibold))
-              .multilineTextAlignment(.center)
-            Text("Reviewing \(feedbackIndex + 1) of \(revisionArray.count)")
-              .font(.caption2)
-              .fontWeight(.light)
-          }
-          .fixedSize(horizontal: false, vertical: true)
-          .padding(.top, 60)
-          .padding(.bottom, 45)
-          VStack(alignment: .leading, spacing: 15) {
-            HStack(alignment: .top) {
-              VStack(alignment: .leading, spacing: 3) {
-                Text("Original Text")
-                  .font(.system(.headline, weight: .semibold))
-                  .transition(.move(edge: .trailing))
-                Text(currentRevNode.oldValue)
-                  .font(.system(.headline, weight: .light))
-                  .foregroundStyle(.secondary)
-                  .transition(.move(edge: .trailing))
-              }
-              .fixedSize(horizontal: false, vertical: true)
-            }
-            if currentRevNode.valueChanged {
-              HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                  Text("Proposed Revision")
-                    .font(.system(.title2, weight: .semibold))
-                    .transition(.move(edge: .trailing))
-                  if isEditingResponse {
-                    HStack(spacing: 10) {
-                      TextField(
-                        "RevisedText",
-                        text: Binding(
-                          get: { currentFeedbackNode.proposedRevision },
-                          set: { newValue in
-                            self.currentFeedbackNode?.proposedRevision = newValue
-                          }
-                        ),
-                        axis: .vertical
-                      ).lineLimit(4...10)
-                      Spacer()
-                      ImageButton(
-                        systemName: "checkmark.circle",
-                        imageSize: 20,
-                        activeColor: Color.green,
-                        action: {
-                          saveAndNext(response: .acceptedWithChanges)
-                        }
-                      )
-                      ImageButton(
-                        systemName: "x.circle",
-                        imageSize: 20,
-                        activeColor: Color.red,
-                        action: {
-                          isEditingResponse = false
-                        }
-                      )
-                    }
-                    .frame(maxWidth: .infinity)
-                  } else {
-                    Text(currentRevNode.newValue)
-                      .font(.system(.title2, weight: .light))
-                      .transition(.move(edge: .trailing))
-                      .foregroundStyle(.secondary)
-                  }
+    if let selRes = selRes {
+      if aiResub {
+        VStack {
+          Text("Submitting Feedback to AI").padding()
+          ProgressView().padding()
+        }
+      } else {
+        VStack {
+          if let currentRevNode = currentRevNode, let currentFeedbackNode = currentFeedbackNode {
+            VStack(spacing: 4) {
+              ZStack {
+                LinearGradient(
+                  gradient: Gradient(colors: [.cyan, .blue]),
+                  startPoint: .top, endPoint: .bottom
+                )
+                .mask {
+                  RoundedRectangle(
+                    cornerRadius: 18, style: .continuous)
                 }
-                .fixedSize(horizontal: false, vertical: true)
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                Image(systemName: "sparkles")
+                  .imageScale(.large)
+                  .foregroundStyle(.white)
+                  .font(.system(.largeTitle, weight: .light))
+                  .rotationEffect(.degrees(90), anchor: .center)
+                  .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 3)
               }
+              .frame(width: 50, height: 50)
+              .clipped()
+              .padding(.bottom, 8)
+              Text("Evaluate Proposed Revisions")
+                .font(.system(.title, weight: .semibold))
+                .multilineTextAlignment(.center)
+              Text("Reviewing \(feedbackIndex + 1) of \(revisionArray.count)")
+                .font(.caption2)
+                .fontWeight(.light)
             }
-            if currentRevNode.valueChanged {
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 60)
+            .padding(.bottom, 45)
+            VStack(alignment: .leading, spacing: 15) {
               HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                  Text("Explanation")
+                  Text("Original Text")
                     .font(.system(.headline, weight: .semibold))
                     .transition(.move(edge: .trailing))
-                  Text(currentRevNode.why)
+                  Text(currentRevNode.oldValue)
                     .font(.system(.headline, weight: .light))
                     .foregroundStyle(.secondary)
                     .transition(.move(edge: .trailing))
                 }
                 .fixedSize(horizontal: false, vertical: true)
               }
-            }
-          }
-          .padding(.leading, 30)
-          .padding(.trailing, 30)
-          Text(currentRevNode.valueChanged ? "Accept proposed revision?" : "Accept original value unchanged?")
-            .padding()
-            .font(.title2)
-          HStack(spacing: 25) {
-            if currentRevNode.valueChanged {
-              ImageButton(
-                systemName: "hand.thumbsdown.circle",
-                activeColor: Color.purple,
-                action: { isCommenting = true }
-              ).help("Reject Revision with comment.").popover(isPresented: $isCommenting) {
-                ReviewCommentView(
-                  comment: Binding(
-                    get: { currentFeedbackNode.reviewerComments },
-                    set: { newValue in
-                      self.currentFeedbackNode?.reviewerComments = newValue
+              if currentRevNode.valueChanged {
+                HStack(alignment: .top) {
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text("Proposed Revision")
+                      .font(.system(.title2, weight: .semibold))
+                      .transition(.move(edge: .trailing))
+                    if isEditingResponse {
+                      HStack(spacing: 10) {
+                        TextField(
+                          "RevisedText",
+                          text: Binding(
+                            get: { currentFeedbackNode.proposedRevision },
+                            set: { newValue in
+                              self.currentFeedbackNode?.proposedRevision = newValue
+                            }
+                          ),
+                          axis: .vertical
+                        ).lineLimit(4...10)
+                        Spacer()
+                        ImageButton(
+                          systemName: "checkmark.circle",
+                          imageSize: 20,
+                          activeColor: Color.green,
+                          action: {
+                            saveAndNext(response: .acceptedWithChanges)
+                          }
+                        )
+                        ImageButton(
+                          systemName: "x.circle",
+                          imageSize: 20,
+                          activeColor: Color.red,
+                          action: {
+                            isEditingResponse = false
+                          }
+                        )
+                      }
+                      .frame(maxWidth: .infinity)
+                    } else {
+                      Text(currentRevNode.newValue)
+                        .font(.system(.title2, weight: .light))
+                        .transition(.move(edge: .trailing))
+                        .foregroundStyle(.secondary)
                     }
-                  ),
-                  isCommenting: $isCommenting,
-                  saveAction: {
-                    saveAndNext(response: .revise)
+                  }
+                  .fixedSize(horizontal: false, vertical: true)
+                }
+              }
+              if currentRevNode.valueChanged {
+                HStack(alignment: .top) {
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text("Explanation")
+                      .font(.system(.headline, weight: .semibold))
+                      .transition(.move(edge: .trailing))
+                    Text(currentRevNode.why)
+                      .font(.system(.headline, weight: .light))
+                      .foregroundStyle(.secondary)
+                      .transition(.move(edge: .trailing))
+                  }
+                  .fixedSize(horizontal: false, vertical: true)
+                }
+              }
+            }
+            .padding(.leading, 30)
+            .padding(.trailing, 30)
+            Text(currentRevNode.valueChanged ? "Accept proposed revision?" : "Accept original value unchanged?")
+              .padding()
+              .font(.title2)
+            HStack(spacing: 25) {
+              if currentRevNode.valueChanged {
+                ImageButton(
+                  systemName: "hand.thumbsdown.circle",
+                  activeColor: Color.purple,
+                  action: { isCommenting = true }
+                ).help("Reject Revision with comment.").popover(isPresented: $isCommenting) {
+                  ReviewCommentView(
+                    comment: Binding(
+                      get: { currentFeedbackNode.reviewerComments },
+                      set: { newValue in
+                        self.currentFeedbackNode?.reviewerComments = newValue
+                      }
+                    ),
+                    isCommenting: $isCommenting,
+                    saveAction: {
+                      saveAndNext(response: .revise)
+                    }
+                  )
+                }
+                ImageButton(
+                  systemName: "trash.circle",
+                  activeColor: Color.red,
+                  action: {
+                    saveAndNext(response: .rewriteNoComment)
+                  }
+                ).help("Try again. Reject Revision without comment.")
+              } else {
+                ImageButton(
+                  systemName: "hand.thumbsdown.circle",
+                  activeColor: Color.purple,
+                  action: { isMoreCommenting = true }
+                ).popover(isPresented: $isMoreCommenting) {
+                  ReviewCommentView(
+                    comment: Binding(
+                      get: { currentFeedbackNode.reviewerComments },
+                      set: { newValue in
+                        self.currentFeedbackNode?.reviewerComments = newValue
+                      }
+                    ),
+                    isCommenting: $isCommenting,
+                    saveAction: {
+                      saveAndNext(response: .mandatedChange)
+                    }
+                  )
+                }
+                ImageButton(
+                  systemName: "trash.circle",
+                  activeColor: Color.red,
+                  action: {
+                    saveAndNext(response: .mandatedChangeNoComment)
                   }
                 )
               }
-              ImageButton(
-                systemName: "trash.circle",
-                activeColor: Color.red,
-                action: {
-                  saveAndNext(response: .rewriteNoComment)
-                }
-              ).help("Try again. Reject Revision without comment.")
-            } else {
-              ImageButton(
-                systemName: "hand.thumbsdown.circle",
-                activeColor: Color.purple,
-                action: { isMoreCommenting = true }
-              ).popover(isPresented: $isMoreCommenting) {
-                ReviewCommentView(
-                  comment: Binding(
-                    get: { currentFeedbackNode.reviewerComments },
-                    set: { newValue in
-                      self.currentFeedbackNode?.reviewerComments = newValue
-                    }
-                  ),
-                  isCommenting: $isCommenting,
-                  saveAction: {
-                    saveAndNext(response: .mandatedChange)
-                  }
+              if currentRevNode.valueChanged {
+                ImageButton(
+                  name: "ai-rejected", imageSize: 43, activeColor: Color.indigo,
+                  action: { saveAndNext(response: .restored) }
+                )
+                ImageButton(
+                  systemName: "pencil.circle",
+                  action: { isEditingResponse = true }
                 )
               }
               ImageButton(
-                systemName: "trash.circle",
-                activeColor: Color.red,
+                systemName: "hand.thumbsup.circle",
+                activeColor: Color.green,
                 action: {
-                  saveAndNext(response: .mandatedChangeNoComment)
+                  saveAndNext(response: currentRevNode.valueChanged ? .accepted : .noChange)
                 }
-              )
+              ).help("Approve revision")
             }
-            ImageButton(
-              systemName: "hand.thumbsup.circle",
-              activeColor: Color.green,
-              action: {
-                saveAndNext(response: currentRevNode.valueChanged ? .accepted : .noChange)
-              }
-            ).help("Approve revision")
+          } else {
+            // Handle the case where currentRevNode or currentFeedbackNode is nil
+            Text("No revision to display").padding()
           }
-        } else {
-          // Handle the case where currentRevNode or currentFeedbackNode is nil
-          Text("No revision to display").padding()
         }
-      }
-      .frame(maxWidth: .infinity)
-      .clipped()
-      .padding(.top, 0)
-      .padding(.bottom, 40)
-      .padding(.horizontal, 20)
-      .onChange(of: aiResub) { oldValue, newValue in
-        print("aiResub changed from \(oldValue ? "true":"false") to \(newValue ? "true":"false")")
-        if !newValue {
-          currentRevNode = revisionArray.first
-          feedbackIndex = 0
-          feedbackArray = []
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .padding(.top, 0)
+        .padding(.bottom, 40)
+        .padding(.horizontal, 20)
+        .onChange(of: aiResub) { oldValue, newValue in
+          print("aiResub changed from \(oldValue ? "true":"false") to \(newValue ? "true":"false")")
+          if !newValue {
+            currentRevNode = revisionArray.first
+            feedbackIndex = 0
+            feedbackArray = []
+          }
         }
-      }
-      .onAppear {
-        if updateNodes.isEmpty {
-          updateNodes = selRes.getUpdatableNodes()
+        .onAppear {
+          if updateNodes.isEmpty {
+            updateNodes = selRes.getUpdatableNodes()
+          }
         }
       }
     }
+    else { Text("No valid Res") }
   }
 
   func saveAndNext(response: PostReviewAction) {
@@ -291,11 +304,12 @@ struct ReviewView: View {
         }
         aiResubmit()
       } else {
-        selRes = resStore.createDuplicate(res: selRes)
+        if var selRes = selRes {
+          selRes = resStore.createDuplicate(res: selRes)
 
-        selRes.debounceExport()
+          selRes.debounceExport()
 
-
+        }
         sheetOn = false
       }
 
@@ -305,11 +319,13 @@ struct ReviewView: View {
   func applyChanges() {
     feedbackArray.forEach { node in
       if node.actionRequested == .accepted || node.actionRequested == .acceptedWithChanges {
-        if let treeNode = selRes.nodes.first(where: { $0.id == node.id }) {
-          treeNode.value = node.proposedRevision
-        } else {
-          print("node not found")
-          print(node.id)
+        if let selRes = selRes{
+          if let treeNode = selRes.nodes.first(where: { $0.id == node.id }) {
+            treeNode.value = node.proposedRevision
+          } else {
+            print("node not found")
+            print(node.id)
+          }
         }
       }
     }

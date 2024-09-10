@@ -12,7 +12,7 @@ enum SourceType: String, CaseIterable, Identifiable, Decodable {
   case background = "Background Resource"
   case resumeSource = "Model Resume"
   case jsonSource = "Model JSON"
-
+  
   var id: String { self.rawValue }
 }
 
@@ -23,7 +23,7 @@ class ResRef: Identifiable {
   var name: String
   var enabledByDefault: Bool
   private var typeRawValue: String
-
+  var enabledResumes: [Resume] = []
   var type: SourceType {
     get {
       return SourceType(rawValue: typeRawValue) ?? .background

@@ -18,9 +18,9 @@ struct AiCommsView: View {
   @State private var isLoading = false
   @State private var sheetOn: Bool = false
   @State private var aiResub: Bool = false
-  @Binding var myRes: Resume
+  @Binding var myRes: Resume?
   @State private var fbnodes: [FeedbackNode] = []
-  init(service: OpenAIService, query: ResumeApiQuery, res: Binding<Resume>) {
+  init(service: OpenAIService, query: ResumeApiQuery, res: Binding<Resume?>) {
     _chatProvider = State(initialValue: ChatStructuredOutputProvider(service: service))
     _q = State(initialValue: query)
     _myRes = res
@@ -46,7 +46,7 @@ struct AiCommsView: View {
       }
       .onChange(of: chatProvider.lastRevNodeArray) { oldValue, newValue in
         sheetOn = true
-        revisions = validateRevs(res: myRes, revs: newValue)  // Updated this call
+        revisions = validateRevs(res: myRes, revs: newValue) ?? []  // Updated this call
         currentRevNode = revisions[0]
         if currentRevNode != nil{
           currentFeedbackNode = FeedbackNode(
@@ -69,17 +69,25 @@ struct AiCommsView: View {
   var exec_query: some View {
     HStack(spacing: 4) {
       VStack {
-        if !isLoading {  // Only show the button when not loading
-          Button(action: {
-            print("Notloading")
-            chatAction()
-          }) {
-            Image("ai-squiggle")
-              .font(.system(size: 20, weight: .regular))
+        if !isLoading {
+          if (
+            (myRes?.rootNode?.aiStatusChildren ?? 0)
+            > 0) {
+            Button(action: {
+              print("Notloading")
+              chatAction()
+            }) {
+
+              Image("ai-squiggle")
+                .font(.system(size: 20, weight: .regular))
+            }
+            .help("Create new Résumé")
+          } else {
+            Image("ai-squiggle.slash").font(.system(size: 20, weight: .regular)).help("Select fields for ai update")
+
           }
-          .help("Create new Résumé")
         } else {
-          ProgressView()  // Show a loading indicator when isLoading is true
+          ProgressView().scaleEffect(0.75, anchor: .center)  // Show a loading indicator when isLoading is true
         }
       }
       .padding()
@@ -87,26 +95,29 @@ struct AiCommsView: View {
   }
 
   // Validation function for revisions
-  func validateRevs(res: Resume, revs: [ProposedRevisionNode]) -> [ProposedRevisionNode] {
+  func validateRevs(res: Resume?, revs: [ProposedRevisionNode]) -> [ProposedRevisionNode]? {
     print("Validating revisions...")
     var validRevs = revs
-    let updateNodes = res.getUpdatableNodes()
+    if let myRes = res {
+      let updateNodes = myRes.getUpdatableNodes()
 
-    for (index, item) in validRevs.enumerated() {
-      // Check by ID first
-      if let matchedNode = updateNodes.first(where: { $0["id"] == item.id }) {
-        print("\(item.id) found")
-        continue
-      } else if let matchedByValue = updateNodes.first(where: { $0["oldValue"] == item.oldValue }), let id = matchedByValue["id"] {
-        // Update revision's ID if matched by value
-        validRevs[index].id = id
-        print("\(item.id) updated")
+      for (index, item) in validRevs.enumerated() {
+        // Check by ID first
+        if let matchedNode = updateNodes.first(where: { $0["id"] == item.id }) {
+          print("\(item.id) found")
+          continue
+        } else if let matchedByValue = updateNodes.first(where: { $0["oldValue"] == item.oldValue }), let id = matchedByValue["id"] {
+          // Update revision's ID if matched by value
+          validRevs[index].id = id
+          print("\(item.id) updated")
 
-      } else {
-        print("No match found for revision: \(item.id) - \(item.oldValue)")
+        } else {
+          print("No match found for revision: \(item.id) - \(item.oldValue)")
+        }
       }
+      return validRevs
     }
-    return validRevs
+    return nil
   }
 
   func chatAction(hasRevisions: Bool = false) {

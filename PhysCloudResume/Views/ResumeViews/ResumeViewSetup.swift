@@ -15,10 +15,8 @@ struct ResumeViewSetup: View {
           CreateNewResumeView()
         } else {
 
-          let unwrappedSelRes = Binding(
-            get: { selRes ?? jobApp.resumes.first! },  // Getter: Retrieves the value or defaults
-            set: { selRes = $0 })  // Setter: Updates the binding
-          ResumeSplitView(selRes: unwrappedSelRes, isWide: $isWide, tab: $currentTab)
+
+          ResumeSplitView(selRes: $selRes, isWide: $isWide, tab: $currentTab)
         }
       } else {
         Text("No job application selected.")
