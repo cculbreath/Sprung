@@ -15,6 +15,7 @@ import SwiftUI
     dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
     return dateFormatter.string(from: dateCreated)
   }
+  var textRes: String = ""
   var bgDocs: [ResRef] {
     return self.enabledSources.filter { $0.type == SourceType.background }
   }
@@ -97,7 +98,10 @@ import SwiftUI
     exportWorkItem = DispatchWorkItem { [weak self] in
       if let jsonString = self?.rebuildJSON() {
         if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonString) {
-          apiGenerateResFromJson(jsonPath: jsonFile) { pdfWebUrl in
+          apiGenerateResFromJson(jsonPath: jsonFile) { pdfWebUrl, resumeText in
+            if let resumeText = resumeText {
+              self?.textRes = resumeText
+            }
             if let pdfWebUrl = pdfWebUrl {
               downloadResPDF(from: pdfWebUrl) { pdfFileUrl in
                 if let pdfFileUrl = pdfFileUrl {

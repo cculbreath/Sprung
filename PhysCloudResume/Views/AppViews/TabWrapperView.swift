@@ -11,6 +11,7 @@ struct TabWrapperView: View {
     edit: false, save: false, cancel: false)
   @State private var selectedTab: TabList = TabList.listing
   @State private var refPopup: Bool = false
+  @State private var coverLetterButtons: CoverLetterButtons = CoverLetterButtons(showInspector: false)
 
   var body: some View {
     let selResBinding = Binding(
@@ -34,8 +35,7 @@ struct TabWrapperView: View {
             )
           }
           .tag(TabList.resume)
-
-        Text("Compose Cover Letter Content")
+        CoverLetterView(buttons: $coverLetterButtons)
           .tabItem {
             Label(
               TabList.coverLetter.rawValue,
@@ -56,7 +56,8 @@ struct TabWrapperView: View {
       buildToolbar(
         selectedTab: $selectedTab,
         selRes: selResBinding,
-        listingButtons: $listingButtons
+        listingButtons: $listingButtons,
+        letterButtons: $coverLetterButtons
       )
     }.onAppear {
       if selResBinding.wrappedValue == nil, let selectedApp = jobAppStore.selectedApp {
@@ -93,4 +94,8 @@ struct SaveButtons {
   var edit: Bool = false
   var save: Bool = false
   var cancel: Bool = false
+}
+
+struct CoverLetterButtons {
+  var showInspector: Bool = false
 }

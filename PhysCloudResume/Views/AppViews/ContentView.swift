@@ -6,6 +6,9 @@ struct ContentView: View {
   @State private var jobAppStore: JobAppStore = JobAppStore()
   @State private var resRefStore: ResRefStore = ResRefStore()
   @State private var resStore: ResStore = ResStore()
+  @State private var coverRefStore: CoverRefStore = CoverRefStore()
+  @State private var coverLetterStore: CoverLetterStore = CoverLetterStore()
+
   @State private var showNewAppSheet: Bool = false
   @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
 
@@ -69,9 +72,13 @@ struct ContentView: View {
       resRefStore.initialize(context: modelContext)
       resStore.initialize(context: modelContext)
       jobAppStore.initialize(context: modelContext, resStore: resStore)
+      coverRefStore.initialize(context: modelContext)
+      coverLetterStore.initialize(context: modelContext, refStore: coverRefStore)
+
+
 
     }
-    .environment(jobAppStore).environment(resRefStore).environment(resStore)
+    .environment(jobAppStore).environment(resRefStore).environment(resStore).environment(coverRefStore).environment(coverLetterStore)
   }
 }
 
