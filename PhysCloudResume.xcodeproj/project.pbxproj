@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		570FEDB82C88C6180074D1E0 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 570FEDB72C88C6180074D1E0 /* SwiftOpenAI */; };
+		571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 571F746D2C9351BE007C8ADD /* SwiftOpenAI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,7 +34,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				570FEDB82C88C6180074D1E0 /* SwiftOpenAI in Frameworks */,
+				571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,7 +77,7 @@
 			);
 			name = PhysCloudResume;
 			packageProductDependencies = (
-				570FEDB72C88C6180074D1E0 /* SwiftOpenAI */,
+				571F746D2C9351BE007C8ADD /* SwiftOpenAI */,
 			);
 			productName = PhysCloudResume;
 			productReference = 570FEC682C855BF50074D1E0 /* PhysCloudResume.app */;
@@ -108,7 +108,7 @@
 			);
 			mainGroup = 570FEC5F2C855BF50074D1E0;
 			packageReferences = (
-				570FEDB62C88C6180074D1E0 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
+				571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 			);
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
 			projectDirPath = "";
@@ -340,7 +340,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		570FEDB62C88C6180074D1E0 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */ = {
+		571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/jamesrochabrun/SwiftOpenAI.git";
 			requirement = {
@@ -351,9 +351,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		570FEDB72C88C6180074D1E0 /* SwiftOpenAI */ = {
+		571F746D2C9351BE007C8ADD /* SwiftOpenAI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 570FEDB62C88C6180074D1E0 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
+			package = 571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
 			productName = SwiftOpenAI;
 		};
 /* End XCSwiftPackageProductDependency section */

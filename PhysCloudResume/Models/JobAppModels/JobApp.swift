@@ -13,7 +13,8 @@ enum Statuses: Codable {
 }
 @Model class JobApp: Equatable, Identifiable, Decodable, Hashable {
   @Relationship(deleteRule: .cascade, inverse: \Resume.jobApp) var resumes: [Resume] = []
-  var selectedRes: Resume?
+  @Relationship(deleteRule: .cascade, inverse: \CoverLetter.jobApp) var coverLetters: [CoverLetter] = []
+  @Transient var selectedRes: Resume?
   var job_position: String
   var job_location: String
   var company_name: String
@@ -39,6 +40,7 @@ enum Statuses: Codable {
     case industries
     case job_apply_link
     case resumes
+    case coverLetters
     case selectedRes
     case status
   }
@@ -186,5 +188,6 @@ enum Statuses: Codable {
     self.industries = sourceJobAppForm.industries
     self.job_apply_link = sourceJobAppForm.job_apply_link
   }
+
 
 }

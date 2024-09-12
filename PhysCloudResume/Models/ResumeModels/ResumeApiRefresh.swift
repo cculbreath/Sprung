@@ -9,11 +9,11 @@
 
 import Foundation
 
-func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?) -> Void) {
+func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?, String?) -> Void) {
   // URL of the API endpoint
   guard let url = URL(string: "https://resume.physicscloud.net/build-resume-file") else {
     print("Invalid URL")
-    completion(nil)
+    completion(nil, nil)
     return
   }
 
@@ -47,7 +47,7 @@ func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?) -> Vo
   let task = URLSession.shared.dataTask(with: request) { data, response, error in
     if let error = error {
       print("Error: \(error)")
-      completion(nil)
+      completion(nil, nil)
       return
     }
 
@@ -57,21 +57,22 @@ func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?) -> Vo
 
     guard let data = data else {
       print("No data received")
-      completion(nil)
+      completion(nil, nil)
       return
     }
 
     do {
       if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
         let pdfUrl = json["pdfUrl"] as? String
-        completion(pdfUrl)
+        let resumeText = json["resumeText"] as? String
+        completion(pdfUrl, resumeText)
       } else {
         print("Invalid JSON format")
-        completion(nil)
+        completion(nil, nil)
       }
     } catch {
       print("Error parsing JSON: \(error)")
-      completion(nil)
+      completion(nil, nil)
     }
   }
 

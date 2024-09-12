@@ -8,7 +8,7 @@
         Window("Physics Cloud Résumé", id: "mainApp") {
           ContentViewLaunch()  // ContentView handles its own JobAppStore initialization
         }
-        .modelContainer(for: [JobApp.self, Resume.self, ResRef.self, TreeNode.self])
+        .modelContainer(for: [JobApp.self, Resume.self, ResRef.self, TreeNode.self, CoverLetter.self, MessageParams.self])
     .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
     .commands {
       CommandGroup(replacing: .appSettings) {
