@@ -1,0 +1,5959 @@
+import Cocoa
+import SwiftUI
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+
+  var settingsWindow: NSWindow?
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    // Set the title of the main window
+    if let window = NSApplication.shared.windows.first {
+      window.title = "Job Applications"
+    }
+
+  }
+
+  @objc func showSettingsWindow() {
+    if settingsWindow == nil {
+      let settingsView = SettingsView()
+      settingsWindow = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+        styleMask: [.titled, .closable],
+        backing: .buffered, defer: false
+      )
+      settingsWindow?.title = "Settings"
+      settingsWindow?.contentView = NSHostingView(rootView: settingsView)
+      settingsWindow?.isReleasedWhenClosed = false
+
+      // Center the window on the screen
+      settingsWindow?.center()
+    }
+    settingsWindow?.makeKeyAndOrderFront(nil)
+  }
+}
+    import SwiftUI
+
+    @main
+    struct PhysicsCloudResumeApp: App {
+      @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+      var body: some Scene {
+        Window("Physics Cloud Résumé", id: "mainApp") {
+          ContentViewLaunch()  // ContentView handles its own JobAppStore initialization
+        }
+        .modelContainer(for: [JobApp.self, Resume.self, ResRef.self, TreeNode.self, CoverLetter.self, MessageParams.self])
+    .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
+    .commands {
+      CommandGroup(replacing: .appSettings) {
+        Button("Settings...") {
+          appDelegate.showSettingsWindow()
+        }
+        .keyboardShortcut(",", modifiers: .command)
+      }
+    }
+  }
+}
+import Foundation
+import PDFKit
+import SwiftData
+import SwiftUI
+
+@Model class Resume: Identifiable, Hashable {
+  var id: String = ""
+  var rootNode: TreeNode?
+  var nodes: [TreeNode] = []
+  var dateCreated: Date
+  weak var jobApp: JobApp?
+  @Relationship(inverse: \ResRef.enabledResumes) var enabledSources: [ResRef]
+  var createdDateString: String {
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
+    return dateFormatter.string(from: dateCreated)
+  }
+  var textRes: String = ""
+  var bgDocs: [ResRef] {
+    return self.enabledSources.filter { $0.type == SourceType.background }
+  }
+  var isUpdating: Bool = false
+  var pdfData: Data?
+  var attentionGrab: Int = 2
+  var hasValidRefsEnabled: Bool {
+
+    let resumeSourceCount = enabledSources.filter { $0.type == .resumeSource }.count
+    let jsonSourceCount = enabledSources.filter { $0.type == .jsonSource }.count
+    return resumeSourceCount == 1 && jsonSourceCount == 1
+
+  }
+
+  func getUpdatableNodes() -> [[String: String]] {
+    if let node = self.rootNode {
+      return TreeNode.traverseAndExportNodes(node: node)
+    }
+    else {return [[:]]}
+  }
+  var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
+
+  // Default initializer
+  init?(
+    jobApp: JobApp,
+    enabledSources: [ResRef]
+  ) {
+    // Initialize stored properties
+    self.id = UUID().uuidString
+    self.jobApp = jobApp
+    self.dateCreated = Date()
+    self.enabledSources = enabledSources
+
+    // Create a temporary variable for rootNode
+  }
+//  func initialize(jsonText: String) {
+//    // Use the temporary variable to store the result of buildTree
+//    if let jsonData = jsonText.data(using: .utf8) {  // Convert the string to Data using UTF-8 encoding
+//      self.rootNode = self.buildTree(from: jsonData, res: self)
+//    } else {
+//      print("Cannot convert jsonText to Data")
+//    }
+//  }
+
+
+
+
+  func generateQuery(attentionGrab: Int) -> ResumeApiQuery {
+    self.attentionGrab = attentionGrab
+    return ResumeApiQuery(resume: self)
+  }
+  func loadPDF(from fileURL: URL = FileHandler.pdfUrl()) {
+    do {
+      print("Loading from URL \(fileURL.path)")
+      self.pdfData = try Data(contentsOf: fileURL)
+      isUpdating = false
+    } catch {
+      print("Failed to load PDF file: \(error.localizedDescription)")
+    }
+  }
+
+  func displayPDF() -> PDFView? {
+    guard let pdfData = pdfData else { return nil }
+    let pdfView = PDFView()
+    if let document = PDFDocument(data: pdfData) {
+      pdfView.document = document
+      pdfView.autoScales = true
+    }
+    return pdfView
+  }
+  @Transient private var exportWorkItem: DispatchWorkItem?
+
+  func debounceExport() {
+    print("pdf refresh")
+    isUpdating = true
+    // Cancel the previous work item if it exists
+    exportWorkItem?.cancel()
+
+    // Create a new work item to perform the export
+    exportWorkItem = DispatchWorkItem { [weak self] in
+      if let jsonString = self?.rebuildJSON() {
+        if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonString) {
+          apiGenerateResFromJson(jsonPath: jsonFile) { pdfWebUrl, resumeText in
+            if let resumeText = resumeText {
+              self?.textRes = resumeText
+            }
+            if let pdfWebUrl = pdfWebUrl {
+              downloadResPDF(from: pdfWebUrl) { pdfFileUrl in
+                if let pdfFileUrl = pdfFileUrl {
+                  self?.loadPDF(from: pdfFileUrl)
+                }
+              }
+            }
+          }
+        }
+      }
+      else {
+        print("jsonString problem")
+      }
+    }
+
+
+    // Execute the export after a delay of 0.5 seconds (or any delay you want)
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + 0.5, execute: self.exportWorkItem!)
+  }
+}
+import Foundation
+import SwiftData
+
+extension Resume {
+  func buildTree(from jsonData: Data, res: Resume) -> TreeNode {
+    let rootNode = TreeNode(
+      name: "root",
+      value: "",
+      status: LeafStatus.isNotLeaf,
+      resume: res
+    )
+    do {
+      if let json = try JSONSerialization.jsonObject(
+        with: jsonData, options: []) as? [String: Any]
+      {
+        // Initialize section labels
+        if let sectionLabelsDict = json["section-labels"]
+          as? [String: String]
+        {
+          let sectionLabels = rootNode.addChild(
+            TreeNode(
+              name: "Section Labels",
+              value: "",
+              status: LeafStatus.isNotLeaf, resume: res))
+          for (key, myValue) in sectionLabelsDict {
+            sectionLabels.addChild(
+              TreeNode(
+                name: key,
+                value: myValue, status: LeafStatus.saved,
+                resume: res))
+          }
+        }
+        if let contactDict = json["contact"] as? [String: Any] {
+          let contact = rootNode.addChild(
+            TreeNode(
+              name: "Contact Info",
+              value: "",
+              status: LeafStatus.isNotLeaf,
+              resume: res))
+
+          for (key, myValue) in contactDict {
+            switch myValue {
+            case let strValue as String:
+              contact.addChild(
+                TreeNode(
+                  name: key,
+                  value: strValue,
+                  status: LeafStatus.disabled, resume: res))
+            case let locDict as [String: String]:
+              let locNode =
+                contact
+                .addChild(
+                  (TreeNode(
+                    name: key,
+                    value: "",
+                    status: LeafStatus.isNotLeaf, resume: res
+                  ))
+                )
+              for (myKey, theValue) in locDict {
+                locNode.addChild(
+                  TreeNode(
+                    name: myKey,
+                    value: theValue,
+                    status: LeafStatus.disabled, resume: res
+                  ))
+              }
+            default:
+              print("unknown type encountered")
+            }
+          }
+        }
+        if let summaryArray = json["summary"] as? [String] {
+          let summary = rootNode.addChild(
+            TreeNode(
+              name: "Summary",
+              value: "",
+              status: LeafStatus.isNotLeaf, resume: res))
+          summary.addChild(
+            TreeNode(
+              name: "", value: summaryArray[0],
+              status: LeafStatus.saved, resume: res))
+
+        }
+
+        // Initialize labels
+        if let labelsArray = json["labels"] as? [String] {
+          let labels = rootNode.addChild(
+            TreeNode(
+              name: "Labels", value: "",
+              status: LeafStatus.isNotLeaf, resume: res))
+          for (index, label) in labelsArray.enumerated() {
+            labels.addChild(
+              TreeNode(
+                name: "", value: label, status: LeafStatus.saved, resume: res
+              ))
+          }
+        }
+        // Initialize skills and expertise
+        if let skillsArray = json["skills-and-expertise"] as? [String] {
+          let skills = rootNode.addChild(
+            TreeNode(
+              name: "Skills and Expertise", value: "",
+              status: LeafStatus.isNotLeaf, resume: res))
+          for (index, skill) in skillsArray.enumerated() {
+            skills.addChild(
+              TreeNode(
+                name: "", value: skill, status: LeafStatus.saved, resume: res
+              ))
+          }
+        }
+
+        // Initialize employment history
+        if let jobDict = json["employment"] as? [[String: Any]] {
+          let employment = rootNode.addChild(
+            TreeNode(
+              name: "Employment", value: "",
+              status: LeafStatus.isNotLeaf, resume: res))
+
+          for (index, job) in jobDict.enumerated() {
+            let jobNode =
+              employment
+              .addChild(
+                TreeNode(
+                  name: job["employer"] as! String,
+                  value: "",
+                  status: LeafStatus.isNotLeaf, resume: res
+                )
+              )
+            for (key, val) in job {
+              switch val {
+              case let strValue as String:
+                jobNode.addChild(
+                  TreeNode(
+                    name: key,
+                    value: strValue,
+                    status: LeafStatus.disabled, resume: res))
+              case let highlightsArray as [String]:
+                let highlightParent =
+                  jobNode
+                  .addChild(
+                    (TreeNode(
+                      name: key,
+                      value: "",
+                      status: LeafStatus.isNotLeaf, resume: res
+                    ))
+                  )
+                for myHighlight in highlightsArray {
+                  highlightParent.addChild(
+                    TreeNode(
+                      name: "",
+                      value: myHighlight,
+                      status: LeafStatus.saved, resume: res
+                    ))
+                }
+              default:
+                print("unknown type encountered")
+              }
+            }
+          }
+        }
+        if let educationArray = json["education"] as? [[String: Any]] {
+          let education = rootNode.addChild(
+            TreeNode(
+              name: "Education",
+              value: "",
+              status: LeafStatus.isNotLeaf, resume: res
+            )
+          )
+          for (index, schoolDict) in educationArray.enumerated() {
+            if let institutionName = schoolDict["institution"]
+              as? String
+            {
+              let schoolNode = education.addChild(
+                TreeNode(
+                  name: institutionName,
+                  value: "",
+                  status: LeafStatus.isNotLeaf, resume: res
+                )
+              )
+              for (key, value) in schoolDict {
+                if let stringValue = value as? String {
+                  schoolNode.addChild(
+                    TreeNode(
+                      name: key,
+                      value: stringValue,
+                      status: LeafStatus.disabled, resume: res
+                    )
+                  )
+                }
+              }
+            }
+          }
+        }
+        if let languagesArray = json["languages"] as? [String] {
+          let languageNode = rootNode.addChild(
+            TreeNode(
+
+              name: "Languages and Frameworks",
+              value: "",
+              status: LeafStatus.isNotLeaf, resume: res
+
+            ))
+          for (index, language) in languagesArray.enumerated() {
+            languageNode.addChild(
+              TreeNode(
+                name: "",
+                value: language,
+                status: LeafStatus.saved, resume: res
+              ))
+          }
+        }
+        if let projectsArray = json["projects-and-hobbies"] as? [[String: Any]] {
+          let projectNode = rootNode.addChild(
+            TreeNode(
+              name: "Projects and Hobbies",
+              value: "",
+              status: LeafStatus.isNotLeaf, resume: res)
+          )
+
+          for (index, projectDict) in projectsArray.enumerated() {
+            guard let projectTitle = projectDict["title"] as? String else {
+              print("Skipping project with no title.")
+              continue
+            }
+            let projectNode = projectNode.addChild(
+              TreeNode(
+                name: projectTitle,
+                value: "",
+                status: LeafStatus.isNotLeaf, resume: res
+              )
+            )
+
+            if let examples = projectDict["examples"] as? [[String: String]] {
+              for (index, example) in examples.enumerated() {
+                if let exampleName = example["name"],
+                  let exampleDescription = example["description"]
+                {
+                  let exampleNode = projectNode.addChild(
+                    TreeNode(
+                      name: exampleName,
+                      value: "",
+                      status: LeafStatus.isNotLeaf, resume: res)
+                  )
+                  exampleNode.addChild(
+                    TreeNode(
+                      name: "Description",
+                      value: exampleDescription,
+                      status: LeafStatus.saved, resume: res
+                    )
+                  )
+                }
+              }
+            } else {
+              print("No examples found for project \(projectTitle).")
+            }
+          }
+        }
+        if let publicationsArray = json["publications"]
+          as? [[String: Any]]
+        {
+          let pubsNode = rootNode.addChild(
+            TreeNode(
+              name: "Publications",
+              value: "",
+              status: LeafStatus.isNotLeaf, resume: res
+            )
+          )
+          for (index, publication) in publicationsArray.enumerated() {
+            if let journalStr = publication["journal"] as? String {
+              if let yearStr = publication["year"] as? String {
+                let nameString = "\(journalStr), \(yearStr)"
+                let paperNode = pubsNode.addChild(
+                  TreeNode(
+                    name: nameString,
+                    value: "",
+                    status:
+                      LeafStatus.isNotLeaf, resume: res
+                  ))
+                for (key, val) in publication {
+                  switch val {
+                  case let strVal as String:
+                    paperNode.addChild(
+                      TreeNode(
+                        name: key,
+                        value: strVal,
+                        status: LeafStatus.disabled, resume: res
+                      ))
+
+                  case let authorArray as [String]:
+                    let authorNode = paperNode.addChild(
+                      TreeNode(
+                        name: "authors",
+                        value: "",
+                        status: LeafStatus.isNotLeaf, resume: res))
+                    for (index, author) in authorArray.enumerated() {
+                      authorNode
+                        .addChild(
+                          TreeNode(
+                            name: "",
+                            value: author,
+                            status: LeafStatus
+                              .disabled, resume: res)
+                        )
+
+                    }
+                  default:
+                    print("unknown publication attribute")
+                  }
+                }
+              } else {
+                print("year can't be read as string")
+              }
+
+            } else {
+              print("journal is not string")
+            }
+          }
+
+        }
+
+        if let moreInfoString = json["more-info"] as? String {
+          let infoNode =
+            rootNode
+            .addChild(
+              TreeNode(
+                name: "More Information",
+                value: "",
+                status: LeafStatus.isNotLeaf, resume: res
+              )
+            )
+          infoNode.addChild(
+            TreeNode(
+              name: "", value: moreInfoString,
+              status: LeafStatus.saved, resume: res))
+        }
+      } else {
+        print("could not read json")
+      }
+    } catch {
+      print("an error was thrown \(error)")
+    }
+    return rootNode
+  }
+
+  func rebuildJSON() -> String {
+    var jsonString = "{\n"
+
+    if let myRootNode = self.rootNode {
+      // 1. Add "meta" dynamically
+      jsonString += """
+        "meta": {
+            "format": "FRESH@0.6.0",
+            "version": "0.1.0"
+        },
+        """
+      // 1b. Missing Labels
+      if let labelsNode = myRootNode.children?.first(where: {
+        $0.name == "Labels"
+      }) {
+        let labelsArray = labelsNode.children?.sorted(by: { $0.myIndex < $1.myIndex })
+          .compactMap { $0.value as String }
+        if let labelsArray = labelsArray, !labelsArray.isEmpty {
+          jsonString += """
+            "labels": [
+            \(labelsArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
+        }
+      }
+      // 2. Traverse and add section-labels dynamically
+      jsonString += """
+        "section-labels": {
+        """
+      if let sectionLabelsNode = myRootNode.children?.first(where: { $0.name == "Section Labels" })
+      {
+        jsonString +=
+          sectionLabelsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap({ child in
+            guard let value = child.value as? String else { return nil }
+            return "\"\(child.name)\": \"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+          }).joined(separator: ",\n") ?? ""
+      }
+      jsonString += "\n},"
+
+      // 3. Traverse and add contact information dynamically
+      if let contactInfoNode = myRootNode.children?.first(where: { $0.name == "Contact Info" }) {
+        jsonString += """
+          "contact": {
+          """
+        jsonString +=
+          contactInfoNode.children?.compactMap({ child in
+            if child.name == "location" {
+              let locationString =
+                child.children?.compactMap({ locChild in
+                  guard let value = locChild.value as? String else { return nil }
+                  return
+                    "\"\(locChild.name)\": \"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+                }).joined(separator: ",\n") ?? ""
+              return "\"\(child.name)\": {\n\(locationString)\n}"
+            } else if let value = child.value as? String {
+              return "\"\(child.name)\": \"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+            }
+            return nil
+          }).joined(separator: ",\n") ?? ""
+        jsonString += "\n},"
+      }
+
+      // 4. Traverse and add summary dynamically
+      if let summaryNode = myRootNode.children?.first(where: { $0.name == "Summary" }) {
+        let summaryArray = summaryNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap
+        { $0.value as? String }
+        if let summaryArray = summaryArray, !summaryArray.isEmpty {
+          jsonString += """
+            "summary": [
+            \(summaryArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
+        }
+      }
+
+      // 5. Traverse and add employment dynamically (sorted by myIndex)
+      if let employmentNode = myRootNode.children?.first(where: { $0.name == "Employment" }) {
+        jsonString += """
+          "employment": [
+          """
+        let employmentArray =
+          employmentNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+            jobNode -> String? in
+            var jobDict: [String: Any] = [:]
+            if !jobNode.name.isEmpty { jobDict["employer"] = jobNode.name }
+            for jobDetail in jobNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+              if jobDetail.name == "highlights" {
+                let highlightsArray = jobDetail.children?.sorted(by: { $0.myIndex < $1.myIndex })
+                  .compactMap { $0.value as? String }
+                if let highlightsArray = highlightsArray, !highlightsArray.isEmpty {
+                  jobDict[jobDetail.name] = highlightsArray
+                }
+              } else if !jobDetail.name.isEmpty, let value = jobDetail.value as? String {
+                jobDict[jobDetail.name] = value
+              }
+            }
+            if !jobDict.isEmpty {
+              let jobJSON = jobDict.map { key, value -> String in
+                if let arrayValue = value as? [String] {
+                  return
+                    "\"\(key)\": [\n\(arrayValue.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))\n]"
+                } else if let stringValue = value as? String {
+                  return
+                    "\"\(key)\": \"\(stringValue.replacingOccurrences(of: "\"", with: "\\\""))\""
+                }
+                return ""
+              }.joined(separator: ",\n")
+              return "{\n\(jobJSON)\n}"
+            }
+            return nil
+          }.joined(separator: ",\n") ?? ""
+        jsonString += employmentArray
+        jsonString += "\n],"
+      }
+
+      // 6. Traverse and add education dynamically (sorted by myIndex)
+      if let educationNode = myRootNode.children?.first(where: { $0.name == "Education" }) {
+        jsonString += """
+          "education": [
+          """
+        let educationArray =
+          educationNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+            schoolNode -> String? in
+            var schoolDict: [String: Any] = [:]
+            if !schoolNode.name.isEmpty { schoolDict["institution"] = schoolNode.name }
+            for schoolDetail in schoolNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+              if !schoolDetail.name.isEmpty, let value = schoolDetail.value as? String {
+                schoolDict[schoolDetail.name] = value
+              }
+            }
+            if !schoolDict.isEmpty {
+              let schoolJSON = schoolDict.map { key, value -> String in
+                return "\"\(key)\": \"\(value as! String)\""
+              }.joined(separator: ",\n")
+              return "{\n\(schoolJSON)\n}"
+            }
+            return nil
+          }.joined(separator: ",\n") ?? ""
+        jsonString += educationArray
+        jsonString += "\n],"
+      }
+
+      // 7. Traverse and add skills-and-expertise dynamically
+      if let skillsNode = myRootNode.children?.first(where: { $0.name == "Skills and Expertise" }) {
+        let skillsArray = skillsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+          $0.value as? String
+        }
+        if let skillsArray = skillsArray, !skillsArray.isEmpty {
+          jsonString += """
+            "skills-and-expertise": [
+            \(skillsArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
+        }
+      }
+
+      // 8. Traverse and add languages dynamically
+      if let languagesNode = myRootNode.children?.first(where: {
+        $0.name == "Languages and Frameworks"
+      }) {
+        let languagesArray = languagesNode.children?.sorted(by: { $0.myIndex < $1.myIndex })
+          .compactMap { $0.value as? String }
+        if let languagesArray = languagesArray, !languagesArray.isEmpty {
+          jsonString += """
+            "languages": [
+            \(languagesArray.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))
+            ],
+            """
+        }
+      }
+
+      // 9. Traverse and add projects-and-hobbies dynamically
+      if let projectsNode = myRootNode.children?.first(where: { $0.name == "Projects and Hobbies" }) {
+        jsonString += """
+    "projects-and-hobbies": [
+    """
+
+        let projectsArray = projectsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap { projectNode -> String? in
+          var projectString = ""
+
+          // Set the project title
+          if !projectNode.name.isEmpty {
+            projectString += "\"title\": \"\(projectNode.name)\""
+          }
+
+          // Handle examples
+          var examplesArray: [String] = []
+          for example in projectNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+            var exampleString = "{"
+            // Extract both "name" and "description" from the node's children
+             let exampleName = example.name
+            if !exampleName.isEmpty {
+              exampleString += "\"name\": \"\(exampleName.replacingOccurrences(of: "\"", with: "\\\""))\", "
+            }
+            if let descriptionNode = example.children?.first(where: { $0.name.lowercased() == "description" }), let description = descriptionNode.value as? String {
+              exampleString += "\"description\": \"\(description.replacingOccurrences(of: "\"", with: "\\\""))\""
+            }
+            exampleString += "}"
+            examplesArray.append(exampleString)
+          }
+
+          // Add examples to project
+          if !examplesArray.isEmpty {
+            projectString += ", \"examples\": [\n" + examplesArray.joined(separator: ",\n") + "\n]"
+          }
+
+          // Wrap the project in curly braces
+          return "{\n\(projectString)\n}"
+
+        }.joined(separator: ",\n") ?? ""
+
+        jsonString += projectsArray
+        jsonString += "\n],"
+      }
+      // 10. Traverse and add publications dynamically
+      if let publicationsNode = myRootNode.children?.first(where: { $0.name == "Publications" }) {
+        jsonString += """
+          "publications": [
+          """
+        let publicationsArray =
+          publicationsNode.children?.sorted(by: { $0.myIndex < $1.myIndex }).compactMap {
+            pubNode -> String? in
+            var pubDict: [String: Any] = [:]
+            if !pubNode.name.isEmpty { pubDict["title"] = pubNode.name }
+            for pubDetail in pubNode.children?.sorted(by: { $0.myIndex < $1.myIndex }) ?? [] {
+              if pubDetail.name == "authors" {
+                let authorsArray = pubDetail.children?.sorted(by: { $0.myIndex < $1.myIndex })
+                  .compactMap { $0.value as String }
+                if let authorsArray = authorsArray, !authorsArray.isEmpty {
+                  pubDict[pubDetail.name] = authorsArray
+                }
+              } else if !pubDetail.name.isEmpty, let value = pubDetail.value as? String {
+                pubDict[pubDetail.name] = value
+              }
+            }
+            if !pubDict.isEmpty {
+              let pubJSON = pubDict.map { key, value -> String in
+                if let arrayValue = value as? [String] {
+                  return
+                    "\"\(key)\": [\n\(arrayValue.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",\n"))\n]"
+                } else if let stringValue = value as? String {
+                  return
+                    "\"\(key)\": \"\(stringValue.replacingOccurrences(of: "\"", with: "\\\""))\""
+                }
+                return ""
+              }.joined(separator: ",\n")
+              return "{\n\(pubJSON)\n}"
+            }
+            return nil
+          }.joined(separator: ",\n") ?? ""
+        jsonString += publicationsArray
+        jsonString += "\n],"
+      }
+
+      // 11. Traverse and add more-info dynamically
+      if let moreInfoNode = myRootNode.children?.first(where: { $0.name == "More Information" }) {
+        if let moreInfoValue = moreInfoNode.children?.first?.value as? String,
+          !moreInfoValue.isEmpty
+        {
+          jsonString += """
+            "more-info": "\(moreInfoValue.replacingOccurrences(of: "\"", with: "\\\""))"
+            """
+        }
+      }
+
+      // 12. Final addition of closing brace
+      jsonString += "\n}"
+    }
+
+    return jsonString
+  }
+}
+//
+//  ResumeUpdateNode.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/2/24.
+//
+import Foundation
+
+struct ProposedRevisionNode: Codable, Equatable {
+  var id: String = ""
+  var oldValue: String = ""
+  var newValue: String = ""
+  var valueChanged: Bool = false
+  var why: String = ""
+}
+
+struct RevisionsContainer: Codable {
+  var revArray: [ProposedRevisionNode]
+}
+
+enum PostReviewAction: String, Codable {
+  case accepted = "No action required. Revision Accepted."
+  case acceptedWithChanges = "No action required. Revision Accepted with reviewer changes."
+  case noChange = "No action required. Original value retained as recommended."
+  case restored = "No action Required. Revision rejected and original value restored."
+  case revise =
+    "Action Required: Please update your submission to incorporate the reviewer comments."
+  case rewriteNoComment = "Action Required: Revsion rejected without comment, please try again."
+  case mandatedChangeNoComment =
+    "Action Required: Unchanged submission rejected. Please propose a revised value for this field"
+  case mandatedChange =
+    "Action Required: Unchanged submission rejected. Please propose a revised value for this field to incorporate reviewer comments"
+  case unevaluated = "Unevaluated"
+
+}
+
+@Observable class FeedbackNode {
+  var id: String
+  var originalValue: String
+  var proposedRevision: String = ""
+  var actionRequested: PostReviewAction = .unevaluated
+  var reviewerComments: String = ""
+  init(
+    id: String = "",
+    originalValue: String = "",
+    proposedRevision: String = "",
+    actionRequested: PostReviewAction = .unevaluated,
+    reviewerComments: String = ""
+  ) {
+    self.id = id
+    self.originalValue = originalValue
+    self.proposedRevision = proposedRevision
+    self.actionRequested = actionRequested
+    self.reviewerComments = reviewerComments
+  }
+
+}
+extension FeedbackNode: Encodable {
+  enum CodingKeys: String, CodingKey {
+    case id
+    case originalValue
+    case proposedRevision
+    case actionRequested
+    case reviewerComments
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(originalValue, forKey: .originalValue)
+    try container.encode(proposedRevision, forKey: .proposedRevision)
+    try container.encode(actionRequested, forKey: .actionRequested)
+    try container.encode(reviewerComments, forKey: .reviewerComments)
+  }
+}
+func fbToJson(_ feedbackNodes: [FeedbackNode]) -> String? {
+  let encoder = JSONEncoder()
+  encoder.outputFormatting = .prettyPrinted // Optional: makes the JSON output more readable
+  do {
+    let jsonData = try encoder.encode(feedbackNodes)
+    if let jsonString = String(data: jsonData, encoding: .utf8) {
+      return jsonString
+    } else {
+      print("Error converting JSON data to String")
+      return nil
+    }
+  } catch {
+    print("Error encoding FeedbackNodes to JSON: \(error)")
+    return nil
+  }
+}
+//
+//  ResumeApplicant.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/25/24.
+//
+
+import Foundation
+
+struct Applicant {
+  let name: String = "Christopher Culbreath"
+  let address: String = "7317 Shadywood Drive"
+  let city: String = "Austin"
+  let state: String = "Texas"
+  let zip: String = "78745"
+  let websites: String = "culbreath.net"
+  let email: String = "cc@physicscloud.net"
+}
+import Foundation
+
+class PdfResume {
+  static func render(res: Resume) {
+    // Step 1: Get the paths for the JSON input, PDF output, and theme
+      if !FileHandler.fontsDone {
+//      FileHandler.copyFontsToAppSupport()
+      FileHandler.fontsDone = true
+
+    }
+    let process = Process()
+
+    let jsonPath: URL = FileHandler.jsonUrl()
+    let pdfPath: URL = FileHandler.pdfUrl()
+    let templatePath: URL = FileHandler.pdfUrl(filename: "rendered-resume.pdf.html")
+
+    // Locate the typewriter theme directory in the bundle
+    guard
+      let themeDirectory = Bundle.main.url(
+        forResource: "typewriter", withExtension: nil, subdirectory: "scripts")
+
+    else {
+      print("Theme directory not found")
+      return
+    }
+    process.currentDirectoryURL = themeDirectory
+    // Get all files and directories in the theme (this step is optional for listing files)
+//    let files = listFilesInThemeDirectory(at: themeDirectory)
+    //    print("Theme files: \(files)")  // You can remove this line if you don't need to list files
+
+    // Step 2: Find the HackMyResume utility in the bundle
+    guard
+      let utilityURL = Bundle.main.url(
+        forResource: "HackMyResume", withExtension: nil, subdirectory: "scripts")
+    else {
+      print("HackMyResume executable not found in the bundle")
+      return
+    }
+
+    // Step 3: Create a Process to execute the utility
+    process.executableURL = utilityURL
+
+    // Step 4: Pass the correct arguments
+    process.arguments = [
+      "build",
+      jsonPath.path,  // Path to the input JSON file
+      "to",
+      templatePath.path,  // Path to the output PDF file
+      "-t", themeDirectory.path,  // Pass the theme directory
+      "-p", "none",  // Specify the PDF generator (weasyprint)
+      "-d",  // Enable debugging
+    ]
+
+    // Step 5: Set up a pipe to capture standard output
+    let pipe = Pipe()
+    process.standardOutput = pipe
+
+    do {
+      // Step 6: Execute the process
+      try process.run()
+
+      // Wait until the process is done
+      process.waitUntilExit()
+
+      // Step 7: Read and print the output if needed
+      let data = pipe.fileHandleForReading.readDataToEndOfFile()
+      if let output = String(data: data, encoding: .utf8) {
+        print("Output: \(output)")
+      }
+      htmlToPdf(sourceUrl: templatePath, destUrl: pdfPath)
+    } catch {
+      print("Error executing the utility: \(error)")
+    }
+  }
+
+  // Helper function to list files in a directory (optional)
+  static func listFilesInThemeDirectory(at directory: URL) -> [URL] {
+    let fileManager = FileManager.default
+    var urls = [URL]()
+
+    if let enumerator = fileManager.enumerator(at: directory, includingPropertiesForKeys: nil) {
+      for case let url as URL in enumerator {
+        urls.append(url)
+      }
+    }
+
+    return urls
+  }
+  static func htmlToPdf(sourceUrl: URL, destUrl: URL) {
+    let process = Process()
+    print("html")
+    guard
+      let utilityURL = Bundle.main.url(
+        forResource: "weasyprint", withExtension: nil, subdirectory: "weasy-dist")
+    else {
+      print("weasyprint executable not found in the bundle")
+      return
+    }
+    process.executableURL = utilityURL
+    process.arguments = [
+      sourceUrl.path,
+      destUrl.path,
+    ]
+
+    // Step 5: Set up a pipe to capture standard output
+    let pipe = Pipe()
+    process.standardOutput = pipe
+
+    do {
+      // Step 6: Execute the process
+      try process.run()
+
+      // Wait until the process is done
+      process.waitUntilExit()
+
+      // Step 7: Read and print the output if needed
+      let data = pipe.fileHandleForReading.readDataToEndOfFile()
+      if let output = String(data: data, encoding: .utf8) {
+        print("Output: \(output)")
+      }
+    } catch {
+      print("Error executing the utility: \(error)")
+    }
+  }
+}
+//
+//  ResumeApiRefresh.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/7/24.
+//
+
+
+
+import Foundation
+
+func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?, String?) -> Void) {
+  // URL of the API endpoint
+  guard let url = URL(string: "https://resume.physicscloud.net/build-resume-file") else {
+    print("Invalid URL")
+    completion(nil, nil)
+    return
+  }
+
+  // Create a URLRequest
+  var request = URLRequest(url: url)
+  request.httpMethod = "POST"
+
+  // Set the API key in the headers
+  request.addValue("b0b307e1-6eb4-41d9-8c1f-278c254351d3", forHTTPHeaderField: "x-api-key")
+
+  // Prepare the file data to be uploaded
+  let boundary = UUID().uuidString
+  let fileData = try! Data(contentsOf: jsonPath)
+
+  // Set the Content-Type to multipart/form-data
+  request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+  // Create multipart form body
+  var body = Data()
+  body.append("--\(boundary)\r\n".data(using: .utf8)!)
+  body.append("Content-Disposition: form-data; name=\"resumeFile\"; filename=\"\(jsonPath.lastPathComponent)\"\r\n".data(using: .utf8)!)
+  body.append("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
+  body.append(fileData)
+  body.append("\r\n".data(using: .utf8)!)
+  body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+  // Set the body
+  request.httpBody = body
+
+  // Create the URLSession and upload the file
+  let task = URLSession.shared.dataTask(with: request) { data, response, error in
+    if let error = error {
+      print("Error: \(error)")
+      completion(nil, nil)
+      return
+    }
+
+    if let response = response as? HTTPURLResponse {
+      print("Response status code: \(response.statusCode)")
+    }
+
+    guard let data = data else {
+      print("No data received")
+      completion(nil, nil)
+      return
+    }
+
+    do {
+      if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+        let pdfUrl = json["pdfUrl"] as? String
+        let resumeText = json["resumeText"] as? String
+        completion(pdfUrl, resumeText)
+      } else {
+        print("Invalid JSON format")
+        completion(nil, nil)
+      }
+    } catch {
+      print("Error parsing JSON: \(error)")
+      completion(nil, nil)
+    }
+  }
+
+  task.resume()
+}
+
+func downloadResPDF(from urlString: String, completion: @escaping (URL?) -> Void) {
+  guard let url = URL(string: urlString) else {
+    print("Invalid URL")
+    completion(nil)
+    return
+  }
+
+  // Create a URLSession data task to download the PDF
+  let task = URLSession.shared.downloadTask(with: url) { (tempFileURL, response, error) in
+    if let error = error {
+      print("Error downloading PDF: \(error)")
+      completion(nil)
+      return
+    }
+
+    guard let tempFileURL = tempFileURL else {
+      print("No file URL")
+      completion(nil)
+      return
+    }
+
+    // Move the file to a permanent location
+    let fileManager = FileManager.default
+    let destinationURL = FileHandler.pdfUrl()
+
+    do {
+      // If file exists, remove it first
+      if fileManager.fileExists(atPath: destinationURL.path) {
+        try fileManager.removeItem(at: destinationURL)
+      }
+
+      // Move the file from temp location to permanent destination
+      try fileManager.moveItem(at: tempFileURL, to: destinationURL)
+      print("File downloaded to: \(destinationURL)")
+      completion(destinationURL)
+    } catch {
+      print("Error saving file: \(error)")
+      completion(nil)
+    }
+  }
+
+  task.resume()
+}
+//
+//  swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/30/24.
+//
+
+import Foundation
+import SwiftData
+
+@Observable
+final class ResStore {
+  var resumes: [Resume] = []
+  var selectedRes: Resume?
+
+  private var modelContext: ModelContext?
+  init() {}
+  func initialize(context: ModelContext) {
+    self.modelContext = context
+    loadResumes()  // Load data from the database when the store is initialized
+  }
+  private func loadResumes() {
+    let descriptor = FetchDescriptor<Resume>()
+    do {
+      resumes = try modelContext!.fetch(descriptor)
+    } catch {
+      print("Failed to fetch Resume Refs: \(error)")
+    }
+  }
+  @discardableResult
+  func addResume(res: Resume, to jobApp: JobApp) -> Resume {
+    resumes.append(res)
+    jobApp.addResume(res)
+    modelContext!.insert(res)
+    saveContext()
+    return res
+  }
+
+  @discardableResult
+  func create(jobApp: JobApp, sources: [ResRef]) -> Resume? {
+    if let modelContext = modelContext {
+      print("Model context available")
+      print("Creating resume for job application: \(jobApp)")
+
+      let resume = Resume(jobApp: jobApp, enabledSources: sources)!
+      print("Resume object created")
+
+      if let jsonSource = sources.filter({ $0.type == .jsonSource }).first {
+        print("JSON source found: \(jsonSource)")
+
+        // Build the tree and attach it to the resume
+        guard let jsonData = jsonSource.content.data(using: .utf8) else {
+          print("Error converting JSON content to data")
+          return nil
+        }
+
+        resume.rootNode = resume.buildTree(from: jsonData, res: resume)
+        print("Resume tree built from JSON data")
+
+        // Insert resume into the model context and save
+        modelContext.insert(resume)
+
+        do {
+          try modelContext.save()
+          print("Model context saved after processing JSON data")
+        } catch {
+          print("Error saving context: \(error)")
+          return nil
+        }
+
+        print("Resume successfully saved and processed")
+        self.addResume(res: resume, to: jobApp)
+        print("Resume added to job application")
+        return resume
+      } else {
+        print("No JSON source found")
+        return nil
+      }
+    } else {
+      print("Model context not available")
+      return nil
+    }
+  }
+  func createDuplicate(res: Resume) -> Resume {
+
+    let newResume = Resume(
+      jobApp: res.jobApp!, enabledSources: res.enabledSources)
+    newResume!.rootNode = res.rootNode!.deepCopy(newResume: newResume!)
+    selectedRes = newResume
+    res.jobApp!.selectedRes = newResume
+    self.addResume(res: newResume!, to: res.jobApp!)
+    return newResume!
+
+  }
+
+  func deleteRes(_ res: Resume) {
+    if let index = resumes.firstIndex(of: res) {
+      if let rootNode = res.rootNode {
+        TreeNode.deleteTreeNode(node: rootNode, context: modelContext!) // Recursively delete rootNode and its children
+      }
+      resumes.remove(at: index)
+      modelContext!.delete(res)
+      saveContext()
+    }
+    else {
+      print("no rootnode")
+    }
+  }
+  //Form functionality incomplete
+  //    private func populateFormFromObj(_ resRef: JobApp) {
+  //        form.populateFormFromObj(jobApp)
+  //    }
+  //
+  //
+  //    func editWithForm(_ jobApp:JobApp? = nil) {
+  //        let jobAppEditing = jobApp ?? selectedApp
+  //        guard let jobAppEditing = jobAppEditing else {
+  //            fatalError("No job application available to edit.")
+  //        }
+  //        self.populateFormFromObj(jobAppEditing)
+  //    }
+  //    func cancelFormEdit(_ jobApp:JobApp? = nil) {
+  //        let jobAppEditing = jobApp ?? selectedApp
+  //        guard let jobAppEditing = jobAppEditing else {
+  //            fatalError("No job application available to restore state.")
+  //        }
+  //        self.populateFormFromObj(jobAppEditing)
+  //    }
+  //
+  //    func saveForm(_ jobApp:JobApp? = nil) {
+  //        let jobAppToSave = jobApp ?? selectedApp
+  //        guard let jobAppToSave = jobAppToSave else {
+  //            fatalError("No job application available to save.")
+  //        }
+  //        jobAppToSave.assignPropsFromForm(form)
+  //        saveContext()
+  //
+  //    }
+
+  // Save changes to the database
+  private func saveContext() {
+    do {
+      try modelContext!.save()
+    } catch {
+      print("Failed to save context: \(error)")
+    }
+  }
+}
+import SwiftData
+
+@Observable final class JobAppStore {
+  var jobApps: [JobApp] = []
+  var selectedApp: JobApp?
+  var form = JobAppForm()
+  var resStore: ResStore?
+
+  private var modelContext: ModelContext?
+  init() {
+
+  }
+  func initialize(context: ModelContext, resStore: ResStore) {
+    modelContext = context
+    self.resStore = resStore
+    loadJobApps()  // Load data from the database when the store is initialized
+  }
+
+  // Load JobApps from the database
+
+  private func loadJobApps() {
+    let descriptor = FetchDescriptor<JobApp>()
+    do {
+      jobApps = try modelContext!.fetch(descriptor)
+    } catch {
+      print("Failed to fetch JobApps: \(error)")
+    }
+  }
+  // Methods to manage jobApps
+
+  func addJobApp(_ jobApp: JobApp) -> JobApp? {
+    jobApps.append(jobApp)
+    modelContext!.insert(jobApp)
+    saveContext()
+    return jobApps.last
+  }
+  func deleteSelected() {
+    guard let deleteMe = selectedApp else {
+      fatalError("No job application available to delete.")
+    }
+
+    self.deleteJobApp(deleteMe)
+    selectedApp = self.jobApps.last  //!FixMe Problematic?
+  }
+  func deleteJobApp(_ jobApp: JobApp) {
+    if let index = jobApps.firstIndex(of: jobApp) {
+      if let resStore = resStore {
+        jobApp.resumes.forEach { resume in
+          resStore.deleteRes(resume)
+        }
+        jobApps.remove(at: index)
+        modelContext!.delete(jobApp)
+        saveContext()  //Error thrown here}
+      } else {
+        print("ResStore ref not here!")
+      }
+    }
+
+  }
+  private func populateFormFromObj(_ jobApp: JobApp) {
+    form.populateFormFromObj(jobApp)
+  }
+
+  func editWithForm(_ jobApp: JobApp? = nil) {
+    let jobAppEditing = jobApp ?? selectedApp
+    guard let jobAppEditing = jobAppEditing else {
+      fatalError("No job application available to edit.")
+    }
+    self.populateFormFromObj(jobAppEditing)
+  }
+  func cancelFormEdit(_ jobApp: JobApp? = nil) {
+    let jobAppEditing = jobApp ?? selectedApp
+    guard let jobAppEditing = jobAppEditing else {
+      fatalError("No job application available to restore state.")
+    }
+    self.populateFormFromObj(jobAppEditing)
+  }
+
+  func saveForm(_ jobApp: JobApp? = nil) {
+    let jobAppToSave = jobApp ?? selectedApp
+    guard let jobAppToSave = jobAppToSave else {
+      fatalError("No job application available to save.")
+    }
+    jobAppToSave.assignPropsFromForm(form)
+    saveContext()
+
+  }
+
+  // Save changes to the database
+  private func saveContext() {
+    do {
+      try modelContext!.save()
+      print("saved")
+    } catch {
+      print("Failed to save context: \(error)")
+    }
+  }
+}
+//
+//  FileManager.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/5/24.
+//
+
+import Foundation
+
+class FileHandler {
+  static var fontsDone: Bool = true
+  init() {
+    if !FileHandler.fontsDone {
+//      FileHandler.copyFontsToAppSupport()
+      FileHandler.fontsDone = true
+
+    }
+  }
+  // Static file manager and application support directory
+  static let fileManager = FileManager.default
+
+  static let appSupportDirectory: URL = {
+    // Ensure the Application Support directory exists
+    let appSupportDirectory = fileManager.urls(
+      for: .applicationSupportDirectory, in: .userDomainMask
+    ).first!
+    do {
+      try fileManager.createDirectory(
+        at: appSupportDirectory, withIntermediateDirectories: true, attributes: nil)
+    } catch {
+      print("Error creating Application Support directory: \(error)")
+    }
+    return appSupportDirectory
+  }()
+
+  static func readJsonUrl(filename: String = "resume-data.json") -> URL? {
+    let path = appSupportDirectory.appendingPathComponent(filename)
+    if FileManager.default.fileExists(atPath: path.path)
+    {
+      return path
+    } else {
+      return nil
+    }
+  }
+  static func jsonUrl(filename: String = "resume-data.json") -> URL {
+    return appSupportDirectory.appendingPathComponent(filename)
+  }
+
+  static func readPdfUrl(filename: String = "rendered-resume.pdf") -> URL? {
+    let path = appSupportDirectory.appendingPathComponent(filename)
+    if FileManager.default.fileExists(atPath: path.path)
+    {
+      return path
+    } else {
+      return nil
+    }
+  }
+  static func pdfUrl(filename: String = "rendered-resume.pdf") -> URL {
+    return appSupportDirectory.appendingPathComponent(filename)
+  }
+  // Function to save JSON to Application Support
+  static func saveJSONToFile(jsonString: String)->URL? {
+    let fileURL = FileHandler.jsonUrl()
+    do {
+      if let jsonData = jsonString.data(using: .utf8) {
+        try jsonData.write(to: fileURL)
+        print("JSON file saved successfully at \(fileURL.path)")
+        return fileURL
+
+      }
+    } catch {
+      print("Error saving JSON file: \(error)")
+    }
+    return nil
+  }
+
+
+//  static func copyFontsToAppSupport() {
+//    let fileManager = FileManager.default
+//
+//    // Get the app support directory
+//    if let appSupportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+//      let destinationURL = appSupportDirectory.appendingPathComponent("_fonts")
+//
+//      // Create the Application Support subdirectory if it doesn't exist
+////      do {
+////        try fileManager.createDirectory(at: destinationURL, withIntermediateDirectories: true, attributes: nil)
+////      } catch {
+////        print("Failed to create directory in Application Support: \(error)")
+////        return
+////      }
+//
+//      // Get the folder URL from the bundle
+//      if let bundleFolderURL = Bundle.main.url(forResource: "cooper", withExtension: "otf", subdirectory: "scripts") {
+//        do {
+//          // Copy all contents of the folder from the bundle to Application Support
+//          let folderContents = try fileManager.contentsOfDirectory(at: bundleFolderURL, includingPropertiesForKeys: nil)
+//          for file in folderContents {
+//            let destinationFileURL = destinationURL.appendingPathComponent(file.lastPathComponent)
+//
+//            // Check if file already exists in
+//              try fileManager.copyItem(at: bundleFolderURL, to: appSupportDirectory)
+//              print("Copied \(file.lastPathComponent) to Application Support")
+//
+//          }
+//        } catch {
+//          print("Failed to copy folder contents: \(error)")
+//        }
+//      } else {
+//        print("Could not locate folder in bundle: scripts/_fonts")
+//      }
+//    } else {
+//      print("Could not locate Application Support directory")
+//    }
+//  }
+}
+import SwiftData
+import Foundation
+
+@Observable
+final class CoverRefStore {
+  var storedCoverRefs: [CoverRef] = []
+  private var modelContext: ModelContext?
+
+  var defaultSources: [CoverRef] {
+    return storedCoverRefs.filter { $0.enabledByDefault == true }
+  }
+
+  init() {}
+
+  func initialize(context: ModelContext) {
+    self.modelContext = context
+    loadCoverRefs()  // Load data from the database when the store is initialized
+  }
+  var backgroundRefs: [CoverRef] {
+    return storedCoverRefs.filter { $0.type == .backgroundFact }
+  }
+
+  var writingSamples: [CoverRef] {
+    return storedCoverRefs.filter { $0.type == .writingSample }
+  }
+
+  private func loadCoverRefs() {
+    let descriptor = FetchDescriptor<CoverRef>()
+    do {
+      storedCoverRefs = try modelContext!.fetch(descriptor)
+    } catch {
+      print("Failed to fetch Cover Refs: \(error)")
+    }
+  }
+
+  @discardableResult
+  func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
+    storedCoverRefs.append(coverRef)
+    modelContext?.insert(coverRef)
+    saveContext()
+    return coverRef
+  }
+
+  func deleteCoverRef(_ coverRef: CoverRef) {
+    if let index = storedCoverRefs.firstIndex(of: coverRef) {
+      storedCoverRefs.remove(at: index)
+      modelContext?.delete(coverRef)
+      saveContext()
+    }
+  }
+
+  private func saveContext() {
+    do {
+      try modelContext?.save()
+    } catch {
+      print("Failed to save context: \(error)")
+    }
+  }
+}
+
+//
+//  swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/30/24.
+//
+
+import Foundation
+import SwiftData
+
+@Observable
+final class CoverLetterStore {
+  var coverRefStore: CoverRefStore?
+
+  private var modelContext: ModelContext?
+  init() {}
+  func initialize(context: ModelContext, refStore: CoverRefStore) {
+    self.modelContext = context
+    self.coverRefStore = refStore
+    print("CoverLetterStore Initialized")
+  }
+
+  @discardableResult
+  func addLetter(letter: CoverLetter, to jobApp: JobApp) -> CoverLetter {
+    jobApp.coverLetters.append(letter)
+    modelContext!.insert(letter)
+    saveContext()
+    return letter
+  }
+
+  @discardableResult
+  func create(jobApp: JobApp) -> CoverLetter {
+
+      print("Model context available")
+      print("Creating resume for job application: \(jobApp)")
+
+      let letter = CoverLetter(
+        enabledRefs: self.coverRefStore!.defaultSources,
+        jobApp: jobApp
+      )
+      print("CoverLetter object created")
+
+      modelContext!.insert(letter)
+      try? modelContext!.save()
+      return letter
+
+  }
+  func createDuplicate(letter: CoverLetter) -> CoverLetter {
+
+    let newLetter = CoverLetter( enabledRefs: letter.enabledRefs,
+                                 jobApp: letter.jobApp)
+    self.addLetter(letter: newLetter, to: letter.jobApp)
+    return newLetter
+
+  }
+
+  func deleteLetter(_ letter: CoverLetter) {
+    let jobApp = letter.jobApp
+    if let index = jobApp.coverLetters.firstIndex(of: letter){
+      jobApp.coverLetters.remove(at: index)
+      modelContext!.delete(letter)
+      saveContext()
+    }
+    else {
+      print("letter not attached to jobapp!")
+    }
+
+
+  }
+ 
+  // Save changes to the database
+  private func saveContext() {
+    do {
+      try modelContext!.save()
+    } catch {
+      print("Failed to save context: \(error)")
+    }
+  }
+}
+//
+//  swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/30/24.
+//
+
+import SwiftData
+
+@Observable
+final class ResRefStore {
+  var resRefs: [ResRef] = []
+  private var modelContext: ModelContext?
+  var defaultSources: [ResRef] {
+    return resRefs.filter { $0.enabledByDefault == true }
+  }
+  init() {}
+  func initialize(context: ModelContext) {
+    self.modelContext = context
+    loadResRefs()  // Load data from the database when the store is initialized
+  }
+  private func loadResRefs() {
+    let descriptor = FetchDescriptor<ResRef>()
+    do {
+      resRefs = try modelContext!.fetch(descriptor)
+    } catch {
+      print("Failed to fetch Resume Refs: \(error)")
+    }
+  }
+
+  @discardableResult
+  func addResRef(_ resRef: ResRef, res: Resume?) -> ResRef {
+
+    resRefs.append(resRef)
+    modelContext!.insert(resRef)
+    saveContext()
+    if let resume = res {
+      resume.enabledSources.append(resRef)
+    }
+    return resRef
+  }
+
+  func deleteResRef(_ resRef: ResRef) {
+    if let index = resRefs.firstIndex(of: resRef) {
+      resRefs.remove(at: index)
+      
+      modelContext!.delete(resRef)
+      saveContext()
+    }
+  }
+  var areRefsOk: Bool {
+    return resRefs.contains { $0.type == .resumeSource && $0.enabledByDefault } &&
+    resRefs.contains { $0.type == .jsonSource && $0.enabledByDefault }
+  }
+  //Form functionality incomplete
+  //    private func populateFormFromObj(_ resRef: JobApp) {
+  //        form.populateFormFromObj(jobApp)
+  //    }
+  //
+  //
+  //    func editWithForm(_ jobApp:JobApp? = nil) {
+  //        let jobAppEditing = jobApp ?? selectedApp
+  //        guard let jobAppEditing = jobAppEditing else {
+  //            fatalError("No job application available to edit.")
+  //        }
+  //        self.populateFormFromObj(jobAppEditing)
+  //    }
+  //    func cancelFormEdit(_ jobApp:JobApp? = nil) {
+  //        let jobAppEditing = jobApp ?? selectedApp
+  //        guard let jobAppEditing = jobAppEditing else {
+  //            fatalError("No job application available to restore state.")
+  //        }
+  //        self.populateFormFromObj(jobAppEditing)
+  //    }
+  //
+  //    func saveForm(_ jobApp:JobApp? = nil) {
+  //        let jobAppToSave = jobApp ?? selectedApp
+  //        guard let jobAppToSave = jobAppToSave else {
+  //            fatalError("No job application available to save.")
+  //        }
+  //        jobAppToSave.assignPropsFromForm(form)
+  //        saveContext()
+  //
+  //    }
+
+  // Save changes to the database
+  private func saveContext() {
+    do {
+      try modelContext!.save()
+    } catch {
+      print("Failed to save context: \(error)")
+    }
+  }
+}
+//
+//  ResRef.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/15/24.
+//
+
+import Foundation
+import SwiftData
+
+enum SourceType: String, CaseIterable, Identifiable, Decodable {
+  case background = "Background Resource"
+  case resumeSource = "Model Resume"
+  case jsonSource = "Model JSON"
+  
+  var id: String { self.rawValue }
+}
+
+@Model
+class ResRef: Identifiable {
+  var id: String
+  var content: String
+  var name: String
+  var enabledByDefault: Bool
+  private var typeRawValue: String
+  var enabledResumes: [Resume] = []
+  var type: SourceType {
+    get {
+      return SourceType(rawValue: typeRawValue) ?? .background
+    }
+    set {
+      typeRawValue = newValue.rawValue
+    }
+  }
+
+  // Custom Decodable initializer
+
+  // CodingKeys enum
+
+  // Initializer for custom creation
+  init(
+    name: String = "", content: String = "", type: SourceType = SourceType.background,
+    enabledByDefault: Bool = false
+  ) {
+    self.id = UUID().uuidString
+    self.content = content
+    self.name = name
+    self.typeRawValue = type.rawValue
+    self.enabledByDefault = enabledByDefault
+  }
+}
+import Foundation
+import SwiftData
+
+enum CoverRefType: String, Codable {
+  case writingSample = "writingSample"
+  case backgroundFact = "backgroundFact"
+}
+
+@Model
+class CoverRef: Identifiable, Codable {
+  var id: String
+  var content: String
+  var name: String
+  var enabledByDefault: Bool
+  var type: CoverRefType
+
+  init(
+    name: String = "", content: String = "",
+    enabledByDefault: Bool = false,  type: CoverRefType
+  ) {
+    self.id = UUID().uuidString
+    self.content = content
+    self.name = name
+    self.enabledByDefault = enabledByDefault
+    self.type = type
+  }
+
+  // Manual Codable implementation
+  enum CodingKeys: String, CodingKey {
+    case id
+    case content
+    case name
+    case enabledByDefault
+    case type
+  }
+
+  // Required initializer for Decodable
+  required init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    content = try container.decode(String.self, forKey: .content)
+    name = try container.decode(String.self, forKey: .name)
+    enabledByDefault = try container.decode(Bool.self, forKey: .enabledByDefault)
+    type = try container.decode(CoverRefType.self, forKey: .type)
+  }
+
+  // Required function for Encodable
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(content, forKey: .content)
+    try container.encode(name, forKey: .name)
+    try container.encode(enabledByDefault, forKey: .enabledByDefault)
+    try container.encode(type, forKey: .type)
+  }
+}
+import Foundation
+import SwiftData
+import SwiftUI
+
+enum Statuses: Codable {
+  case new
+  case inProgress
+  case unsubmitted
+  case submitted
+  case interview
+  case closed
+  case followUp
+}
+@Model class JobApp: Equatable, Identifiable, Decodable, Hashable {
+  @Relationship(deleteRule: .cascade, inverse: \Resume.jobApp) var resumes: [Resume] = []
+  @Relationship(deleteRule: .cascade, inverse: \CoverLetter.jobApp) var coverLetters: [CoverLetter] = []
+  @Transient var selectedRes: Resume?
+  var job_position: String
+  var job_location: String
+  var company_name: String
+  var company_linkedin_id: String = ""
+  var job_posting_time: String = ""
+  var job_description: String
+  var seniority_level: String = ""
+  var employment_type: String = ""
+  var job_function: String = ""
+  var industries: String = ""
+  var job_apply_link: String = ""
+  var status: Statuses = Statuses.new
+  enum CodingKeys: String, CodingKey {
+    case job_position
+    case job_location
+    case company_name
+    case company_linkedin_id
+    case job_posting_time
+    case job_description
+    case seniority_level
+    case employment_type
+    case job_function
+    case industries
+    case job_apply_link
+    case resumes
+    case coverLetters
+    case selectedRes
+    case status
+  }
+  var jobListingString: String {
+    var descriptionParts: [String] = []
+
+    descriptionParts.append("Job Position: \(job_position)")
+    descriptionParts.append("Job Location: \(job_location)")
+    descriptionParts.append("Company Name: \(company_name)")
+
+    if company_linkedin_id != "" {
+      descriptionParts.append("Company LinkedIn ID: \(company_linkedin_id)")
+    }
+
+    if job_posting_time != "" {
+      descriptionParts.append("Job Posting Time: \(job_posting_time)")
+    }
+
+    if !seniority_level.isEmpty {
+      descriptionParts.append("Seniority Level: \(seniority_level)")
+    }
+
+    if !employment_type.isEmpty {
+      descriptionParts.append("Employment Type: \(employment_type)")
+    }
+
+    if !job_function.isEmpty {
+      descriptionParts.append("Job Function: \(job_function)")
+    }
+
+    if !industries.isEmpty {
+      descriptionParts.append("Industries: \(industries)")
+    }
+    if !job_description.isEmpty {
+      descriptionParts.append("Job Description: \(job_description)")
+    }
+
+    return descriptionParts.joined(separator: "\n")
+  }
+
+  @ViewBuilder
+  var statusTag: some View {
+    switch self.status {
+    case .new:
+      RoundedTagView(
+        tagText: "New", backgroundColor: .green, foregroundColor: .white
+      )
+    case .inProgress:
+      RoundedTagView(
+        tagText: "In Progress", backgroundColor: .mint,
+        foregroundColor: .white)
+    case .unsubmitted:
+      RoundedTagView(
+        tagText: "Unsubmitted", backgroundColor: .cyan,
+        foregroundColor: .white)
+    case .submitted:
+      RoundedTagView(
+        tagText: "Submitted", backgroundColor: .indigo,
+        foregroundColor: .white)
+    case .interview:
+      RoundedTagView(
+        tagText: "Interview", backgroundColor: .pink,
+        foregroundColor: .white)
+    case .closed:
+      RoundedTagView(
+        tagText: "Closed", backgroundColor: .gray,
+        foregroundColor: .white)
+    case .followUp:
+      RoundedTagView(
+        tagText: "Follow Up", backgroundColor: .yellow,
+        foregroundColor: .white)
+    }
+  }
+
+  init(
+    job_position: String = "", job_location: String = "",
+    company_name: String = "", company_linkedin_id: String = "",
+    job_posting_time: String = "", job_description: String = "",
+    seniority_level: String = "", employment_type: String = "",
+    job_function: String = "", industries: String = "",
+    job_apply_link: String = ""
+  ) {
+    self.job_position = job_position
+    self.job_location = job_location
+    self.company_name = company_name
+    self.company_linkedin_id = company_linkedin_id
+    self.job_posting_time = job_posting_time
+    self.job_description = job_description
+    self.seniority_level = seniority_level
+    self.employment_type = employment_type
+    self.job_function = job_function
+    self.industries = industries
+    self.job_apply_link = job_apply_link
+  }
+
+  static func == (lhs: JobApp, rhs: JobApp) -> Bool {
+    return lhs.id == rhs.id
+  }
+  func addResume(_ resume: Resume) {
+    if self.status == .new {
+      self.status = .inProgress
+    }
+
+    var resumes = self.resumes
+    resumes.append(resume)
+    self.resumes = resumes
+    if selectedRes == nil { selectedRes = resume }
+
+  }
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+  }
+
+  required init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.job_position = try container.decode(String.self, forKey: .job_position)
+    self.job_location = try container.decode(String.self, forKey: .job_location)
+    self.company_name = try container.decode(String.self, forKey: .company_name)
+    self.company_linkedin_id =
+      try container.decodeIfPresent(String.self, forKey: .company_linkedin_id) ?? ""
+    self.job_posting_time =
+      try container.decodeIfPresent(String.self, forKey: .job_posting_time) ?? ""
+    self.job_description = try container.decode(String.self, forKey: .job_description)
+    self.seniority_level =
+      try container.decodeIfPresent(String.self, forKey: .seniority_level) ?? ""
+    self.employment_type =
+      try container.decodeIfPresent(String.self, forKey: .employment_type) ?? ""
+    self.job_function = try container.decodeIfPresent(String.self, forKey: .job_function) ?? ""
+    self.industries = try container.decodeIfPresent(String.self, forKey: .industries) ?? ""
+    self.job_apply_link = try container.decodeIfPresent(String.self, forKey: .job_apply_link) ?? ""
+    //        self.resumes = try container.decodeIfPresent([Resume].self, forKey: .resumes) ?? []
+    //        self.selectedRes = try container.decodeIfPresent(Resume.self, forKey: .selectedRes)
+    self.status = try container.decodeIfPresent(Statuses.self, forKey: .status) ?? .new
+  }
+  public func assignPropsFromForm(_ sourceJobAppForm: JobAppForm) {
+    self.job_position = sourceJobAppForm.job_position
+    self.job_location = sourceJobAppForm.job_location
+    self.company_name = sourceJobAppForm.company_name
+    self.company_linkedin_id = sourceJobAppForm.company_linkedin_id
+    self.job_posting_time = sourceJobAppForm.job_posting_time
+    self.job_description = sourceJobAppForm.job_description
+    self.seniority_level = sourceJobAppForm.seniority_level
+    self.employment_type = sourceJobAppForm.employment_type
+    self.job_function = sourceJobAppForm.job_function
+    self.industries = sourceJobAppForm.industries
+    self.job_apply_link = sourceJobAppForm.job_apply_link
+  }
+
+
+}
+import SwiftData
+
+@Observable class JobAppForm {
+  var job_position: String = ""
+  var job_location: String = ""
+  var company_name: String = ""
+  var company_linkedin_id: String = ""
+  var job_posting_time: String = ""
+  var job_description: String = ""
+  var seniority_level: String = ""
+  var employment_type: String = ""
+  var job_function: String = ""
+  var industries: String = ""
+  var job_apply_link: String = ""
+
+  init() {
+  }
+  func populateFormFromObj(_ source: JobApp) {
+    self.job_position = source.job_position
+    self.job_location = source.job_location
+    self.company_name = source.company_name
+    self.company_linkedin_id = source.company_linkedin_id
+    self.job_posting_time = source.job_posting_time
+    self.job_description = source.job_description
+    self.seniority_level = source.seniority_level
+    self.employment_type = source.employment_type
+    self.job_function = source.job_function
+    self.industries = source.industries
+    self.job_apply_link = source.job_apply_link
+  }
+}
+import Foundation
+import SwiftData
+import SwiftUI
+
+enum LeafStatus: String, Codable, Hashable {
+  case isEditing = "isEditing"
+  case aiToReplace = "aiToReplace"
+  case disabled = "leafDisabled"
+  case saved = "leafValueSaved"
+  case isNotLeaf = "nodeIsNotLeaf"
+}
+
+// Example SwiftData model
+
+@Model class TreeNode: Identifiable {
+  var id = UUID().uuidString
+  var name: String = ""
+  var value: String
+
+  private(set) var myIndex: Int = -1
+  private var childIndexer = 0
+    var children: [TreeNode]? = nil
+  @Relationship(deleteRule: .cascade, inverse:\TreeNode.children)
+  weak var parent: TreeNode? = nil
+  @Relationship(deleteRule: .noAction) var resume: Resume
+  var status: LeafStatus
+  private(set) var nodeDepth: Int
+
+  var hasChildren: Bool {
+    return !(children?.isEmpty ?? true)
+  }
+  var aiStatusChildren: Int {
+    var count = 0
+
+    // Check if the current node has the desired status
+    if self.status == .aiToReplace {
+      count += 1
+    }
+
+    // Recursively count the descendants with the desired status
+    if let children = self.children {
+      for child in children {
+        count += child.aiStatusChildren
+      }
+    }
+
+    return count
+  }
+
+  init(
+    name: String, value: String = "", children: [TreeNode]? = nil,
+    parent: TreeNode? = nil, status: LeafStatus = LeafStatus.disabled,
+    resume: Resume
+  ) {
+    self.name = name
+    self.value = value
+    self.children = children
+    self.parent = parent
+    self.status = status
+    self.nodeDepth = 0
+    self.resume = resume
+    resume.nodes.append(self)
+    // No need to set status again, it's already set by default.
+  }
+  @discardableResult
+  func addChild(_ child: TreeNode) -> TreeNode {
+    if self.children == nil {
+      self.children = []
+    }
+    //    print(child.resume.id)
+    child.parent = self
+    child.myIndex = childIndexer
+    child.nodeDepth = self.nodeDepth + 1
+    self.children?.append(child)
+    childIndexer += 1
+    return child
+  }
+  var growDepth: Bool { return nodeDepth > 2 }
+  static func traverseAndExportNodes(node: TreeNode, currentPath: String = "")
+    -> [[String: String]]
+  {
+    var result: [[String: String]] = []
+    var newPath: String
+    // Construct the current tree path
+    if node.parent == nil {
+      newPath = "Resume"
+    } else {
+      newPath =
+        currentPath.isEmpty ? node.name : "\(currentPath) > \(node.name)"
+    }
+    // If the node's status is .aiToReplace, add it to the result array
+    if node.status == .aiToReplace {
+      if node.name != "" && node.value != "" {
+
+      }
+
+      let nodeData: [String: String] = [
+        "id": node.id,
+        "value": node.value,
+        "tree_path": newPath,
+      ]
+      result.append(nodeData)
+    }
+
+    // Recursively traverse the children
+    for child in node.children ?? [] {
+      let childResults = traverseAndExportNodes(
+        node: child, currentPath: newPath)
+      result.append(contentsOf: childResults)
+    }
+
+    return result
+  }
+
+  /// Updates the values of TreeNode objects based on the provided JSON file.
+  /// - Parameters:
+  ///   - jsonFileURL: The URL of the JSON file containing the array of {id: String, value: String} objects.
+  ///   - context: The SwiftData context used to fetch and update the TreeNode objects.
+  /// - Throws: An error if reading the JSON file, parsing JSON, or saving the context fails.
+  static func updateValues(from jsonFileURL: URL, using context: ModelContext) throws {
+    // Load JSON data from the provided file URL
+    let jsonData = try Data(contentsOf: jsonFileURL)
+
+    // Parse JSON data into an array of dictionaries
+    guard let jsonArray = try JSONSerialization.jsonObject(
+      with: jsonData, options: []) as? [[String: String]] else {
+      print("Failed to parse JSON.")
+      return
+    }
+
+    // Iterate over the array and update corresponding TreeNodes
+    for jsonObject in jsonArray {
+      if let id = jsonObject["id"], let newValue = jsonObject["value"] {
+        // Fetch the corresponding TreeNode from the SwiftData store manually
+        let fetchRequest = FetchDescriptor<TreeNode>(
+          predicate: #Predicate { $0.id == id }
+        )
+
+        if let node = try context.fetch(fetchRequest).first {
+          // Update the value of the TreeNode
+          node.value = newValue
+        } else {
+          print("TreeNode with id \(id) not found.")
+        }
+      } else {
+        print("Invalid JSON object: \(jsonObject)")
+      }
+    }
+
+    // Save the context to persist changes
+    try context.save()
+  }
+  static func deleteTreeNode(node: TreeNode, context: ModelContext) {
+    // First, recursively delete all children
+    if let children = node.children {
+      for child in children {
+        deleteTreeNode(node: child, context: context)
+      }
+    }
+    // Then delete the node itself
+    context.delete(node)
+  }
+
+  
+  func deepCopy(newResume: Resume) -> TreeNode {
+    // Create a copy of the current node with the new resume
+    let copyNode = TreeNode(
+      name: self.name,
+      value: self.value,
+      parent: nil,  // The parent will be set during recursion
+      status: self.status,
+      resume: newResume
+    )
+
+    // Recursively copy the children
+    if let children = self.children {
+      for child in children {
+        let childCopy = child.deepCopy(newResume: newResume)
+        copyNode.addChild(childCopy)  // Attach the child to the copied parent
+      }
+    }
+
+    return copyNode
+  }
+
+}
+//
+//  CoverLetterPrompts.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/12/24.
+//
+import SwiftOpenAI
+
+enum CoverAiMode: String, Codable {
+  case generate
+  case revise
+  case rewrite
+  case none
+
+}
+struct CoverLetterPrompts {
+
+  static var systemMessage = ChatCompletionParameters.Message(
+    role: .system,
+    content: .text("You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for a job application, based on the job listing and resume provided below. The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself."))
+
+  static func generate(coverLetter: CoverLetter, resume: Resume, mode: CoverAiMode) -> String {
+    let applicant = Applicant()
+    let app = coverLetter.jobApp
+
+    var prompt: String = ""
+    switch mode {
+    case .generate:
+      let prompt = """
+        You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app.job_position) at \(app.company_name). The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself.
+
+        **Instructions:**
+
+        - **Personalization:** Tailor the cover letter specifically to the job listing at \(app.company_name), aligning \(applicant.name)'s skills and experiences with the job requirements.
+        - **Highlight Strengths:** Emphasize the most relevant qualifications, achievements, and experiences from \(applicant.name)'s résumé that make them an ideal fit for the position.
+        - **Professional Tone:** Maintain a professional and engaging tone throughout the letter.
+        - **Memorable Impact:** Craft the letter to leave a lasting impression on the reader, making it stand out among other applications.
+        - **Formatting:** Begin with a proper salutation and structure the letter in coherent paragraphs, concluding with a strong closing statement.
+
+        \(applicant.name) has provided the following background information regarding their current job search that may be useful in composing the draft cover letter:
+
+        \(coverLetter.backgroundItemsString)
+
+        **Full Job Listing:**
+
+        \(app.jobListingString)
+
+        **Text Version of Résumé to be Submitted with Application:**
+
+        \(resume.textRes)
+
+        \(applicant.name) has also included a few samples of cover letters they wrote for earlier applications that they are particularly satisfied with. Use these writing samples as a guide to the writing style and voice of your cover letter draft:
+
+        \(coverLetter.writingSamplesString)
+        """
+    case .revise:
+      prompt = """
+            [Messsage History]
+            Upon reading your latest draft, \(applicant.name) has requested that you prepare a revised draft that incorporates each of the feedback items below:
+
+                [cannedResponseString]
+        """
+    case .rewrite:
+      prompt = """
+            My initial draft of a cover letter to accompany my application to be hired as a  \(app.job_position) at \(app.company_name) is included below.
+            [chosenEditorPrompt]
+            [freshFeedback]
+
+        """
+    default: prompt = ""
+    }
+
+    return prompt
+  }
+  enum EditorPrompts: String {
+    case improve =
+      "Please carefully read the draft and indentify at least three ways the content and quality of the writing can be improved. Provde a new draft that incorporates the identified improvements."
+    case zissner =
+      "Carefully read the letter as a professional editor, specifically William Zissner incorporating the writing techniques and style he advocates in \"On Writing Well\" Provide a new draft that incorporates Zissner's edits to improve the quality of the writing. "
+  }
+}
+import Foundation
+import SwiftData
+import SwiftOpenAI
+
+@Model
+class CoverLetter {
+  var jobApp: JobApp
+  var createdDate: Date = Date()
+  var moddedDate: Date = Date()
+  var content: String = ""
+  var generated: Bool = false
+  var encodedEnabledRefs: Data?  // Store as Data
+  var encodedMessageHistory: Data?  // Store as Data
+  var currentMode: CoverAiMode? = CoverAiMode.none
+  var modDate: String {
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
+    return dateFormatter.string(from: moddedDate)
+  }
+
+  // Computed properties to decode arrays
+  var enabledRefs: [CoverRef] {
+    get {
+      guard let data = encodedEnabledRefs else { return [] }
+      return (try? JSONDecoder().decode([CoverRef].self, from: data)) ?? []
+    }
+    set {
+      encodedEnabledRefs = try? JSONEncoder().encode(newValue)
+    }
+  }
+
+  var messageHistory: [MessageParams] {
+    get {
+      guard let data = encodedMessageHistory else { return [] }
+      return (try? JSONDecoder().decode([MessageParams].self, from: data)) ?? []
+    }
+    set {
+      encodedMessageHistory = try? JSONEncoder().encode(newValue)
+    }
+  }
+
+  init(
+    enabledRefs: [CoverRef],
+    jobApp: JobApp
+  ) {
+    self.encodedEnabledRefs = try? JSONEncoder().encode(enabledRefs)
+    self.jobApp = jobApp
+  }
+  var backgroundItemsString: String {
+    return enabledRefs.filter { $0.type == CoverRefType.backgroundFact }
+      .map { $0.content }.joined(separator: "\n\n")
+  }
+  var writingSamplesString: String {
+    return enabledRefs.filter { $0.type == CoverRefType.writingSample }
+      .map { $0.content }.joined(separator: "\n\n")
+  }
+}
+
+@Model
+class MessageParams: Identifiable, Codable {
+  var id: String = UUID().uuidString
+  var content: String
+  var role: MessageRole
+
+  init(content: String, role: MessageRole) {
+    self.content = content
+    self.role = role
+  }
+
+  // Manual Codable implementation
+  enum CodingKeys: String, CodingKey {
+    case id
+    case content
+    case role
+  }
+
+  // Required initializer for Decodable
+  required init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    content = try container.decode(String.self, forKey: .content)
+    role = try container.decode(MessageRole.self, forKey: .role)
+  }
+
+  // Required function for Encodable
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(content, forKey: .content)
+    try container.encode(role, forKey: .role)
+  }
+
+  // Make MessageRole conform to Codable
+  enum MessageRole: String, Codable {
+    case user = "user"
+    case assistant = "assistant"
+    case none = "none"
+  }
+}
+//
+//  ResumeQuery.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/25/24.
+//
+
+import Foundation
+import SwiftOpenAI
+
+@Observable class ResumeApiQuery {
+  static let revNodeArraySchema =
+    JSONSchemaResponseFormat(
+      name: "revNode_array_response",
+      strict: true,
+      schema: JSONSchema(
+        type: .object,
+        properties: [
+          "revArray": JSONSchema(
+            type: .array,
+            items: JSONSchema(
+              type: .object,
+              properties: [
+                "id": JSONSchema(
+                  type: .string,
+                  description:
+                    "The unique identifier for the node provided in the original EditableNode"
+                ),
+                "oldValue": JSONSchema(
+                  type: .string,
+                  description:
+                    "The original value before revision provided in the original EditableNode"),
+                "newValue": JSONSchema(
+                  type: .string,
+                  description:
+                    "The proposed new value after revision"),
+                "valueChanged": JSONSchema(
+                  type: .boolean,
+                  description:
+                    "Indicates if the value is changed by the proposed revision."
+                ),
+                "why": JSONSchema(
+                  type: .string,
+                  description:
+                    "Explanation for the proposed revision. Note that an explanation is not required: set this value to a blank string if the reason is trivial or obvious."
+                ),
+              ],
+              required: ["id", "oldValue", "newValue", "valueChanged", "why"],
+              additionalProperties: false
+            ))
+        ],
+        required: ["revArray"],
+        additionalProperties: false))
+
+  let systemMessage = ChatCompletionParameters.Message(
+    role: .system,
+    content: .text(
+      "You are an expert career coach with a specialization in crafting and refining technical resumes to optimize them for job applications. With extensive experience in helping candidates secure interviews at top companies, you understand the importance of aligning resume content with job descriptions and the subtleties of tailoring resumes to specific roles. \n\nYour task is to use the information provided—such as the candidate’s current resume, job listing details, and additional background resources—to customize and optimize the resume. You should mirror the language and specific skills mentioned in the job listing where appropriate, ensuring that the resume is tailored to meet the expectations of potential employers while staying true to the candidate’s actual skills and experiences. Your goal is to make the resume as compelling as possible for the target position, increasing the chances of the candidate being selected for an interview"
+    ))
+
+  let applicant: Applicant
+  var queryString: String = ""
+  let attentionGrab: Int = 2
+  let res: Resume
+  var backgroundDocs: String {
+    let bgrefs = res.bgDocs
+    if bgrefs.isEmpty {
+      return ""
+    } else {
+      return bgrefs.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
+    }
+
+  }
+  var resumeText: String {
+    let sources = res.enabledSources
+    if sources.isEmpty { return "" }
+
+    return sources.first { $0.type == SourceType.resumeSource }?.content
+      ?? ""
+  }
+  var resumeJson: String {
+    let sources = res.enabledSources
+    if sources.isEmpty {
+      return ""
+    }
+
+    return sources.first { $0.type == SourceType.jsonSource }?.content ?? ""
+  }
+  var jobListing: String {
+    //        print(res.jobApp?.jobListingString ?? "")
+    return res.jobApp?.jobListingString ?? ""
+  }
+
+  var updatableFieldsString: String {
+    if let rootNode = res.rootNode {
+      let exportDict = TreeNode.traverseAndExportNodes(node: rootNode)
+
+
+      do {
+        let updatableJsonData = try JSONSerialization.data(
+          withJSONObject: exportDict, options: .prettyPrinted)
+        return String(data: updatableJsonData, encoding: .utf8) ?? ""
+      } catch {
+        print("Error serializing JSON: \(error.localizedDescription)")
+        return ""
+      }
+    }
+    else {print("rootnode error")
+    return ""}
+  }
+
+  init(resume: Resume) {
+    applicant = Applicant()  //To Do allow for general applicant name etc. (Needs UI)
+    self.res = resume
+
+  }
+  func revisionPrompt(_ fb: [FeedbackNode])->String {
+    let json = fbToJson(fb)
+    let prompt = """
+    \(applicant.name) has reviewed your proposed revsion and has provided feedback. Please revise and rewrite as specified for each FeedbackNode below. Provide your updated revisions as an array of RevNodes (schema attached).  The RevNodeArray should  only include RevNodes for each of the FeedbackNodes below for which your action is required (newValue != oldValue). No response is required for any FeedbackMode for which no action is required. 
+        
+        Feedback Nodes:
+        \(json ?? "none provided")
+    """
+    return prompt
+  }
+  var wholeResumeQueryString: String {
+    var attentionGrabLanguage: String
+
+    switch self.res.attentionGrab {
+    case 0:
+      attentionGrabLanguage = ""
+    case 1:
+      attentionGrabLanguage =
+        "Make the résumé stand out by emphasizing key skills and experiences without going overboard."
+    case 2:
+      attentionGrabLanguage =
+        "Ensure the résumé is memorable and attention-grabbing, while maintaining a focus on relevance and truthfulness."
+    case 3:
+      attentionGrabLanguage =
+        "Make a strong impression with the résumé, prioritizing memorability and uniqueness, even if it pushes some boundaries."
+    case 4:
+      attentionGrabLanguage =
+        "Make every effort to make this résumé memorable and attention-grabbing above all else. Making any sort of impression is more important than making a positive impression. Make this résumé something the recruiter is certain to remember, even if it pushes some boundaries."
+    default:
+      attentionGrabLanguage = ""
+    }
+
+    // Start building the prompt string
+    let prompt = """
+      ================================================================================
+      Latest Résumé:
+      \(resumeText)
+      ================================================================================
+      This is the most recent version of \(applicant.name)'s résumé, rendered in plain text. The résumé was generated from the following JSON data using a command-line utility and a Handlebars-based template. The utility also creates HTML and PDF versions.
+
+      Résumé Source JSON:
+      \(resumeJson)
+      ================================================================================
+      ================================================================================
+      Goal:
+      Our primary objective is to secure \(applicant.name) an interview for the following position:
+
+      Job Listing:
+      \(jobListing)
+
+      Task:
+      Starting with \(applicant.name)'s latest résumé, your task is to utilize the background resources provided below to customize the résumé. The goal is to ensure it is finely tailored to the job listing.
+
+      - **Do Not** fabricate experience.
+      - **Do** highlight and frame the skills and experiences in a way that is most relevant and compelling for the position.
+      - **Do** mirror the specific language and skills mentioned in the job listing, as long as they are consistent with \(applicant.name)'s actual skills and experience. This will help align the résumé more closely with the employer’s expectations and increase the likelihood of passing through automated screening systems.
+
+      For example, if the job listing emphasizes 'Statistical Process Control (SPC),' ensure that Christopher’s experience with similar methodologies is clearly highlighted and described in similar terms.
+
+      Guidance:
+      Leverage the provided resources to make the résumé as compelling as possible for the job listing. Focus on enhancing the relevance of the résumé content by aligning it with the job description and emphasizing \(applicant.name)’s qualifications. \(attentionGrabLanguage)
+
+      Prioritize the most relevant background information from the documents provided, particularly those that align directly with the job listing requirements. Use this information to inform your customizations, ensuring that the final résumé is targeted, effective, and stands out.
+      ================================================================================
+      ================================================================================
+      You may only modify the résumé values in the following array of EditableNodes:
+      \(updatableFieldsString)
+
+      An EditableNode includes (1) the résumé value (which your customizations will change) (2) an id, which will be used to update the values in the resume source programatically, and must be referenced in your response and (3) a text tree path which is provided to aid in understanding the values in the context of the resume)
+
+      ================================================================================
+
+      You will provide your suggested résumé revsions as an RevArray (schema attached), an array of RevNodes that is needed to obtain feedback on each of your proposed revisions. Although the number of RevNodes should match the number of Editible nodes in the original set, you do not need to revise the value of every EditibleNode. For those values that are acceptable without revision, set newValue to "" and valueUpdated to False. 
+
+      ================================================================================
+      ================================================================================
+      Background Resources:
+      Below are additional resources that may provide context and supporting information for your task:
+      \(backgroundDocs)
+      ================================================================================
+      ================================================================================
+
+      Reminder:
+      As you finalize the customized résumé, ensure that:
+      - **No experience is fabricated.**
+      - Skills and experiences are framed in a way that is relevant, compelling, and truthful.
+      - The writing is memorable and attention-grabbing to increase the likelihood of catching a recruiter’s eye and prompting a follow-up.
+      - The language and skills from the job listing are mirrored where appropriate and consistent with \(applicant.name)’s actual experience.
+      - The RevArray should have an element for every EditbleNode provided.
+      - The final résumé is compelling, accurate, and aligned with the job listing’s requirements.
+      """
+
+    // Print or return the final prompt
+    return prompt
+
+  }
+}
+//
+//  ChatStructuredOutputProvider.swift
+//  SwiftOpenAIExample
+//
+//  Created by James Rochabrun on 8/10/24.
+//
+
+import Foundation
+import SwiftOpenAI
+
+@Observable
+final class ResumeChatProvider {
+
+  private let service: OpenAIService
+  private var streamTask: Task<Void, Never>? = nil
+  var message: String = ""
+  var messages: [String] = []
+  var messageHist: [ChatCompletionParameters.Message] = []
+  var errorMessage: String = ""
+  var lastRevNodeArray: [ProposedRevisionNode] = []
+
+
+  // MARK: - Initializer
+
+  init(service: OpenAIService) {
+    
+    self.service = service
+
+  }
+  private func convertJsonToNodes(_ jsonString: String?) -> [ProposedRevisionNode]? {
+
+    guard let jsonString = jsonString, let jsonData = jsonString.data(using: .utf8) else {
+      print("Error converting string to data")
+      return nil
+    }
+
+    do {
+      // Decode the JSON data into RevisionsContainer
+      let revisionsContainer = try JSONDecoder().decode(RevisionsContainer.self, from: jsonData)
+
+      // Return the array of ProposedRevisionNode
+      return revisionsContainer.revArray
+    } catch {
+      print("Failed to decode JSON: \(error)")
+      return nil
+    }
+  }
+
+  // MARK: - Public Methods
+  func unloadResponse() -> [ProposedRevisionNode]? {
+    if let nodes = convertJsonToNodes(messages[0]) {
+      messages.removeFirst()
+      self.lastRevNodeArray = nodes
+      return nodes
+    } else {
+      return nil
+    }
+  }
+  func startChat(
+    parameters: ChatCompletionParameters
+  ) async throws {
+    do {
+
+      let choices = try await service.startChat(parameters: parameters).choices
+      self.messages = choices.compactMap(\.message.content).map { $0.asJsonFormatted() }
+      assert(messages.count == 1)
+      print(self.messages.last ?? "Nothin")
+      self.lastRevNodeArray = convertJsonToNodes(messages.last) ?? []
+      messageHist
+        .append(
+          .init(role: .assistant, content: .text(choices.last?.message.content ?? ""))
+        )
+      self.errorMessage = choices.first?.message.refusal ?? ""
+    } catch APIError.responseUnsuccessful(let description, let statusCode) {
+      self.errorMessage =
+        "Network error with status code: \(statusCode) and description: \(description)"
+    } catch {
+      self.errorMessage = error.localizedDescription
+    }
+  }
+
+  func startStreamedChat(
+    parameters: ChatCompletionParameters
+  ) async throws {
+    streamTask = Task {
+      do {
+        let stream = try await service.startStreamedChat(parameters: parameters)
+        for try await result in stream {
+          let firstChoiceDelta = result.choices.first?.delta
+          let content = firstChoiceDelta?.refusal ?? firstChoiceDelta?.content ?? ""
+          self.message += content
+          if result.choices.first?.finishReason != nil {
+            self.message = self.message.asJsonFormatted()
+          }
+        }
+      } catch APIError.responseUnsuccessful(let description, let statusCode) {
+        self.errorMessage =
+          "Network error with status code: \(statusCode) and description: \(description)"
+      } catch {
+        self.errorMessage = error.localizedDescription
+      }
+    }
+  }
+
+  func cancelStream() {
+    streamTask?.cancel()
+  }
+}
+
+/// Helper that allows to display the JSON Schema.
+extension String {
+  func asJsonFormatted() -> String {
+    guard let data = self.data(using: .utf8) else { return self }
+    do {
+      // Parse JSON string to Any object
+      if let jsonObject = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+        // Traverse and strip quotes from string values
+        let cleanedObject = stripQuotes(from: jsonObject)
+
+        // Convert back to data with pretty-printing
+        let prettyPrintedData = try JSONSerialization.data(
+          withJSONObject: cleanedObject, options: [.prettyPrinted, .sortedKeys])
+
+        // Convert formatted data back to string
+        return String(data: prettyPrintedData, encoding: .utf8) ?? self
+      }
+    } catch {
+      print("Error formatting JSON: \(error)")
+    }
+    return self
+  }
+
+  // Recursive function to traverse and strip quotes from string values in a dictionary
+  private func stripQuotes(from dictionary: [String: Any]) -> [String: Any] {
+    var newDict = dictionary
+    for (key, value) in dictionary {
+      if let stringValue = value as? String {
+        // Strip quotes from the string value
+        newDict[key] = stringValue.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+      } else if let nestedDict = value as? [String: Any] {
+        // Recursively strip quotes in nested dictionaries
+        newDict[key] = stripQuotes(from: nestedDict)
+      } else if let arrayValue = value as? [Any] {
+        // Recursively process arrays
+        newDict[key] = stripQuotes(from: arrayValue)
+      }
+    }
+    return newDict
+  }
+
+  // Recursive function to traverse and strip quotes from string values in an array
+  private func stripQuotes(from array: [Any]) -> [Any] {
+    return array.map { value in
+      if let stringValue = value as? String {
+        return stringValue.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+      } else if let nestedDict = value as? [String: Any] {
+        return stripQuotes(from: nestedDict)
+      } else if let nestedArray = value as? [Any] {
+        return stripQuotes(from: nestedArray)
+      } else {
+        return value
+      }
+    }
+  }
+}
+
+import Foundation
+import SwiftOpenAI
+
+@Observable
+final class CoverChatProvider {
+
+  private let service: OpenAIService
+  var message: String = ""
+  var messages: [String] = []
+  var messageHist: [ChatCompletionParameters.Message] = []
+  var errorMessage: String = ""
+  var resultsAvailable: Bool = false
+  var lastResponse: String = ""
+
+
+  // MARK: - Initializer
+
+  init(service: OpenAIService) {
+
+    self.service = service
+
+  }
+
+  func startChat(
+    parameters: ChatCompletionParameters,
+    onComplete: (_ : String)->Void
+  ) async throws {
+    do {
+      print("sending request")
+      let choices = try await service.startChat(parameters: parameters).choices
+      self.messages = choices.compactMap(\.message.content).map { $0.asJsonFormatted() }
+      assert(messages.count == 1)
+      print(self.messages.last ?? "Nothin")
+      messageHist
+        .append(
+          .init(role: .assistant, content: .text(choices.last?.message.content ?? ""))
+        )
+      self.lastResponse = choices.last?.message.content ?? ""
+      self.resultsAvailable = true
+      self.errorMessage = choices.first?.message.refusal ?? ""
+      onComplete(self.lastResponse)
+    } catch APIError.responseUnsuccessful(let description, let statusCode) {
+      self.errorMessage =
+      "Network error with status code: \(statusCode) and description: \(description)"
+    } catch {
+      self.errorMessage = error.localizedDescription
+    }
+  }
+}
+//
+//  StackSecondView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/2/24.
+//
+
+import SwiftUI
+
+struct StackSecondView: View {
+  var body: some View {
+    Text( /*@START_MENU_TOKEN@*/"Hello, World!" /*@END_MENU_TOKEN@*/)
+  }
+}
+//
+//  InsetGroupStyle.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/13/24.
+//
+
+import SwiftUI
+
+extension View {
+  func insetGroupedStyle<V: View>(header: V) -> some View {
+    return GroupBox(label: header.padding(.top).padding(.bottom, 6)) {
+      Form {
+        self.padding(.vertical, 3).padding(.horizontal, 5)
+
+      }.padding(.horizontal).padding(.vertical)
+    }
+  }
+}
+//
+//  CustomToolbarButtonStyle.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/22/24.
+//
+
+import SwiftUI
+
+struct CustomToolbarButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .padding(3)
+      .cornerRadius(5)
+      .background(Color.blue.opacity(0.3))
+      .foregroundStyle(.gray)
+      .scaleEffect(configuration.isPressed ? 1.2 : 1)
+      .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+  }
+}
+//
+//  StackNavigationView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/2/24.
+//
+import SwiftUI
+
+struct StackNavigationView<RootContent>: View where RootContent: View {
+  @Binding var currentSubview: AnyView
+  @Binding var showingSubview: Bool
+
+  let rootView: () -> RootContent
+
+  init(
+    currentSubview: Binding<AnyView>, showingSubview: Binding<Bool>,
+    @ViewBuilder rootView: @escaping () -> RootContent
+  ) {
+    self._currentSubview = currentSubview
+    self._showingSubview = showingSubview
+    self.rootView = rootView
+  }
+  var body: some View {
+    VStack {
+      if !showingSubview {
+        rootView()
+      } else {
+        StackNavigationSubview(isVisible: $showingSubview) {
+          currentSubview
+        }
+        .transition(.move(edge: .trailing))
+      }
+    }
+  }
+  private struct StackNavigationSubview<Content>: View where Content: View {
+    @Binding var isVisible: Bool
+    let contentView: () -> Content
+    var body: some View {
+      VStack {
+        contentView()  // subview
+      }
+      .toolbar {
+        ToolbarItem(placement: .navigation) {
+          Button(
+            action: {
+              withAnimation(.easeOut(duration: 0.3)) {
+                isVisible = false
+              }
+            },
+            label: {
+              Label("back", systemImage: "chevron.left")
+            })
+        }
+      }
+    }
+
+  }
+}
+//
+//  StackRootView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/2/24.
+//
+
+import SwiftUI
+
+struct StackRootView: View {
+  @State private var currentSubview = AnyView(StackSecondView())
+  @State private var showingSubview = false
+  var body: some View {
+    StackNavigationView(currentSubview: $currentSubview, showingSubview: $showingSubview) {
+      Text("I'm the rootview")
+      Button(
+        action: {
+          showSubview(
+            view: AnyView(
+              Text("Subview!").frame(maxWidth: .infinity, maxHeight: .infinity).background(
+                Color.white)))
+        },
+        label: {
+          Text("go to subview")
+        })
+    }
+    .frame(
+      minWidth: 500, idealWidth: 500, maxWidth: 500, minHeight: 500, idealHeight: 500,
+      maxHeight: 500)
+  }
+  private func showSubview(view: AnyView) {
+    withAnimation(.easeOut(duration: 0.3)) {
+      currentSubview = view
+      showingSubview = true
+    }
+  }
+}
+import SwiftUI
+
+@ToolbarContentBuilder
+func CoverLetterToolbar(
+  buttons: Binding<CoverLetterButtons>, coverLetter: Binding<CoverLetter>,
+  jobApp: JobApp?,
+  resume: Binding<Resume?>
+) -> some ToolbarContent {
+
+  ToolbarItem(placement: .automatic) {
+    CoverLetterAiView(
+      selRes: resume,
+      coverLetter: coverLetter,
+      buttons: buttons
+    ).onAppear{print("foo")}
+
+  }
+  ToolbarItem(placement: .automatic) {
+    Button(action: {
+      buttons.wrappedValue.showInspector.toggle()
+    }) {
+      Label("Toggle Inspector", systemImage: "sidebar.right")
+    }.onAppear{print("Toolbar Cover Letter")}
+  }
+}
+import SwiftUI
+
+struct CoverRefView: View {
+  @Binding var coverLetter: CoverLetter
+  @State var backgroundFacts: [CoverRef]
+  @State var writingSamples: [CoverRef]
+  @State private var showAddBackgroundFactSheet = false
+  @State private var showAddWritingSampleSheet = false
+  @Environment(CoverRefStore.self)  var coverRefStore: CoverRefStore
+
+  var body: some View {
+    List {
+      Section("Background Facts") {
+        ForEach($backgroundFacts, id: \.self) { fact in
+          HStack {
+            Toggle(isOn: Binding<Bool>(
+              get: { $coverLetter.wrappedValue.enabledRefs.contains(fact.wrappedValue) },
+              set: { isEnabled in
+                if isEnabled {
+                  if !$coverLetter.wrappedValue.enabledRefs.contains(fact.wrappedValue) {
+                    $coverLetter.wrappedValue.enabledRefs.append(fact.wrappedValue)
+                  }
+                } else {
+                  $coverLetter.wrappedValue.enabledRefs.removeAll { $0 == fact.wrappedValue }
+                }
+              }
+            )) {
+              Text(fact.wrappedValue.content)
+            }
+          }
+        }
+        Button(action: {
+          $showAddBackgroundFactSheet.wrappedValue.toggle()
+        }) {
+          Label("Add Background Fact", systemImage: "plus")
+        }
+      }
+      .sheet(isPresented: $showAddBackgroundFactSheet) {
+        AddCoverRefForm(type: .backgroundFact, coverLetter: coverLetter, backgroundFacts: $backgroundFacts, writingSamples: $writingSamples, showMe: $showAddBackgroundFactSheet)
+      }
+
+      Section("Writing Samples") {
+        ForEach(writingSamples, id: \.self) { sample in
+          HStack {
+            Toggle(isOn: Binding<Bool>(
+              get: { coverLetter.enabledRefs.contains(sample) },
+              set: { isEnabled in
+                if isEnabled {
+                  if !coverLetter.enabledRefs.contains(sample) {
+                    coverLetter.enabledRefs.append(sample)
+                  }
+                } else {
+                  coverLetter.enabledRefs.removeAll { $0 == sample }
+                }
+              }
+            )) {
+              Text(sample.content)
+            }
+          }
+        }
+        Button(action: {
+          showAddWritingSampleSheet.toggle()
+        }) {
+          Label("Add Writing Sample", systemImage: "plus")
+        }
+      }
+      .sheet(isPresented: $showAddWritingSampleSheet) {
+        AddCoverRefForm(type: .writingSample, coverLetter: coverLetter, backgroundFacts: $backgroundFacts, writingSamples: $writingSamples, showMe: $showAddWritingSampleSheet)
+      }
+    }
+  }
+}
+////
+////  SwiftUIView.swift
+////  PhysCloudResume
+////
+////  Created by Christopher Culbreath on 9/10/24.
+////
+//
+//import SwiftUI
+//
+//struct CoverLetterGenerate: View {
+//  @Bindable var jobApp: JobApp
+//  let applicant = Applicant()
+//  let chosenResume: Resume
+//  let backgroundItemsString = ""
+//  let writingSamplesString = ""
+//  let cannedResponseString = ""
+//  let messageHistory = [chatMessage]
+//  var body: some View {
+//    var generationPrompt = """
+//  Please compose a cover letter to accompany \(applicant.name)'s application to be hired as a \(jobApp.job_position) at \(jobApp.company_name). The full job listing and \(applicant.name)'s résumé for this position are included below. 
+//
+//    \(applicant.name) has provided the folllowing background information regarding his current job search that may be useful in composing the draft cover letter:
+//
+//    \(backgroundItemsString)
+//
+//    Full Job Listing:
+//    \(jobApp.jobListingString)
+//
+//    Text version of Résumé to be submitted with application:
+//    \(chosenResume.textRes)
+//
+//    \(applicant.name) has also included a few samples of cover letters he wrote for earlier applications that he is particularly satisfied with. Use these writing samples to as a guide to the writing style and voice of your cover letter draft.
+//    \(writingSamplesString)
+//
+//"""
+//    var revisePrompt = //[System, User, Assistant].append.init() or something
+//    """
+//    [Messsage History]
+//    Upon reading your latest draft, \(applicant.name) has requested that you prepare a revised draft that incorporates each of the feedback items below:
+//
+//        \(cannedResponseString)
+//"""
+//    var editorPrompt = """
+//    My initial draft of a cover letter to accompany my application to be hired as a  \(jobApp.job_position) at \(jobApp.company_name) is included below. \(chosenEditorPrompt)
+//        \(freshFeedback)
+//
+//"""
+//
+//    }
+//}
+//
+//
+import SwiftUI
+
+struct CoverLetterView: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+  @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+
+  @Binding var buttons: CoverLetterButtons
+  @Binding var coverLetter: CoverLetter  // Now non-optional
+
+  var body: some View {
+    contentView()
+  }
+
+  @ViewBuilder
+  private func contentView() -> some View {
+    if let jobApp = jobAppStore.selectedApp,
+       let res = jobApp.selectedRes {
+
+      let resBinding = Binding(
+        get: { res },
+        set: { jobApp.selectedRes = $0 }
+      )
+
+      VStack {
+        CoverLetterContentView(
+          myLetter: $coverLetter,
+          res: resBinding,
+          jobApp: jobApp,
+          buttons: $buttons
+        )
+      }
+      .inspector(isPresented: $buttons.showInspector) {
+        CoverRefView(
+          coverLetter: $coverLetter,
+          backgroundFacts: coverRefStore.backgroundRefs,
+          writingSamples: coverRefStore.writingSamples
+        )
+      }
+    } else {
+      Text("Required data not available")
+    }
+  }
+}
+
+struct CoverLetterContentView: View {
+  @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+
+  @Binding var myLetter: CoverLetter
+  @Binding var res: Resume
+  @Bindable var jobApp: JobApp
+  @Binding var buttons: CoverLetterButtons
+
+  var body: some View {
+    VStack {
+      Picker(
+        "Load existing cover letter",
+        selection: $myLetter
+      ) {
+        ForEach(jobApp.coverLetters, id: \.self) { letter in
+          Text("Generated at \(letter.modDate)")
+            .tag(letter as CoverLetter)
+        }
+      }
+      Text("AI generated text at \(myLetter.modDate)")
+        .font(.caption).italic()
+      Text(myLetter.content)
+        .font(.body)
+    }
+    .onChange(of: myLetter.content) { oldValue, newValue in
+      print("Cover letter content: \(newValue)")
+    }
+  }
+}
+import SwiftUI
+
+struct AddCoverRefForm: View {
+  @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+  @State private var newCoverRefName = ""
+  @State private var newCoverRefContent = ""
+  @State private var newCoverRefEnabledByDefault = false
+  var type: CoverRefType
+  @Bindable var coverLetter: CoverLetter
+  @Binding var backgroundFacts: [CoverRef]
+  @Binding var writingSamples: [CoverRef]
+  @Binding var showMe: Bool
+
+  var body: some View {
+    NavigationView {
+      Form {
+        TextField("Name", text: $newCoverRefName)
+        TextField("Content", text: $newCoverRefContent)
+        Toggle("Enabled by Default", isOn: $newCoverRefEnabledByDefault)
+
+        Button("Add") {
+          let newCoverRef = CoverRef(
+            name: newCoverRefName,
+            content: newCoverRefContent,
+            enabledByDefault: newCoverRefEnabledByDefault,
+            type: type
+          )
+
+          if type == .backgroundFact {
+            backgroundFacts.append(newCoverRef)
+          } else if type == .writingSample {
+            writingSamples.append(newCoverRef)
+          }
+
+          let newRef = coverRefStore.addCoverRef(newCoverRef)
+          coverLetter.enabledRefs.append(newRef)
+          resetForm()
+        }
+      }
+      .navigationTitle("Add \(type == .backgroundFact ? "Background Fact" : "Writing Sample")")
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") {
+            dismissForm()
+          }
+        }
+      }
+    }
+  }
+
+  private func resetForm() {
+    newCoverRefName = ""
+    newCoverRefContent = ""
+    newCoverRefEnabledByDefault = false
+  }
+
+  private func dismissForm() {
+
+      showMe.toggle()
+
+
+
+  }
+}
+import SwiftData
+import SwiftUI
+
+struct JobAppDetailView: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore  // Explicit
+  @Binding var tab: TabList
+  @Binding var buttons: SaveButtons
+  @State private var showingDeleteConfirmation: Bool = false
+
+  var body: some View {
+    ScrollView {
+      let form = jobAppStore.form
+      if let selectedApp = jobAppStore.selectedApp {
+        VStack {
+          HeaderView(
+            showingDeleteConfirmation: $showingDeleteConfirmation, buttons: $buttons, tab: $tab)
+
+          JobAppPostingDetailsSection(buttons: $buttons)
+
+          JobAppDescriptionSection(buttons: $buttons)
+
+          JobAppInformationSection(buttons: $buttons)
+
+          ApplySection(buttons: $buttons)
+        }
+        .padding(.horizontal).padding(.vertical)
+        .navigationTitle(
+          buttons.edit
+            ? "Editing \(form.job_position) at \(form.company_name)"
+            : "\(selectedApp.job_position) at \(selectedApp.company_name)"
+        )
+        .onChange(of: buttons.edit) { oldValue, newValue in
+          if newValue {
+            jobAppStore.editWithForm()
+          }
+        }
+        .onChange(of: buttons.cancel) { oldValue, newValue in
+          if newValue && buttons.edit {
+            jobAppStore.cancelFormEdit()  // revert changes
+            buttons.edit = false
+            buttons.cancel = false
+          }
+        }
+        .onChange(of: buttons.save) { oldValue, newValue in
+          if newValue && buttons.edit {
+            jobAppStore.saveForm()
+
+            buttons.edit = false
+            buttons.save = false
+          }
+        }
+      } else {
+        Text("No job application selected")
+          .padding()
+      }
+    }
+  }
+}
+import SwiftUI
+
+//func binding(for optionalString: Binding<String?>, default value: String = "")
+//-> Binding<String>
+//{
+//    return Binding<String>(
+//        get: { optionalString.wrappedValue ?? value },
+//        set: { newValue in
+//            optionalString.wrappedValue = newValue.isEmpty ? nil : newValue
+//        }
+//    )
+//}
+
+struct JobAppPostingDetailsSection: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore  // Explicit type
+  @Binding var buttons: SaveButtons
+
+  var body: some View {
+    Section {
+      Cell(
+        leading: "Job Position", trailingKeys: \JobApp.job_position,
+        formTrailingKeys: \JobAppForm.job_position, isEditing: $buttons.edit)
+      Cell(
+        leading: "Job Location", trailingKeys: \JobApp.job_location,
+        formTrailingKeys: \JobAppForm.job_location, isEditing: $buttons.edit)
+      Cell(
+        leading: "Company Name", trailingKeys: \JobApp.company_name,
+        formTrailingKeys: \JobAppForm.company_name, isEditing: $buttons.edit)
+      Cell(
+        leading: "Company LinkedIn ID", trailingKeys: \JobApp.company_linkedin_id,
+        formTrailingKeys: \JobAppForm.company_linkedin_id, isEditing: $buttons.edit)
+      Cell(
+        leading: "Job Posting Time", trailingKeys: \JobApp.job_posting_time,
+        formTrailingKeys: \JobAppForm.job_posting_time, isEditing: $buttons.edit)
+    }
+    .insetGroupedStyle(header: Text("Posting Details"))
+  }
+}
+import SwiftUI
+
+struct NewAppSheetView: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(\.dismiss) private var dismiss
+
+  @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
+
+  @State private var isLoading: Bool = false
+  @State private var urlText: String = ""
+  @Binding var isPresented: Bool
+
+  var body: some View {
+    VStack {
+      if isLoading {
+        VStack {
+          ProgressView("Fetching job details...")
+            .progressViewStyle(CircularProgressViewStyle())
+            .padding()
+        }
+      } else {
+        Text("Enter LinkedIn Job URL")
+        TextField("https://www.linkedin.com/jobs/view/3951765732", text: $urlText)
+          .textFieldStyle(RoundedBorderTextFieldStyle())
+          .padding()
+
+        HStack {
+          Button("Cancel") {
+            isPresented = false
+          }
+          Spacer()
+          Button("Scrape URL") {
+            Task {
+              await handleNewApp()
+            }
+          }
+        }
+      }
+    }
+    .padding()
+  }
+
+  private func handleNewApp() async {
+    guard let url = URL(string: urlText), url.host == "www.linkedin.com" else {
+      // Handle invalid URL
+      return
+    }
+    isLoading = true
+    if let jobID = url.pathComponents.last {
+      await fetchJobDetails(jobID: jobID)
+    }
+  }
+
+  private func fetchJobDetails(jobID: String) async {
+    let apiKey = scrapingDogApiKey
+    let requestURL = "https://api.scrapingdog.com/linkedinjobs?api_key=\(apiKey)&job_id=\(jobID)"
+
+    guard let url = URL(string: requestURL) else { return }
+
+    do {
+      print(requestURL)
+      let (data, response) = try await URLSession.shared.data(from: url)
+
+      if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+        // Handle HTTP error (non-200 status code)
+        print("HTTP error: \(httpResponse.statusCode)")
+        isLoading = false
+        return
+      }
+
+      let jobDetails = try JSONDecoder().decode([JobApp].self, from: data)
+      if let jobDetail = jobDetails.first {
+        jobAppStore.selectedApp = jobAppStore.addJobApp(jobDetail)
+        isPresented = false
+      }
+    } catch {
+      // Handle network or decoding error
+      print("Error: \(error)")
+    }
+
+    isLoading = false
+  }
+}
+import SwiftUI
+
+struct ApplySection: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Binding var buttons: SaveButtons
+
+  var body: some View {
+    Section {
+      Cell(
+        leading: "Job Apply Link", trailingKeys: \JobApp.job_apply_link,
+        formTrailingKeys: \JobAppForm.job_apply_link, isEditing: $buttons.edit)
+    }
+    .insetGroupedStyle(header: Text("Apply"))
+  }
+}
+import SwiftData
+import SwiftUI
+
+struct JobAppDescriptionSection: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Binding var buttons: SaveButtons
+
+  var body: some View {
+    if let selApp = jobAppStore.selectedApp {
+      @Bindable var boundSelApp = selApp
+      Section {
+        if buttons.edit {
+          TextField("", text: $boundSelApp.job_description, axis: .vertical)
+            .lineLimit(15...20)
+            .padding(.all, 3)
+        } else {
+          Text(boundSelApp.job_description.isEmpty ? "none listed" : boundSelApp.job_description)
+            .padding(.all, 3)
+            .foregroundColor(.secondary)
+            .italic(boundSelApp.job_description.isEmpty)
+        }
+      }
+      .insetGroupedStyle(header: Text("Job Description"))
+    } else {
+      // Handle the case where selectedApp is nil
+      Text("No job application selected.")
+        .padding()
+    }
+  }
+}
+import SwiftData
+import SwiftUI
+
+struct HeaderView: View {
+  @Binding var showingDeleteConfirmation: Bool
+  @Binding var buttons: SaveButtons
+  @Binding var tab: TabList
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore  // Explicit type
+
+  var body: some View {
+    HStack {
+      Spacer()
+      if buttons.edit {
+        Button {
+          showingDeleteConfirmation = true
+        } label: {
+          Label("Delete Job Application", systemImage: "trash")
+            .padding(5)
+            .foregroundColor(.red)
+        }
+        .buttonStyle(.plain)
+        .confirmationDialog(
+          "Are you sure you want to delete this job application?",
+          isPresented: $showingDeleteConfirmation,
+          titleVisibility: .visible
+        ) {
+          Button("Delete", role: .destructive) {
+            buttons.edit = false
+            jobAppStore.deleteSelected()
+            tab = TabList.none
+          }
+          Button("Cancel", role: .cancel) {
+            // Just dismiss the dialog
+          }
+        }
+      }
+    }
+    .padding(.vertical, 0)
+  }
+}
+import SwiftUI
+
+struct JobAppInformationSection: View {
+
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @State private var isHovered: Bool = false
+  @Binding var buttons: SaveButtons
+
+  var body: some View {
+    Section {
+
+      Cell(
+        leading: "Seniority Level", trailingKeys: \JobApp.seniority_level,
+        formTrailingKeys: \JobAppForm.seniority_level, isEditing: $buttons.edit)
+      Cell(
+        leading: "Employment Type", trailingKeys: \JobApp.employment_type,
+        formTrailingKeys: \JobAppForm.employment_type, isEditing: $buttons.edit)
+      Cell(
+        leading: "Job Function", trailingKeys: \JobApp.job_function,
+        formTrailingKeys: \JobAppForm.job_function, isEditing: $buttons.edit)
+      Cell(
+        leading: "Industries", trailingKeys: \JobApp.industries,
+        formTrailingKeys: \JobAppForm.industries, isEditing: $buttons.edit)
+    }
+    .insetGroupedStyle(header: Text("Job Information"))
+  }
+}
+import SwiftUI
+
+struct BuildToolbar: ToolbarContent {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(ResStore.self) private var resStore: ResStore
+  @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+  @State var attention: Int = 2
+
+  @Binding var selectedTab: TabList
+  @Binding var selRes: Resume?
+  @Binding var coverLetter: CoverLetter?
+  @State var saveIsHovering: Bool = false
+  @Binding var listingButtons: SaveButtons
+  @Binding var letterButtons: CoverLetterButtons
+
+  var body: some ToolbarContent {
+    if let selApp = jobAppStore.selectedApp {
+      // Use individual toolbar item functions
+      ToolbarItem(placement: .navigation) {
+        selApp.statusTag
+      }
+
+      twoTierTextToolbar(
+        headline: selApp.job_position,
+        caption: selApp.company_name
+      )
+
+      // Always show resumePicker regardless of selectedTab
+      if selRes != nil, let selectedApp = selRes?.jobApp {
+        resumePicker(selectedApp: selectedApp)
+      }
+
+      // Toolbar content specific to the selected tab
+      toolbarContent(for: selectedTab, selRes: $selRes)
+    }
+  }
+
+  @ToolbarContentBuilder
+  func toolbarContent(for tab: TabList, selRes: Binding<Resume?>) -> some ToolbarContent {
+    switch tab {
+      case .listing:
+        listingToolbarItem()
+      case .resume:
+        resumeToolbarContent(selRes: selRes, selectedApp: jobAppStore.selectedApp, attention: $attention)
+      case .coverLetter:
+        if let unwrappedCoverLetter = coverLetter {
+          var coverLetterBinding = Binding(
+            get: { unwrappedCoverLetter },
+            set: { coverLetter = $0 }
+          )
+          CoverLetterToolbar(buttons: $letterButtons, coverLetter: coverLetterBinding, jobApp: jobAppStore.selectedApp, resume: selRes)
+        } else {
+          ToolbarItem { Text("No Cover Letter Available") } // Handle case where cover letter is nil
+        }
+      case .submitApp, .none:
+        emptyToolbarItem()
+    }
+  }
+
+  func twoTierTextToolbar(
+    headline: String, caption: String,
+    alignment: HorizontalAlignment = .leading
+  ) -> some ToolbarContent {
+    ToolbarItem(placement: .navigation) {
+      VStack(alignment: alignment) {
+        Text(headline).font(.headline)
+        Text(caption).lineLimit(1).font(.caption)
+      }
+    }
+  }
+
+  func saveButton() -> ToolbarItem<Void, some View> {
+    ToolbarItem(placement: .primaryAction) {
+      Button(action: {
+        print("Save button pressed")
+        listingButtons.save.toggle()
+      }) {
+        Image(systemName: "checkmark.circle")
+          .font(.system(size: 40, weight: .light))
+          .foregroundColor(saveIsHovering ? .accentColor : .primary)
+          .onHover { hovering in
+            saveIsHovering = hovering
+          }
+      }
+      .help("Save changes")
+    }
+  }
+
+  func toggleEditButton() -> ToolbarItem<Void, some View> {
+    ToolbarItem(placement: .primaryAction) {
+      Button(action: {
+        listingButtons.edit.toggle()
+        print("Edit button toggled")
+      }) {
+        Image(systemName: "pencil.and.list.clipboard")
+          .font(.system(size: 20, weight: .light))
+          .foregroundColor(listingButtons.edit ? .accentColor : .primary)
+      }
+      .applyConditionalButtonStyle(editMode: listingButtons.edit)
+      .help("Edit job listing")
+    }
+  }
+
+  @ToolbarContentBuilder
+  func listingToolbarItem() -> some ToolbarContent {
+    if listingButtons.edit {
+      saveButton()
+    }
+    toggleEditButton()
+  }
+
+  @ToolbarContentBuilder
+  func resumePicker(selectedApp: JobApp) -> some ToolbarContent {
+    ToolbarItemGroup(placement: .automatic) {
+      Spacer()
+      Picker(
+        "Load existing résumé draft",
+        selection: $selRes
+      ) {
+        Text("None").tag(nil as Resume?)
+        ForEach(selectedApp.resumes, id: \.self) { resume in
+          Text("Created at \(resume.createdDateString)")
+            .tag(Optional(resume) as Resume?)
+            .help("Select a resume to customize")
+        }
+      }
+      .frame(maxHeight: .infinity, alignment: .trailing)
+    }
+  }
+
+  struct NoHoverButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+      configuration.label
+        .contentShape(Rectangle())
+        .background(
+          configuration.isPressed ? Color.gray.opacity(0.2) : Color.clear
+        )
+    }
+  }
+}
+
+extension View {
+  func applyConditionalButtonStyle(editMode: Bool) -> some View {
+    if editMode {
+      return AnyView(self.buttonStyle(BuildToolbar.NoHoverButtonStyle()))
+    } else {
+      return AnyView(self.buttonStyle(PlainButtonStyle()))
+    }
+  }
+}
+
+func emptyToolbarItem() -> some ToolbarContent {
+  ToolbarItem(placement: .automatic) {
+    Spacer()
+  }
+}
+
+func buildToolbar(
+  selectedTab: Binding<TabList>,
+  selRes: Binding<Resume?>,
+  listingButtons: Binding<SaveButtons>,
+  letterButtons: Binding<CoverLetterButtons>,
+  coverLetter: Binding<CoverLetter?>
+) -> some ToolbarContent {
+  BuildToolbar(
+    selectedTab: selectedTab,
+    selRes: selRes,
+    coverLetter: coverLetter,
+    listingButtons: listingButtons,
+    letterButtons: letterButtons
+  )
+}
+import SwiftUI
+
+struct SettingsView: View {
+  @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
+  @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
+
+  @State private var isEditingScrapingDog = false
+  @State private var isEditingOpenAI = false
+
+  @State private var editedScrapingDogApiKey = ""
+  @State private var editedOpenAiApiKey = ""
+
+  @State private var isHoveringCheckmark = false
+  @State private var isHoveringXmark = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {  // Reduced spacing between label and table
+      Text("API Keys")
+        .font(.headline)
+        .padding(.bottom, 5)  // Slightly smaller padding for tighter layout
+
+      VStack(spacing: 0) {
+        apiKeyRow(
+          label: "Scraping Dog",
+          icon: "dog.fill",
+          value: $scrapingDogApiKey,
+          isEditing: $isEditingScrapingDog,
+          editedValue: $editedScrapingDogApiKey,
+          isHoveringCheckmark: $isHoveringCheckmark,
+          isHoveringXmark: $isHoveringXmark
+        )
+        Rectangle()
+          .fill(Color.gray.opacity(0.5))
+          .frame(height: 0.5)  // Thinner separator
+          .edgesIgnoringSafeArea(.horizontal)  // Extend to edges
+        apiKeyRow(
+          label: "OpenAI",
+          icon: "sparkles",
+          value: $openAiApiKey,
+          isEditing: $isEditingOpenAI,
+          editedValue: $editedOpenAiApiKey,
+          isHoveringCheckmark: $isHoveringCheckmark,
+          isHoveringXmark: $isHoveringXmark
+        )
+      }
+      .padding(10)
+      .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+      .cornerRadius(8)
+      .overlay(
+        RoundedRectangle(cornerRadius: 8)
+          .stroke(Color.gray.opacity(0.7), lineWidth: 1)  // Hardcoded border color
+      )
+
+      Spacer()
+    }
+    .padding()
+    .frame(width: 400, height: 200)
+  }
+
+  @ViewBuilder
+  private func apiKeyRow(
+    label: String, icon: String, value: Binding<String>, isEditing: Binding<Bool>,
+    editedValue: Binding<String>, isHoveringCheckmark: Binding<Bool>, isHoveringXmark: Binding<Bool>
+  ) -> some View {
+    HStack {
+      HStack {
+        Image(systemName: icon)
+        Text(label)
+          .fontWeight(.medium)
+          .foregroundColor(.black)
+      }
+      Spacer()
+
+      if isEditing.wrappedValue {
+        HStack {
+          TextField("Enter API Key", text: editedValue)
+            .textFieldStyle(PlainTextFieldStyle())
+            .foregroundColor(.gray)
+
+          Button(action: {
+            value.wrappedValue = editedValue.wrappedValue
+            isEditing.wrappedValue = false
+          }) {
+            Image(systemName: "checkmark.circle.fill")
+              .foregroundColor(isHoveringCheckmark.wrappedValue ? .green : .gray)
+          }
+          .buttonStyle(BorderlessButtonStyle())
+          .onHover { hovering in
+            isHoveringCheckmark.wrappedValue = hovering
+          }
+
+          Button(action: {
+            isEditing.wrappedValue = false
+          }) {
+            Image(systemName: "xmark.circle.fill")
+              .foregroundColor(isHoveringXmark.wrappedValue ? .red : .gray)
+          }
+          .buttonStyle(BorderlessButtonStyle())
+          .onHover { hovering in
+            isHoveringXmark.wrappedValue = hovering
+          }
+        }
+        .frame(maxWidth: 200)
+      } else {
+        HStack {
+          Text(value.wrappedValue)
+            .italic()
+            .foregroundColor(.gray)
+            .fontWeight(.light)
+          Image(systemName: "square.and.pencil")
+            .onTapGesture {
+              editedValue.wrappedValue = value.wrappedValue
+              isEditing.wrappedValue = true
+            }
+            .foregroundColor(.gray)
+        }
+      }
+    }
+    .padding(.vertical, 8)
+  }
+}
+//
+//  ContentViewLaunch.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/31/24.
+//
+
+import SwiftUI
+
+struct ContentViewLaunch: View {
+  @Environment(\.modelContext) private var modelContext
+  var body: some View {
+    ContentView(modelContext: modelContext)
+  }
+}
+import SwiftUI
+
+struct TabWrapperView: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(ResStore.self) private var resStore: ResStore
+  @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+  @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+  @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+
+  @State private var listingButtons: SaveButtons = SaveButtons(edit: false, save: false, cancel: false)
+  @State private var selectedTab: TabList = TabList.listing
+  @State private var refPopup: Bool = false
+  @State private var myLetter: CoverLetter? = nil
+  @State private var coverLetterButtons: CoverLetterButtons = CoverLetterButtons(showInspector: false, runRequested: false)
+
+  var body: some View {
+    let selResBinding = Binding(
+      get: { jobAppStore.selectedApp?.selectedRes },
+      set: { jobAppStore.selectedApp?.selectedRes = $0 }
+    )
+
+    VStack {
+      TabView(selection: $selectedTab) {
+        JobAppDetailView(tab: $selectedTab, buttons: $listingButtons)
+          .tabItem {
+            Label(TabList.listing.rawValue, systemImage: "newspaper")
+          }
+          .tag(TabList.listing)
+
+        ResumeViewSetup(currentTab: selectedTab, selRes: selResBinding)
+          .tabItem {
+            Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
+          }
+          .tag(TabList.resume)
+
+        if let myApp = jobAppStore.selectedApp {
+          let letterBinding = Binding(
+            get: { myLetter ?? loadOrCreateLetter(jobApp: myApp) },
+            set: { myLetter = $0 }
+          )
+
+          CoverLetterView(buttons: $coverLetterButtons, coverLetter: letterBinding)
+            .tabItem {
+              Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
+            }
+            .tag(TabList.coverLetter)
+        }
+
+        Text("Submit Application Content")
+          .tabItem {
+            Label(TabList.submitApp.rawValue, systemImage: "paperplane")
+          }
+          .tag(TabList.submitApp)
+      }
+      .padding(.all)
+    }
+    .toolbar {
+      buildToolbar(
+        selectedTab: $selectedTab,
+        selRes: selResBinding,
+        listingButtons: $listingButtons,
+        letterButtons: $coverLetterButtons,
+        coverLetter: Binding(get: { myLetter }, set: { myLetter = $0 })
+      )
+    }
+    .onAppear {
+      if selResBinding.wrappedValue == nil, let selectedApp = jobAppStore.selectedApp {
+        if resRefStore.areRefsOk {
+          selResBinding.wrappedValue = resStore.create(jobApp: selectedApp, sources: resRefStore.defaultSources)
+        } else {
+          refPopup = true
+        }
+      }
+      updateMyLetter()
+    }
+    .onChange(of: jobAppStore.selectedApp) { _ in
+      updateMyLetter()
+    }
+    .sheet(isPresented: $refPopup) {
+      ResRefView(
+        refPopup: $refPopup,
+        isSourceExpanded: true,
+        selRes: selResBinding,
+        tab: $selectedTab
+      )
+      .padding()
+    }
+  }
+
+  func updateMyLetter() {
+    if let selectedApp = jobAppStore.selectedApp {
+      if let lastLetter = selectedApp.coverLetters.last {
+        myLetter = lastLetter
+      } else {
+        myLetter = coverLetterStore.create(jobApp: selectedApp)
+      }
+    } else {
+      myLetter = nil
+    }
+  }
+
+  func loadOrCreateLetter(jobApp: JobApp) -> CoverLetter {
+    if let letter = myLetter {
+      return letter
+    } else if jobApp.coverLetters.isEmpty {
+      let newLetter = coverLetterStore.create(jobApp: jobApp)
+      myLetter = newLetter
+      return newLetter
+    } else {
+      let lastLetter = jobApp.coverLetters.last!
+      myLetter = lastLetter
+      return lastLetter
+    }
+  }
+}
+
+struct SaveButtons {
+  var edit: Bool = false
+  var save: Bool = false
+  var cancel: Bool = false
+}
+
+struct CoverLetterButtons {
+  var showInspector: Bool = false
+  var runRequested: Bool = false
+}
+import SwiftData
+import SwiftUI
+
+struct ContentView: View {
+  var modelContext: ModelContext
+  @State private var jobAppStore: JobAppStore = JobAppStore()
+  @State private var resRefStore: ResRefStore = ResRefStore()
+  @State private var resStore: ResStore = ResStore()
+  @State private var coverRefStore: CoverRefStore = CoverRefStore()
+  @State private var coverLetterStore: CoverLetterStore = CoverLetterStore()
+
+  @State private var showNewAppSheet: Bool = false
+  @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
+
+  var body: some View {
+
+    NavigationSplitView {
+      List(
+        jobAppStore.jobApps,
+        id: \.self,
+        selection: $jobAppStore.selectedApp
+      ) { selApp in
+        Text(selApp.job_position)
+          .tag(selApp)
+          .contextMenu {
+            Button(role: .destructive) {
+              jobAppStore.deleteJobApp(selApp)
+            } label: {
+              Label("Delete", systemImage: "trash")
+            }
+          }
+      }
+      .listStyle(.sidebar)
+      .navigationTitle("Job Applications")
+      .safeAreaInset(edge: .bottom) {
+        Button(action: { showNewAppSheet = true }) {
+          Label("Add Application", systemImage: "plus.circle.fill")
+        }
+        .controlSize(.regular)
+        .labelStyle(.titleAndIcon)
+        .padding(.bottom, 10)
+        .background(Color.clear)
+        .buttonStyle(BlackOnHoverButtonStyle())
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 10)
+      }
+    } detail: {
+      VStack(alignment: .leading) {
+        if let selApp = jobAppStore.selectedApp {
+          TabWrapperView()
+            .navigationTitle(selApp.job_position)
+        } else {
+          Text("No Selection")
+            .navigationTitle("Job Details")
+        }
+      }
+      .frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+      .background(
+        VStack {
+          Divider()
+          Spacer()
+        }
+      )
+    }
+    .sheet(isPresented: $showNewAppSheet) {
+      NewAppSheetView(
+        scrapingDogApiKey: scrapingDogApiKey,
+        isPresented: $showNewAppSheet
+      )
+    }
+    .onAppear {
+      resRefStore.initialize(context: modelContext)
+      resStore.initialize(context: modelContext)
+      jobAppStore.initialize(context: modelContext, resStore: resStore)
+      coverRefStore.initialize(context: modelContext)
+      coverLetterStore.initialize(context: modelContext, refStore: coverRefStore)
+
+
+
+    }
+    .environment(jobAppStore).environment(resRefStore).environment(resStore).environment(coverRefStore).environment(coverLetterStore)
+  }
+}
+
+
+
+struct BlackOnHoverButtonStyle: ButtonStyle {
+  @State private var isHovered = false
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .foregroundColor(isHovered ? .black : .primary)
+      .onHover { hovering in
+        isHovered = hovering
+      }
+  }
+}
+//
+//  TabList.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/9/24.
+//
+
+
+enum TabList: String {
+  case listing = "Job Listing"
+  case resume = "Customize Résumé"
+  case coverLetter = "Compose Cover Letter"
+  case submitApp = "Submit Application"
+  case none = "None"
+}import AppKit
+import SwiftUI
+
+struct Cell: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore?
+  @Environment(\.openURL) private var openURL
+  var leading: String
+  var trailingKeys: KeyPath<JobApp, String>
+  var formTrailingKeys: WritableKeyPath<JobAppForm, String>
+  @Binding var isEditing: Bool
+  //    @State private var isHovered: Bool = false
+
+  var body: some View {
+    HStack {
+      Text(leading)
+      Spacer()
+      if isEditing {
+        if let store = jobAppStore {
+          TextField(
+            "",
+            text: Binding(
+              get: { store.form[keyPath: formTrailingKeys] },
+              set: { store.form[keyPath: formTrailingKeys] = $0 })
+          )
+          .textFieldStyle(.roundedBorder)
+        } else {
+          Text("Error: Store not available")
+        }
+      } else {
+        HStack {
+          if let app = jobAppStore?.selectedApp {
+            let val = app[keyPath: trailingKeys]
+            Text(val.isEmpty ? "none listed" : val)
+              .foregroundColor(false ? .blue : .secondary)
+              .italic(val.isEmpty)
+              .lineLimit(1)
+
+            if isValidURL(val) {
+              Button(action: {
+                if let url = URL(string: val) {
+                  openURL(url)
+                } else {
+                  print("URL Problem")
+                }
+              }) {
+                Image(systemName: "arrow.up.right.square")
+                  .foregroundColor(
+                    false ? .blue : .secondary)
+              }
+              .buttonStyle(PlainButtonStyle())
+            }
+
+          } else {
+            Text("No app selected")
+              .foregroundColor(.red)
+          }
+        }
+        //                .onHover { hover in
+        //                    if let app = jobAppStore?.selectedApp {
+        //                        let trailing = app[keyPath: trailingKeys]
+        //                        if isValidURL(trailing) {
+        //                            isHovered = hover
+        //                        } else {
+        //                            isHovered = false
+        //                        }
+        //
+        //                    }
+        //                }
+      }
+    }
+    .onAppear {
+      // Debugging print statements, safely
+
+    }
+  }
+
+  private func isValidURL(_ urlString: String) -> Bool {
+    if let url = URL(string: urlString) {
+      return NSWorkspace.shared.urlForApplication(toOpen: url) != nil
+    }
+    return false
+  }
+}
+import SwiftUI
+
+struct ImageButton: View {
+  let systemName: String?
+  let name: String?
+  var defaultColor: Color?
+  var activeColor: Color?
+  let imageSize: CGFloat
+  let action: () -> Void
+
+  @State private var isHovered = false
+  @State private var isActive = false
+
+  init(
+    systemName: String? = nil, name: String? = nil, imageSize: CGFloat = 35,
+    defaultColor: Color? = Color.secondary, activeColor: Color? = Color.accentColor,
+    action: @escaping () -> Void
+  ) {
+    // Validation: Ensure either systemName or name is provided, but not both or none
+    if (systemName == nil && name == nil) || (systemName != nil && name != nil) {
+      fatalError("You must provide either `systemName` or `name`, but not both or none.")
+    }
+    self.imageSize = imageSize
+    self.systemName = systemName
+    self.name = name
+    self.defaultColor = defaultColor
+    self.activeColor = activeColor
+    self.action = action
+  }
+
+  var body: some View {
+    imageView()
+      .resizable()
+      .aspectRatio(contentMode: .fit)
+      .frame(width: imageSize, height: imageSize)
+      .foregroundColor(
+        (isActive || isHovered) ? activeColor ?? Color.accentColor : defaultColor ?? Color.secondary
+      )
+      .onHover { hovering in
+        isHovered = hovering
+      }
+      .onTapGesture {
+        isActive = true
+        action()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+          isActive = false
+        }
+      }
+  }
+
+  private func imageView() -> Image {
+    let baseName = currentImageName()
+    // Check if systemName is nil or not, and use the appropriate initializer
+    if systemName != nil {
+      return Image(systemName: baseName)
+    } else {
+      return Image(baseName)
+    }
+  }
+
+  private func currentImageName() -> String {
+    let baseName = systemName ?? name ?? ""
+    return isActive ? baseName + ".fill" : baseName
+  }
+}
+import SwiftUI
+
+struct RoundedTagView: View {
+  var tagText: String
+  var backgroundColor: Color = .blue
+  var foregroundColor: Color = .white
+
+  var body: some View {
+    Text(tagText.capitalized)
+      .font(.caption)
+      .padding(.vertical, 4)
+      .padding(.horizontal, 8)
+      .background(backgroundColor)
+      .foregroundColor(foregroundColor)
+      .cornerRadius(10)
+  }
+}
+import SwiftUI
+struct Colors  {
+  static let ltGray = Color(red: 245 / 255, green: 245 / 255, blue: 245 / 255)
+  static let midLtGray = Color(red: 235 / 255, green: 235 / 255, blue: 235 / 255)
+  static let midGray = Color(red: 225 / 255, green: 225 / 255, blue: 225 / 255)
+
+}
+struct CustomStepper: View {
+  @Binding var value: Int
+  @State var isPlusHovering: Bool = false
+  @State var isMinusHovering: Bool = false
+  var range: ClosedRange<Int>
+  var body: some View {
+    HStack(spacing: 0) {
+      // Decrement button (-)
+      Button(action: {
+        if value > range.lowerBound {
+          value -= 1
+        }
+      }) {
+        Text("–")
+          .frame(width: 24, height: 24)
+          .background(isMinusHovering ? Colors.ltGray : Color.clear )
+          .foregroundColor(.primary)  // Text color for button
+      }
+      .buttonStyle(PlainButtonStyle()).onHover{hover in isMinusHovering = hover}  // Disable default button style
+
+      // Divider between the buttons and value
+      Divider()
+        .frame(height: 22)
+        .background(Colors.midGray)
+
+      // Value display
+      Text("\(value)")
+        .frame(width: 24, height: 24)
+        .background(Color.clear)
+        .foregroundColor(.primary)  // Text color for value
+
+      // Divider between value and increment button
+      Divider()
+        .frame(height: 22)
+        .background(Colors.midGray)
+
+      // Increment button (+)
+      Button(action: {
+        if value < range.upperBound {
+          value += 1
+        }
+      }) {
+        Text("+")
+          .frame(width: 24, height: 24)
+          .background(isPlusHovering ? Colors.ltGray : Color.clear)
+          .foregroundColor(.primary)  // Text color for button
+      }
+      .buttonStyle(PlainButtonStyle())
+      .onHover{hovering in
+        isPlusHovering = hovering}// Disable default button style
+    }
+    .font(.body)  // Set the font size
+    .cornerRadius(8)  // Rounded corners
+    .overlay(
+      RoundedRectangle(cornerRadius: 8)
+        .stroke(Colors.ltGray, lineWidth: 1)
+    )  // Add border around the entire stepper
+    .background(Colors.midLtGray)  // Use tertiary background color to match design
+    .clipShape(RoundedRectangle(cornerRadius: 8))  // Clip the shape to match the rounded corners
+  }
+}
+
+
+
+import SwiftOpenAI
+import SwiftUI
+
+struct AiFunctionView: View {
+  @Binding var attentionGrab: Int
+  @Binding var res: Resume?
+  @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
+
+  init(res: Binding<Resume?>, attn: Binding<Int>) {
+    self._res = res
+    self._attentionGrab = attn
+  }
+
+  var body: some View {
+    if let myRes = res {
+      AiCommsView(
+        service: OpenAIServiceFactory.service(apiKey: openAiApiKey, debugEnabled: true),
+        query: myRes.generateQuery(attentionGrab: attentionGrab), // Use unwrapped `myRes`
+        res: $res // Pass the binding directly
+      )
+      .onAppear { myRes.debounceExport() } // Use `myRes` instead of force-unwrapping
+    } else {
+      Text("No Resume Available") // Optionally, handle the case when `res` is nil
+    }
+  }
+}
+import SwiftUI
+
+struct ReviewCommentView: View {
+  @Binding var comment: String
+  @Binding var isCommenting: Bool
+  let saveAction: () -> Void  // Closure without parameters
+
+  var body: some View {
+    VStack(alignment: .leading) {
+      Text("Comments/Instructions to improve text generation")
+        .font(.footnote)
+      TextField("Reviewer Comments", text: $comment)
+        .lineLimit(3...10)
+      HStack {
+        Button(
+          "Save",
+          action: {
+            isCommenting = false
+            saveAction()  // Call the closure directly
+          })
+        Button(
+          "Cancel",
+          action: {
+            isCommenting = false
+          })
+      }
+    }.padding()
+  }
+}
+//
+//  ChatStructuredOutputDemoView.swift
+//  SwiftOpenAIExample
+//
+//  Created by James Rochabrun on 8/10/24.
+//
+
+import Foundation
+import SwiftOpenAI
+import SwiftUI
+
+struct AiCommsView: View {
+  @State private var q: ResumeApiQuery
+  @State private var chatProvider: ResumeChatProvider
+  @State private var revisions: [ProposedRevisionNode] = []
+  @State private var currentRevNode: ProposedRevisionNode? = nil
+  @State var currentFeedbackNode: FeedbackNode? = nil
+  @State private var isLoading = false
+  @State private var sheetOn: Bool = false
+  @State private var aiResub: Bool = false
+  @Binding var myRes: Resume?
+  @State private var fbnodes: [FeedbackNode] = []
+  init(service: OpenAIService, query: ResumeApiQuery, res: Binding<Resume?>) {
+    _chatProvider = State(initialValue: ResumeChatProvider(service: service))
+    _q = State(initialValue: query)
+    _myRes = res
+  }
+
+  var body: some View {
+    exec_query
+      .sheet(isPresented: $sheetOn) {
+        print("sheet dismissed")
+      } content: {
+        if sheetOn {
+          ReviewView(
+            revisionArray: $revisions,
+            feedbackArray: $fbnodes,
+            currentFeedbackNode: $currentFeedbackNode,
+            currentRevNode: $currentRevNode,
+            sheetOn: $sheetOn,
+            selRes: $myRes,
+            aiResub: $aiResub
+          )
+          .frame(minWidth: 650)
+        }
+      }
+      .onChange(of: chatProvider.lastRevNodeArray) { oldValue, newValue in
+        sheetOn = true
+        revisions = validateRevs(res: myRes, revs: newValue) ?? []  // Updated this call
+        currentRevNode = revisions[0]
+        if currentRevNode != nil{
+          currentFeedbackNode = FeedbackNode(
+            id: currentRevNode!.id,
+            originalValue: currentRevNode!.oldValue,
+            proposedRevision: currentRevNode!.newValue,
+            actionRequested: .unevaluated
+          )
+        }
+        aiResub = false
+        fbnodes = []
+      }
+      .onChange(of: aiResub) { oldValue, newValue in
+        if newValue {
+          chatAction(hasRevisions: true)
+        }
+      }
+  }
+
+  var exec_query: some View {
+    HStack(spacing: 4) {
+      VStack {
+        if !isLoading {
+          if (
+            (myRes?.rootNode?.aiStatusChildren ?? 0)
+            > 0) {
+            Button(action: {
+              print("Notloading")
+              chatAction()
+            }) {
+
+              Image("ai-squiggle")
+                .font(.system(size: 20, weight: .regular))
+            }
+            .help("Create new Résumé")
+          } else {
+            Image("ai-squiggle.slash").font(.system(size: 20, weight: .regular)).help("Select fields for ai update")
+
+          }
+        } else {
+          ProgressView().scaleEffect(0.75, anchor: .center)  // Show a loading indicator when isLoading is true
+        }
+      }
+      .padding()
+    }
+  }
+
+  // Validation function for revisions
+  func validateRevs(res: Resume?, revs: [ProposedRevisionNode]) -> [ProposedRevisionNode]? {
+    print("Validating revisions...")
+    var validRevs = revs
+    if let myRes = res {
+      let updateNodes = myRes.getUpdatableNodes()
+
+      for (index, item) in validRevs.enumerated() {
+        // Check by ID first
+        if let matchedNode = updateNodes.first(where: { $0["id"] == item.id }) {
+          print("\(item.id) found")
+          continue
+        } else if let matchedByValue = updateNodes.first(where: { $0["oldValue"] == item.oldValue }), let id = matchedByValue["id"] {
+          // Update revision's ID if matched by value
+          validRevs[index].id = id
+          print("\(item.id) updated")
+
+        } else {
+          print("No match found for revision: \(item.id) - \(item.oldValue)")
+        }
+      }
+      return validRevs
+    }
+    return nil
+  }
+
+  func chatAction(hasRevisions: Bool = false) {
+    Task {
+      print("chatAction")
+      isLoading = true
+      defer { isLoading = false }  // ensure isLoading is set to false when the task completes
+
+      if !hasRevisions {
+        let content: ChatCompletionParameters.Message.ContentType = .text(q.wholeResumeQueryString)
+
+        chatProvider.messageHist = [
+          q.systemMessage,
+          .init(role: .user, content: content)
+        ]
+      } else {
+        chatProvider.messageHist.append(.init(role: .user, content: .text(q.revisionPrompt(fbnodes))))
+      }
+
+      let parameters = ChatCompletionParameters(
+        messages: chatProvider.messageHist,
+        model: .gpt4o20240806,
+        responseFormat: .jsonSchema(ResumeApiQuery.revNodeArraySchema)
+      )
+      try await chatProvider.startChat(parameters: parameters)
+    }
+  }
+}
+import SwiftData
+import SwiftUI
+
+struct ReviewView: View {
+  @Environment(ResStore.self) private var resStore
+  @Binding var revisionArray: [ProposedRevisionNode]
+  @Binding var feedbackArray: [FeedbackNode]
+  @State private var feedbackIndex: Int = 0
+  @Binding var currentFeedbackNode: FeedbackNode?
+  @Binding var currentRevNode: ProposedRevisionNode?
+  @Binding var sheetOn: Bool
+  @Binding var selRes: Resume?
+  @State private var updateNodes: [[String: String]] = []
+  @Binding var aiResub: Bool
+  @State var isEditingResponse: Bool = false
+  @State var isCommenting: Bool = false
+  @State var isMoreCommenting: Bool = false
+
+  var body: some View {
+    if let selRes = selRes {
+      if aiResub {
+        VStack {
+          Text("Submitting Feedback to AI").padding()
+          ProgressView().padding()
+        }
+      } else {
+        VStack {
+          if let currentRevNode = currentRevNode, let currentFeedbackNode = currentFeedbackNode {
+            VStack(spacing: 4) {
+              ZStack {
+                LinearGradient(
+                  gradient: Gradient(colors: [.cyan, .blue]),
+                  startPoint: .top, endPoint: .bottom
+                )
+                .mask {
+                  RoundedRectangle(
+                    cornerRadius: 18, style: .continuous)
+                }
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                Image(systemName: "sparkles")
+                  .imageScale(.large)
+                  .foregroundStyle(.white)
+                  .font(.system(.largeTitle, weight: .light))
+                  .rotationEffect(.degrees(90), anchor: .center)
+                  .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 3)
+              }
+              .frame(width: 50, height: 50)
+              .clipped()
+              .padding(.bottom, 8)
+              Text("Evaluate Proposed Revisions")
+                .font(.system(.title, weight: .semibold))
+                .multilineTextAlignment(.center)
+              Text("Reviewing \(feedbackIndex + 1) of \(revisionArray.count)")
+                .font(.caption2)
+                .fontWeight(.light)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 60)
+            .padding(.bottom, 45)
+            VStack(alignment: .leading, spacing: 15) {
+              HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                  Text("Original Text")
+                    .font(.system(.headline, weight: .semibold))
+                    .transition(.move(edge: .trailing))
+                  Text(currentRevNode.oldValue)
+                    .font(.system(.headline, weight: .light))
+                    .foregroundStyle(.secondary)
+                    .transition(.move(edge: .trailing))
+                }
+                .fixedSize(horizontal: false, vertical: true)
+              }
+              if currentRevNode.valueChanged {
+                HStack(alignment: .top) {
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text("Proposed Revision")
+                      .font(.system(.title2, weight: .semibold))
+                      .transition(.move(edge: .trailing))
+                    if isEditingResponse {
+                      HStack(spacing: 10) {
+                        TextField(
+                          "RevisedText",
+                          text: Binding(
+                            get: { currentFeedbackNode.proposedRevision },
+                            set: { newValue in
+                              self.currentFeedbackNode?.proposedRevision = newValue
+                            }
+                          ),
+                          axis: .vertical
+                        ).lineLimit(4...10)
+                        Spacer()
+                        ImageButton(
+                          systemName: "checkmark.circle",
+                          imageSize: 20,
+                          activeColor: Color.green,
+                          action: {
+                            saveAndNext(response: .acceptedWithChanges)
+                          }
+                        )
+                        ImageButton(
+                          systemName: "x.circle",
+                          imageSize: 20,
+                          activeColor: Color.red,
+                          action: {
+                            isEditingResponse = false
+                          }
+                        )
+                      }
+                      .frame(maxWidth: .infinity)
+                    } else {
+                      Text(currentRevNode.newValue)
+                        .font(.system(.title2, weight: .light))
+                        .transition(.move(edge: .trailing))
+                        .foregroundStyle(.secondary)
+                    }
+                  }
+                  .fixedSize(horizontal: false, vertical: true)
+                }
+              }
+              if currentRevNode.valueChanged {
+                HStack(alignment: .top) {
+                  VStack(alignment: .leading, spacing: 3) {
+                    Text("Explanation")
+                      .font(.system(.headline, weight: .semibold))
+                      .transition(.move(edge: .trailing))
+                    Text(currentRevNode.why)
+                      .font(.system(.headline, weight: .light))
+                      .foregroundStyle(.secondary)
+                      .transition(.move(edge: .trailing))
+                  }
+                  .fixedSize(horizontal: false, vertical: true)
+                }
+              }
+            }
+            .padding(.leading, 30)
+            .padding(.trailing, 30)
+            Text(currentRevNode.valueChanged ? "Accept proposed revision?" : "Accept original value unchanged?")
+              .padding()
+              .font(.title2)
+            HStack(spacing: 25) {
+              if currentRevNode.valueChanged {
+                ImageButton(
+                  systemName: "hand.thumbsdown.circle",
+                  activeColor: Color.purple,
+                  action: { isCommenting = true }
+                ).help("Reject Revision with comment.").popover(isPresented: $isCommenting) {
+                  ReviewCommentView(
+                    comment: Binding(
+                      get: { currentFeedbackNode.reviewerComments },
+                      set: { newValue in
+                        self.currentFeedbackNode?.reviewerComments = newValue
+                      }
+                    ),
+                    isCommenting: $isCommenting,
+                    saveAction: {
+                      saveAndNext(response: .revise)
+                    }
+                  )
+                }
+                ImageButton(
+                  systemName: "trash.circle",
+                  activeColor: Color.red,
+                  action: {
+                    saveAndNext(response: .rewriteNoComment)
+                  }
+                ).help("Try again. Reject Revision without comment.")
+              } else {
+                ImageButton(
+                  systemName: "hand.thumbsdown.circle",
+                  activeColor: Color.purple,
+                  action: { isMoreCommenting = true }
+                ).popover(isPresented: $isMoreCommenting) {
+                  ReviewCommentView(
+                    comment: Binding(
+                      get: { currentFeedbackNode.reviewerComments },
+                      set: { newValue in
+                        self.currentFeedbackNode?.reviewerComments = newValue
+                      }
+                    ),
+                    isCommenting: $isCommenting,
+                    saveAction: {
+                      saveAndNext(response: .mandatedChange)
+                    }
+                  )
+                }
+                ImageButton(
+                  systemName: "trash.circle",
+                  activeColor: Color.red,
+                  action: {
+                    saveAndNext(response: .mandatedChangeNoComment)
+                  }
+                )
+              }
+              if currentRevNode.valueChanged {
+                ImageButton(
+                  name: "ai-rejected", imageSize: 43, activeColor: Color.indigo,
+                  action: { saveAndNext(response: .restored) }
+                )
+                ImageButton(
+                  systemName: "pencil.circle",
+                  action: { isEditingResponse = true }
+                )
+              }
+              ImageButton(
+                systemName: "hand.thumbsup.circle",
+                activeColor: Color.green,
+                action: {
+                  saveAndNext(response: currentRevNode.valueChanged ? .accepted : .noChange)
+                }
+              ).help("Approve revision")
+            }
+          } else {
+            // Handle the case where currentRevNode or currentFeedbackNode is nil
+            Text("No revision to display").padding()
+          }
+        }
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .padding(.top, 0)
+        .padding(.bottom, 40)
+        .padding(.horizontal, 20)
+        .onChange(of: aiResub) { oldValue, newValue in
+          print("aiResub changed from \(oldValue ? "true":"false") to \(newValue ? "true":"false")")
+          if !newValue {
+            currentRevNode = revisionArray.first
+            feedbackIndex = 0
+            feedbackArray = []
+          }
+        }
+        .onAppear {
+          if updateNodes.isEmpty {
+            updateNodes = selRes.getUpdatableNodes()
+          }
+        }
+      }
+    }
+    else { Text("No valid Res") }
+  }
+
+  func saveAndNext(response: PostReviewAction) {
+    if let currentFeedbackNode = currentFeedbackNode {
+    currentFeedbackNode.actionRequested = response
+      switch response {
+        case .accepted:
+          nextNode()
+          
+        case .acceptedWithChanges:
+          isEditingResponse = false
+          nextNode()
+        case .restored:
+          currentFeedbackNode.proposedRevision =
+          currentFeedbackNode.originalValue
+          nextNode()
+        case .revise:
+          isCommenting = false
+          nextNode()
+        case .rewriteNoComment:
+          nextNode()
+        case .mandatedChangeNoComment:
+          isCommenting = false
+          nextNode()
+        case .mandatedChange:
+          nextNode()
+        case .noChange:
+          nextNode()
+          
+        default:
+          print("default")
+      }
+    }
+
+  }
+  func nextNode() {
+    if let currentFeedbackNode = currentFeedbackNode {
+      feedbackArray.append(currentFeedbackNode)
+      print(feedbackArray.count)
+      feedbackIndex += 1
+    }
+    if feedbackIndex < revisionArray.count {
+      withAnimation(.easeInOut(duration: 0.5)) {
+        currentRevNode = revisionArray[feedbackIndex]
+        if let currentRevNode = currentRevNode {
+          currentFeedbackNode = FeedbackNode(
+            id: currentRevNode.id,
+            originalValue: currentRevNode.oldValue,
+            proposedRevision: currentRevNode.newValue,
+            actionRequested: .unevaluated
+          )
+        }
+      }
+    } else {
+
+      applyChanges()
+      let aiActions: Set<PostReviewAction> = [
+        .revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment
+      ]
+
+      if feedbackArray.contains(where: { node in
+        aiActions.contains(node.actionRequested)
+      }) {
+        for fb in feedbackArray {
+          print(fb.proposedRevision)
+          print("Action: \(String(describing: fb.actionRequested))")
+        }
+        aiResubmit()
+      } else {
+        if var selRes = selRes {
+          selRes = resStore.createDuplicate(res: selRes)
+
+          selRes.debounceExport()
+
+        }
+        sheetOn = false
+      }
+
+    }
+  }
+
+  func applyChanges() {
+    feedbackArray.forEach { node in
+      if node.actionRequested == .accepted || node.actionRequested == .acceptedWithChanges {
+        if let selRes = selRes{
+          if let treeNode = selRes.nodes.first(where: { $0.id == node.id }) {
+            treeNode.value = node.proposedRevision
+          } else {
+            print("node not found")
+            print(node.id)
+          }
+        }
+      }
+    }
+  }
+
+  func aiResubmit() {
+    feedbackIndex = 0
+    aiResub = true
+  }
+
+  func fetchModelByID(id: String, context: ModelContext) -> TreeNode? {
+    var descriptor = FetchDescriptor<TreeNode>()
+    descriptor.predicate = #Predicate { $0.id == id }
+    descriptor.fetchLimit = 1
+    return try? context.fetch(descriptor).first
+  }
+}
+//
+//  CoverLetterAi.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/12/24.
+//
+
+import Foundation
+import SwiftOpenAI
+import SwiftUI
+
+struct CoverLetterAiView: View {
+  @Binding var selRes: Resume?
+  @Binding var coverLetter: CoverLetter
+  @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
+  @Binding var buttons: CoverLetterButtons
+  @State var aiMode: CoverAiMode = .none
+
+  var body: some View {
+    if selRes != nil {
+      CoverLetterAiContentView(
+        service: OpenAIServiceFactory.service(
+          apiKey: openAiApiKey, debugEnabled: false),
+        aiMode: aiMode,
+        myRes: $selRes,
+        coverLetter: $coverLetter,
+        buttons: $buttons)
+      .onAppear { print("Ai Cover Letter") }
+    } else {
+      EmptyView()      .onAppear { print("Womp") }
+
+    }
+  }
+}
+
+struct CoverLetterAiContentView: View {
+  @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+  @State var aiMode: CoverAiMode
+  @State var isLoading = false
+  @Binding var myRes: Resume?
+  @Binding var coverLetter: CoverLetter
+  @Binding var buttons: CoverLetterButtons
+  let service: OpenAIService
+
+  // Use @Bindable for chatProvider
+  @Bindable var chatProvider: CoverChatProvider
+  
+  init(
+    service: OpenAIService,
+    aiMode: CoverAiMode,
+    myRes: Binding<Resume?>,
+    coverLetter: Binding<CoverLetter>,
+    buttons: Binding<CoverLetterButtons>
+  ) {
+    self.service = service
+    self._aiMode = State(initialValue: aiMode)
+    self._myRes = myRes
+    self._coverLetter = coverLetter
+    self._buttons = buttons
+    self.chatProvider = CoverChatProvider(service: service)
+  }
+
+  var body: some View {
+    HStack(spacing: 4) {
+      VStack {
+        if !isLoading {
+          Button(action: {
+            print("Not loading")
+            if !coverLetter.generated {coverLetter.currentMode = .generate}
+            else {
+              coverLetter = coverLetterStore.createDuplicate(letter: coverLetter)
+              print("new cover letter")
+            }
+            chatAction()
+          }) {
+            Image("ai-squiggle")
+              .font(.system(size: 20, weight: .regular))
+          }
+          .help("Create new Résumé")
+        } else {
+          ProgressView()
+            .scaleEffect(0.75, anchor: .center)
+        }
+      }
+      .padding().onAppear{print("ai vontent")}
+    }
+    .onChange(of: chatProvider.resultsAvailable) { oldValue, newValue in
+      if newValue {
+        print("New results received!")
+//        processResults()
+      }
+    }
+    .onChange(of: buttons.runRequested) { oldValue, newValue in
+      if newValue {
+        chatAction()
+      }
+    }
+  }
+  @MainActor
+  func processResults(newMessage: String) {
+    print("processResults")
+    $coverLetter.wrappedValue.generated = true
+    $coverLetter.wrappedValue.messageHistory
+        .append(.init(content: newMessage, role: .assistant))
+    $coverLetter.wrappedValue.content = newMessage
+    print(newMessage)
+      isLoading = false
+      chatProvider.resultsAvailable = false
+
+
+    // Add your result processing logic here
+  }
+
+  func chatAction() {
+    Task {
+      print("chatAction")
+      isLoading = true
+      defer {
+        isLoading = false
+        buttons.runRequested = false
+      }
+
+      guard let resume = myRes else {
+        print("guard fail")
+        return }
+
+      switch coverLetter.currentMode {
+      case .generate:
+        let prompt = CoverLetterPrompts.generate(
+            coverLetter: coverLetter, resume: resume, mode: aiMode)
+        let myContent = ChatCompletionParameters.Message.ContentType.text(prompt)
+        chatProvider.messageHist = [
+          CoverLetterPrompts.systemMessage,.init(role: .user, content: myContent)
+        ]
+          print("message count: \(chatProvider.messageHist.count)")
+        coverLetter.messageHistory.append(.init(content: prompt, role: .user))
+        let parameters = ChatCompletionParameters(
+          messages: chatProvider.messageHist,
+          model: .gpt4o20240806,
+          responseFormat: .text
+        )
+          try await chatProvider.startChat(parameters: parameters, onComplete: { @MainActor newMessage in
+            processResults(newMessage: newMessage)
+          })
+
+      default:
+        // Handle other cases as needed
+        break
+      }
+    }
+  }
+}
+//`//
+////  AiPanelView.swift
+////  PhysicsCloudResume
+////
+////  Created by Christopher Culbreath on 8/25/24.
+////
+//
+//import SwiftUI
+//
+//struct AiPanelView: View {
+//  @Binding var res: Resume
+//  @State var attentionGrab: Int = 2
+//  @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
+//
+//  @State private var isButHover: Bool = false
+//
+//  var body: some View {
+//    let q = res.generateQuery(attentionGrab: attentionGrab)
+//    GroupBox {
+//      VStack {
+//        HStack {
+//          Button( action: {print("nope")}) {
+//            Image(
+//              isButHover
+//                ? "ai-squiggle.bubble.left.fill"
+//                : "ai-squiggle.bubble.left"
+//            )
+//            .foregroundColor(.pink)
+//            .font(.system(size: 22))
+//            .fontWeight(.light)
+//          }.buttonStyle(.borderless).onHover { hover in
+//            isButHover = hover
+//          }
+//          Stepper("Attenion grabbing intensity \(attentionGrab)", value: $attentionGrab, in: 0...4)
+//        }
+//        ChatView(key: openAiApiKey, apiQuery: q, res: $res)
+//      }.frame(maxWidth: .infinity, minHeight: 100)
+//    }
+//  }
+//}
+
+//
+//  CreateNewResumeView.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/18/24.
+//
+
+import SwiftData
+import SwiftUI
+
+struct CreateNewResumeView: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+  @Environment(ResStore.self) private var resStore: ResStore
+
+  var body: some View {
+    let selApp: JobApp = jobAppStore.selectedApp!
+
+    VStack {
+      Text("No resumes available")
+        .font(.title)
+      Button(action: {
+        resStore.create(jobApp: selApp, sources: resRefStore.defaultSources)}) {
+        Text("Create Résumé")
+          .buttonStyle(.borderedProminent)
+          .controlSize(.regular)
+          .buttonBorderShape(.capsule)
+      }
+    }.onAppear { print("create app bitches") }
+  }
+}
+//
+//  ResumeSplitView.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/31/24.
+//
+
+import SwiftUI
+
+struct ResumeSplitView: View {
+  @Binding var selRes: Resume?
+  @Binding var isWide: Bool
+  @Binding var tab: TabList
+  var body: some View {
+    HSplitView {
+      if let selRes = selRes, let rootNode = selRes.rootNode {
+
+        ResumeDetailView(
+          selRes: $selRes,
+          tab: $tab,
+          rootNode: rootNode,
+          isWide: $isWide
+          
+        )
+        .frame(
+          minWidth: isWide ? 350 : 200,
+          idealWidth: isWide ? 500 : 300,
+          maxWidth: 600,
+          maxHeight: .infinity
+        ).onAppear{print("RootNode")
+          //          print(rootNode.resume.id)
+        }
+        .layoutPriority(1)  // Ensures this view gets priority in layout
+      }
+      if let selRes = selRes {
+        ResumePDFView(resume: selRes)
+          .frame(
+            minWidth: 300, idealWidth: 400,
+            maxWidth: .infinity, maxHeight: .infinity
+          )
+          .layoutPriority(1)  // Less priority, but still resizable
+      }
+    }
+  }
+}
+//
+//  ResumePDFView.swift
+//  PhysicsCloudResume
+//
+//  Created by Christopher Culbreath on 8/20/24.
+//
+
+import PDFKit
+import SwiftUI
+
+struct ResumePDFView: View {
+  @Bindable var resume: Resume
+  @State private var needsUpdate: Bool = false
+
+  var body: some View {
+    @State var isUpdating = resume.isUpdating
+
+    VStack {
+      if let pdfData = resume.pdfData {
+        PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
+          .frame(maxWidth: .infinity, maxHeight: .infinity).overlay(alignment: .topTrailing){
+            if isUpdating {
+              ProgressView().scaleEffect(0.5, anchor: .center).padding(.top, 2).padding(.trailing, 2)
+            }
+          }
+      } else {
+        Text("No PDF available")
+      }
+    }
+    .onAppear {
+      if resume.pdfData == nil {
+        if let fileURL = FileHandler.readPdfUrl() {
+          resume.loadPDF(from: fileURL)
+        }
+      }
+    }
+    .onChange(of: resume.pdfData) {
+      needsUpdate.toggle()  // Update the view when pdfData changes
+    }
+  }
+}
+
+func pdfViewer(pdfData: Data) -> PDFView {
+  let pdfDoc = PDFDocument(data: pdfData)
+  let pdfView = PDFView()
+  pdfView.document = pdfDoc
+  pdfView.autoScales = true
+  return pdfView
+}
+
+struct PDFKitWrapper: NSViewRepresentable {
+  let pdfView: PDFView
+
+  func makeNSView(context: Context) -> PDFView {
+    return pdfView
+  }
+
+  func updateNSView(_ nsView: PDFView, context: Context) {
+    // Update the NSView if needed
+    nsView.document = pdfView.document
+  }
+
+  typealias NSViewType = PDFView
+}
+import SwiftUI
+
+struct ResumeViewSetup: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+  @Environment(ResStore.self) private var resStore: ResStore
+  @State private var isWide = false
+  @State var currentTab: TabList
+  @Binding var selRes: Resume?
+
+  var body: some View {
+    VStack {
+      if let jobApp = jobAppStore.selectedApp {
+        if jobApp.resumes.isEmpty {
+          CreateNewResumeView()
+        } else {
+
+
+          ResumeSplitView(selRes: $selRes, isWide: $isWide, tab: $currentTab)
+        }
+      } else {
+        Text("No job application selected.")
+      }
+    }
+  }
+}
+//
+//  ResumeToolbar.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/10/24.
+//
+import SwiftUI
+
+
+@ToolbarContentBuilder
+func resumeToolbarContent(selRes: Binding<Resume?>, selectedApp: JobApp?, attention: Binding<Int>) -> some ToolbarContent {
+      // Ensure selRes has a value if it is nil
+
+
+
+      // ToolbarItem: Custom Stepper for attention control
+      ToolbarItem(placement: .automatic) {
+        CustomStepper(value: attention, range: 0...4)
+          .padding(.vertical, 0)
+          .overlay {
+            Text("Attention Grab")
+              .font(.caption2)
+              .padding(.vertical, 0)
+              .lineLimit(1)
+              .minimumScaleFactor(0.9)
+              .fontWeight(.light)
+              .offset(y: 18)
+          }
+          .offset(y: -1)
+          .padding(.trailing, 2)
+          .padding(.leading, 6)
+      }
+
+      // ToolbarItem: AiFunctionView or fallback text
+      ToolbarItem(placement: .automatic) {
+        if selRes.wrappedValue?.rootNode != nil {
+          AiFunctionView(res: selRes, attn: attention)
+        } else {
+          Text(":(")
+        }
+      }
+
+    }
+  
+import SwiftData
+import SwiftUI
+
+struct ResRefView: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+  @Binding var refPopup: Bool
+  @State var isSourceExpanded: Bool
+  @State var isSheetPresented: Bool = false
+  var isSourceHovering = false
+  var buttonHover: Bool = false
+  @Binding var selRes: Resume?
+  @Binding var tab: TabList
+  @State var newSourceName: String = ""
+  @State var newSourceContent: String = ""
+  @State var newSourceType: SourceType = SourceType.background
+  @State var newEnabledByDefault: Bool = false
+
+  var body: some View {
+
+    LazyVStack(alignment: .leading) {
+      HStack {
+        Image(systemName: "chevron.right")
+          .rotationEffect(.degrees(isSourceExpanded ? 90 : 0))
+          .animation(
+            .easeInOut(duration: 0.1), value: isSourceExpanded
+          )
+          .foregroundColor(.primary)
+        Text("Résumé Source Documents")
+          .font(.headline)
+        Spacer()
+        if let selRes = selRes {
+          if !(selRes.hasValidRefsEnabled) {
+            HStack {
+              Spacer().frame(minWidth: 10)
+              Text("Choose one resume source and one JSON source")
+                .foregroundColor(.purple)
+                .font(.caption)
+                .multilineTextAlignment(.trailing).fontWeight(.light).frame(minWidth: 150)
+              Image(systemName: "exclamationmark.triangle").foregroundColor(.purple).fontWeight(
+                .light
+              ).font(.system(size: 20))
+            }
+          }
+        }
+      }
+      .padding(.horizontal, 10)
+      .padding(.vertical, 5)
+      .background(
+        isSourceHovering ? Color.gray.opacity(0.3) : Color.clear
+      )
+      .cornerRadius(5)
+      //            .onHover { hovering in
+      //                isSourceHovering = hovering
+      //            }
+      .contentShape(Rectangle())
+      .onTapGesture {
+        withAnimation {
+          isSourceExpanded.toggle()
+        }
+      }
+
+      if isSourceExpanded {
+        LazyVStack(alignment: .leading, spacing: 0) {
+          ForEach(resRefStore.resRefs, id: \.self) { child in
+            Divider()
+            SourceRowView(sourceNode: child, res: $selRes, tab: $tab)
+              .transition(.move(edge: .top))
+          }
+          HStack {
+            Spacer()
+            Button(action: {
+              // Resetting states with @State properties
+              newSourceName = ""
+              newSourceContent = ""
+              newEnabledByDefault = false
+              newSourceType = .background
+              isSheetPresented = true
+            }) {
+              Image(systemName: "plus.app")
+              Text("Add Source")
+            }
+            .buttonStyle(.bordered)
+            //                        .onHover { hovering in buttonHover = hovering }
+            .padding()
+          }.frame(maxWidth: .infinity)
+            .sheet(isPresented: $isSheetPresented) {
+              Form {
+                Section(
+                  header: Text("Add New Source").font(.headline)
+                ) {
+                  HStack(alignment: .top) {
+                    Text("Source Name:")
+                      .frame(width: 150, alignment: .trailing)
+                    TextField(
+                      "",
+                      text: $newSourceName
+                    )  // Use $ to pass a Binding
+                    .frame(maxWidth: .infinity)
+                  }
+                  HStack(alignment: .top) {
+                    Text("Content:")
+                      .frame(width: 150, alignment: .trailing)
+                    TextField(
+                      "", text: $newSourceContent,
+                      axis: .vertical
+                    )  // Use $ to pass a Binding
+                    .lineLimit(12)
+                    .frame(maxWidth: .infinity)
+                  }
+                  .padding(.bottom, 10)
+
+                  HStack(alignment: .top) {
+                    Text("Source Type:")
+                      .frame(width: 150, alignment: .trailing)
+                    Picker(
+                      "",
+                      selection: $newSourceType
+                    ) {  // Use $ to pass a Binding
+                      ForEach(SourceType.allCases, id: \.self) { sourceType in
+                        Text(sourceType.rawValue).tag(
+                          sourceType)
+                      }
+                    }
+                    .pickerStyle(RadioGroupPickerStyle())
+                    .frame(
+                      maxWidth: .infinity, alignment: .leading
+                    )
+                  }
+
+                  HStack {
+                    Text("Enabled by Default:")
+                      .frame(width: 150, alignment: .trailing)
+                    Toggle(
+                      "",
+                      isOn: $newEnabledByDefault
+                    )  // Use $ to pass a Binding
+                    .toggleStyle(SwitchToggleStyle())  // Standard switch toggle style
+                  }
+
+                  HStack {
+                    Spacer()
+                    Button("Cancel") {
+                      isSheetPresented = false
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
+                    Button("Save") {
+                      let newSource = ResRef(
+                        name: newSourceName,
+                        content: newSourceContent,
+                        type: newSourceType,
+                        enabledByDefault:
+                          newEnabledByDefault
+                      )
+                      resRefStore
+                        .addResRef(newSource, res: selRes)
+                      isSheetPresented = false
+                      if (resRefStore.areRefsOk) {
+                        print("refs okay")
+                        $refPopup.wrappedValue = false
+                      }
+                      else {
+                        print("refs not okay")
+                      }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Spacer()
+                  }
+                  .padding(.top)
+                }
+              }
+              .padding()
+              .frame(minWidth: 400, maxWidth: 600)
+            }
+        }
+      }
+    }
+  }
+}
+struct SourceRowView: View {
+  @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+
+  @State var sourceNode: ResRef
+  @State private var isButtonHovering = false
+  @State private var isRowHovering = false
+  @Binding var res: Resume?
+  //    @Query var sourceNodes: [ResRef]
+  @Binding var tab: TabList
+  var isChecked: Bool {
+    if res == nil {
+      return false
+    }
+    else {
+      return res!.enabledSources.contains(sourceNode)
+    }
+  }
+
+  var body: some View {
+    HStack {
+      HStack(spacing: 15) {
+        ToggleTextRow(
+          leadingText: sourceNode.content,
+          res: $res,
+          sourceNode: sourceNode
+        )
+        VStack(alignment: .leading) {
+          Text(sourceNode.type.rawValue).font(.caption)
+            .foregroundColor(isChecked ? .primary : .secondary)
+          Text(sourceNode.name).foregroundColor(isChecked ? .primary : .secondary)
+
+        }
+
+      }
+      .padding(.vertical, 2).padding(.leading, 25)
+      //            .onHover { hovering in
+      //                isRowHovering = hovering
+      //            }
+      Spacer().frame(maxWidth: .infinity)
+
+      Button(action: {
+        resRefStore.deleteResRef(sourceNode)
+      }) {
+        Image(systemName: "trash.fill")
+          .foregroundColor(isButtonHovering ? .red : .gray)
+          .font(.system(size: 15))
+          .padding(2)
+          .background(
+            isButtonHovering
+              ? Color.red.opacity(0.3) : Color.gray.opacity(0.3)
+          )
+          .cornerRadius(5)
+
+      }
+      .buttonStyle(PlainButtonStyle())
+      //            .onHover { hovering in
+      //                isButtonHovering = hovering
+      //            }
+      .padding(4)
+    }.background(Color.clear)
+      .cornerRadius(5)
+    //            .onHover { hovering in
+    //                isRowHovering = hovering
+    //            }
+  }
+}
+
+struct ToggleTextRow: View {
+  let leadingText: String
+  @Binding var res: Resume?
+  @State var sourceNode: ResRef
+
+  var body: some View {
+    if let res = res {
+      Toggle(
+        "",
+        isOn: Binding<Bool>(
+          get: { res.enabledSources.contains(sourceNode) },
+          set: { newValue in
+            if newValue {
+              if !res.enabledSources.contains(sourceNode) {
+                res.enabledSources.append(sourceNode)
+              }
+            } else {
+              if let index = res.enabledSources.firstIndex(of: sourceNode) {
+                res.enabledSources.remove(at: index)
+              }
+            }
+            //          res.enabledSources.forEach { print($0.name + $0.type.rawValue) }  // This should now run when the toggle is changed
+          }
+        )
+      )
+      .toggleStyle(.switch)
+    }
+    
+    else{
+      EmptyView()
+    }
+  }
+}
+
+import SwiftData
+import SwiftUI
+
+struct ResumeDetailView: View {
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+  @Binding var selRes: Resume?
+  @Binding var tab: TabList
+  let rootNode: TreeNode
+  @Binding var isWide: Bool
+  @State var dummypopup: Bool = false
+  var body: some View {
+
+    ScrollView {
+      VStack(alignment: .leading, spacing: 10) {
+
+        //        AiPanelView(res: $selRes)  // Pass the unwrapped Binding
+        ResRefView(
+          refPopup: $dummypopup,
+          isSourceExpanded: false,
+          selRes: $selRes,
+          tab: $tab
+        )  // Pass the unwrapped Binding
+      }
+      nodeView(rootNode)
+    }
+
+  }
+  @ViewBuilder
+  func nodeView(_ node: TreeNode) -> some View {
+    if node.hasChildren {
+      NodeWithChildrenView(
+        node: node, isExpanded: node.parent == nil, isWide: $isWide)
+    } else {
+      NodeLeafView(node: node)
+    }
+  }
+}
+
+struct NodeWithChildrenView: View {
+  let node: TreeNode
+  @State var isExpanded: Bool
+  @State var isHovering = false
+  @Binding var isWide: Bool
+
+  init(node: TreeNode, isExpanded: Bool, isWide: Binding<Bool>) {
+    self.node = node
+    self._isExpanded = State(initialValue: isExpanded)
+    self._isWide = isWide
+  }
+
+  var body: some View {
+    VStack(alignment: .leading) {
+      HStack {
+        Image(systemName: "chevron.right")
+          .rotationEffect(.degrees(isExpanded ? 90 : 0))
+          .animation(.easeInOut(duration: 0.1), value: isExpanded)
+          .foregroundColor(.primary)
+          .onTapGesture {
+            withAnimation {
+              isExpanded.toggle()
+              if !isExpanded { isWide = false }
+            }
+          }
+        if node.parent == nil {
+          HeaderTextRow()
+        } else {
+          AlignedTextRow(
+            leadingText: "\(node.name)", trailingText: nil,
+            nodeStatus: node.status
+          )
+        }
+        Spacer()
+
+        // Add the badge for aiStatusChildren count
+        if node.aiStatusChildren > 0
+          && (!isExpanded || node.parent == nil
+            || node.parent?.parent == nil)
+        {
+          Text("\(node.aiStatusChildren)")
+            .font(.caption).fontWeight(.medium)
+            .padding(.horizontal, 10)  // Increase horizontal padding for a wider shape
+            .padding(.vertical, 4)
+            .background(Color.blue.opacity(0.2))
+            .foregroundColor(.blue)
+            .cornerRadius(10)
+        }
+      }
+      .padding(.horizontal, 10)
+      .padding(.vertical, 5)
+      .background(isHovering ? Color.gray.opacity(0.3) : Color.clear)
+      .cornerRadius(5)
+      //            .onHover { hovering in
+      //                isHovering = hovering
+      //            }
+      .onTapGesture {
+        withAnimation {
+          isExpanded.toggle()
+          if isExpanded == false {
+            isWide = false
+          }
+        }
+      }
+
+      if isExpanded, let children = node.children {
+        LazyVStack(alignment: .leading, spacing: 0) {
+          ForEach(
+            children.sorted(by: { $0.myIndex < $1.myIndex }),
+            id: \.self
+          ) { child in
+
+            Divider()
+            nodeView(child).onAppear {
+              if child.nodeDepth > 2 {
+                isWide = true
+              }
+            }
+            .transition(isWide ? .opacity : .move(edge: .top))
+          }
+        }
+        .padding(.leading, 25)
+      }
+
+    }
+  }
+  @ViewBuilder
+  func nodeView(_ node: TreeNode) -> some View {
+    if node.hasChildren {
+      NodeWithChildrenView(node: node, isExpanded: false, isWide: $isWide)
+    } else {
+      NodeLeafView(node: node)
+    }
+  }
+}
+
+struct NodeLeafView: View {
+  @Environment(\.modelContext) private var context
+  @State var node: TreeNode
+  @State private var isHoveringSparkles = false
+  @State private var isHoveringEdit = false
+  @State private var isEditing = false
+  @State private var tempValue: String = ""
+  init(
+    node: TreeNode,
+    isHoveringSparkles: Bool = false,
+    isHoveringEdit: Bool = false,
+    isEditing: Bool = false
+  ) {
+    self.node = node
+    self.isHoveringSparkles = isHoveringSparkles
+    self.isHoveringEdit = isHoveringEdit
+    self.isEditing = isEditing
+    self.tempValue = ""
+  }
+  var body: some View {
+    HStack(spacing: 5) {
+
+      if node.value.isEmpty {
+        Spacer().frame(width: 50)
+        Text(node.name)
+          .foregroundColor(.gray)
+      } else {
+        if node.status != LeafStatus.disabled {
+          Button(action: {
+            toggleNodeStatus()
+          }) {
+            Image(systemName: "sparkles")
+              .foregroundColor(
+                node.status == LeafStatus.saved
+                  ? .gray : .accentColor
+              )
+              .font(.system(size: 14))
+              .padding(2)
+              .background(
+                isHoveringSparkles
+                  ? (node.status == LeafStatus.saved
+                    ? Color.gray.opacity(0.3)
+                    : Color.accentColor.opacity(0.3))
+                  : Color.clear
+              )
+              .cornerRadius(5)
+          }
+          .buttonStyle(PlainButtonStyle())
+          //                    .onHover { hovering in
+          //                        isHoveringSparkles = hovering
+          //                    }
+        }
+        if node.status == LeafStatus.disabled {
+          Image(systemName: "lock.fill")
+            .foregroundColor(.gray)
+            .font(.system(size: 12))
+        }
+
+        if isEditing {
+          HStack(spacing: 10){
+            Button(action: {deleteNode(node: node)}){Image(systemName: "trash")}
+              .buttonStyle(PlainButtonStyle())
+            TextField("", text: $tempValue)
+              .textFieldStyle(PlainTextFieldStyle()).lineLimit(1...5)
+              .padding(5)
+              .background(Color.primary.opacity(0.1))
+              .cornerRadius(5)
+              .frame(maxWidth: .infinity)
+          }
+          HStack(spacing: 10) {
+            Button(action: {
+              saveChanges()
+            }) {
+              Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(
+                  isHoveringEdit ? .green : .secondary
+                )
+                .font(.system(size: 14))
+            }
+            .buttonStyle(PlainButtonStyle())
+            //                        .onHover { hovering in
+            //                            isHoveringEdit = hovering
+            //                        }
+
+            Button(action: {
+              cancelChanges()
+            }) {
+              Image(systemName: "xmark.circle.fill")
+                .foregroundColor(
+                  isHoveringEdit ? .red : .secondary
+                )
+                .font(.system(size: 14))
+            }
+            .buttonStyle(PlainButtonStyle())
+            //                        .onHover { hovering in
+            //                            isHoveringEdit = hovering
+            //                        }
+          }
+        } else {
+          AlignedTextRow(
+            leadingText: "\(node.myIndex) \(node.name)", trailingText: node.value,
+            nodeStatus: node.status)
+
+          Spacer()
+
+          if node.status != LeafStatus.disabled {
+            HStack(spacing: 10) {
+              Button(action: {
+                startEditing()
+              }) {
+                Image(systemName: "square.and.pencil")
+                  .foregroundColor(
+                    isHoveringEdit
+                      ? node.status
+                        == LeafStatus.aiToReplace
+                        ? .primary : .accentColor
+                      : (node.status
+                        == LeafStatus.aiToReplace
+                        ? .accentColor : .secondary)
+                  )
+                  .font(.system(size: 14))
+                  .padding(5)
+              }
+              .buttonStyle(PlainButtonStyle())
+              //                            .onHover { hovering in
+              //                                isHoveringEdit = hovering
+              //                            }
+            }
+          }
+        }
+      }
+    }.onChange(of: node.value) {
+      node.resume.debounceExport()
+    }
+    .padding(.vertical, 4)
+    .background(
+      node.status == LeafStatus.aiToReplace
+        ? Color.accentColor.opacity(0.3) : Color.clear
+    )
+    .cornerRadius(5)
+  }
+  private func deleteNode(node: TreeNode) {
+
+      TreeNode.deleteTreeNode(node: node, context: context)  // Call the deletion function on the node
+
+  }
+  private func startEditing() {
+    tempValue = node.value
+    isEditing = true
+  }
+
+  private func saveChanges() {
+    node.value = tempValue
+    node.status = .saved
+    isEditing = false
+  }
+
+  private func cancelChanges() {
+    isEditing = false
+  }
+
+  private func toggleNodeStatus() {
+    if node.status == LeafStatus.saved {
+      node.status = LeafStatus.aiToReplace
+    } else if node.status == LeafStatus.aiToReplace {
+      node.status = LeafStatus.saved
+    }
+  }
+}
+@ViewBuilder
+func HeaderTextRow() -> some View {
+  let leadingText = "Résumé Field Values"
+  HStack {
+    Text(leadingText).font(.headline)
+  }
+  .cornerRadius(5)
+  .padding(.vertical, 2)
+}
+
+@ViewBuilder
+func AlignedTextRow(
+  leadingText: String,
+  trailingText: String?,
+  nodeStatus: LeafStatus  // Pass the status as a parameter
+) -> some View {
+  let indent: CGFloat = 100.0
+  @State var isHovering = false
+
+  HStack {
+    Text(leadingText)
+      .foregroundColor(
+        nodeStatus == .aiToReplace ? .accentColor : .secondary
+      )
+      .fontWeight(nodeStatus == .aiToReplace ? .medium : .regular)
+      .frame(
+        width: (trailingText == nil || trailingText!.isEmpty)
+          ? nil : leadingText == "" ? 15 : indent,
+        alignment: .leading)
+
+    if let trailingText = trailingText, !trailingText.isEmpty {
+      Text(trailingText)
+        .foregroundColor(
+          nodeStatus == .aiToReplace ? .accentColor : .secondary
+        )
+        .fontWeight(.regular)
+        .frame(
+          minWidth: 0, maxWidth: .infinity, alignment: .leading)
+    }
+  }
+  .cornerRadius(5)
+  .padding(.vertical, 2)
+}

@@ -9,8 +9,9 @@ class CoverLetter {
   var moddedDate: Date = Date()
   var content: String = ""
   var generated: Bool = false
-  var encodedEnabledRefs: Data? // Store as Data
-  var encodedMessageHistory: Data? // Store as Data
+  var encodedEnabledRefs: Data?  // Store as Data
+  var encodedMessageHistory: Data?  // Store as Data
+  var currentMode: CoverAiMode? = CoverAiMode.none
   var modDate: String {
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -44,6 +45,14 @@ class CoverLetter {
   ) {
     self.encodedEnabledRefs = try? JSONEncoder().encode(enabledRefs)
     self.jobApp = jobApp
+  }
+  var backgroundItemsString: String {
+    return enabledRefs.filter { $0.type == CoverRefType.backgroundFact }
+      .map { $0.content }.joined(separator: "\n\n")
+  }
+  var writingSamplesString: String {
+    return enabledRefs.filter { $0.type == CoverRefType.writingSample }
+      .map { $0.content }.joined(separator: "\n\n")
   }
 }
 

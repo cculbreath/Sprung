@@ -1,80 +1,81 @@
-//
-//  CoverLetterView.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/10/24.
-//
-
 import SwiftUI
 
 struct CoverLetterView: View {
   @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-  @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-  @State var myLetter: CoverLetter?
+  @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+  @Environment(CoverLetterStore.self) private var  coverLetterStore: CoverLetterStore
+
   @Binding var buttons: CoverLetterButtons
 
   var body: some View {
-    if let jobApp = jobAppStore.selectedApp {
-      if let res = jobApp.selectedRes {
-        CoverLetterContentView(
-          myLetter: Binding(
-            get: { loadOrCreateLetter(letter: myLetter, jobApp: jobApp) },
-            set: { myLetter = $0 }
-          ),
-          res: Binding(
-            get: { res },
-            set: { jobApp.selectedRes = $0 }
-          ),
-          jobApp: jobApp,
-          buttons: $buttons // Use `$buttons` to pass the binding
-        )
-      }
-    }
-    Text("foo")
+    contentView()
   }
 
+  @ViewBuilder
+  private func contentView() -> some View {
+    @Bindable var coverLetterStore = coverLetterStore
+    @Bindable var jobAppStore = jobAppStore
 
-  func loadOrCreateLetter(letter: CoverLetter?, jobApp: JobApp) -> CoverLetter {
-    if let letter = letter {
-      return letter
-    }
-    if jobApp.coverLetters.isEmpty {
-      return coverLetterStore.create(jobApp: jobApp)
-    }
-    else {
-      return jobApp.coverLetters.last!
+    if let jobApp = $jobAppStore.wrappedValue.selectedApp,
+       let res = jobApp.selectedRes {
+
+      let resBinding = Binding(
+        get: { res },
+        set: { jobApp.selectedRes = $0 }
+      )
+
+      VStack {
+        CoverLetterContentView(
+          res: resBinding,
+          jobApp: jobApp,
+          buttons: $buttons
+        )
+      }
+      .inspector(isPresented: $buttons.showInspector) {
+        if $coverLetterStore.wrappedValue.cL != nil {
+          CoverRefView(
+            backgroundFacts: coverRefStore.backgroundRefs,
+            writingSamples: coverRefStore.writingSamples
+          )
+        }
+        else {EmptyView()}
+      }
+    } else {
+
+      Text(jobAppStore.selectedApp == nil ? "job app nil" : "Poo").onAppear{if jobAppStore.selectedApp == nil {print("no job app")}
+        else if jobAppStore.selectedApp?.selectedRes == nil {print("no resume")}}
     }
   }
 }
 
 struct CoverLetterContentView: View {
   @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+  @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
 
-  @Binding var myLetter: CoverLetter
   @Binding var res: Resume
   @Bindable var jobApp: JobApp
   @Binding var buttons: CoverLetterButtons
+
   var body: some View {
-    VStack{
-      Picker(
-        "Load existing cover letter",
-        selection: $myLetter
-      ) {
-        Text("None").tag(nil as CoverLetter?)
-        ForEach($jobApp.coverLetters, id: \.self) { resume in
-          Text("Generated at \(myLetter.modDate)")
-            .tag(myLetter)
-            .help("Select a cover letter to customize")
+    @Bindable var coverLetterStore = coverLetterStore
+    if $coverLetterStore.wrappedValue.cL != nil {
+      VStack {
+        Picker(
+          "Load existing cover letter",
+          selection: $coverLetterStore.cL
+        ) {
+          ForEach(jobApp.coverLetters) { letter in
+            Text("Generated at \(letter.modDate)")
+              .tag(letter as CoverLetter)
+          }
         }
+        Text("AI generated text at \(coverLetterStore.cL!.modDate)")
+          .font(.caption).italic()
+        Text(coverLetterStore.cL!.content)
+          .font(.body)
       }
-        Text("AI generated text at \(myLetter.modDate)").font(.caption).italic()
-        Text(myLetter.content).fixedSize(horizontal: false, vertical: true)
-    }.inspector(isPresented: $buttons.showInspector){
-      CoverRefView(
-        coverLetter: myLetter,
-        backgroundFacts: coverRefStore.backgroundRefs,
-        writingSamples: coverRefStore.writingSamples
-      )
-    }
-  }
+      .onChange(of: coverLetterStore.cL!.content) { oldValue, newValue in
+        print("Cover letter content: \(newValue)")
+      }
+    }}
 }

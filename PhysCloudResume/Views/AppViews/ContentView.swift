@@ -8,8 +8,8 @@ struct ContentView: View {
   @State private var resStore: ResStore = ResStore()
   @State private var coverRefStore: CoverRefStore = CoverRefStore()
   @State private var coverLetterStore: CoverLetterStore = CoverLetterStore()
-
   @State private var showNewAppSheet: Bool = false
+  @State private var cL : CoverLetter? = nil
   @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
 
   var body: some View {
