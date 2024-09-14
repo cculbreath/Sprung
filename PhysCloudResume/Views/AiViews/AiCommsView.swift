@@ -11,7 +11,7 @@ import SwiftUI
 
 struct AiCommsView: View {
   @State private var q: ResumeApiQuery
-  @State private var chatProvider: ChatStructuredOutputProvider
+  @State private var chatProvider: ResumeChatProvider
   @State private var revisions: [ProposedRevisionNode] = []
   @State private var currentRevNode: ProposedRevisionNode? = nil
   @State var currentFeedbackNode: FeedbackNode? = nil
@@ -21,7 +21,7 @@ struct AiCommsView: View {
   @Binding var myRes: Resume?
   @State private var fbnodes: [FeedbackNode] = []
   init(service: OpenAIService, query: ResumeApiQuery, res: Binding<Resume?>) {
-    _chatProvider = State(initialValue: ChatStructuredOutputProvider(service: service))
+    _chatProvider = State(initialValue: ResumeChatProvider(service: service))
     _q = State(initialValue: query)
     _myRes = res
   }

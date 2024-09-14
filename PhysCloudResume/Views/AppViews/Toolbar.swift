@@ -4,6 +4,8 @@ struct BuildToolbar: ToolbarContent {
   @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
   @Environment(ResStore.self) private var resStore: ResStore
   @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+  @Environment(CoverLetter.self) private var cL: CoverLetter?
+
   @State var attention: Int = 2
 
   @Binding var selectedTab: TabList
@@ -23,7 +25,7 @@ struct BuildToolbar: ToolbarContent {
         headline: selApp.job_position,
         caption: selApp.company_name
       )
-      
+
       // Always show resumePicker regardless of selectedTab
       if selRes != nil, let selectedApp = selRes?.jobApp {
         resumePicker(selectedApp: selectedApp)
@@ -42,7 +44,11 @@ struct BuildToolbar: ToolbarContent {
       case .resume:
         resumeToolbarContent(selRes: selRes, selectedApp: jobAppStore.selectedApp, attention: $attention)
       case .coverLetter:
-        CoverLetterToolbar(buttons: $letterButtons)
+        if let cL = cL {
+          CoverLetterToolbar(buttons: $letterButtons, jobApp: jobAppStore.selectedApp, resume: selRes)
+        } else {
+          ToolbarItem { Text("No Cover Letter Available") } // Handle case where cover letter is nil
+        }
       case .submitApp, .none:
         emptyToolbarItem()
     }
@@ -60,8 +66,6 @@ struct BuildToolbar: ToolbarContent {
     }
   }
 
-  // Define saveButton to return a ToolbarItem
-  // Define saveButton to return a ToolbarItem with flexible content (some View)
   func saveButton() -> ToolbarItem<Void, some View> {
     ToolbarItem(placement: .primaryAction) {
       Button(action: {
@@ -79,7 +83,6 @@ struct BuildToolbar: ToolbarContent {
     }
   }
 
-  // Define toggleEditButton to return a ToolbarItem with flexible content (some View)
   func toggleEditButton() -> ToolbarItem<Void, some View> {
     ToolbarItem(placement: .primaryAction) {
       Button(action: {
@@ -95,7 +98,6 @@ struct BuildToolbar: ToolbarContent {
     }
   }
 
-  // Update listingToolbarItem to return multiple ToolbarItems
   @ToolbarContentBuilder
   func listingToolbarItem() -> some ToolbarContent {
     if listingButtons.edit {
@@ -103,13 +105,11 @@ struct BuildToolbar: ToolbarContent {
     }
     toggleEditButton()
   }
+
   @ToolbarContentBuilder
   func resumePicker(selectedApp: JobApp) -> some ToolbarContent {
-    // Insert a toolbar group to control the alignment with a Spacer
     ToolbarItemGroup(placement: .automatic) {
-      Spacer()  // Acts as a flexible spacer to push the picker to the right
-
-      // Resume picker
+      Spacer()
       Picker(
         "Load existing résumé draft",
         selection: $selRes
@@ -124,10 +124,11 @@ struct BuildToolbar: ToolbarContent {
       .frame(maxHeight: .infinity, alignment: .trailing)
     }
   }
+
   struct NoHoverButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
       configuration.label
-        .contentShape(Rectangle())  // Ensure the entire button area is clickable
+        .contentShape(Rectangle())
         .background(
           configuration.isPressed ? Color.gray.opacity(0.2) : Color.clear
         )
@@ -147,7 +148,7 @@ extension View {
 
 func emptyToolbarItem() -> some ToolbarContent {
   ToolbarItem(placement: .automatic) {
-    Spacer()  // Or any empty content
+    Spacer()
   }
 }
 

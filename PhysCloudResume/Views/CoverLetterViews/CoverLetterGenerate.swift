@@ -1,10 +1,10 @@
+////
+////  SwiftUIView.swift
+////  PhysCloudResume
+////
+////  Created by Christopher Culbreath on 9/10/24.
+////
 //
-//  SwiftUIView.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/10/24.
-//
-
 //import SwiftUI
 //
 //struct CoverLetterGenerate: View {
@@ -49,7 +49,4 @@
 //    }
 //}
 //
-//enum EditorPrompts: String {
-//  case improve = "Please carefully read the draft and indentify at least three ways the content and quality of the writing can be improved. Provde a new draft that incorporates the identified improvements."
-//  case zissner = "Carefully read the letter as a professional editor, specifically William Zissner incorporating the writing techniques and style he advocates in \"On Writing Well\" Provide a new draft that incorporates Zissner's edits to improve the quality of the writing. "
-//}
+//

@@ -12,12 +12,13 @@ struct AddCoverRefForm: View {
   @Binding var showMe: Bool
 
   var body: some View {
-    NavigationView {
-      Form {
-        TextField("Name", text: $newCoverRefName)
-        TextField("Content", text: $newCoverRefContent)
-        Toggle("Enabled by Default", isOn: $newCoverRefEnabledByDefault)
+    Form {
+      TextField("Name", text: $newCoverRefName)
+      TextField("Content", text: $newCoverRefContent, axis: .vertical)
+        .lineLimit(3...10)
+      Toggle("Enabled by Default", isOn: $newCoverRefEnabledByDefault)
 
+      HStack {
         Button("Add") {
           let newCoverRef = CoverRef(
             name: newCoverRefName,
@@ -35,17 +36,19 @@ struct AddCoverRefForm: View {
           let newRef = coverRefStore.addCoverRef(newCoverRef)
           coverLetter.enabledRefs.append(newRef)
           resetForm()
+          dismissForm()
         }
-      }
-      .navigationTitle("Add \(type == .backgroundFact ? "Background Fact" : "Writing Sample")")
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismissForm()
-          }
+        .keyboardShortcut(.defaultAction)
+        Button("Cancel") {
+          dismissForm()
         }
+        .keyboardShortcut(.cancelAction)
       }
+      .padding(.top)
     }
+    .padding()
+    .frame(minWidth: 400, maxWidth: 600)
+    .navigationTitle("Add \(type == .backgroundFact ? "Background Fact" : "Writing Sample")")
   }
 
   private func resetForm() {
@@ -55,10 +58,6 @@ struct AddCoverRefForm: View {
   }
 
   private func dismissForm() {
-
-      showMe.toggle()
-
-
-
+    showMe = false
   }
 }

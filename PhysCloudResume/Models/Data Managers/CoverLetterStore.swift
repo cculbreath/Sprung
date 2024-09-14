@@ -12,12 +12,13 @@ import SwiftData
 @Observable
 final class CoverLetterStore {
   var coverRefStore: CoverRefStore?
-
+  var cL: CoverLetter?
   private var modelContext: ModelContext?
   init() {}
   func initialize(context: ModelContext, refStore: CoverRefStore) {
     self.modelContext = context
     self.coverRefStore = refStore
+    print("CoverLetterStore Initialized")
   }
 
   @discardableResult
@@ -46,14 +47,19 @@ final class CoverLetterStore {
 
   }
   func createDuplicate(letter: CoverLetter) -> CoverLetter {
+    let newLetter = CoverLetter(
+      enabledRefs: letter.enabledRefs,
+      jobApp: letter.jobApp
+    )
+    newLetter.content = letter.content
+    newLetter.generated = false
+    newLetter.encodedMessageHistory = letter.encodedMessageHistory
+    newLetter.currentMode = letter.currentMode
+    // Copy other necessary properties here
 
-    let newLetter = CoverLetter( enabledRefs: letter.enabledRefs,
-                                 jobApp: letter.jobApp)
     self.addLetter(letter: newLetter, to: letter.jobApp)
     return newLetter
-
   }
-
   func deleteLetter(_ letter: CoverLetter) {
     let jobApp = letter.jobApp
     if let index = jobApp.coverLetters.firstIndex(of: letter){

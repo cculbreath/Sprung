@@ -9,7 +9,7 @@ import Foundation
 import SwiftOpenAI
 
 @Observable
-final class ChatStructuredOutputProvider {
+final class ResumeChatProvider {
 
   private let service: OpenAIService
   private var streamTask: Task<Void, Never>? = nil
