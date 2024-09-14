@@ -42,7 +42,10 @@ struct CoverLetterView: View {
       }
     } else {
 
-      Text(jobAppStore.selectedApp == nil ? "job app nil" : "Poo").onAppear{if jobAppStore.selectedApp == nil {print("no job app")}
+      Text(
+        jobAppStore.selectedApp?.selectedRes == nil  ? "job app nil" : "No nil fail"
+      )
+      .onAppear{if jobAppStore.selectedApp == nil {print("no job app")}
         else if jobAppStore.selectedApp?.selectedRes == nil {print("no resume")}}
     }
   }
@@ -64,7 +67,7 @@ struct CoverLetterContentView: View {
           "Load existing cover letter",
           selection: $coverLetterStore.cL
         ) {
-          ForEach(jobApp.coverLetters) { letter in
+          ForEach(jobApp.coverLetters, id: \.id) { letter in
             Text("Generated at \(letter.modDate)")
               .tag(letter as CoverLetter)
           }

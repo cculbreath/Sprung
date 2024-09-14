@@ -6,7 +6,6 @@ struct ResumeViewSetup: View {
   @Environment(ResStore.self) private var resStore: ResStore
   @State private var isWide = false
   @State var currentTab: TabList
-  @Binding var selRes: Resume?
 
   var body: some View {
     VStack {
@@ -16,7 +15,7 @@ struct ResumeViewSetup: View {
         } else {
 
 
-          ResumeSplitView(selRes: $selRes, isWide: $isWide, tab: $currentTab)
+          ResumeSplitView(isWide: $isWide, tab: $currentTab)
         }
       } else {
         Text("No job application selected.")

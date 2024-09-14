@@ -10,33 +10,29 @@ import SwiftOpenAI
 import SwiftUI
 
 struct CoverLetterAiView: View {
-  @Binding var selRes: Resume?
   @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
   @Binding var buttons: CoverLetterButtons
   @State var aiMode: CoverAiMode = .none
 
   var body: some View {
-    if selRes != nil {
-      CoverLetterAiContentView(
-        service: OpenAIServiceFactory.service(
-          apiKey: openAiApiKey, debugEnabled: false),
-        aiMode: aiMode,
-        myRes: $selRes,
-        buttons: $buttons)
-      .onAppear { print("Ai Cover Letter") }
-    } else {
-      EmptyView()      .onAppear { print("Womp") }
 
-    }
+    CoverLetterAiContentView(
+      service: OpenAIServiceFactory.service(
+        apiKey: openAiApiKey, debugEnabled: false),
+      aiMode: aiMode,
+      buttons: $buttons
+    )
+    .onAppear { print("Ai Cover Letter") }
+
   }
 }
 
 struct CoverLetterAiContentView: View {
-  @Environment(CoverLetterStore.self) private var coverLetterStore
+  @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
 
   @State var aiMode: CoverAiMode
   @State var isLoading = false
-  @Binding var myRes: Resume?
   @Binding var buttons: CoverLetterButtons
   let service: OpenAIService
 
@@ -46,18 +42,16 @@ struct CoverLetterAiContentView: View {
   init(
     service: OpenAIService,
     aiMode: CoverAiMode,
-    myRes: Binding<Resume?>,
     buttons: Binding<CoverLetterButtons>
   ) {
     self.service = service
     self._aiMode = State(initialValue: aiMode)
-    self._myRes = myRes
     self._buttons = buttons
     self.chatProvider = CoverChatProvider(service: service)
   }
 
   var body: some View {
-    if let cL = coverLetterStore.cL {
+    if var cL = jobAppStore.selectedApp?.selectedCover {
       HStack(spacing: 4) {
         VStack {
           if !isLoading {
@@ -67,10 +61,10 @@ struct CoverLetterAiContentView: View {
                 cL.currentMode = .generate
               } else {
                 let newCL = coverLetterStore.createDuplicate(letter: cL)
-                coverLetterStore.cL = newCL  // Assign new instance
+                jobAppStore.selectedApp!.selectedCover = newCL  // Assign new instance
                 print("new cover letter")
               }
-              chatAction()
+              chatAction(res: jobAppStore.selectedApp?.selectedRes)
             }) {
               Image("ai-squiggle")
                 .font(.system(size: 20, weight: .regular))
@@ -92,14 +86,15 @@ struct CoverLetterAiContentView: View {
       }
       .onChange(of: buttons.runRequested) { oldValue, newValue in
         if newValue {
-          chatAction()
+          chatAction(res: jobAppStore.selectedApp?.selectedRes)
         }
       }
-    }}
+    }
+  }
   @MainActor
   func processResults(newMessage: String) {
     print("processResults")
-    if let cL = coverLetterStore.cL {
+    if let cL = jobAppStore.selectedApp?.selectedCover {
       cL.generated = true
       cL.messageHistory.append(.init(content: newMessage, role: .assistant))
       cL.content = newMessage
@@ -109,7 +104,7 @@ struct CoverLetterAiContentView: View {
     }
   }
 
-  func chatAction() {
+  func chatAction(res: Resume?) {
     Task {
       print("chatAction")
       isLoading = true
@@ -118,33 +113,37 @@ struct CoverLetterAiContentView: View {
         buttons.runRequested = false
       }
 
-      guard let resume = myRes, let cL = coverLetterStore.cL else {
+      guard let resume = res, let cL = coverLetterStore.cL else {
         print("guard fail")
         return
       }
 
       switch cL.currentMode {
-        case .generate:
-          let prompt = CoverLetterPrompts.generate(
-            coverLetter: cL, resume: resume, mode: aiMode)
-          let myContent = ChatCompletionParameters.Message.ContentType.text(prompt)
-          chatProvider.messageHist = [
-            CoverLetterPrompts.systemMessage, .init(role: .user, content: myContent)
-          ]
-          print("message count: \(chatProvider.messageHist.count)")
-          cL.messageHistory.append(.init(content: prompt, role: .user))
-          let parameters = ChatCompletionParameters(
-            messages: chatProvider.messageHist,
-            model: .gpt4o20240806,
-            responseFormat: .text
-          )
-          try await chatProvider.startChat(parameters: parameters, onComplete: { @MainActor newMessage in
+      case .generate:
+        let prompt = CoverLetterPrompts.generate(
+          coverLetter: cL, resume: resume, mode: aiMode)
+        let myContent = ChatCompletionParameters.Message.ContentType.text(
+          prompt)
+        chatProvider.messageHist = [
+          CoverLetterPrompts.systemMessage,
+          .init(role: .user, content: myContent),
+        ]
+        print("message count: \(chatProvider.messageHist.count)")
+        cL.messageHistory.append(.init(content: prompt, role: .user))
+        let parameters = ChatCompletionParameters(
+          messages: chatProvider.messageHist,
+          model: .gpt4o20240806,
+          responseFormat: .text
+        )
+        try await chatProvider.startChat(
+          parameters: parameters,
+          onComplete: { @MainActor newMessage in
             processResults(newMessage: newMessage)
           })
 
-        default:
-          // Handle other cases as needed
-          break
+      default:
+        // Handle other cases as needed
+        break
       }
     }
   }

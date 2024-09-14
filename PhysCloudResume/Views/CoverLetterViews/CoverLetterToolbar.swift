@@ -2,14 +2,12 @@ import SwiftUI
 
 @ToolbarContentBuilder
 func CoverLetterToolbar(
-  buttons: Binding<CoverLetterButtons>,
-  jobApp: JobApp?,
-  resume: Binding<Resume?>
-) -> some ToolbarContent {
+  buttons: Binding<CoverLetterButtons>
 
+
+) -> some ToolbarContent {
   ToolbarItem(placement: .automatic) {
     CoverLetterAiView(
-      selRes: resume,
       buttons: buttons
     ).onAppear{print("foo")}
 

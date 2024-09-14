@@ -24,6 +24,7 @@ final class CoverLetterStore {
   @discardableResult
   func addLetter(letter: CoverLetter, to jobApp: JobApp) -> CoverLetter {
     jobApp.coverLetters.append(letter)
+    jobApp.selectedCover = jobApp.coverLetters.last
     modelContext!.insert(letter)
     saveContext()
     return letter

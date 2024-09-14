@@ -4,18 +4,17 @@ struct BuildToolbar: ToolbarContent {
   @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
   @Environment(ResStore.self) private var resStore: ResStore
   @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-  @Environment(CoverLetter.self) private var cL: CoverLetter?
 
   @State var attention: Int = 2
 
   @Binding var selectedTab: TabList
-  @Binding var selRes: Resume?
   @State var saveIsHovering: Bool = false
   @Binding var listingButtons: SaveButtons
   @Binding var letterButtons: CoverLetterButtons
 
   var body: some ToolbarContent {
     if let selApp = jobAppStore.selectedApp {
+
       // Use individual toolbar item functions
       ToolbarItem(placement: .navigation) {
         selApp.statusTag
@@ -27,25 +26,25 @@ struct BuildToolbar: ToolbarContent {
       )
 
       // Always show resumePicker regardless of selectedTab
-      if selRes != nil, let selectedApp = selRes?.jobApp {
-        resumePicker(selectedApp: selectedApp)
+      if selApp.selectedRes != nil {
+        resumePicker(selectedApp: selApp)
       }
-
+      @Bindable var selApp = selApp
       // Toolbar content specific to the selected tab
-      toolbarContent(for: selectedTab, selRes: $selRes)
+      toolbarContent(for: selectedTab, selRes: $selApp.selectedRes, selApp: selApp)
     }
   }
 
   @ToolbarContentBuilder
-  func toolbarContent(for tab: TabList, selRes: Binding<Resume?>) -> some ToolbarContent {
+  func toolbarContent(for tab: TabList, selRes: Binding<Resume?>, selApp: JobApp) -> some ToolbarContent {
     switch tab {
       case .listing:
         listingToolbarItem()
       case .resume:
         resumeToolbarContent(selRes: selRes, selectedApp: jobAppStore.selectedApp, attention: $attention)
       case .coverLetter:
-        if let cL = cL {
-          CoverLetterToolbar(buttons: $letterButtons, jobApp: jobAppStore.selectedApp, resume: selRes)
+        if let cL = selApp.selectedCover {
+          CoverLetterToolbar(buttons: $letterButtons)
         } else {
           ToolbarItem { Text("No Cover Letter Available") } // Handle case where cover letter is nil
         }
@@ -108,11 +107,12 @@ struct BuildToolbar: ToolbarContent {
 
   @ToolbarContentBuilder
   func resumePicker(selectedApp: JobApp) -> some ToolbarContent {
+    @Bindable var selectedApp = selectedApp
     ToolbarItemGroup(placement: .automatic) {
       Spacer()
       Picker(
         "Load existing résumé draft",
-        selection: $selRes
+        selection: $selectedApp.selectedRes
       ) {
         Text("None").tag(nil as Resume?)
         ForEach(selectedApp.resumes, id: \.self) { resume in
@@ -154,13 +154,11 @@ func emptyToolbarItem() -> some ToolbarContent {
 
 func buildToolbar(
   selectedTab: Binding<TabList>,
-  selRes: Binding<Resume?>,
   listingButtons: Binding<SaveButtons>,
   letterButtons: Binding<CoverLetterButtons>
 ) -> some ToolbarContent {
   BuildToolbar(
     selectedTab: selectedTab,
-    selRes: selRes,
     listingButtons: listingButtons,
     letterButtons: letterButtons
   )
