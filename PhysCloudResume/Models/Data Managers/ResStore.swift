@@ -11,7 +11,6 @@ import SwiftData
 @Observable
 final class ResStore {
   var resumes: [Resume] = []
-  var selectedRes: Resume?
 
   private var modelContext: ModelContext?
   init() {}
@@ -86,7 +85,6 @@ final class ResStore {
     let newResume = Resume(
       jobApp: res.jobApp!, enabledSources: res.enabledSources)
     newResume!.rootNode = res.rootNode!.deepCopy(newResume: newResume!)
-    selectedRes = newResume
     res.jobApp!.selectedRes = newResume
     self.addResume(res: newResume!, to: res.jobApp!)
     return newResume!

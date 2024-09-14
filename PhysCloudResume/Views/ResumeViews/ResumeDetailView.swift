@@ -17,7 +17,6 @@ struct ResumeDetailView: View {
         ResRefView(
           refPopup: $dummypopup,
           isSourceExpanded: false,
-          selRes: $selRes,
           tab: $tab
         )  // Pass the unwrapped Binding
       }
@@ -194,12 +193,13 @@ struct NodeLeafView: View {
           HStack(spacing: 10){
             Button(action: {deleteNode(node: node)}){Image(systemName: "trash")}
               .buttonStyle(PlainButtonStyle())
-            TextField("", text: $tempValue)
-              .textFieldStyle(PlainTextFieldStyle()).lineLimit(1...5)
+            TextEditor(text: $tempValue)
+              .frame(minHeight: 100) // Adjust the height as needed
               .padding(5)
               .background(Color.primary.opacity(0.1))
               .cornerRadius(5)
               .frame(maxWidth: .infinity)
+          
           }
           HStack(spacing: 10) {
             Button(action: {

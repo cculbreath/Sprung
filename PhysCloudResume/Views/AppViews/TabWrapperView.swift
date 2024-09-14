@@ -13,76 +13,79 @@ struct TabWrapperView: View {
   @State private var coverLetterButtons: CoverLetterButtons = CoverLetterButtons(showInspector: false, runRequested: false)
 
   var body: some View {
-    let selResBinding = Binding(
-      get: { jobAppStore.selectedApp?.selectedRes },
-      set: { jobAppStore.selectedApp?.selectedRes = $0 }
-    )
-
-    VStack {
-      TabView(selection: $selectedTab) {
-        JobAppDetailView(tab: $selectedTab, buttons: $listingButtons)
-          .tabItem {
-            Label(TabList.listing.rawValue, systemImage: "newspaper")
-          }
-          .tag(TabList.listing)
-
-        ResumeViewSetup(currentTab: selectedTab, selRes: selResBinding)
-          .tabItem {
-            Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
-          }
-          .tag(TabList.resume)
-
-        if let myApp = jobAppStore.selectedApp {
-
-
-          CoverLetterView(buttons: $coverLetterButtons)
+    @Bindable var jobAppStore = jobAppStore
+    if let jobApp = jobAppStore.selectedApp {
+      @Bindable var jobApp = jobApp
+      
+      
+      VStack {
+        TabView(selection: $selectedTab) {
+          JobAppDetailView(tab: $selectedTab, buttons: $listingButtons)
             .tabItem {
-              Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
+              Label(TabList.listing.rawValue, systemImage: "newspaper")
             }
-            .tag(TabList.coverLetter)
-        }
-
-        Text("Submit Application Content")
-          .tabItem {
-            Label(TabList.submitApp.rawValue, systemImage: "paperplane")
+            .tag(TabList.listing)
+          
+          ResumeViewSetup(currentTab: selectedTab)
+            .tabItem {
+              Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
+            }
+            .tag(TabList.resume)
+          
+          if let _ = jobAppStore.selectedApp {
+            
+            
+            CoverLetterView(buttons: $coverLetterButtons)
+              .tabItem {
+                Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
+              }
+              .tag(TabList.coverLetter)
           }
-          .tag(TabList.submitApp)
-      }
-      .padding(.all)
-    }
-    .toolbar {
-      buildToolbar(
-        selectedTab: $selectedTab,
-        selRes: selResBinding,
-        listingButtons: $listingButtons,
-        letterButtons: $coverLetterButtons
-      )
-    }
-    .onAppear {
-      if selResBinding.wrappedValue == nil, let selectedApp = jobAppStore.selectedApp {
-        if resRefStore.areRefsOk {
-          selResBinding.wrappedValue = resStore.create(jobApp: selectedApp, sources: resRefStore.defaultSources)
-        } else {
-          refPopup = true
+          
+          Text("Submit Application Content")
+            .tabItem {
+              Label(TabList.submitApp.rawValue, systemImage: "paperplane")
+            }
+            .tag(TabList.submitApp)
         }
+        
+        .padding(.all)
       }
-      updateMyLetter()
-    }
-    .onChange(of: jobAppStore.selectedApp) { _, _ in
-      updateMyLetter()
-    }
-    .sheet(isPresented: $refPopup) {
-      ResRefView(
-        refPopup: $refPopup,
-        isSourceExpanded: true,
-        selRes: selResBinding,
-        tab: $selectedTab
-      )
-      .padding()
+      .toolbar {
+        buildToolbar(
+          selectedTab: $selectedTab,
+          listingButtons: $listingButtons,
+          letterButtons: $coverLetterButtons
+        )
+      }
+      .onAppear {
+        if  let selectedApp = jobAppStore.selectedApp {
+          if selectedApp.selectedRes == nil {
+            if resRefStore.areRefsOk {
+              selectedApp.selectedRes = resStore.create(jobApp: selectedApp, sources: resRefStore.defaultSources)
+            } else {
+              refPopup = true
+            }
+          }
+        }
+        updateMyLetter()
+      }
+      .onChange(of: jobAppStore.selectedApp) { _, _ in
+        updateMyLetter()
+      }
+      .sheet(isPresented: $refPopup) {
+        ResRefView(
+          refPopup: $refPopup,
+          isSourceExpanded: true,
+          tab: $selectedTab
+        )
+        .padding()
+      }
     }
   }
 
   func updateMyLetter() {
+    print("update cover letter")
     if let selectedApp = jobAppStore.selectedApp {
       if let lastLetter = selectedApp.coverLetters.last {
         coverLetterStore.cL = lastLetter

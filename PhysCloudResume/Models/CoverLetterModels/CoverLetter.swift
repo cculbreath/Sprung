@@ -3,7 +3,7 @@ import SwiftData
 import SwiftOpenAI
 
 @Model
-class CoverLetter {
+class CoverLetter: Identifiable, Hashable {
   var jobApp: JobApp
   var createdDate: Date = Date()
   var moddedDate: Date = Date()
