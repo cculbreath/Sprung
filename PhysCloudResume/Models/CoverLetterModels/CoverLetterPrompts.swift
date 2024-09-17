@@ -22,28 +22,35 @@ struct CoverLetterPrompts {
   static func generate(coverLetter: CoverLetter, resume: Resume, mode: CoverAiMode) -> String {
     let applicant = Applicant()
     let app = coverLetter.jobApp
-
+    
     var prompt: String = ""
     switch mode {
     case .generate:
-      let prompt = """
-        You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app.job_position) at \(app.company_name). The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself.
+      prompt = """
+        You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app?.job_position ?? "") at \(app?.company_name ?? ""). The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself.
 
         **Instructions:**
 
-        - **Personalization:** Tailor the cover letter specifically to the job listing at \(app.company_name), aligning \(applicant.name)'s skills and experiences with the job requirements.
+        - **Personalization:** Tailor the cover letter specifically to the job listing at \(app?.company_name ?? ""), aligning \(applicant.name)'s skills and experiences with the job requirements.
         - **Highlight Strengths:** Emphasize the most relevant qualifications, achievements, and experiences from \(applicant.name)'s résumé that make them an ideal fit for the position.
         - **Professional Tone:** Maintain a professional and engaging tone throughout the letter.
         - **Memorable Impact:** Craft the letter to leave a lasting impression on the reader, making it stand out among other applications.
         - **Formatting:** Begin with a proper salutation and structure the letter in coherent paragraphs, concluding with a strong closing statement.
 
         \(applicant.name) has provided the following background information regarding their current job search that may be useful in composing the draft cover letter:
-
+        \(applicant.name)'s contact information:
+        \(applicant.name)
+        \(applicant.address)
+        \(applicant.city), \(applicant.state) \(applicant.zip)
+        \(applicant.email)
+        \(applicant.websites)
+        
+        Additional Background Facts:
         \(coverLetter.backgroundItemsString)
 
         **Full Job Listing:**
 
-        \(app.jobListingString)
+        \(app?.jobListingString ?? "")
 
         **Text Version of Résumé to be Submitted with Application:**
 
@@ -62,17 +69,20 @@ struct CoverLetterPrompts {
         """
     case .rewrite:
       prompt = """
-            My initial draft of a cover letter to accompany my application to be hired as a  \(app.job_position) at \(app.company_name) is included below.
-            [chosenEditorPrompt]
-            [freshFeedback]
+            My initial draft of a cover letter to accompany my application to be hired as a  \(app?.job_position ?? "") at \(app?.company_name ?? "") is included below.
+            \(coverLetter.editorPrompt)
+        
+        Cover Letter initial draft:
+        \(coverLetter.content)
 
         """
-    default: prompt = ""
+      case .none:
+        prompt = "none"
     }
 
     return prompt
   }
-  enum EditorPrompts: String {
+  enum EditorPrompts: String, Codable, CaseIterable {
     case improve =
       "Please carefully read the draft and indentify at least three ways the content and quality of the writing can be improved. Provde a new draft that incorporates the identified improvements."
     case zissner =

@@ -43,7 +43,7 @@ struct BuildToolbar: ToolbarContent {
       case .resume:
         resumeToolbarContent(selRes: selRes, selectedApp: jobAppStore.selectedApp, attention: $attention)
       case .coverLetter:
-        if let cL = selApp.selectedCover {
+        if let _ = selApp.selectedCover {
           CoverLetterToolbar(buttons: $letterButtons)
         } else {
           ToolbarItem { Text("No Cover Letter Available") } // Handle case where cover letter is nil
@@ -83,7 +83,7 @@ struct BuildToolbar: ToolbarContent {
   }
 
   func toggleEditButton() -> ToolbarItem<Void, some View> {
-    ToolbarItem(placement: .primaryAction) {
+    ToolbarItem(placement: .automatic) {
       Button(action: {
         listingButtons.edit.toggle()
         print("Edit button toggled")

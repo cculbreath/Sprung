@@ -27,11 +27,15 @@ import SwiftData
     }
   }
   // Methods to manage jobApps
-
+  func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
+    jobApp.status = newStatus
+//    saveContext()
+    // Handle additional logic like saving or notifying listeners
+  }
   func addJobApp(_ jobApp: JobApp) -> JobApp? {
     jobApps.append(jobApp)
     modelContext!.insert(jobApp)
-    saveContext()
+//    saveContext()
     return jobApps.last
   }
   func deleteSelected() {
@@ -50,7 +54,7 @@ import SwiftData
         }
         jobApps.remove(at: index)
         modelContext!.delete(jobApp)
-        saveContext()  //Error thrown here}
+//        saveContext()  //Error thrown here}
       } else {
         print("ResStore ref not here!")
       }
@@ -82,12 +86,13 @@ import SwiftData
       fatalError("No job application available to save.")
     }
     jobAppToSave.assignPropsFromForm(form)
-    saveContext()
+//    saveContext()
 
   }
 
   // Save changes to the database
   private func saveContext() {
+    print("don't call this manually!")
     do {
       try modelContext!.save()
       print("saved")

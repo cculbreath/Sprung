@@ -15,4 +15,5 @@ struct Applicant {
   let zip: String = "78745"
   let websites: String = "culbreath.net"
   let email: String = "cc@physicscloud.net"
+  let phone: String = "(805) 234-0847"
 }
