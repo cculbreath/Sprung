@@ -12,14 +12,12 @@ import SwiftUI
 struct CoverLetterAiView: View {
   @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
   @Binding var buttons: CoverLetterButtons
-  @State var aiMode: CoverAiMode = .none
 
   var body: some View {
 
     CoverLetterAiContentView(
       service: OpenAIServiceFactory.service(
         apiKey: openAiApiKey, debugEnabled: false),
-      aiMode: aiMode,
       buttons: $buttons
     )
     .onAppear { print("Ai Cover Letter") }
@@ -31,7 +29,7 @@ struct CoverLetterAiContentView: View {
   @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
   @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
 
-  @State var aiMode: CoverAiMode
+  @State var aiMode: CoverAiMode = .none
   @State var isLoading = false
   @Binding var buttons: CoverLetterButtons
   let service: OpenAIService
@@ -41,17 +39,15 @@ struct CoverLetterAiContentView: View {
 
   init(
     service: OpenAIService,
-    aiMode: CoverAiMode,
     buttons: Binding<CoverLetterButtons>
   ) {
     self.service = service
-    self._aiMode = State(initialValue: aiMode)
     self._buttons = buttons
     self.chatProvider = CoverChatProvider(service: service)
   }
 
   var body: some View {
-    if var cL = jobAppStore.selectedApp?.selectedCover {
+    if let cL = jobAppStore.selectedApp?.selectedCover {
       HStack(spacing: 4) {
         VStack {
           if !isLoading {
@@ -113,17 +109,18 @@ struct CoverLetterAiContentView: View {
         buttons.runRequested = false
       }
 
-      guard let resume = res, let cL = coverLetterStore.cL else {
+      guard let resume = res, let cL = jobAppStore.selectedApp?.selectedCover else {
         print("guard fail")
         return
       }
 
       switch cL.currentMode {
       case .generate:
+          print("generate")
         let prompt = CoverLetterPrompts.generate(
-          coverLetter: cL, resume: resume, mode: aiMode)
-        let myContent = ChatCompletionParameters.Message.ContentType.text(
-          prompt)
+          coverLetter: cL, resume: resume, mode: .generate)
+          print("prompt: \(prompt)")
+          let myContent: ChatCompletionParameters.Message.ContentType = .text(prompt)
         chatProvider.messageHist = [
           CoverLetterPrompts.systemMessage,
           .init(role: .user, content: myContent),

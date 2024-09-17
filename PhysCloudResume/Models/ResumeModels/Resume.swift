@@ -22,6 +22,9 @@ import SwiftUI
   var isUpdating: Bool = false
   var pdfData: Data?
   var attentionGrab: Int = 2
+  var jsonTxt: String {
+    return self.rebuildJSON()
+  }
   var hasValidRefsEnabled: Bool {
 
     let resumeSourceCount = enabledSources.filter { $0.type == .resumeSource }.count
@@ -68,22 +71,38 @@ import SwiftUI
     return ResumeApiQuery(resume: self)
   }
   func loadPDF(from fileURL: URL = FileHandler.pdfUrl()) {
-    do {
-      print("Loading from URL \(fileURL.path)")
-      self.pdfData = try Data(contentsOf: fileURL)
-      isUpdating = false
-    } catch {
-      print("Failed to load PDF file: \(error.localizedDescription)")
+    // Load the PDF data asynchronously
+    DispatchQueue.global(qos: .background).async { [weak self] in
+      do {
+        print("Loading from URL \(fileURL.path)")
+        let data = try Data(contentsOf: fileURL)
+
+        // Switch back to the main queue to update the UI
+        DispatchQueue.main.async { [weak self] in
+          self?.pdfData = data
+          self?.isUpdating = false
+        }
+      } catch {
+        // Handle the error safely in case the view is not available
+        DispatchQueue.main.async { [weak self] in
+          print("Failed to load PDF file: \(error.localizedDescription)")
+          self?.isUpdating = false
+        }
+      }
     }
   }
-
   func displayPDF() -> PDFView? {
     guard let pdfData = pdfData else { return nil }
     let pdfView = PDFView()
-    if let document = PDFDocument(data: pdfData) {
-      pdfView.document = document
-      pdfView.autoScales = true
+
+    // Create the PDF document on the main queue
+    DispatchQueue.main.async {
+      if let document = PDFDocument(data: pdfData) {
+        pdfView.document = document
+        pdfView.autoScales = true
+      }
     }
+
     return pdfView
   }
   @Transient private var exportWorkItem: DispatchWorkItem?

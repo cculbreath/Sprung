@@ -2,14 +2,14 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-enum Statuses: Codable {
-  case new
-  case inProgress
-  case unsubmitted
-  case submitted
-  case interview
-  case closed
-  case followUp
+enum Statuses: String, Codable, CaseIterable {
+  case new = "New"
+  case inProgress = "In Progress"
+  case unsubmitted = "Unsubmitted"
+  case submitted = "Submitted"
+  case interview = "Interview Pending"
+  case closed = "Closed"
+  case followUp = "Follow up Required"
 }
 
 @Model class JobApp: Equatable, Identifiable, Decodable, Hashable {

@@ -24,9 +24,9 @@ final class CoverLetterStore {
   @discardableResult
   func addLetter(letter: CoverLetter, to jobApp: JobApp) -> CoverLetter {
     jobApp.coverLetters.append(letter)
-    jobApp.selectedCover = jobApp.coverLetters.last
+    jobApp.selectedCover = letter
     modelContext!.insert(letter)
-    saveContext()
+//    saveContext()
     return letter
   }
 
@@ -43,14 +43,14 @@ final class CoverLetterStore {
       print("CoverLetter object created")
 
       modelContext!.insert(letter)
-      try? modelContext!.save()
+//      try? modelContext!.save()
       return letter
 
   }
   func createDuplicate(letter: CoverLetter) -> CoverLetter {
     let newLetter = CoverLetter(
       enabledRefs: letter.enabledRefs,
-      jobApp: letter.jobApp
+      jobApp: letter.jobApp ?? nil
     )
     newLetter.content = letter.content
     newLetter.generated = false
@@ -58,15 +58,18 @@ final class CoverLetterStore {
     newLetter.currentMode = letter.currentMode
     // Copy other necessary properties here
 
-    self.addLetter(letter: newLetter, to: letter.jobApp)
+    if let jobApp = letter.jobApp {
+      self.addLetter(letter: newLetter, to: jobApp)
+    }
     return newLetter
   }
   func deleteLetter(_ letter: CoverLetter) {
-    let jobApp = letter.jobApp
-    if let index = jobApp.coverLetters.firstIndex(of: letter){
-      jobApp.coverLetters.remove(at: index)
-      modelContext!.delete(letter)
-      saveContext()
+    if let jobApp = letter.jobApp {
+      if let index = jobApp.coverLetters.firstIndex(of: letter){
+        jobApp.coverLetters.remove(at: index)
+        modelContext!.delete(letter)
+        //      saveContext()
+      }
     }
     else {
       print("letter not attached to jobapp!")

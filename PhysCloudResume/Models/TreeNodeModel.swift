@@ -19,9 +19,9 @@ enum LeafStatus: String, Codable, Hashable {
 
   private(set) var myIndex: Int = -1
   private var childIndexer = 0
-    var children: [TreeNode]? = nil
-  @Relationship(deleteRule: .cascade, inverse:\TreeNode.children)
-  weak var parent: TreeNode? = nil
+  @Relationship(deleteRule: .cascade) var children: [TreeNode]? = nil
+  weak var parent: TreeNode?
+
   @Relationship(deleteRule: .noAction) var resume: Resume
   var status: LeafStatus
   private(set) var nodeDepth: Int
@@ -159,6 +159,13 @@ enum LeafStatus: String, Codable, Hashable {
     }
     // Then delete the node itself
     context.delete(node)
+
+    // Save context to persist changes
+    do {
+      try context.save()
+    } catch {
+      print("Failed to delete TreeNode: \(error)")
+    }
   }
 
   

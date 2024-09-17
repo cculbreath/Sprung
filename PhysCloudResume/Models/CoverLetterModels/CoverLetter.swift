@@ -4,7 +4,7 @@ import SwiftOpenAI
 
 @Model
 class CoverLetter: Identifiable, Hashable {
-  var jobApp: JobApp
+  var jobApp: JobApp? = nil
   var createdDate: Date = Date()
   var moddedDate: Date = Date()
   var content: String = ""
@@ -12,6 +12,7 @@ class CoverLetter: Identifiable, Hashable {
   var encodedEnabledRefs: Data?  // Store as Data
   var encodedMessageHistory: Data?  // Store as Data
   var currentMode: CoverAiMode? = CoverAiMode.none
+  var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zissner
   var modDate: String {
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -41,10 +42,10 @@ class CoverLetter: Identifiable, Hashable {
 
   init(
     enabledRefs: [CoverRef],
-    jobApp: JobApp
+    jobApp: JobApp?
   ) {
     self.encodedEnabledRefs = try? JSONEncoder().encode(enabledRefs)
-    self.jobApp = jobApp
+    self.jobApp = jobApp ?? nil
   }
   var backgroundItemsString: String {
     return enabledRefs.filter { $0.type == CoverRefType.backgroundFact }

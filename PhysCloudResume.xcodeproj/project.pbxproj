@@ -8,7 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 571F746D2C9351BE007C8ADD /* SwiftOpenAI */; };
-		571F75262C957C90007C8ADD /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75252C957C90007C8ADD /* Collections */; };
+		571F75312C98F973007C8ADD /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75302C98F973007C8ADD /* Collections */; };
+		571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75322C98F973007C8ADD /* OrderedCollections */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,8 +36,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				571F75262C957C90007C8ADD /* Collections in Frameworks */,
+				571F75312C98F973007C8ADD /* Collections in Frameworks */,
 				571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */,
+				571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -80,7 +82,8 @@
 			name = PhysCloudResume;
 			packageProductDependencies = (
 				571F746D2C9351BE007C8ADD /* SwiftOpenAI */,
-				571F75252C957C90007C8ADD /* Collections */,
+				571F75302C98F973007C8ADD /* Collections */,
+				571F75322C98F973007C8ADD /* OrderedCollections */,
 			);
 			productName = PhysCloudResume;
 			productReference = 570FEC682C855BF50074D1E0 /* PhysCloudResume.app */;
@@ -112,7 +115,7 @@
 			mainGroup = 570FEC5F2C855BF50074D1E0;
 			packageReferences = (
 				571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
-				571F75242C957C90007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */,
+				571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */,
 			);
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
 			projectDirPath = "";
@@ -277,6 +280,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PhysCloudResume/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Physics Cloud Résumé";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -306,6 +310,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PhysCloudResume/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Physics Cloud Résumé";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -352,7 +357,7 @@
 				version = 3.7.0;
 			};
 		};
-		571F75242C957C90007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+		571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-collections.git";
 			requirement = {
@@ -368,10 +373,15 @@
 			package = 571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
 			productName = SwiftOpenAI;
 		};
-		571F75252C957C90007C8ADD /* Collections */ = {
+		571F75302C98F973007C8ADD /* Collections */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 571F75242C957C90007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */;
+			package = 571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */;
 			productName = Collections;
+		};
+		571F75322C98F973007C8ADD /* OrderedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = OrderedCollections;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

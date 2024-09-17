@@ -42,7 +42,7 @@ struct TabWrapperView: View {
               .tag(TabList.coverLetter)
           }
           
-          Text("Submit Application Content")
+          ResumeExportView()
             .tabItem {
               Label(TabList.submitApp.rawValue, systemImage: "paperplane")
             }
@@ -61,9 +61,11 @@ struct TabWrapperView: View {
       .onAppear {
         if  let selectedApp = jobAppStore.selectedApp {
           if selectedApp.selectedRes == nil {
+            print("nil res")
             if resRefStore.areRefsOk {
               selectedApp.selectedRes = resStore.create(jobApp: selectedApp, sources: resRefStore.defaultSources)
             } else {
+              print("refs not ok")
               refPopup = true
             }
           }
