@@ -1,59 +1,60 @@
-import SwiftData
 import Foundation
+import SwiftData
 
 @Observable
 final class CoverRefStore {
-  var storedCoverRefs: [CoverRef] = []
-  private var modelContext: ModelContext?
+    var storedCoverRefs: [CoverRef] = []
+    private var modelContext: ModelContext?
 
-  var defaultSources: [CoverRef] {
-    return storedCoverRefs.filter { $0.enabledByDefault == true }
-  }
-
-  init() {}
-
-  func initialize(context: ModelContext) {
-    self.modelContext = context
-    loadCoverRefs()  // Load data from the database when the store is initialized
-  }
-  var backgroundRefs: [CoverRef] {
-    return storedCoverRefs.filter { $0.type == .backgroundFact }
-  }
-
-  var writingSamples: [CoverRef] {
-    return storedCoverRefs.filter { $0.type == .writingSample }
-  }
-
-  private func loadCoverRefs() {
-    let descriptor = FetchDescriptor<CoverRef>()
-    do {
-      storedCoverRefs = try modelContext!.fetch(descriptor)
-    } catch {
-      print("Failed to fetch Cover Refs: \(error)")
+    var defaultSources: [CoverRef] {
+        return storedCoverRefs.filter { $0.enabledByDefault == true }
     }
-  }
 
-  @discardableResult
-  func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
-    storedCoverRefs.append(coverRef)
-    modelContext?.insert(coverRef)
-    saveContext()
-    return coverRef
-  }
+    init() {}
 
-  func deleteCoverRef(_ coverRef: CoverRef) {
-    if let index = storedCoverRefs.firstIndex(of: coverRef) {
-      storedCoverRefs.remove(at: index)
-      modelContext?.delete(coverRef)
-      saveContext()
+    func initialize(context: ModelContext) {
+        modelContext = context
+        loadCoverRefs() // Load data from the database when the store is initialized
     }
-  }
 
-  private func saveContext() {
-    do {
-      try modelContext?.save()
-    } catch {
-      print("Failed to save context: \(error)")
+    var backgroundFacts: [CoverRef] {
+        return storedCoverRefs.filter { $0.type == .backgroundFact }
     }
-  }
+
+    var writingSamples: [CoverRef] {
+        return storedCoverRefs.filter { $0.type == .writingSample }
+    }
+
+    private func loadCoverRefs() {
+        let descriptor = FetchDescriptor<CoverRef>()
+        do {
+            storedCoverRefs = try modelContext!.fetch(descriptor)
+        } catch {
+            print("Failed to fetch Cover Refs: \(error)")
+        }
+    }
+
+    @discardableResult
+    func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
+        storedCoverRefs.append(coverRef)
+        modelContext?.insert(coverRef)
+        saveContext()
+        return coverRef
+    }
+
+    func deleteCoverRef(_ coverRef: CoverRef) {
+        if let index = storedCoverRefs.firstIndex(of: coverRef) {
+            storedCoverRefs.remove(at: index)
+            modelContext?.delete(coverRef)
+            saveContext()
+        }
+    }
+
+    private func saveContext() {
+        do {
+            try modelContext?.save()
+        } catch {
+            print("Failed to save context: \(error)")
+        }
+    }
 }

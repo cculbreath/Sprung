@@ -3,225 +3,272 @@ import SwiftData
 import SwiftUI
 
 enum Statuses: String, Codable, CaseIterable {
-  case new = "New"
-  case inProgress = "In Progress"
-  case unsubmitted = "Unsubmitted"
-  case submitted = "Submitted"
-  case interview = "Interview Pending"
-  case closed = "Closed"
-  case followUp = "Follow up Required"
+    case new = "New"
+    case inProgress = "In Progress"
+    case unsubmitted = "Unsubmitted"
+    case submitted = "Submitted"
+    case interview = "Interview Pending"
+    case closed = "Closed"
+    case followUp = "Follow up Required"
+    case abandonned = "Abandonned"
+    case rejected = "Rejected"
 }
 
 @Model class JobApp: Equatable, Identifiable, Decodable, Hashable {
-  @Relationship(deleteRule: .cascade, inverse: \Resume.jobApp)
-  var resumes: [Resume] = []
+    @Attribute(.unique) var id: UUID = UUID()
 
-  @Relationship(deleteRule: .cascade, inverse: \CoverLetter.jobApp)
-  var coverLetters: [CoverLetter] = []
-
-  @Transient
-  private var _selectedCover: CoverLetter?
-  var selectedCover: CoverLetter? {
-    get {
-      if _selectedCover == nil && !coverLetters.isEmpty {
-        return coverLetters.last
-      } else {
-        return _selectedCover
-      }
-    }
-    set {
-      if let newValue = newValue, coverLetters.contains(where: { $0.id == newValue.id }) {
-        _selectedCover = newValue
-      } else {
-        _selectedCover = nil
-      }
-    }
-  }
-
-  @Transient
-  private var _selectedRes: Resume?
-
-
-  var selectedRes: Resume? {
-    get {
-      if _selectedRes == nil && !resumes.isEmpty {
-        return resumes.last
-      } else {
-        return _selectedRes
-      }
-    }
-    set {
-      if let newValue = newValue, resumes.contains(where: { $0.id == newValue.id }) {
-        _selectedRes = newValue
-      } else {
-        _selectedRes = nil
-      }
-    }
-  }
-
-  var job_position: String
-  var job_location: String
-  var company_name: String
-  var company_linkedin_id: String = ""
-  var job_posting_time: String = ""
-  var job_description: String
-  var seniority_level: String = ""
-  var employment_type: String = ""
-  var job_function: String = ""
-  var industries: String = ""
-  var job_apply_link: String = ""
-  var status: Statuses = Statuses.new
-
-  enum CodingKeys: String, CodingKey {
-    case job_position
-    case job_location
-    case company_name
-    case company_linkedin_id
-    case job_posting_time
-    case job_description
-    case seniority_level
-    case employment_type
-    case job_function
-    case industries
-    case job_apply_link
-    case resumes
-    case coverLetters
-    case selectedRes
-    case status
-  }
-
-  var jobListingString: String {
-    var descriptionParts: [String] = []
-
-    descriptionParts.append("Job Position: \(job_position)")
-    descriptionParts.append("Job Location: \(job_location)")
-    descriptionParts.append("Company Name: \(company_name)")
-
-    if !company_linkedin_id.isEmpty {
-      descriptionParts.append("Company LinkedIn ID: \(company_linkedin_id)")
+    static func == (lhs: JobApp, rhs: JobApp) -> Bool {
+        lhs.id == rhs.id
     }
 
-    if !job_posting_time.isEmpty {
-      descriptionParts.append("Job Posting Time: \(job_posting_time)")
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 
-    if !seniority_level.isEmpty {
-      descriptionParts.append("Seniority Level: \(seniority_level)")
+    @Relationship(deleteRule: .cascade, inverse: \Resume.jobApp)
+    var resumes: [Resume] {
+        didSet {
+            objectWillChange.send()
+            print("resumeAppendedToJobApp")
+        }
     }
 
-    if !employment_type.isEmpty {
-      descriptionParts.append("Employment Type: \(employment_type)")
+    @Relationship(deleteRule: .cascade, inverse: \CoverLetter.jobApp)
+    var coverLetters: [CoverLetter] = []
+    var selectedResId: UUID?
+    var selectedCoverId: UUID?
+
+    var selectedRes: Resume? {
+        get {
+            if let id = selectedResId {
+                return resumes.first(where: { $0.id == id })
+            } else if resumes.isEmpty {
+                return nil
+            } else { return resumes.last }
+        }
+        set {
+            selectedResId = newValue?.id
+        }
     }
 
-    if !job_function.isEmpty {
-      descriptionParts.append("Job Function: \(job_function)")
+    var selectedCover: CoverLetter? {
+        get {
+            if let id = selectedCoverId {
+                return coverLetters.first(where: { $0.id == id })
+            }
+            return coverLetters.last
+        }
+        set {
+            selectedCoverId = newValue?.id
+        }
     }
 
-    if !industries.isEmpty {
-      descriptionParts.append("Industries: \(industries)")
+    var job_position: String
+    var job_location: String
+    var company_name: String
+    var company_linkedin_id: String = ""
+    var job_posting_time: String = ""
+    var job_description: String
+    var seniority_level: String = ""
+    var employment_type: String = ""
+    var job_function: String = ""
+    var industries: String = ""
+    var job_apply_link: String = ""
+    var posting_url: String = ""
+    var status: Statuses = Statuses.new
+    var notes: String = ""
+
+    enum CodingKeys: String, CodingKey {
+        case job_position
+        case job_location
+        case company_name
+        case company_linkedin_id
+        case job_posting_time
+        case job_description
+        case seniority_level
+        case employment_type
+        case job_function
+        case industries
+        case job_apply_link
+        case resumes
+        case coverLetters
+        case selectedRes
+        case status
+        case posting_url
     }
 
-    if !job_description.isEmpty {
-      descriptionParts.append("Job Description: \(job_description)")
+    var jobListingString: String {
+        var descriptionParts: [String] = []
+
+        descriptionParts.append("Job Position: \(job_position)")
+        descriptionParts.append("Job Location: \(job_location)")
+        descriptionParts.append("Company Name: \(company_name)")
+
+        if !company_linkedin_id.isEmpty {
+            descriptionParts.append("Company LinkedIn ID: \(company_linkedin_id)")
+        }
+
+        if !job_posting_time.isEmpty {
+            descriptionParts.append("Job Posting Time: \(job_posting_time)")
+        }
+
+        if !seniority_level.isEmpty {
+            descriptionParts.append("Seniority Level: \(seniority_level)")
+        }
+
+        if !employment_type.isEmpty {
+            descriptionParts.append("Employment Type: \(employment_type)")
+        }
+
+        if !job_function.isEmpty {
+            descriptionParts.append("Job Function: \(job_function)")
+        }
+
+        if !industries.isEmpty {
+            descriptionParts.append("Industries: \(industries)")
+        }
+
+        if !job_description.isEmpty {
+            descriptionParts.append("Job Description: \(job_description)")
+        }
+
+        return descriptionParts.joined(separator: "\n")
     }
 
-    return descriptionParts.joined(separator: "\n")
-  }
-
-  @ViewBuilder
-  var statusTag: some View {
-    switch self.status {
-      case .new:
-        RoundedTagView(tagText: "New", backgroundColor: .green, foregroundColor: .white)
-      case .inProgress:
-        RoundedTagView(tagText: "In Progress", backgroundColor: .mint, foregroundColor: .white)
-      case .unsubmitted:
-        RoundedTagView(tagText: "Unsubmitted", backgroundColor: .cyan, foregroundColor: .white)
-      case .submitted:
-        RoundedTagView(tagText: "Submitted", backgroundColor: .indigo, foregroundColor: .white)
-      case .interview:
-        RoundedTagView(tagText: "Interview", backgroundColor: .pink, foregroundColor: .white)
-      case .closed:
-        RoundedTagView(tagText: "Closed", backgroundColor: .gray, foregroundColor: .white)
-      case .followUp:
-        RoundedTagView(tagText: "Follow Up", backgroundColor: .yellow, foregroundColor: .white)
-    }
-  }
-
-  init(
-    job_position: String = "",
-    job_location: String = "",
-    company_name: String = "",
-    company_linkedin_id: String = "",
-    job_posting_time: String = "",
-    job_description: String = "",
-    seniority_level: String = "",
-    employment_type: String = "",
-    job_function: String = "",
-    industries: String = "",
-    job_apply_link: String = ""
-  ) {
-    self.job_position = job_position
-    self.job_location = job_location
-    self.company_name = company_name
-    self.company_linkedin_id = company_linkedin_id
-    self.job_posting_time = job_posting_time
-    self.job_description = job_description
-    self.seniority_level = seniority_level
-    self.employment_type = employment_type
-    self.job_function = job_function
-    self.industries = industries
-    self.job_apply_link = job_apply_link
-  }
-
-  static func == (lhs: JobApp, rhs: JobApp) -> Bool {
-    return lhs.id == rhs.id
-  }
-
-  func addResume(_ resume: Resume) {
-    if self.status == .new {
-      self.status = .inProgress
+    @ViewBuilder
+    var statusTag: some View {
+        switch status {
+        case .new:
+            RoundedTagView(tagText: "New", backgroundColor: .green, foregroundColor: .white)
+        case .inProgress:
+            RoundedTagView(tagText: "In Progress", backgroundColor: .mint, foregroundColor: .white)
+        case .unsubmitted:
+            RoundedTagView(tagText: "Unsubmitted", backgroundColor: .cyan, foregroundColor: .white)
+        case .submitted:
+            RoundedTagView(tagText: "Submitted", backgroundColor: .indigo, foregroundColor: .white)
+        case .interview:
+            RoundedTagView(tagText: "Interview", backgroundColor: .pink, foregroundColor: .white)
+        case .closed:
+            RoundedTagView(tagText: "Closed", backgroundColor: .gray, foregroundColor: .white)
+        case .followUp:
+            RoundedTagView(tagText: "Follow Up", backgroundColor: .yellow, foregroundColor: .white)
+        case .abandonned:
+            RoundedTagView(tagText: "Abandoned", backgroundColor: .secondary, foregroundColor: .white)
+        case .rejected:
+            RoundedTagView(tagText: "Rejected", backgroundColor: .black, foregroundColor: .white)
+        }
     }
 
-    // Ensure uniqueness
-    if !resumes.contains(where: { $0.id == resume.id }) {
-      resumes.append(resume)
+    static func pillColor(_ myCase: String) -> Color {
+        let myCase = myCase.lowercased()
+        switch myCase {
+        case "closed": return Color.gray
+        case "follow up": return Color.yellow
+        case "interview": return Color.pink
+        case "submitted": return Color.indigo
+        case "unsubmitted": return Color.cyan
+        case "in progress": return Color.mint
+        case "new": return Color.green
+        case "abandonned": return .secondary
+        case "rejected": return Color.black
+        default: return Color.black
+        }
     }
 
-    if selectedRes == nil { selectedRes = resume }
-  }
+    init(
+        job_position: String = "",
+        job_location: String = "",
+        company_name: String = "",
+        company_linkedin_id: String = "",
+        job_posting_time: String = "",
+        job_description: String = "",
+        seniority_level: String = "",
+        employment_type: String = "",
+        job_function: String = "",
+        industries: String = "",
+        job_apply_link: String = "",
+        posting_url: String = ""
+    ) {
+        self.job_position = job_position
+        self.job_location = job_location
+        self.company_name = company_name
+        self.company_linkedin_id = company_linkedin_id
+        self.job_posting_time = job_posting_time
+        self.job_description = job_description
+        self.seniority_level = seniority_level
+        self.employment_type = employment_type
+        self.job_function = job_function
+        self.industries = industries
+        self.job_apply_link = job_apply_link
+        self.posting_url = posting_url
+        resumes = []
+    }
 
-  func hash(into hasher: inout Hasher) {
-    hasher.combine(id)
-  }
+    var hasAnyRes: Bool { return !resumes.isEmpty }
+    func addResume(_ resume: Resume) {
+        // Ensure uniqueness
+        if !resumes.contains(where: { $0.id == resume.id }) {
+            resumes.append(resume)
+            selectedRes = resume
+            print("JobApp resume added, jobApp.hasAnyResume is \(hasAnyRes ? "true" : "false")")
+        } else {
+            if resumes.isEmpty {
+                print("Uniqueness test fails: resumes array is empty")
+            } else {
+                for (index, resume) in resumes.enumerated() {
+                    print("resume array \(index): \(resume.createdDateString)")
+                }
+            }
+        }
 
-  required init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.job_position = try container.decode(String.self, forKey: .job_position)
-    self.job_location = try container.decode(String.self, forKey: .job_location)
-    self.company_name = try container.decode(String.self, forKey: .company_name)
-    self.company_linkedin_id = try container.decodeIfPresent(String.self, forKey: .company_linkedin_id) ?? ""
-    self.job_posting_time = try container.decodeIfPresent(String.self, forKey: .job_posting_time) ?? ""
-    self.job_description = try container.decode(String.self, forKey: .job_description)
-    self.seniority_level = try container.decodeIfPresent(String.self, forKey: .seniority_level) ?? ""
-    self.employment_type = try container.decodeIfPresent(String.self, forKey: .employment_type) ?? ""
-    self.job_function = try container.decodeIfPresent(String.self, forKey: .job_function) ?? ""
-    self.industries = try container.decodeIfPresent(String.self, forKey: .industries) ?? ""
-    self.job_apply_link = try container.decodeIfPresent(String.self, forKey: .job_apply_link) ?? ""
-    self.status = try container.decodeIfPresent(Statuses.self, forKey: .status) ?? .new
-  }
+        if selectedRes == nil {
+            selectedRes = resume
+            print("selected res set to newly added res")
+        }
+    }
 
-  public func assignPropsFromForm(_ sourceJobAppForm: JobAppForm) {
-    self.job_position = sourceJobAppForm.job_position
-    self.job_location = sourceJobAppForm.job_location
-    self.company_name = sourceJobAppForm.company_name
-    self.company_linkedin_id = sourceJobAppForm.company_linkedin_id
-    self.job_posting_time = sourceJobAppForm.job_posting_time
-    self.job_description = sourceJobAppForm.job_description
-    self.seniority_level = sourceJobAppForm.seniority_level
-    self.employment_type = sourceJobAppForm.employment_type
-    self.job_function = sourceJobAppForm.job_function
-    self.industries = sourceJobAppForm.industries
-    self.job_apply_link = sourceJobAppForm.job_apply_link
-  }
+    func resumeDeletePrep(candidate: Resume) {
+        if selectedRes == candidate {
+            if resumes.count == 1 {
+                selectedRes = nil
+                print("SelREs nil")
+            } else {
+                selectedRes = resumes.first(where: { $0.id != candidate.id })
+                print("sel res reassigned")
+            }
+        }
+        print("no change to selRes required. It's another object")
+    }
+
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        job_position = try container.decode(String.self, forKey: .job_position)
+        job_location = try container.decode(String.self, forKey: .job_location)
+        company_name = try container.decode(String.self, forKey: .company_name)
+        company_linkedin_id = try container.decodeIfPresent(String.self, forKey: .company_linkedin_id) ?? ""
+        job_posting_time = try container.decodeIfPresent(String.self, forKey: .job_posting_time) ?? ""
+        job_description = try container.decode(String.self, forKey: .job_description)
+        seniority_level = try container.decodeIfPresent(String.self, forKey: .seniority_level) ?? ""
+        employment_type = try container.decodeIfPresent(String.self, forKey: .employment_type) ?? ""
+        job_function = try container.decodeIfPresent(String.self, forKey: .job_function) ?? ""
+        industries = try container.decodeIfPresent(String.self, forKey: .industries) ?? ""
+        job_apply_link = try container.decodeIfPresent(String.self, forKey: .job_apply_link) ?? ""
+        status = try container.decodeIfPresent(Statuses.self, forKey: .status) ?? .new
+        resumes = []
+    }
+
+    public func assignPropsFromForm(_ sourceJobAppForm: JobAppForm) {
+        job_position = sourceJobAppForm.job_position
+        job_location = sourceJobAppForm.job_location
+        company_name = sourceJobAppForm.company_name
+        company_linkedin_id = sourceJobAppForm.company_linkedin_id
+        job_posting_time = sourceJobAppForm.job_posting_time
+        job_description = sourceJobAppForm.job_description
+        seniority_level = sourceJobAppForm.seniority_level
+        employment_type = sourceJobAppForm.employment_type
+        job_function = sourceJobAppForm.job_function
+        industries = sourceJobAppForm.industries
+        job_apply_link = sourceJobAppForm.job_apply_link
+        posting_url = sourceJobAppForm.posting_url
+    }
 }

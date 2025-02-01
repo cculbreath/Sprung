@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct ContentViewLaunch: View {
-  @Environment(\.modelContext) private var modelContext
-  var body: some View {
-    ContentView(modelContext: modelContext)
-  }
+    @Environment(\.modelContext) private var modelContext
+    var body: some View {
+        ContentView(modelContext: modelContext)
+    }
 }

@@ -1,13 +1,13 @@
-//`//
+// `//
 ////  AiPanelView.swift
 ////  PhysicsCloudResume
 ////
 ////  Created by Christopher Culbreath on 8/25/24.
 ////
 //
-//import SwiftUI
+// import SwiftUI
 //
-//struct AiPanelView: View {
+// struct AiPanelView: View {
 //  @Binding var res: Resume
 //  @State var attentionGrab: Int = 2
 //  @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
@@ -37,5 +37,4 @@
 //      }.frame(maxWidth: .infinity, minHeight: 100)
 //    }
 //  }
-//}
-
+// }

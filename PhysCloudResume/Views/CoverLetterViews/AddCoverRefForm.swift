@@ -1,63 +1,121 @@
 import SwiftUI
 
 struct AddCoverRefForm: View {
-  @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
-  @State private var newCoverRefName = ""
-  @State private var newCoverRefContent = ""
-  @State private var newCoverRefEnabledByDefault = false
-  var type: CoverRefType
-  @Bindable var coverLetter: CoverLetter
-  @Binding var backgroundFacts: [CoverRef]
-  @Binding var writingSamples: [CoverRef]
-  @Binding var showMe: Bool
+    @Bindable var coverRefStore: CoverRefStore
+    @State private var newCoverRefName = ""
+    @State private var newCoverRefContent = ""
+    @State private var newCoverRefEnabledByDefault = true
+    @State private var isTargeted: Bool = false
 
-  var body: some View {
-    Form {
-      TextField("Name", text: $newCoverRefName)
-      TextField("Content", text: $newCoverRefContent, axis: .vertical)
-        .lineLimit(3...10)
-      Toggle("Enabled by Default", isOn: $newCoverRefEnabledByDefault)
+    var type: CoverRefType
+    @Bindable var cL: CoverLetter
+    @Binding var showMe: Bool
+    @FocusState var isFocused: Bool
 
-      HStack {
-        Button("Add") {
-          let newCoverRef = CoverRef(
+    var body: some View {
+        Form {
+            TextField("Name", text: $newCoverRefName)
+            TextEditor(text: $newCoverRefContent)
+                .padding(5)
+                .focusable(true) // (1) Mark it focusable on macOS
+                .focused($isFocused)
+                .onTapGesture { isFocused = true }
+                .onChange(of: isFocused) { print("isFocused changed to:", isFocused) }
+                .frame(maxWidth: .infinity, minHeight: 200)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(
+                            (isTargeted || isFocused) ? .blue : .secondary,
+                            lineWidth: (isTargeted || isFocused) ? 2 : 0.25
+                        )
+                )
+            Toggle("Enabled by Default", isOn: $newCoverRefEnabledByDefault)
+
+            HStack {
+                Button("Add") {
+                    saveForm()
+                    resetForm()
+                    dismissForm()
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("Cancel") {
+                    dismissForm()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(.top)
+        }
+        .padding()
+        .frame(minWidth: 400, maxWidth: 600)
+        .navigationTitle("Add \(type == .backgroundFact ? "Background Fact" : "Writing Sample")")
+        .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in handleOnDrop(providers: providers) }
+        .onChange(of: isTargeted) { print("isTargeted:", isTargeted) }
+    }
+
+    private func saveForm() {
+        let newCoverRef = CoverRef(
             name: newCoverRefName,
             content: newCoverRefContent,
             enabledByDefault: newCoverRefEnabledByDefault,
             type: type
-          )
+        )
 
-          if type == .backgroundFact {
-            backgroundFacts.append(newCoverRef)
-          } else if type == .writingSample {
-            writingSamples.append(newCoverRef)
-          }
+//    if self.type == .backgroundFact {
+//      coverRefStore.append(newCoverRef)
+//    } else if self.type == .writingSample {
+//      self.writingSamples.append(newCoverRef)
+//    }
 
-          let newRef = coverRefStore.addCoverRef(newCoverRef)
-          coverLetter.enabledRefs.append(newRef)
-          resetForm()
-          dismissForm()
-        }
-        .keyboardShortcut(.defaultAction)
-        Button("Cancel") {
-          dismissForm()
-        }
-        .keyboardShortcut(.cancelAction)
-      }
-      .padding(.top)
+        let newRef = coverRefStore.addCoverRef(newCoverRef)
+
+        cL.enabledRefs.append(newRef)
     }
-    .padding()
-    .frame(minWidth: 400, maxWidth: 600)
-    .navigationTitle("Add \(type == .backgroundFact ? "Background Fact" : "Writing Sample")")
-  }
 
-  private func resetForm() {
-    newCoverRefName = ""
-    newCoverRefContent = ""
-    newCoverRefEnabledByDefault = false
-  }
+    func handleOnDrop(providers: [NSItemProvider]) -> Bool {
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                    guard let urlData = item as? Data,
+                          let url = URL(dataRepresentation: urlData, relativeTo: nil)
+                    else {
+                        return
+                    }
 
-  private func dismissForm() {
-    showMe = false
-  }
+                    // Extract the file name
+                    let fileName = url.deletingPathExtension().lastPathComponent
+
+                    // Read the file contents
+                    do {
+                        let text = try String(contentsOf: url, encoding: .utf8)
+
+                        self.newCoverRefName = fileName
+                        self.newCoverRefContent = text
+                        self.self.newCoverRefEnabledByDefault = true
+                        saveForm()
+
+                    } catch {
+                        print("Error reading file: \(error.localizedDescription)")
+                    }
+                }
+
+                // If we handle a valid file drop, return true
+                continue
+            } else {
+                return false
+            }
+        }
+        resetForm()
+        dismissForm()
+        return true
+    }
+
+    private func resetForm() {
+        newCoverRefName = ""
+        newCoverRefContent = ""
+        newCoverRefEnabledByDefault = true
+    }
+
+    private func dismissForm() {
+        showMe = false
+    }
 }

@@ -10,6 +10,7 @@
 		571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 571F746D2C9351BE007C8ADD /* SwiftOpenAI */; };
 		571F75312C98F973007C8ADD /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75302C98F973007C8ADD /* Collections */; };
 		571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75322C98F973007C8ADD /* OrderedCollections */; };
+		57D0478B2CA771AE00A601BC /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 57D0478A2CA771AE00A601BC /* SwiftSoup */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +22,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Models/ResumeModels/Scratch.swift,
 				scripts,
 			);
 			target = 570FEC672C855BF50074D1E0 /* PhysCloudResume */;
@@ -37,6 +39,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				571F75312C98F973007C8ADD /* Collections in Frameworks */,
+				57D0478B2CA771AE00A601BC /* SwiftSoup in Frameworks */,
 				571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */,
 				571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */,
 			);
@@ -84,6 +87,7 @@
 				571F746D2C9351BE007C8ADD /* SwiftOpenAI */,
 				571F75302C98F973007C8ADD /* Collections */,
 				571F75322C98F973007C8ADD /* OrderedCollections */,
+				57D0478A2CA771AE00A601BC /* SwiftSoup */,
 			);
 			productName = PhysCloudResume;
 			productReference = 570FEC682C855BF50074D1E0 /* PhysCloudResume.app */;
@@ -116,6 +120,7 @@
 			packageReferences = (
 				571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 				571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */,
+				57D047892CA771AE00A601BC /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 			);
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
 			projectDirPath = "";
@@ -281,12 +286,13 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PhysCloudResume/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Physics Cloud Résumé";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Physics-Cloud.PhysCloudResume";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -301,25 +307,29 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = PhysCloudResume/PhysCloudResume.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = SHTVYKLJHV;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PhysCloudResume/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Physics Cloud Résumé";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Physics-Cloud.PhysCloudResume";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -354,7 +364,7 @@
 			repositoryURL = "https://github.com/jamesrochabrun/SwiftOpenAI.git";
 			requirement = {
 				kind = exactVersion;
-				version = 3.7.0;
+				version = 3.9.5;
 			};
 		};
 		571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */ = {
@@ -363,6 +373,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.1.3;
+			};
+		};
+		57D047892CA771AE00A601BC /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/scinfu/SwiftSoup.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.5;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -382,6 +400,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */;
 			productName = OrderedCollections;
+		};
+		57D0478A2CA771AE00A601BC /* SwiftSoup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57D047892CA771AE00A601BC /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
