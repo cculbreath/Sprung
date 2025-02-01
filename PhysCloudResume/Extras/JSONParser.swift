@@ -5,6 +5,7 @@
 //  Created by Christopher Culbreath on 9/16/24.
 //
 
+import Foundation
 
 //===----------------------------------------------------------------------===//
 //
@@ -18,25 +19,24 @@
 //
 //===----------------------------------------------------------------------===//
 import OrderedCollections
-import Foundation
 
-internal struct JSONParser {
+struct JSONParser {
     var reader: DocumentReader
     var depth: Int = 0
 
     init(bytes: [UInt8]) {
-        self.reader = DocumentReader(array: bytes)
+        reader = DocumentReader(array: bytes)
     }
 
     mutating func parse() throws -> JSONValue {
         try reader.consumeWhitespace()
-        let value = try self.parseValue()
+        let value = try parseValue()
         #if DEBUG
-        defer {
-            guard self.depth == 0 else {
-                preconditionFailure("Expected to end parsing with a depth of 0")
+            defer {
+                guard self.depth == 0 else {
+                    preconditionFailure("Expected to end parsing with a depth of 0")
+                }
             }
-        }
         #endif
 
         // ensure only white space is remaining
@@ -62,7 +62,7 @@ internal struct JSONParser {
             switch byte {
             case UInt8(ascii: "\""):
                 reader.moveReaderIndex(forwardBy: whitespace)
-                return .string(try reader.readString())
+                return try .string(reader.readString())
             case ._openbrace:
                 reader.moveReaderIndex(forwardBy: whitespace)
                 let object = try parseObject()
@@ -81,28 +81,27 @@ internal struct JSONParser {
                 return .null
             case UInt8(ascii: "-"), UInt8(ascii: "0") ... UInt8(ascii: "9"):
                 reader.moveReaderIndex(forwardBy: whitespace)
-                let number = try self.reader.readNumber()
+                let number = try reader.readNumber()
                 return .number(number)
             case ._space, ._return, ._newline, ._tab:
                 whitespace += 1
                 continue
             default:
-                throw JSONError.unexpectedCharacter(ascii: byte, characterIndex: self.reader.readerIndex)
+                throw JSONError.unexpectedCharacter(ascii: byte, characterIndex: reader.readerIndex)
             }
         }
 
         throw JSONError.unexpectedEndOfFile
     }
 
-
     // MARK: - Parse Array -
 
     mutating func parseArray() throws -> [JSONValue] {
-        precondition(self.reader.read() == ._openbracket)
-        guard self.depth < 512 else {
-            throw JSONError.tooManyNestedArraysOrDictionaries(characterIndex: self.reader.readerIndex - 1)
+        precondition(reader.read() == ._openbracket)
+        guard depth < 512 else {
+            throw JSONError.tooManyNestedArraysOrDictionaries(characterIndex: reader.readerIndex - 1)
         }
-        self.depth += 1
+        depth += 1
         defer { depth -= 1 }
 
         // parse first value or end immediatly
@@ -111,7 +110,7 @@ internal struct JSONParser {
             preconditionFailure("Expected that all white space is consumed")
         case ._closebracket:
             // if the first char after whitespace is a closing bracket, we found an empty array
-            self.reader.moveReaderIndex(forwardBy: 1)
+            reader.moveReaderIndex(forwardBy: 1)
             return []
         default:
             break
@@ -152,11 +151,11 @@ internal struct JSONParser {
     // MARK: - Object parsing -
 
     mutating func parseObject() throws -> OrderedDictionary<String, JSONValue> {
-        precondition(self.reader.read() == ._openbrace)
-        guard self.depth < 512 else {
-            throw JSONError.tooManyNestedArraysOrDictionaries(characterIndex: self.reader.readerIndex - 1)
+        precondition(reader.read() == ._openbrace)
+        guard depth < 512 else {
+            throw JSONError.tooManyNestedArraysOrDictionaries(characterIndex: reader.readerIndex - 1)
         }
-        self.depth += 1
+        depth += 1
         defer { depth -= 1 }
 
         // parse first value or end immediatly
@@ -165,7 +164,7 @@ internal struct JSONParser {
             preconditionFailure("Expected that all white space is consumed")
         case ._closebrace:
             // if the first char after whitespace is a closing bracket, we found an empty array
-            self.reader.moveReaderIndex(forwardBy: 1)
+            reader.moveReaderIndex(forwardBy: 1)
             return [:]
         default:
             break
@@ -182,7 +181,7 @@ internal struct JSONParser {
             }
             reader.moveReaderIndex(forwardBy: 1)
             try reader.consumeWhitespace()
-            object[key] = try self.parseValue()
+            object[key] = try parseValue()
 
             let commaOrBrace = try reader.consumeWhitespace()
             switch commaOrBrace {
@@ -205,62 +204,60 @@ internal struct JSONParser {
 }
 
 extension JSONParser {
-
     struct DocumentReader {
         let array: [UInt8]
 
         private(set) var readerIndex: Int = 0
 
         private var readableBytes: Int {
-            self.array.endIndex - self.readerIndex
+            array.endIndex - readerIndex
         }
 
         var isEOF: Bool {
-            self.readerIndex >= self.array.endIndex
+            readerIndex >= array.endIndex
         }
-
 
         init(array: [UInt8]) {
             self.array = array
         }
 
         subscript<R: RangeExpression<Int>>(bounds: R) -> ArraySlice<UInt8> {
-            self.array[bounds]
+            array[bounds]
         }
 
         mutating func read() -> UInt8? {
-            guard self.readerIndex < self.array.endIndex else {
-                self.readerIndex = self.array.endIndex
+            guard readerIndex < array.endIndex else {
+                readerIndex = array.endIndex
                 return nil
             }
 
             defer { self.readerIndex += 1 }
 
-            return self.array[self.readerIndex]
+            return array[readerIndex]
         }
 
         func peek(offset: Int = 0) -> UInt8? {
-            guard self.readerIndex + offset < self.array.endIndex else {
+            guard readerIndex + offset < array.endIndex else {
                 return nil
             }
 
-            return self.array[self.readerIndex + offset]
+            return array[readerIndex + offset]
         }
 
         mutating func moveReaderIndex(forwardBy offset: Int) {
-            self.readerIndex += offset
+            readerIndex += offset
         }
 
         @discardableResult
         mutating func consumeWhitespace() throws -> UInt8 {
             var whitespace = 0
-            while let ascii = self.peek(offset: whitespace) {
+            while let ascii = peek(offset: whitespace) {
                 switch ascii {
                 case ._space, ._return, ._newline, ._tab:
                     whitespace += 1
                     continue
                 default:
-                    self.moveReaderIndex(forwardBy: whitespace)
+                    moveReaderIndex(forwardBy: whitespace)
                     return ascii
                 }
             }
@@ -269,39 +266,39 @@ extension JSONParser {
         }
 
         mutating func readString() throws -> String {
-            try self.readUTF8StringTillNextUnescapedQuote()
+            try readUTF8StringTillNextUnescapedQuote()
         }
 
         mutating func readNumber() throws -> String {
-            try self.parseNumber()
+            try parseNumber()
         }
 
         mutating func readBool() throws -> Bool {
-            switch self.read() {
+            switch read() {
             case UInt8(ascii: "t"):
-                guard self.read() == UInt8(ascii: "r"),
-                      self.read() == UInt8(ascii: "u"),
-                      self.read() == UInt8(ascii: "e")
+                guard read() == UInt8(ascii: "r"),
+                      read() == UInt8(ascii: "u"),
+                      read() == UInt8(ascii: "e")
                 else {
-                    guard !self.isEOF else {
+                    guard !isEOF else {
                         throw JSONError.unexpectedEndOfFile
                     }
 
-                    throw JSONError.unexpectedCharacter(ascii: self.peek(offset: -1)!, characterIndex: self.readerIndex - 1)
+                    throw JSONError.unexpectedCharacter(ascii: peek(offset: -1)!, characterIndex: readerIndex - 1)
                 }
 
                 return true
             case UInt8(ascii: "f"):
-                guard self.read() == UInt8(ascii: "a"),
-                      self.read() == UInt8(ascii: "l"),
-                      self.read() == UInt8(ascii: "s"),
-                      self.read() == UInt8(ascii: "e")
+                guard read() == UInt8(ascii: "a"),
+                      read() == UInt8(ascii: "l"),
+                      read() == UInt8(ascii: "s"),
+                      read() == UInt8(ascii: "e")
                 else {
-                    guard !self.isEOF else {
+                    guard !isEOF else {
                         throw JSONError.unexpectedEndOfFile
                     }
 
-                    throw JSONError.unexpectedCharacter(ascii: self.peek(offset: -1)!, characterIndex: self.readerIndex - 1)
+                    throw JSONError.unexpectedCharacter(ascii: peek(offset: -1)!, characterIndex: readerIndex - 1)
                 }
 
                 return false
@@ -311,16 +308,16 @@ extension JSONParser {
         }
 
         mutating func readNull() throws {
-            guard self.read() == UInt8(ascii: "n"),
-                  self.read() == UInt8(ascii: "u"),
-                  self.read() == UInt8(ascii: "l"),
-                  self.read() == UInt8(ascii: "l")
+            guard read() == UInt8(ascii: "n"),
+                  read() == UInt8(ascii: "u"),
+                  read() == UInt8(ascii: "l"),
+                  read() == UInt8(ascii: "l")
             else {
-                guard !self.isEOF else {
+                guard !isEOF else {
                     throw JSONError.unexpectedEndOfFile
                 }
 
-                throw JSONError.unexpectedCharacter(ascii: self.peek(offset: -1)!, characterIndex: self.readerIndex - 1)
+                throw JSONError.unexpectedCharacter(ascii: peek(offset: -1)!, characterIndex: readerIndex - 1)
             }
         }
 
@@ -335,17 +332,17 @@ extension JSONParser {
         }
 
         private mutating func readUTF8StringTillNextUnescapedQuote() throws -> String {
-            guard self.read() == ._quote else {
-                throw JSONError.unexpectedCharacter(ascii: self.peek(offset: -1)!, characterIndex: self.readerIndex - 1)
+            guard read() == ._quote else {
+                throw JSONError.unexpectedCharacter(ascii: peek(offset: -1)!, characterIndex: readerIndex - 1)
             }
-            var stringStartIndex = self.readerIndex
+            var stringStartIndex = readerIndex
             var copy = 0
             var output: String?
 
             while let byte = peek(offset: copy) {
                 switch byte {
                 case UInt8(ascii: "\""):
-                    self.moveReaderIndex(forwardBy: copy + 1)
+                    moveReaderIndex(forwardBy: copy + 1)
                     guard var result = output else {
                         // if we don't have an output string we create a new string
                         return try makeString(at: stringStartIndex ..< stringStartIndex + copy)
@@ -360,32 +357,32 @@ extension JSONParser {
                     // quotation mark, reverse solidus, and the control characters (U+0000
                     // through U+001F).
                     var string = output ?? ""
-                    let errorIndex = self.readerIndex + copy
+                    let errorIndex = readerIndex + copy
                     string += try makeString(at: stringStartIndex ... errorIndex)
                     throw JSONError.unescapedControlCharacterInString(ascii: byte, in: string, index: errorIndex)
 
                 case UInt8(ascii: "\\"):
-                    self.moveReaderIndex(forwardBy: copy)
+                    moveReaderIndex(forwardBy: copy)
                     if output != nil {
                         output! += try makeString(at: stringStartIndex ..< stringStartIndex + copy)
                     } else {
                         output = try makeString(at: stringStartIndex ..< stringStartIndex + copy)
                     }
 
-                    let escapedStartIndex = self.readerIndex
+                    let escapedStartIndex = readerIndex
 
                     do {
                         let escaped = try parseEscapeSequence()
                         output! += escaped
-                        stringStartIndex = self.readerIndex
+                        stringStartIndex = readerIndex
                         copy = 0
-                    } catch EscapedSequenceError.unexpectedEscapedCharacter(let ascii, let failureIndex) {
+                    } catch let EscapedSequenceError.unexpectedEscapedCharacter(ascii, failureIndex) {
                         output! += try makeString(at: escapedStartIndex ..< self.readerIndex)
                         throw JSONError.unexpectedEscapedCharacter(ascii: ascii, in: output!, index: failureIndex)
-                    } catch EscapedSequenceError.expectedLowSurrogateUTF8SequenceAfterHighSurrogate(let failureIndex) {
+                    } catch let EscapedSequenceError.expectedLowSurrogateUTF8SequenceAfterHighSurrogate(failureIndex) {
                         output! += try makeString(at: escapedStartIndex ..< self.readerIndex)
                         throw JSONError.expectedLowSurrogateUTF8SequenceAfterHighSurrogate(in: output!, index: failureIndex)
-                    } catch EscapedSequenceError.couldNotCreateUnicodeScalarFromUInt32(let failureIndex, let unicodeScalarValue) {
+                    } catch let EscapedSequenceError.couldNotCreateUnicodeScalarFromUInt32(failureIndex, unicodeScalarValue) {
                         output! += try makeString(at: escapedStartIndex ..< self.readerIndex)
                         throw JSONError.couldNotCreateUnicodeScalarFromUInt32(
                             in: output!, index: failureIndex, unicodeScalarValue: unicodeScalarValue
@@ -410,8 +407,8 @@ extension JSONParser {
         }
 
         private mutating func parseEscapeSequence() throws -> String {
-            precondition(self.read() == ._backslash, "Expected to have an backslash first")
-            guard let ascii = self.read() else {
+            precondition(read() == ._backslash, "Expected to have an backslash first")
+            guard let ascii = read() else {
                 throw JSONError.unexpectedEndOfFile
             }
 
@@ -428,7 +425,7 @@ extension JSONParser {
                 let character = try parseUnicodeSequence()
                 return String(character)
             default:
-                throw EscapedSequenceError.unexpectedEscapedCharacter(ascii: ascii, index: self.readerIndex - 1)
+                throw EscapedSequenceError.unexpectedEscapedCharacter(ascii: ascii, index: readerIndex - 1)
             }
         }
 
@@ -441,14 +438,14 @@ extension JSONParser {
             if isFirstByteHighSurrogate == 0xD800 {
                 // if we have a high surrogate we expect a low surrogate next
                 let highSurrogateBitPattern = bitPattern
-                guard let (escapeChar) = self.read(),
-                      let (uChar) = self.read()
+                guard let escapeChar = read(),
+                      let uChar = read()
                 else {
                     throw JSONError.unexpectedEndOfFile
                 }
 
                 guard escapeChar == UInt8(ascii: #"\"#), uChar == UInt8(ascii: "u") else {
-                    throw EscapedSequenceError.expectedLowSurrogateUTF8SequenceAfterHighSurrogate(index: self.readerIndex - 1)
+                    throw EscapedSequenceError.expectedLowSurrogateUTF8SequenceAfterHighSurrogate(index: readerIndex - 1)
                 }
 
                 let lowSurrogateBitBattern = try parseUnicodeHexSequence()
@@ -456,7 +453,7 @@ extension JSONParser {
                 guard isSecondByteLowSurrogate == 0xDC00 else {
                     // we are in an escaped sequence. for this reason an output string must have
                     // been initialized
-                    throw EscapedSequenceError.expectedLowSurrogateUTF8SequenceAfterHighSurrogate(index: self.readerIndex - 1)
+                    throw EscapedSequenceError.expectedLowSurrogateUTF8SequenceAfterHighSurrogate(index: readerIndex - 1)
                 }
 
                 let highValue = UInt32(highSurrogateBitPattern - 0xD800) * 0x400
@@ -464,7 +461,7 @@ extension JSONParser {
                 let unicodeValue = highValue + lowValue + 0x10000
                 guard let unicode = Unicode.Scalar(unicodeValue) else {
                     throw EscapedSequenceError.couldNotCreateUnicodeScalarFromUInt32(
-                        index: self.readerIndex, unicodeScalarValue: unicodeValue
+                        index: readerIndex, unicodeScalarValue: unicodeValue
                     )
                 }
                 return unicode
@@ -472,7 +469,7 @@ extension JSONParser {
 
             guard let unicode = Unicode.Scalar(bitPattern) else {
                 throw EscapedSequenceError.couldNotCreateUnicodeScalarFromUInt32(
-                    index: self.readerIndex, unicodeScalarValue: UInt32(bitPattern)
+                    index: readerIndex, unicodeScalarValue: UInt32(bitPattern)
                 )
             }
             return unicode
@@ -481,11 +478,11 @@ extension JSONParser {
         private mutating func parseUnicodeHexSequence() throws -> UInt16 {
             // As stated in RFC-8259 an escaped unicode character is 4 HEXDIGITs long
             // https://tools.ietf.org/html/rfc8259#section-7
-            let startIndex = self.readerIndex
-            guard let firstHex = self.read(),
-                  let secondHex = self.read(),
-                  let thirdHex = self.read(),
-                  let forthHex = self.read()
+            let startIndex = readerIndex
+            guard let firstHex = read(),
+                  let secondHex = read(),
+                  let thirdHex = read(),
+                  let forthHex = read()
             else {
                 throw JSONError.unexpectedEndOfFile
             }
@@ -537,7 +534,7 @@ extension JSONParser {
 
             // parse first character
 
-            guard let ascii = self.peek() else {
+            guard let ascii = peek() else {
                 preconditionFailure("Why was this function called, if there is no 0...9 or -")
             }
             switch ascii {
@@ -558,7 +555,7 @@ extension JSONParser {
             var numberchars = 1
 
             // parse everything else
-            while let byte = self.peek(offset: numberchars) {
+            while let byte = peek(offset: numberchars) {
                 switch byte {
                 case UInt8(ascii: "0"):
                     if hasLeadingZero {
@@ -585,7 +582,6 @@ extension JSONParser {
                     hasLeadingZero = false
                     pastControlChar = .decimalPoint
                     numbersSinceControlChar = 0
-
                 case UInt8(ascii: "e"), UInt8(ascii: "E"):
                     guard numbersSinceControlChar > 0,
                           pastControlChar == .operand || pastControlChar == .decimalPoint
@@ -609,10 +605,10 @@ extension JSONParser {
                     guard numbersSinceControlChar > 0 else {
                         throw JSONError.unexpectedCharacter(ascii: byte, characterIndex: readerIndex + numberchars)
                     }
-                    let numberStartIndex = self.readerIndex
-                    self.moveReaderIndex(forwardBy: numberchars)
+                    let numberStartIndex = readerIndex
+                    moveReaderIndex(forwardBy: numberchars)
 
-                    return String(decoding: self[numberStartIndex ..< self.readerIndex], as: Unicode.UTF8.self)
+                    return String(decoding: self[numberStartIndex ..< readerIndex], as: Unicode.UTF8.self)
                 default:
                     throw JSONError.unexpectedCharacter(ascii: byte, characterIndex: readerIndex + numberchars)
                 }
@@ -623,38 +619,34 @@ extension JSONParser {
             }
 
             defer { self.readerIndex = self.array.endIndex }
-            return String(decoding: self.array.suffix(from: readerIndex), as: Unicode.UTF8.self)
+            return String(decoding: array.suffix(from: readerIndex), as: Unicode.UTF8.self)
         }
     }
 }
 
 extension UInt8 {
+    static let _space = UInt8(ascii: " ")
+    static let _return = UInt8(ascii: "\r")
+    static let _newline = UInt8(ascii: "\n")
+    static let _tab = UInt8(ascii: "\t")
 
-    internal static let _space = UInt8(ascii: " ")
-    internal static let _return = UInt8(ascii: "\r")
-    internal static let _newline = UInt8(ascii: "\n")
-    internal static let _tab = UInt8(ascii: "\t")
+    static let _colon = UInt8(ascii: ":")
+    static let _comma = UInt8(ascii: ",")
 
-    internal static let _colon = UInt8(ascii: ":")
-    internal static let _comma = UInt8(ascii: ",")
+    static let _openbrace = UInt8(ascii: "{")
+    static let _closebrace = UInt8(ascii: "}")
 
-    internal static let _openbrace = UInt8(ascii: "{")
-    internal static let _closebrace = UInt8(ascii: "}")
+    static let _openbracket = UInt8(ascii: "[")
+    static let _closebracket = UInt8(ascii: "]")
 
-    internal static let _openbracket = UInt8(ascii: "[")
-    internal static let _closebracket = UInt8(ascii: "]")
-
-    internal static let _quote = UInt8(ascii: "\"")
-    internal static let _backslash = UInt8(ascii: "\\")
-
+    static let _quote = UInt8(ascii: "\"")
+    static let _backslash = UInt8(ascii: "\\")
 }
 
 extension Array where Element == UInt8 {
-
-    internal static let _true = [UInt8(ascii: "t"), UInt8(ascii: "r"), UInt8(ascii: "u"), UInt8(ascii: "e")]
-    internal static let _false = [UInt8(ascii: "f"), UInt8(ascii: "a"), UInt8(ascii: "l"), UInt8(ascii: "s"), UInt8(ascii: "e")]
-    internal static let _null = [UInt8(ascii: "n"), UInt8(ascii: "u"), UInt8(ascii: "l"), UInt8(ascii: "l")]
-
+    static let _true = [UInt8(ascii: "t"), UInt8(ascii: "r"), UInt8(ascii: "u"), UInt8(ascii: "e")]
+    static let _false = [UInt8(ascii: "f"), UInt8(ascii: "a"), UInt8(ascii: "l"), UInt8(ascii: "s"), UInt8(ascii: "e")]
+    static let _null = [UInt8(ascii: "n"), UInt8(ascii: "u"), UInt8(ascii: "l"), UInt8(ascii: "l")]
 }
 
 enum JSONError: Swift.Error, Equatable {

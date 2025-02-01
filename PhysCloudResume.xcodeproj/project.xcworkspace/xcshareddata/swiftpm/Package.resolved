@@ -1,5 +1,5 @@
 {
-  "originHash" : "75e52a4677ae98a2ea1eecf3cc6099cd875de7e03d730ed1fb12168146cd5337",
+  "originHash" : "071101cef178dd4ae165d4f38804f9970173e634522e7273ce08f4a50f8c62e6",
   "pins" : [
     {
       "identity" : "swift-collections",
@@ -15,8 +15,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jamesrochabrun/SwiftOpenAI.git",
       "state" : {
-        "revision" : "7090d164fecf51b5ca55000b054dd469e9eb9265",
-        "version" : "3.7.0"
+        "revision" : "25c73a4ce4bf05e1d75a3b405e677f8c022488cf",
+        "version" : "3.9.5"
+      }
+    },
+    {
+      "identity" : "swiftsoup",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/scinfu/SwiftSoup.git",
+      "state" : {
+        "revision" : "3c2c7e1e72b8abd96eafbae80323c5c1e5317437",
+        "version" : "2.7.5"
       }
     }
   ],

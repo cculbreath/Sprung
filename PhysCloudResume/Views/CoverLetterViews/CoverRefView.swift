@@ -1,92 +1,132 @@
 import SwiftUI
 
 struct CoverRefView: View {
-  @State var backgroundFacts: [CoverRef]
-  @State var writingSamples: [CoverRef]
-  @State private var showAddBackgroundFactSheet = false
-  @State private var showAddWritingSampleSheet = false
-  @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
-  @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
+    @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
+    @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
 
-  var body: some View {
-    @Bindable var coverLetterStore = coverLetterStore
-    if let cL = coverLetterStore.cL {
-      List {
-        // Custom "header" using Text for Background Facts
-        Text("Background Facts")
-          .font(.headline)
-          .foregroundColor(.primary)
-          .padding(.vertical, 5)
-          .background(Color.clear).sheet(isPresented: $showAddBackgroundFactSheet) {
-            AddCoverRefForm(type: .backgroundFact, coverLetter: cL, backgroundFacts: $backgroundFacts, writingSamples: $writingSamples, showMe: $showAddBackgroundFactSheet)
-          } 
-
-        ForEach(backgroundFacts, id: \.id) { fact in
-          HStack {
-            Toggle(isOn: Binding<Bool>(
-              get: { cL.enabledRefs.contains(where: { $0.id == fact.id }) },
-              set: { isEnabled in
-                if isEnabled {
-                  if !cL.enabledRefs.contains(where: { $0.id == fact.id }) {
-                    cL.enabledRefs.append(fact)
-                  }
-                } else {
-                  cL.enabledRefs.removeAll { $0.id == fact.id }
-                }
-              }
-            )) {
-              Text(fact.content)
-            }
-          }
-          .listRowBackground(Color.clear)  // Ensure row background is clear
+    var body: some View {
+        // Only show the wrapped view if we have a cL
+        if let letter = coverLetterStore.cL {
+            CoverRefViewWrapped(coverRefStore: coverRefStore, cL: letter)
         }
-
-        Button(action: {
-          showAddBackgroundFactSheet.toggle()
-        }) {
-          Label("Add Background Fact", systemImage: "plus")
-        }
-        .listRowBackground(Color.clear)  // Ensure button row background is clear
-
-        // Custom "header" using Text for Writing Samples
-        Text("Writing Samples")
-          .font(.headline)
-          .foregroundColor(.primary)
-          .padding(.vertical, 5)
-          .background(Color.clear).sheet(isPresented: $showAddWritingSampleSheet) {
-            AddCoverRefForm(type: .writingSample, coverLetter: cL, backgroundFacts: $backgroundFacts, writingSamples: $writingSamples, showMe: $showAddWritingSampleSheet)
-          }
-        ForEach(writingSamples, id: \.id) { sample in
-          HStack {
-            Toggle(isOn: Binding<Bool>(
-              get: { cL.enabledRefs.contains(where: { $0.id == sample.id }) },
-              set: { isEnabled in
-                if isEnabled {
-                  if !cL.enabledRefs.contains(where: { $0.id == sample.id }) {
-                    cL.enabledRefs.append(sample)
-                  }
-                } else {
-                  cL.enabledRefs.removeAll { $0.id == sample.id }
-                }
-              }
-            )) {
-              Text(sample.name)
-            }
-          }
-          .listRowBackground(Color.clear)  // Ensure row background is clear
-        }
-
-        Button(action: {
-          showAddWritingSampleSheet.toggle()
-        }) {
-          Label("Add Writing Sample", systemImage: "plus")
-        }
-        .listRowBackground(Color.clear)  // Ensure button row background is clear
-      }
-      .listStyle(PlainListStyle())  // Use plain list style
-      .scrollContentBackground(.hidden)  // Ensure list background is hidden
-      .background(Color.clear)  // Ensure overall background is clear
-
     }
-  }
+}
+
+struct CoverRefViewWrapped: View {
+    @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
+
+    // Using `@Bindable` from SwiftData/SwiftUI so that
+    // we can do `$coverRefStore` updates if needed.
+    @Bindable var coverRefStore: CoverRefStore
+    @Bindable var cL: CoverLetter
+
+    @State private var showAddBackgroundFactSheet = false
+    @State private var showAddWritingSampleSheet = false
+
+    var body: some View {
+        List {
+            // ======= Background section =======
+            Text("Resume Background Documents")
+                .font(.headline)
+                .foregroundColor(.primary)
+                .padding(.vertical, 5)
+                .background(Color.clear)
+
+            // Instead of directly binding to $cL.includeResumeRefs,
+            // use a custom Binding that either:
+            // (a) sets `cL.includeResumeRefs` if `generated == false`
+            // (b) or creates a new cL with `includeResumeRefs` changed
+            Toggle(isOn: includeResumeBinding) {
+                Text("Include Resume Background")
+            }
+
+            Text("Cover Letter Background Facts")
+                .font(.headline)
+                .foregroundColor(.primary)
+                .padding(.vertical, 5)
+                .background(Color.clear)
+                .sheet(isPresented: $showAddBackgroundFactSheet) {
+                    AddCoverRefForm(
+                        coverRefStore: coverRefStore,
+                        type: .backgroundFact,
+                        cL: cL,
+                        showMe: $showAddBackgroundFactSheet
+                    )
+                }
+
+            // Show existing background facts
+            ForEach(coverRefStore.backgroundFacts, id: \.id) { fact in
+                RefRow(
+                    cL: cL,
+                    element: fact,
+                    coverRefStore: coverRefStore,
+                    showPreview: true
+                )
+                .listRowBackground(Color.clear)
+            }
+
+            Button(action: {
+                showAddBackgroundFactSheet.toggle()
+            }) {
+                Label("Add Background Fact", systemImage: "plus")
+            }
+            .listRowBackground(Color.clear)
+
+            // ======= Writing Samples section =======
+            Text("Writing Samples")
+                .font(.headline)
+                .foregroundColor(.primary)
+                .padding(.vertical, 5)
+                .background(Color.clear)
+                .sheet(isPresented: $showAddWritingSampleSheet) {
+                    AddCoverRefForm(
+                        coverRefStore: coverRefStore,
+                        type: .writingSample,
+                        cL: cL,
+                        showMe: $showAddWritingSampleSheet
+                    )
+                }
+
+            ForEach(coverRefStore.writingSamples, id: \.id) { sample in
+                RefRow(
+                    cL: cL,
+                    element: sample,
+                    coverRefStore: coverRefStore,
+                    showPreview: false
+                )
+                .listRowBackground(Color.clear)
+            }
+
+            Button(action: {
+                showAddWritingSampleSheet.toggle()
+            }) {
+                Label("Add Writing Sample", systemImage: "plus")
+            }
+            .listRowBackground(Color.clear)
+        }
+        // If you want a plain look
+        .listStyle(PlainListStyle())
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+    }
+
+    // MARK: - Custom Binding for `includeResumeRefs`
+
+    private var includeResumeBinding: Binding<Bool> {
+        Binding<Bool>(
+            get: { cL.includeResumeRefs },
+            set: { newValue in
+                guard let oldCL = coverLetterStore.cL else { return }
+                if oldCL.generated {
+                    // If it's generated, create a *new* copy with updated value
+                    let newCL = coverLetterStore.createDuplicate(letter: oldCL)
+                    newCL.includeResumeRefs = newValue
+                    coverLetterStore.cL = newCL
+                } else {
+                    // Otherwise, just mutate the existing cL
+                    cL.includeResumeRefs = newValue
+                }
+            }
+        )
+    }
 }

@@ -11,79 +11,91 @@ import SwiftData
 
 @Observable
 final class CoverLetterStore {
-  var coverRefStore: CoverRefStore?
-  var cL: CoverLetter?
-  private var modelContext: ModelContext?
-  init() {}
-  func initialize(context: ModelContext, refStore: CoverRefStore) {
-    self.modelContext = context
-    self.coverRefStore = refStore
-    print("CoverLetterStore Initialized")
-  }
+    var coverRefStore: CoverRefStore?
+    var cL: CoverLetter?
+    private var modelContext: ModelContext?
+    init() {}
+    func initialize(context: ModelContext, refStore: CoverRefStore) {
+        modelContext = context
+        coverRefStore = refStore
+        print("CoverLetterStore Initialized")
+    }
 
-  @discardableResult
-  func addLetter(letter: CoverLetter, to jobApp: JobApp) -> CoverLetter {
-    jobApp.coverLetters.append(letter)
-    jobApp.selectedCover = letter
-    modelContext!.insert(letter)
+    @discardableResult
+    func addLetter(letter: CoverLetter, to jobApp: JobApp) -> CoverLetter {
+        jobApp.coverLetters.append(letter)
+        jobApp.selectedCover = letter
+        modelContext!.insert(letter)
 //    saveContext()
-    return letter
-  }
+        return letter
+    }
 
-  @discardableResult
-  func create(jobApp: JobApp) -> CoverLetter {
+    func createBlank(jobApp: JobApp) {
+        let letter = CoverLetter(
+            enabledRefs: coverRefStore!.defaultSources,
+            jobApp: jobApp
+        )
+        letter.generated = false
+        jobApp.coverLetters.append(letter)
+        jobApp.selectedCover = letter
 
-      print("Model context available")
-      print("Creating resume for job application: \(jobApp)")
+        modelContext!.insert(letter)
+    }
 
-      let letter = CoverLetter(
-        enabledRefs: self.coverRefStore!.defaultSources,
-        jobApp: jobApp
-      )
-      print("CoverLetter object created")
+    @discardableResult
+    func create(jobApp: JobApp) -> CoverLetter {
+        print("Model context available")
+        print("Creating cover letter for job application: \(jobApp)")
 
-      modelContext!.insert(letter)
+        let letter = CoverLetter(
+            enabledRefs: coverRefStore!.defaultSources,
+            jobApp: jobApp
+        )
+        print("CoverLetter object created")
+
+        modelContext!.insert(letter)
 //      try? modelContext!.save()
-      return letter
-
-  }
-  func createDuplicate(letter: CoverLetter) -> CoverLetter {
-    let newLetter = CoverLetter(
-      enabledRefs: letter.enabledRefs,
-      jobApp: letter.jobApp ?? nil
-    )
-    newLetter.content = letter.content
-    newLetter.generated = false
-    newLetter.encodedMessageHistory = letter.encodedMessageHistory
-    newLetter.currentMode = letter.currentMode
-    // Copy other necessary properties here
-
-    if let jobApp = letter.jobApp {
-      self.addLetter(letter: newLetter, to: jobApp)
-    }
-    return newLetter
-  }
-  func deleteLetter(_ letter: CoverLetter) {
-    if let jobApp = letter.jobApp {
-      if let index = jobApp.coverLetters.firstIndex(of: letter){
-        jobApp.coverLetters.remove(at: index)
-        modelContext!.delete(letter)
-        //      saveContext()
-      }
-    }
-    else {
-      print("letter not attached to jobapp!")
+        return letter
     }
 
+    func createDuplicate(letter: CoverLetter) -> CoverLetter {
+        saveContext()
+        let newLetter = CoverLetter(
+            enabledRefs: letter.enabledRefs,
+            jobApp: letter.jobApp ?? nil
+        )
+        newLetter.includeResumeRefs = letter.includeResumeRefs
+        newLetter.content = letter.content
+        newLetter.generated = false
+        newLetter.encodedMessageHistory = letter.encodedMessageHistory
+        newLetter.currentMode = letter.currentMode
+        // Copy other necessary properties here
 
-  }
- 
-  // Save changes to the database
-  private func saveContext() {
-    do {
-      try modelContext!.save()
-    } catch {
-      print("Failed to save context: \(error)")
+        if let jobApp = letter.jobApp {
+            addLetter(letter: newLetter, to: jobApp)
+        }
+        saveContext()
+        return newLetter
     }
-  }
+
+    func deleteLetter(_ letter: CoverLetter) {
+        if let jobApp = letter.jobApp {
+            if let index = jobApp.coverLetters.firstIndex(of: letter) {
+                jobApp.coverLetters.remove(at: index)
+                modelContext!.delete(letter)
+                //      saveContext()
+            }
+        } else {
+            print("letter not attached to jobapp!")
+        }
+    }
+
+    // Save changes to the database
+    private func saveContext() {
+        do {
+            try modelContext!.save()
+        } catch {
+            print("Failed to save context: \(error)")
+        }
+    }
 }

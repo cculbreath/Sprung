@@ -1,5 +1,5 @@
 //
-//  RevisionsView.swift
+//  CoverRevisionsView.swift
 //  PhysCloudResume
 //
 //  Created by Christopher Culbreath on 9/14/24.
@@ -9,83 +9,118 @@ import SwiftOpenAI
 import SwiftUI
 
 struct CoverRevisionsView: View {
-  @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
-  @Binding var buttons: CoverLetterButtons
+    @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
+    @Binding var buttons: CoverLetterButtons
 
-  var body: some View {
-
-    RevisionsViewContent(
-      service: OpenAIServiceFactory.service(
-        apiKey: openAiApiKey, debugEnabled: false),
-      buttons: $buttons
-    )
-    .onAppear { print("Ai Cover Letterv2") }
-
-  }
-}
-struct RevisionsViewContent: View {
-  @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-  @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-  @State var tempMode: CoverLetterPrompts.EditorPrompts = .zissner
-  @State var aiMode: CoverAiMode = .none
-  @State var isLoading = false
-  @Binding var buttons: CoverLetterButtons
-  let service: OpenAIService
-
-  // Use @Bindable for chatProvider
-  @Bindable var chatProvider: CoverChatProvider
-
-  init(
-    service: OpenAIService,
-    buttons: Binding<CoverLetterButtons>
-  ) {
-    self.service = service
-    self._buttons = buttons
-    self.chatProvider = CoverChatProvider(service: service)
-  }
-
-  var body: some View {
-    Picker("", selection: $tempMode) {
-      ForEach(CoverLetterPrompts.EditorPrompts.allCases, id: \.self) { status in
-        Text(String(describing: status))  // Using the enum case name instead of raw value
-          .tag(status)
-      }
-    }
-    .pickerStyle(SegmentedPickerStyle())
-    if !isLoading {
-      Button("Rewrite") {
-        rewriteBut(
-          coverLetterStore: coverLetterStore,
-          jobAppStore: jobAppStore,
-          chatProvider: chatProvider,
-          isLoading: $isLoading,
-          buttons: $buttons
+    var body: some View {
+        RevisionsViewContent(
+            service: OpenAIServiceFactory.service(
+                apiKey: openAiApiKey, debugEnabled: false
+            ),
+            buttons: $buttons
         )
-      }
-    } else {
-      ProgressView()
+        .onAppear { print("Ai Cover Letterv2") }
     }
-  }
-  func rewriteBut(
-    coverLetterStore: CoverLetterStore,
-    jobAppStore: JobAppStore,
-    chatProvider: CoverChatProvider,
-    isLoading: Binding<Bool>,
-    buttons: Binding<CoverLetterButtons>
-  ) {
-    let oldContent = jobAppStore.selectedApp!.selectedCover!.content
-    var newCL = coverLetterStore.create(jobApp: jobAppStore.selectedApp!)
-    jobAppStore.selectedApp!.selectedCover = newCL  // Assign new instance\
-    jobAppStore.selectedApp!.selectedCover!.currentMode = .rewrite
-    jobAppStore.selectedApp!.selectedCover!.content = oldContent
-    jobAppStore.selectedApp!.selectedCover!.editorPrompt = tempMode
-    print("new cover letter")
-    chatProvider.coverChatAction(
-      res: jobAppStore.selectedApp!.selectedRes,
-      jobAppStore: jobAppStore,
-      isLoading: isLoading,
-      chatProvider: chatProvider,
-      buttons: buttons
-    )
-  }
+}
+
+struct RevisionsViewContent: View {
+    @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @State var tempMode: CoverLetterPrompts.EditorPrompts = .zissner
+    @State var aiMode: CoverAiMode = .none
+    @State private var customFeedback: String = ""
+    @Binding var buttons: CoverLetterButtons
+    let service: OpenAIService
+
+    // Use @Bindable for chatProvider
+    @Bindable var chatProvider: CoverChatProvider
+
+    init(
+        service: OpenAIService,
+        buttons: Binding<CoverLetterButtons>
+    ) {
+        self.service = service
+        _buttons = buttons
+        chatProvider = CoverChatProvider(service: service)
+    }
+
+    var body: some View {
+        VStack {
+            Picker("", selection: $tempMode) {
+                ForEach(CoverLetterPrompts.EditorPrompts.allCases, id: \.self) { status in
+
+                    Text(String(describing: status).capitalized) // Using the enum case name instead of raw value
+                        .tag(status)
+                }
+            }
+            .pickerStyle(SegmentedPickerStyle())
+
+            // Conditionally show the text input box
+            if tempMode == .custom { // Assuming .custom is one of the enum cases
+                TextField("Revision Feedback", text: $customFeedback) // Binding variable for text
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+            }
+
+            if !$buttons.wrappedValue.runRequested {
+                Button((tempMode == .custom) ? "Revise" : "Rewrite") {
+                    rewriteBut(
+                        coverLetterStore: coverLetterStore,
+                        jobAppStore: jobAppStore,
+                        chatProvider: chatProvider,
+                        buttons: $buttons,
+                        customFeedback: $customFeedback
+                    )
+                }
+            } else {
+                ProgressView()
+            }
+        }
+    }
+
+    // Add a binding variable for the text field
+    func rewriteBut(
+        coverLetterStore: CoverLetterStore,
+        jobAppStore: JobAppStore,
+        chatProvider: CoverChatProvider,
+        buttons: Binding<CoverLetterButtons>,
+        customFeedback: Binding<String>
+    ) {
+        guard let currentResume = jobAppStore.selectedApp?.selectedRes else {
+            print("No resume selected")
+            return
+        }
+
+        guard let selectedCover = jobAppStore.selectedApp?.selectedCover else {
+            print("No selected cover letter")
+            return
+        }
+
+        // Check if there's an existing cover letter for the current resume with `generated = false`
+        if let existingLetter = jobAppStore.selectedApp?.coverLetters.first(where: { letter in
+            !letter.generated
+        }) {
+            // Load the existing letter
+            jobAppStore.selectedApp?.selectedCover = existingLetter
+            print("Loaded existing draft cover letter")
+        } else {
+            // No existing draft, create a new cover letter
+            let oldContent = selectedCover.content // Unwrapped safely
+            let newCL = coverLetterStore.createDuplicate(letter: selectedCover) // Unwrapped safely
+            jobAppStore.selectedApp?.selectedCover = newCL // Assign new instance
+            jobAppStore.selectedApp?.selectedCover?.currentMode = (tempMode == .custom) ? .revise : .rewrite
+            jobAppStore.selectedApp?.selectedCover?.content = oldContent
+            jobAppStore.selectedApp?.selectedCover?.editorPrompt = tempMode
+            print("Created new cover letter draft")
+        }
+
+        // Perform the revision or rewrite operation
+        chatProvider.coverChatRevise(
+            res: currentResume, // Already safely unwrapped earlier
+            jobAppStore: jobAppStore,
+            chatProvider: chatProvider,
+            buttons: buttons,
+            customFeedback: customFeedback
+        )
+    }
 }

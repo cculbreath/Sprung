@@ -8,12 +8,12 @@
 import Foundation
 
 struct Applicant {
-  let name: String = "Christopher Culbreath"
-  let address: String = "7317 Shadywood Drive"
-  let city: String = "Austin"
-  let state: String = "Texas"
-  let zip: String = "78745"
-  let websites: String = "culbreath.net"
-  let email: String = "cc@physicscloud.net"
-  let phone: String = "(805) 234-0847"
+    let name: String = "Christopher Culbreath"
+    let address: String = "7317 Shadywood Drive"
+    let city: String = "Austin"
+    let state: String = "Texas"
+    let zip: String = "78745"
+    let websites: String = "culbreath.net"
+    let email: String = "cc@physicscloud.net"
+    let phone: String = "(805) 234-0847"
 }
