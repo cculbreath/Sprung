@@ -10,6 +10,7 @@ import SwiftUI
 struct ResModelFormView: View {
     @Environment(ResModelStore.self) private var resModelStore: ResModelStore
     @Binding var sheetPresented: Bool
+    @State private var isValidJSON: Bool = true
 
     // Optional ResModel to determine if we're editing
     var resModelToEdit: ResModel?
@@ -62,10 +63,22 @@ struct ResModelFormView: View {
 
                     // JSON Data
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("JSON Data")
-                            .font(.headline)
-                        CustomTextEditor(sourceContent: $formJson)
-                            .frame(minHeight: 120)
+                        HStack {
+                            Text("JSON Data")
+                                .font(.headline)
+                            Spacer()
+                            if !isValidJSON {
+                                Text("⚠️ Invalid JSON format")
+                                    .foregroundColor(.red)
+                                    .font(.callout)
+                                    .padding(.vertical, 5)
+                            }
+                        }.frame(maxWidth: .infinity)
+
+                        JsonValidatingTextEditor(sourceContent: $formJson, isValidJSON: $isValidJSON)
+                            .frame(height: 150)
+
+                        // Display warning when JSON is invalid
                     }
                     .padding(.horizontal, 20) // Added horizontal padding
 
@@ -119,7 +132,7 @@ struct ResModelFormView: View {
                     saveResModel()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(formName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(formName.trimmingCharacters(in: .whitespaces).isEmpty || !isValidJSON)
             }
             .padding()
         }
@@ -164,7 +177,7 @@ struct ResModelFormView: View {
                 name: trimmedName,
                 json: formJson,
                 renderedResumeText: formResumeText,
-                style: ResModel.defaultStyle
+                style: selectedStyle
             )
             resModelStore.addResModel(newResModel)
         }

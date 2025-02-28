@@ -35,20 +35,23 @@ struct TabWrapperView: View {
                             Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
                         }
                         .tag(TabList.resume)
-
-                    if let _ = jobAppStore.selectedApp {
+                    if jobAppStore.selectedApp?.hasAnyRes ?? false {
                         CoverLetterView(buttons: $coverLetterButtons)
                             .tabItem {
                                 Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
                             }
                             .tag(TabList.coverLetter)
-                    }
-                    if let _ = jobAppStore.selectedApp {
+                            .disabled(
+                                jobAppStore.selectedApp?.hasAnyRes == nil
+                            ) // Disable tab if no selected job app
                         ResumeExportView()
                             .tabItem {
                                 Label(TabList.submitApp.rawValue, systemImage: "paperplane")
                             }
                             .tag(TabList.submitApp)
+                            .disabled(
+                                jobAppStore.selectedApp?.selectedRes == nil
+                            ) // Disable tab if no selected job app
                     }
                 }
                 .padding(.all)
@@ -66,6 +69,9 @@ struct TabWrapperView: View {
 
                 .onChange(of: jobAppStore.selectedApp) { _, _ in
                     updateMyLetter()
+                }
+                .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, newVal in
+                    print(newVal ? "tab resExists" : "change res doesn't exist")
                 }
                 .onChange(of: $tabRefresh.wrappedValue) { _, newvalue in print("Tab is is now + \(newvalue ? "true" : "false")") }
                 .sheet(isPresented: $refPopup) {

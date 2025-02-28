@@ -40,7 +40,7 @@ struct CreateNewResumeView: View {
 
                 // Display selected model (optional)
                 if let selectedModel = selectedJsonModel {
-                    Text("Selected Model: \(selectedModel.name)")
+                    Text("Selected Model: \(selectedModel.style)")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 } else {
@@ -58,12 +58,14 @@ struct CreateNewResumeView: View {
                     }
 
                     // Pass defaultSources and selectedJsonModel to the create method
-                    resStore.create(jobApp: selApp, sources: resRefStore.defaultSources, model: selectedModel)
-
+                    var newRes = resStore.create(jobApp: selApp, sources: resRefStore.defaultSources, model: selectedModel)
+                    if let newRes = newRes {
+                        newRes.debounceExport()
+                    }
                     // Toggle refresh to update the UI if necessary
 //                    refresh.toggle()
 
-                    print("Résumé created using model: \(selectedModel.name)")
+                    print("Résumé created using model: \(selectedModel.style)")
                 }) {
                     Text("Create Résumé")
                         .fontWeight(.semibold)

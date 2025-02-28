@@ -16,13 +16,13 @@ enum LeafStatus: String, Codable, Hashable {
     var id = UUID().uuidString
     var name: String = ""
     var value: String
-
+    var includeInEditor: Bool = false
     var myIndex: Int = -1
     var isEditing: Bool = false
     public static var childIndexer = 0
     @Relationship(deleteRule: .cascade) var children: [TreeNode]? = nil
     weak var parent: TreeNode?
-
+    var label: String { return resume.label(name) }
     @Relationship(deleteRule: .noAction) var resume: Resume
     var status: LeafStatus
     private(set) var nodeDepth: Int
@@ -62,7 +62,7 @@ enum LeafStatus: String, Codable, Hashable {
 
     init(
         name: String, value: String = "", children: [TreeNode]? = nil,
-        parent: TreeNode? = nil, status: LeafStatus = LeafStatus.disabled,
+        parent: TreeNode? = nil, inEditor: Bool, status: LeafStatus = LeafStatus.disabled,
         resume: Resume
     ) {
         self.name = name
@@ -70,6 +70,8 @@ enum LeafStatus: String, Codable, Hashable {
         self.children = children
         self.parent = parent
         self.status = status
+        includeInEditor = inEditor
+
         nodeDepth = 0
         self.resume = resume
         resume.nodes.append(self)
@@ -196,6 +198,7 @@ enum LeafStatus: String, Codable, Hashable {
             name: name,
             value: value,
             parent: nil, // The parent will be set during recursion
+            inEditor: includeInEditor,
             status: status,
             resume: newResume
         )

@@ -45,27 +45,27 @@ struct ContentView: View {
                     }
                     .frame(maxHeight: .infinity)
 
-                    if showSlidingList {
-                        SlidingSourceListView(refresh: $tabRefresh)
-                            .transition(.move(edge: .bottom)) // Use transition to slide in from the bottom
-                            .zIndex(1)
-                    }
+                  if showSlidingList {
+                    DraggableSlidingSourceListView(refresh: $tabRefresh, isVisible: $showSlidingList)
+                      .transition(.move(edge: .bottom))
+                      .zIndex(1)
+                  }
                 }.padding(.top, 20)
                     .frame(maxHeight: .infinity)
                     .toolbar {
                         Spacer()
                         if sidebarVisibility != .detailOnly { // Hide toolbar when sidebar is closed
-                            Button(action: {
-                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
-                                    showSlidingList.toggle()
-                                }
-                            }) {
-                                Label(
-                                    showSlidingList ? "Hide Additional List" : "Show Additional List",
-                                    systemImage: "append.page"
-                                )
-                                .foregroundColor(showSlidingList ? .accentColor : .primary)
+                          Button(action: {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
+                              showSlidingList.toggle()
                             }
+                          }) {
+                            Label(
+                              showSlidingList ? "Hide Additional List" : "Show Additional List",
+                              systemImage: "append.page"
+                            )
+                            .foregroundColor(showSlidingList ? .accentColor : .primary)
+                          }
                             Button(action: {
                                 showNewAppSheet = true
                             }) {

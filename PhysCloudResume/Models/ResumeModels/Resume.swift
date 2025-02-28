@@ -8,13 +8,25 @@ class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
 
     var needToTree: Bool = true
+    var needToFont: Bool = true
 
     @Relationship(deleteRule: .cascade)
     var rootNode: TreeNode? // The top-level node
+    var fontSizeNodes: [FontSizeNode] = []
+    var includeFonts: Bool = false
+    var keyLabels: [String: String] = [:]
+    var importedEditorKeys: [String] = []
+    func label(_ key: String) -> String {
+        if let myLabel = keyLabels[key] {
+            return myLabel
+        } else {
+            return key
+        }
+    }
 
     var nodes: [TreeNode] = []
 
-    var dateCreated: Date
+    var dateCreated: Date = Date()
     weak var jobApp: JobApp?
 
     @Relationship(deleteRule: .nullify, inverse: \ResRef.enabledResumes)
@@ -32,7 +44,9 @@ class Resume: Identifiable, Hashable {
     var isUpdating: Bool = false
     var pdfData: Data?
     var jsonTxt: String {
-        return rebuildJSON()
+        if let myRoot = rootNode, let json = TreeToJson(rootNode: myRoot)?.buildJsonString() {
+            return json
+        } else { return "" }
     }
 
     // Example function
@@ -100,29 +114,17 @@ class Resume: Identifiable, Hashable {
 
         exportWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            let jsonString = self.rebuildJSON()
-            if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonString) {
-                apiGenerateResFromJson(jsonPath: jsonFile) { pdfWebUrl, resumeText in
-                    if let resumeText {
-                        self.textRes = resumeText
-                    }
-                    if let pdfWebUrl {
-                        downloadResPDF(from: pdfWebUrl) { pdfFileUrl in
-                            if let pdfFileUrl {
-                                print(pdfFileUrl)
-                                self.loadPDF(from: pdfFileUrl)
-                            }
-                        }
+            if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonTxt) {
+                apiGenerateResFromJson(jsonPath: jsonFile, resume: self) { success in
+                    DispatchQueue.main.async {
+                        self.isUpdating = !success
                     }
                 }
             }
         }
 
         // Delay half a second before exporting
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.5,
-            execute: exportWorkItem!
-        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: exportWorkItem!)
     }
 
     // MARK: - Hashable

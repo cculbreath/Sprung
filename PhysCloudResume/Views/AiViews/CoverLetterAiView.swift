@@ -1,10 +1,3 @@
-//
-//  CoverLetterAiView.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/12/24.
-//
-
 import Foundation
 import SwiftOpenAI
 import SwiftUI
@@ -79,14 +72,14 @@ struct CoverLetterAiContentView: View {
                             .scaleEffect(0.75, anchor: .center)
                     }
                 }
+                .padding()
+                .onAppear { print("AI content") }
             }
 
-//      .onChange(of: buttons.runRequested) { oldValue, newValue in
-//        if newValue {
-//          chatAction(res: jobAppStore.selectedApp?.selectedRes)
-//        }
-        } else {
-            EmptyView()
+            //      .onChange(of: buttons.runRequested) { oldValue, newValue in
+            //        if newValue {
+            //          chatAction(res: jobAppStore.selectedApp?.selectedRes)
+            //        }
         }
     }
 }

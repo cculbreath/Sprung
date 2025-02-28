@@ -3,13 +3,14 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 73;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 571F746D2C9351BE007C8ADD /* SwiftOpenAI */; };
 		571F75312C98F973007C8ADD /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75302C98F973007C8ADD /* Collections */; };
 		571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75322C98F973007C8ADD /* OrderedCollections */; };
+		57D02A782D54682F00A6C193 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57D02A772D54682F00A6C193 /* SwiftyJSON */; };
 		57D0478B2CA771AE00A601BC /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 57D0478A2CA771AE00A601BC /* SwiftSoup */; };
 /* End PBXBuildFile section */
 
@@ -22,15 +23,25 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				Models/ResumeModels/Scratch.swift,
+				"Models/UtilityClasses/OrderedDictionary+PrettyPrint.swift",
 				scripts,
 			);
 			target = 570FEC672C855BF50074D1E0 /* PhysCloudResume */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		5751991C2D4FA657005EC1E7 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 570FEC662C855BF50074D1E0 /* Resources */;
+			membershipExceptions = (
+				"Models/UtilityClasses/OrderedDictionary+PrettyPrint.swift",
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		570FEC6A2C855BF50074D1E0 /* PhysCloudResume */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (575276262C8A60ED007576CF /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (scripts, ); path = PhysCloudResume; sourceTree = "<group>"; };
+		570FEC6A2C855BF50074D1E0 /* PhysCloudResume */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (575276262C8A60ED007576CF /* PBXFileSystemSynchronizedBuildFileExceptionSet */, 5751991C2D4FA657005EC1E7 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (scripts, ); path = PhysCloudResume; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +52,7 @@
 				571F75312C98F973007C8ADD /* Collections in Frameworks */,
 				57D0478B2CA771AE00A601BC /* SwiftSoup in Frameworks */,
 				571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */,
+				57D02A782D54682F00A6C193 /* SwiftyJSON in Frameworks */,
 				571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -88,6 +100,7 @@
 				571F75302C98F973007C8ADD /* Collections */,
 				571F75322C98F973007C8ADD /* OrderedCollections */,
 				57D0478A2CA771AE00A601BC /* SwiftSoup */,
+				57D02A772D54682F00A6C193 /* SwiftyJSON */,
 			);
 			productName = PhysCloudResume;
 			productReference = 570FEC682C855BF50074D1E0 /* PhysCloudResume.app */;
@@ -109,7 +122,6 @@
 				};
 			};
 			buildConfigurationList = 570FEC632C855BF50074D1E0 /* Build configuration list for PBXProject "PhysCloudResume" */;
-			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -121,7 +133,9 @@
 				571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 				571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */,
 				57D047892CA771AE00A601BC /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+				57D02A762D54682F00A6C193 /* XCRemoteSwiftPackageReference "SwiftyJSON" */,
 			);
+			preferredProjectObjectVersion = 60;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -375,6 +389,14 @@
 				minimumVersion = 1.1.3;
 			};
 		};
+		57D02A762D54682F00A6C193 /* XCRemoteSwiftPackageReference "SwiftyJSON" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SwiftyJSON/SwiftyJSON.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.2;
+			};
+		};
 		57D047892CA771AE00A601BC /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/scinfu/SwiftSoup.git";
@@ -400,6 +422,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */;
 			productName = OrderedCollections;
+		};
+		57D02A772D54682F00A6C193 /* SwiftyJSON */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57D02A762D54682F00A6C193 /* XCRemoteSwiftPackageReference "SwiftyJSON" */;
+			productName = SwiftyJSON;
 		};
 		57D0478A2CA771AE00A601BC /* SwiftSoup */ = {
 			isa = XCSwiftPackageProductDependency;

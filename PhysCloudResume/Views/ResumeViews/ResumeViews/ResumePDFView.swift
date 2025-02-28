@@ -16,15 +16,18 @@ struct ResumePDFView: View {
         @State var isUpdating = resume.isUpdating
 
         VStack {
-            if let pdfData = resume.pdfData {
-                PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity).overlay(alignment: .topTrailing) {
-                        if isUpdating {
-                            ProgressView().scaleEffect(0.5, anchor: .center).padding(.top, 2).padding(.trailing, 2)
+            if resume.pdfData != nil {
+                if let pdfData = resume.pdfData {
+                    PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).overlay(alignment: .topTrailing) {
+                            if isUpdating {
+                                ProgressView().scaleEffect(0.5, anchor: .center).padding(.top, 2).padding(.trailing, 2)
+                            }
                         }
-                    }
+                }
             } else {
-                Text("No PDF available")
+                if isUpdating { ProgressView() }
+                else { Text("No PDF available") }
             }
         }
         .onAppear {
@@ -40,8 +43,12 @@ struct ResumePDFView: View {
     }
 }
 
-func pdfViewer(pdfData: Data) -> PDFView {
-    let pdfDoc = PDFDocument(data: pdfData)
+func pdfViewer(pdfData: Data?) -> PDFView {
+    var pdfDoc: PDFDocument?
+    if let pdfData = pdfData {
+        pdfDoc = PDFDocument(data: pdfData)
+    }
+
     let pdfView = PDFView()
     pdfView.document = pdfDoc
     pdfView.autoScales = true

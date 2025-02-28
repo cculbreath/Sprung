@@ -25,7 +25,7 @@ struct BuildToolbar: ToolbarContent {
     }
 
     @ToolbarContentBuilder
-    func toolbarContent(for tab: TabList, selRes _: Binding<Resume?>, selApp: JobApp) -> some ToolbarContent {
+    func toolbarContent(for tab: TabList, selRes: Binding<Resume?>, selApp: JobApp) -> some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             selApp.statusTag
         }
@@ -43,33 +43,22 @@ struct BuildToolbar: ToolbarContent {
                 ToolbarItem(placement: .primaryAction) { saveButton() }
             } else {
                 ToolbarItem(placement: .primaryAction) { toggleEditButton() }
-            }
-        case .resume:
-            ToolbarItem(placement: .primaryAction) {
-                Text("Res Bupkis")
-            }
+            } case .resume:
+            resumeToolbarContent(
+                buttons: $resumeButtons,
+                selectedResume: selRes
+            )
         case .coverLetter:
-
-            ToolbarItem(placement: .primaryAction) {
-                Text("No Cover Letter Available")
-            }
-        case .submitApp, .none:
-            ToolbarItem(placement: .primaryAction) {
-                Text("Bupkis")
-            }
-        }
-    }
-
-    func coverContent() -> some View {
-        Group {
-            if let _ = jobAppStore.selectedApp?.selectedCover {
-                CoverLetterToolbar(
+            if let _ = selApp.selectedCover {
+                ToolbarItem(placement: .primaryAction) { CoverLetterToolbar(
                     buttons: $letterButtons,
                     refresh: $refresh
-                )
+                ) }
             } else {
-                Text("No Cover Letter Available")
+                ToolbarItem { Text("No Cover Letter Available") } // Handle case where cover letter is nil
             }
+        case .submitApp, .none:
+            emptyToolbarItem()
         }
     }
 
