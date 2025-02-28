@@ -3,7 +3,7 @@ import SwiftUI
 
 // A hover wrapper for each résumé model row
 struct HoverableResModelRowView: View {
-    var sourceNode: ResModel // Replace with your actual model type
+    @State var sourceNode: ResModel // Replace with your actual model type
     @State private var isHovering: Bool = false
 
     var body: some View {

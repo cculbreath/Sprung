@@ -11,6 +11,8 @@ class ResModel: Identifiable, Equatable, Hashable {
     var json: String
     var renderedResumeText: String
     var style: String
+    var includeFonts: Bool = false
+
     // Override the initializer to set the type to '.jsonSource'
     init(
         resumes: [Resume] = [],

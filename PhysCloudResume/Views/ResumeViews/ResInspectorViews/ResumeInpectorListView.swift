@@ -1,68 +1,65 @@
 import SwiftUI
 
+import SwiftUI
+
 struct ResumeInspectorListView: View {
     @Environment(ResStore.self) private var resStore
     @Binding var listSelection: Resume?
     @Binding var resumes: [Resume]
 
-    // Precompute the sorted resumes
-    private var sortedResumes: [Resume] {
-        resumes.sorted { $0.dateCreated > $1.dateCreated }
-    }
+    // The persisted string that holds the available styles.
+    @AppStorage("availableStyles") private var availableStylesString: String = ResModel.defaultStyle
+    // The mutable state variable that will drive your UI updates.
+    @State private var availableStyles: [String] = []
 
     var body: some View {
-        VStack {
-            // Header
-            HStack {
-                Text("Date Created")
-                    .fontWeight(.bold)
-                    .frame(minWidth: 120, maxWidth: .infinity, alignment: .leading) // Changed from `.trailing` to `.leading`
-
-                Text("Model")
-                    .fontWeight(.bold)
-                    .frame(width: 50, alignment: .trailing)
-            }
-            .padding(.horizontal)
-            .padding(.top, 5)
-
-            Divider()
-
-            // List of Resumes
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Enumerate to get index and resume
-                    ForEach(Array(sortedResumes.enumerated()), id: \.element.id) { index, resume in
-                        ResumeRowView(
-                            resume: resume,
-                            rowIndex: index,
-                            isSelected: self.listSelection == resume,
-                            onSelect: {
-                                withAnimation {
-                                    self.listSelection = resume
+        List {
+            ForEach(availableStyles, id: \.self) { style in
+                // Filter resumes that match the current style
+                let resumesForStyle = resumes.filter { $0.model?.style == style }.sorted { $0.dateCreated > $1.dateCreated }
+                if !resumesForStyle.isEmpty {
+                    Section(header: Text(style)) {
+                        ForEach(resumesForStyle, id: \.id) { resume in
+                            ResumeRowView(
+                                resume: resume,
+                                rowIndex: 0, // Calculate an index if needed
+                                isSelected: listSelection == resume,
+                                onSelect: {
+                                    withAnimation {
+                                        listSelection = resume
+                                    }
+                                },
+                                onDelete: {
+                                    resStore.deleteRes(resume)
+                                    if let index = resumes.firstIndex(of: resume) {
+                                        resumes.remove(at: index)
+                                    }
                                 }
-                            },
-                            onDelete: {
-                                resStore.deleteRes(resume)
-                                if let index = resumes.firstIndex(of: resume) {
-                                    resumes.remove(at: index)
-                                }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
         }
-        .frame(minWidth: 200, minHeight: 100)
-    }
-
-    private func removeSelectedResume() {
-        if let selected = listSelection, let index = resumes.firstIndex(of: selected) {
-            resStore.deleteRes(selected)
-            resumes.remove(at: index)
-            listSelection = resumes.first
+        .listStyle(.plain)
+        // Update availableStyles when the view appears or when the AppStorage string changes.
+        .onAppear { updateAvailableStyles() }
+        .onChange(of: availableStylesString) {
+            updateAvailableStyles()
+        }
+        .onChange(of: resumes) {
+            updateAvailableStyles()
         }
     }
+
+    private func updateAvailableStyles() {
+        availableStyles = availableStylesString
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
 }
+
+// ResInspectorToggleView(res: $selApp.selectedRes)
 
 struct ResumeRowView: View {
     let resume: Resume

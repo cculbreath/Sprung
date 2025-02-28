@@ -7,11 +7,18 @@
 
 import Foundation
 
-func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?, String?) -> Void) {
+func apiGenerateResFromJson(jsonPath: URL, resume: Resume, completion: @escaping (Bool) -> Void) {
     // URL of the API endpoint
     guard let url = URL(string: "https://resume.physicscloud.net/build-resume-file") else {
         print("Invalid URL")
-        completion(nil, nil)
+        completion(false)
+        return
+    }
+
+    // Ensure the style parameter exists
+    guard let style = resume.model?.style else {
+        print("Style parameter is missing")
+        completion(false)
         return
     }
 
@@ -24,13 +31,27 @@ func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?, Strin
 
     // Prepare the file data to be uploaded
     let boundary = UUID().uuidString
-    let fileData = try! Data(contentsOf: jsonPath)
+    let fileData: Data
+    do {
+        fileData = try Data(contentsOf: jsonPath)
+    } catch {
+        print("Error loading JSON file: \(error)")
+        completion(false)
+        return
+    }
 
     // Set the Content-Type to multipart/form-data
     request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
     // Create multipart form body
     var body = Data()
+
+    // Append style parameter
+    body.append("--\(boundary)\r\n".data(using: .utf8)!)
+    body.append("Content-Disposition: form-data; name=\"style\"\r\n\r\n".data(using: .utf8)!)
+    body.append("\(style)\r\n".data(using: .utf8)!)
+
+    // Append file data
     body.append("--\(boundary)\r\n".data(using: .utf8)!)
     body.append("Content-Disposition: form-data; name=\"resumeFile\"; filename=\"\(jsonPath.lastPathComponent)\"\r\n".data(using: .utf8)!)
     body.append("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
@@ -42,20 +63,16 @@ func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?, Strin
     request.httpBody = body
 
     // Create the URLSession and upload the file
-    let task = URLSession.shared.dataTask(with: request) { data, response, error in
+    let task = URLSession.shared.dataTask(with: request) { data, _, error in
         if let error = error {
             print("Error: \(error)")
-            completion(nil, nil)
+            completion(false)
             return
-        }
-
-        if let response = response as? HTTPURLResponse {
-            print("Response status code: \(response.statusCode)")
         }
 
         guard let data = data else {
             print("No data received")
-            completion(nil, nil)
+            completion(false)
             return
         }
 
@@ -63,58 +80,58 @@ func apiGenerateResFromJson(jsonPath: URL, completion: @escaping (String?, Strin
             if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                 let pdfUrl = json["pdfUrl"] as? String
                 let resumeText = json["resumeText"] as? String
-                completion(pdfUrl, resumeText)
+
+                DispatchQueue.main.async {
+                    // Store text data
+                    if let resumeText = resumeText {
+                        resume.textRes = resumeText
+                    }
+
+                    // Fetch and store PDF data
+                    if let pdfUrl = pdfUrl {
+                        downloadResPDF(from: pdfUrl, resume: resume, completion: completion)
+                    } else {
+                        completion(false)
+                    }
+                }
             } else {
                 print("Invalid JSON format")
-                completion(nil, nil)
+                completion(false)
             }
         } catch {
             print("Error parsing JSON: \(error)")
-            completion(nil, nil)
+            completion(false)
         }
     }
 
     task.resume()
 }
 
-func downloadResPDF(from urlString: String, completion: @escaping (URL?) -> Void) {
+func downloadResPDF(from urlString: String, resume: Resume, completion: @escaping (Bool) -> Void) {
     guard let url = URL(string: urlString) else {
         print("Invalid URL")
-        completion(nil)
+        completion(false)
         return
     }
 
     // Create a URLSession data task to download the PDF
-    let task = URLSession.shared.downloadTask(with: url) { tempFileURL, _, error in
+    let task = URLSession.shared.dataTask(with: url) { data, _, error in
         if let error = error {
             print("Error downloading PDF: \(error)")
-            completion(nil)
+            completion(false)
             return
         }
 
-        guard let tempFileURL = tempFileURL else {
-            print("No file URL")
-            completion(nil)
+        guard let data = data else {
+            print("No PDF data received")
+            completion(false)
             return
         }
 
-        // Move the file to a permanent location
-        let fileManager = FileManager.default
-        let destinationURL = FileHandler.pdfUrl()
-
-        do {
-            // If file exists, remove it first
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-
-            // Move the file from temp location to permanent destination
-            try fileManager.moveItem(at: tempFileURL, to: destinationURL)
-            print("File downloaded to: \(destinationURL)")
-            completion(destinationURL)
-        } catch {
-            print("Error saving file: \(error)")
-            completion(nil)
+        DispatchQueue.main.async {
+            resume.pdfData = data
+            print("PDF successfully stored in resume.pdfData (\(data.count) bytes)")
+            completion(true)
         }
     }
 

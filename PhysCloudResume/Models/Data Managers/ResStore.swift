@@ -58,32 +58,36 @@ final class ResStore {
             }
             print("Resume object created")
 
-            guard let jsonData = model.json.data(using: .utf8) else {
-                print("Error converting JSON content to data")
-                return nil
-            }
-
-            resume.rootNode = resume.buildTree(from: jsonData, res: resume)
-            print("Resume tree built from JSON data")
-            print("1 Current resumes count: \(resume.jobApp!.resumes.count)")
-            addResume(res: resume, to: jobApp)
-
-            // Insert resume into the model context and save
-            modelContext.insert(resume)
-            print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
-
             do {
-                try modelContext.save()
-                print("Model context saved after processing JSON data")
-                print("3 Current resumes count: \(resume.jobApp!.resumes.count)")
+                guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
+                    return nil
+                }
+                resume.rootNode = builder.buildTree()
+                print("Resume tree built from JSON data")
+                print("1 Current resumes count: \(resume.jobApp!.resumes.count)")
+//                print(builder.json)
+                addResume(res: resume, to: jobApp)
+
+                // Insert resume into the model context and save
+                modelContext.insert(resume)
+                print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
+
+                do {
+                    try modelContext.save()
+                    print("Model context saved after processing JSON data")
+                    print("3 Current resumes count: \(resume.jobApp!.resumes.count)")
+
+                } catch {
+                    print("Error saving context: \(error)")
+                    return nil
+                }
+
+                print("Resume successfully saved and processed")
+                resume.debounceExport()
 
             } catch {
-                print("Error saving context: \(error)")
-                return nil
+                print("Could not unwrap JSON")
             }
-
-            print("Resume successfully saved and processed")
-            resume.debounceExport()
             return resume
         } else {
             print("No JSON source found")
@@ -124,6 +128,7 @@ final class ResStore {
             name: node.name,
             value: node.value,
             parent: nil, // The parent will be set during recursion
+            inEditor: node.includeInEditor,
             status: node.status,
             resume: newResume
         )
