@@ -110,9 +110,11 @@ final class CoverChatProvider {
             }
 
             print("message count: \(self.messageHist.count)")
+            let model = OpenAIModelFetcher.getPreferredModel()
+            print("Using OpenAI model: \(model)")
             let parameters = ChatCompletionParameters(
                 messages: self.messageHist,
-                model: .gpt4o20241120,
+                model: model,
                 responseFormat: .text
             )
             try await self.startChat(
@@ -173,9 +175,11 @@ final class CoverChatProvider {
             ]
             print("handler message count: \(self.messageHist.count)")
             print("CL message count:  \(cL.messageHistory.count)")
+            let model = OpenAIModelFetcher.getPreferredModel()
+            print("Using OpenAI model: \(model)")
             let parameters = ChatCompletionParameters(
                 messages: self.messageHist,
-                model: .gpt4o20241120,
+                model: model,
                 responseFormat: .text
             )
             try await self.startChat(

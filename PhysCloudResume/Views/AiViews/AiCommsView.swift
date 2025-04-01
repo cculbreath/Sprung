@@ -140,9 +140,11 @@ struct AiCommsView: View {
                 chatProvider.messageHist.append(.init(role: .user, content: .text(q.revisionPrompt(fbnodes))))
             }
 
+            let model = OpenAIModelFetcher.getPreferredModel()
+            print("Using OpenAI model for resume query: \(model)")
             let parameters = ChatCompletionParameters(
                 messages: chatProvider.messageHist,
-                model: .gpt4o20240806,
+                model: model,
                 responseFormat: .jsonSchema(ResumeApiQuery.revNodeArraySchema)
             )
             try await chatProvider.startChat(parameters: parameters)

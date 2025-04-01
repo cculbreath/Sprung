@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
     @AppStorage("brightDataApiKey") var brightDataApiKey: String = "none"
     @AppStorage("preferredApi") var preferredApi: apis = .scrapingDog
+    @AppStorage("preferredOpenAIModel") var preferredOpenAIModel: String = "gpt-4o-2024-08-06"
 
     @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableStyles: [String] = []
@@ -26,6 +27,10 @@ struct SettingsView: View {
 
     @State private var isHoveringCheckmark = false
     @State private var isHoveringXmark = false
+    
+    @State private var availableModels: [String] = []
+    @State private var isLoadingModels: Bool = false
+    @State private var modelError: String? = nil
 
     var body: some View {
         VStack {
@@ -65,6 +70,55 @@ struct SettingsView: View {
                             isHoveringCheckmark: $isHoveringCheckmark,
                             isHoveringXmark: $isHoveringXmark
                         )
+                    }
+                    .padding(10)
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+                    )
+                    
+                    // OpenAI Model Selection Section
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("OpenAI Model")
+                            .font(.headline)
+                        
+                        HStack {
+                            Picker("Model", selection: $preferredOpenAIModel) {
+                                ForEach(availableModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                            }
+                            .onChange(of: preferredOpenAIModel) { oldValue, newValue in
+                                print("Changed OpenAI model: \(oldValue) → \(newValue)")
+                            }
+                            .disabled(isLoadingModels || availableModels.isEmpty)
+                            .frame(maxWidth: .infinity)
+                            
+                            Button(action: fetchOpenAIModels) {
+                                if isLoadingModels {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                            .disabled(openAiApiKey == "none")
+                        }
+                        
+                        if let error = modelError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        if availableModels.isEmpty && !isLoadingModels && modelError == nil {
+                            Text("Click refresh to load available models")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .padding(10)
                     .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
@@ -122,6 +176,37 @@ struct SettingsView: View {
                minHeight: 500, idealHeight: 600, maxHeight: 800)
         .onAppear {
             loadAvailableStyles()
+            if openAiApiKey != "none" {
+                fetchOpenAIModels()
+            }
+        }
+    }
+
+    private func fetchOpenAIModels() {
+        guard openAiApiKey != "none" else {
+            modelError = "API key is required to fetch models"
+            return
+        }
+        
+        isLoadingModels = true
+        modelError = nil
+        
+        Task {
+            let models = await OpenAIModelFetcher.fetchAvailableModels(apiKey: openAiApiKey)
+            
+            await MainActor.run {
+                if models.isEmpty {
+                    modelError = "Failed to fetch models or no models available"
+                } else {
+                    availableModels = models
+                    
+                    // Set default model if current selection isn't in the list
+                    if !models.contains(preferredOpenAIModel) && !models.isEmpty {
+                        preferredOpenAIModel = models.first!
+                    }
+                }
+                isLoadingModels = false
+            }
         }
     }
 
@@ -146,6 +231,9 @@ struct SettingsView: View {
                     Button(action: {
                         value.wrappedValue = editedValue.wrappedValue
                         isEditing.wrappedValue = false
+                        if label == "OpenAI" && !editedValue.wrappedValue.isEmpty && editedValue.wrappedValue != "none" {
+                            fetchOpenAIModels()
+                        }
                     }) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(isHoveringCheckmark.wrappedValue ? .green : .gray)
