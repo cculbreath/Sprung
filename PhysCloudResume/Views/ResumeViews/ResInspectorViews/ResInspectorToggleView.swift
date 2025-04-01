@@ -12,9 +12,30 @@ struct ResInspectorToggleView: View {
         GridItem(.flexible()),
         GridItem(.flexible()),
     ]
+    
+    // Helper function to create the binding for a ResRef
+    private func createBinding(for resRef: ResRef, in resume: Resume) -> Binding<Bool> {
+        return Binding<Bool>(
+            get: {
+                // Check if this ResRef is in the resume's enabledSources.
+                resume.enabledSources.contains { $0.id == resRef.id }
+            },
+            set: { newValue in
+                if newValue {
+                    // Add the ResRef if it isn't already present.
+                    if !resume.enabledSources.contains(where: { $0.id == resRef.id }) {
+                        resume.enabledSources.append(resRef)
+                    }
+                } else {
+                    // Remove the ResRef if it is present.
+                    resume.enabledSources.removeAll { $0.id == resRef.id }
+                }
+            }
+        )
+    }
 
     var body: some View {
-        if let res = res {
+        if let resume = res {
             VStack {
                 // Centered headline
                 Text("Enabled Background Sources")
@@ -27,23 +48,7 @@ struct ResInspectorToggleView: View {
                     ForEach(resRefStore.resRefs, id: \.id) { resRef in
                         ResRefToggleCell(
                             resRef: resRef,
-                            isEnabled: Binding<Bool>(
-                                get: {
-                                    // Check if this ResRef is in the resume’s enabledSources.
-                                    res.enabledSources.contains { $0.id == resRef.id }
-                                },
-                                set: { newValue in
-                                    if newValue {
-                                        // Add the ResRef if it isn’t already present.
-                                        if !res.enabledSources.contains(where: { $0.id == resRef.id }) {
-                                            res.enabledSources.append(resRef)
-                                        }
-                                    } else {
-                                        // Remove the ResRef if it is present.
-                                        res.enabledSources.removeAll { $0.id == resRef.id }
-                                    }
-                                }
-                            )
+                            isEnabled: createBinding(for: resRef, in: resume)
                         )
                     }
                 }
