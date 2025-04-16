@@ -55,6 +55,7 @@ final class CoverChatProvider {
         buttons: Binding<CoverLetterButtons>
     ) {
         print("processResults")
+      
 
         coverLetter.generated = true
         coverLetter.messageHistory.append(

@@ -10,14 +10,17 @@ import Foundation
 import SwiftData
 
 @Observable
+@MainActor
 final class CoverLetterStore {
-    var coverRefStore: CoverRefStore?
+    // MARK: - Properties
+    private unowned let modelContext: ModelContext
+    var coverRefStore: CoverRefStore
     var cL: CoverLetter?
-    private var modelContext: ModelContext?
-    init() {}
-    func initialize(context: ModelContext, refStore: CoverRefStore) {
-        modelContext = context
-        coverRefStore = refStore
+
+    // MARK: - Initialiser
+    init(context: ModelContext, refStore: CoverRefStore) {
+        self.modelContext = context
+        self.coverRefStore = refStore
         print("CoverLetterStore Initialized")
     }
 
@@ -25,21 +28,21 @@ final class CoverLetterStore {
     func addLetter(letter: CoverLetter, to jobApp: JobApp) -> CoverLetter {
         jobApp.coverLetters.append(letter)
         jobApp.selectedCover = letter
-        modelContext!.insert(letter)
+        modelContext.insert(letter)
 //    saveContext()
         return letter
     }
 
     func createBlank(jobApp: JobApp) {
         let letter = CoverLetter(
-            enabledRefs: coverRefStore!.defaultSources,
+            enabledRefs: coverRefStore.defaultSources,
             jobApp: jobApp
         )
         letter.generated = false
         jobApp.coverLetters.append(letter)
         jobApp.selectedCover = letter
 
-        modelContext!.insert(letter)
+        modelContext.insert(letter)
     }
 
     @discardableResult
@@ -48,13 +51,13 @@ final class CoverLetterStore {
         print("Creating cover letter for job application: \(jobApp)")
 
         let letter = CoverLetter(
-            enabledRefs: coverRefStore!.defaultSources,
+            enabledRefs: coverRefStore.defaultSources,
             jobApp: jobApp
         )
         print("CoverLetter object created")
 
-        modelContext!.insert(letter)
-//      try? modelContext!.save()
+        modelContext.insert(letter)
+//      try? modelContext.save()
         return letter
     }
 
@@ -82,7 +85,7 @@ final class CoverLetterStore {
         if let jobApp = letter.jobApp {
             if let index = jobApp.coverLetters.firstIndex(of: letter) {
                 jobApp.coverLetters.remove(at: index)
-                modelContext!.delete(letter)
+        modelContext.delete(letter)
                 //      saveContext()
             }
         } else {
@@ -93,7 +96,7 @@ final class CoverLetterStore {
     // Save changes to the database
     private func saveContext() {
         do {
-            try modelContext!.save()
+            try modelContext.save()
         } catch {
             print("Failed to save context: \(error)")
         }

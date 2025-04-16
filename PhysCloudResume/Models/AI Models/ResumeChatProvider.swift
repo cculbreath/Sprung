@@ -23,10 +23,9 @@ final class ResumeChatProvider {
 
     // MARK: - Initializer
 
-    init(service: OpenAIService) {
-        self.service = service
-    }
-
+  init(service: OpenAIService) {
+    self.service = service
+  }
     private func convertJsonToNodes(_ jsonString: String?) -> [ProposedRevisionNode]? {
         guard let jsonString = jsonString, let jsonData = jsonString.data(using: .utf8) else {
             print("Error converting string to data")
@@ -50,9 +49,14 @@ final class ResumeChatProvider {
     func unloadResponse() -> [ProposedRevisionNode]? {
         if let nodes = convertJsonToNodes(messages[0]) {
             messages.removeFirst()
+            print("Nodes processed from JSON response:")
+            for node in nodes {
+                print("Node ID: \(node.id), isTitleNode: \(node.isTitleNode), oldValue: \(node.oldValue.prefix(20))...")
+            }
             lastRevNodeArray = nodes
             return nodes
         } else {
+            print("❌ ERROR: Failed to convert JSON response to nodes")
             return nil
         }
     }
@@ -65,6 +69,7 @@ final class ResumeChatProvider {
             messages = choices.compactMap(\.message.content).map { $0.asJsonFormatted() }
             assert(messages.count == 1)
             print(messages.last ?? "Nothin")
+            
             lastRevNodeArray = convertJsonToNodes(messages.last) ?? []
             messageHist
                 .append(

@@ -3,27 +3,25 @@ import Observation
 import SwiftData
 
 @Observable
+@MainActor
 final class ResRefStore {
+    private unowned let modelContext: ModelContext
     var resRefs: [ResRef] = []
 
     var defaultSources: [ResRef] {
-        return resRefs.filter { $0.enabledByDefault == true }
+        resRefs.filter { $0.enabledByDefault }
     }
 
-    private var modelContext: ModelContext?
-
-    init() {}
-
-    func initialize(context: ModelContext) {
-        modelContext = context
-        loadResRefs() // Load data from database on init
+    init(context: ModelContext) {
+        self.modelContext = context
+        loadResRefs()
         print("RefStore Initialized: \(resRefs.count) refs")
     }
 
     private func loadResRefs() {
         let descriptor = FetchDescriptor<ResRef>()
         do {
-            resRefs = try modelContext!.fetch(descriptor)
+            resRefs = try modelContext.fetch(descriptor)
         } catch {
             print("Failed to fetch Resume Refs: \(error)")
         }
@@ -32,7 +30,7 @@ final class ResRefStore {
     /// Adds a new `ResRef` to the store
     func addResRef(_ resRef: ResRef) {
         resRefs.append(resRef)
-        modelContext?.insert(resRef)
+        modelContext.insert(resRef)
         saveContext()
     }
 
@@ -48,7 +46,7 @@ final class ResRefStore {
     func deleteResRef(_ resRef: ResRef) {
         if let index = resRefs.firstIndex(where: { $0.id == resRef.id }) {
             resRefs.remove(at: index)
-            modelContext?.delete(resRef)
+        modelContext.delete(resRef)
             saveContext()
         }
     }
@@ -56,7 +54,7 @@ final class ResRefStore {
     /// Persists changes to the database
     private func saveContext() {
         do {
-            try modelContext?.save()
+            try modelContext.save()
         } catch {
             print("Failed to save context: \(error)")
         }

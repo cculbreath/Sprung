@@ -1,5 +1,5 @@
 import SwiftUI
-
+import Foundation
 @main
 struct PhysicsCloudResumeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -18,5 +18,7 @@ struct PhysicsCloudResumeApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
         }
+      
     }
+  
 }

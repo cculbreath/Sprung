@@ -1,3 +1,13 @@
+//
+//  OpenAIModelFetcher.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/7/25.
+//
+
+import Foundation
+import SwiftOpenAI
+
 class OpenAIModelFetcher {
     /// Get the configured preferred model from UserDefaults
     static func getPreferredModel() -> Model {
@@ -39,7 +49,7 @@ class OpenAIModelFetcher {
             return []
         }
     }
-  func modelFromString(_ modelId: String) -> Model {
+  static func modelFromString(_ modelId: String) -> Model {
     // Array of known enum members (ignoring the .custom case)
     let knownModels: [Model] = [
       .gpt4oAudioPreview,

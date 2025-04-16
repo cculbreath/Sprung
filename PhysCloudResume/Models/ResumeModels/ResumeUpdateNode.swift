@@ -11,6 +11,7 @@ struct ProposedRevisionNode: Codable, Equatable {
     var oldValue: String = ""
     var newValue: String = ""
     var valueChanged: Bool = false
+    var isTitleNode: Bool = false
     var why: String = ""
 }
 
@@ -39,18 +40,21 @@ enum PostReviewAction: String, Codable {
     var proposedRevision: String = ""
     var actionRequested: PostReviewAction = .unevaluated
     var reviewerComments: String = ""
+    var isTitleNode: Bool = false
     init(
         id: String = "",
         originalValue: String = "",
         proposedRevision: String = "",
         actionRequested: PostReviewAction = .unevaluated,
-        reviewerComments: String = ""
+        reviewerComments: String = "",
+        isTitleNode: Bool = false
     ) {
         self.id = id
         self.originalValue = originalValue
         self.proposedRevision = proposedRevision
         self.actionRequested = actionRequested
         self.reviewerComments = reviewerComments
+        self.isTitleNode = isTitleNode
     }
 }
 
@@ -61,6 +65,7 @@ extension FeedbackNode: Encodable {
         case proposedRevision
         case actionRequested
         case reviewerComments
+        case isTitleNode
     }
 
     func encode(to encoder: Encoder) throws {
@@ -70,6 +75,7 @@ extension FeedbackNode: Encodable {
         try container.encode(proposedRevision, forKey: .proposedRevision)
         try container.encode(actionRequested, forKey: .actionRequested)
         try container.encode(reviewerComments, forKey: .reviewerComments)
+      try container.encode(isTitleNode, forKey: .isTitleNode)
     }
 }
 

@@ -239,7 +239,7 @@ class JsonToTree {
             }
             // Add the node with name = valueOne, value = valueTwo
             sectionNode.addChild(
-                TreeNode(name: valueOne, value: valueTwo, inEditor: isInEditor(key), status: .isNotLeaf, resume: res)
+                TreeNode(name: valueOne, value: valueTwo, inEditor: isInEditor(key), status: .saved, resume: res)
             )
         }
     }

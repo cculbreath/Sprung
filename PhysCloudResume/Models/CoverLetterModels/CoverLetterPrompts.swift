@@ -17,7 +17,7 @@ enum CoverAiMode: String, Codable {
 enum CoverLetterPrompts {
     static var systemMessage = ChatCompletionParameters.Message(
         role: .system,
-        content: .text("You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for a job application, based on the job listing and resume provided below. The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself.")
+        content: .text("You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for a job application, based on the job listing and resume provided below. The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself. The letter should use block-format paragraphs with no indentation, and just a single new line at the end of each paragraph. Do not add a blank line between paragraphs.")
     )
 
     static func generate(coverLetter: CoverLetter, resume: Resume, mode: CoverAiMode, customFeedbackString: String? = "") -> String {
@@ -39,7 +39,7 @@ enum CoverLetterPrompts {
                 }
             }
             prompt = """
-            You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app?.job_position ?? "") at \(app?.company_name ?? ""). The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself.
+            You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app?.job_position ?? "") at \(app?.company_name ?? ""). The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself. The letter should use block-format paragraphs with no indentation, and just a single new line at the end of each paragraph. Do not add a blank line between paragraphs.
 
             **Instructions:**
 

@@ -50,7 +50,7 @@ class Resume: Identifiable, Hashable {
     }
 
     // Example function
-    func getUpdatableNodes() -> [[String: String]] {
+    func getUpdatableNodes() -> [[String: Any]] {
         if let node = rootNode {
             return TreeNode.traverseAndExportNodes(node: node)
         } else {
