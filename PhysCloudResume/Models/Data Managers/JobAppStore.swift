@@ -1,20 +1,24 @@
 import SwiftData
 
-@Observable final class JobAppStore {
+@Observable
+@MainActor
+final class JobAppStore {
+    // MARK: - Properties
+
+    private unowned let modelContext: ModelContext
     var jobApps: [JobApp] = []
     var selectedApp: JobApp?
     var form = JobAppForm()
-    var resStore: ResStore?
-    var coverLetterStore: CoverLetterStore?
+    var resStore: ResStore
+    var coverLetterStore: CoverLetterStore
 
-    private var modelContext: ModelContext?
-    init() {}
+    // MARK: - Initialiser
 
-    func initialize(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
-        modelContext = context
+    init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
+        self.modelContext = context
         self.resStore = resStore
-        loadJobApps() // Load data from the database when the store is initialized
         self.coverLetterStore = coverLetterStore
+        loadJobApps()
     }
 
     // Load JobApps from the database
@@ -22,7 +26,7 @@ import SwiftData
     private func loadJobApps() {
         let descriptor = FetchDescriptor<JobApp>()
         do {
-            jobApps = try modelContext!.fetch(descriptor)
+            jobApps = try modelContext.fetch(descriptor)
         } catch {
             print("Failed to fetch JobApps: \(error)")
         }
@@ -36,10 +40,9 @@ import SwiftData
     }
 
     func addJobApp(_ jobApp: JobApp) -> JobApp? {
-        coverLetterStore!
-            .createBlank(jobApp: jobApp)
+        coverLetterStore.createBlank(jobApp: jobApp)
         jobApps.append(jobApp)
-        modelContext!.insert(jobApp)
+        modelContext.insert(jobApp)
 //    saveContext()
         return jobApps.last
     }
@@ -55,22 +58,17 @@ import SwiftData
 
     func deleteJobApp(_ jobApp: JobApp) {
         if let index = jobApps.firstIndex(of: jobApp) {
-            if let resStore = resStore {
-                for resume in jobApp.resumes {
-                    resStore.deleteRes(resume)
-                }
-                jobApps.remove(at: index)
-                modelContext!.delete(jobApp)
+            for resume in jobApp.resumes {
+                resStore.deleteRes(resume)
+            }
+            jobApps.remove(at: index)
+            modelContext.delete(jobApp)
 
-//        saveContext()  //Error thrown here}
-                if selectedApp == jobApp {
-                    selectedApp = nil
-                }
-                if selectedApp == nil {
-                    selectedApp = jobApps.first
-                }
-            } else {
-                print("ResStore ref not here!")
+            if selectedApp == jobApp {
+                selectedApp = nil
+            }
+            if selectedApp == nil {
+                selectedApp = jobApps.first
             }
         }
     }
@@ -115,7 +113,7 @@ import SwiftData
 
         // Save the updated data to SwiftData (if you want to do so automatically)
         do {
-            try modelContext?.save()
+            try modelContext.save()
             print("JobAppStore: Successfully updated and saved changes for \(updated).")
         } catch {
             print("JobAppStore: Failed to save updated JobApp. Error: \(error)")
@@ -126,7 +124,7 @@ import SwiftData
     private func saveContext() {
         print("don't call this manually!")
         do {
-            try modelContext!.save()
+            try modelContext.save()
             print("saved")
         } catch {
             print("Failed to save context: \(error)")

@@ -7,6 +7,7 @@ struct NewAppSheetView: View {
 
     @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
     @AppStorage("brightDataApiKey") var brightDataApiKey: String = "none"
+    @AppStorage("proxycurlApiKey") var proxycurlApiKey: String = "none"
 
     @AppStorage("preferredApi") var preferredApi: apis = .scrapingDog
 
@@ -61,14 +62,18 @@ struct NewAppSheetView: View {
             case "www.linkedin.com":
                 isLoading = true
                 if preferredApi == .scrapingDog {
-                    print("linkedin")
+                    print("linkedin - ScrapingDog")
                     if let jobID = url.pathComponents.last {
                         await ScrapingDogfetchLinkedInJobDetails(jobID: jobID, posting_url: url)
                     }
                 }
                 if preferredApi == .brightData {
-                    print("brightData Linked in")
+                    print("linkedin - BrightData")
                     await BrightDatafetchLinkedInJobDetails(posting_url: url)
+                }
+                if preferredApi == .proxycurl {
+                    print("linkedin - Proxycurl")
+                    await ProxycurlfetchLinkedInJobDetails(posting_url: url)
                 }
             case "jobs.apple.com":
                 isLoading = true
@@ -292,5 +297,58 @@ struct NewAppSheetView: View {
                 print("Response body: \(responseBody)")
             }
         }
+    }
+    
+    private func ProxycurlfetchLinkedInJobDetails(posting_url: URL) async {
+        let apiKey = proxycurlApiKey
+        
+        // Build the URL with the job URL as a query parameter
+        let baseURL = "https://nubela.co/proxycurl/api/linkedin/job"
+        var components = URLComponents(string: baseURL)
+        components?.queryItems = [
+            URLQueryItem(name: "url", value: posting_url.absoluteString)
+        ]
+        
+        guard let requestURL = components?.url else {
+            print("Invalid URL construction")
+            isLoading = false
+            return
+        }
+        
+        // Create request with authorization header
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        
+        do {
+            print("Fetching from Proxycurl: \(requestURL)")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    // Process successful response
+                    if let jobDetail = JobApp.parseProxycurlJobApp(
+                        jobAppStore: jobAppStore, 
+                        jsonData: data,
+                        postingUrl: posting_url.absoluteString
+                    ) {
+                        print("Successfully parsed Proxycurl job data")
+                        isPresented = false
+                    } else {
+                        print("Error parsing Proxycurl response")
+                    }
+                } else {
+                    // Handle error response
+                    print("HTTP error: \(httpResponse.statusCode)")
+                    if let errorText = String(data: data, encoding: .utf8) {
+                        print("Error response: \(errorText)")
+                    }
+                }
+            }
+        } catch {
+            print("Network request error: \(error.localizedDescription)")
+        }
+        
+        isLoading = false
     }
 }

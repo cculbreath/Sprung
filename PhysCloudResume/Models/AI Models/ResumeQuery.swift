@@ -28,7 +28,7 @@ import SwiftOpenAI
                             properties: [
                                 "id": JSONSchema(
                                     type: .string,
-                                    description: "The unique identifier for the node provided in the original EditableNode"
+                                    description: "The identifier for the node provided in the original EditableNode"
                                 ),
                                 "oldValue": JSONSchema(
                                     type: .string,
@@ -46,8 +46,12 @@ import SwiftOpenAI
                                     type: .string,
                                     description: "Explanation for the proposed revision. Leave blank if the reason is trivial or obvious."
                                 ),
+                                "isTitleNode": JSONSchema(
+                                  type: .boolean,
+                                  description: "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
+                                  )
                             ],
-                            required: ["id", "oldValue", "newValue", "valueChanged", "why"],
+                            required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode"],
                             additionalProperties: false
                         )
                     ),

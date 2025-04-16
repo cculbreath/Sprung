@@ -10,7 +10,7 @@ struct ReviewView: View {
     @Binding var currentRevNode: ProposedRevisionNode?
     @Binding var sheetOn: Bool
     @Binding var selRes: Resume?
-    @State private var updateNodes: [[String: String]] = []
+    @State private var updateNodes: [[String: Any]] = []
     @Binding var aiResub: Bool
     @State var isEditingResponse: Bool = false
     @State var isCommenting: Bool = false
@@ -284,7 +284,9 @@ struct ReviewView: View {
                         id: currentRevNode.id,
                         originalValue: currentRevNode.oldValue,
                         proposedRevision: currentRevNode.newValue,
-                        actionRequested: .unevaluated
+                        actionRequested: .unevaluated,
+                        reviewerComments: "",
+                        isTitleNode: currentRevNode.isTitleNode
                     )
                 }
             }
@@ -318,10 +320,28 @@ struct ReviewView: View {
             if node.actionRequested == .accepted || node.actionRequested == .acceptedWithChanges {
                 if let selRes = selRes {
                     if let treeNode = selRes.nodes.first(where: { $0.id == node.id }) {
-                        treeNode.value = node.proposedRevision
+                        // Debug logging to help diagnose issues
+                        print("Processing node ID: \(node.id)")
+                        print("isTitleNode value: \(node.isTitleNode)")
+                        
+                        if node.isTitleNode {
+                            print("Updating NAME to: \(node.proposedRevision)")
+                            treeNode.name = node.proposedRevision
+                        } else {
+                            print("Updating VALUE to: \(node.proposedRevision)")
+                            treeNode.value = node.proposedRevision
+                        }
                     } else {
-                        print("node not found")
-                        print(node.id)
+                        print("❌ ERROR: Node not found with ID: \(node.id)")
+                        
+                        // Try to diagnose the issue by listing available node IDs
+                        print("Available node IDs:")
+                        for treeNode in selRes.nodes.prefix(10) {
+                            print("- \(treeNode.id)")
+                        }
+                        if selRes.nodes.count > 10 {
+                            print("... and \(selRes.nodes.count - 10) more")
+                        }
                     }
                 }
             }

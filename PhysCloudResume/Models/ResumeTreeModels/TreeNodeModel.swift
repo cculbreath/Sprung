@@ -94,9 +94,9 @@ enum LeafStatus: String, Codable, Hashable {
 
     var growDepth: Bool { return nodeDepth > 2 }
     static func traverseAndExportNodes(node: TreeNode, currentPath: String = "")
-        -> [[String: String]]
+        -> [[String: Any]]
     {
-        var result: [[String: String]] = []
+        var result: [[String: Any]] = []
         var newPath: String
         // Construct the current tree path
         if node.parent == nil {
@@ -107,14 +107,27 @@ enum LeafStatus: String, Codable, Hashable {
         }
         // If the node's status is .aiToReplace, add it to the result array
         if node.status == .aiToReplace {
-            if node.name != "" && node.value != "" {}
+            if node.name != "" && node.value != "" {
 
-            let nodeData: [String: String] = [
+              let titleNodeData: [String: Any] = [
                 "id": node.id,
-                "value": node.value,
-                "tree_path": newPath,
+                "value": node.name,
+                "tree_path": currentPath,
+                "isTitleNode": true
+              ]
+              result.append(titleNodeData)
+
+
+            }
+
+            let nodeData: [String: Any] = [
+              "id": node.id,
+              "value": node.value,
+              "tree_path": newPath,
+              "isTitleNode": false
             ]
             result.append(nodeData)
+          
         }
 
         // Recursively traverse the children
@@ -147,7 +160,7 @@ enum LeafStatus: String, Codable, Hashable {
 
         // Iterate over the array and update corresponding TreeNodes
         for jsonObject in jsonArray {
-            if let id = jsonObject["id"], let newValue = jsonObject["value"] {
+            if let id = jsonObject["id"], let newValue = jsonObject["value"], let titleNode = jsonObject["isTitleNode"] {
                 // Fetch the corresponding TreeNode from the SwiftData store manually
                 let fetchRequest = FetchDescriptor<TreeNode>(
                     predicate: #Predicate { $0.id == id }
@@ -155,7 +168,12 @@ enum LeafStatus: String, Codable, Hashable {
 
                 if let node = try context.fetch(fetchRequest).first {
                     // Update the value of the TreeNode
+                  if titleNode == "true" {
+                    node.name = newValue
+                  }
+                  else {
                     node.value = newValue
+                  }
                 } else {
                     print("TreeNode with id \(id) not found.")
                 }

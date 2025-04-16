@@ -1,10 +1,3 @@
-//
-//  AiCommsView.swift
-//  SwiftOpenAIExample
-//
-//  Created by James Rochabrun on 8/10/24.
-//
-
 import Foundation
 import SwiftOpenAI
 import SwiftUI
@@ -54,7 +47,9 @@ struct AiCommsView: View {
                         id: currentRevNode!.id,
                         originalValue: currentRevNode!.oldValue,
                         proposedRevision: currentRevNode!.newValue,
-                        actionRequested: .unevaluated
+                        actionRequested: .unevaluated,
+                        reviewerComments: "",
+                        isTitleNode: currentRevNode!.isTitleNode
                     )
                 }
                 aiResub = false
@@ -103,13 +98,17 @@ struct AiCommsView: View {
 
             for (index, item) in validRevs.enumerated() {
                 // Check by ID first
-                if let matchedNode = updateNodes.first(where: { $0["id"] == item.id }) {
+                if let matchedNode = updateNodes.first(where: { $0["id"] as? String == item.id }) {
                     print("\(item.id) found")
                     continue
-                } else if let matchedByValue = updateNodes.first(where: { $0["oldValue"] == item.oldValue }), let id = matchedByValue["id"] {
+                } else if let matchedByValue = updateNodes.first(where: { $0["value"] as? String == item.oldValue }), let id = matchedByValue["id"] as? String {
                     // Update revision's ID if matched by value
                     validRevs[index].id = id
-                    print("\(item.id) updated")
+                    
+                    // Make sure to preserve isTitleNode when matching by value
+                    validRevs[index].isTitleNode = matchedByValue["isTitleNode"] as? Bool ?? false
+                    
+                    print("\(item.id) updated to use ID from matched node. isTitleNode: \(validRevs[index].isTitleNode)")
 
                 } else {
                     print("No match found for revision: \(item.id) - \(item.oldValue)")

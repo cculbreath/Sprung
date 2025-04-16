@@ -28,11 +28,13 @@ struct NodeLeafView: View {
                     .foregroundColor(.gray)
             } else {
                 if node.status != LeafStatus.disabled {
+
                     SparkleButton(
-                        node: $node,
-                        isHovering: $isHoveringSparkles,
-                        toggleNodeStatus: toggleNodeStatus
+                      node: $node,
+                      isHovering: $isHoveringSparkles,
+                      toggleNodeStatus: toggleNodeStatus
                     )
+                   
                 }
                 if node.status == LeafStatus.disabled {
                     Image(systemName: "lock.fill")
@@ -107,6 +109,7 @@ struct NodeLeafView: View {
         } else if node.status == LeafStatus.aiToReplace {
             node.status = .saved
         }
+
     }
 
     private func startEditing() {

@@ -9,20 +9,24 @@ import Foundation
 import SwiftData
 
 @Observable
+@MainActor
 final class ResStore {
+    // MARK: - Properties
+
+    private unowned let modelContext: ModelContext
     var resumes: [Resume] = []
 
-    private var modelContext: ModelContext?
-    init() {}
-    func initialize(context: ModelContext) {
-        modelContext = context
-        loadResumes() // Load data from the database when the store is initialized
+    // MARK: - Initialiser
+
+    init(context: ModelContext) {
+        self.modelContext = context
+        loadResumes()
     }
 
     private func loadResumes() {
         let descriptor = FetchDescriptor<Resume>()
         do {
-            resumes = try modelContext!.fetch(descriptor)
+            resumes = try modelContext.fetch(descriptor)
         } catch {
             print("Failed to fetch Resume Refs: \(error)")
         }
@@ -35,7 +39,7 @@ final class ResStore {
         resumes.append(res)
         jobApp.addResume(res)
         res.model!.resumes.append(res)
-        modelContext!.insert(res)
+        modelContext.insert(res)
         saveContext()
         print("ResStore resume added, jobApp.hasAnyResume is \(jobApp.hasAnyRes ? "true" : "false")")
         return res
@@ -43,8 +47,9 @@ final class ResStore {
 
     @discardableResult
     func create(jobApp: JobApp, sources: [ResRef], model: ResModel) -> Resume? {
-        if let modelContext = modelContext {
-            print("Model context available")
+        // ModelContext is guaranteed to exist
+        let modelContext = self.modelContext
+        print("Model context available")
             print("Creating resume for job application: \(jobApp)")
             print("Current resumes count: \(jobApp.resumes.count)")
 
@@ -69,7 +74,7 @@ final class ResStore {
                 addResume(res: resume, to: jobApp)
 
                 // Insert resume into the model context and save
-                modelContext.insert(resume)
+        modelContext.insert(resume)
                 print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
 
                 do {
@@ -89,10 +94,6 @@ final class ResStore {
                 print("Could not unwrap JSON")
             }
             return resume
-        } else {
-            print("No JSON source found")
-            return nil
-        }
     }
 
     func createDuplicate(originalResume: Resume, context: ModelContext) -> Resume? {
@@ -108,7 +109,7 @@ final class ResStore {
             }
 
             // Step 3: Save the new resume to the context
-            context.insert(newResume)
+        context.insert(newResume)
 
             do {
                 try context.save()
@@ -150,21 +151,21 @@ final class ResStore {
 
     func updateResumeTree(resume: Resume, rootNode: TreeNode) {
         resume.rootNode = rootNode
-        try? modelContext?.save()
+        try? modelContext.save()
         resume.debounceExport() // Update JSON, PDF, etc.
     }
 
     func deleteRes(_ res: Resume) {
         if let index = resumes.firstIndex(of: res) {
             if let rootNode = res.rootNode {
-                TreeNode.deleteTreeNode(node: rootNode, context: modelContext!) // Recursively delete rootNode and its children
+                TreeNode.deleteTreeNode(node: rootNode, context: modelContext) // Recursively delete rootNode and its children
             }
             if let jobApp = res.jobApp, let parentindex = jobApp.resumes.firstIndex(of: res) {
                 jobApp.resumeDeletePrep(candidate: res)
                 jobApp.resumes.remove(at: parentindex)
             }
             resumes.remove(at: index)
-            modelContext!.delete(res)
+            modelContext.delete(res)
             saveContext()
         } else {
             print("no rootnode")
@@ -205,7 +206,7 @@ final class ResStore {
     // Save changes to the database
     private func saveContext() {
         do {
-            try modelContext!.save()
+            try modelContext.save()
         } catch {
             print("Failed to save context: \(error)")
         }

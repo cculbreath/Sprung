@@ -4,12 +4,12 @@ import SwiftUI
 struct ContentView: View {
     // MARK: - State Variables
 
-    @State private var jobAppStore: JobAppStore = .init()
-    @State private var resRefStore: ResRefStore = .init()
-    @State private var resStore: ResStore = .init()
-    @State private var coverRefStore: CoverRefStore = .init()
-    @State private var coverLetterStore: CoverLetterStore = .init()
-    @State private var resModelStore: ResModelStore = .init()
+    @State private var jobAppStore: JobAppStore
+    @State private var resRefStore: ResRefStore
+    @State private var resStore: ResStore
+    @State private var coverRefStore: CoverRefStore
+    @State private var coverLetterStore: CoverLetterStore
+    @State private var resModelStore: ResModelStore
     @State var dragInfo: DragInfo = .init()
     @State var tabRefresh: Bool = false
     @State var showNewAppSheet: Bool = false
@@ -18,7 +18,28 @@ struct ContentView: View {
     @AppStorage("availableStyles") var availableStylesString: String = "Typewriter"
 
     @State var selectedTab: TabList = .listing
-    var modelContext: ModelContext
+    let modelContext: ModelContext
+
+    // MARK: - Initialiser
+
+    init(modelContext: ModelContext) {
+        self.modelContext = modelContext
+
+        // Create stores that do not depend on each other first
+        let resStore = ResStore(context: modelContext)
+        let resRefStore = ResRefStore(context: modelContext)
+        let coverRefStore = CoverRefStore(context: modelContext)
+        let coverLetterStore = CoverLetterStore(context: modelContext, refStore: coverRefStore)
+        let jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
+        let resModelStore = ResModelStore(context: modelContext, resStore: resStore)
+
+        _resStore = State(initialValue: resStore)
+        _resRefStore = State(initialValue: resRefStore)
+        _coverRefStore = State(initialValue: coverRefStore)
+        _coverLetterStore = State(initialValue: coverLetterStore)
+        _jobAppStore = State(initialValue: jobAppStore)
+        _resModelStore = State(initialValue: resModelStore)
+    }
 
     @Namespace private var slidingAnimation // Animation namespace
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic // Track sidebar
@@ -86,15 +107,16 @@ struct ContentView: View {
             Spacer()
         }
         .onAppear {
+          if let storeURL = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Model.sqlite") {
+            print("Database location: \(storeURL.path)")
+          }
             ResModel.defaultStyle = availableStylesString
                 .components(separatedBy: ",")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.first!
-            resRefStore.initialize(context: modelContext)
-            resStore.initialize(context: modelContext)
-            coverLetterStore.initialize(context: modelContext, refStore: coverRefStore)
-            jobAppStore.initialize(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
-            coverRefStore.initialize(context: modelContext)
-            resModelStore.initialize(context: modelContext, resStore: resStore)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first!
         }
         .environment(jobAppStore)
         .environment(resRefStore)

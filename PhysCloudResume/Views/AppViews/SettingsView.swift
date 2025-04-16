@@ -4,12 +4,14 @@ enum apis: String, Identifiable, CaseIterable {
     var id: Self { self }
     case scrapingDog = "Scraping Dog"
     case brightData = "Bright Data"
+    case proxycurl = "Proxycurl"
 }
 
 struct SettingsView: View {
     @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
     @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
     @AppStorage("brightDataApiKey") var brightDataApiKey: String = "none"
+    @AppStorage("proxycurlApiKey") var proxycurlApiKey: String = "none"
     @AppStorage("preferredApi") var preferredApi: apis = .scrapingDog
     @AppStorage("preferredOpenAIModel") var preferredOpenAIModel: String = "gpt-4o-2024-08-06"
 
@@ -20,10 +22,12 @@ struct SettingsView: View {
     @State private var isEditingScrapingDog = false
     @State private var isEditingBrightData = false
     @State private var isEditingOpenAI = false
+    @State private var isEditingProxycurl = false
 
     @State private var editedScrapingDogApiKey = ""
     @State private var editedOpenAiApiKey = ""
     @State private var editedBrightDataApiKey = ""
+    @State private var editedProxycurlApiKey = ""
 
     @State private var isHoveringCheckmark = false
     @State private var isHoveringXmark = false
@@ -67,6 +71,16 @@ struct SettingsView: View {
                             value: $brightDataApiKey,
                             isEditing: $isEditingBrightData,
                             editedValue: $editedBrightDataApiKey,
+                            isHoveringCheckmark: $isHoveringCheckmark,
+                            isHoveringXmark: $isHoveringXmark
+                        )
+                        Divider()
+                        apiKeyRow(
+                            label: "Proxycurl",
+                            icon: "link",
+                            value: $proxycurlApiKey,
+                            isEditing: $isEditingProxycurl,
+                            editedValue: $editedProxycurlApiKey,
                             isHoveringCheckmark: $isHoveringCheckmark,
                             isHoveringXmark: $isHoveringXmark
                         )
