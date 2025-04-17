@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ResumeSplitView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(ResStore.self) private var resStore: ResStore
     @Binding var isWide: Bool
     @Binding var tab: TabList
     @Binding var resumeButtons: ResumeButtons
@@ -19,13 +20,12 @@ struct ResumeSplitView: View {
                 @Bindable var selApp = selApp
 
                 HSplitView {
-                    if let rootNode = selRes.rootNode {
-                        ResumeDetailView(
-                            selRes: $selApp.selectedRes,
-                            tab: $tab,
-                            rootNode: rootNode,
-                            isWide: $isWide
-                        )
+                    ResumeDetailView(
+                        resume: selRes,
+                        tab: $tab,
+                        isWide: $isWide,
+                        resStore: resStore
+                    )
                         .frame(
                             minWidth: isWide ? 350 : 200,
                             idealWidth: isWide ? 500 : 300,
@@ -35,7 +35,7 @@ struct ResumeSplitView: View {
                             //          print(rootNode.resume.id)
                         }
                         .layoutPriority(1) // Ensures this view gets priority in layout
-                    }
+
 
                     ResumePDFView(resume: selRes)
                         .frame(
