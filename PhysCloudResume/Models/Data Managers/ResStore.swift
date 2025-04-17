@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftData
-import SwiftUI
 
 @Observable
 @MainActor
@@ -21,7 +20,6 @@ final class ResStore {
         (try? modelContext.fetch(FetchDescriptor<Resume>())) ?? []
     }
 
-    private var changeToken: Int = 0
 
     // MARK: - Initialiser
 
@@ -40,7 +38,7 @@ final class ResStore {
         res.model!.resumes.append(res)
         modelContext.insert(res)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
         print("ResStore resume added, jobApp.hasAnyResume is \(jobApp.hasAnyRes ? "true" : "false")")
         return res
     }
@@ -76,7 +74,7 @@ final class ResStore {
                 jobApp.addResume(resume)
                 modelContext.insert(resume)
                 try? modelContext.save()
-                withAnimation { changeToken += 1 }
+
 
                 print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
 
@@ -160,7 +158,7 @@ final class ResStore {
 
         modelContext.delete(res)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
     }
 
     // Form functionality incomplete

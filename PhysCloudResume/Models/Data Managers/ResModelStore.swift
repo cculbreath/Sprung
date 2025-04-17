@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import SwiftData
-import SwiftUI
 
 @Observable
 @MainActor
@@ -11,7 +10,6 @@ final class ResModelStore {
         (try? modelContext.fetch(FetchDescriptor<ResModel>())) ?? []
     }
 
-    private var changeToken: Int = 0
     var resStore: ResStore
 
     var isThereAnyJson: Bool { !resModels.isEmpty }
@@ -30,14 +28,14 @@ final class ResModelStore {
     func addResModel(_ resModel: ResModel) {
         modelContext.insert(resModel)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
     }
 
     /// Persist updates on the supplied model
     func updateResModel(_ resModel: ResModel) {
         do {
             try modelContext.save()
-            withAnimation { changeToken += 1 }
+
         } catch {
             print("ResModelStore: update failed \(error)")
         }
@@ -51,7 +49,7 @@ final class ResModelStore {
 
         modelContext.delete(resModel)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
     }
 
     /// Enforces uniqueness when a `ResRef` is assigned a `modelRef`

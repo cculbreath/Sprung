@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import SwiftData
-import SwiftUI
 
 @Observable
 @MainActor
@@ -12,7 +11,6 @@ final class ResRefStore {
         (try? modelContext.fetch(FetchDescriptor<ResRef>())) ?? []
     }
 
-    private var changeToken: Int = 0
 
     var defaultSources: [ResRef] {
         resRefs.filter { $0.enabledByDefault }
@@ -29,14 +27,14 @@ final class ResRefStore {
     func addResRef(_ resRef: ResRef) {
         modelContext.insert(resRef)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
     }
 
     /// Persists updates (entity already mutated)
     func updateResRef(_ resRef: ResRef) {
         do {
             try modelContext.save()
-            withAnimation { changeToken += 1 }
+
         } catch {
             print("ResRefStore: failed to save update \(error)")
         }
@@ -46,7 +44,7 @@ final class ResRefStore {
     func deleteResRef(_ resRef: ResRef) {
         modelContext.delete(resRef)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
     }
 
     /// Persists changes to the database

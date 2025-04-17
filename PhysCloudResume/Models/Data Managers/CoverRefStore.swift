@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftUI
 
 @Observable
 @MainActor
@@ -10,7 +9,6 @@ final class CoverRefStore {
         (try? modelContext.fetch(FetchDescriptor<CoverRef>())) ?? []
     }
 
-    private var changeToken: Int = 0
 
     var defaultSources: [CoverRef] {
         storedCoverRefs.filter { $0.enabledByDefault }
@@ -34,14 +32,14 @@ final class CoverRefStore {
     func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
         modelContext.insert(coverRef)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
         return coverRef
     }
 
     func deleteCoverRef(_ coverRef: CoverRef) {
         modelContext.delete(coverRef)
         try? modelContext.save()
-        withAnimation { changeToken += 1 }
+
     }
 
     private func saveContext() {
