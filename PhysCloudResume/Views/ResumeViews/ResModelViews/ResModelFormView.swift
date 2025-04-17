@@ -19,10 +19,10 @@ struct ResModelFormView: View {
     @State private var formJson: String = ""
     @State private var formResumeText: String = ""
     @State private var formName: String = ""
-    @State private var selectedStyle: String = ResModel.defaultStyle // State for the chosen style
+    @State private var selectedStyle: String = "Typewriter" // initial fallback
 
     // Using AppStorage to persist the available styles (as a comma-separated string)
-    @AppStorage("availableStyles") private var availableStylesString: String = ResModel.defaultStyle
+    @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableStyles: [String] = []
 
     var body: some View {
