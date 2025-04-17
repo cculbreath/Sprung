@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 enum Statuses: String, Codable, CaseIterable {
     case new = "New"
