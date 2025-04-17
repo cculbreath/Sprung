@@ -17,10 +17,7 @@ struct NodeChildrenListView: View {
                 if child.includeInEditor {
                     Divider()
                     if child.hasChildren {
-                        NodeWithChildrenView(
-                            node: child,
-                            isExpanded: false
-                        )
+                        NodeWithChildrenView(node: child)
                     } else {
                         ReorderableLeafRow(
                             node: child,

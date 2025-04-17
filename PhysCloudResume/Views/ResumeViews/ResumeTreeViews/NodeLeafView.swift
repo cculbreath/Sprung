@@ -10,15 +10,17 @@ import SwiftUI
 
 struct NodeLeafView: View {
     @Environment(\.modelContext) private var context
+    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
+
     @State var node: TreeNode
     @Binding var refresher: Bool
 
-    // State variables for editing and hover actions.
-    @State private var isEditing: Bool = false
-    @State private var tempValue: String = ""
-    @State private var tempName: String = ""
+    // Local UI state (hover effects)
     @State private var isHoveringEdit: Bool = false
     @State private var isHoveringSparkles: Bool = false
+
+    // Derived editing bindings
+    private var isEditing: Bool { vm.editingNodeID == node.id }
 
     var body: some View {
         HStack(spacing: 5) {
@@ -43,11 +45,14 @@ struct NodeLeafView: View {
                 }
                 if isEditing {
                     EditingControls(
-                        isEditing: $isEditing,
-                        tempName: $tempName,
-                        tempValue: $tempValue,
-                        saveChanges: saveChanges,
-                        cancelChanges: cancelChanges,
+                        isEditing: Binding(
+                            get: { isEditing },
+                            set: { newVal in if !newVal { vm.cancelEditing() } }
+                        ),
+                        tempName: Binding(get: { vm.tempName }, set: { vm.tempName = $0 }),
+                        tempValue: Binding(get: { vm.tempValue }, set: { vm.tempValue = $0 }),
+                        saveChanges: { vm.saveEdits() },
+                        cancelChanges: { vm.cancelEditing() },
                         deleteNode: { deleteNode(node: node) }
                     )
                 } else {
@@ -68,7 +73,7 @@ struct NodeLeafView: View {
                     }
 
                     if node.status != LeafStatus.disabled {
-                        Button(action: startEditing) {
+                        Button(action: { vm.startEditing(node: node) }) {
                             Image(systemName: "square.and.pencil")
                                 .foregroundColor(
                                     isHoveringEdit
@@ -86,12 +91,8 @@ struct NodeLeafView: View {
                 }
             }
         }
-        .onChange(of: node.value) { _ in
-            node.resume.debounceExport()
-        }
-        .onChange(of: node.name) { _ in
-            node.resume.debounceExport()
-        }
+        .onChange(of: node.value) { _ in vm.refreshPDF() }
+        .onChange(of: node.name) { _ in vm.refreshPDF() }
         .padding(.vertical, 4)
         .background(
             node.status == LeafStatus.aiToReplace
@@ -112,23 +113,7 @@ struct NodeLeafView: View {
 
     }
 
-    private func startEditing() {
-        tempValue = node.value
-        tempName = node.name
-        isEditing = true
-    }
-
-    private func saveChanges() {
-        node.value = tempValue
-        node.name = tempName
-        node.status = .saved
-        isEditing = false
-        try? context.save()
-    }
-
-    private func cancelChanges() {
-        isEditing = false
-    }
+    // startEditing/save/cancel logic handled by ResumeDetailVM
 
     private func deleteNode(node: TreeNode) {
         let resume = node.resume
