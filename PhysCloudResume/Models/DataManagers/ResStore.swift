@@ -91,7 +91,7 @@ final class ResStore {
         // Step 1: Create a new Resume instance
         if let jobAppo = originalResume.jobApp {
             let newResume = Resume(jobApp: jobAppo, enabledSources: originalResume.enabledSources, model: originalResume.model!)
-            TreeNode.childIndexer = 0
+            // Indexes of copied nodes will be assigned sequentially within their new parent.
 
             // Step 2: Deep copy the root node and its children
             if let rootNode = originalResume.rootNode {

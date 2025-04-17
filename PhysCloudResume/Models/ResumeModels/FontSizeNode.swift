@@ -10,8 +10,8 @@ import SwiftData
 @Model class FontSizeNode: Identifiable {
     var id = UUID().uuidString
     var key: String = ""
-    static var counter: Int = 0
-    var index: Int = -1
+    /// Local index within the font‑size array (provided by the builder).
+    var index: Int
     var fontValue: Float
     var fontString: String {
         get {
@@ -25,12 +25,11 @@ import SwiftData
     init(
         id: String = UUID().uuidString,
         key: String,
+        index: Int,
         fontString: String
 
     ) {
-        let myIndex = FontSizeNode.counter + 1
-        index = myIndex
-        FontSizeNode.counter = myIndex
+        self.index = index
         self.id = id
         self.key = key
         fontValue = FontSizeNode.parseFontString(fontString)

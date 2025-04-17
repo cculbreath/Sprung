@@ -12,6 +12,8 @@ class JsonToTree {
     private let res: Resume
     var json: OrderedDictionary<String, Any>
     private var treeKeys: [String] = []
+    /// Supplies monotonically increasing indexes during this tree build.
+    private let indexProvider = IndexProvider()
 
     init?(resume: Resume, rawJson: String) {
         res = resume
@@ -53,7 +55,7 @@ class JsonToTree {
 
     func buildTree() -> TreeNode? {
         let rootNode = TreeNode(name: "root", value: "", inEditor: true, status: .isNotLeaf, resume: res)
-        TreeNode.childIndexer = 0
+        // Child indices start fresh for every new tree build.
         guard res.needToTree else {
             fatalError("Extra run attempted – why is there an extra tree rebuild")
         }
@@ -114,14 +116,17 @@ class JsonToTree {
             return []
         }
 
-        let parsedNodes = fontArray.compactMap { myKey, myValue -> FontSizeNode? in
-            let fontString = myValue
-            print("Adding FontSizeNode: key = \(myKey), fontString = \(fontString)")
-            return FontSizeNode(key: myKey, fontString: fontString as? String ?? "")
+        var nodes: [FontSizeNode] = []
+        for (myKey, myValue) in fontArray {
+            let fontString = myValue as? String ?? ""
+            let idx = indexProvider.make()
+            print("Adding FontSizeNode: key = \(myKey), fontString = \(fontString), index = \(idx)")
+            let node = FontSizeNode(key: myKey, index: idx, fontString: fontString)
+            nodes.append(node)
         }
 
-        print("Completed parsing font sizes. Count: \(parsedNodes.count)")
-        return parsedNodes
+        print("Completed parsing font sizes. Count: \(nodes.count)")
+        return nodes
     }
 
     func treeFunction(for sectionType: SectionType) -> (String, TreeNode) -> Void {
