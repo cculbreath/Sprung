@@ -1,37 +1,37 @@
-//
-//  NodeHeaderView.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 2/2/25.
-//
-import SwiftData
 import SwiftUI
 
+/// Header row for a parent node.  No state lives here; it queries and mutates
+/// expansion state through `ResumeDetailVM`.
 struct NodeHeaderView: View {
+
     let node: TreeNode
-    @Binding var isExpanded: Bool
-    @Binding var isWide: Bool
-    @Binding var refresher: Bool
     let addChildAction: () -> Void
 
-    @State private var isHoveringAdd: Bool = false
+    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
+
+    // Bindings that forward to the view‑model properties.
+    private var isExpanded: Binding<Bool> {
+        Binding(
+            get: { vm.isExpanded(node) },
+            set: { _ in vm.toggleExpansion(for: node) }
+        )
+    }
+
+    // Accessors kept for future controls if needed.
+
+    @State private var isHoveringAdd = false
 
     var body: some View {
         HStack {
-            ToggleChevronView(isExpanded: $isExpanded, toggleAction: {
-                withAnimation {
-                    isExpanded.toggle()
-                    if !isExpanded {
-                        refresher.toggle()
-                    }
-                }
+            ToggleChevronView(isExpanded: isExpanded, toggleAction: {
+                vm.toggleExpansion(for: node)
             })
 
             if node.parent == nil {
                 HeaderTextRow()
             } else {
                 AlignedTextRow(
-                    leadingText: "\(node.label)",
+                    leadingText: node.label,
                     trailingText: nil,
                     nodeStatus: node.status
                 )
@@ -39,7 +39,7 @@ struct NodeHeaderView: View {
 
             Spacer()
 
-            if isExpanded && node.parent != nil {
+            if vm.isExpanded(node) && node.parent != nil {
                 Button(action: addChildAction) {
                     HStack {
                         Image(systemName: "plus.circle.fill")
@@ -55,17 +55,13 @@ struct NodeHeaderView: View {
                     .cornerRadius(10)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .onHover { hovering in
-                    isHoveringAdd = hovering
-                }
+                .onHover { hovering in isHoveringAdd = hovering }
             }
 
-            StatusBadgeView(node: node, isExpanded: isExpanded)
+            StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
         }
         .padding(.horizontal, 10)
         .padding(.leading, CGFloat(node.depth * 20))
         .padding(.vertical, 5)
-        .background(Color.clear)
-        .cornerRadius(5)
     }
 }
