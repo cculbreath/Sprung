@@ -1,5 +1,4 @@
 import SwiftData
-import SwiftUI
 
 @Observable
 @MainActor
@@ -14,11 +13,6 @@ final class JobAppStore {
     var jobApps: [JobApp] {
         (try? modelContext.fetch(FetchDescriptor<JobApp>())) ?? []
     }
-    // Manual refresh token to trigger Observation on mutations that occur via
-    // `modelContext` (writes to a computed property do not emit change
-    // notifications).
-    private var changeToken: Int = 0
-
     var selectedApp: JobApp?
     var form = JobAppForm()
     var resStore: ResStore
@@ -49,9 +43,6 @@ final class JobAppStore {
         try? modelContext.save()
 
         selectedApp = jobApp
-        withAnimation {
-            changeToken += 1 // notify observers
-        }
         return jobApp
     }
 
@@ -81,7 +72,7 @@ final class JobAppStore {
             selectedApp = jobApps.first
         }
 
-        withAnimation { changeToken += 1 }
+
     }
 
     private func populateFormFromObj(_ jobApp: JobApp) {
@@ -118,7 +109,7 @@ final class JobAppStore {
         // instance.
         do {
             try modelContext.save()
-            withAnimation { changeToken += 1 }
+
         } catch {
             print("JobAppStore: Failed to save updated JobApp. Error: \(error)")
         }
