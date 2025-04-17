@@ -26,6 +26,8 @@ struct HoverableResRefRowView: View {
 struct ResRefView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+    // Live SwiftData list of references
+    @Query(sort: \ResRef.name) private var resRefs: [ResRef]
 
     @State var isRefSheetPresented: Bool = false
     @State private var isHovering: Bool = false
@@ -45,7 +47,7 @@ struct ResRefView: View {
             .contentShape(Rectangle())
 
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(resRefStore.resRefs) { child in
+                ForEach(resRefs) { child in
                     Divider()
                     HoverableResRefRowView(sourceNode: child)
                         .transition(.move(edge: .top))
