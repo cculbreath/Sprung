@@ -53,7 +53,6 @@ class Resume: Identifiable, Hashable {
 
     var textRes: String = ""
 
-    var isUpdating: Bool = false
     var pdfData: Data?
     var jsonTxt: String {
         if let myRoot = rootNode, let json = TreeToJson(rootNode: myRoot)?.buildJsonString() {
@@ -88,18 +87,21 @@ class Resume: Identifiable, Hashable {
         return ResumeApiQuery(resume: self)
     }
 
-    func loadPDF(from fileURL: URL = FileHandler.pdfUrl()) {
+    /// Loads PDF data from disk into `pdfData` on a background queue.
+    /// - Parameter fileURL: The location of the PDF on disk. Defaults to the
+    ///   standard `FileHandler.pdfUrl()` path.
+    /// - Parameter completion: Optional callback executed on the main queue
+    ///   when loading finishes (success or failure).
+    func loadPDF(from fileURL: URL = FileHandler.pdfUrl(),
+                 completion: (() -> Void)? = nil) {
         DispatchQueue.global(qos: .background).async { [weak self] in
+            defer { DispatchQueue.main.async { completion?() } }
             do {
                 let data = try Data(contentsOf: fileURL)
-                DispatchQueue.main.async {
-                    self?.pdfData = data
-                    self?.isUpdating = false
-                }
+                DispatchQueue.main.async { self?.pdfData = data }
             } catch {
                 DispatchQueue.main.async {
                     print("Failed to load PDF file: \(error.localizedDescription)")
-                    self?.isUpdating = false
                 }
             }
         }
@@ -109,10 +111,19 @@ class Resume: Identifiable, Hashable {
 
     @Transient private var exportWorkItem: DispatchWorkItem?
 
-    func debounceExport() {
+    /// Debounces repeated export requests so that the network operation is
+    /// not triggered excessively while the user is typing.
+    /// - Parameters:
+    ///   - onStart:   Callback executed immediately when the debounce window
+    ///                begins – typically used to toggle a loading indicator.
+    ///   - onFinish:  Callback executed after the export attempt (success or
+    ///                failure) completes.
+    func debounceExport(onStart: (() -> Void)? = nil,
+                        onFinish: (() -> Void)? = nil) {
         print("pdf refresh")
-        isUpdating = true
+
         exportWorkItem?.cancel()
+        onStart?()
 
         exportWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
@@ -120,17 +131,21 @@ class Resume: Identifiable, Hashable {
                 Task {
                     do {
                         try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
-                        DispatchQueue.main.async { self.isUpdating = false }
+                        DispatchQueue.main.async { onFinish?() }
                     } catch {
                         print("Resume export failed: \(error)")
-                        DispatchQueue.main.async { self.isUpdating = false }
+                        DispatchQueue.main.async { onFinish?() }
                     }
                 }
+            } else {
+                DispatchQueue.main.async { onFinish?() }
             }
         }
 
         // Delay half a second before exporting
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: exportWorkItem!)
+        if let workItem = exportWorkItem {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+        }
     }
 
     // MARK: - Hashable

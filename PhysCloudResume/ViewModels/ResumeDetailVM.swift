@@ -20,6 +20,17 @@ final class ResumeDetailVM {
     /// Triggers a view refresh when nodes change order / values.
     var refresher: Bool = false
 
+    /// Whether the optional font‑size panel should be shown. This setting is
+    /// mirrored from the underlying model but owned by the view‑model so that
+    /// the view no longer touches the model layer directly.
+    var includeFonts: Bool {
+        get { resume.includeFonts }
+        set { resume.includeFonts = newValue }
+    }
+
+    // Tracks which group nodes are expanded in the UI.
+    private var expandedIDs: Set<String> = []
+
     /// Computed convenience access to the resume’s root node.
     var rootNode: TreeNode? { resume.rootNode }
 
@@ -43,7 +54,7 @@ final class ResumeDetailVM {
             status: .saved,
             resume: resume
         )
-        newNode.isEditing = true
+        // Editing state is now tracked solely in the view‑model.
         parent.addChild(newNode)
         refresher.toggle()
     }
@@ -58,4 +69,50 @@ final class ResumeDetailVM {
 
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
     func refreshPDF() { resume.debounceExport() }
+
+    // MARK: - Editing -------------------------------------------------------
+
+    private(set) var editingNodeID: String? = nil
+    var tempName: String = ""
+    var tempValue: String = ""
+
+    func startEditing(node: TreeNode) {
+        editingNodeID = node.id
+        tempName = node.name
+        tempValue = node.value
+    }
+
+    func cancelEditing() {
+        editingNodeID = nil
+    }
+
+    /// Save edits currently in `tempName` / `tempValue` back to the node and
+    /// refresh the PDF.
+    func saveEdits() {
+        guard let id = editingNodeID, let node = resume.nodes.first(where: { $0.id == id }) else { return }
+
+        node.name  = tempName
+        node.value = tempValue
+
+        editingNodeID = nil
+
+        // Trigger PDF export and view refresh
+        refreshPDF()
+        refresher.toggle()
+    }
+    // MARK: - Expansion state ---------------------------------------------
+
+    func isExpanded(_ node: TreeNode) -> Bool {
+        if node.parent == nil { return true }          // Root always expanded
+        return expandedIDs.contains(node.id)
+    }
+
+    func toggleExpansion(for node: TreeNode) {
+        if expandedIDs.contains(node.id) {
+            expandedIDs.remove(node.id)
+        } else {
+            expandedIDs.insert(node.id)
+        }
+        refresher.toggle() // trigger a UI update
+    }
 }

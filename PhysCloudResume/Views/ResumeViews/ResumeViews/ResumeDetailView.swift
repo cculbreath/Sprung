@@ -33,7 +33,7 @@ struct ResumeDetailView: View {
                     nodeView(root)
                 }
 
-                if vm.resume.includeFonts {
+                if vm.includeFonts {
                     FontSizePanelView(refresher: $vm.refresher).padding(10)
                 }
             }
@@ -57,10 +57,7 @@ struct ResumeDetailView: View {
     private func nodeView(_ node: TreeNode) -> some View {
         if node.includeInEditor {
             if node.hasChildren {
-                NodeWithChildrenView(
-                    node: node,
-                    isExpanded: node.parent == nil // root expanded by default
-                )
+                NodeWithChildrenView(node: node)
             } else {
                 NodeLeafView(node: node, refresher: $vm.refresher)
             }
