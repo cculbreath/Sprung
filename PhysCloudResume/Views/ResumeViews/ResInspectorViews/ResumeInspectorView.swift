@@ -41,9 +41,9 @@ struct ResumeInspectorView: View {
 
       GeometryReader { geometry in
         VStack(spacing: 0) {
-          ResumeInspectorListView(
-            listSelection: $selApp.selectedRes,
-            resumes: $selApp.resumes
+            ResumeInspectorListView(
+                listSelection: $selApp.selectedRes,
+                resumes: selApp.resumes
           )
 
           if isHidden {
