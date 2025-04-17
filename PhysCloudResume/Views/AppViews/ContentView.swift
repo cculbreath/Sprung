@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-
 struct ContentView: View {
     // MARK: - State Variables
 
@@ -10,6 +9,9 @@ struct ContentView: View {
     @State private var coverRefStore: CoverRefStore
     @State private var coverLetterStore: CoverLetterStore
     @State private var resModelStore: ResModelStore
+
+    // Live query for JobApps displayed in the sidebar list
+    @Query(sort: \JobApp.job_position) private var jobApps: [JobApp]
     @State var dragInfo: DragInfo = .init()
     @State var tabRefresh: Bool = false
     @State var showNewAppSheet: Bool = false
@@ -52,7 +54,7 @@ struct ContentView: View {
                 VStack(spacing: 0) {
                     List(selection: $jobAppStore.selectedApp) {
                         ForEach(Statuses.allCases, id: \.self) { status in
-                            let filteredApps: [JobApp] = jobAppStore.jobApps.filter { $0.status == status }
+                            let filteredApps = jobApps.filter { $0.status == status }
                             if !filteredApps.isEmpty {
                                 JobAppSectionView(
                                     status: status,
