@@ -1,8 +1,0 @@
-{{#each r.publications}}
-{{#if (articleType this.type)}}
-<li>{{{formatAuthors this.authors}}}. "<a href="{{this.url}}">{{this.title}}"&#x21D7;</a> {{this.journal}}, {{this.volume}}({{this.issue}}),({{this.year}}).</li>
-{{/if}}
-{{#if (dissType this.type)}}
-<li>{{this.authors}}.  "<a href="{{this.url}}">{{this.title}}"&#x21D7;</a> {{this.journal}}. Doctoral Dissertation. ({{this.year}})</li>
-{{/if}}
-{{/each}}
