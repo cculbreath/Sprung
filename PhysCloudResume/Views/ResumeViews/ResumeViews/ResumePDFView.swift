@@ -1,71 +1,63 @@
-//
 //  ResumePDFView.swift
 //  PhysicsCloudResume
-//
-//  Created by Christopher Culbreath on 8/20/24.
-//
 
 import PDFKit
 import SwiftUI
 
+/// Displays the generated PDF for a given resume along with a small progress
+/// indicator while an export job is running.
 struct ResumePDFView: View {
-    @Bindable var resume: Resume
-    @State private var needsUpdate: Bool = false
+
+    @State private var vm: ResumePDFViewModel
+
+    init(resume: Resume) {
+        _vm = State(wrappedValue: ResumePDFViewModel(resume: resume))
+    }
 
     var body: some View {
-        @State var isUpdating = resume.isUpdating
-
         VStack {
-            if resume.pdfData != nil {
-                if let pdfData = resume.pdfData {
-                    PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity).overlay(alignment: .topTrailing) {
-                            if isUpdating {
-                                ProgressView().scaleEffect(0.5, anchor: .center).padding(.top, 2).padding(.trailing, 2)
-                            }
+            if let pdfData = vm.resume.pdfData {
+                PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .topTrailing) {
+                        if vm.isUpdating {
+                            ProgressView().scaleEffect(0.5)
+                                .padding([.top, .trailing], 2)
                         }
-                }
+                    }
             } else {
-                if isUpdating { ProgressView() }
-                else { Text("No PDF available") }
+                if vm.isUpdating {
+                    ProgressView()
+                } else {
+                    Text("No PDF available")
+                }
             }
         }
         .onAppear {
-            if resume.pdfData == nil {
-                if let fileURL = FileHandler.readPdfUrl() {
-                    resume.loadPDF(from: fileURL)
-                }
+            // Lazy‑load a cached PDF if present on disk.
+            if vm.resume.pdfData == nil,
+               let fileURL = FileHandler.readPdfUrl() {
+                vm.resume.loadPDF(from: fileURL)
             }
         }
-//    .onChange(of: resume.pdfData) {
-//      needsUpdate.toggle()  // Update the view when pdfData changes
-//    }
     }
 }
 
-func pdfViewer(pdfData: Data?) -> PDFView {
-    var pdfDoc: PDFDocument?
-    if let pdfData = pdfData {
-        pdfDoc = PDFDocument(data: pdfData)
-    }
+// MARK: - PDF helpers -------------------------------------------------------
 
+private func pdfViewer(pdfData: Data?) -> PDFView {
     let pdfView = PDFView()
-    pdfView.document = pdfDoc
+    if let pdfData {
+        pdfView.document = PDFDocument(data: pdfData)
+    }
     pdfView.autoScales = true
     return pdfView
 }
 
-struct PDFKitWrapper: NSViewRepresentable {
+private struct PDFKitWrapper: NSViewRepresentable {
     let pdfView: PDFView
 
-    func makeNSView(context _: Context) -> PDFView {
-        return pdfView
-    }
-
-    func updateNSView(_ nsView: PDFView, context _: Context) {
-        // Update the NSView if needed
-        nsView.document = pdfView.document
-    }
-
+    func makeNSView(context _: Context) -> PDFView { pdfView }
+    func updateNSView(_ nsView: PDFView, context _: Context) { nsView.document = pdfView.document }
     typealias NSViewType = PDFView
 }
