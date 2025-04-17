@@ -117,9 +117,13 @@ class Resume: Identifiable, Hashable {
         exportWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonTxt) {
-                apiGenerateResFromJson(jsonPath: jsonFile, resume: self) { success in
-                    DispatchQueue.main.async {
-                        self.isUpdating = !success
+                Task {
+                    do {
+                        try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
+                        DispatchQueue.main.async { self.isUpdating = false }
+                    } catch {
+                        print("Resume export failed: \(error)")
+                        DispatchQueue.main.async { self.isUpdating = false }
                     }
                 }
             }
