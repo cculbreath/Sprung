@@ -3,10 +3,6 @@ import Foundation
 class PdfResume {
     static func render(res _: Resume) {
         // Step 1: Get the paths for the JSON input, PDF output, and theme
-        if !FileHandler.fontsDone {
-//      FileHandler.copyFontsToAppSupport()
-            FileHandler.fontsDone = true
-        }
         let process = Process()
 
         let jsonPath: URL = FileHandler.jsonUrl()

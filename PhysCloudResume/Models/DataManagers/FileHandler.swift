@@ -8,13 +8,6 @@
 import Foundation
 
 class FileHandler {
-    static var fontsDone: Bool = true
-    init() {
-        if !FileHandler.fontsDone {
-//      FileHandler.copyFontsToAppSupport()
-            FileHandler.fontsDone = true
-        }
-    }
 
     // Static file manager and application support directory
     static let fileManager = FileManager.default
