@@ -346,6 +346,9 @@ struct ReviewView: View {
                 }
             }
         }
+        // After applying accepted changes, trigger a PDF refresh for the
+        // currently selected resume so the new values are exported.
+        selRes?.debounceExport()
     }
 
     func aiResubmit() {
