@@ -1,5 +1,6 @@
 import AppKit // Import AppKit to use NSCursor
 import SwiftUI
+import SwiftData
 
 struct ResInspectorToggleView: View {
     // Access the ResRefStore from the environment.

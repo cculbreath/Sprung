@@ -1,7 +1,5 @@
 import Foundation
-import PDFKit
 import SwiftData
-import SwiftUI
 
 @Model
 class Resume: Identifiable, Hashable {
@@ -24,7 +22,21 @@ class Resume: Identifiable, Hashable {
         }
     }
 
-    var nodes: [TreeNode] = []
+    /// Computed list of all `TreeNode`s that belong to this resume.  This
+    /// replaces the previous stored `nodes` array to eliminate strong
+    /// reference cycles and manual bookkeeping.
+    var nodes: [TreeNode] {
+        guard let rootNode else { return [] }
+        return Resume.collectNodes(from: rootNode)
+    }
+
+    private static func collectNodes(from node: TreeNode) -> [TreeNode] {
+        var all: [TreeNode] = [node]
+        for child in node.children ?? [] {
+            all.append(contentsOf: collectNodes(from: child))
+        }
+        return all
+    }
 
     var dateCreated: Date = Date()
     weak var jobApp: JobApp?
@@ -93,17 +105,7 @@ class Resume: Identifiable, Hashable {
         }
     }
 
-    func displayPDF() -> PDFView? {
-        guard let pdfData else { return nil }
-        let pdfView = PDFView()
-        DispatchQueue.main.async {
-            if let document = PDFDocument(data: pdfData) {
-                pdfView.document = document
-                pdfView.autoScales = true
-            }
-        }
-        return pdfView
-    }
+
 
     @Transient private var exportWorkItem: DispatchWorkItem?
 
