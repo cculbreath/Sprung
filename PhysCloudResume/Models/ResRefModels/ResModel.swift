@@ -3,7 +3,6 @@ import SwiftData
 
 @Model
 class ResModel: Identifiable, Equatable, Hashable {
-    static var defaultStyle: String = ""
     var id: UUID
     var dateCreated: Date = Date()
     @Relationship(deleteRule: .cascade, inverse: \Resume.model) var resumes: [Resume]
@@ -19,7 +18,7 @@ class ResModel: Identifiable, Equatable, Hashable {
         name: String,
         json: String,
         renderedResumeText: String,
-        style: String = ResModel.defaultStyle
+        style: String = "Typewriter"
     ) {
         id = UUID()
         self.resumes = resumes
