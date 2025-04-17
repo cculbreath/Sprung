@@ -18,7 +18,6 @@ enum LeafStatus: String, Codable, Hashable {
     var includeInEditor: Bool = false
     var myIndex: Int = -1
     var isEditing: Bool = false
-    public static var childIndexer = 0
     @Relationship(deleteRule: .cascade) var children: [TreeNode]? = nil
     weak var parent: TreeNode?
     var label: String { return resume.label(name) }
@@ -83,10 +82,10 @@ enum LeafStatus: String, Codable, Hashable {
         }
         //    print(child.resume.id)
         child.parent = self
-        child.myIndex = TreeNode.childIndexer
+        // Assign index sequentially within the parent's children array.
+        child.myIndex = (children?.count ?? 0)
         child.nodeDepth = nodeDepth + 1
         children?.append(child)
-        TreeNode.childIndexer += 1
         return child
     }
 
