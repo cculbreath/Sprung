@@ -5,7 +5,7 @@ import SwiftUI
 struct ResumeInspectorListView: View {
     @Environment(ResStore.self) private var resStore
     @Binding var listSelection: Resume?
-    @Binding var resumes: [Resume]
+    var resumes: [Resume]
 
     // The persisted string that holds the available styles.
     @AppStorage("availableStyles") private var availableStylesString: String = ResModel.defaultStyle
@@ -31,9 +31,6 @@ struct ResumeInspectorListView: View {
                                 },
                                 onDelete: {
                                     resStore.deleteRes(resume)
-                                    if let index = resumes.firstIndex(of: resume) {
-                                        resumes.remove(at: index)
-                                    }
                                 }
                             )
                         }
@@ -47,7 +44,7 @@ struct ResumeInspectorListView: View {
         .onChange(of: availableStylesString) {
             updateAvailableStyles()
         }
-        .onChange(of: resumes) {
+        .onChange(of: resumes.count) { _ in
             updateAvailableStyles()
         }
     }
