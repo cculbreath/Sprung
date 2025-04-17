@@ -9,8 +9,7 @@ import SwiftUI
 
 struct NodeChildrenListView: View {
     let children: [TreeNode]
-    @Binding var isWide: Bool
-    @Binding var refresher: Bool
+    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
@@ -20,16 +19,14 @@ struct NodeChildrenListView: View {
                     if child.hasChildren {
                         NodeWithChildrenView(
                             node: child,
-                            isExpanded: false,
-                            isWide: $isWide,
-                            refresher: $refresher
+                            isExpanded: false
                         )
                     } else {
                         ReorderableLeafRow(
                             node: child,
                             siblings: children,
                             currentIndex: index,
-                            refresher: $refresher
+                            refresher: Binding(get: { vm.refresher }, set: { vm.refresher = $0 })
                         )
                         .padding(.vertical, 4)
                     }
