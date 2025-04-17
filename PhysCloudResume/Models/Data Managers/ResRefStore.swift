@@ -1,12 +1,18 @@
 import Foundation
 import Observation
 import SwiftData
+import SwiftUI
 
 @Observable
 @MainActor
 final class ResRefStore {
     private unowned let modelContext: ModelContext
-    var resRefs: [ResRef] = []
+    // Computed collection
+    var resRefs: [ResRef] {
+        (try? modelContext.fetch(FetchDescriptor<ResRef>())) ?? []
+    }
+
+    private var changeToken: Int = 0
 
     var defaultSources: [ResRef] {
         resRefs.filter { $0.enabledByDefault }
@@ -14,41 +20,33 @@ final class ResRefStore {
 
     init(context: ModelContext) {
         self.modelContext = context
-        loadResRefs()
         print("RefStore Initialized: \(resRefs.count) refs")
     }
 
-    private func loadResRefs() {
-        let descriptor = FetchDescriptor<ResRef>()
-        do {
-            resRefs = try modelContext.fetch(descriptor)
-        } catch {
-            print("Failed to fetch Resume Refs: \(error)")
-        }
-    }
+
 
     /// Adds a new `ResRef` to the store
     func addResRef(_ resRef: ResRef) {
-        resRefs.append(resRef)
         modelContext.insert(resRef)
-        saveContext()
+        try? modelContext.save()
+        withAnimation { changeToken += 1 }
     }
 
-    /// Updates an existing `ResRef` if found
+    /// Persists updates (entity already mutated)
     func updateResRef(_ resRef: ResRef) {
-        if let index = resRefs.firstIndex(where: { $0.id == resRef.id }) {
-            resRefs[index] = resRef
-            saveContext()
+        do {
+            try modelContext.save()
+            withAnimation { changeToken += 1 }
+        } catch {
+            print("ResRefStore: failed to save update \(error)")
         }
     }
 
     /// Deletes a `ResRef` from the store
     func deleteResRef(_ resRef: ResRef) {
-        if let index = resRefs.firstIndex(where: { $0.id == resRef.id }) {
-            resRefs.remove(at: index)
         modelContext.delete(resRef)
-            saveContext()
-        }
+        try? modelContext.save()
+        withAnimation { changeToken += 1 }
     }
 
     /// Persists changes to the database

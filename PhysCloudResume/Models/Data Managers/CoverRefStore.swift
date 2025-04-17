@@ -1,11 +1,16 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 @Observable
 @MainActor
 final class CoverRefStore {
     private unowned let modelContext: ModelContext
-    var storedCoverRefs: [CoverRef] = []
+    var storedCoverRefs: [CoverRef] {
+        (try? modelContext.fetch(FetchDescriptor<CoverRef>())) ?? []
+    }
+
+    private var changeToken: Int = 0
 
     var defaultSources: [CoverRef] {
         storedCoverRefs.filter { $0.enabledByDefault }
@@ -13,7 +18,6 @@ final class CoverRefStore {
 
     init(context: ModelContext) {
         self.modelContext = context
-        loadCoverRefs()
     }
 
     var backgroundFacts: [CoverRef] {
@@ -24,29 +28,20 @@ final class CoverRefStore {
         return storedCoverRefs.filter { $0.type == .writingSample }
     }
 
-    private func loadCoverRefs() {
-        let descriptor = FetchDescriptor<CoverRef>()
-        do {
-            storedCoverRefs = try modelContext.fetch(descriptor)
-        } catch {
-            print("Failed to fetch Cover Refs: \(error)")
-        }
-    }
+
 
     @discardableResult
     func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
-        storedCoverRefs.append(coverRef)
         modelContext.insert(coverRef)
-        saveContext()
+        try? modelContext.save()
+        withAnimation { changeToken += 1 }
         return coverRef
     }
 
     func deleteCoverRef(_ coverRef: CoverRef) {
-        if let index = storedCoverRefs.firstIndex(of: coverRef) {
-            storedCoverRefs.remove(at: index)
-            modelContext.delete(coverRef)
-            saveContext()
-        }
+        modelContext.delete(coverRef)
+        try? modelContext.save()
+        withAnimation { changeToken += 1 }
     }
 
     private func saveContext() {
