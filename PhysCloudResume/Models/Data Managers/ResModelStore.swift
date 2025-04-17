@@ -1,12 +1,17 @@
 import Foundation
 import Observation
 import SwiftData
+import SwiftUI
 
 @Observable
 @MainActor
 final class ResModelStore {
     private unowned let modelContext: ModelContext
-    var resModels: [ResModel] = []
+    var resModels: [ResModel] {
+        (try? modelContext.fetch(FetchDescriptor<ResModel>())) ?? []
+    }
+
+    private var changeToken: Int = 0
     var resStore: ResStore
 
     var isThereAnyJson: Bool { !resModels.isEmpty }
@@ -14,51 +19,39 @@ final class ResModelStore {
     init(context: ModelContext, resStore: ResStore) {
         self.modelContext = context
         self.resStore = resStore
-        loadModels()
         print("Model Store Init: \(resModels.count) models")
     }
 
-    private func loadModels() {
-        let descriptor = FetchDescriptor<ResModel>()
-        do {
-            resModels = try modelContext.fetch(descriptor)
-        } catch {
-            print("Failed to fetch Resume Models: \(error)")
-        }
-    }
+
 
     /// Ensures that each modelRef is unique across `resRefs`
 
-    /// Adds a new `ResRef` to the store
+    /// Adds a new model to the store
     func addResModel(_ resModel: ResModel) {
-        resModels.append(resModel)
         modelContext.insert(resModel)
-        try! saveContext()
+        try? modelContext.save()
+        withAnimation { changeToken += 1 }
     }
 
-    /// Updates an existing `ResRef` if found
+    /// Persist updates on the supplied model
     func updateResModel(_ resModel: ResModel) {
-        if let index = resModels.firstIndex(where: { $0.id == resModel.id }) {
-            resModels[index] = resModel
-            try? saveContext()
+        do {
+            try modelContext.save()
+            withAnimation { changeToken += 1 }
+        } catch {
+            print("ResModelStore: update failed \(error)")
         }
     }
 
-    /// Deletes a `ResRef` from the store
+    /// Deletes a model and associated resumes
     func deleteResModel(_ resModel: ResModel) {
-        if let index = resModels.firstIndex(where: { $0.id == resModel.id }) {
-            for myRes in resModels[index].resumes {
-                resStore.deleteRes(myRes)
-            }
-
-            resModels.remove(at: index)
-        modelContext.delete(resModel)
-            do {
-                try saveContext()
-            } catch {
-                print("deleteRes")
-            }
+        for myRes in resModel.resumes {
+            resStore.deleteRes(myRes)
         }
+
+        modelContext.delete(resModel)
+        try? modelContext.save()
+        withAnimation { changeToken += 1 }
     }
 
     /// Enforces uniqueness when a `ResRef` is assigned a `modelRef`
