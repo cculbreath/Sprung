@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftUI
 
 enum LeafStatus: String, Codable, Hashable {
     case isEditing
@@ -74,7 +73,6 @@ enum LeafStatus: String, Codable, Hashable {
 
         nodeDepth = 0
         self.resume = resume
-        resume.nodes.append(self)
         // No need to set status again, it's already set by default.
     }
 
@@ -195,10 +193,8 @@ enum LeafStatus: String, Codable, Hashable {
         if let parent = node.parent, let index = parent.children?.firstIndex(of: node) {
             parent.children?.remove(at: index)
         }
-        // Remove from resume.nodes
-        if let index = node.resume.nodes.firstIndex(of: node) {
-            node.resume.nodes.remove(at: index)
-        }
+        // No need to manually maintain a nodes array; the computed property
+        // on `Resume` will pick up changes automatically.
         // Delete the node itself
         context.delete(node)
 

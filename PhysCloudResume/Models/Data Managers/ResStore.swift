@@ -125,9 +125,6 @@ final class ResStore {
             resume: newResume
         )
 
-        // Add the copied node to the new resume's nodes array
-        newResume.nodes.append(copyNode)
-
         // Step 2: Recursively copy the children and set the parent-child relationship
         if let children = node.children {
             for child in children {

@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftUI
 
 enum Statuses: String, Codable, CaseIterable {
     case new = "New"
@@ -26,12 +25,7 @@ enum Statuses: String, Codable, CaseIterable {
     }
 
     @Relationship(deleteRule: .cascade, inverse: \Resume.jobApp)
-    var resumes: [Resume] {
-        didSet {
-            objectWillChange.send()
-            print("resumeAppendedToJobApp")
-        }
-    }
+    var resumes: [Resume] = []
 
     @Relationship(deleteRule: .cascade, inverse: \CoverLetter.jobApp)
     var coverLetters: [CoverLetter] = []
@@ -135,29 +129,7 @@ enum Statuses: String, Codable, CaseIterable {
         return descriptionParts.joined(separator: "\n")
     }
 
-    @ViewBuilder
-    var statusTag: some View {
-        switch status {
-        case .new:
-            RoundedTagView(tagText: "New", backgroundColor: .green, foregroundColor: .white)
-        case .inProgress:
-            RoundedTagView(tagText: "In Progress", backgroundColor: .mint, foregroundColor: .white)
-        case .unsubmitted:
-            RoundedTagView(tagText: "Unsubmitted", backgroundColor: .cyan, foregroundColor: .white)
-        case .submitted:
-            RoundedTagView(tagText: "Submitted", backgroundColor: .indigo, foregroundColor: .white)
-        case .interview:
-            RoundedTagView(tagText: "Interview", backgroundColor: .pink, foregroundColor: .white)
-        case .closed:
-            RoundedTagView(tagText: "Closed", backgroundColor: .gray, foregroundColor: .white)
-        case .followUp:
-            RoundedTagView(tagText: "Follow Up", backgroundColor: .yellow, foregroundColor: .white)
-        case .abandonned:
-            RoundedTagView(tagText: "Abandoned", backgroundColor: .secondary, foregroundColor: .white)
-        case .rejected:
-            RoundedTagView(tagText: "Rejected", backgroundColor: .black, foregroundColor: .white)
-        }
-    }
+
 
     static func pillColor(_ myCase: String) -> Color {
         let myCase = myCase.lowercased()
