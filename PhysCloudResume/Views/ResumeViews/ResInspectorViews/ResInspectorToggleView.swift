@@ -4,6 +4,7 @@ import SwiftUI
 struct ResInspectorToggleView: View {
     // Access the ResRefStore from the environment.
     @Environment(ResRefStore.self) var resRefStore: ResRefStore
+    @Query(sort: \ResRef.name) private var resRefs: [ResRef]
     // Bind to the Resume model.
     @Binding var res: Resume?
 
@@ -45,7 +46,7 @@ struct ResInspectorToggleView: View {
                     .padding(.bottom, 2)
 
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 2) {
-                    ForEach(resRefStore.resRefs, id: \.id) { resRef in
+                    ForEach(resRefs, id: \.id) { resRef in
                         ResRefToggleCell(
                             resRef: resRef,
                             isEnabled: createBinding(for: resRef, in: resume)
