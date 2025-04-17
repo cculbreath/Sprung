@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftUI
 
 enum Statuses: String, Codable, CaseIterable {
     case new = "New"
@@ -132,21 +131,7 @@ enum Statuses: String, Codable, CaseIterable {
 
 
 
-    static func pillColor(_ myCase: String) -> Color {
-        let myCase = myCase.lowercased()
-        switch myCase {
-        case "closed": return Color.gray
-        case "follow up": return Color.yellow
-        case "interview": return Color.pink
-        case "submitted": return Color.indigo
-        case "unsubmitted": return Color.cyan
-        case "in progress": return Color.mint
-        case "new": return Color.green
-        case "abandonned": return .secondary
-        case "rejected": return Color.black
-        default: return Color.black
-        }
-    }
+    // UI helpers have been moved to SwiftUI‑only extension (ViewExtensions).
 
     init(
         job_position: String = "",
