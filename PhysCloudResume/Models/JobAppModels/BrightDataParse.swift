@@ -1,6 +1,7 @@
 import Foundation
 
 extension JobApp {
+    @MainActor
     static func parseBrightDataJobApp(jobAppStore: JobAppStore, jsonData: Data) -> JobApp? {
         if let jsonArray = (try? JSONSerialization.jsonObject(with: jsonData, options: [])) as? [[String: Any]],
            let jsonDict = jsonArray.first

@@ -32,6 +32,7 @@ extension JobApp {
         }
     }
 
+    @MainActor
     static func parseAppleJobListing(jobAppStore: JobAppStore, html: String, url: String) {
         do {
             let doc: Document = try SwiftSoup.parse(html)

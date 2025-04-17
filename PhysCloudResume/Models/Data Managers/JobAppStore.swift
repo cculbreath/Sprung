@@ -1,4 +1,5 @@
 import SwiftData
+import SwiftUI
 
 @Observable
 @MainActor
@@ -6,7 +7,18 @@ final class JobAppStore {
     // MARK: - Properties
 
     private unowned let modelContext: ModelContext
-    var jobApps: [JobApp] = []
+    // Computed collection that always reflects the latest state stored in
+    // `modelContext`.  Because this is *computed*, any view access will fetch
+    // directly from SwiftData and therefore stay in sync with persistent
+    // storage without additional bookkeeping.
+    var jobApps: [JobApp] {
+        (try? modelContext.fetch(FetchDescriptor<JobApp>())) ?? []
+    }
+    // Manual refresh token to trigger Observation on mutations that occur via
+    // `modelContext` (writes to a computed property do not emit change
+    // notifications).
+    private var changeToken: Int = 0
+
     var selectedApp: JobApp?
     var form = JobAppForm()
     var resStore: ResStore
@@ -18,21 +30,10 @@ final class JobAppStore {
         self.modelContext = context
         self.resStore = resStore
         self.coverLetterStore = coverLetterStore
-        loadJobApps()
+
     }
 
-    // Load JobApps from the database
-
-    private func loadJobApps() {
-        let descriptor = FetchDescriptor<JobApp>()
-        do {
-            jobApps = try modelContext.fetch(descriptor)
-        } catch {
-            print("Failed to fetch JobApps: \(error)")
-        }
-    }
-
-    // Methods to manage jobApps
+    // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus
 //    saveContext()
@@ -40,11 +41,18 @@ final class JobAppStore {
     }
 
     func addJobApp(_ jobApp: JobApp) -> JobApp? {
+        // Side‑effect: create an empty cover‑letter placeholder so the UI can
+        // immediately reference `selectedCover`.
         coverLetterStore.createBlank(jobApp: jobApp)
-        jobApps.append(jobApp)
+
         modelContext.insert(jobApp)
-//    saveContext()
-        return jobApps.last
+        try? modelContext.save()
+
+        selectedApp = jobApp
+        withAnimation {
+            changeToken += 1 // notify observers
+        }
+        return jobApp
     }
 
     func deleteSelected() {
@@ -53,24 +61,27 @@ final class JobAppStore {
         }
 
         deleteJobApp(deleteMe)
-        selectedApp = jobApps.last //! FixMe Problematic?
+        // Fallback to most recent app (if any)
+        selectedApp = jobApps.last
     }
 
     func deleteJobApp(_ jobApp: JobApp) {
-        if let index = jobApps.firstIndex(of: jobApp) {
-            for resume in jobApp.resumes {
-                resStore.deleteRes(resume)
-            }
-            jobApps.remove(at: index)
-            modelContext.delete(jobApp)
-
-            if selectedApp == jobApp {
-                selectedApp = nil
-            }
-            if selectedApp == nil {
-                selectedApp = jobApps.first
-            }
+        // Clean up child objects first
+        for resume in jobApp.resumes {
+            resStore.deleteRes(resume)
         }
+
+        modelContext.delete(jobApp)
+        try? modelContext.save()
+
+        if selectedApp == jobApp {
+            selectedApp = nil
+        }
+        if selectedApp == nil {
+            selectedApp = jobApps.first
+        }
+
+        withAnimation { changeToken += 1 }
     }
 
     private func populateFormFromObj(_ jobApp: JobApp) {
@@ -103,18 +114,11 @@ final class JobAppStore {
     }
 
     func updateJobApp(_ updated: JobApp) {
-        // Make sure we’re actually tracking this JobApp in our array
-        if let index = jobApps.firstIndex(of: updated) {
-            // Update the array in case you need to reflect changes in memory
-            jobApps[index] = updated
-        } else {
-            print("Warning: updateJobApp called for a JobApp not in jobApps.")
-        }
-
-        // Save the updated data to SwiftData (if you want to do so automatically)
+        // Persist the changes that should already be reflected on the entity
+        // instance.
         do {
             try modelContext.save()
-            print("JobAppStore: Successfully updated and saved changes for \(updated).")
+            withAnimation { changeToken += 1 }
         } catch {
             print("JobAppStore: Failed to save updated JobApp. Error: \(error)")
         }

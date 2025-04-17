@@ -1,6 +1,7 @@
 import Foundation
 
 extension JobApp {
+    @MainActor
     static func parseProxycurlJobApp(jobAppStore: JobAppStore, jsonData: Data, postingUrl: String) -> JobApp? {
         do {
             // Try to decode the JSON response

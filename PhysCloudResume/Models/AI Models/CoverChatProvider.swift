@@ -66,6 +66,7 @@ final class CoverChatProvider {
         resultsAvailable = false
     }
 
+    @MainActor
     func coverChatRevise(
         res: Resume?,
         jobAppStore: JobAppStore,
@@ -73,7 +74,7 @@ final class CoverChatProvider {
         buttons: Binding<CoverLetterButtons>,
         customFeedback: Binding<String>
     ) {
-        Task {
+        Task { @MainActor in
             print("reviseAction")
             buttons.wrappedValue.runRequested = true
             defer {
@@ -131,13 +132,14 @@ final class CoverChatProvider {
         }
     }
 
+    @MainActor
     func coverChatAction(
         res: Resume?,
         jobAppStore: JobAppStore,
         chatProvider _: CoverChatProvider,
         buttons: Binding<CoverLetterButtons>
     ) {
-        Task {
+        Task { @MainActor in
             print("chatAction")
             buttons.wrappedValue.runRequested = true
 //      defer {
