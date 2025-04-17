@@ -17,7 +17,6 @@ enum LeafStatus: String, Codable, Hashable {
     var value: String
     var includeInEditor: Bool = false
     var myIndex: Int = -1
-    var isEditing: Bool = false
     @Relationship(deleteRule: .cascade) var children: [TreeNode]? = nil
     weak var parent: TreeNode?
     var label: String { return resume.label(name) }
