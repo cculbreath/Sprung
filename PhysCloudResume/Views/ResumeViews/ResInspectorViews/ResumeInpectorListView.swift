@@ -8,7 +8,7 @@ struct ResumeInspectorListView: View {
     var resumes: [Resume]
 
     // The persisted string that holds the available styles.
-    @AppStorage("availableStyles") private var availableStylesString: String = ResModel.defaultStyle
+    @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     // The mutable state variable that will drive your UI updates.
     @State private var availableStyles: [String] = []
 
