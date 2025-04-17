@@ -5,14 +5,18 @@ import SwiftUI
 
 struct SidebarView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    // Live query – any insertion / deletion in SwiftData refreshes the list
+    @Query(sort: \JobApp.job_position) private var jobApps: [JobApp]
+
     @Binding var showNewAppSheet: Bool
     @Binding var showSlidingList: Bool
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
+
         List(selection: $jobAppStore.selectedApp) {
             ForEach(Statuses.allCases, id: \.self) { status in
-                let filteredApps: [JobApp] = jobAppStore.jobApps.filter { $0.status == status }
+                let filteredApps = jobApps.filter { $0.status == status }
                 if !filteredApps.isEmpty {
                     JobAppSectionView(
                         status: status,
@@ -25,6 +29,5 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        // No toolbar here
     }
 }
