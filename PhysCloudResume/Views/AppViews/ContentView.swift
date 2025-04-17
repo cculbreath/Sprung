@@ -115,10 +115,8 @@ struct ContentView: View {
             .appendingPathComponent("Model.sqlite") {
             print("Database location: \(storeURL.path)")
           }
-            ResModel.defaultStyle = availableStylesString
-                .components(separatedBy: ",")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first!
+            // Default style preference stored in AppStorage; ResModel instances
+            // will receive their style explicitly when created.
         }
         .environment(jobAppStore)
         .environment(resRefStore)
