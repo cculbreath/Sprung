@@ -54,6 +54,12 @@ class Resume: Identifiable, Hashable {
     var textRes: String = ""
 
     var pdfData: Data?
+
+    /// Indicates that a PDF export is currently running. This is **transient**
+    /// UI‑state only and is therefore excluded from persistence so it does
+    /// not pollute the database model.
+    @Transient
+    var isExporting: Bool = false
     var jsonTxt: String {
         if let myRoot = rootNode, let json = TreeToJson(rootNode: myRoot)?.buildJsonString() {
             return json
@@ -123,6 +129,10 @@ class Resume: Identifiable, Hashable {
         print("pdf refresh")
 
         exportWorkItem?.cancel()
+
+        // Toggle the per‑resume loading flag and forward to any external
+        // callback so view‑models can react.
+        isExporting = true
         onStart?()
 
         exportWorkItem = DispatchWorkItem { [weak self] in
@@ -131,14 +141,23 @@ class Resume: Identifiable, Hashable {
                 Task {
                     do {
                         try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
-                        DispatchQueue.main.async { onFinish?() }
                     } catch {
                         print("Resume export failed: \(error)")
-                        DispatchQueue.main.async { onFinish?() }
+                    }
+
+                    // Regardless of success toggle the exporting flag off and
+                    // notify any external observers on the main thread.
+                    DispatchQueue.main.async {
+                        self.isExporting = false
+                        onFinish?()
                     }
                 }
             } else {
-                DispatchQueue.main.async { onFinish?() }
+                // No export – reset flag immediately.
+                DispatchQueue.main.async {
+                    self.isExporting = false
+                    onFinish?()
+                }
             }
         }
 

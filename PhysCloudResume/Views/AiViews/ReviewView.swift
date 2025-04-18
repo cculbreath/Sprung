@@ -24,7 +24,8 @@ struct ReviewView: View {
                     ProgressView().padding()
                 }
             } else {
-                VStack {
+                ScrollView {
+                    VStack {
                     if let currentRevNode = currentRevNode, let currentFeedbackNode = currentFeedbackNode {
                         VStack(spacing: 4) {
                             ZStack {
@@ -215,6 +216,7 @@ struct ReviewView: View {
                         Text("No revision to display").padding()
                     }
                 }
+                } // Close ScrollView
                 .frame(maxWidth: .infinity)
                 .clipped()
                 .padding(.top, 0)
