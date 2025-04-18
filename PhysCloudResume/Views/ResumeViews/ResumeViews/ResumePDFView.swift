@@ -3,6 +3,7 @@
 
 import PDFKit
 import SwiftUI
+import Observation
 
 /// Displays the generated PDF for a given resume along with a small progress
 /// indicator while an export job is running.
@@ -15,18 +16,20 @@ struct ResumePDFView: View {
     }
 
     var body: some View {
+        @Bindable var vm = vm   // enables change tracking for Observation
+
         VStack {
             if let pdfData = vm.resume.pdfData {
                 PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .topTrailing) {
-                        if vm.isUpdating {
+                        if vm.resume.isExporting || vm.isUpdating {
                             ProgressView().scaleEffect(0.5)
                                 .padding([.top, .trailing], 2)
                         }
                     }
             } else {
-                if vm.isUpdating {
+                if vm.resume.isExporting || vm.isUpdating {
                     ProgressView()
                 } else {
                     Text("No PDF available")
