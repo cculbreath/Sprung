@@ -78,6 +78,9 @@ struct TabWrapperView: View {
                     ResRefView()
                         .padding()
                 }
+                .onAppear {
+                    updateMyLetter()
+                }
         }
     }
 

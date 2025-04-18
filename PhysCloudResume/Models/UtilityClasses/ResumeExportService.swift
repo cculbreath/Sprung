@@ -66,8 +66,21 @@ struct ApiResumeExportService: ResumeExportService {
         try await downloadPDF(from: pdfUrl, into: resume)
     }
 
+    /// Downloads the exported PDF and stores it in the given resume model.
+    ///
+    /// ⚠️  All writes to `Resume` models **must** occur on the main actor to
+    ///     avoid SwiftData/SwiftUI runtime warnings and to ensure UI updates
+    ///     are propagated correctly.  Without hopping back to the main actor
+    ///     the view displaying the PDF (`ResumePDFView`) would never be
+    ///     invalidated after calling `applyChanges()` from `ReviewView`
+    ///     because the property change happened on a background thread.
+    @MainActor
     private func downloadPDF(from urlString: String, into resume: Resume) async throws {
         guard let url = URL(string: urlString) else { throw ExportError.invalidResponse }
+
+        // Network transfer runs on the current actor (background by default)
+        // but the assignment to `resume.pdfData` happens after an explicit
+        // hop to the main actor enforced by the `@MainActor` attribute.
         let (data, _) = try await URLSession.shared.data(from: url)
         resume.pdfData = data
     }
