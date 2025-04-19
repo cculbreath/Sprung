@@ -2,89 +2,69 @@
 //  AppleJobScrape.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 9/27/24.
-//
+//  Contains only the Apple‐specific HTML → JobApp parser.  The shared HTML
+//  downloader lives in UtilityClasses/HTMLFetcher.swift.
+
 import Foundation
 import SwiftSoup
 
 extension JobApp {
-    static func fetchHTMLContent(from urlString: String) async throws -> String {
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-
-        // Configure the URLSession to mimic a browser request
-        var request = URLRequest(url: url)
-        request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        // Check for HTTP response errors
-        if let httpResponse = response as? HTTPURLResponse, !(200 ... 299).contains(httpResponse.statusCode) {
-            throw URLError(.badServerResponse)
-        }
-
-        // Convert data to string
-        if let htmlContent = String(data: data, encoding: .utf8) {
-            return htmlContent
-        } else {
-            throw URLError(.cannotDecodeContentData)
-        }
-    }
-
+    /// Parse Apple careers HTML and populate a JobApp. Returns the newly added
+    /// instance that is also selected in `jobAppStore`.
     @MainActor
     static func parseAppleJobListing(jobAppStore: JobAppStore, html: String, url: String) {
         do {
             let doc: Document = try SwiftSoup.parse(html)
             let jobApp = JobApp()
-            // Extract job position
-            if let jobTitleElement = try doc.select("#jdPostingTitle").first() {
-                jobApp.jobPosition = try jobTitleElement.text()
+
+            // Title
+            if let titleEl = try doc.select("#jdPostingTitle").first() {
+                jobApp.jobPosition = try titleEl.text()
             }
 
-            // Extract job location
-            if let jobLocationElement = try doc.select("#job-location-name").first() {
-                let locality = try jobLocationElement.select("span[itemProp=addressLocality]").text()
-                let region = try jobLocationElement.select("span[itemProp=addressRegion]").text()
-                let country = try jobLocationElement.select("span[itemProp=addressCountry]").text()
-                jobApp.jobLocation = "\(locality), \(region), \(country)"
+            // Location
+            if let loc = try doc.select("#job-location-name").first() {
+                let locality = try loc.select("span[itemProp=addressLocality]").text()
+                let region = try loc.select("span[itemProp=addressRegion]").text()
+                let country = try loc.select("span[itemProp=addressCountry]").text()
+                jobApp.jobLocation = [locality, region, country]
+                    .filter { !$0.isEmpty }.joined(separator: ", ")
             }
 
-            // Set company name
             jobApp.companyName = "Apple"
 
-            // Extract job posting time
-            if let jobPostDateElement = try doc.select("#jobPostDate").first() {
-                jobApp.jobPostingTime = try jobPostDateElement.text()
+            // Posting time
+            if let dateEl = try doc.select("#jobPostDate").first() {
+                jobApp.jobPostingTime = try dateEl.text()
             }
 
-            // Extract job description, combining description, minimum qualifications, and preferred qualifications
-            var descriptionText = ""
+            // Description (description + min & preferred qualifications)
+            var desc = ""
+            if let main = try doc.select("#jd-description").first() {
+                desc += try main.text() + "\n\n"
+            }
+            if let minQ = try doc.select("#jd-minimum-qualifications").first() {
+                try desc += "Minimum Qualifications:\n" + (minQ.text()) + "\n\n"
+            }
+            if let prefQ = try doc.select("#jd-preferred-qualifications").first() {
+                try desc += "Preferred Qualifications:\n" + (prefQ.text())
+            }
+            jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            if let descriptionElement = try doc.select("#jd-description").first() {
-                descriptionText += try descriptionElement.text() + "\n\n"
+            // Team / Function
+            if let team = try doc.select("#job-team-name").first() {
+                jobApp.jobFunction = try team.text()
             }
-            if let minQualificationsElement = try doc.select("#jd-minimum-qualifications").first() {
-                descriptionText += "Minimum Qualifications:\n"
-                descriptionText += try minQualificationsElement.text() + "\n\n"
-            }
-            if let prefQualificationsElement = try doc.select("#jd-preferred-qualifications").first() {
-                descriptionText += "Preferred Qualifications:\n"
-                descriptionText += try prefQualificationsElement.text() + "\n"
-            }
-            jobApp.jobDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Extract job function (department or division)
-            if let jobTeamElement = try doc.select("#job-team-name").first() {
-                jobApp.jobFunction = try jobTeamElement.text()
-            }
             jobApp.postingURL = url
+            jobApp.status = .new
 
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
+
         } catch let Exception.Error(type, message) {
-            print("Type: \(type), Message: \(message)")
+            print("[AppleJobScrape] SwiftSoup error type \(type) – \(message)")
         } catch {
-            print("Unexpected error: \(error).")
+            print("[AppleJobScrape] Unexpected error: \(error)")
         }
     }
 }

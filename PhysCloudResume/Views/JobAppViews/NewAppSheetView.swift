@@ -15,6 +15,8 @@ struct NewAppSheetView: View {
     @State private var urlText: String = ""
     @State private var delayed: Bool = false
     @State private var verydelayed: Bool = false
+    @State private var showCloudflareChallenge: Bool = false
+    @State private var challengeURL: URL? = nil
 
     @Binding var isPresented: Bool
 
@@ -54,6 +56,24 @@ struct NewAppSheetView: View {
             }
         }
         .padding()
+        .sheet(isPresented: $showCloudflareChallenge) {
+            if let challengeURL {
+                CloudflareChallengeView(url: challengeURL, isPresented: $showCloudflareChallenge) {
+                    // After success retry the import
+                    Task {
+                        isLoading = true
+                        if let urlString = challengeURL.absoluteString as String?,
+                           let _ = await JobApp.importFromIndeed(urlString: urlString, jobAppStore: jobAppStore)
+                        {
+                            isLoading = false
+                            isPresented = false
+                        } else {
+                            isLoading = false
+                        }
+                    }
+                }.defaultSize()
+            }
+        }
     }
 
     private func handleNewApp() async {
@@ -99,8 +119,23 @@ struct NewAppSheetView: View {
                     }
                 }
                 print("apple")
+            case "www.indeed.com", "indeed.com":
+                isLoading = true
+                Task {
+                    if let _ = await JobApp.importFromIndeed(urlString: urlText, jobAppStore: jobAppStore) {
+                        isLoading = false
+                        isPresented = false
+                    } else {
+                        // likely Cloudflare challenge – show web view
+                        isLoading = false
+                        if let u = URL(string: urlText) {
+                            challengeURL = u
+                            showCloudflareChallenge = true
+                        }
+                    }
+                }
             default:
-                print("only apple and linked in are supported")
+                print("Only Apple, Indeed, and LinkedIn are supported")
             }
             return
         }
