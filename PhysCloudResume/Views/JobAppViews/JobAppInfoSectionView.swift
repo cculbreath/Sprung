@@ -8,16 +8,16 @@ struct JobAppInformationSection: View {
     var body: some View {
         Section {
             Cell(
-                leading: "Seniority Level", trailingKeys: \JobApp.seniority_level,
-                formTrailingKeys: \JobAppForm.seniority_level, isEditing: $buttons.edit
+                leading: "Seniority Level", trailingKeys: \JobApp.seniorityLevel,
+                formTrailingKeys: \JobAppForm.seniorityLevel, isEditing: $buttons.edit
             )
             Cell(
-                leading: "Employment Type", trailingKeys: \JobApp.employment_type,
-                formTrailingKeys: \JobAppForm.employment_type, isEditing: $buttons.edit
+                leading: "Employment Type", trailingKeys: \JobApp.employmentType,
+                formTrailingKeys: \JobAppForm.employmentType, isEditing: $buttons.edit
             )
             Cell(
-                leading: "Job Function", trailingKeys: \JobApp.job_function,
-                formTrailingKeys: \JobAppForm.job_function, isEditing: $buttons.edit
+                leading: "Job Function", trailingKeys: \JobApp.jobFunction,
+                formTrailingKeys: \JobAppForm.jobFunction, isEditing: $buttons.edit
             )
             Cell(
                 leading: "Industries", trailingKeys: \JobApp.industries,

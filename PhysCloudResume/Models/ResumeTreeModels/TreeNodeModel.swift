@@ -104,26 +104,22 @@ enum LeafStatus: String, Codable, Hashable {
         // If the node's status is .aiToReplace, add it to the result array
         if node.status == .aiToReplace {
             if node.name != "" && node.value != "" {
-
-              let titleNodeData: [String: Any] = [
-                "id": node.id,
-                "value": node.name,
-                "tree_path": currentPath,
-                "isTitleNode": true
-              ]
-              result.append(titleNodeData)
-
-
+                let titleNodeData: [String: Any] = [
+                    "id": node.id,
+                    "value": node.name,
+                    "tree_path": currentPath,
+                    "isTitleNode": true,
+                ]
+                result.append(titleNodeData)
             }
 
             let nodeData: [String: Any] = [
-              "id": node.id,
-              "value": node.value,
-              "tree_path": newPath,
-              "isTitleNode": false
+                "id": node.id,
+                "value": node.value,
+                "tree_path": newPath,
+                "isTitleNode": false,
             ]
             result.append(nodeData)
-          
         }
 
         // Recursively traverse the children
@@ -164,12 +160,11 @@ enum LeafStatus: String, Codable, Hashable {
 
                 if let node = try context.fetch(fetchRequest).first {
                     // Update the value of the TreeNode
-                  if titleNode == "true" {
-                    node.name = newValue
-                  }
-                  else {
-                    node.value = newValue
-                  }
+                    if titleNode == "true" {
+                        node.name = newValue
+                    } else {
+                        node.value = newValue
+                    }
                 } else {
                     print("TreeNode with id \(id) not found.")
                 }

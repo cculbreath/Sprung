@@ -99,7 +99,8 @@ class Resume: Identifiable, Hashable {
     /// - Parameter completion: Optional callback executed on the main queue
     ///   when loading finishes (success or failure).
     func loadPDF(from fileURL: URL = FileHandler.pdfUrl(),
-                 completion: (() -> Void)? = nil) {
+                 completion: (() -> Void)? = nil)
+    {
         DispatchQueue.global(qos: .background).async { [weak self] in
             defer { DispatchQueue.main.async { completion?() } }
             do {
@@ -113,8 +114,6 @@ class Resume: Identifiable, Hashable {
         }
     }
 
-
-
     @Transient private var exportWorkItem: DispatchWorkItem?
 
     /// Debounces repeated export requests so that the network operation is
@@ -125,7 +124,8 @@ class Resume: Identifiable, Hashable {
     ///   - onFinish:  Callback executed after the export attempt (success or
     ///                failure) completes.
     func debounceExport(onStart: (() -> Void)? = nil,
-                        onFinish: (() -> Void)? = nil) {
+                        onFinish: (() -> Void)? = nil)
+    {
         print("pdf refresh")
 
         exportWorkItem?.cancel()

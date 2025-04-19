@@ -39,11 +39,11 @@ enum CoverLetterPrompts {
                 }
             }
             prompt = """
-            You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app?.job_position ?? "") at \(app?.company_name ?? ""). The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself. The letter should use block-format paragraphs with no indentation, and just a single new line at the end of each paragraph. Do not add a blank line between paragraphs.
+            You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app?.jobPosition ?? "") at \(app?.companyName ?? ""). The cover letter should be in plain text with no commentary or annotations—only the text of the letter itself. The letter should use block-format paragraphs with no indentation, and just a single new line at the end of each paragraph. Do not add a blank line between paragraphs.
 
             **Instructions:**
 
-            - **Personalization:** Tailor the cover letter specifically to the job listing at \(app?.company_name ?? ""), aligning \(applicant.name)'s skills and experiences with the job requirements.
+            - **Personalization:** Tailor the cover letter specifically to the job listing at \(app?.companyName ?? ""), aligning \(applicant.name)'s skills and experiences with the job requirements.
             - **Highlight Strengths:** Emphasize the most relevant qualifications, achievements, and experiences from \(applicant.name)'s résumé that make them an ideal fit for the position.
             - **Professional Tone:** Maintain a professional and engaging tone throughout the letter.
             - **Memorable Impact:** Craft the letter to leave a lasting impression on the reader, making it stand out among other applications.
@@ -94,7 +94,7 @@ enum CoverLetterPrompts {
             """
         case .rewrite:
             prompt = """
-                My initial draft of a cover letter to accompany my application to be hired as a  \(app?.job_position ?? "") at \(app?.company_name ?? "") is included below.
+                My initial draft of a cover letter to accompany my application to be hired as a  \(app?.jobPosition ?? "") at \(app?.companyName ?? "") is included below.
                 \(coverLetter.editorPrompt)
 
             Cover Letter initial draft:

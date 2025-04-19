@@ -1,5 +1,5 @@
 //
-//  ChatProvider.swift
+//  ResumeChatProvider.swift
 //  SwiftOpenAIExample
 //
 //  Created by James Rochabrun on 8/10/24.
@@ -9,7 +9,6 @@ import Foundation
 import SwiftOpenAI
 
 /// Helper to fetch available OpenAI models and convert model IDs to SwiftOpenAI Model enum
-
 
 @Observable
 final class ResumeChatProvider {
@@ -23,9 +22,10 @@ final class ResumeChatProvider {
 
     // MARK: - Initializer
 
-  init(service: OpenAIService) {
-    self.service = service
-  }
+    init(service: OpenAIService) {
+        self.service = service
+    }
+
     private func convertJsonToNodes(_ jsonString: String?) -> [ProposedRevisionNode]? {
         guard let jsonString = jsonString, let jsonData = jsonString.data(using: .utf8) else {
             print("Error converting string to data")
@@ -69,7 +69,7 @@ final class ResumeChatProvider {
             messages = choices.compactMap(\.message.content).map { $0.asJsonFormatted() }
             assert(messages.count == 1)
             print(messages.last ?? "Nothin")
-            
+
             lastRevNodeArray = convertJsonToNodes(messages.last) ?? []
             messageHist
                 .append(

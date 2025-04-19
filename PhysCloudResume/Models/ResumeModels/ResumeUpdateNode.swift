@@ -75,7 +75,7 @@ extension FeedbackNode: Encodable {
         try container.encode(proposedRevision, forKey: .proposedRevision)
         try container.encode(actionRequested, forKey: .actionRequested)
         try container.encode(reviewerComments, forKey: .reviewerComments)
-      try container.encode(isTitleNode, forKey: .isTitleNode)
+        try container.encode(isTitleNode, forKey: .isTitleNode)
     }
 }
 

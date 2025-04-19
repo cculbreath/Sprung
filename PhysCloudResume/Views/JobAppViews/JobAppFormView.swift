@@ -18,28 +18,28 @@ struct JobAppPostingDetailsSection: View {
     var body: some View {
         Section {
             Cell(
-                leading: "Job Position", trailingKeys: \JobApp.job_position,
-                formTrailingKeys: \JobAppForm.job_position, isEditing: $buttons.edit
+                leading: "Job Position", trailingKeys: \JobApp.jobPosition,
+                formTrailingKeys: \JobAppForm.jobPosition, isEditing: $buttons.edit
             )
             Cell(
-                leading: "Job Location", trailingKeys: \JobApp.job_location,
-                formTrailingKeys: \JobAppForm.job_location, isEditing: $buttons.edit
+                leading: "Job Location", trailingKeys: \JobApp.jobLocation,
+                formTrailingKeys: \JobAppForm.jobLocation, isEditing: $buttons.edit
             )
             Cell(
-                leading: "Company Name", trailingKeys: \JobApp.company_name,
-                formTrailingKeys: \JobAppForm.company_name, isEditing: $buttons.edit
+                leading: "Company Name", trailingKeys: \JobApp.companyName,
+                formTrailingKeys: \JobAppForm.companyName, isEditing: $buttons.edit
             )
             Cell(
-                leading: "Company LinkedIn ID", trailingKeys: \JobApp.company_linkedin_id,
-                formTrailingKeys: \JobAppForm.company_linkedin_id, isEditing: $buttons.edit
+                leading: "Company LinkedIn ID", trailingKeys: \JobApp.companyLinkedinId,
+                formTrailingKeys: \JobAppForm.companyLinkedinId, isEditing: $buttons.edit
             )
             Cell(
-                leading: "Posting URL", trailingKeys: \JobApp.posting_url,
-                formTrailingKeys: \JobAppForm.posting_url, isEditing: $buttons.edit
+                leading: "Posting URL", trailingKeys: \JobApp.postingURL,
+                formTrailingKeys: \JobAppForm.postingURL, isEditing: $buttons.edit
             )
             Cell(
-                leading: "Job Posting Time", trailingKeys: \JobApp.job_posting_time,
-                formTrailingKeys: \JobAppForm.job_posting_time, isEditing: $buttons.edit
+                leading: "Job Posting Time", trailingKeys: \JobApp.jobPostingTime,
+                formTrailingKeys: \JobAppForm.jobPostingTime, isEditing: $buttons.edit
             )
         }
         .insetGroupedStyle(header: Text("Posting Details"))

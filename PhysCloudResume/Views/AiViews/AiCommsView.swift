@@ -21,7 +21,7 @@ struct AiCommsView: View {
     }
 
     var body: some View {
-        exec_query
+        execQuery
             .sheet(isPresented: $sheetOn) {
                 print("sheet dismissed")
             } content: {
@@ -62,7 +62,7 @@ struct AiCommsView: View {
             }
     }
 
-    var exec_query: some View {
+    var execQuery: some View {
         HStack(spacing: 4) {
             VStack {
                 if !isLoading {
@@ -104,10 +104,10 @@ struct AiCommsView: View {
                 } else if let matchedByValue = updateNodes.first(where: { $0["value"] as? String == item.oldValue }), let id = matchedByValue["id"] as? String {
                     // Update revision's ID if matched by value
                     validRevs[index].id = id
-                    
+
                     // Make sure to preserve isTitleNode when matching by value
                     validRevs[index].isTitleNode = matchedByValue["isTitleNode"] as? Bool ?? false
-                    
+
                     print("\(item.id) updated to use ID from matched node. isTitleNode: \(validRevs[index].isTitleNode)")
 
                 } else {

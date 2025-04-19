@@ -238,7 +238,39 @@ class TreeToJson {
         return nil
     }
 
+    /// Escapes special characters so the resulting string is valid JSON.
+    ///
+    /// The JSON builder in this file manually concatenates strings instead of
+    /// relying on `JSONEncoder`.  This requires us to escape characters that
+    /// have a semantic meaning in JSON.  Failing to do so results in an
+    /// invalid payload that the resume rendering API rightfully rejects with
+    /// an `invalidResponse` error.  In the UI this surfaces as
+    /// “Resume export failed: invalidResponse”.
+    ///
+    /// At the moment only quotation marks were escaped.  New‑line characters,
+    /// back‑slashes and carriage‑returns – which are common when users insert
+    /// multi‑line text in e.g. summary or job descriptions – were **not**
+    /// handled and therefore broke the exported JSON.
+    ///
+    /// This helper now performs a minimal but sufficient escaping so that all
+    /// control characters that need escaping according to the JSON spec are
+    /// covered.  The implementation purposefully keeps the list short and
+    /// avoids the overhead of running every value through `JSONEncoder`
+    /// because that would allocate a lot of temporary Data objects during the
+    /// recursive build process.
     private func escape(_ string: String) -> String {
-        return string.replacingOccurrences(of: "\"", with: "\\\"")
+        var escaped = string
+
+        // IMPORTANT: Backslash must be escaped first to avoid double‑escaping
+        // later replacements.
+        escaped = escaped.replacingOccurrences(of: "\\", with: "\\\\")
+
+        // The remaining replacements can be processed in any order.
+        escaped = escaped.replacingOccurrences(of: "\"", with: "\\\"") // Quote
+        escaped = escaped.replacingOccurrences(of: "\n", with: "\\n") // New line
+        escaped = escaped.replacingOccurrences(of: "\r", with: "\\r") // Carriage return
+        escaped = escaped.replacingOccurrences(of: "\t", with: "\\t") // Tab
+
+        return escaped
     }
 }

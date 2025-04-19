@@ -31,8 +31,8 @@ struct BuildToolbar: ToolbarContent {
         }
         ToolbarItem(placement: .navigation) {
             twoTierTextToolbar(
-                headline: selApp.job_position,
-                caption: selApp.company_name
+                headline: selApp.jobPosition,
+                caption: selApp.companyName
             )
         }
         ToolbarItem(placement: .principal) { Spacer() }

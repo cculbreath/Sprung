@@ -7,8 +7,8 @@ struct ApplySection: View {
     var body: some View {
         Section {
             Cell(
-                leading: "Job Apply Link", trailingKeys: \JobApp.job_apply_link,
-                formTrailingKeys: \JobAppForm.job_apply_link, isEditing: $buttons.edit
+                leading: "Job Apply Link", trailingKeys: \JobApp.jobApplyLink,
+                formTrailingKeys: \JobAppForm.jobApplyLink, isEditing: $buttons.edit
             )
         }
         .insetGroupedStyle(header: Text("Apply"))

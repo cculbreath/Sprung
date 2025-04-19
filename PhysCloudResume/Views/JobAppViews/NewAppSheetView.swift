@@ -85,12 +85,12 @@ struct NewAppSheetView: View {
                         )
                         if let jobApp = jobAppStore.selectedApp {
                             // Now you can access the extracted data from jobApp
-                            print("Job Position: \(jobApp.job_position)")
-                            print("Job Location: \(jobApp.job_location)")
-                            print("Company Name: \(jobApp.company_name)")
-                            print("Job Posting Time: \(jobApp.job_posting_time)")
-                            print("Job Description: \(jobApp.job_description)")
-                            print("Job Function: \(jobApp.job_function)")
+                            print("Job Position: \(jobApp.jobPosition)")
+                            print("Job Location: \(jobApp.jobLocation)")
+                            print("Company Name: \(jobApp.companyName)")
+                            print("Job Posting Time: \(jobApp.jobPostingTime)")
+                            print("Job Description: \(jobApp.jobDescription)")
+                            print("Job Function: \(jobApp.jobFunction)")
                         }
                         isLoading = false
                         isPresented = false
@@ -128,7 +128,7 @@ struct NewAppSheetView: View {
 
             let jobDetails = try JSONDecoder().decode([JobApp].self, from: data)
             if let jobDetail = jobDetails.first {
-                jobDetail.posting_url = posting_url.absoluteString
+                jobDetail.postingURL = posting_url.absoluteString
                 jobAppStore.selectedApp = jobAppStore.addJobApp(jobDetail)
                 isPresented = false
             }
@@ -298,37 +298,37 @@ struct NewAppSheetView: View {
             }
         }
     }
-    
+
     private func ProxycurlfetchLinkedInJobDetails(posting_url: URL) async {
         let apiKey = proxycurlApiKey
-        
+
         // Build the URL with the job URL as a query parameter
         let baseURL = "https://nubela.co/proxycurl/api/linkedin/job"
         var components = URLComponents(string: baseURL)
         components?.queryItems = [
-            URLQueryItem(name: "url", value: posting_url.absoluteString)
+            URLQueryItem(name: "url", value: posting_url.absoluteString),
         ]
-        
+
         guard let requestURL = components?.url else {
             print("Invalid URL construction")
             isLoading = false
             return
         }
-        
+
         // Create request with authorization header
         var request = URLRequest(url: requestURL)
         request.httpMethod = "GET"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        
+
         do {
             print("Fetching from Proxycurl: \(requestURL)")
             let (data, response) = try await URLSession.shared.data(for: request)
-            
+
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 200 {
                     // Process successful response
                     if let jobDetail = JobApp.parseProxycurlJobApp(
-                        jobAppStore: jobAppStore, 
+                        jobAppStore: jobAppStore,
                         jsonData: data,
                         postingUrl: posting_url.absoluteString
                     ) {
@@ -348,7 +348,7 @@ struct NewAppSheetView: View {
         } catch {
             print("Network request error: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
 }

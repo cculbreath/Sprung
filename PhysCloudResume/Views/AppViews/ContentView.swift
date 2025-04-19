@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+
 struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
 
@@ -11,7 +12,7 @@ struct ContentView: View {
     @Environment(ResModelStore.self) private var resModelStore: ResModelStore
 
     // Live query for JobApps displayed in the sidebar list
-    @Query(sort: \JobApp.job_position) private var jobApps: [JobApp]
+    @Query(sort: \JobApp.jobPosition) private var jobApps: [JobApp]
     @State var dragInfo: DragInfo = .init()
     @State var tabRefresh: Bool = false
     @State var showNewAppSheet: Bool = false
@@ -46,27 +47,27 @@ struct ContentView: View {
                     }
                     .frame(maxHeight: .infinity)
 
-                  if showSlidingList {
-                    DraggableSlidingSourceListView(refresh: $tabRefresh, isVisible: $showSlidingList)
-                      .transition(.move(edge: .bottom))
-                      .zIndex(1)
-                  }
+                    if showSlidingList {
+                        DraggableSlidingSourceListView(refresh: $tabRefresh, isVisible: $showSlidingList)
+                            .transition(.move(edge: .bottom))
+                            .zIndex(1)
+                    }
                 }.padding(.top, 20)
                     .frame(maxHeight: .infinity)
                     .toolbar {
                         Spacer()
                         if sidebarVisibility != .detailOnly { // Hide toolbar when sidebar is closed
-                          Button(action: {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
-                              showSlidingList.toggle()
+                            Button(action: {
+                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
+                                    showSlidingList.toggle()
+                                }
+                            }) {
+                                Label(
+                                    showSlidingList ? "Hide Additional List" : "Show Additional List",
+                                    systemImage: "append.page"
+                                )
+                                .foregroundColor(showSlidingList ? .accentColor : .primary)
                             }
-                          }) {
-                            Label(
-                              showSlidingList ? "Hide Additional List" : "Show Additional List",
-                              systemImage: "append.page"
-                            )
-                            .foregroundColor(showSlidingList ? .accentColor : .primary)
-                          }
                             Button(action: {
                                 showNewAppSheet = true
                             }) {
@@ -90,7 +91,8 @@ struct ContentView: View {
             if let storeURL = FileManager.default
                 .urls(for: .applicationSupportDirectory, in: .userDomainMask)
                 .first?
-                .appendingPathComponent("Model.sqlite") {
+                .appendingPathComponent("Model.sqlite")
+            {
                 print("Database location: \(storeURL.path)")
             }
         }

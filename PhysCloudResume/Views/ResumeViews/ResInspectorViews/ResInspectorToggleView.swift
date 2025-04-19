@@ -1,6 +1,6 @@
 import AppKit // Import AppKit to use NSCursor
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ResInspectorToggleView: View {
     // Access the ResRefStore from the environment.
@@ -14,7 +14,7 @@ struct ResInspectorToggleView: View {
         GridItem(.flexible()),
         GridItem(.flexible()),
     ]
-    
+
     // Helper function to create the binding for a ResRef
     private func createBinding(for resRef: ResRef, in resume: Resume) -> Binding<Bool> {
         return Binding<Bool>(

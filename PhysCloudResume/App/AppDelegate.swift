@@ -4,14 +4,6 @@ import SwiftUI
 class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
 
-    //  func applicationDidFinishLaunching(_ notification: Notification) {
-//    // Set the title of the main window
-//    if let window = NSApplication.shared.windows.first {
-//      window.title = "Job Applications"
-//    }
-//
-    //  }
-
     @objc func showSettingsWindow() {
         if settingsWindow == nil {
             let settingsView = SettingsView()

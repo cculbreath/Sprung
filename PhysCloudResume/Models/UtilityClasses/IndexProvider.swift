@@ -13,12 +13,11 @@
 import Foundation
 
 public final class IndexProvider {
-
     private var nextValue: Int
     private let lock = NSLock()
 
     public init(startAt: Int = 0) {
-        self.nextValue = startAt
+        nextValue = startAt
     }
 
     /// Returns the next sequential integer value in a thread‑safe manner.

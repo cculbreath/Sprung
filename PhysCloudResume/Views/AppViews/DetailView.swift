@@ -18,7 +18,7 @@ struct DetailView: View {
         VStack(alignment: .leading) {
             if let selApp = jobAppStore.selectedApp {
                 TabWrapperView(selectedTab: $selectedTab, tabRefresh: $tabRefresh)
-                    .navigationTitle(selApp.job_position)
+                    .navigationTitle(selApp.jobPosition)
             } else {
                 Text("No Selection")
             }

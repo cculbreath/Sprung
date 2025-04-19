@@ -1,33 +1,33 @@
 import SwiftData
 
 @Observable class JobAppForm {
-    var job_position: String = ""
-    var job_location: String = ""
-    var company_name: String = ""
-    var company_linkedin_id: String = ""
-    var job_posting_time: String = ""
-    var job_description: String = ""
-    var seniority_level: String = ""
-    var employment_type: String = ""
-    var job_function: String = ""
+    var jobPosition: String = ""
+    var jobLocation: String = ""
+    var companyName: String = ""
+    var companyLinkedinId: String = ""
+    var jobPostingTime: String = ""
+    var jobDescription: String = ""
+    var seniorityLevel: String = ""
+    var employmentType: String = ""
+    var jobFunction: String = ""
     var industries: String = ""
-    var job_apply_link: String = ""
-    var posting_url: String = ""
+    var jobApplyLink: String = ""
+    var postingURL: String = ""
 
     init() {}
 
     func populateFormFromObj(_ source: JobApp) {
-        job_position = source.job_position
-        job_location = source.job_location
-        company_name = source.company_name
-        company_linkedin_id = source.company_linkedin_id
-        job_posting_time = source.job_posting_time
-        job_description = source.job_description
-        seniority_level = source.seniority_level
-        employment_type = source.employment_type
-        job_function = source.job_function
+        jobPosition = source.jobPosition
+        jobLocation = source.jobLocation
+        companyName = source.companyName
+        companyLinkedinId = source.companyLinkedinId
+        jobPostingTime = source.jobPostingTime
+        jobDescription = source.jobDescription
+        seniorityLevel = source.seniorityLevel
+        employmentType = source.employmentType
+        jobFunction = source.jobFunction
         industries = source.industries
-        job_apply_link = source.job_apply_link
-        posting_url = source.posting_url
+        jobApplyLink = source.jobApplyLink
+        postingURL = source.postingURL
     }
 }

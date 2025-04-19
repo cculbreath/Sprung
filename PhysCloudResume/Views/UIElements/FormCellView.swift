@@ -8,7 +8,6 @@ struct Cell: View {
     var trailingKeys: KeyPath<JobApp, String>
     var formTrailingKeys: WritableKeyPath<JobAppForm, String>
     @Binding var isEditing: Bool
-    //    @State private var isHovered: Bool = false
 
     var body: some View {
         HStack {
@@ -56,17 +55,6 @@ struct Cell: View {
                             .foregroundColor(.red)
                     }
                 }
-                //                .onHover { hover in
-                //                    if let app = jobAppStore?.selectedApp {
-                //                        let trailing = app[keyPath: trailingKeys]
-                //                        if isValidURL(trailing) {
-                //                            isHovered = hover
-                //                        } else {
-                //                            isHovered = false
-                //                        }
-                //
-                //                    }
-                //                }
             }
         }
         .onAppear {
