@@ -5,7 +5,7 @@ import SwiftData
 @Observable
 @MainActor
 final class ResRefStore: SwiftDataStore {
-    private unowned let modelContext: ModelContext
+    unowned let modelContext: ModelContext
     // JSON backup for ResRef
     private let jsonBacking = JSONFileStore<ResRef>(filename: "ResRefs.json")
     // Computed collection

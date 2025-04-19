@@ -4,7 +4,7 @@ import SwiftData
 @Observable
 @MainActor
 final class CoverRefStore: SwiftDataStore {
-    private unowned let modelContext: ModelContext
+    unowned let modelContext: ModelContext
     var storedCoverRefs: [CoverRef] {
         (try? modelContext.fetch(FetchDescriptor<CoverRef>())) ?? []
     }

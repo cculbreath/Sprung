@@ -5,7 +5,7 @@ import SwiftData
 @Observable
 @MainActor
 final class ResModelStore: SwiftDataStore {
-    private unowned let modelContext: ModelContext
+    unowned let modelContext: ModelContext
     // JSON backup for ResModel
     private let jsonBacking = JSONFileStore<ResModel>(filename: "ResModels.json")
     var resModels: [ResModel] {

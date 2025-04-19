@@ -17,7 +17,7 @@ import SwiftUI // Needed only for `@Observable` macro, already available.
 final class CoverLetterStore: SwiftDataStore {
     // MARK: - Properties
 
-    private unowned let modelContext: ModelContext
+    unowned let modelContext: ModelContext
     var coverRefStore: CoverRefStore
     var cL: CoverLetter?
 
