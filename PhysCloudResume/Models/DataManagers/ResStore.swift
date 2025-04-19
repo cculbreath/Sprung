@@ -10,7 +10,7 @@ import SwiftData
 
 @Observable
 @MainActor
-final class ResStore {
+final class ResStore: SwiftDataStore {
     // MARK: - Properties
 
     private unowned let modelContext: ModelContext
@@ -33,7 +33,7 @@ final class ResStore {
         jobApp.addResume(res)
         res.model!.resumes.append(res)
         modelContext.insert(res)
-        try? modelContext.save()
+        saveContext()
 
         print("ResStore resume added, jobApp.hasAnyResume is \(jobApp.hasAnyRes ? "true" : "false")")
         return res
@@ -69,7 +69,7 @@ final class ResStore {
             // Persist new resume (and trigger observers)
             jobApp.addResume(resume)
             modelContext.insert(resume)
-            try? modelContext.save()
+            saveContext()
 
             print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
 
@@ -134,7 +134,7 @@ final class ResStore {
 
     func updateResumeTree(resume: Resume, rootNode: TreeNode) {
         resume.rootNode = rootNode
-        try? modelContext.save()
+        saveContext()
         resume.debounceExport() // Update JSON, PDF, etc.
     }
 
@@ -149,17 +149,10 @@ final class ResStore {
         }
 
         modelContext.delete(res)
-        try? modelContext.save()
+        saveContext()
     }
 
     // Form functionality incomplete
 
-    // Save changes to the database
-    private func saveContext() {
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to save context: \(error)")
-        }
-    }
+    // `saveContext()` now lives in `SwiftDataStore`.
 }
