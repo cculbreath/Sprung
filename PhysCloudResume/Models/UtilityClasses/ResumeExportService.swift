@@ -19,7 +19,7 @@ protocol ResumeExportService: Sendable {
 
 struct ApiResumeExportService: ResumeExportService {
     private let endpoint = URL(string: "https://resume.physicscloud.net/build-resume-file")!
-    private let apiKey   = "b0b307e1-6eb4-41d9-8c1f-278c254351d3" // TODO: move to secure storage
+    private let apiKey = "b0b307e1-6eb4-41d9-8c1f-278c254351d3" // TODO: move to secure storage
 
     func export(jsonURL: URL, for resume: Resume) async throws {
         guard let style = resume.model?.style else { throw ExportError.missingStyle }

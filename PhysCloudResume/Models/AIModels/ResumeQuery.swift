@@ -47,9 +47,9 @@ import SwiftOpenAI
                                     description: "Explanation for the proposed revision. Leave blank if the reason is trivial or obvious."
                                 ),
                                 "isTitleNode": JSONSchema(
-                                  type: .boolean,
-                                  description: "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
-                                  )
+                                    type: .boolean,
+                                    description: "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
+                                ),
                             ],
                             required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode"],
                             additionalProperties: false

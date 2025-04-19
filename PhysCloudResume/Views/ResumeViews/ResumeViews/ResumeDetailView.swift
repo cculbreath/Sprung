@@ -5,7 +5,6 @@ import SwiftUI
 /// It no longer mutates the model directly; all actions are routed through
 /// `ResumeDetailVM`.
 struct ResumeDetailView: View {
-
     // External navigation bindings
     @Binding var tab: TabList
 
@@ -18,14 +17,14 @@ struct ResumeDetailView: View {
 
     init(resume: Resume, tab: Binding<TabList>, isWide: Binding<Bool>, resStore: ResStore) {
         _tab = tab
-        _vm  = State(wrappedValue: ResumeDetailVM(resume: resume, resStore: resStore))
-        self.externalIsWide = isWide
+        _vm = State(wrappedValue: ResumeDetailVM(resume: resume, resStore: resStore))
+        externalIsWide = isWide
     }
 
     // MARK: – Body ---------------------------------------------------------
 
     var body: some View {
-        @Bindable var vm = vm   // enable Observation bindings
+        @Bindable var vm = vm // enable Observation bindings
 
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {

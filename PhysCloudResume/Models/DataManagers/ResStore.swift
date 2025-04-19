@@ -20,15 +20,11 @@ final class ResStore {
         (try? modelContext.fetch(FetchDescriptor<Resume>())) ?? []
     }
 
-
     // MARK: - Initialiser
 
     init(context: ModelContext) {
-        self.modelContext = context
-
+        modelContext = context
     }
-
-
 
     @discardableResult
     func addResume(res: Resume, to jobApp: JobApp) -> Resume {
@@ -48,43 +44,42 @@ final class ResStore {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
         print("Model context available")
-            print("Creating resume for job application: \(jobApp)")
-            print("Current resumes count: \(jobApp.resumes.count)")
+        print("Creating resume for job application: \(jobApp)")
+        print("Current resumes count: \(jobApp.resumes.count)")
 
-            let resume = Resume(jobApp: jobApp, enabledSources: sources, model: model)
-            print("Current resumes count: \(resume.jobApp!.resumes.count)")
+        let resume = Resume(jobApp: jobApp, enabledSources: sources, model: model)
+        print("Current resumes count: \(resume.jobApp!.resumes.count)")
 
-            if jobApp.selectedRes == nil {
-                print("Set Selection")
+        if jobApp.selectedRes == nil {
+            print("Set Selection")
 
-                jobApp.selectedRes = resume
+            jobApp.selectedRes = resume
+        }
+        print("Resume object created")
+
+        do {
+            guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
+                return nil
             }
-            print("Resume object created")
-
-            do {
-                guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
-                    return nil
-                }
-                resume.rootNode = builder.buildTree()
-                print("Resume tree built from JSON data")
-                print("1 Current resumes count: \(resume.jobApp!.resumes.count)")
+            resume.rootNode = builder.buildTree()
+            print("Resume tree built from JSON data")
+            print("1 Current resumes count: \(resume.jobApp!.resumes.count)")
 //                print(builder.json)
 
-                // Persist new resume (and trigger observers)
-                jobApp.addResume(resume)
-                modelContext.insert(resume)
-                try? modelContext.save()
+            // Persist new resume (and trigger observers)
+            jobApp.addResume(resume)
+            modelContext.insert(resume)
+            try? modelContext.save()
 
+            print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
 
-                print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
+            print("Resume successfully saved and processed")
+            resume.debounceExport()
 
-                print("Resume successfully saved and processed")
-                resume.debounceExport()
-
-            } catch {
-                print("Could not unwrap JSON")
-            }
-            return resume
+        } catch {
+            print("Could not unwrap JSON")
+        }
+        return resume
     }
 
     func createDuplicate(originalResume: Resume, context: ModelContext) -> Resume? {
@@ -100,7 +95,7 @@ final class ResStore {
             }
 
             // Step 3: Save the new resume to the context
-        context.insert(newResume)
+            context.insert(newResume)
 
             do {
                 try context.save()
@@ -155,39 +150,9 @@ final class ResStore {
 
         modelContext.delete(res)
         try? modelContext.save()
-
     }
 
     // Form functionality incomplete
-    //    private func populateFormFromObj(_ resRef: JobApp) {
-    //        form.populateFormFromObj(jobApp)
-    //    }
-    //
-    //
-    //    func editWithForm(_ jobApp:JobApp? = nil) {
-    //        let jobAppEditing = jobApp ?? selectedApp
-    //        guard let jobAppEditing = jobAppEditing else {
-    //            fatalError("No job application available to edit.")
-    //        }
-    //        self.populateFormFromObj(jobAppEditing)
-    //    }
-    //    func cancelFormEdit(_ jobApp:JobApp? = nil) {
-    //        let jobAppEditing = jobApp ?? selectedApp
-    //        guard let jobAppEditing = jobAppEditing else {
-    //            fatalError("No job application available to restore state.")
-    //        }
-    //        self.populateFormFromObj(jobAppEditing)
-    //    }
-    //
-    //    func saveForm(_ jobApp:JobApp? = nil) {
-    //        let jobAppToSave = jobApp ?? selectedApp
-    //        guard let jobAppToSave = jobAppToSave else {
-    //            fatalError("No job application available to save.")
-    //        }
-    //        jobAppToSave.assignPropsFromForm(form)
-    //        saveContext()
-    //
-    //    }
 
     // Save changes to the database
     private func saveContext() {

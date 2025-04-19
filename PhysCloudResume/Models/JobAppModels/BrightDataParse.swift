@@ -10,18 +10,18 @@ extension JobApp {
             let jobApp = JobApp()
 
             // Manually assign attributes
-            jobApp.job_position = jsonDict["job_title"] as? String ?? ""
-            jobApp.job_location = jsonDict["job_location"] as? String ?? ""
-            jobApp.company_name = jsonDict["company_name"] as? String ?? ""
-            jobApp.company_linkedin_id = jsonDict["company_id"] as? String ?? ""
-            jobApp.job_posting_time = jsonDict["job_posted_time"] as? String ?? ""
-            jobApp.job_description = jsonDict["job_summary"] as? String ?? ""
-            jobApp.seniority_level = jsonDict["job_seniority_level"] as? String ?? ""
-            jobApp.employment_type = jsonDict["job_employment_type"] as? String ?? ""
-            jobApp.job_function = jsonDict["job_function"] as? String ?? ""
+            jobApp.jobPosition = jsonDict["job_title"] as? String ?? ""
+            jobApp.jobLocation = jsonDict["job_location"] as? String ?? ""
+            jobApp.companyName = jsonDict["company_name"] as? String ?? ""
+            jobApp.companyLinkedinId = jsonDict["company_id"] as? String ?? ""
+            jobApp.jobPostingTime = jsonDict["job_posted_time"] as? String ?? ""
+            jobApp.jobDescription = jsonDict["job_summary"] as? String ?? ""
+            jobApp.seniorityLevel = jsonDict["job_seniority_level"] as? String ?? ""
+            jobApp.employmentType = jsonDict["job_employment_type"] as? String ?? ""
+            jobApp.jobFunction = jsonDict["job_function"] as? String ?? ""
             jobApp.industries = jsonDict["job_industries"] as? String ?? ""
-            jobApp.job_apply_link = jsonDict["apply_link"] as? String ?? ""
-            jobApp.posting_url = jsonDict["url"] as? String ?? ""
+            jobApp.jobApplyLink = jsonDict["apply_link"] as? String ?? ""
+            jobApp.postingURL = jsonDict["url"] as? String ?? ""
 
             // Handle any additional properties or default values
             jobApp.status = .new // or assign based on logic

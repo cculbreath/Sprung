@@ -3,7 +3,6 @@ import SwiftUI
 // MARK: – UI helpers for JobApp (kept outside the core model)
 
 extension JobApp {
-
     /// Small colored pill used throughout the UI to visualise the current
     /// application status.  Declared in a SwiftUI‑only extension so that the
     /// JobApp data model itself stays free of any UI framework imports.

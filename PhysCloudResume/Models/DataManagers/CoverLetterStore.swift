@@ -13,14 +13,16 @@ import SwiftData
 @MainActor
 final class CoverLetterStore {
     // MARK: - Properties
+
     private unowned let modelContext: ModelContext
     var coverRefStore: CoverRefStore
     var cL: CoverLetter?
 
     // MARK: - Initialiser
+
     init(context: ModelContext, refStore: CoverRefStore) {
-        self.modelContext = context
-        self.coverRefStore = refStore
+        modelContext = context
+        coverRefStore = refStore
         print("CoverLetterStore Initialized")
     }
 
@@ -85,7 +87,7 @@ final class CoverLetterStore {
         if let jobApp = letter.jobApp {
             if let index = jobApp.coverLetters.firstIndex(of: letter) {
                 jobApp.coverLetters.remove(at: index)
-        modelContext.delete(letter)
+                modelContext.delete(letter)
                 //      saveContext()
             }
         } else {

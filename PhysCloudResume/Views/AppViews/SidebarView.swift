@@ -6,7 +6,7 @@ import SwiftUI
 struct SidebarView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     // Live query – any insertion / deletion in SwiftData refreshes the list
-    @Query(sort: \JobApp.job_position) private var jobApps: [JobApp]
+    @Query(sort: \JobApp.jobPosition) private var jobApps: [JobApp]
 
     @Binding var showNewAppSheet: Bool
     @Binding var showSlidingList: Bool

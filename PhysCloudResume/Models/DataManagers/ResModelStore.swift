@@ -15,12 +15,10 @@ final class ResModelStore {
     var isThereAnyJson: Bool { !resModels.isEmpty }
 
     init(context: ModelContext, resStore: ResStore) {
-        self.modelContext = context
+        modelContext = context
         self.resStore = resStore
         print("Model Store Init: \(resModels.count) models")
     }
-
-
 
     /// Ensures that each modelRef is unique across `resRefs`
 
@@ -28,11 +26,10 @@ final class ResModelStore {
     func addResModel(_ resModel: ResModel) {
         modelContext.insert(resModel)
         try? modelContext.save()
-
     }
 
     /// Persist updates on the supplied model
-    func updateResModel(_ resModel: ResModel) {
+    func updateResModel(_: ResModel) {
         do {
             try modelContext.save()
 
@@ -49,7 +46,6 @@ final class ResModelStore {
 
         modelContext.delete(resModel)
         try? modelContext.save()
-
     }
 
     /// Enforces uniqueness when a `ResRef` is assigned a `modelRef`

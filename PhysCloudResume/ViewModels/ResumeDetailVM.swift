@@ -7,7 +7,6 @@ import Observation
 @Observable
 @MainActor
 final class ResumeDetailVM {
-
     // MARK: - Input ---------------------------------------------------------
 
     private(set) var resume: Resume
@@ -72,7 +71,7 @@ final class ResumeDetailVM {
 
     // MARK: - Editing -------------------------------------------------------
 
-    private(set) var editingNodeID: String? = nil
+    private(set) var editingNodeID: String?
     var tempName: String = ""
     var tempValue: String = ""
 
@@ -91,7 +90,7 @@ final class ResumeDetailVM {
     func saveEdits() {
         guard let id = editingNodeID, let node = resume.nodes.first(where: { $0.id == id }) else { return }
 
-        node.name  = tempName
+        node.name = tempName
         node.value = tempValue
 
         editingNodeID = nil
@@ -100,10 +99,11 @@ final class ResumeDetailVM {
         refreshPDF()
         refresher.toggle()
     }
+
     // MARK: - Expansion state ---------------------------------------------
 
     func isExpanded(_ node: TreeNode) -> Bool {
-        if node.parent == nil { return true }          // Root always expanded
+        if node.parent == nil { return true } // Root always expanded
         return expandedIDs.contains(node.id)
     }
 

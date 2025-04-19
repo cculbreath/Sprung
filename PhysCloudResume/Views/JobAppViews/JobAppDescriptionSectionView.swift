@@ -1,6 +1,6 @@
+import Foundation
 import SwiftData
 import SwiftUI
-import Foundation
 
 struct JobAppDescriptionSection: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
@@ -12,19 +12,19 @@ struct JobAppDescriptionSection: View {
             @Bindable var boundSelApp = selApp
             Section {
                 if buttons.edit {
-                    TextField("", text: $boundSelApp.job_description, axis: .vertical)
+                    TextField("", text: $boundSelApp.jobDescription, axis: .vertical)
                         .lineLimit(15 ... 20)
                         .padding(.all, 3)
                 } else if useMarkdownForJobDescription {
                     ScrollView {
-                        if boundSelApp.job_description.isEmpty {
+                        if boundSelApp.jobDescription.isEmpty {
                             Text("none listed")
                                 .italic()
                                 .foregroundColor(.secondary)
                                 .padding(.all, 3)
                         } else {
                             // Reset the view with a new unique ID when the job description changes
-                            RichTextView(text: boundSelApp.job_description, jobId: boundSelApp.id)
+                            RichTextView(text: boundSelApp.jobDescription, jobId: boundSelApp.id)
                                 .textSelection(.enabled)
                                 .padding(.all, 3)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -32,11 +32,11 @@ struct JobAppDescriptionSection: View {
                         }
                     }
                 } else {
-                    Text(boundSelApp.job_description.isEmpty ? "none listed" : boundSelApp.job_description)
+                    Text(boundSelApp.jobDescription.isEmpty ? "none listed" : boundSelApp.jobDescription)
                         .textSelection(.enabled)
                         .padding(.all, 3)
                         .foregroundColor(.secondary)
-                        .italic(boundSelApp.job_description.isEmpty)
+                        .italic(boundSelApp.jobDescription.isEmpty)
                 }
             }
             .insetGroupedStyle(header: getHeader())
@@ -46,7 +46,7 @@ struct JobAppDescriptionSection: View {
                 .padding()
         }
     }
-    
+
     @ViewBuilder
     private func getHeader() -> some View {
         if buttons.edit {
@@ -55,12 +55,12 @@ struct JobAppDescriptionSection: View {
             Text("Job Description")
         }
     }
-    
+
     private func markdownToggleHeader() -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Job Description")
                 .font(.headline)
-            
+
             HStack {
                 Text("Format with rich text")
                     .font(.caption)
@@ -79,20 +79,20 @@ struct RichTextView: View {
     let text: String
     let jobId: UUID // Add jobId to track changes in selected job
     @State private var paragraphs: [Paragraph] = []
-    
+
     struct Paragraph: Identifiable {
         let id = UUID()
         let content: String
         let type: ParagraphType
     }
-    
+
     enum ParagraphType {
         case normal
         case bold
         case list
         case listItem(String)
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(paragraphs) { paragraph in
@@ -105,7 +105,7 @@ struct RichTextView: View {
                         .foregroundColor(.primary)
                 case .list:
                     bulletList(paragraph.content)
-                case .listItem(let text):
+                case let .listItem(text):
                     HStack(alignment: .top, spacing: 4) {
                         Text("•")
                             .padding(.trailing, 4)
@@ -124,28 +124,28 @@ struct RichTextView: View {
             processParagraphs()
         }
     }
-    
+
     private func normalParagraph(_ content: String) -> some View {
         let processedContent = processBoldInlineText(content)
         return processedContent
     }
-    
+
     private func processBoldInlineText(_ content: String) -> some View {
         // Check for the simple case first - no bold text
         if !content.contains("**") {
             return Text(processEmailLinks(content))
                 .foregroundColor(.primary)
         }
-        
+
         // If we get here, we need to process bold text
         var segments: [TextSegment] = []
         let pattern = #"\*\*(.+?)\*\*|([^*]+)"#
-        
+
         do {
             let regex = try NSRegularExpression(pattern: pattern)
             let nsText = content as NSString
             let matches = regex.matches(in: content, options: [], range: NSRange(location: 0, length: nsText.length))
-            
+
             for match in matches {
                 if match.numberOfRanges > 2 {
                     // Check which capture group matched
@@ -169,13 +169,13 @@ struct RichTextView: View {
             return Text(processEmailLinks(content))
                 .foregroundColor(.primary)
         }
-        
+
         if segments.isEmpty {
             // If no segments were created, return the original text
             return Text(processEmailLinks(content))
                 .foregroundColor(.primary)
         }
-        
+
         // Build the combined text
         var combinedText = Text("")
         for segment in segments {
@@ -184,16 +184,15 @@ struct RichTextView: View {
                 .fontWeight(segment.isBold ? .bold : .regular)
             combinedText = combinedText + textPart
         }
-        
+
         return combinedText
     }
-    
-    
+
     struct TextSegment {
         let text: String
         let isBold: Bool
     }
-    
+
     private func bulletList(_ content: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(content.split(separator: "\n"), id: \.self) { line in
@@ -211,13 +210,13 @@ struct RichTextView: View {
             }
         }
     }
-    
+
     private func processParagraphs() {
         var result: [Paragraph] = []
-        
+
         // Preprocess the text to handle problematic patterns
         var preprocessedText = text
-        
+
         // First, explicitly handle the problematic pattern where newlines are between content and closing asterisks
         // Special pattern matches: **The opportunity\n\n**
         let problemPattern1 = #"\*\*([^*\n]+)[\s\n]+\*\*"#
@@ -225,56 +224,56 @@ struct RichTextView: View {
             let nsString = preprocessedText as NSString
             let range = NSRange(location: 0, length: nsString.length)
             let matches = regex.matches(in: preprocessedText, options: [], range: range)
-            
+
             for match in matches.reversed() {
                 if match.numberOfRanges > 1 {
                     let contentRange = match.range(at: 1)
                     let content = nsString.substring(with: contentRange)
-                    
+
                     let replacement = "**\(content)**"
                     preprocessedText = (preprocessedText as NSString).replacingCharacters(in: match.range, with: replacement)
                 }
             }
         }
-        
+
         // Second, handle sections that have newlines after the closing asterisks
         // Pattern like: "**Title**\n\n"
         preprocessedText = preprocessedText.replacingOccurrences(
-            of: "\\*\\*([^*]+?)\\*\\*\\s*\\n\\s*\\n", 
-            with: "**$1**\n\n", 
+            of: "\\*\\*([^*]+?)\\*\\*\\s*\\n\\s*\\n",
+            with: "**$1**\n\n",
             options: .regularExpression
         )
-        
+
         // Split by double newlines to get paragraphs
         let sections = preprocessedText.components(separatedBy: "\n\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        
+
         for section in sections {
             // Check for bullet list
             if section.contains("\n* ") || section.contains("\n• ") || section.hasPrefix("* ") || section.hasPrefix("• ") {
                 result.append(Paragraph(content: section, type: .list))
                 continue
             }
-            
+
             // Use regex to precisely detect "**Title**" patterns including whitespace and newlines
             let boldTitlePattern = #"^\*\*(.+?)\*\*[\s\n]*"#
-            
+
             do {
                 let regex = try NSRegularExpression(pattern: boldTitlePattern, options: [.dotMatchesLineSeparators])
                 let nsSection = section as NSString
                 let matches = regex.matches(in: section, options: [], range: NSRange(location: 0, length: nsSection.length))
-                
+
                 if !matches.isEmpty, let match = matches.first {
                     // Found a bold title pattern
                     if match.numberOfRanges > 1 {
                         // Extract the title text (without **)
                         let titleRange = match.range(at: 1)
                         let boldTitle = nsSection.substring(with: titleRange).trimmingCharacters(in: .whitespacesAndNewlines)
-                        
+
                         // Add the bold title as a paragraph
                         result.append(Paragraph(content: boldTitle, type: .bold))
-                        
+
                         // Check if there's content after the bold title
                         if match.range.upperBound < nsSection.length {
                             let remainingText = nsSection.substring(from: match.range.upperBound).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -297,29 +296,29 @@ struct RichTextView: View {
                 result.append(Paragraph(content: section, type: .normal))
             }
         }
-        
+
         paragraphs = result
     }
-    
+
     // Helper to clean up any remaining asterisks in normal text
     private func cleanAsterisks(_ text: String) -> String {
         // Replace "**text**" patterns with "text"
         var result = text
-        
+
         // Handle the case where "**text**" is at the start of a line
         let pattern = #"\*\*(.+?)\*\*"#
-        
+
         do {
             let regex = try NSRegularExpression(pattern: pattern)
             let nsText = text as NSString
             let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
-            
+
             // Process matches from end to beginning to avoid index issues
             for match in matches.reversed() {
                 if match.numberOfRanges > 1 {
                     let contentRange = match.range(at: 1)
                     let content = nsText.substring(with: contentRange)
-                    
+
                     let range = match.range
                     result = (result as NSString).replacingCharacters(in: range, with: content)
                 }
@@ -327,28 +326,28 @@ struct RichTextView: View {
         } catch {
             print("Regex cleanup error: \(error)")
         }
-        
+
         return result
     }
-    
+
     private func processEmailLinks(_ content: String) -> AttributedString {
         do {
             // Create a basic attributed string
             var attributedText = AttributedString(content)
-            
+
             // Regular expression for email addresses
             let emailPattern = #"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,64}"#
             let emailRegex = try NSRegularExpression(pattern: emailPattern)
-            
+
             // Find all matches
             let nsString = content as NSString
             let matches = emailRegex.matches(in: content, range: NSRange(location: 0, length: nsString.length))
-            
+
             // Apply links to each email match
             for match in matches {
                 let emailRange = match.range
                 let email = nsString.substring(with: emailRange)
-                
+
                 // Find the corresponding range in the AttributedString
                 if let range = attributedText.range(of: email) {
                     // Add link attribute
@@ -356,7 +355,7 @@ struct RichTextView: View {
                     attributedText[range].foregroundColor = .blue
                 }
             }
-            
+
             return attributedText
         } catch {
             // Fallback if regex fails

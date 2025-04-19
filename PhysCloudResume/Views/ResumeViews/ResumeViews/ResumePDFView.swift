@@ -1,14 +1,13 @@
 //  ResumePDFView.swift
 //  PhysicsCloudResume
 
+import Observation
 import PDFKit
 import SwiftUI
-import Observation
 
 /// Displays the generated PDF for a given resume along with a small progress
 /// indicator while an export job is running.
 struct ResumePDFView: View {
-
     @State private var vm: ResumePDFViewModel
 
     init(resume: Resume) {
@@ -16,7 +15,7 @@ struct ResumePDFView: View {
     }
 
     var body: some View {
-        @Bindable var vm = vm   // enables change tracking for Observation
+        @Bindable var vm = vm // enables change tracking for Observation
 
         VStack {
             if let pdfData = vm.resume.pdfData {
@@ -39,7 +38,8 @@ struct ResumePDFView: View {
         .onAppear {
             // Lazy‑load a cached PDF if present on disk.
             if vm.resume.pdfData == nil,
-               let fileURL = FileHandler.readPdfUrl() {
+               let fileURL = FileHandler.readPdfUrl()
+            {
                 vm.resume.loadPDF(from: fileURL)
             }
         }

@@ -27,8 +27,8 @@ struct JobAppDetailView: View {
                 .padding(.horizontal).padding(.vertical)
                 .navigationTitle(
                     buttons.edit
-                        ? "Editing \(form.job_position) at \(form.company_name)"
-                        : "\(selectedApp.job_position) at \(selectedApp.company_name)"
+                        ? "Editing \(form.jobPosition) at \(form.companyName)"
+                        : "\(selectedApp.jobPosition) at \(selectedApp.companyName)"
                 )
                 .onChange(of: buttons.edit) { _, newValue in
                     if newValue {

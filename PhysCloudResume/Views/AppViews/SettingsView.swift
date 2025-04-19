@@ -31,7 +31,7 @@ struct SettingsView: View {
 
     @State private var isHoveringCheckmark = false
     @State private var isHoveringXmark = false
-    
+
     @State private var availableModels: [String] = []
     @State private var isLoadingModels: Bool = false
     @State private var modelError: String? = nil
@@ -92,12 +92,12 @@ struct SettingsView: View {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.gray.opacity(0.7), lineWidth: 1)
                     )
-                    
+
                     // OpenAI Model Selection Section
                     VStack(alignment: .leading, spacing: 10) {
                         Text("OpenAI Model")
                             .font(.headline)
-                        
+
                         HStack {
                             Picker("Model", selection: $preferredOpenAIModel) {
                                 ForEach(availableModels, id: \.self) { model in
@@ -109,7 +109,7 @@ struct SettingsView: View {
                             }
                             .disabled(isLoadingModels || availableModels.isEmpty)
                             .frame(maxWidth: .infinity)
-                            
+
                             Button(action: fetchOpenAIModels) {
                                 if isLoadingModels {
                                     ProgressView()
@@ -121,13 +121,13 @@ struct SettingsView: View {
                             .buttonStyle(BorderlessButtonStyle())
                             .disabled(openAiApiKey == "none")
                         }
-                        
+
                         if let error = modelError {
                             Text(error)
                                 .font(.caption)
                                 .foregroundColor(.red)
                         }
-                        
+
                         if availableModels.isEmpty && !isLoadingModels && modelError == nil {
                             Text("Click refresh to load available models")
                                 .font(.caption)
@@ -201,19 +201,19 @@ struct SettingsView: View {
             modelError = "API key is required to fetch models"
             return
         }
-        
+
         isLoadingModels = true
         modelError = nil
-        
+
         Task {
             let models = await OpenAIModelFetcher.fetchAvailableModels(apiKey: openAiApiKey)
-            
+
             await MainActor.run {
                 if models.isEmpty {
                     modelError = "Failed to fetch models or no models available"
                 } else {
                     availableModels = models
-                    
+
                     // Set default model if current selection isn't in the list
                     if !models.contains(preferredOpenAIModel) && !models.isEmpty {
                         preferredOpenAIModel = models.first!
@@ -245,7 +245,7 @@ struct SettingsView: View {
                     Button(action: {
                         value.wrappedValue = editedValue.wrappedValue
                         isEditing.wrappedValue = false
-                        if label == "OpenAI" && !editedValue.wrappedValue.isEmpty && editedValue.wrappedValue != "none" {
+                        if label == "OpenAI", !editedValue.wrappedValue.isEmpty, editedValue.wrappedValue != "none" {
                             fetchOpenAIModels()
                         }
                     }) {

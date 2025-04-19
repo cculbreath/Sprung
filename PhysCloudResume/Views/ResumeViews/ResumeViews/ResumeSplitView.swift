@@ -26,16 +26,15 @@ struct ResumeSplitView: View {
                         isWide: $isWide,
                         resStore: resStore
                     )
-                        .frame(
-                            minWidth: isWide ? 350 : 200,
-                            idealWidth: isWide ? 500 : 300,
-                            maxWidth: 600,
-                            maxHeight: .infinity
-                        ).onAppear { print("RootNode")
-                            //          print(rootNode.resume.id)
-                        }
-                        .layoutPriority(1) // Ensures this view gets priority in layout
-
+                    .frame(
+                        minWidth: isWide ? 350 : 200,
+                        idealWidth: isWide ? 500 : 300,
+                        maxWidth: 600,
+                        maxHeight: .infinity
+                    ).onAppear { print("RootNode")
+                        //          print(rootNode.resume.id)
+                    }
+                    .layoutPriority(1) // Ensures this view gets priority in layout
 
                     ResumePDFView(resume: selRes)
                         .frame(

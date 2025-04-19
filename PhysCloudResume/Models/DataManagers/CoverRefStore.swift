@@ -9,13 +9,12 @@ final class CoverRefStore {
         (try? modelContext.fetch(FetchDescriptor<CoverRef>())) ?? []
     }
 
-
     var defaultSources: [CoverRef] {
         storedCoverRefs.filter { $0.enabledByDefault }
     }
 
     init(context: ModelContext) {
-        self.modelContext = context
+        modelContext = context
     }
 
     var backgroundFacts: [CoverRef] {
@@ -25,8 +24,6 @@ final class CoverRefStore {
     var writingSamples: [CoverRef] {
         return storedCoverRefs.filter { $0.type == .writingSample }
     }
-
-
 
     @discardableResult
     func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
@@ -39,7 +36,6 @@ final class CoverRefStore {
     func deleteCoverRef(_ coverRef: CoverRef) {
         modelContext.delete(coverRef)
         try? modelContext.save()
-
     }
 
     private func saveContext() {

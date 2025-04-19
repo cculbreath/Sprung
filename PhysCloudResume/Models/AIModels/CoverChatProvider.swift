@@ -55,7 +55,6 @@ final class CoverChatProvider {
         buttons: Binding<CoverLetterButtons>
     ) {
         print("processResults")
-      
 
         coverLetter.generated = true
         coverLetter.messageHistory.append(
@@ -78,8 +77,6 @@ final class CoverChatProvider {
             print("reviseAction")
             buttons.wrappedValue.runRequested = true
             defer {
-                //        var myButtons = buttons.wrappedValue
-                //        myButtons.runRequested = false
                 customFeedback.wrappedValue = ""
             }
 
@@ -142,11 +139,6 @@ final class CoverChatProvider {
         Task { @MainActor in
             print("chatAction")
             buttons.wrappedValue.runRequested = true
-//      defer {
-//        buttons.wrappedValue.runRequested = false
-            //         var myButtons = buttons.wrappedValue
-            //          myButtons.runRequested = false
-//      }
 
             guard let resume = res, let cL = jobAppStore.selectedApp?.selectedCover
             else {

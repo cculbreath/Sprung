@@ -4,7 +4,6 @@ import Observation
 @Observable
 @MainActor
 final class ResumePDFViewModel {
-
     private(set) var resume: Resume
 
     /// Tracks whether a JSON → PDF export operation is currently running so

@@ -15,10 +15,10 @@ struct NodeWithChildrenView: View {
     var body: some View {
         VStack(alignment: .leading) {
             // Header combines the chevron, title, add button, and status badge.
-                NodeHeaderView(
-                    node: node,
-                    addChildAction: { vm.addChild(to: node) }
-                )
+            NodeHeaderView(
+                node: node,
+                addChildAction: { vm.addChild(to: node) }
+            )
 
             // Show child nodes when expanded.
             if vm.isExpanded(node),

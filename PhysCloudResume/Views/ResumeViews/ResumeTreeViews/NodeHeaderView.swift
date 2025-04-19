@@ -3,7 +3,6 @@ import SwiftUI
 /// Header row for a parent node.  No state lives here; it queries and mutates
 /// expansion state through `ResumeDetailVM`.
 struct NodeHeaderView: View {
-
     let node: TreeNode
     let addChildAction: () -> Void
 

@@ -39,7 +39,7 @@ extension JobApp {
             let jobApp = JobApp()
             // Extract job position
             if let jobTitleElement = try doc.select("#jdPostingTitle").first() {
-                jobApp.job_position = try jobTitleElement.text()
+                jobApp.jobPosition = try jobTitleElement.text()
             }
 
             // Extract job location
@@ -47,15 +47,15 @@ extension JobApp {
                 let locality = try jobLocationElement.select("span[itemProp=addressLocality]").text()
                 let region = try jobLocationElement.select("span[itemProp=addressRegion]").text()
                 let country = try jobLocationElement.select("span[itemProp=addressCountry]").text()
-                jobApp.job_location = "\(locality), \(region), \(country)"
+                jobApp.jobLocation = "\(locality), \(region), \(country)"
             }
 
             // Set company name
-            jobApp.company_name = "Apple"
+            jobApp.companyName = "Apple"
 
             // Extract job posting time
             if let jobPostDateElement = try doc.select("#jobPostDate").first() {
-                jobApp.job_posting_time = try jobPostDateElement.text()
+                jobApp.jobPostingTime = try jobPostDateElement.text()
             }
 
             // Extract job description, combining description, minimum qualifications, and preferred qualifications
@@ -72,13 +72,13 @@ extension JobApp {
                 descriptionText += "Preferred Qualifications:\n"
                 descriptionText += try prefQualificationsElement.text() + "\n"
             }
-            jobApp.job_description = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+            jobApp.jobDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
 
             // Extract job function (department or division)
             if let jobTeamElement = try doc.select("#job-team-name").first() {
-                jobApp.job_function = try jobTeamElement.text()
+                jobApp.jobFunction = try jobTeamElement.text()
             }
-            jobApp.posting_url = url
+            jobApp.postingURL = url
 
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
         } catch let Exception.Error(type, message) {

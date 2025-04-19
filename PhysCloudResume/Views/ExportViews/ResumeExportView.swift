@@ -128,7 +128,7 @@ struct ResumeExportView: View {
             return
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let fileURL = downloadsURL.appendingPathComponent(sanitizeFilename("\(resume.jobApp?.job_position ?? "unknown").pdf"))
+        let fileURL = downloadsURL.appendingPathComponent(sanitizeFilename("\(resume.jobApp?.jobPosition ?? "unknown").pdf"))
 
         do {
             try FileManager.default.createDirectory(at: downloadsURL, withIntermediateDirectories: true, attributes: nil)
@@ -146,7 +146,7 @@ struct ResumeExportView: View {
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let fileURL = downloadsURL.appendingPathComponent(
-            sanitizeFilename("\(resume.jobApp?.job_position ?? "unknown").txt")
+            sanitizeFilename("\(resume.jobApp?.jobPosition ?? "unknown").txt")
         )
 
         do {
@@ -163,7 +163,7 @@ struct ResumeExportView: View {
             return
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let fileURL = downloadsURL.appendingPathComponent(sanitizeFilename("\(resume.jobApp?.job_position ?? "unknown").json"))
+        let fileURL = downloadsURL.appendingPathComponent(sanitizeFilename("\(resume.jobApp?.jobPosition ?? "unknown").json"))
 
         let jsonString = resume.jsonTxt
         do {
@@ -180,7 +180,7 @@ struct ResumeExportView: View {
             return
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let fileURL = downloadsURL.appendingPathComponent(sanitizeFilename("\(coverLetter.jobApp?.job_position ?? "")_CoverLetter.txt"))
+        let fileURL = downloadsURL.appendingPathComponent(sanitizeFilename("\(coverLetter.jobApp?.jobPosition ?? "")_CoverLetter.txt"))
 
         do {
             try coverLetter.content.write(to: fileURL, atomically: true, encoding: .utf8)

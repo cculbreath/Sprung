@@ -13,6 +13,7 @@ final class JobAppStore {
     var jobApps: [JobApp] {
         (try? modelContext.fetch(FetchDescriptor<JobApp>())) ?? []
     }
+
     var selectedApp: JobApp?
     var form = JobAppForm()
     var resStore: ResStore
@@ -21,13 +22,13 @@ final class JobAppStore {
     // MARK: - Initialiser
 
     init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
-        self.modelContext = context
+        modelContext = context
         self.resStore = resStore
         self.coverLetterStore = coverLetterStore
-
     }
 
     // MARK: - Methods
+
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus
 //    saveContext()
@@ -71,8 +72,6 @@ final class JobAppStore {
         if selectedApp == nil {
             selectedApp = jobApps.first
         }
-
-
     }
 
     private func populateFormFromObj(_ jobApp: JobApp) {
@@ -104,7 +103,7 @@ final class JobAppStore {
 //    saveContext()
     }
 
-    func updateJobApp(_ updated: JobApp) {
+    func updateJobApp(_: JobApp) {
         // Persist the changes that should already be reflected on the entity
         // instance.
         do {

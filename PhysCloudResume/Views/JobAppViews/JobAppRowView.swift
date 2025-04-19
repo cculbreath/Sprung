@@ -14,7 +14,7 @@ struct JobAppRowView: View {
     var deleteAction: () -> Void
 
     var body: some View {
-        Text("\(jobApp.company_name): \(jobApp.job_position)")
+        Text("\(jobApp.companyName): \(jobApp.jobPosition)")
             .tag(jobApp)
             .contextMenu {
                 Button(role: .destructive, action: deleteAction) {

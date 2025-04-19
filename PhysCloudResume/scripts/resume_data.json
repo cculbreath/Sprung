@@ -1,0 +1,322 @@
+{
+    "meta": {
+        "format": "FRESH@0.6.0",
+        "version": "0.1.0"
+    },
+    "section-labels": {
+        "skills-and-expertise": "Multidisciplinary Skills and Expertise",
+        "employment": "Professional Experience",
+        "education": "Education",
+        "languages": "Languages and Frameworks",
+        "hobbies": "Personal Projects and Hobbies",
+        "publications": "Publications",
+        "more": "Learn more at Culbreath.net"
+    },
+    "contact": {
+        "name": "Christopher Culbreath",
+        "website": "culbreath.net",
+        "phone": "(805) 234-0847",
+        "email": "cc@physicscloud.net",
+        "location": {
+            "address": "7317 Shadywood Drive",
+            "city": "Austin",
+            "state": "Texas",
+            "code": "78745",
+            "country": "US"
+        }
+    },
+    "labels": [
+        "Physicist",
+        "Educator",
+        "Programmer",
+        "Machinist"
+    ],
+    "summary": [
+        "Adaptable physicist with a passion for innovation and collaboration. Skilled in problem-solving and communication across domains such as education, materials research, automation, optics and imaging systems, prototyping, and fabrication. Seeking opportunities to contribute to creative projects that challenge and inspire."
+    ],
+    "skills-and-expertise": [
+        "Designing experiments and performing analysis to characterize and iterate product development",
+        "Design and fabrication of mechanical parts through CAD, CAM, and prototype machining",
+        "Selecting sensors for data measurement, acquisition, analysis, and quantifying uncertainty",
+        "Optimizing data analysis pipelines using tools such as Mathematica, MATLAB, and open-source Python libraries",
+        "Programming rich, interactive data visualizations",
+        "Communicating technical ideas to both technical and non-technical audiences with strong technical writing and engaging presentations",
+        "Multi-disciplinary expertise in soft-matter condensed physics, optics, and mechanics"
+    ],
+    "more-info": "For Project photos, Research Papers, and more, <a href=\"https://culbreath.net\" style=\"font-weight: bold; color: black; text-decoration: none;\">visit culbreath.net↪︎</a>",
+    "employment": [
+        {
+            "employer": "California Polytechnic University",
+            "url": "https://calpoly.edu/",
+            "location": "San Luis Obispo, California",
+            "position": "Senior Lecturer, Physics Department",
+            "start": "September 2016",
+            "end": "June 2024",
+            "highlights": [
+                "Taught as many as 120 undergraduate engineers and scientists each quarter with an engaging, evidence-based curriculum",
+                "Infused lectures on theoretical concepts of mechanics, waves, optics, thermodynamics, electricity, and magnetism with real-world applications and spirited commentary to ensure knowledge retention and student success",
+                "Built and expanded research programs investigating novel shape-memory materials while simultaneously teaching courses and supervising student researchers",
+                "Developed, refined, and implemented Physics Cloud, a bespoke web application for the assignment and collection of online assignments and distribution of assignment scores and course grades"
+            ]
+        },
+        {
+            "employer": "NRD LLC (formerly Nuance Designs)",
+            "location": "San Luis Obispo, California",
+            "position": "Materials Science and Automation Engineer",
+            "start": "April 2019",
+            "end": "December 2021",
+            "highlights": [
+                "Researched, discovered, and implemented theoretical models and simulations of thermodynamic properties for an auto-injector prototype using a novel liquid-vapor equilibrium propellant",
+                "Earned executive leadership buy-in for a proposal that brought Elastium Technologies together with NRD on a contractual basis for continued development of a single-crystal shape memory furnace",
+                "Acted as a key contributor in scaling and refining processes for production and commercial sale",
+                "Performed system-level testing and evaluations to ensure functional and performance readiness of developed prototypes and products"
+            ]
+        },
+        {
+            "employer": "Elastium Technologies",
+            "location": "Emeryville, California",
+            "position": "Materials Science and Automation Consultant",
+            "start": "March 2017",
+            "end": "September 2018",
+            "highlights": [
+                "Onboarded to develop an automation control scheme for a newly developed single-crystal shape memory continuous casting furnace",
+                "Chosen by leadership to stay on as a consultant after the automation project ended",
+                "Revamped and turned around ineffective processes using novel techniques, resulting in improved productivity and higher efficiency",
+                "Developed a comprehensive automation control scheme that incorporated electrical and embedded system elements for the single-crystal shape memory continuous casting furnace",
+                "Contributed to system design improvements focused on increased productivity and higher efficiency in the continuous casting furnace"
+            ]
+        },
+        {
+            "employer": "California State University",
+            "location": "Chico, California",
+            "position": "Lecturer, Physics Department",
+            "start": "January 2015",
+            "end": "June 2016",
+            "highlights": [
+                "Led lectures and taught calculus-based mechanics for up to 200 students",
+                "Fostered an enthusiastic and positive class culture to facilitate active learning",
+                "Engaged students with original and memorable lab exercises and in-class demonstrations",
+                "Piloted a summer research program investigating twist disclinations in nematic liquid crystals"
+            ]
+        },
+        {
+            "employer": "MacSuperstore",
+            "location": "San Luis Obispo, California",
+            "position": "Senior Technician",
+            "start": "August 2005",
+            "end": "June 2008",
+            "highlights": [
+                "Earned certification as an Apple Desktop and Portable Repair Technician",
+                "Highest scoring participant in Apple Online Training for 2007 among all US resellers",
+                "Performed front counter troubleshooting, diagnosis, while-you-wait and full-service repairs",
+                "Performed hardware and software repairs on Apple desktops, portables, and iPods",
+                "Earned highest metrics in efficiency, productivity, and repair quality, doubling the number of completed repairs per technician"
+            ]
+        },
+        {
+            "employer": "Iconic Photography",
+            "location": "Kent, Ohio",
+            "position": "Owner, Photographer, Client Satisfaction Expert",
+            "start": "March 2011",
+            "end": "January 2015"
+        }
+    ],
+    "education": [
+        {
+            "institution": "Liquid Crystal Institute, Kent State University",
+            "title": "Doctor of Philosophy - Chemical Physics",
+            "url": "https://lci.kent.edu/",
+            "end": "2015"
+        },
+        {
+            "institution": "California Polytechnic State University San Luis Obispo",
+            "title": "Bachelor of Science - Physics",
+            "url": "https://calpoly.edu",
+            "end": "2008"
+        },
+        {
+            "institution": "Sherburne Sculptures, Atascadero, California",
+            "title": "Apprentice Machinist",
+            "end": "2006"
+        }
+    ],
+    "languages": [
+        "PHP",
+        "JavaScript",
+        "HTML5",
+        "CSS",
+        "SQL",
+        "Yii Framework",
+        "LAMP",
+        "Python",
+        "C++",
+        "MATLAB",
+        "LabVIEW",
+        "SwiftUI",
+        "Arduino",
+        "Raspberry Pi",
+        "Mathematica",
+        "LaTeX",
+        "Bootstrap"
+    ],
+    "projects-and-hobbies": [
+        {
+            "title": "Software Development",
+            "examples": [
+                {
+                    "name": "Physics Cloud:",
+                    "description": "A custom learning management system built on the LAMP stack."
+                },
+                {
+                    "name": "Chore Cloud:",
+                    "description": "Brings family chores and allowance tracking to mobile devices."
+                },
+                {
+                    "name": "Physics Cloud Résumé:",
+                    "description": "Delivers a native macOS experience for tracking, preparing, and submitting job applications."
+                },
+                {
+                    "name": "Mom’s Bills:",
+                    "description": "A multi-device, FileMaker-based relational database accounting platform."
+                }
+            ]
+        },
+        {
+            "title": "Precision Machining",
+            "examples": [
+                {
+                    "name": "Classically Trained",
+                    "description": "by a master machinist in conventional machining methods."
+                },
+                {
+                    "name": "Combining creativity with quality",
+                    "description": "bringing innovation to fabrication and artistry to my creative work."
+                }
+            ]
+        },
+        {
+            "title": "Electronics Projects",
+            "examples": [
+                {
+                    "name": "Nine-Digit Nixie-Tube Timer:",
+                    "description": "Commemorated the final 104,185,920 seconds before my dad’s retirement."
+                },
+                {
+                    "name": "Kite Aerial Photography:",
+                    "description": "Provided a unique vantage point before drones, using a custom-built RC rig."
+                },
+                {
+                    "name": "Three-Axis CNC Mill:",
+                    "description": "Built as an invaluable introduction to motion control."
+                },
+                {
+                    "name": "Drumline Robot:",
+                    "description": "(in progress) Combines o-drive, brushless motors, and advanced robotics to deliver the sound of a marching band from a bike trailer."
+                }
+            ]
+        },
+        {
+            "title": "Photography & Print",
+            "examples": [
+                {
+                    "name": "My creative voice",
+                    "description": " blends traditional methods like letterpress, silk screen, and darkroom printing with"
+                },
+                {
+                    "name": "advanced technical skills",
+                    "description": "in desktop publishing and photography."
+                }
+            ]
+        }
+    ],
+    "publications": [
+        {
+            "type": "article",
+            "title": "Frank-Read Mechanism in Nematic Liquid Crystals",
+            "authors": [
+                "Cheng Long",
+                "Matthew J. Deutsch",
+                "Joseph Angelo",
+                "Christopher Culbreath",
+                "Hiroshi Yokoyama",
+                "Jonathan V. Selinger",
+                "Robin L. B. Selinger"
+            ],
+            "journal": "Phys. Rev. X",
+            "volume": "14",
+            "issue": "1",
+            "pages": "011044",
+            "year": "2024",
+            "month": "Mar",
+            "publisher": "American Physical Society",
+            "doi": "10.1103/PhysRevX.14.011044",
+            "url": "https://link.aps.org/doi/10.1103/PhysRevX.14.011044"
+        },
+        {
+            "type": "article",
+            "doi": "10.1080/15421406.2017.1287486",
+            "authors": [
+                "Joseph Angelo",
+                "Christopher Culbreath",
+                "Hiroshi Yokoyama"
+            ],
+            "title": "Breaking planar liquid crystal anchoring to form controllable twist disclination loops",
+            "journal": "Molecular Crystals and Liquid Crystals",
+            "volume": "646",
+            "issue": "1",
+            "pages": "214-219",
+            "year": "2017",
+            "publisher": "Taylor & Francis",
+            "url": "https://doi.org/10.1080/15421406.2017.1287486",
+            "eprint": "https://doi.org/10.1080/15421406.2017.1287486"
+        },
+        {
+            "type": "article",
+            "doi": "10.7567/APEX.8.116501",
+            "authors": [
+                "Nikolaus Glazar",
+                "Christopher Culbreath",
+                "Yannian Li",
+                "Hiroshi Yokoyama"
+            ],
+            "title": "Switchable liquid-crystal phase-shift mask for super-resolution photolithography based on Pancharatnam-Berry phase",
+            "journal": "Applied Physics Express",
+            "volume": "8",
+            "issue": "11",
+            "pages": "116501",
+            "year": "2015",
+            "month": "Nov",
+            "url": "https://ui.adsabs.harvard.edu/abs/2015APExp…8k6501G",
+            "adsnote": "Provided by the SAO/NASA Astrophysics Data System"
+        },
+        {
+            "title": "Artificial Microscopic Structures in Nematic Liquid Crystals Created by Patterned Photoalignment and Controlled Confinement: Instrumentation, Fabrication, and Characterization",
+            "type": "dissertation",
+            "authors": [
+                "Christopher Culbreath"
+            ],
+            "journal": "Kent State University",
+			"year": "2015"
+        },
+        {
+            "type": "article",
+            "doi": "10.1063/1.3669528",
+            "authors": [
+                "Christopher Culbreath",
+                "Nikolaus Glazar",
+                "Hiroshi Yokoyama"
+            ],
+            "title": "Automated maskless micro-multidomain photoalignment",
+            "journal": "Review of Scientific Instruments",
+            "volume": "82",
+            "issue": "12",
+            "pages": "126107",
+            "year": "2011",
+            "month": "Dec",
+            "abstract": "We present a fully automated maskless exposure system for the fabrication of microscopic orientational surface alignment patterns. The maskless system allows us to fabricate arbitrary surface patterns over a 2 mm × 2 mm area with a resolution of 2.2 μm. A confocal autofocus system ensures accurate and repeatable focus. Microscopic orientational surface patterns have been demonstrated to exhibit a variety of novel functionalities, such as surface alignment multi-stability.",
+            "issn": "0034-6748",
+            "url": "https://doi.org/10.1063/1.3669528",
+            "eprint": "https://pubs.aip.org/aip/rsi/article-pdf/doi/10.1063/1.3669528/8827560/126107_1_online.pdf"
+        }
+    ]
+}

@@ -7,13 +7,13 @@ extension JobApp {
             // Try to decode the JSON response
             let decoder = JSONDecoder()
             let proxycurlJob = try decoder.decode(ProxycurlJob.self, from: jsonData)
-            
+
             // Create a new JobApp instance
             let jobApp = JobApp()
-            
+
             // Map the Proxycurl response fields to JobApp properties
-            jobApp.job_position = proxycurlJob.title
-            
+            jobApp.jobPosition = proxycurlJob.title
+
             // Construct location string
             var locationParts: [String] = []
             if let city = proxycurlJob.location.city, !city.isEmpty {
@@ -25,17 +25,17 @@ extension JobApp {
             if let country = proxycurlJob.location.country, !country.isEmpty {
                 locationParts.append(country)
             }
-            jobApp.job_location = locationParts.joined(separator: ", ")
-            
+            jobApp.jobLocation = locationParts.joined(separator: ", ")
+
             // Company information
-            jobApp.company_name = proxycurlJob.company.name
-            
+            jobApp.companyName = proxycurlJob.company.name
+
             // LinkedIn ID (derived from the internal ID)
-            jobApp.company_linkedin_id = proxycurlJob.linkedin_internal_id
-            
+            jobApp.companyLinkedinId = proxycurlJob.linkedin_internal_id
+
             // Job description - clean up the title
             var cleanedDescription = proxycurlJob.job_description
-            
+
             // Remove "**Job Description**" or similar titles with asterisks
             let titlePattern = #"\*\*Job Description\*\*[\s\n]*"#
             if let regex = try? NSRegularExpression(pattern: titlePattern, options: [.caseInsensitive]) {
@@ -46,33 +46,33 @@ extension JobApp {
                     withTemplate: ""
                 )
             }
-            
-            jobApp.job_description = cleanedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            
+
+            jobApp.jobDescription = cleanedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+
             // Seniority level
-            jobApp.seniority_level = proxycurlJob.seniority_level
-            
+            jobApp.seniorityLevel = proxycurlJob.seniority_level
+
             // Employment type
-            jobApp.employment_type = proxycurlJob.employment_type
-            
+            jobApp.employmentType = proxycurlJob.employment_type
+
             // Job function (joining multiple functions if available)
-            jobApp.job_function = proxycurlJob.job_functions.joined(separator: ", ")
-            
+            jobApp.jobFunction = proxycurlJob.job_functions.joined(separator: ", ")
+
             // Industries (joining multiple industries if available)
             jobApp.industries = proxycurlJob.industry.joined(separator: ", ")
-            
+
             // Apply link
-            jobApp.job_apply_link = proxycurlJob.apply_url
-            
+            jobApp.jobApplyLink = proxycurlJob.apply_url
+
             // Original posting URL
-            jobApp.posting_url = postingUrl
-            
+            jobApp.postingURL = postingUrl
+
             // Set default status for new job application
             jobApp.status = .new
-            
+
             // Add jobApp to the store
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
-            
+
             return jobApp
         } catch {
             print("Failed to parse Proxycurl JSON: \(error)")

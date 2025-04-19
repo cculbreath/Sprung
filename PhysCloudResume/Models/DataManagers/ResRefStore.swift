@@ -11,27 +11,23 @@ final class ResRefStore {
         (try? modelContext.fetch(FetchDescriptor<ResRef>())) ?? []
     }
 
-
     var defaultSources: [ResRef] {
         resRefs.filter { $0.enabledByDefault }
     }
 
     init(context: ModelContext) {
-        self.modelContext = context
+        modelContext = context
         print("RefStore Initialized: \(resRefs.count) refs")
     }
-
-
 
     /// Adds a new `ResRef` to the store
     func addResRef(_ resRef: ResRef) {
         modelContext.insert(resRef)
         try? modelContext.save()
-
     }
 
     /// Persists updates (entity already mutated)
-    func updateResRef(_ resRef: ResRef) {
+    func updateResRef(_: ResRef) {
         do {
             try modelContext.save()
 
@@ -44,7 +40,6 @@ final class ResRefStore {
     func deleteResRef(_ resRef: ResRef) {
         modelContext.delete(resRef)
         try? modelContext.save()
-
     }
 
     /// Persists changes to the database
