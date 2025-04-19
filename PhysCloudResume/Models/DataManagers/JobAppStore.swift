@@ -7,7 +7,7 @@ import SwiftData
 final class JobAppStore: SwiftDataStore {
     // MARK: - Properties
 
-    private unowned let modelContext: ModelContext
+    unowned let modelContext: ModelContext
     // Computed collection that always reflects the latest state stored in
     // `modelContext`.  Because this is *computed*, any view access will fetch
     // directly from SwiftData and therefore stay in sync with persistent

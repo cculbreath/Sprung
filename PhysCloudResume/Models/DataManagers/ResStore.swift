@@ -13,7 +13,7 @@ import SwiftData
 final class ResStore: SwiftDataStore {
     // MARK: - Properties
 
-    private unowned let modelContext: ModelContext
+    unowned let modelContext: ModelContext
 
     // Computed collection that always reflects current SwiftData contents.
     var resumes: [Resume] {
