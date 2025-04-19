@@ -1,8 +1,10 @@
 import SwiftData
 
+// Shared helper for SwiftData persistence.
+
 @Observable
 @MainActor
-final class JobAppStore {
+final class JobAppStore: SwiftDataStore {
     // MARK: - Properties
 
     private unowned let modelContext: ModelContext
@@ -41,7 +43,7 @@ final class JobAppStore {
         coverLetterStore.createBlank(jobApp: jobApp)
 
         modelContext.insert(jobApp)
-        try? modelContext.save()
+        saveContext()
 
         selectedApp = jobApp
         return jobApp
@@ -64,7 +66,7 @@ final class JobAppStore {
         }
 
         modelContext.delete(jobApp)
-        try? modelContext.save()
+        saveContext()
 
         if selectedApp == jobApp {
             selectedApp = nil
@@ -106,22 +108,9 @@ final class JobAppStore {
     func updateJobApp(_: JobApp) {
         // Persist the changes that should already be reflected on the entity
         // instance.
-        do {
-            try modelContext.save()
-
-        } catch {
-            print("JobAppStore: Failed to save updated JobApp. Error: \(error)")
-        }
+        _ = saveContext()
     }
 
     // Save changes to the database
-    private func saveContext() {
-        print("don't call this manually!")
-        do {
-            try modelContext.save()
-            print("saved")
-        } catch {
-            print("Failed to save context: \(error)")
-        }
-    }
+    // `saveContext()` now lives in `SwiftDataStore`.
 }

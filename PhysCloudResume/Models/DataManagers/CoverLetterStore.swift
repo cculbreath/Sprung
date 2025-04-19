@@ -9,9 +9,12 @@
 import Foundation
 import SwiftData
 
+// Replaces hand‑rolled `saveContext()` duplication with a shared helper.
+import SwiftUI // Needed only for `@Observable` macro, already available.
+
 @Observable
 @MainActor
-final class CoverLetterStore {
+final class CoverLetterStore: SwiftDataStore {
     // MARK: - Properties
 
     private unowned let modelContext: ModelContext
@@ -64,7 +67,7 @@ final class CoverLetterStore {
     }
 
     func createDuplicate(letter: CoverLetter) -> CoverLetter {
-        saveContext()
+        saveContext() // From `SwiftDataStore` extension
         let newLetter = CoverLetter(
             enabledRefs: letter.enabledRefs,
             jobApp: letter.jobApp ?? nil
@@ -95,12 +98,5 @@ final class CoverLetterStore {
         }
     }
 
-    // Save changes to the database
-    private func saveContext() {
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to save context: \(error)")
-        }
-    }
+    // `saveContext()` now provided by `SwiftDataStore` default implementation.
 }

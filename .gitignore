@@ -1,0 +1,11 @@
+# Ignore vendored and generated artifacts
+weasy-dist/
+weasy/
+
+# Ignore root-level generated files
+PhysCloudResume.zip
+backup.txt
+combined_model_code.txt
+combined_output.txt
+output.txt
+CLAUDE.md
