@@ -354,8 +354,23 @@ struct ReviewView: View {
     }
 
     func aiResubmit() {
+        // Reset to original state before resubmitting to AI
         feedbackIndex = 0
-        aiResub = true
+
+        // Set to true with an animation and slight delay to ensure UI updates properly
+        withAnimation {
+            aiResub = true
+        }
+
+        // Safety timeout - if aiResub remains true for too long, auto-dismiss the sheet
+        // as this likely indicates a communication issue with the AI service
+        DispatchQueue.main.asyncAfter(deadline: .now() + 120) { // 2 minute timeout
+            if aiResub {
+                print("AI resubmission timeout detected - automatically dismissing")
+                aiResub = false
+                sheetOn = false
+            }
+        }
     }
 
     func fetchModelByID(id: String, context: ModelContext) -> TreeNode? {

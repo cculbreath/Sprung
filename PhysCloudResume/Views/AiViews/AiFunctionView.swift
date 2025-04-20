@@ -11,7 +11,11 @@ struct AiFunctionView: View {
         _res = res
 
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 360 // 360 seconds for extended timeout
+        configuration.timeoutIntervalForRequest = 600 // 10 minutes for extended timeout
+        configuration.timeoutIntervalForResource = 600 // Also set resource timeout
+
+        // Increase the connections per host for better performance
+        configuration.httpMaximumConnectionsPerHost = 6
 
         service = OpenAIServiceFactory.service(
             apiKey: openAiApiKey, configuration: configuration, debugEnabled: false

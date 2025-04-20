@@ -64,23 +64,71 @@ final class ResumeChatProvider {
     func startChat(
         parameters: ChatCompletionParameters
     ) async throws {
+        // Clear previous error message before starting
+        errorMessage = ""
+
         do {
-            let choices = try await service.startChat(parameters: parameters).choices
+            // Start a task with specific timeout for the API call
+            let result = try await withCheckedThrowingContinuation { continuation in
+                let task = Task {
+                    do {
+                        let result = try await service.startChat(parameters: parameters)
+                        continuation.resume(returning: result)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+                }
+
+                // Set up a timeout task
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout (a bit less than the URLSession timeout)
+                    if !task.isCancelled {
+                        task.cancel()
+                        continuation.resume(throwing: NSError(
+                            domain: "ResumeChatProviderError",
+                            code: -1001,
+                            userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
+                        ))
+                    }
+                }
+            }
+
+            let choices = result.choices
             messages = choices.compactMap(\.message.content).map { $0.asJsonFormatted() }
-            assert(messages.count == 1)
-            print(messages.last ?? "Nothin")
+
+            if messages.isEmpty {
+                throw NSError(
+                    domain: "ResumeChatProviderError",
+                    code: 1002,
+                    userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
+                )
+            }
+
+            print("AI response received: \(messages.last?.prefix(100) ?? "Empty")")
 
             lastRevNodeArray = convertJsonToNodes(messages.last) ?? []
-            messageHist
-                .append(
-                    .init(role: .assistant, content: .text(choices.last?.message.content ?? ""))
+            messageHist.append(
+                .init(role: .assistant, content: .text(choices.last?.message.content ?? ""))
+            )
+
+            if let refusal = choices.first?.message.refusal, !refusal.isEmpty {
+                errorMessage = refusal
+                throw NSError(
+                    domain: "OpenAIRefusalError",
+                    code: 1003,
+                    userInfo: [NSLocalizedDescriptionKey: "AI refused to complete the request: \(refusal)"]
                 )
-            errorMessage = choices.first?.message.refusal ?? ""
+            }
         } catch let APIError.responseUnsuccessful(description, statusCode) {
-            self.errorMessage =
-                "Network error with status code: \(statusCode) and description: \(description)"
+            self.errorMessage = "Network error with status code: \(statusCode) and description: \(description)"
+            throw NSError(
+                domain: "OpenAINetworkError",
+                code: statusCode,
+                userInfo: [NSLocalizedDescriptionKey: description]
+            )
         } catch {
             errorMessage = error.localizedDescription
+            throw error
         }
     }
 

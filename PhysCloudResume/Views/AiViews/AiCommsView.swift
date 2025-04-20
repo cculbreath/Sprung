@@ -14,6 +14,8 @@ struct AiCommsView: View {
     @State private var aiResub: Bool = false
     @Binding var myRes: Resume?
     @State private var fbnodes: [FeedbackNode] = []
+    @State private var errorMessage: String = ""
+    @State private var showError: Bool = false
     init(service: OpenAIService, query: ResumeApiQuery, res: Binding<Resume?>) {
         _chatProvider = State(initialValue: ResumeChatProvider(service: service))
         _q = State(initialValue: query)
@@ -38,6 +40,16 @@ struct AiCommsView: View {
                     .frame(minWidth: 650)
                 }
             }
+            .alert("API Request Error", isPresented: $showError) {
+                Button("OK") {
+                    // Reset state when error is acknowledged
+                    aiResub = false
+                    sheetOn = false
+                    isLoading = false
+                }
+            } message: {
+                Text(errorMessage)
+            }
             .onChange(of: chatProvider.lastRevNodeArray) { _, newValue in
                 sheetOn = true
                 revisions = validateRevs(res: myRes, revs: newValue) ?? [] // Updated this call
@@ -58,6 +70,18 @@ struct AiCommsView: View {
             .onChange(of: aiResub) { _, newValue in
                 if newValue {
                     chatAction(hasRevisions: true)
+
+                    // Safety timeout to dismiss the review view if AI request takes too long
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 180) { // 3 minutes timeout
+                        if isLoading && aiResub {
+                            print("Request timeout triggered in AiCommsView - dismissing UI")
+                            self.showError = true
+                            self.errorMessage = "The AI request is taking longer than expected. Please try again later."
+                            aiResub = false
+                            sheetOn = false
+                            isLoading = false
+                        }
+                    }
                 }
             }
     }
@@ -123,30 +147,66 @@ struct AiCommsView: View {
         if let jobApp = jobAppStore.selectedApp {
             jobApp.status = .inProgress
         }
+
         Task {
-            print("chatAction")
+            print("chatAction starting")
             isLoading = true
-            defer { isLoading = false } // ensure isLoading is set to false when the task completes
 
-            if !hasRevisions {
-                let content: ChatCompletionParameters.Message.ContentType = .text(q.wholeResumeQueryString)
+            do {
+                if !hasRevisions {
+                    let content: ChatCompletionParameters.Message.ContentType = .text(q.wholeResumeQueryString)
 
-                chatProvider.messageHist = [
-                    q.systemMessage,
-                    .init(role: .user, content: content),
-                ]
-            } else {
-                chatProvider.messageHist.append(.init(role: .user, content: .text(q.revisionPrompt(fbnodes))))
+                    chatProvider.messageHist = [
+                        q.systemMessage,
+                        .init(role: .user, content: content),
+                    ]
+                } else {
+                    chatProvider.messageHist.append(.init(role: .user, content: .text(q.revisionPrompt(fbnodes))))
+                }
+
+                let model = OpenAIModelFetcher.getPreferredModel()
+                print("Using OpenAI model for resume query: \(model)")
+                let parameters = ChatCompletionParameters(
+                    messages: chatProvider.messageHist,
+                    model: model,
+                    responseFormat: .jsonSchema(ResumeApiQuery.revNodeArraySchema)
+                )
+
+                // Set up a timeout task that will run if the main task takes too long
+                let timeoutTask = Task {
+                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds - just for checking if progress is made
+                    if isLoading && !Task.isCancelled {
+                        print("AI operation in progress...")
+                    }
+                }
+
+                // Execute the API call
+                try await chatProvider.startChat(parameters: parameters)
+
+                // Cancel the timeout task since we completed successfully
+                timeoutTask.cancel()
+
+                // Check for error messages from the chat provider
+                if !chatProvider.errorMessage.isEmpty {
+                    throw NSError(domain: "OpenAIError",
+                                  code: 1001,
+                                  userInfo: [NSLocalizedDescriptionKey: chatProvider.errorMessage])
+                }
+            } catch {
+                print("Error in chatAction: \(error.localizedDescription)")
+
+                // Update error state and show alert
+                await MainActor.run {
+                    errorMessage = "An error occurred: \(error.localizedDescription)\n\nPlease try again or check your API key configuration."
+                    showError = true
+                    aiResub = false
+                }
             }
 
-            let model = OpenAIModelFetcher.getPreferredModel()
-            print("Using OpenAI model for resume query: \(model)")
-            let parameters = ChatCompletionParameters(
-                messages: chatProvider.messageHist,
-                model: model,
-                responseFormat: .jsonSchema(ResumeApiQuery.revNodeArraySchema)
-            )
-            try await chatProvider.startChat(parameters: parameters)
+            // Always clean up loading state
+            await MainActor.run {
+                isLoading = false
+            }
         }
     }
 }
