@@ -88,12 +88,8 @@ struct RecommendJobButton: View {
                         // Store the recommended job ID for highlighting
                         appState.recommendedJobId = jobId
 
-                        // Create a notification
-                        let notification = NSUserNotification()
-                        notification.title = "Job Recommendation"
-                        notification.subtitle = "Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)"
-                        notification.informativeText = reason
-                        NSUserNotificationCenter.default.deliver(notification)
+                        // Create an alert instead of notification since NSUserNotification is unavailable
+                        errorMessage = "Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)"
                     } else {
                         errorMessage = "Recommended job not found"
                     }
