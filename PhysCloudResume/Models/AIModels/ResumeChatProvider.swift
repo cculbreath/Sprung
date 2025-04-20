@@ -62,20 +62,19 @@ final class ResumeChatProvider {
     }
 
     // Actor to safely coordinate continuations and prevent multiple resumes
-    private actor ContinuationCoordinator<T> {
+    private actor ContinuationCoordinator {
         private var hasResumed = false
         
-        func resume<E: Error>(continuation: CheckedContinuation<T, E>, 
-                             with result: Result<T, E>) {
+        func resumeWithValue<T, E: Error>(_ value: T, continuation: CheckedContinuation<T, E>) {
             guard !hasResumed else { return }
             hasResumed = true
-            
-            switch result {
-            case .success(let value):
-                continuation.resume(returning: value)
-            case .failure(let error):
-                continuation.resume(throwing: error)
-            }
+            continuation.resume(returning: value)
+        }
+        
+        func resumeWithError<T, E: Error>(_ error: E, continuation: CheckedContinuation<T, E>) {
+            guard !hasResumed else { return }
+            hasResumed = true
+            continuation.resume(throwing: error)
         }
     }
     
@@ -87,10 +86,10 @@ final class ResumeChatProvider {
 
         do {
             // Create a coordinator for safe continuation resumption
-            let coordinator = ContinuationCoordinator<ChatCompletionResponse>()
+            let coordinator = ContinuationCoordinator()
             
             // Start a task with specific timeout for the API call
-            let result = try await withCheckedThrowingContinuation { continuation in
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ChatCompletionResult, Error>) in
                 let timeoutError = NSError(
                     domain: "ResumeChatProviderError",
                     code: -1001,
@@ -100,9 +99,9 @@ final class ResumeChatProvider {
                 let apiTask = Task {
                     do {
                         let result = try await service.startChat(parameters: parameters)
-                        await coordinator.resume(continuation: continuation, with: .success(result))
+                        await coordinator.resumeWithValue(result, continuation: continuation)
                     } catch {
-                        await coordinator.resume(continuation: continuation, with: .failure(error))
+                        await coordinator.resumeWithError(error, continuation: continuation)
                     }
                 }
                 
@@ -111,7 +110,7 @@ final class ResumeChatProvider {
                     try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout (a bit less than the URLSession timeout)
                     if !apiTask.isCancelled {
                         apiTask.cancel()
-                        await coordinator.resume(continuation: continuation, with: .failure(timeoutError))
+                        await coordinator.resumeWithError(timeoutError, continuation: continuation)
                     }
                 }
             }
@@ -165,10 +164,10 @@ final class ResumeChatProvider {
         streamTask = Task {
             do {
                 // Create a coordinator for the timeout
-                let coordinator = ContinuationCoordinator<Any?>()
+                let coordinator = ContinuationCoordinator()
                 
                 // Use withTimeout pattern similar to startChat
-                let stream = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AsyncThrowingStream<ChatCompletionStreamResponse, Error>, Error>) in
+                let stream = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AsyncThrowingStream<ChatCompletionChunkResult, Error>, Error>) in
                     
                     // Create timeout error
                     let timeoutError = NSError(
@@ -181,16 +180,16 @@ final class ResumeChatProvider {
                     Task {
                         do {
                             let stream = try await service.startStreamedChat(parameters: parameters)
-                            await coordinator.resume(continuation: continuation, with: .success(stream))
+                            await coordinator.resumeWithValue(stream, continuation: continuation)
                         } catch {
-                            await coordinator.resume(continuation: continuation, with: .failure(error))
+                            await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
                     
                     // Timeout task
                     Task {
                         try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
-                        await coordinator.resume(continuation: continuation, with: .failure(timeoutError))
+                        await coordinator.resumeWithError(timeoutError, continuation: continuation)
                     }
                 }
                 
