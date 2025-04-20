@@ -19,6 +19,8 @@ import SwiftUI
         role: .system,
         content: .text("""
         You are an expert career advisor specializing in job application prioritization. Your task is to analyze a list of job applications and recommend the one that best matches the candidate's qualifications and career goals. You will be provided with job descriptions, the candidate's resume, and additional background information. Choose the job that offers the best match in terms of skills, experience, and potential career growth.
+
+        IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The recommendedJobId field must contain the exact UUID string from the id field of the chosen job in the job listings JSON array. Do not modify the UUID format in any way.
         """)
     )
 
@@ -46,16 +48,16 @@ import SwiftUI
         self.jobApps = jobApps
         self.resume = resume
         self.savePromptToFile = savePromptToFile
-        
+
         // Get API key from UserDefaults directly to avoid conflict with @Observable
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        
+
         // Create service using the factory
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 360 // 360 seconds extended timeout
-        
-        self.service = OpenAIServiceFactory.service(
-            apiKey: apiKey, 
+
+        service = OpenAIServiceFactory.service(
+            apiKey: apiKey,
             configuration: configuration,
             debugEnabled: false
         )
@@ -86,10 +88,32 @@ import SwiftUI
             ChatCompletionParameters.Message(role: .user, content: .text(prompt)),
         ]
 
+        // Create a JSON schema for the recommended job response
+        let recommendationSchema = JSONSchemaResponseFormat(
+            name: "job_recommendation_response",
+            strict: true,
+            schema: JSONSchema(
+                type: .object,
+                properties: [
+                    "recommendedJobId": JSONSchema(
+                        type: .string,
+                        description: "The exact UUID string from the id field of the recommended job"
+                    ),
+                    "reason": JSONSchema(
+                        type: .string,
+                        description: "A brief explanation of why this job is recommended"
+                    ),
+                ],
+                required: ["recommendedJobId", "reason"],
+                additionalProperties: false
+            )
+        )
+
+        // Set response format to use the JSON schema
         let parameters = ChatCompletionParameters(
             messages: messages,
             model: preferredModel,
-            responseFormat: .text
+            responseFormat: .jsonSchema(recommendationSchema)
         )
 
         do {
@@ -113,20 +137,22 @@ import SwiftUI
     private func buildPrompt(newJobApps: [JobApp], resume: Resume) -> String {
         let resumeText = resume.model?.renderedResumeText ?? ""
 
-        var jobListings = ""
-        for (index, app) in newJobApps.enumerated() {
-            jobListings += """
-
-            JOB #\(index + 1):
-            ID: \(app.id)
-            Position: \(app.jobPosition)
-            Company: \(app.companyName)
-            Location: \(app.jobLocation)
-            Description:
-            \(app.jobDescription)
-
-            """
+        // Create JSON array of job listings
+        var jobsArray: [[String: Any]] = []
+        for app in newJobApps {
+            let jobDict: [String: Any] = [
+                "id": app.id.uuidString,
+                "position": app.jobPosition,
+                "company": app.companyName,
+                "location": app.jobLocation,
+                "description": app.jobDescription,
+            ]
+            jobsArray.append(jobDict)
         }
+
+        // Convert to JSON string
+        let jsonData = try? JSONSerialization.data(withJSONObject: jobsArray, options: [.prettyPrinted])
+        let jsonString = jsonData != nil ? String(data: jsonData!, encoding: .utf8) ?? "" : ""
 
         let prompt = """
         TASK:
@@ -138,17 +164,21 @@ import SwiftUI
         BACKGROUND INFORMATION:
         \(backgroundDocs)
 
-        JOB LISTINGS:
-        \(jobListings)
+        JOB LISTINGS (JSON FORMAT):
+        \(jsonString)
 
         RESPONSE INSTRUCTIONS:
-        1. Evaluate each job against the candidate's skills, experience, and potential fit.
-        2. Select the job that offers the best match.
-        3. Provide your recommendation as a JSON object with the following structure:
-           {
-              "recommendedJobId": "the-uuid-of-recommended-job",
-              "reason": "A brief explanation of why this job is recommended"
-           }
+        You must return a valid JSON object with exactly these two fields:
+        1. "recommendedJobId": The exact UUID string from the 'id' field of the best matching job
+        2. "reason": A brief explanation of why this job is the best match
+
+        Example response format:
+        {
+          "recommendedJobId": "00000000-0000-0000-0000-000000000000",
+          "reason": "This job aligns with the candidate's experience in..."
+        }
+
+        IMPORTANT: The recommendedJobId MUST be copied exactly, character-for-character from the 'id' field of the job listing you select.
         """
 
         return prompt
@@ -160,28 +190,64 @@ import SwiftUI
             let reason: String
         }
 
-        // Extract JSON from the response if it's wrapped in ```json and ```
-        let jsonPattern = #"```(?:json)?\s*(\{.*?\})\s*```"#
-        let jsonRegex = try NSRegularExpression(pattern: jsonPattern, options: [.dotMatchesLineSeparators])
-        let range = NSRange(responseText.startIndex ..< responseText.endIndex, in: responseText)
-
-        let jsonToUse: String
-        if let match = jsonRegex.firstMatch(in: responseText, options: [], range: range),
-           let matchRange = Range(match.range(at: 1), in: responseText)
-        {
-            jsonToUse = String(responseText[matchRange])
-        } else {
-            jsonToUse = responseText
+        // Save complete response for debugging
+        if savePromptToFile {
+            savePromptToDownloads(content: responseText, fileName: "jobRecommendationResponse.txt")
         }
 
-        let data = jsonToUse.data(using: .utf8)!
-        let recommendation = try JSONDecoder().decode(Recommendation.self, from: data)
+        // With JSONSchemaResponseFormat, the response should already be valid JSON
+        guard let data = responseText.data(using: .utf8) else {
+            throw NSError(domain: "JobRecommendationProvider", code: 4, userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
+        }
 
+        // Decode the recommendation
+        let recommendation: Recommendation
+        do {
+            recommendation = try JSONDecoder().decode(Recommendation.self, from: data)
+        } catch {
+            print("JSON decode error: \(error.localizedDescription)")
+            if savePromptToFile {
+                savePromptToDownloads(content: "JSON decode error: \(error)\nJSON: \(responseText)", fileName: "jsonError.txt")
+            }
+            throw NSError(
+                domain: "JobRecommendationProvider",
+                code: 4,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Failed to decode JSON response",
+                ]
+            )
+        }
+
+        print("Received recommendedJobId: \(recommendation.recommendedJobId)")
+
+        // Try to create a UUID from the recommendedJobId and find matching job
         guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
-            throw NSError(domain: "JobRecommendationProvider", code: 5, userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format in response"])
+            throw NSError(
+                domain: "JobRecommendationProvider",
+                code: 5,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Invalid UUID format in response: \(recommendation.recommendedJobId)",
+                ]
+            )
         }
 
-        return (uuid, recommendation.reason)
+        // Look for the job with this UUID
+        if let _ = jobApps.first(where: { $0.id == uuid }) {
+            return (uuid, recommendation.reason)
+        }
+
+        // Log all job IDs for debugging
+        let availableIds = jobApps.map { $0.id.uuidString }
+        print("Available job IDs: \(availableIds)")
+        print("Looking for ID: \(uuid)")
+
+        throw NSError(
+            domain: "JobRecommendationProvider",
+            code: 6,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Job with ID \(uuid.uuidString) not found in job applications",
+            ]
+        )
     }
 
     /// Saves the provided prompt text to the user's `Downloads` folder for debugging purposes.

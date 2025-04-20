@@ -53,7 +53,7 @@ struct RecommendJobButton: View {
     private func setErrorMessage(_ message: String) {
         errorWrapper = ErrorMessageWrapper(message: message)
     }
-    
+
     private func recommendBestJob() {
         guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
             setErrorMessage("Please select a resume first")

@@ -17,11 +17,6 @@ func resumeToolbarContent(buttons: Binding<ResumeButtons>, selectedResume: Bindi
         }
     }
 
-    // AI job recommendation feature
-    ToolbarItem(placement: .automatic) {
-        RecommendJobButton()
-    }
-
     // Resume inspector toggle
     ToolbarItem(placement: .primaryAction) {
         Button(action: {
