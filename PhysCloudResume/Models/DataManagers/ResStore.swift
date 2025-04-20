@@ -139,15 +139,26 @@ final class ResStore: SwiftDataStore {
     }
 
     func deleteRes(_ res: Resume) {
-        if let rootNode = res.rootNode {
-            TreeNode.deleteTreeNode(node: rootNode, context: modelContext)
-        }
-
-        if let jobApp = res.jobApp, let parentIndex = jobApp.resumes.firstIndex(of: res) {
+        // Handle jobApp relationship updates and remove the resume from the jobApp
+        if let jobApp = res.jobApp {
+            // First update selection if needed
             jobApp.resumeDeletePrep(candidate: res)
-            jobApp.resumes.remove(at: parentIndex)
+
+            // Then remove from the array if it exists
+            if let parentIndex = jobApp.resumes.firstIndex(of: res) {
+                jobApp.resumes.remove(at: parentIndex)
+            }
+
+            // Clear the reference to prevent invalid access
+            res.jobApp = nil
         }
 
+        // Clear references to prevent potential access to deleted objects
+        res.rootNode = nil
+        res.enabledSources = []
+        res.model = nil
+
+        // Delete the resume and save
         modelContext.delete(res)
         saveContext()
     }
