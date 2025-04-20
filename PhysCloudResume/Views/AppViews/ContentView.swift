@@ -68,6 +68,11 @@ struct ContentView: View {
                                 )
                                 .foregroundColor(showSlidingList ? .accentColor : .primary)
                             }
+                            
+                            // AI Job Recommendation Button
+                            SidebarRecommendButton()
+                            
+                            // New Application Button
                             Button(action: {
                                 showNewAppSheet = true
                             }) {
