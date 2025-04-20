@@ -71,12 +71,15 @@ import SwiftUI
         
         let preferredModel = OpenAIModelFetcher.getPreferredModel()
         
+        let messages = [
+            systemMessage,
+            ChatCompletionParameters.Message(role: .user, content: .text(prompt))
+        ]
+        
         let parameters = ChatCompletionParameters(
+            messages: messages,
             model: preferredModel,
-            messages: [
-                systemMessage,
-                ChatCompletionParameters.Message(role: .user, content: .text(prompt))
-            ]
+            responseFormat: .text
         )
         
         do {
