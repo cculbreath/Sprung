@@ -14,8 +14,6 @@ import SwiftUI
 
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
-    
-    @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
 
     let systemMessage = ChatCompletionParameters.Message(
         role: .system,
@@ -49,12 +47,15 @@ import SwiftUI
         self.resume = resume
         self.savePromptToFile = savePromptToFile
         
-        // Create service using the factory and API key from AppStorage
+        // Get API key from UserDefaults directly to avoid conflict with @Observable
+        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        
+        // Create service using the factory
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 360 // 360 seconds extended timeout
         
         self.service = OpenAIServiceFactory.service(
-            apiKey: openAiApiKey, 
+            apiKey: apiKey, 
             configuration: configuration,
             debugEnabled: false
         )
