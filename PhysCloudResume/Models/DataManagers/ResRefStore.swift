@@ -29,7 +29,7 @@ final class ResRefStore: SwiftDataStore {
             }
         } catch {
             #if DEBUG
-            print("ResRefStore: Failed to import JSON backup – \(error)")
+                print("ResRefStore: Failed to import JSON backup – \(error)")
             #endif
         }
         print("RefStore Initialized: \(resRefs.count) refs")
@@ -43,7 +43,7 @@ final class ResRefStore: SwiftDataStore {
     }
 
     /// Persists updates (entity already mutated)
-    func updateResRef(_ resRef: ResRef) {
+    func updateResRef(_: ResRef) {
         _ = saveContext()
         persistToJSON()
     }
@@ -56,17 +56,19 @@ final class ResRefStore: SwiftDataStore {
     }
 
     /// Persists changes to the database
+
     // MARK: - JSON File Backing
+
     /// Serialises the current collection to disk. Failures are ignored in production.
     private func persistToJSON() {
         #if DEBUG
-        do {
-            try jsonBacking.save(resRefs)
-        } catch {
-            print("ResRefStore: Failed to write JSON backup – \(error)")
-        }
+            do {
+                try jsonBacking.save(resRefs)
+            } catch {
+                print("ResRefStore: Failed to write JSON backup – \(error)")
+            }
         #else
-        try? jsonBacking.save(resRefs)
+            try? jsonBacking.save(resRefs)
         #endif
     }
     // `saveContext()` now from `SwiftDataStore`.

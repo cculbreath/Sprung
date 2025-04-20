@@ -29,7 +29,7 @@ final class CoverRefStore: SwiftDataStore {
             }
         } catch {
             #if DEBUG
-            print("CoverRefStore: Failed to import JSON backup – \(error)")
+                print("CoverRefStore: Failed to import JSON backup – \(error)")
             #endif
         }
     }
@@ -57,6 +57,7 @@ final class CoverRefStore: SwiftDataStore {
 
         persistToJSON()
     }
+
     // MARK: - JSON File Backing
 
     private let jsonBacking = JSONFileStore<CoverRef>(filename: "CoverRefs.json")
@@ -66,13 +67,13 @@ final class CoverRefStore: SwiftDataStore {
     /// should continue to function if the backup couldn’t be written.
     private func persistToJSON() {
         #if DEBUG
-        do {
-            try jsonBacking.save(storedCoverRefs)
-        } catch {
-            print("CoverRefStore: Failed to write JSON backup – \(error)")
-        }
+            do {
+                try jsonBacking.save(storedCoverRefs)
+            } catch {
+                print("CoverRefStore: Failed to write JSON backup – \(error)")
+            }
         #else
-        try? jsonBacking.save(storedCoverRefs)
+            try? jsonBacking.save(storedCoverRefs)
         #endif
     }
 
