@@ -10,10 +10,10 @@ import SwiftUI
 struct RecommendJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(\.appState) private var appState
-    
+
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
-    
+
     var body: some View {
         Button(action: recommendBestJob) {
             HStack {
@@ -44,7 +44,7 @@ struct RecommendJobButton: View {
             )
         }
     }
-    
+
     private var errorMessageWrapper: ErrorMessageWrapper? {
         get {
             errorMessage.map { ErrorMessageWrapper(message: $0) }
@@ -53,22 +53,22 @@ struct RecommendJobButton: View {
             errorMessage = newValue?.message
         }
     }
-    
+
     private func recommendBestJob() {
         guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
             errorMessage = "Please select a resume first"
             return
         }
-        
+
         let newJobs = jobAppStore.jobApps.filter { $0.status == .new }
         if newJobs.isEmpty {
             errorMessage = "No new job applications found"
             return
         }
-        
+
         isLoading = true
         appState.isLoadingRecommendation = true
-        
+
         Task {
             do {
                 let provider = JobRecommendationProvider(
@@ -76,18 +76,18 @@ struct RecommendJobButton: View {
                     resume: selectedResume,
                     savePromptToFile: true
                 )
-                
+
                 let (jobId, reason) = try await provider.fetchRecommendation()
-                
+
                 await MainActor.run {
                     // Find the job with the recommended ID
                     if let recommendedJob = jobAppStore.jobApps.first(where: { $0.id == jobId }) {
                         // Set as selected job
                         jobAppStore.selectedApp = recommendedJob
-                        
+
                         // Store the recommended job ID for highlighting
                         appState.recommendedJobId = jobId
-                        
+
                         // Create a notification
                         let notification = NSUserNotification()
                         notification.title = "Job Recommendation"
@@ -97,7 +97,7 @@ struct RecommendJobButton: View {
                     } else {
                         errorMessage = "Recommended job not found"
                     }
-                    
+
                     isLoading = false
                     appState.isLoadingRecommendation = false
                 }

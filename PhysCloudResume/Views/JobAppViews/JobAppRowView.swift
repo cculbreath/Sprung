@@ -11,7 +11,7 @@ struct JobAppRowView: View {
     var jobApp: JobApp
     var deleteAction: () -> Void
     @Environment(\.appState) private var appState
-    
+
     var body: some View {
         Text("\(jobApp.companyName): \(jobApp.jobPosition)")
             .tag(jobApp)
@@ -25,7 +25,7 @@ struct JobAppRowView: View {
                 }
             }
     }
-    
+
     private var isRecommended: Bool {
         appState.recommendedJobId == jobApp.id
     }
