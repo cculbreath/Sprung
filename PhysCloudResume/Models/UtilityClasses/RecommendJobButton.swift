@@ -7,12 +7,17 @@
 
 import SwiftUI
 
+struct ErrorMessageWrapper: Identifiable {
+    let id = UUID()
+    let message: String
+}
+
 struct RecommendJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(\.appState) private var appState
 
     @State private var isLoading = false
-    @State private var errorMessage: String? = nil
+    @State private var errorWrapper: ErrorMessageWrapper? = nil
 
     var body: some View {
         Button(action: recommendBestJob) {
@@ -36,33 +41,28 @@ struct RecommendJobButton: View {
         }
         .disabled(isLoading)
         .help("Find the best job match based on your qualifications")
-        .alert(item: $errorMessageWrapper) { wrapper in
+        .alert(item: $errorWrapper) { wrapper in
             Alert(
-                title: Text("Error"),
+                title: Text("Recommendation"),
                 message: Text(wrapper.message),
                 dismissButton: .default(Text("OK"))
             )
         }
     }
 
-    private var errorMessageWrapper: ErrorMessageWrapper? {
-        get {
-            errorMessage.map { ErrorMessageWrapper(message: $0) }
-        }
-        set {
-            errorMessage = newValue?.message
-        }
+    private func setErrorMessage(_ message: String) {
+        errorWrapper = ErrorMessageWrapper(message: message)
     }
-
+    
     private func recommendBestJob() {
         guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
-            errorMessage = "Please select a resume first"
+            setErrorMessage("Please select a resume first")
             return
         }
 
         let newJobs = jobAppStore.jobApps.filter { $0.status == .new }
         if newJobs.isEmpty {
-            errorMessage = "No new job applications found"
+            setErrorMessage("No new job applications found")
             return
         }
 
@@ -88,10 +88,10 @@ struct RecommendJobButton: View {
                         // Store the recommended job ID for highlighting
                         appState.recommendedJobId = jobId
 
-                        // Create an alert instead of notification since NSUserNotification is unavailable
-                        errorMessage = "Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)"
+                        // Show recommendation in alert
+                        setErrorMessage("Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)")
                     } else {
-                        errorMessage = "Recommended job not found"
+                        setErrorMessage("Recommended job not found")
                     }
 
                     isLoading = false
@@ -99,18 +99,13 @@ struct RecommendJobButton: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Error: \(error.localizedDescription)"
+                    setErrorMessage("Error: \(error.localizedDescription)")
                     isLoading = false
                     appState.isLoadingRecommendation = false
                 }
             }
         }
     }
-}
-
-struct ErrorMessageWrapper: Identifiable {
-    let id = UUID()
-    let message: String
 }
 
 #Preview {
