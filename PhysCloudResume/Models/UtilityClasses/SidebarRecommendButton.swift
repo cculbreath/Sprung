@@ -12,7 +12,7 @@ struct SidebarRecommendButton: View {
     @Environment(\.appState) private var appState
     @State private var isLoading = false
     @State private var errorWrapper: ErrorMessageWrapper? = nil
-    
+
     var body: some View {
         Button(action: recommendBestJob) {
             if isLoading {
@@ -39,13 +39,30 @@ struct SidebarRecommendButton: View {
     private func setErrorMessage(_ message: String) {
         errorWrapper = ErrorMessageWrapper(message: message)
     }
-    
+
     private func recommendBestJob() {
-        guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
-            setErrorMessage("Please select a resume first")
+        // Track if we're using the fallback mechanism
+        let isUsingFallbackResume: Bool
+        let resumeForRecommendation: Resume?
+
+        // First check if we have an actively selected resume
+        if let activelySelectedResume = jobAppStore.selectedApp?.selectedRes {
+            // Using the currently selected resume
+            resumeForRecommendation = activelySelectedResume
+            isUsingFallbackResume = false
+        } else {
+            // Try to find a fallback resume for recommendation only
+            resumeForRecommendation = getResumeForRecommendation()
+            isUsingFallbackResume = true
+        }
+
+        // Make sure we have a resume to use
+        guard let resumeToUse = resumeForRecommendation else {
+            setErrorMessage("Please select or complete a resume first")
             return
         }
 
+        // Check if we have new job applications
         let newJobs = jobAppStore.jobApps.filter { $0.status == .new }
         if newJobs.isEmpty {
             setErrorMessage("No new job applications found")
@@ -59,7 +76,7 @@ struct SidebarRecommendButton: View {
             do {
                 let provider = JobRecommendationProvider(
                     jobApps: jobAppStore.jobApps,
-                    resume: selectedResume,
+                    resume: resumeToUse,
                     savePromptToFile: true
                 )
 
@@ -71,13 +88,29 @@ struct SidebarRecommendButton: View {
                         // Set as selected job
                         jobAppStore.selectedApp = recommendedJob
 
+                        // IMPORTANT FIX: We should never clear the selectedResId completely
+                        // as it breaks the ability to create new resumes
+                        if isUsingFallbackResume {
+                            // When using a fallback resume, we should not affect the selected resume
+                            print("⚠️ INFO: Using fallback resume for recommendation only, not changing selectedResId")
+                            // Do not modify selectedResId at all
+                        } else {
+                            // Even with a legitimate selected resume, verify it's still valid
+                            if let selectedResume = recommendedJob.selectedRes {
+                                print("✓ Valid resume selected: \(selectedResume.id)")
+                            } else {
+                                // Do not clear the selectedResId as it breaks the CreateNewResumeView
+                                print("⚠️ ALERT: Resume reference needs attention")
+                            }
+                        }
+
                         // Store the recommended job ID for highlighting
                         appState.recommendedJobId = jobId
 
                         // Show recommendation in alert
                         setErrorMessage("Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)")
                     } else {
-                        setErrorMessage("Recommended job not found")
+                        setErrorMessage("Recommended job ID \(jobId) not found. Please try again.")
                     }
 
                     isLoading = false
@@ -91,5 +124,48 @@ struct SidebarRecommendButton: View {
                 }
             }
         }
+    }
+
+    /// Find the most appropriate resume to use for recommendation
+    private func getResumeForRecommendation() -> Resume? {
+        // First, check if there's already a selected resume
+        if let selectedResume = jobAppStore.selectedApp?.selectedRes {
+            return selectedResume
+        }
+
+        // Define statuses to consider for fallback resumes
+        let relevantStatuses: [Statuses] = [
+            .submitted, .rejected, .interview, .closed, .followUp,
+        ]
+
+        // Find job applications with relevant statuses
+        let relevantApps = jobAppStore.jobApps.filter {
+            relevantStatuses.contains($0.status) && $0.hasAnyRes
+        }
+
+        // Sort by status priority and then by jobPostingTime if available
+        let sortedApps = relevantApps.sorted { app1, app2 in
+            // First, prioritize by status in this order: submitted, interview, followUp, closed, rejected
+            let statusOrder: [Statuses] = [.submitted, .interview, .followUp, .closed, .rejected]
+
+            if let index1 = statusOrder.firstIndex(of: app1.status),
+               let index2 = statusOrder.firstIndex(of: app2.status),
+               index1 != index2
+            {
+                return index1 < index2 // Lower index has higher priority
+            }
+
+            // If statuses are the same, try to use jobPostingTime
+            // Assuming newer postings are more relevant
+            if !app1.jobPostingTime.isEmpty && !app2.jobPostingTime.isEmpty {
+                return app1.jobPostingTime > app2.jobPostingTime
+            }
+
+            // If no reliable sorting criteria, use number of resumes as a proxy for activity
+            return app1.resumes.count > app2.resumes.count
+        }
+
+        // Return the most recently modified app's selected resume
+        return sortedApps.first?.selectedRes
     }
 }

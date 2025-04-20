@@ -44,10 +44,17 @@ struct BuildToolbar: ToolbarContent {
             } else {
                 ToolbarItem(placement: .primaryAction) { toggleEditButton() }
             } case .resume:
-            resumeToolbarContent(
-                buttons: $resumeButtons,
-                selectedResume: selRes
-            )
+            // Only show resume toolbar if there's actually a resume
+            if selApp.selectedRes != nil {
+                resumeToolbarContent(
+                    buttons: $resumeButtons,
+                    selectedResume: selRes
+                )
+            } else {
+                ToolbarItem(placement: .automatic) {
+                    Text("No resume selected")
+                }
+            }
         case .coverLetter:
             if let _ = selApp.selectedCover {
                 ToolbarItem(placement: .primaryAction) { CoverLetterToolbar(
@@ -107,12 +114,6 @@ struct BuildToolbar: ToolbarContent {
         }
     }
 }
-
-// extension View {
-//  func applyConditionalButtonStyle(editMode: Bool) -> some View {
-//    self.buttonStyle(editMode ? BuildToolbar.NoHoverButtonStyle() : PlainButtonStyle())
-//  }
-// }
 
 func emptyToolbarItem() -> some ToolbarContent {
     ToolbarItem(placement: .automatic) {

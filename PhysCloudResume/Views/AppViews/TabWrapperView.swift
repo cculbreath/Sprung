@@ -23,7 +23,10 @@ struct TabWrapperView: View {
             @Bindable var jobApp = jobApp
 
             VStack {
-                TabView(selection: $selectedTab) {
+                // Simple direct binding to selectedTab - no restrictions or custom logic
+                let tabBinding = $selectedTab
+
+                TabView(selection: tabBinding) {
                     JobAppDetailView(tab: $selectedTab, buttons: $listingButtons)
                         .tabItem {
                             Label(TabList.listing.rawValue, systemImage: "newspaper")
@@ -35,6 +38,7 @@ struct TabWrapperView: View {
                             Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
                         }
                         .tag(TabList.resume)
+
                     if jobAppStore.selectedApp?.hasAnyRes ?? false {
                         CoverLetterView(buttons: $coverLetterButtons)
                             .tabItem {

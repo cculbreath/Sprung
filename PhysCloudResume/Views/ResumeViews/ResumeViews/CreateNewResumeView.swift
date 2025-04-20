@@ -12,12 +12,13 @@ struct CreateNewResumeView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResModelStore.self) private var resModelStore: ResModelStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-
     @Environment(ResStore.self) private var resStore: ResStore
     @Binding var refresh: Bool
 
-    // 1. Define the @State variable for selected JSON model
-    @State private var selectedJsonModel: ResModel? = nil // Ensure ResModel conforms to Identifiable
+    // State variables
+    @State private var selectedJsonModel: ResModel? = nil
+    @State private var showErrorMessage = false
+    @State private var errorMessage = ""
 
     var body: some View {
         // Safely unwrap the selected job application
@@ -27,45 +28,30 @@ struct CreateNewResumeView: View {
                     .font(.title)
                     .padding(.top)
 
-                // 2. Implement the Picker
-                Picker("Select JSON Model", selection: $selectedJsonModel) {
-                    // Ensure jsonModels conform to Identifiable
+                // Standard SwiftUI Picker - going back to basics
+                Picker("Select Template", selection: $selectedJsonModel) {
+                    Text("Select a template").tag(nil as ResModel?)
                     ForEach(resModelStore.resModels) { model in
-                        Text(model.name) // Assuming ResModel has a 'name' property
-                            .tag(model as ResModel)
+                        Text(model.name).tag(model as ResModel?)
                     }
                 }
-                .pickerStyle(MenuPickerStyle()) // Choose desired picker style
+                .pickerStyle(.menu)
                 .padding()
 
-                // Display selected model (optional)
+                // Display selected model info
                 if let selectedModel = selectedJsonModel {
-                    Text("Selected Model: \(selectedModel.style)")
+                    Text("Selected: \(selectedModel.style)")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 } else {
-                    Text("No JSON model selected.")
+                    Text("No template selected")
                         .font(.subheadline)
                         .foregroundColor(.red)
                 }
 
-                // 3. Update the Create Résumé button action
+                // Standard SwiftUI Button - using the original approach
                 Button(action: {
-                    guard let selectedModel = selectedJsonModel else {
-                        // Handle the case where no model is selected
-                        print("No JSON model selected. Please select a model before creating a résumé.")
-                        return
-                    }
-
-                    // Pass defaultSources and selectedJsonModel to the create method
-                    var newRes = resStore.create(jobApp: selApp, sources: resRefStore.defaultSources, model: selectedModel)
-                    if let newRes = newRes {
-                        newRes.debounceExport()
-                    }
-                    // Toggle refresh to update the UI if necessary
-//                    refresh.toggle()
-
-                    print("Résumé created using model: \(selectedModel.style)")
+                    createResume(with: selApp)
                 }) {
                     Text("Create Résumé")
                         .fontWeight(.semibold)
@@ -76,22 +62,70 @@ struct CreateNewResumeView: View {
                         .cornerRadius(10)
                 }
                 .padding(.horizontal)
-                .buttonStyle(PlainButtonStyle()) // Remove default button styles if needed
+                .buttonStyle(PlainButtonStyle())
+
+                // Error message display
+                if showErrorMessage {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                        .font(.callout)
+                        .padding()
+                }
             }
             .padding()
             .onAppear {
-                print("CreateNewResumeView appeared")
+                print("⏺️ CreateNewResumeView appeared")
+                print("📋 Available models: \(resModelStore.resModels.count)")
 
-                // Optionally, set a default selection if jsonModels is not empty
+                // Set default selection
                 if selectedJsonModel == nil, let firstModel = resModelStore.resModels.first {
                     selectedJsonModel = firstModel
+                    print("✓ Default model selected: \(firstModel.name)")
                 }
             }
         } else {
-            // Handle the case where no job application is selected
             Text("No job application selected.")
                 .foregroundColor(.red)
                 .padding()
+        }
+    }
+
+    // Separate function to handle resume creation
+    private func createResume(with jobApp: JobApp) {
+        print("🔘 Create button tapped")
+
+        guard let selectedModel = selectedJsonModel else {
+            errorMessage = "Please select a template first"
+            showErrorMessage = true
+            print("⚠️ No template selected")
+            return
+        }
+
+        print("Creating resume with model: \(selectedModel.id)")
+        print("Using job app: \(jobApp.id)")
+
+        if let newResume = resStore.create(
+            jobApp: jobApp,
+            sources: resRefStore.defaultSources,
+            model: selectedModel
+        ) {
+            newResume.debounceExport()
+
+            // Update UI
+            refresh.toggle()
+
+            print("✅ Resume created successfully: \(newResume.id)")
+            print("✅ Job app now has \(jobApp.resumes.count) resumes")
+
+            // Ensure the UI updates fully
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("🔄 Forcing another refresh")
+                refresh.toggle()
+            }
+        } else {
+            errorMessage = "Failed to create resume"
+            showErrorMessage = true
+            print("❌ Failed to create resume")
         }
     }
 }
