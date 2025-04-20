@@ -61,6 +61,24 @@ final class ResumeChatProvider {
         }
     }
 
+    // Actor to safely coordinate continuations and prevent multiple resumes
+    private actor ContinuationCoordinator<T> {
+        private var hasResumed = false
+        
+        func resume<E: Error>(continuation: CheckedContinuation<T, E>, 
+                             with result: Result<T, E>) {
+            guard !hasResumed else { return }
+            hasResumed = true
+            
+            switch result {
+            case .success(let value):
+                continuation.resume(returning: value)
+            case .failure(let error):
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
     func startChat(
         parameters: ChatCompletionParameters
     ) async throws {
@@ -68,27 +86,32 @@ final class ResumeChatProvider {
         errorMessage = ""
 
         do {
+            // Create a coordinator for safe continuation resumption
+            let coordinator = ContinuationCoordinator<ChatCompletionResponse>()
+            
             // Start a task with specific timeout for the API call
             let result = try await withCheckedThrowingContinuation { continuation in
-                let task = Task {
+                let timeoutError = NSError(
+                    domain: "ResumeChatProviderError",
+                    code: -1001,
+                    userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
+                )
+                
+                let apiTask = Task {
                     do {
                         let result = try await service.startChat(parameters: parameters)
-                        continuation.resume(returning: result)
+                        await coordinator.resume(continuation: continuation, with: .success(result))
                     } catch {
-                        continuation.resume(throwing: error)
+                        await coordinator.resume(continuation: continuation, with: .failure(error))
                     }
                 }
-
+                
                 // Set up a timeout task
                 Task {
                     try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout (a bit less than the URLSession timeout)
-                    if !task.isCancelled {
-                        task.cancel()
-                        continuation.resume(throwing: NSError(
-                            domain: "ResumeChatProviderError",
-                            code: -1001,
-                            userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
-                        ))
+                    if !apiTask.isCancelled {
+                        apiTask.cancel()
+                        await coordinator.resume(continuation: continuation, with: .failure(timeoutError))
                     }
                 }
             }
@@ -135,9 +158,43 @@ final class ResumeChatProvider {
     func startStreamedChat(
         parameters: ChatCompletionParameters
     ) async throws {
+        // Clear any previous error message
+        errorMessage = ""
+        
+        // Create and store a new task for streaming
         streamTask = Task {
             do {
-                let stream = try await service.startStreamedChat(parameters: parameters)
+                // Create a coordinator for the timeout
+                let coordinator = ContinuationCoordinator<Any?>()
+                
+                // Use withTimeout pattern similar to startChat
+                let stream = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AsyncThrowingStream<ChatCompletionStreamResponse, Error>, Error>) in
+                    
+                    // Create timeout error
+                    let timeoutError = NSError(
+                        domain: "ResumeChatProviderError",
+                        code: -1001,
+                        userInfo: [NSLocalizedDescriptionKey: "Streaming request timed out. Please try again."]
+                    )
+                    
+                    // Main API task
+                    Task {
+                        do {
+                            let stream = try await service.startStreamedChat(parameters: parameters)
+                            await coordinator.resume(continuation: continuation, with: .success(stream))
+                        } catch {
+                            await coordinator.resume(continuation: continuation, with: .failure(error))
+                        }
+                    }
+                    
+                    // Timeout task
+                    Task {
+                        try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
+                        await coordinator.resume(continuation: continuation, with: .failure(timeoutError))
+                    }
+                }
+                
+                // Process the stream
                 for try await result in stream {
                     let firstChoiceDelta = result.choices.first?.delta
                     let content = firstChoiceDelta?.refusal ?? firstChoiceDelta?.content ?? ""
@@ -147,8 +204,7 @@ final class ResumeChatProvider {
                     }
                 }
             } catch let APIError.responseUnsuccessful(description, statusCode) {
-                self.errorMessage =
-                    "Network error with status code: \(statusCode) and description: \(description)"
+                self.errorMessage = "Network error with status code: \(statusCode) and description: \(description)"
             } catch {
                 self.errorMessage = error.localizedDescription
             }
