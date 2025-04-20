@@ -14,4 +14,8 @@ class AppState {
     var showSlidingList: Bool = false
     var selectedTab: TabList = .listing
     var dragInfo = DragInfo()
+    
+    // AI job recommendation properties
+    var recommendedJobId: UUID? = nil
+    var isLoadingRecommendation: Bool = false
 }

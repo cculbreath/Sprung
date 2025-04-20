@@ -8,8 +8,7 @@ import SwiftUI
 
 @ToolbarContentBuilder
 func resumeToolbarContent(buttons: Binding<ResumeButtons>, selectedResume: Binding<Resume?>) -> some ToolbarContent {
-    // Removed the empty Text spacer to avoid multiple flexible spaces.
-
+    // AI resume enhancement feature
     ToolbarItem(placement: .automatic) {
         if selectedResume.wrappedValue?.rootNode != nil {
             AiFunctionView(res: selectedResume)
@@ -17,6 +16,13 @@ func resumeToolbarContent(buttons: Binding<ResumeButtons>, selectedResume: Bindi
             Text(":(")
         }
     }
+    
+    // AI job recommendation feature
+    ToolbarItem(placement: .automatic) {
+        RecommendJobButton()
+    }
+    
+    // Resume inspector toggle
     ToolbarItem(placement: .primaryAction) {
         Button(action: {
             buttons.wrappedValue.showResumeInspector.toggle()
