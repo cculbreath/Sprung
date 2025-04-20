@@ -197,15 +197,17 @@ enum Statuses: String, Codable, CaseIterable {
 
     func resumeDeletePrep(candidate: Resume) {
         if selectedRes == candidate {
-            if resumes.count == 1 {
-                selectedRes = nil
-                print("SelREs nil")
+            if resumes.count <= 1 {
+                // This was the last resume, set selection to nil
+                selectedResId = nil
             } else {
-                selectedRes = resumes.first(where: { $0.id != candidate.id })
-                print("sel res reassigned")
+                // Find another resume to select
+                if let anotherResume = resumes.first(where: { $0.id != candidate.id }) {
+                    selectedResId = anotherResume.id
+                }
             }
         }
-        print("no change to selRes required. It's another object")
+        // No else branch needed - if selectedRes != candidate, we don't need to change selection
     }
 
     required init(from decoder: Decoder) throws {
