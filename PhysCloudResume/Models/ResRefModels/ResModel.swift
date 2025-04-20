@@ -27,8 +27,9 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
         self.renderedResumeText = renderedResumeText
         self.style = style
     }
-    
+
     // MARK: - Codable
+
     enum CodingKeys: String, CodingKey {
         case id
         case dateCreated

@@ -29,7 +29,7 @@ final class ResModelStore: SwiftDataStore {
             }
         } catch {
             #if DEBUG
-            print("ResModelStore: Failed to import JSON backup – \(error)")
+                print("ResModelStore: Failed to import JSON backup – \(error)")
             #endif
         }
         print("Model Store Init: \(resModels.count) models")
@@ -45,7 +45,7 @@ final class ResModelStore: SwiftDataStore {
     }
 
     /// Persist updates on the supplied model
-    func updateResModel(_ resModel: ResModel) {
+    func updateResModel(_: ResModel) {
         _ = saveContext()
         persistToJSON()
     }
@@ -73,16 +73,17 @@ final class ResModelStore: SwiftDataStore {
     }
 
     // MARK: - JSON File Backing
+
     /// Serialises the current collection to disk. Failures are ignored in production.
     private func persistToJSON() {
         #if DEBUG
-        do {
-            try jsonBacking.save(resModels)
-        } catch {
-            print("ResModelStore: Failed to write JSON backup – \(error)")
-        }
+            do {
+                try jsonBacking.save(resModels)
+            } catch {
+                print("ResModelStore: Failed to write JSON backup – \(error)")
+            }
         #else
-        try? jsonBacking.save(resModels)
+            try? jsonBacking.save(resModels)
         #endif
     }
 }
