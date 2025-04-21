@@ -59,15 +59,13 @@ struct ResumeExportView: View {
                 Text("Cover Letter")
                     .font(.headline)
 
-                Picker("Select a Cover Letter", selection: $selectedCoverLetter) {
-                    Text("None").tag(nil as CoverLetter?)
-                    ForEach(
-                        jobApp.coverLetters.sorted(by: { $0.moddedDate > $1.moddedDate }),
-                        id: \.id
-                    ) { coverLetter in
-                        Text("Generated at \(coverLetter.modDate)").tag(coverLetter as CoverLetter?)
-                    }
-                }
+                CoverLetterPicker(
+                    coverLetters: jobApp.coverLetters.sorted(by: { $0.moddedDate > $1.moddedDate }),
+                    selection: $selectedCoverLetter,
+                    includeNoneOption: true,
+                    noneLabel: "None",
+                    label: "Select a Cover Letter"
+                )
                 .pickerStyle(.menu)
 
                 HStack(spacing: 15) {
@@ -311,7 +309,8 @@ struct ResumeExportView: View {
             let optionLabel = index < letterLabels.count ? String(letterLabels[index]) : "\(index + 1)"
 
             combinedText += "=============================================\n"
-            combinedText += "OPTION \(optionLabel): (Generated at \(letter.modDate))\n"
+            // Use the editable name for each option
+            combinedText += "OPTION \(optionLabel): (\(letter.name))\n"
             combinedText += "=============================================\n\n"
             combinedText += letter.content
             combinedText += "\n\n\n"

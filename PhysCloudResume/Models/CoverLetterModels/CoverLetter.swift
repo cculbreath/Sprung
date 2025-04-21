@@ -8,6 +8,8 @@ class CoverLetter: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID() // Explicit id field
     var createdDate: Date = Date()
     var moddedDate: Date = Date()
+    // Editable name of the cover letter, shown in pickers and exports
+    var name: String = ""
     var content: String = ""
     var generated: Bool = false
     var includeResumeRefs: Bool = false

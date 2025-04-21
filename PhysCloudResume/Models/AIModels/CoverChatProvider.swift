@@ -84,8 +84,28 @@ final class CoverChatProvider {
         print("processResults")
 
         coverLetter.generated = true
-        coverLetter.messageHistory.append(
-            .init(content: newMessage, role: .assistant))
+        // Update modification date
+        coverLetter.moddedDate = Date()
+        // Determine the human-readable operation name
+        let opName = coverLetter.editorPrompt.operation.rawValue
+        if coverLetter.currentMode == .generate {
+            coverLetter.name = "Generated at \(coverLetter.modDate)"
+        } else {
+            let oldName = coverLetter.name
+            if oldName.isEmpty {
+                coverLetter.name = "Generated at \(coverLetter.modDate)"
+            } else if let start = oldName.firstIndex(of: "("), let end = oldName.lastIndex(of: ")"), start < end {
+                let base = oldName[..<start].trimmingCharacters(in: .whitespaces)
+                let ops = oldName[oldName.index(after: start) ..< end]
+                var items = ops.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                items.append(opName)
+                coverLetter.name = "\(base) (\(items.joined(separator: ", ")) )"
+            } else {
+                coverLetter.name = "\(oldName) (\(opName))"
+            }
+        }
+        // Append new content to message history and update content
+        coverLetter.messageHistory.append(.init(content: newMessage, role: .assistant))
         coverLetter.content = newMessage
         print(newMessage)
         buttons.wrappedValue.runRequested = false

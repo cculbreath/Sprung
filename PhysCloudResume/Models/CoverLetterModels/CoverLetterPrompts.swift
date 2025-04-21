@@ -121,3 +121,23 @@ enum CoverLetterPrompts {
             "Please provide a revised draft of the provided cover letter incorporating the following feedback: "
     }
 }
+
+/// Represents the human-readable revision operation applied to a cover letter
+enum RevisionOperation: String, Codable {
+    case improve = "Improve"
+    case zissner = "Zissner"
+    case mimic = "Mimic"
+    case custom = "Custom"
+}
+
+extension CoverLetterPrompts.EditorPrompts {
+    /// Maps an EditorPrompt case to its corresponding revision operation
+    var operation: RevisionOperation {
+        switch self {
+        case .improve: return .improve
+        case .zissner: return .zissner
+        case .mimic: return .mimic
+        case .custom: return .custom
+        }
+    }
+}
