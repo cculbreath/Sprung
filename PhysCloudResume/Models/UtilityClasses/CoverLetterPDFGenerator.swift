@@ -34,12 +34,11 @@ enum CoverLetterPDFGenerator {
         // Extract just the body of the letter
         let letterContent = extractLetterBody(from: cover.content)
 
-        // Create explicit signature block to ensure it's not cut off
+        // Create explicit signature block with tighter contact info spacing
         let signatureBlock = """
         Best Regards,
 
         \(applicant.name)
-
         \(applicant.phone) | \(applicant.address), \(applicant.city), \(applicant.state)
         \(applicant.email) | \(applicant.websites)
         """
@@ -261,15 +260,23 @@ enum CoverLetterPDFGenerator {
             // Always create the page with our fixed margins, even if the text doesn't fit perfectly
             print("Creating PDF page with fixed margins: left=\(leftMargin / 72)in, right=\(rightMargin / 72)in")
 
-            // Use direct PDF generation with our specified margins
+            // ONLY use direct vector PDF generation - NEVER fall back to image-based rendering
             let page = createDirectPDFPage(attributedText: formattedText, pageRect: pageRect, textRect: currentTextRect)
             if let page = page {
                 pdfDocument.insert(page, at: 0)
                 done = true
-                print("Successfully created PDF page with fixed margins")
+                print("Successfully created vector PDF page with fixed margins")
             } else {
-                print("Failed to create page with fixed margins")
-                // If page creation fails, we'll fall back to the simplified approach
+                print("First attempt failed, retrying direct PDF generation with stronger settings")
+                // Try once more with direct PDF generation, never fall back to image rendering
+                let retryFormattedText = forceBlackHyperlinks(attributedText: formattedText)
+                if let retryPage = createDirectPDFPage(attributedText: retryFormattedText, pageRect: pageRect, textRect: currentTextRect) {
+                    pdfDocument.insert(retryPage, at: 0)
+                    done = true
+                    print("Successfully created vector PDF page on retry")
+                } else {
+                    print("Failed on retry - PDF creation issues")
+                }
             }
 
             // Exit the do block - we're done trying
@@ -280,9 +287,9 @@ enum CoverLetterPDFGenerator {
          // Auto-adjustment code was previously here
          */
 
-        // If we couldn't create a PDF, create a simplified fallback version
+        // If we still couldn't create a PDF, make one last attempt with direct vector rendering
         if pdfDocument.pageCount == 0 {
-            print("Creating fallback PDF with fixed settings")
+            print("Creating last-resort PDF with fixed settings (still using vector text)")
 
             // Use the same fixed margins and font
             let textRect = NSRect(
@@ -297,12 +304,17 @@ enum CoverLetterPDFGenerator {
 
             // Create formatted text with hyperlinks
             let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: urlAttributes, applicant: applicant)
+            
+            // Force all hyperlinks to be black
+            let forcedBlackText = forceBlackHyperlinks(attributedText: formattedText)
 
-            // Create a simple PDF page
-            let defaultPage = createSimplePDFPage(attributedText: formattedText, pageRect: pageRect, textRect: textRect)
+            // Create a direct vector PDF page - NEVER use the image-based fallback 
+            let defaultPage = createDirectPDFPage(attributedText: forcedBlackText, pageRect: pageRect, textRect: textRect)
             if let page = defaultPage {
                 pdfDocument.insert(page, at: 0)
-                print("Created fallback PDF page")
+                print("Created vector text PDF as last resort")
+            } else {
+                print("WARNING: All PDF generation attempts failed!")
             }
         }
 
@@ -425,12 +437,16 @@ enum CoverLetterPDFGenerator {
             return pdfDocument.page(at: 0)
         }
 
-        // Fallback to a simpler approach if the CoreText approach failed
-        return createSimplePDFPage(attributedText: attributedText, pageRect: pageRect, textRect: textRect)
+        // Don't fall back to image-based rendering - just return nil and let the caller try again
+        // with different settings
+        print("Direct PDF generation failed - no fallback to image rendering")
+        return nil
     }
 
-    /// Creates a simple PDF page using PDFKit's built-in capabilities
+    /// Creates a simple PDF page using PDFKit's built-in capabilities - AVOID USING THIS
     private static func createSimplePDFPage(attributedText: NSAttributedString, pageRect: NSRect, textRect: NSRect) -> PDFPage? {
+        // THIS METHOD CREATES RASTER IMAGES INSTEAD OF VECTOR TEXT - AVOID IF POSSIBLE
+        
         // Create a drawing area and draw into it
         let image = NSImage(size: pageRect.size)
         image.lockFocus()
@@ -447,5 +463,23 @@ enum CoverLetterPDFGenerator {
 
         // Create PDF page from image
         return PDFPage(image: image)
+    }
+    
+    /// Force all hyperlinks to be black, regardless of default system behavior
+    private static func forceBlackHyperlinks(attributedText: NSAttributedString) -> NSAttributedString {
+        let result = NSMutableAttributedString(attributedString: attributedText)
+        
+        // Find all hyperlinks and force them to be black
+        attributedText.enumerateAttribute(.link, in: NSRange(location: 0, length: attributedText.length)) { value, range, _ in
+            if value != nil {
+                // Force black color for all link text
+                result.addAttribute(.foregroundColor, value: NSColor.black, range: range)
+                result.addAttribute(.underlineColor, value: NSColor.black, range: range)
+                // Ensure links are underlined
+                result.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            }
+        }
+        
+        return result
     }
 }
