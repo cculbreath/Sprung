@@ -20,6 +20,7 @@ final class CoverLetterStore: SwiftDataStore {
     unowned let modelContext: ModelContext
     var coverRefStore: CoverRefStore
     var cL: CoverLetter?
+    private let exportService = LocalCoverLetterExportService()
 
     // MARK: - Initialiser
 
@@ -99,4 +100,16 @@ final class CoverLetterStore: SwiftDataStore {
     }
 
     // `saveContext()` now provided by `SwiftDataStore` default implementation.
+    
+    // MARK: - PDF Export
+    
+    func exportPDF(from coverLetter: CoverLetter) -> Data {
+        return exportService.exportPDF(from: coverLetter, applicant: Applicant())
+    }
+    
+    func exportAllCoverLetters(for jobApp: JobApp) -> [Data] {
+        return jobApp.coverLetters.filter { $0.generated }.map { letter in
+            exportService.exportPDF(from: letter, applicant: Applicant())
+        }
+    }
 }
