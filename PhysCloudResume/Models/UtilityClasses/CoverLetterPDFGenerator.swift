@@ -51,18 +51,24 @@ enum CoverLetterPDFGenerator {
 
     /// Extract only the body of the letter, removing salutation, signature, date, etc.
     private static func extractLetterBody(from content: String) -> String {
-        // 1. First try to extract content between "Dear" and "Best Regards" (or similar closings)
-        let commonClosings = ["Best Regards", "Sincerely", "Thank you,", "Thank you for your consideration,", "Regards,", "Best,", "Yours,"]
+        // First check if we have "best regards" or similar closing text
+        let commonClosings = [
+            "Best Regards", "Best regards", "Sincerely", "Thank you,", 
+            "Thank you for your consideration,", "Regards,", "Best,", "Yours,"
+        ]
         let lines = content.components(separatedBy: .newlines)
         let applicantName = "Christopher Culbreath" // Hardcoded for now
 
         // Find the start and end indices
         var startIndex = -1
         var endIndex = lines.count
-
-        // Try to find where salutation ends
+        
+        // Clean lowercase closings with case-insensitive search
         for (i, line) in lines.enumerated() {
-            if line.contains("Dear") && startIndex == -1 {
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Try to find where salutation ends
+            if trimmedLine.contains("Dear") && startIndex == -1 {
                 startIndex = i + 1 // Start after "Dear" line
                 // Skip any blank lines after salutation
                 while startIndex < lines.count && lines[startIndex].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -70,16 +76,16 @@ enum CoverLetterPDFGenerator {
                 }
             }
 
-            // Try to find where closing begins
+            // Try to find where closing begins - case insensitive
             for closing in commonClosings {
-                if line.contains(closing) && i > startIndex && i < endIndex {
+                if trimmedLine.range(of: closing, options: .caseInsensitive) != nil && i > startIndex && i < endIndex {
                     endIndex = i
                     break
                 }
             }
 
             // Also look for the name in the signature
-            if line.contains(applicantName) && i > startIndex && i < endIndex {
+            if trimmedLine.contains(applicantName) && i > startIndex && i < endIndex {
                 endIndex = i
             }
         }
@@ -89,14 +95,27 @@ enum CoverLetterPDFGenerator {
             let bodyLines = Array(lines[startIndex ..< endIndex])
             let bodyText = bodyLines.joined(separator: "\n")
 
-            // Preserve paragraph breaks but ensure consistency
-            let cleanedText = bodyText.replacingOccurrences(of: "\n\n\n", with: "\n\n") // Triple newlines to double
-                .replacingOccurrences(of: "\n\n", with: "\n\n") // Keep double newlines for paragraphs
+            // Clean up common issues and preserve paragraph structure
+            var cleanedText = bodyText
+                .replacingOccurrences(of: "\n\n\n", with: "\n\n")  // Triple newlines to double
+                .replacingOccurrences(of: "best regards", with: "", options: .caseInsensitive) // Remove any embedded closing
+                .replacingOccurrences(of: "sincerely", with: "", options: .caseInsensitive) // Remove any embedded closing
+                .trimmingCharacters(in: .whitespacesAndNewlines) // Trim start/end whitespace
+            
+            // Ensure no trailing commas at the end from partial closings
+            if cleanedText.hasSuffix(",") {
+                cleanedText = String(cleanedText.dropLast())
+            }
+            
             return cleanedText
         }
 
-        // If extraction failed, return the original content
+        // If extraction failed, return the original content with minimal cleanup
         return content
+            .replacingOccurrences(of: "Dear Hiring Manager,", with: "")
+            .replacingOccurrences(of: "Best Regards,", with: "")
+            .replacingOccurrences(of: "Best regards,", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func formattedToday() -> String {
@@ -110,15 +129,15 @@ enum CoverLetterPDFGenerator {
 
         // Page setup
         let pageRect = NSRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
-        let leftMargin: CGFloat = 2.5 * 72 // Significantly increased left margin (2.5 inches)
-        let rightMargin: CGFloat = 2.5 * 72 // 2.5 inches
+        let leftMargin: CGFloat = 1.25 * 72 // Left margin (1.25 inches)
+        let rightMargin: CGFloat = 1.25 * 72 // Right margin (1.25 inches)
         let topMargin: CGFloat = 0.75 * 72 // 0.75 inches
         let bottomMargin: CGFloat = 0.75 * 72 // 0.75 inches
 
         // Prepare text attributes with Futura Light font
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 0 // Single line spacing
-        paragraphStyle.paragraphSpacing = 5 // 5pt paragraph spacing as requested
+        paragraphStyle.lineSpacing = 1 // Slightly increased line spacing
+        paragraphStyle.paragraphSpacing = 12 // Increased paragraph spacing for better visual separation
         paragraphStyle.alignment = .natural
 
         // Register the Futura Light font from the system
@@ -146,8 +165,8 @@ enum CoverLetterPDFGenerator {
             }
         }
 
-        // Use smaller font size (20% reduction from original)
-        let initialFontSize: CGFloat = 9.0
+        // Adjust font size for better readability and layout
+        let initialFontSize: CGFloat = 10.5
 
         // Try with the specific requested font first
         if let loadedFont = NSFont(name: "Futura Light", size: initialFontSize) {
@@ -177,9 +196,9 @@ enum CoverLetterPDFGenerator {
         let linkFont = font!
         let urlAttributes: [NSAttributedString.Key: Any] = [
             .font: linkFont,
-            .foregroundColor: NSColor.blue,
+            .foregroundColor: NSColor.black, // Black text instead of blue
             .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .underlineColor: NSColor.blue,
+            .underlineColor: NSColor.black, // Black underline instead of blue
             // No hardcoded email - we'll set proper links in createFormattedText
         ]
 
