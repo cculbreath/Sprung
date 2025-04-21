@@ -38,7 +38,7 @@ enum CoverLetterPDFGenerator {
         \(formattedToday())
 
         Dear Hiring Manager,
-\(letterContent)
+        \(letterContent)
 
         Best Regards,
 
@@ -90,8 +90,8 @@ enum CoverLetterPDFGenerator {
             let bodyText = bodyLines.joined(separator: "\n")
 
             // Preserve paragraph breaks but ensure consistency
-            let cleanedText = bodyText.replacingOccurrences(of: "\n\n\n", with: "\n\n")  // Triple newlines to double
-                                      .replacingOccurrences(of: "\n\n", with: "\n\n")     // Keep double newlines for paragraphs
+            let cleanedText = bodyText.replacingOccurrences(of: "\n\n\n", with: "\n\n") // Triple newlines to double
+                .replacingOccurrences(of: "\n\n", with: "\n\n") // Keep double newlines for paragraphs
             return cleanedText
         }
 
@@ -131,7 +131,7 @@ enum CoverLetterPDFGenerator {
             CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: specificFuturaLightPath) as CFURL, .process, &error)
             print("Registered Futura Light from: \(specificFuturaLightPath)")
         }
-        
+
         // Backup paths if primary fails
         let futuraPaths = [
             "/Library/Fonts/futuralight.ttf",
@@ -146,20 +146,20 @@ enum CoverLetterPDFGenerator {
             }
         }
 
-        // Start with smaller font size (20% reduction from original)
-        let fontSize: CGFloat = 9.0
-        
+        // Use smaller font size (20% reduction from original)
+        let initialFontSize: CGFloat = 9.0
+
         // Try with the specific requested font first
-        if let loadedFont = NSFont(name: "Futura Light", size: fontSize) {
+        if let loadedFont = NSFont(name: "Futura Light", size: initialFontSize) {
             font = loadedFont
-            print("Successfully loaded Futura Light at \(fontSize)pt")
+            print("Successfully loaded Futura Light at \(initialFontSize)pt")
         } else {
             // Try other possible font names for Futura Light
             let fontNames = ["FuturaLight", "Futura-Light", "Futura"]
             for name in fontNames {
-                if let loadedFont = NSFont(name: name, size: fontSize) {
+                if let loadedFont = NSFont(name: name, size: initialFontSize) {
                     font = loadedFont
-                    print("Loaded alternative font: \(name) at \(fontSize)pt")
+                    print("Loaded alternative font: \(name) at \(initialFontSize)pt")
                     break
                 }
             }
@@ -167,8 +167,8 @@ enum CoverLetterPDFGenerator {
 
         // Fallback to system font if Futura Light isn't available
         if font == nil {
-            font = NSFont.systemFont(ofSize: fontSize)
-            print("Fallback to system font at \(fontSize)pt")
+            font = NSFont.systemFont(ofSize: initialFontSize)
+            print("Fallback to system font at \(initialFontSize)pt")
         }
 
         print("Using font: \(font!.fontName)")
@@ -191,7 +191,7 @@ enum CoverLetterPDFGenerator {
 
         // Determine how many pages we need
         var done = false
-        var fontSize: CGFloat = 9 // Start with smaller font
+        var currentFontSize: CGFloat = initialFontSize // Use the initial font size
         var currentLeftMargin = leftMargin
         var currentRightMargin = rightMargin
 
@@ -265,8 +265,8 @@ enum CoverLetterPDFGenerator {
         }
 
         // If reducing margins didn't work, try reducing font size
-        while !done && fontSize >= 7 {
-            print("Trying font size: \(fontSize)")
+        while !done && currentFontSize >= 7 {
+            print("Trying font size: \(currentFontSize)")
 
             // Use minimum margins
             let minLeftMargin: CGFloat = 0.5 * 72
@@ -281,7 +281,7 @@ enum CoverLetterPDFGenerator {
             )
 
             // Create a new font with the current size
-            let currentFont = NSFont(name: font!.fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+            let currentFont = NSFont(name: font!.fontName, size: currentFontSize) ?? NSFont.systemFont(ofSize: currentFontSize)
             let currentAttributes = attributes.merging([.font: currentFont]) { _, new in new }
             let currentLinkAttributes = urlAttributes.merging([.font: currentFont]) { _, new in new }
 
@@ -319,7 +319,7 @@ enum CoverLetterPDFGenerator {
 
             if !done {
                 // Try a smaller font size
-                fontSize -= 0.5
+                currentFontSize -= 0.5
             }
         }
 
