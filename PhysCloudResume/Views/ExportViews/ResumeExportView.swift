@@ -12,6 +12,10 @@ struct ResumeExportView: View {
 
     // Local state for notes text
     @State private var notes: String = ""
+    
+    // State for showing export success notification
+    @State private var showExportAlert: Bool = false
+    @State private var exportAlertMessage: String = ""
 
     var body: some View {
         // Only show if we actually have a selected JobApp in the store
@@ -65,8 +69,14 @@ struct ResumeExportView: View {
                 }
                 .pickerStyle(.menu)
 
-                Button("Export Cover Letter Text") {
-                    exportCoverLetterText()
+                HStack(spacing: 15) {
+                    Button("Export Cover Letter Text") {
+                        exportCoverLetterText()
+                    }
+                    
+                    Button("Export All Cover Letters") {
+                        exportAllCoverLetters()
+                    }
                 }
 
                 Divider()
@@ -102,15 +112,22 @@ struct ResumeExportView: View {
             .padding()
             .frame(maxHeight: .infinity, alignment: .top)
             .onAppear {
-                // Sync local state from the store’s selectedApp
+                // Sync local state from the store's selectedApp
                 selectedStatus = jobApp.status
                 notes = jobApp.notes
                 // Optionally, restore selectedResume/selectedCoverLetter if desired
                 // selectedResume = ...
                 // selectedCoverLetter = ...
             }
+            .alert(isPresented: $showExportAlert) {
+                Alert(
+                    title: Text("Export Complete"),
+                    message: Text(exportAlertMessage),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         } else {
-            // If there’s no selected jobApp
+            // If there's no selected jobApp
             EmptyView()
         }
     }
@@ -177,16 +194,77 @@ struct ResumeExportView: View {
     private func exportCoverLetterText() {
         guard let coverLetter = selectedCoverLetter else {
             print("No cover letter selected")
+            exportAlertMessage = "No cover letter selected. Please select a cover letter first."
+            showExportAlert = true
             return
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let fileURL = downloadsURL.appendingPathComponent(sanitizeFilename("\(coverLetter.jobApp?.jobPosition ?? "")_CoverLetter.txt"))
+        let filename = sanitizeFilename("\(coverLetter.jobApp?.jobPosition ?? "")_CoverLetter.txt")
+        let fileURL = downloadsURL.appendingPathComponent(filename)
 
         do {
             try coverLetter.content.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Cover letter text file exported to \(fileURL)")
+            exportAlertMessage = "Cover letter has been exported to \"\(filename)\""
+            showExportAlert = true
         } catch {
             print("Failed to export cover letter text: \(error)")
+            exportAlertMessage = "Failed to export: \(error.localizedDescription)"
+            showExportAlert = true
+        }
+    }
+    
+    private func exportAllCoverLetters() {
+        guard let jobApp = jobAppStore.selectedApp else {
+            print("No job application selected")
+            return
+        }
+        
+        // Get all cover letters for this job app
+        let allCoverLetters = jobApp.coverLetters.sorted(by: { $0.moddedDate > $1.moddedDate })
+        
+        if allCoverLetters.isEmpty {
+            print("No cover letters available to export")
+            exportAlertMessage = "No cover letters available to export for this job application."
+            showExportAlert = true
+            return
+        }
+        
+        // Create a combined string with all cover letters, labeled by option letter and timestamp
+        var combinedText = "ALL COVER LETTER OPTIONS FOR \(jobApp.jobPosition.uppercased()) AT \(jobApp.companyName.uppercased())\n\n"
+        
+        // Use letters a, b, c, etc. to label options
+        let letterLabels = Array("abcdefghijklmnopqrstuvwxyz")
+        
+        for (index, letter) in allCoverLetters.enumerated() {
+            // Determine the option label (a, b, c, etc.)
+            let optionLabel = index < letterLabels.count ? String(letterLabels[index]) : "\(index + 1)"
+            
+            combinedText += "=============================================\n"
+            combinedText += "OPTION \(optionLabel): (Generated at \(letter.modDate))\n"
+            combinedText += "=============================================\n\n"
+            combinedText += letter.content
+            combinedText += "\n\n\n"
+        }
+        
+        // Save to downloads folder
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let filename = sanitizeFilename("All cover letter options for \(jobApp.jobPosition) job.txt")
+        let fileURL = downloadsURL.appendingPathComponent(filename)
+        
+        do {
+            try combinedText.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("All cover letters exported to \(fileURL)")
+            
+            // Show success alert
+            exportAlertMessage = "\(allCoverLetters.count) cover letter options have been exported to \"\(filename)\""
+            showExportAlert = true
+        } catch {
+            print("Failed to export all cover letters: \(error)")
+            
+            // Show error alert
+            exportAlertMessage = "Failed to export: \(error.localizedDescription)"
+            showExportAlert = true
         }
     }
 }
