@@ -133,23 +133,39 @@ struct CoverLetterContentView: View {
                         EmptyView()
                     }
                 }
-                Text("PDF Preview - Generated \(cL.modDate)")
-                    .font(.caption)
-                    .italic()
-
-                if cL.generated {
-                    CoverLetterPDFView(
-                        coverLetter: cL,
-                        applicant: Applicant()
+                // Toggle between editing raw content and PDF preview
+                if buttons.isEditing {
+                    Text("Editing - Last modified \(cL.modDate)")
+                        .font(.caption)
+                    // Bind to the cover letter content for editing
+                    let contentBinding = Binding<String>(
+                        get: { cL.content },
+                        set: { newText in
+                            cL.content = newText
+                            cL.moddedDate = Date()
+                        }
                     )
-                    .frame(maxHeight: .infinity)
-                    .id(cL.id)
-                    .onChange(of: bindApp.selectedCover) { _, newCover in
-                        print("Cover letter changed to: \(newCover?.modDate ?? "None")")
-                    }
-                } else {
-                    EmptyView()
+                    TextEditor(text: contentBinding)
                         .frame(maxHeight: .infinity)
+                } else {
+                    Text("PDF Preview - Generated \(cL.modDate)")
+                        .font(.caption)
+                        .italic()
+
+                    if cL.generated {
+                        CoverLetterPDFView(
+                            coverLetter: cL,
+                            applicant: Applicant()
+                        )
+                        .frame(maxHeight: .infinity)
+                        .id(cL.id)
+                        .onChange(of: bindApp.selectedCover) { _, newCover in
+                            print("Cover letter changed to: \(newCover?.modDate ?? "None")")
+                        }
+                    } else {
+                        EmptyView()
+                            .frame(maxHeight: .infinity)
+                    }
                 }
             }
         } else {

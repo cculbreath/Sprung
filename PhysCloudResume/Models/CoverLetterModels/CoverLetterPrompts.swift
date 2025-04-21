@@ -40,9 +40,9 @@ enum CoverLetterPrompts {
             }
             prompt = """
             You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app?.jobPosition ?? "") at \(app?.companyName ?? "").
-            
+
             IMPORTANT: Your response must contain ONLY the body text of the cover letter. Do not include date, salutation (Dear Hiring Manager), closing (Best Regards), signature, name, or contact information. Start immediately with the first paragraph and end with the final paragraph. These elements will be added automatically by the system.
-            
+
             **Instructions:**
 
             - **Personalization:** Tailor the cover letter specifically to the job listing at \(app?.companyName ?? ""), aligning \(applicant.name)'s skills and experiences with the job requirements.
