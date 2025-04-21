@@ -8,7 +8,7 @@ enum CoverLetterPDFGenerator {
     static func generatePDF(from coverLetter: CoverLetter, applicant: Applicant) -> Data {
         print("Generating PDF from cover letter...")
         let text = buildLetterText(from: coverLetter, applicant: applicant)
-        
+
         // Use a better PDF generation approach that guarantees vector text
         let pdfData = createVectorPDFFromString(text)
 
@@ -484,18 +484,18 @@ enum CoverLetterPDFGenerator {
 
         return result
     }
-    
+
     /// Creates a PDF with guaranteed vector text using NSAttributedString and PDFKit
     private static func createVectorPDFFromString(_ text: String) -> Data {
         print("Creating vector PDF from text using PDFKit...")
-        
+
         // Page setup with our preferred margins
         let pageRect = CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
         let leftMargin: CGFloat = 1.3 * 72 // Left margin (1.3 inches)
         let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches)
         let topMargin: CGFloat = 0.75 * 72 // Top margin (0.75 inches)
         let bottomMargin: CGFloat = 0.5 * 72 // Bottom margin (0.5 inches)
-        
+
         // Set up text rectangle
         let textRect = CGRect(
             x: leftMargin,
@@ -503,17 +503,17 @@ enum CoverLetterPDFGenerator {
             width: pageRect.width - leftMargin - rightMargin,
             height: pageRect.height - topMargin - bottomMargin
         )
-        
+
         // Prepare paragraph style with exact spacing requirements
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 11.5 - 9.8 // 11.5pt line spacing
         paragraphStyle.paragraphSpacing = 7.0 // 7pt after paragraph spacing
         paragraphStyle.alignment = .natural
-        
+
         // Set up Futura Light font
         var font: NSFont?
         let fontSize: CGFloat = 9.8
-        
+
         // Try to load the font
         if let loadedFont = NSFont(name: "Futura Light", size: fontSize) {
             font = loadedFont
@@ -525,7 +525,7 @@ enum CoverLetterPDFGenerator {
                 var error: Unmanaged<CFError>?
                 CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: specificFuturaLightPath) as CFURL, .process, &error)
                 print("Registered Futura Light for vector PDF")
-                
+
                 // Try loading the font again after registration
                 if let loadedFont = NSFont(name: "Futura Light", size: fontSize) {
                     font = loadedFont
@@ -540,32 +540,32 @@ enum CoverLetterPDFGenerator {
                 print("Falling back to system font at \(fontSize)pt - Font not found")
             }
         }
-        
+
         // Create base text attributes
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font!,
             .foregroundColor: NSColor.black,
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
-        
+
         // Create link attributes with BLACK links (which is key!)
         let urlAttributes: [NSAttributedString.Key: Any] = [
             .font: font!,
-            .foregroundColor: NSColor.black, 
+            .foregroundColor: NSColor.black,
             .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .underlineColor: NSColor.black
+            .underlineColor: NSColor.black,
         ]
-        
+
         // Create initial attributed string
         let attributedString = NSMutableAttributedString(string: text, attributes: attributes)
-        
+
         // Find and format hyperlinks
         let emailPattern = #"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,64}"#
         let urlPattern = #"(https?://)?(www\.)?[A-Za-z0-9.-]+\.(com|org|net|edu|io|dev)"#
-        
+
         if let emailRegex = try? NSRegularExpression(pattern: emailPattern),
-           let urlRegex = try? NSRegularExpression(pattern: urlPattern) {
-           
+           let urlRegex = try? NSRegularExpression(pattern: urlPattern)
+        {
             // Find and format emails
             let emailMatches = emailRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
             for match in emailMatches {
@@ -577,7 +577,7 @@ enum CoverLetterPDFGenerator {
                     print("Added mailto link for: \(email)")
                 }
             }
-            
+
             // Find and format URLs
             let urlMatches = urlRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
             for match in urlMatches {
@@ -591,112 +591,114 @@ enum CoverLetterPDFGenerator {
                 }
             }
         }
-        
+
         // Create a proper PDF context for macOS
         let pdfMetaData = [
             kCGPDFContextCreator: "Physics Cloud Resume" as CFString,
-            kCGPDFContextTitle: "Cover Letter" as CFString
+            kCGPDFContextTitle: "Cover Letter" as CFString,
         ]
-        
+
         let data = NSMutableData()
         var mediaBox = pageRect
-        
+
         // Create a PDF context directly using CGContext
         guard let pdfContext = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!,
-                                      mediaBox: &mediaBox,
-                                      pdfMetaData as CFDictionary) else {
+                                         mediaBox: &mediaBox,
+                                         pdfMetaData as CFDictionary)
+        else {
             print("Failed to create PDF context")
             return Data()
         }
-        
+
         // Begin a PDF page
         pdfContext.beginPage(mediaBox: &mediaBox)
-        
+
         // Fill with white background
         pdfContext.setFillColor(NSColor.white.cgColor)
         pdfContext.fill(mediaBox)
-        
+
         // Flip for proper text orientation (PDF has bottom-left origin)
         pdfContext.saveGState()
         pdfContext.translateBy(x: 0, y: pageRect.height)
         pdfContext.scaleBy(x: 1.0, y: -1.0)
-        
+
         // Create frame for the text
-        let framePath = CGPath(rect: CGRect(x: textRect.origin.x, 
-                                            y: 0,  // Position at the top after flipping 
-                                            width: textRect.width, 
+        let framePath = CGPath(rect: CGRect(x: textRect.origin.x,
+                                            y: 0, // Position at the top after flipping
+                                            width: textRect.width,
                                             height: textRect.height),
-                           transform: nil)
-                           
+                               transform: nil)
+
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
         let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), framePath, nil)
-        
+
         // Draw the text
         CTFrameDraw(frame, pdfContext)
-        
+
         // Restore graphics state and end the page
-        pdfContext.restoreGState() 
+        pdfContext.restoreGState()
         pdfContext.endPage()
         pdfContext.closePDF()
-        
+
         // Create the final PDF document
         if let pdfDoc = PDFDocument(data: data as Data), pdfDoc.pageCount > 0 {
             print("Successfully created vector PDF with \(pdfDoc.pageCount) pages and size: \(data.length) bytes")
             return data as Data
         }
-        
+
         print("Failed to create vector PDF - trying alternate approach")
-        
+
         // Last resort: Direct PDF drawing with CGContext
         print("Using direct PDF drawing with CGContext...")
-        
+
         // Create a PDF context
         let pdfData = NSMutableData()
-        var mediaBox = pageRect
-        
-        guard let pdfContext = CGContext(consumer: CGDataConsumer(data: pdfData as CFMutableData)!, 
-                                         mediaBox: &mediaBox, 
-                                         nil) else {
+        var pdfMediaBox = pageRect
+
+        guard let pdfContext = CGContext(consumer: CGDataConsumer(data: pdfData as CFMutableData)!,
+                                         mediaBox: &pdfMediaBox,
+                                         nil)
+        else {
             print("Failed to create direct PDF context")
             return Data()
         }
-        
+
         // Begin PDF page
-        pdfContext.beginPage(mediaBox: &mediaBox)
-        
+        pdfContext.beginPage(mediaBox: &pdfMediaBox)
+
         // Fill with white background
         pdfContext.setFillColor(NSColor.white.cgColor)
-        pdfContext.fill(mediaBox)
-        
+        pdfContext.fill(pdfMediaBox)
+
         // Set up for text rendering
         pdfContext.saveGState()
         pdfContext.translateBy(x: 0, y: pageRect.height)
         pdfContext.scaleBy(x: 1.0, y: -1.0)
-        
+
         // Draw text using Core Text for proper vector text
-        let pathForText = CGPath(rect: CGRect(x: textRect.origin.x, 
-                                          y: 0,
-                                          width: textRect.width, 
-                                          height: textRect.height), 
-                             transform: nil)
-        
+        let pathForText = CGPath(rect: CGRect(x: textRect.origin.x,
+                                              y: 0,
+                                              width: textRect.width,
+                                              height: textRect.height),
+                                 transform: nil)
+
         let textFramesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
         let textFrame = CTFramesetterCreateFrame(textFramesetter, CFRangeMake(0, 0), pathForText, nil)
-        
+
         // Draw the text
         CTFrameDraw(textFrame, pdfContext)
-        
+
         // Clean up
         pdfContext.restoreGState()
         pdfContext.endPage()
         pdfContext.closePDF()
-        
+
         // Get PDF data
         if pdfData.length > 0 {
             print("Created direct vector PDF with size: \(pdfData.length)")
             return pdfData as Data
         }
-        
+
         print("All PDF generation methods failed")
         return Data()
     }
