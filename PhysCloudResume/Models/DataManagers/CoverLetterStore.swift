@@ -78,6 +78,8 @@ final class CoverLetterStore: SwiftDataStore {
         newLetter.generated = false
         newLetter.encodedMessageHistory = letter.encodedMessageHistory
         newLetter.currentMode = letter.currentMode
+        // Preserve the existing cover letter name for revision operations
+        newLetter.name = letter.name
         // Copy other necessary properties here
 
         if let jobApp = letter.jobApp {

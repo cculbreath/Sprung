@@ -83,26 +83,12 @@ struct CoverLetterContentView: View {
             @Bindable var bindApp = app
             VStack {
                 HStack {
-                    Picker(
-                        "Load existing cover letter",
-                        selection: Binding(
-                            get: { bindApp.selectedCover },
-                            set: { newCoverLetter in
-                                bindApp.selectedCover = newCoverLetter
-                            }
-                        )
-                    ) {
-                        ForEach(
-                            app.coverLetters.sorted(by: { $0.moddedDate < $1.moddedDate }),
-                            id: \.id
-                        ) { letter in
-                            if letter.generated {
-                                Text("Generated at \(letter.modDate)").tag(letter as CoverLetter?)
-                            } else {
-                                Text("Ungenerated draft").tag(letter as CoverLetter?)
-                            }
-                        }
-                    }
+                    CoverLetterPicker(
+                        coverLetters: bindApp.coverLetters.sorted(by: { $0.moddedDate < $1.moddedDate }),
+                        selection: $bindApp.selectedCover,
+                        includeNoneOption: false,
+                        label: "Load existing cover letter"
+                    )
                     .padding()
 
                     // Delete Button
