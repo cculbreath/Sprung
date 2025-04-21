@@ -81,7 +81,22 @@ struct CoverLetterContentView: View {
            let cL = jobAppStore.selectedApp?.selectedCover
         {
             @Bindable var bindApp = app
-            VStack {
+            VStack(alignment: .leading, spacing: 8) {
+                // Editable cover letter name
+                if let cL = bindApp.selectedCover {
+                    // Bindable text field for the cover letter name
+                    let nameBinding = Binding<String>(
+                        get: { cL.name },
+                        set: { newName in
+                            cL.name = newName
+                            cL.moddedDate = Date()
+                        }
+                    )
+                    TextField("Cover Letter Name", text: nameBinding)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .padding(.horizontal)
+                }
+                // Picker and delete row
                 HStack {
                     CoverLetterPicker(
                         coverLetters: bindApp.coverLetters.sorted(by: { $0.moddedDate < $1.moddedDate }),
