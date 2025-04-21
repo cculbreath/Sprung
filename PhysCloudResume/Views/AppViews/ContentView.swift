@@ -23,7 +23,7 @@ struct ContentView: View {
     @State var selectedTab: TabList = .listing
 
     @Namespace private var slidingAnimation // Animation namespace
-    @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic // Track sidebar
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .doubleColumn // Show sidebar by default
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore

@@ -16,6 +16,8 @@ struct AiCommsView: View {
     @State private var fbnodes: [FeedbackNode] = []
     @State private var errorMessage: String = ""
     @State private var showError: Bool = false
+    @State private var retryCount: Int = 0
+    @State private var isRetrying: Bool = false
     init(service: OpenAIService, query: ResumeApiQuery, res: Binding<Resume?>) {
         _chatProvider = State(initialValue: ResumeChatProvider(service: service))
         _q = State(initialValue: query)
@@ -69,17 +71,48 @@ struct AiCommsView: View {
             }
             .onChange(of: aiResub) { _, newValue in
                 if newValue {
+                    // Reset retry count when starting a new request
+                    if !isRetrying {
+                        retryCount = 0
+                    }
+
                     chatAction(hasRevisions: true)
 
                     // Safety timeout to dismiss the review view if AI request takes too long
                     DispatchQueue.main.asyncAfter(deadline: .now() + 180) { // 3 minutes timeout
                         if isLoading && aiResub {
-                            print("Request timeout triggered in AiCommsView - dismissing UI")
-                            self.showError = true
-                            self.errorMessage = "The AI request is taking longer than expected. Please try again later."
-                            aiResub = false
-                            sheetOn = false
-                            isLoading = false
+                            print("Request timeout triggered in AiCommsView")
+
+                            // If this is the first attempt, retry once
+                            if retryCount == 0 {
+                                print("Retrying AI request after timeout")
+                                retryCount += 1
+                                isRetrying = true
+
+                                // Retry the request
+                                chatAction(hasRevisions: true)
+
+                                // Set another timeout for the retry
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 180) { // 3 minutes for retry
+                                    if isLoading && aiResub {
+                                        print("Retry request timeout triggered - dismissing UI")
+                                        self.showError = true
+                                        self.errorMessage = "The AI request is still taking longer than expected. Please try again later."
+                                        aiResub = false
+                                        sheetOn = false
+                                        isLoading = false
+                                        isRetrying = false
+                                    }
+                                }
+                            } else {
+                                // Already retried once, show error
+                                self.showError = true
+                                self.errorMessage = "The AI request is taking longer than expected. Please try again later."
+                                aiResub = false
+                                sheetOn = false
+                                isLoading = false
+                                isRetrying = false
+                            }
                         }
                     }
                 }
@@ -106,7 +139,14 @@ struct AiCommsView: View {
                         Image("ai-squiggle.slash").font(.system(size: 20, weight: .regular)).help("Select fields for ai update")
                     }
                 } else {
-                    ProgressView().scaleEffect(0.75, anchor: .center) // Show a loading indicator when isLoading is true
+                    VStack(spacing: 4) {
+                        ProgressView().scaleEffect(0.75, anchor: .center)
+                        if isRetrying {
+                            Text("Retrying request...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
             .padding()
@@ -203,9 +243,14 @@ struct AiCommsView: View {
                 }
             }
 
-            // Always clean up loading state
+            // Always clean up loading state unless we're retrying
             await MainActor.run {
-                isLoading = false
+                if !isRetrying {
+                    isLoading = false
+                } else {
+                    // If this was a retry attempt that succeeded
+                    isRetrying = false
+                }
             }
         }
     }

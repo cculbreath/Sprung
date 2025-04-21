@@ -13,8 +13,9 @@ struct TabWrapperView: View {
     @State private var refPopup: Bool = false
     @State private var coverLetterButtons: CoverLetterButtons = .init(showInspector: true, runRequested: false)
     @State private var resumeButtons: ResumeButtons = .init(
-        showResumeInspector: true, aiRunning: false
+        showResumeInspector: false, aiRunning: false
     )
+    @State private var hasVisitedResumeTab: Bool = false
     @Binding var tabRefresh: Bool
 
     var body: some View {
@@ -78,12 +79,26 @@ struct TabWrapperView: View {
                     print(newVal ? "tab resExists" : "change res doesn't exist")
                 }
                 .onChange(of: $tabRefresh.wrappedValue) { _, newvalue in print("Tab is is now + \(newvalue ? "true" : "false")") }
+                .onChange(of: selectedTab) { _, newTab in
+                    // Track when the user switches to the resume tab
+                    if newTab == .resume {
+                        if !hasVisitedResumeTab {
+                            // First visit to resume tab after launch - inspector should be hidden
+                            resumeButtons.showResumeInspector = false
+                            hasVisitedResumeTab = true
+                        }
+                        // After first visit, we don't change the inspector state here
+                        // so it retains its previous state
+                    }
+                }
                 .sheet(isPresented: $refPopup) {
                     ResRefView()
                         .padding()
                 }
                 .onAppear {
                     updateMyLetter()
+                    // Reset the visited flag when the view appears
+                    hasVisitedResumeTab = false
                 }
         }
     }
