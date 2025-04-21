@@ -38,7 +38,6 @@ enum CoverLetterPDFGenerator {
         \(formattedToday())
         Dear Hiring Manager,
         \(letterContent)
-
         Best Regards,
 
         \(applicant.name)
