@@ -8,7 +8,7 @@ enum CoverLetterPDFGenerator {
     static func generatePDF(from coverLetter: CoverLetter, applicant: Applicant) -> Data {
         print("Generating PDF from cover letter...")
         let text = buildLetterText(from: coverLetter, applicant: applicant)
-        let pdfData = createPDFFromString(text)
+        let pdfData = createPDFFromString(text, applicant: applicant)
 
         // Debug - save PDF to desktop
         saveDebugPDF(pdfData)
@@ -105,7 +105,7 @@ enum CoverLetterPDFGenerator {
         return df.string(from: Date())
     }
 
-    private static func createPDFFromString(_ text: String) -> Data {
+    private static func createPDFFromString(_ text: String, applicant: Applicant) -> Data {
         print("Creating high-quality vector PDF with text: \(text.count) chars")
 
         // Page setup
@@ -180,8 +180,7 @@ enum CoverLetterPDFGenerator {
             .foregroundColor: NSColor.blue,
             .underlineStyle: NSUnderlineStyle.single.rawValue,
             .underlineColor: NSColor.blue,
-            // Adding actual link attributes for functioning hyperlinks
-            .link: URL(string: "mailto:cc@physicscloud.net")!
+            // No hardcoded email - we'll set proper links in createFormattedText
         ]
 
         let attributes: [NSAttributedString.Key: Any] = [
@@ -215,7 +214,7 @@ enum CoverLetterPDFGenerator {
             let currentAttributes = attributes.merging([:]) { current, _ in current }
 
             // Create modified text with hyperlinks
-            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: urlAttributes)
+            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: urlAttributes, applicant: applicant)
 
             // Create a framesetter for the current attributed text
             let framesetter = CTFramesetterCreateWithAttributedString(formattedText as CFAttributedString)
@@ -287,7 +286,7 @@ enum CoverLetterPDFGenerator {
             let currentLinkAttributes = urlAttributes.merging([.font: currentFont]) { _, new in new }
 
             // Create formatted text with hyperlinks
-            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: currentLinkAttributes)
+            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: currentLinkAttributes, applicant: applicant)
 
             // Create a framesetter
             let framesetter = CTFramesetterCreateWithAttributedString(formattedText as CFAttributedString)
@@ -347,7 +346,7 @@ enum CoverLetterPDFGenerator {
             let currentLinkAttributes = urlAttributes.merging([.font: currentFont]) { _, new in new }
 
             // Create formatted text with hyperlinks
-            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: currentLinkAttributes)
+            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: currentLinkAttributes, applicant: applicant)
 
             // Create a blank document
             let defaultPage = createSimplePDFPage(attributedText: formattedText, pageRect: pageRect, textRect: finalTextRect)
@@ -367,7 +366,7 @@ enum CoverLetterPDFGenerator {
     }
 
     /// Creates formatted text with hyperlinks for email and website
-    private static func createFormattedText(text: String, attributes: [NSAttributedString.Key: Any], urlAttributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
+    private static func createFormattedText(text: String, attributes: [NSAttributedString.Key: Any], urlAttributes: [NSAttributedString.Key: Any], applicant: Applicant) -> NSAttributedString {
         let attributedText = NSMutableAttributedString(string: text, attributes: attributes)
 
         // Find and format email addresses and websites
@@ -383,8 +382,9 @@ enum CoverLetterPDFGenerator {
                 if let range = Range(match.range, in: text) {
                     let email = String(text[range])
                     var emailAttributes = urlAttributes
-                    // Create a proper email mailto link
-                    emailAttributes[.link] = URL(string: "mailto:\(email)")
+                    // Create a proper email mailto link using either the detected email or the applicant's email
+                    let emailToUse = email == applicant.email ? applicant.email : email
+                    emailAttributes[.link] = URL(string: "mailto:\(emailToUse)")
                     attributedText.setAttributes(emailAttributes, range: match.range)
                 }
             }
@@ -395,8 +395,9 @@ enum CoverLetterPDFGenerator {
                 if let range = Range(match.range, in: text) {
                     let urlString = String(text[range])
                     var websiteAttributes = urlAttributes
-                    // Create a proper web URL
-                    let fullURL = urlString.hasPrefix("http") ? urlString : "https://\(urlString)"
+                    // Create a proper web URL using either the detected URL or the applicant's website
+                    let websiteToUse = urlString == applicant.websites ? applicant.websites : urlString
+                    let fullURL = websiteToUse.hasPrefix("http") ? websiteToUse : "https://\(websiteToUse)"
                     websiteAttributes[.link] = URL(string: fullURL)
                     attributedText.setAttributes(websiteAttributes, range: match.range)
                 }
