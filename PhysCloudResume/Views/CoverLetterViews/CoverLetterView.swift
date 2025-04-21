@@ -133,17 +133,15 @@ struct CoverLetterContentView: View {
                         EmptyView()
                     }
                 }
-                Text("AI generated text at \(cL.modDate)")
+                Text("PDF Preview - Generated \(cL.modDate)")
                     .font(.caption)
                     .italic()
 
                 if cL.generated {
-                    ScrollView {
-                        Text(cL.content)
-                            .font(.body)
-                            .padding()
-                            .textSelection(.enabled)
-                    }
+                    CoverLetterPDFView(
+                        coverLetter: cL,
+                        applicant: Applicant()
+                    )
                     .frame(maxHeight: .infinity)
                     .id(cL.id)
                     .onChange(of: bindApp.selectedCover) { _, newCover in

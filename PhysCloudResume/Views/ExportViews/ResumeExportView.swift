@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ResumeExportView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
 
     // Local state for picking a resume or cover letter
     @State private var selectedResume: Resume?
@@ -12,7 +13,7 @@ struct ResumeExportView: View {
 
     // Local state for notes text
     @State private var notes: String = ""
-    
+
     // State for showing export success notification
     @State private var showExportAlert: Bool = false
     @State private var exportAlertMessage: String = ""
@@ -70,10 +71,14 @@ struct ResumeExportView: View {
                 .pickerStyle(.menu)
 
                 HStack(spacing: 15) {
-                    Button("Export Cover Letter Text") {
-                        exportCoverLetterText()
+                    Button("Export PDF") {
+                        exportCoverLetterPDF()
                     }
                     
+                    Button("Export Text") {
+                        exportCoverLetterText()
+                    }
+
                     Button("Export All Cover Letters") {
                         exportAllCoverLetters()
                     }
@@ -213,30 +218,95 @@ struct ResumeExportView: View {
             showExportAlert = true
         }
     }
+
+    private func exportCoverLetterPDF() {
+        guard let coverLetter = selectedCoverLetter else {
+            exportAlertMessage = "No cover letter selected. Please select a cover letter first."
+            showExportAlert = true
+            return
+        }
+        
+        let pdfData = coverLetterStore.exportPDF(from: coverLetter)
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let filename = sanitizeFilename("\(coverLetter.jobApp?.jobPosition ?? "")_CoverLetter.pdf")
+        let fileURL = downloadsURL.appendingPathComponent(filename)
+        
+        do {
+            try pdfData.write(to: fileURL)
+            print("Cover letter PDF exported to \(fileURL)")
+            exportAlertMessage = "Cover letter PDF has been exported to \"\(filename)\""
+            showExportAlert = true
+        } catch {
+            print("Failed to export cover letter PDF: \(error)")
+            exportAlertMessage = "Failed to export PDF: \(error.localizedDescription)"
+            showExportAlert = true
+        }
+    }
     
     private func exportAllCoverLetters() {
         guard let jobApp = jobAppStore.selectedApp else {
             print("No job application selected")
             return
         }
-        
+
         // Get all cover letters for this job app
-        let allCoverLetters = jobApp.coverLetters.sorted(by: { $0.moddedDate > $1.moddedDate })
-        
+        let allCoverLetters = jobApp.coverLetters.filter { $0.generated }.sorted(by: { $0.moddedDate > $1.moddedDate })
+
         if allCoverLetters.isEmpty {
             print("No cover letters available to export")
             exportAlertMessage = "No cover letters available to export for this job application."
             showExportAlert = true
             return
         }
+
+        // Create and export combined text file
+        let combinedText = createCombinedCoverLettersText(jobApp: jobApp, coverLetters: allCoverLetters)
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let textFilename = sanitizeFilename("All cover letter options for \(jobApp.jobPosition) job.txt")
+        let textFileURL = downloadsURL.appendingPathComponent(textFilename)
         
-        // Create a combined string with all cover letters, labeled by option letter and timestamp
+        // Create folder for PDFs
+        let folderName = sanitizeFilename("Cover Letters for \(jobApp.jobPosition)")
+        let folderURL = downloadsURL.appendingPathComponent(folderName)
+        
+        do {
+            // Export text file
+            try combinedText.write(to: textFileURL, atomically: true, encoding: .utf8)
+            
+            // Create folder for PDFs if needed
+            try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true, attributes: nil)
+            
+            // Export individual PDFs
+            let letterLabels = Array("abcdefghijklmnopqrstuvwxyz")
+            
+            for (index, letter) in allCoverLetters.enumerated() {
+                // Determine the option label
+                let optionLabel = index < letterLabels.count ? String(letterLabels[index]) : "\(index + 1)"
+                let pdfFilename = sanitizeFilename("Option \(optionLabel) - \(jobApp.jobPosition) Cover Letter.pdf")
+                let pdfFileURL = folderURL.appendingPathComponent(pdfFilename)
+                
+                // Generate and save PDF
+                let pdfData = coverLetterStore.exportPDF(from: letter)
+                try pdfData.write(to: pdfFileURL)
+            }
+            
+            // Show success alert
+            exportAlertMessage = "\(allCoverLetters.count) cover letter options have been exported as text and PDFs"
+            showExportAlert = true
+        } catch {
+            print("Failed to export all cover letters: \(error)")
+            exportAlertMessage = "Failed to export: \(error.localizedDescription)"
+            showExportAlert = true
+        }
+    }
+    
+    private func createCombinedCoverLettersText(jobApp: JobApp, coverLetters: [CoverLetter]) -> String {
         var combinedText = "ALL COVER LETTER OPTIONS FOR \(jobApp.jobPosition.uppercased()) AT \(jobApp.companyName.uppercased())\n\n"
         
         // Use letters a, b, c, etc. to label options
         let letterLabels = Array("abcdefghijklmnopqrstuvwxyz")
         
-        for (index, letter) in allCoverLetters.enumerated() {
+        for (index, letter) in coverLetters.enumerated() {
             // Determine the option label (a, b, c, etc.)
             let optionLabel = index < letterLabels.count ? String(letterLabels[index]) : "\(index + 1)"
             
@@ -247,24 +317,6 @@ struct ResumeExportView: View {
             combinedText += "\n\n\n"
         }
         
-        // Save to downloads folder
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let filename = sanitizeFilename("All cover letter options for \(jobApp.jobPosition) job.txt")
-        let fileURL = downloadsURL.appendingPathComponent(filename)
-        
-        do {
-            try combinedText.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("All cover letters exported to \(fileURL)")
-            
-            // Show success alert
-            exportAlertMessage = "\(allCoverLetters.count) cover letter options have been exported to \"\(filename)\""
-            showExportAlert = true
-        } catch {
-            print("Failed to export all cover letters: \(error)")
-            
-            // Show error alert
-            exportAlertMessage = "Failed to export: \(error.localizedDescription)"
-            showExportAlert = true
-        }
+        return combinedText
     }
 }

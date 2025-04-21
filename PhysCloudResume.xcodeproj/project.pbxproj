@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 571F746D2C9351BE007C8ADD /* SwiftOpenAI */; };
+		5708EBF02DB5BCD700DABC2C /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 5708EBEF2DB5BCD700DABC2C /* SwiftOpenAI */; };
 		571F75312C98F973007C8ADD /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75302C98F973007C8ADD /* Collections */; };
 		571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75322C98F973007C8ADD /* OrderedCollections */; };
 		57D02A782D54682F00A6C193 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57D02A772D54682F00A6C193 /* SwiftyJSON */; };
@@ -50,8 +50,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				571F75312C98F973007C8ADD /* Collections in Frameworks */,
+				5708EBF02DB5BCD700DABC2C /* SwiftOpenAI in Frameworks */,
 				57D0478B2CA771AE00A601BC /* SwiftSoup in Frameworks */,
-				571F746E2C9351BE007C8ADD /* SwiftOpenAI in Frameworks */,
 				57D02A782D54682F00A6C193 /* SwiftyJSON in Frameworks */,
 				571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */,
 			);
@@ -96,11 +96,11 @@
 			);
 			name = PhysCloudResume;
 			packageProductDependencies = (
-				571F746D2C9351BE007C8ADD /* SwiftOpenAI */,
 				571F75302C98F973007C8ADD /* Collections */,
 				571F75322C98F973007C8ADD /* OrderedCollections */,
 				57D0478A2CA771AE00A601BC /* SwiftSoup */,
 				57D02A772D54682F00A6C193 /* SwiftyJSON */,
+				5708EBEF2DB5BCD700DABC2C /* SwiftOpenAI */,
 			);
 			productName = PhysCloudResume;
 			productReference = 570FEC682C855BF50074D1E0 /* PhysCloudResume.app */;
@@ -130,10 +130,10 @@
 			);
 			mainGroup = 570FEC5F2C855BF50074D1E0;
 			packageReferences = (
-				571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 				571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */,
 				57D047892CA771AE00A601BC /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				57D02A762D54682F00A6C193 /* XCRemoteSwiftPackageReference "SwiftyJSON" */,
+				5708EBEE2DB5BCD700DABC2C /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 			);
 			preferredProjectObjectVersion = 60;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
@@ -373,12 +373,13 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */ = {
+		5708EBEE2DB5BCD700DABC2C /* XCRemoteSwiftPackageReference "SwiftOpenAI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/jamesrochabrun/SwiftOpenAI.git";
 			requirement = {
-				kind = exactVersion;
-				version = 3.9.5;
+				kind = versionRange;
+				maximumVersion = 5.0.0;
+				minimumVersion = 4.0.0;
 			};
 		};
 		571F752F2C98F973007C8ADD /* XCRemoteSwiftPackageReference "swift-collections" */ = {
@@ -408,9 +409,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		571F746D2C9351BE007C8ADD /* SwiftOpenAI */ = {
+		5708EBEF2DB5BCD700DABC2C /* SwiftOpenAI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 571F746C2C9351BE007C8ADD /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
+			package = 5708EBEE2DB5BCD700DABC2C /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
 			productName = SwiftOpenAI;
 		};
 		571F75302C98F973007C8ADD /* Collections */ = {
