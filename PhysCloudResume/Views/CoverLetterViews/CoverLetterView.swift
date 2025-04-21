@@ -72,6 +72,7 @@ struct CoverLetterContentView: View {
     @Bindable var jobApp: JobApp
     @Binding var buttons: CoverLetterButtons
     @State private var isHoveringDelete = false
+    @State private var isHoveringEdit = false
 
     var body: some View {
         @Bindable var coverLetterStore = coverLetterStore
@@ -82,21 +83,7 @@ struct CoverLetterContentView: View {
         {
             @Bindable var bindApp = app
             VStack(alignment: .leading, spacing: 8) {
-                // Editable cover letter name
-                if let cL = bindApp.selectedCover {
-                    // Bindable text field for the cover letter name
-                    let nameBinding = Binding<String>(
-                        get: { cL.name },
-                        set: { newName in
-                            cL.name = newName
-                            cL.moddedDate = Date()
-                        }
-                    )
-                    TextField("Cover Letter Name", text: nameBinding)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal)
-                }
-                // Picker and delete row
+                // Picker, delete and edit controls
                 HStack {
                     CoverLetterPicker(
                         coverLetters: bindApp.coverLetters.sorted(by: { $0.moddedDate < $1.moddedDate }),
@@ -107,9 +94,8 @@ struct CoverLetterContentView: View {
                     .padding()
 
                     // Delete Button
-                    Button(action: {
-                        deleteCoverLetter()
-                    }) {
+                    // Delete Button
+                    Button(action: { deleteCoverLetter() }) {
                         HStack {
                             Image(systemName: "trash.fill")
                                 .foregroundColor(isHoveringDelete ? .red : .secondary)
@@ -124,15 +110,45 @@ struct CoverLetterContentView: View {
                         .cornerRadius(10)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .onHover { hovering in
-                        isHoveringDelete = hovering
+                    .onHover { hovering in isHoveringDelete = hovering }
+
+                    // Edit/Preview toggle Button
+                    Button(action: { buttons.wrappedValue.isEditing.toggle() }) {
+                        HStack {
+                            Image(systemName: buttons.wrappedValue.isEditing ? "doc.text.viewfinder" : "pencil")
+                                .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
+                                .font(.system(size: 14))
+                            Text(buttons.wrappedValue.isEditing ? "Preview" : "Edit")
+                                .font(.caption)
+                                .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(isHoveringEdit ? Color.white.opacity(0.4) : Color.clear)
+                        .cornerRadius(10)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    .onHover { hovering in isHoveringEdit = hovering }
+                    .disabled(!buttons.wrappedValue.canEdit)
 
                     if $buttons.wrappedValue.runRequested {
                         ProgressView()
                     } else {
                         EmptyView()
                     }
+                }
+                // Editable cover letter name
+                if let cL = bindApp.selectedCover {
+                    let nameBinding = Binding<String>(
+                        get: { cL.name },
+                        set: { newName in
+                            cL.name = newName
+                            cL.moddedDate = Date()
+                        }
+                    )
+                    TextField("Cover Letter Name", text: nameBinding)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .padding(.horizontal)
                 }
                 // Toggle between editing raw content and PDF preview
                 if buttons.isEditing {
