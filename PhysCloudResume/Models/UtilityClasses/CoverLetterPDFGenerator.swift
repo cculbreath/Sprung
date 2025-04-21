@@ -54,8 +54,9 @@ struct CoverLetterPDFGenerator {
         
         func layOut(fontSize: CGFloat, margins: NSEdgeInsets) -> (Data, pages: Int) {
             let data = NSMutableData()
+            var mediaBox = CGRect(origin: .zero, size: pageSize)
             let pdfContext = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!,
-                                       mediaBox: CGRect(origin: .zero, size: pageSize),
+                                       mediaBox: &mediaBox,
                                        nil)!
             
             let attr = attributed(text, size: fontSize)
@@ -64,7 +65,8 @@ struct CoverLetterPDFGenerator {
             var pages = 0
             
             repeat {
-                pdfContext.beginPage(mediaBox: CGRect(origin: .zero, size: pageSize))
+                var pageRect = CGRect(origin: .zero, size: pageSize)
+                pdfContext.beginPage(mediaBox: &pageRect)
                 pages += 1
                 let frameRect = CGRect(x: margins.left,
                                    y: margins.bottom,
