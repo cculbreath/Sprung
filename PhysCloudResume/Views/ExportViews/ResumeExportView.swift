@@ -74,7 +74,7 @@ struct ResumeExportView: View {
                     Button("Export PDF") {
                         exportCoverLetterPDF()
                     }
-                    
+
                     Button("Export Text") {
                         exportCoverLetterText()
                     }
@@ -225,12 +225,12 @@ struct ResumeExportView: View {
             showExportAlert = true
             return
         }
-        
+
         let pdfData = coverLetterStore.exportPDF(from: coverLetter)
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let filename = sanitizeFilename("\(coverLetter.jobApp?.jobPosition ?? "")_CoverLetter.pdf")
         let fileURL = downloadsURL.appendingPathComponent(filename)
-        
+
         do {
             try pdfData.write(to: fileURL)
             print("Cover letter PDF exported to \(fileURL)")
@@ -242,7 +242,7 @@ struct ResumeExportView: View {
             showExportAlert = true
         }
     }
-    
+
     private func exportAllCoverLetters() {
         guard let jobApp = jobAppStore.selectedApp else {
             print("No job application selected")
@@ -264,32 +264,32 @@ struct ResumeExportView: View {
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let textFilename = sanitizeFilename("All cover letter options for \(jobApp.jobPosition) job.txt")
         let textFileURL = downloadsURL.appendingPathComponent(textFilename)
-        
+
         // Create folder for PDFs
         let folderName = sanitizeFilename("Cover Letters for \(jobApp.jobPosition)")
         let folderURL = downloadsURL.appendingPathComponent(folderName)
-        
+
         do {
             // Export text file
             try combinedText.write(to: textFileURL, atomically: true, encoding: .utf8)
-            
+
             // Create folder for PDFs if needed
             try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true, attributes: nil)
-            
+
             // Export individual PDFs
             let letterLabels = Array("abcdefghijklmnopqrstuvwxyz")
-            
+
             for (index, letter) in allCoverLetters.enumerated() {
                 // Determine the option label
                 let optionLabel = index < letterLabels.count ? String(letterLabels[index]) : "\(index + 1)"
                 let pdfFilename = sanitizeFilename("Option \(optionLabel) - \(jobApp.jobPosition) Cover Letter.pdf")
                 let pdfFileURL = folderURL.appendingPathComponent(pdfFilename)
-                
+
                 // Generate and save PDF
                 let pdfData = coverLetterStore.exportPDF(from: letter)
                 try pdfData.write(to: pdfFileURL)
             }
-            
+
             // Show success alert
             exportAlertMessage = "\(allCoverLetters.count) cover letter options have been exported as text and PDFs"
             showExportAlert = true
@@ -299,24 +299,24 @@ struct ResumeExportView: View {
             showExportAlert = true
         }
     }
-    
+
     private func createCombinedCoverLettersText(jobApp: JobApp, coverLetters: [CoverLetter]) -> String {
         var combinedText = "ALL COVER LETTER OPTIONS FOR \(jobApp.jobPosition.uppercased()) AT \(jobApp.companyName.uppercased())\n\n"
-        
+
         // Use letters a, b, c, etc. to label options
         let letterLabels = Array("abcdefghijklmnopqrstuvwxyz")
-        
+
         for (index, letter) in coverLetters.enumerated() {
             // Determine the option label (a, b, c, etc.)
             let optionLabel = index < letterLabels.count ? String(letterLabels[index]) : "\(index + 1)"
-            
+
             combinedText += "=============================================\n"
             combinedText += "OPTION \(optionLabel): (Generated at \(letter.modDate))\n"
             combinedText += "=============================================\n\n"
             combinedText += letter.content
             combinedText += "\n\n\n"
         }
-        
+
         return combinedText
     }
 }
