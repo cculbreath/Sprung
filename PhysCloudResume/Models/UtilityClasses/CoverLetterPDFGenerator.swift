@@ -657,25 +657,34 @@ enum CoverLetterPDFGenerator {
         }
         
         // Begin PDF document
-        pdfRep.prepareContext { (context) in
-            // Clear the page
-            NSColor.white.set()
-            NSRectFill(pageRect)
-            
-            // Draw the text with proper flipping
-            let flippedContext = context as! CGContext
-            flippedContext.saveGState()
-            flippedContext.translateBy(x: 0, y: pageRect.height)
-            flippedContext.scaleBy(x: 1.0, y: -1.0)
-            
-            // Drawing using Core Text for best vector text results
-            let path = CGPath(rect: CGRect(x: textRect.origin.x, y: 0, width: textRect.width, height: textRect.height), transform: nil)
-            let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
-            let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
-            CTFrameDraw(frame, flippedContext)
-            
-            flippedContext.restoreGState()
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(pdfImageRep: pdfRep)
+        
+        guard let context = NSGraphicsContext.current?.cgContext else {
+            NSGraphicsContext.restoreGraphicsState()
+            print("Failed to get graphics context")
+            return Data()
         }
+            
+        // Clear the page
+        NSColor.white.setFill()
+        context.fill(pageRect)
+            
+        // Draw the text with proper flipping
+        context.saveGState()
+        context.translateBy(x: 0, y: pageRect.height)
+        context.scaleBy(x: 1.0, y: -1.0)
+        
+        // Drawing using Core Text for best vector text results
+        let path = CGPath(rect: CGRect(x: textRect.origin.x, y: 0, width: textRect.width, height: textRect.height), transform: nil)
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+        CTFrameDraw(frame, context)
+        
+        context.restoreGState()
+        
+        // Finish drawing
+        NSGraphicsContext.restoreGraphicsState()
         
         // Get PDF data
         if let pdfData = pdfRep.pdfRepresentation {
