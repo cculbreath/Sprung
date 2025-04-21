@@ -129,15 +129,15 @@ enum CoverLetterPDFGenerator {
 
         // Page setup
         let pageRect = NSRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
-        let leftMargin: CGFloat = 1.25 * 72 // Left margin (1.25 inches)
-        let rightMargin: CGFloat = 1.25 * 72 // Right margin (1.25 inches)
+        let leftMargin: CGFloat = 1.3 * 72 // Left margin (1.3 inches)
+        let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches)
         let topMargin: CGFloat = 0.75 * 72 // 0.75 inches
         let bottomMargin: CGFloat = 0.75 * 72 // 0.75 inches
 
         // Prepare text attributes with Futura Light font
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 1 // Slightly increased line spacing
-        paragraphStyle.paragraphSpacing = 12 // Increased paragraph spacing for better visual separation
+        paragraphStyle.lineSpacing = 14.0 - 9.8 // 14pt line spacing (line height minus font size)
+        paragraphStyle.paragraphSpacing = 7.0 // 7pt after paragraph spacing
         paragraphStyle.alignment = .natural
 
         // Register the Futura Light font from the system
@@ -165,8 +165,8 @@ enum CoverLetterPDFGenerator {
             }
         }
 
-        // Adjust font size for better readability and layout
-        let initialFontSize: CGFloat = 10.5
+        // Use exact font size as specified
+        let initialFontSize: CGFloat = 9.8
 
         // Try with the specific requested font first
         if let loadedFont = NSFont(name: "Futura Light", size: initialFontSize) {
