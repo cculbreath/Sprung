@@ -647,49 +647,54 @@ enum CoverLetterPDFGenerator {
         
         print("Failed to create vector PDF - trying alternate approach")
         
-        // Pure AppKit fallback for macOS using NSPDFImageRep
-        print("Using NSGraphicsContext-based method for PDFs")
+        // Last resort: Direct PDF drawing with CGContext
+        print("Using direct PDF drawing with CGContext...")
         
-        // Create a PDF representation
-        guard let pdfRep = NSPDFImageRep(bounds: pageRect) else {
-            print("Could not create PDF representation")
+        // Create a PDF context
+        let pdfData = NSMutableData()
+        var mediaBox = pageRect
+        
+        guard let pdfContext = CGContext(consumer: CGDataConsumer(data: pdfData as CFMutableData)!, 
+                                         mediaBox: &mediaBox, 
+                                         nil) else {
+            print("Failed to create direct PDF context")
             return Data()
         }
         
-        // Begin PDF document
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(pdfImageRep: pdfRep)
+        // Begin PDF page
+        pdfContext.beginPage(mediaBox: &mediaBox)
         
-        guard let context = NSGraphicsContext.current?.cgContext else {
-            NSGraphicsContext.restoreGraphicsState()
-            print("Failed to get graphics context")
-            return Data()
-        }
-            
-        // Clear the page
-        NSColor.white.setFill()
-        context.fill(pageRect)
-            
-        // Draw the text with proper flipping
-        context.saveGState()
-        context.translateBy(x: 0, y: pageRect.height)
-        context.scaleBy(x: 1.0, y: -1.0)
+        // Fill with white background
+        pdfContext.setFillColor(NSColor.white.cgColor)
+        pdfContext.fill(mediaBox)
         
-        // Drawing using Core Text for best vector text results
-        let path = CGPath(rect: CGRect(x: textRect.origin.x, y: 0, width: textRect.width, height: textRect.height), transform: nil)
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
-        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
-        CTFrameDraw(frame, context)
+        // Set up for text rendering
+        pdfContext.saveGState()
+        pdfContext.translateBy(x: 0, y: pageRect.height)
+        pdfContext.scaleBy(x: 1.0, y: -1.0)
         
-        context.restoreGState()
+        // Draw text using Core Text for proper vector text
+        let pathForText = CGPath(rect: CGRect(x: textRect.origin.x, 
+                                          y: 0,
+                                          width: textRect.width, 
+                                          height: textRect.height), 
+                             transform: nil)
         
-        // Finish drawing
-        NSGraphicsContext.restoreGraphicsState()
+        let textFramesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
+        let textFrame = CTFramesetterCreateFrame(textFramesetter, CFRangeMake(0, 0), pathForText, nil)
+        
+        // Draw the text
+        CTFrameDraw(textFrame, pdfContext)
+        
+        // Clean up
+        pdfContext.restoreGState()
+        pdfContext.endPage()
+        pdfContext.closePDF()
         
         // Get PDF data
-        if let pdfData = pdfRep.pdfRepresentation {
-            print("Created PDF with NSPDFImageRep, size: \(pdfData.count)")
-            return pdfData
+        if pdfData.length > 0 {
+            print("Created direct vector PDF with size: \(pdfData.length)")
+            return pdfData as Data
         }
         
         print("All PDF generation methods failed")
