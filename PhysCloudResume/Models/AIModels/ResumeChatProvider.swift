@@ -64,20 +64,20 @@ final class ResumeChatProvider {
     // Actor to safely coordinate continuations and prevent multiple resumes
     private actor ContinuationCoordinator {
         private var hasResumed = false
-        
+
         func resumeWithValue<T, E: Error>(_ value: T, continuation: CheckedContinuation<T, E>) {
             guard !hasResumed else { return }
             hasResumed = true
             continuation.resume(returning: value)
         }
-        
+
         func resumeWithError<T, E: Error>(_ error: E, continuation: CheckedContinuation<T, E>) {
             guard !hasResumed else { return }
             hasResumed = true
             continuation.resume(throwing: error)
         }
     }
-    
+
     func startChat(
         parameters: ChatCompletionParameters
     ) async throws {
@@ -87,15 +87,15 @@ final class ResumeChatProvider {
         do {
             // Create a coordinator for safe continuation resumption
             let coordinator = ContinuationCoordinator()
-            
+
             // Start a task with specific timeout for the API call
-            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ChatCompletionResult, Error>) in
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ChatCompletionObject, Error>) in
                 let timeoutError = NSError(
                     domain: "ResumeChatProviderError",
                     code: -1001,
                     userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
                 )
-                
+
                 let apiTask = Task {
                     do {
                         let result = try await service.startChat(parameters: parameters)
@@ -104,7 +104,7 @@ final class ResumeChatProvider {
                         await coordinator.resumeWithError(error, continuation: continuation)
                     }
                 }
-                
+
                 // Set up a timeout task
                 Task {
                     try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout (a bit less than the URLSession timeout)
@@ -115,8 +115,17 @@ final class ResumeChatProvider {
                 }
             }
 
-            let choices = result.choices
-            messages = choices.compactMap(\.message.content).map { $0.asJsonFormatted() }
+            // Safely unwrap choices
+            let unwrappedChoices = result.choices ?? []
+
+            // Process messages from choices
+            messages = unwrappedChoices.compactMap { choice -> String? in
+                // Safely access message
+                guard let messageObj = choice.message else { return nil }
+                // Safely access content
+                guard let contentStr = messageObj.content else { return nil }
+                return contentStr.asJsonFormatted()
+            }
 
             if messages.isEmpty {
                 throw NSError(
@@ -129,11 +138,23 @@ final class ResumeChatProvider {
             print("AI response received: \(messages.last?.prefix(100) ?? "Empty")")
 
             lastRevNodeArray = convertJsonToNodes(messages.last) ?? []
+            // Get the last message content safely
+            let lastContent: String = {
+                guard let lastChoice = unwrappedChoices.last else { return "" }
+                guard let lastMessage = lastChoice.message else { return "" }
+                return lastMessage.content ?? ""
+            }()
+
             messageHist.append(
-                .init(role: .assistant, content: .text(choices.last?.message.content ?? ""))
+                .init(role: .assistant, content: .text(lastContent))
             )
 
-            if let refusal = choices.first?.message.refusal, !refusal.isEmpty {
+            // Check for refusal
+            if let firstChoice = unwrappedChoices.first,
+               let firstMessage = firstChoice.message,
+               let refusal = firstMessage.refusal,
+               !refusal.isEmpty
+            {
                 errorMessage = refusal
                 throw NSError(
                     domain: "OpenAIRefusalError",
@@ -159,23 +180,23 @@ final class ResumeChatProvider {
     ) async throws {
         // Clear any previous error message
         errorMessage = ""
-        
+
         // Create and store a new task for streaming
         streamTask = Task {
             do {
                 // Create a coordinator for the timeout
                 let coordinator = ContinuationCoordinator()
-                
+
                 // Use withTimeout pattern similar to startChat
-                let stream = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AsyncThrowingStream<ChatCompletionChunkResult, Error>, Error>) in
-                    
+                let stream = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AsyncThrowingStream<ChatCompletionChunkObject, Error>, Error>) in
+
                     // Create timeout error
                     let timeoutError = NSError(
                         domain: "ResumeChatProviderError",
                         code: -1001,
                         userInfo: [NSLocalizedDescriptionKey: "Streaming request timed out. Please try again."]
                     )
-                    
+
                     // Main API task
                     Task {
                         do {
@@ -185,21 +206,31 @@ final class ResumeChatProvider {
                             await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
-                    
+
                     // Timeout task
                     Task {
                         try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
                         await coordinator.resumeWithError(timeoutError, continuation: continuation)
                     }
                 }
-                
+
                 // Process the stream
                 for try await result in stream {
-                    let firstChoiceDelta = result.choices.first?.delta
-                    let content = firstChoiceDelta?.refusal ?? firstChoiceDelta?.content ?? ""
-                    self.message += content
-                    if result.choices.first?.finishReason != nil {
-                        self.message = self.message.asJsonFormatted()
+                    // Safely process each chunk
+                    let choices = result.choices ?? []
+
+                    if !choices.isEmpty {
+                        let firstChoice = choices[0]
+
+                        if let deltaObj = firstChoice.delta {
+                            // Extract content or refusal from delta
+                            let contentToAdd = deltaObj.refusal ?? deltaObj.content ?? ""
+                            self.message += contentToAdd
+
+                            if firstChoice.finishReason != nil {
+                                self.message = self.message.asJsonFormatted()
+                            }
+                        }
                     }
                 }
             } catch let APIError.responseUnsuccessful(description, statusCode) {

@@ -24,22 +24,49 @@ final class CoverChatProvider {
     ) async throws {
         do {
             print("sending request")
-            let choices = try await service.startChat(parameters: parameters).choices
-            messages = choices.compactMap(\.message.content).map {
-                $0.asJsonFormatted()
+            let result = try await service.startChat(parameters: parameters)
+            let choices = result.choices ?? []
+
+            // Process messages using proper optional handling
+            messages = choices.compactMap { choice in
+                if let message = choice.message, let content = message.content {
+                    return content.asJsonFormatted()
+                }
+                return nil
             }
             assert(messages.count == 1)
             print(messages.last ?? "Nothin")
-            messageHist
-                .append(
-                    .init(
-                        role: .assistant,
-                        content: .text(choices.last?.message.content ?? "")
-                    )
+            // Get the last response content safely
+            let lastContent: String = {
+                if let lastChoice = choices.last,
+                   let message = lastChoice.message,
+                   let content = message.content
+                {
+                    return content
+                }
+                return ""
+            }()
+
+            messageHist.append(
+                .init(
+                    role: .assistant,
+                    content: .text(lastContent)
                 )
-            lastResponse = choices.last?.message.content ?? ""
+            )
+
+            lastResponse = lastContent
             resultsAvailable = true
-            errorMessage = choices.first?.message.refusal ?? ""
+
+            // Check for refusal safely
+            errorMessage = {
+                if let firstChoice = choices.first,
+                   let message = firstChoice.message,
+                   let refusal = message.refusal
+                {
+                    return refusal
+                }
+                return ""
+            }()
             onComplete(lastResponse)
         } catch let APIError.responseUnsuccessful(description, statusCode) {
             self.errorMessage =

@@ -118,8 +118,10 @@ import SwiftUI
 
         do {
             let result = try await service.startChat(parameters: parameters)
-            guard let choice = result.choices.first,
-                  let content = choice.message.content
+            guard let choices = result.choices,
+                  let choice = choices.first,
+                  let message = choice.message,
+                  let content = message.content
             else {
                 throw NSError(domain: "JobRecommendationProvider", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])
             }
