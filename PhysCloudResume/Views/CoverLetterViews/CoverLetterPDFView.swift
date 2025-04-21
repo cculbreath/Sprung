@@ -33,18 +33,18 @@ struct CoverLetterPDFView: View {
             generatePDF()
         }
     }
-    
+
     private func generatePDF() {
         print("Generating PDF view for cover letter...")
         isLoading = true
-        
+
         // Use a background thread for PDF generation
         DispatchQueue.global(qos: .userInitiated).async {
             let generatedData = CoverLetterPDFGenerator.generatePDF(
                 from: coverLetter,
                 applicant: applicant
             )
-            
+
             DispatchQueue.main.async {
                 if !generatedData.isEmpty {
                     print("Successfully created PDF data with size: \(generatedData.count)")
@@ -68,14 +68,14 @@ struct PDFKitView: NSViewRepresentable {
         pdfView.autoScales = true
         pdfView.displayMode = .singlePage
         pdfView.backgroundColor = .white
-        
+
         if let document = PDFDocument(data: data) {
             print("Creating PDFView with document containing \(document.pageCount) pages")
             pdfView.document = document
         } else {
             print("Failed to create PDFDocument in makeNSView")
         }
-        
+
         return pdfView
     }
 
