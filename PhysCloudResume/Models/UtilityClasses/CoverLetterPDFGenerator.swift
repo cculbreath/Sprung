@@ -91,61 +91,144 @@ enum CoverLetterPDFGenerator {
             height: pageRect.height - topMargin - bottomMargin
         )
         
-        // Create a framesetter for the attributed text
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedText as CFAttributedString)
-        
         // Determine how many pages we need
-        var textPos = 0
         var done = false
-        var pageNumber = 0
         var fontSize: CGFloat = 11
+        var currentLeftMargin = leftMargin
+        var currentRightMargin = rightMargin
         var pdfPage: PDFPage?
         
-        // Try to fit the text on a single page if possible
-        while !done && fontSize >= 9 {
-            print("Trying font size: \(fontSize)")
+        // First try reducing margins before reducing font size
+        while !done && (currentLeftMargin >= 0.5 * 72 || currentRightMargin >= 0.5 * 72) {
+            print("Trying with margins: left=\(currentLeftMargin/72)in, right=\(currentRightMargin/72)in")
             
-            // Create a new graphics context
-            let context = NSGraphicsContext.current
-            let mediaBox = CGRect(x: 0, y: 0, width: pageRect.width, height: pageRect.height)
+            // Recalculate the text rectangle with current margins
+            let currentTextRect = NSRect(
+                x: currentLeftMargin,
+                y: bottomMargin,
+                width: pageRect.width - currentLeftMargin - currentRightMargin,
+                height: pageRect.height - topMargin - bottomMargin
+            )
+            
+            // Create attributed text with current font size
+            let currentAttributes = attributes.merging([:]) { (current, _) in current }
+            let currentAttributedText = NSAttributedString(string: text, attributes: currentAttributes)
+            
+            // Create a framesetter for the current attributed text
+            let framesetter = CTFramesetterCreateWithAttributedString(currentAttributedText as CFAttributedString)
             
             // Size constraints
-            let sizeConstraints = CGSize(width: textRect.width, height: CGFloat.greatestFiniteMagnitude)
+            let sizeConstraints = CGSize(width: currentTextRect.width, height: CGFloat.greatestFiniteMagnitude)
             
             // Calculate the total height needed
             let suggestedSize = CTFramesetterSuggestFrameSizeWithConstraints(
                 framesetter,
-                CFRange(location: 0, length: attributedText.length),
+                CFRange(location: 0, length: currentAttributedText.length),
                 nil,
                 sizeConstraints,
                 nil
             )
             
-            print("Suggested size: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(textRect.height)")
+            print("Suggested size: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(currentTextRect.height)")
             
-            if suggestedSize.height <= textRect.height {
-                print("Text fits on one page with font size \(fontSize)")
+            if suggestedSize.height <= currentTextRect.height {
+                print("Text fits on one page with margins: left=\(currentLeftMargin/72)in, right=\(currentRightMargin/72)in")
                 // Text fits on one page, create the page
-                pdfPage = createPDFPage(attributedText: attributedText, pageRect: pageRect, textRect: textRect)
+                pdfPage = createPDFPage(attributedText: currentAttributedText, pageRect: pageRect, textRect: currentTextRect)
                 done = true
             } else {
-                // Try a smaller font
-                fontSize -= 0.5
-                
-                // Update the font size in the attributes
-                let newFont = NSFont(name: font.fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
-                let newAttributes = attributes.merging([.font: newFont]) { (_, new) in new }
-                let newAttributedText = NSAttributedString(string: text, attributes: newAttributes)
-                attributedText = newAttributedText
-                framesetter = CTFramesetterCreateWithAttributedString(attributedText as CFAttributedString)
+                // Try reducing margins first (evenly from both sides)
+                if currentLeftMargin > 0.5 * 72 && currentRightMargin > 0.5 * 72 {
+                    // Reduce both margins by 0.1 inches
+                    currentLeftMargin -= 0.1 * 72
+                    currentRightMargin -= 0.1 * 72
+                } else if currentLeftMargin > 0.5 * 72 {
+                    // Only reduce left margin
+                    currentLeftMargin -= 0.1 * 72
+                } else if currentRightMargin > 0.5 * 72 {
+                    // Only reduce right margin
+                    currentRightMargin -= 0.1 * 72
+                } else {
+                    // Minimum margins reached, try reducing font size next
+                    break
+                }
             }
         }
         
-        // If we couldn't fit on one page with reasonable font size, use the current font size
-        // and accept multiple pages
+        // If reducing margins didn't work, try reducing font size
+        while !done && fontSize >= 9 {
+            print("Trying font size: \(fontSize)")
+            
+            // Use minimum margins
+            let minLeftMargin: CGFloat = 0.5 * 72
+            let minRightMargin: CGFloat = 0.5 * 72
+            
+            // Recalculate the text rectangle with minimum margins
+            let finalTextRect = NSRect(
+                x: minLeftMargin,
+                y: bottomMargin,
+                width: pageRect.width - minLeftMargin - minRightMargin,
+                height: pageRect.height - topMargin - bottomMargin
+            )
+            
+            // Create a new font with the current size
+            let currentFont = NSFont(name: font.fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+            let currentAttributes = attributes.merging([.font: currentFont]) { (_, new) in new }
+            let currentAttributedText = NSAttributedString(string: text, attributes: currentAttributes)
+            
+            // Create a new framesetter
+            let framesetter = CTFramesetterCreateWithAttributedString(currentAttributedText as CFAttributedString)
+            
+            // Size constraints
+            let sizeConstraints = CGSize(width: finalTextRect.width, height: CGFloat.greatestFiniteMagnitude)
+            
+            // Calculate the total height needed
+            let suggestedSize = CTFramesetterSuggestFrameSizeWithConstraints(
+                framesetter,
+                CFRange(location: 0, length: currentAttributedText.length),
+                nil,
+                sizeConstraints,
+                nil
+            )
+            
+            print("Suggested size with font \(fontSize)pt: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(finalTextRect.height)")
+            
+            if suggestedSize.height <= finalTextRect.height {
+                print("Text fits on one page with font size \(fontSize)pt and minimum margins")
+                // Text fits on one page, create the page
+                pdfPage = createPDFPage(attributedText: currentAttributedText, pageRect: pageRect, textRect: finalTextRect)
+                done = true
+            } else {
+                // Try a smaller font size
+                fontSize -= 0.5
+            }
+        }
+        
+        // If we couldn't fit on one page with reasonable font size, use the minimum font size
+        // and minimum margins
         if pdfPage == nil {
-            print("Using multi-page layout with font size \(fontSize)")
-            pdfPage = createPDFPage(attributedText: attributedText, pageRect: pageRect, textRect: textRect)
+            print("Using multi-page layout with minimum font size 9pt and minimum margins")
+            
+            // Use minimum margins and font size
+            let minLeftMargin: CGFloat = 0.5 * 72
+            let minRightMargin: CGFloat = 0.5 * 72
+            let minFontSize: CGFloat = 9
+            
+            // Recalculate the text rectangle with minimum margins
+            let finalTextRect = NSRect(
+                x: minLeftMargin,
+                y: bottomMargin,
+                width: pageRect.width - minLeftMargin - minRightMargin,
+                height: pageRect.height - topMargin - bottomMargin
+            )
+            
+            // Create a new font with the minimum size
+            let currentFont = NSFont(name: font.fontName, size: minFontSize) ?? NSFont.systemFont(ofSize: minFontSize)
+            let currentAttributes = attributes.merging([.font: currentFont]) { (_, new) in new }
+            let currentAttributedText = NSAttributedString(string: text, attributes: currentAttributes)
+            
+            // Create the page with minimum settings
+            pdfPage = createPDFPage(attributedText: currentAttributedText, pageRect: pageRect, textRect: finalTextRect)
         }
         
         // Add the page to the document
