@@ -46,6 +46,48 @@ enum CoverLetterPDFGenerator {
         \(applicant.email) | \(applicant.websites)
         """
     }
+    
+    /// Add signature image to PDF if available
+    private static func addSignature(to context: CGContext, in rect: CGRect) {
+        // Try to load the signature image
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let possiblePaths = [
+            "/Users/cculbreath/devlocal/PhysCloudResume/signature.pdf",
+            "/Users/cculbreath/devlocal/PhysCloudResume/signature.png",
+            homeDir.appendingPathComponent("signature.pdf").path,
+            homeDir.appendingPathComponent("signature.png").path
+        ]
+        
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path) {
+                if path.hasSuffix(".pdf"), let pdfDoc = CGPDFDocument(URL(fileURLWithPath: path) as CFURL) {
+                    if let page = pdfDoc.page(at: 1) {
+                        let sigRect = CGRect(x: rect.origin.x + 30, y: rect.origin.y + 100, width: 150, height: 50)
+                        context.saveGState()
+                        context.translateBy(x: sigRect.origin.x, y: sigRect.origin.y)
+                        context.scaleBy(x: sigRect.width / page.getBoxRect(.mediaBox).width, 
+                                       y: sigRect.height / page.getBoxRect(.mediaBox).height)
+                        context.drawPDFPage(page)
+                        context.restoreGState()
+                    }
+                    return
+                } else if let image = NSImage(contentsOfFile: path) {
+                    let sigRect = CGRect(x: rect.origin.x + 30, y: rect.origin.y + 100, width: 150, height: 50)
+                    context.saveGState()
+                    
+                    // Draw image preserving transparency
+                    if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                        context.translateBy(x: 0, y: rect.height)
+                        context.scaleBy(x: 1.0, y: -1.0)
+                        context.draw(cgImage, in: sigRect)
+                    }
+                    
+                    context.restoreGState()
+                    return
+                }
+            }
+        }
+    }
 
     private static func formattedToday() -> String {
         let df = DateFormatter()
@@ -63,16 +105,47 @@ enum CoverLetterPDFGenerator {
         let topMargin: CGFloat = 0.75 * 72 // 0.75 inches
         let bottomMargin: CGFloat = 0.75 * 72 // 0.75 inches
 
-        // Prepare text attributes with Futura font
+        // Prepare text attributes with Futura Light font
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 4
-        paragraphStyle.paragraphSpacing = 10
-
-        let font = NSFont(name: "Futura-Light", size: 11) ?? NSFont.systemFont(ofSize: 11)
-        print("Using font: \(font.fontName)")
+        paragraphStyle.lineSpacing = 5
+        paragraphStyle.paragraphSpacing = 12
+        paragraphStyle.alignment = .natural
+        
+        // Register the Futura Light font from the system
+        var font: NSFont?
+        
+        // Try loading from specific path provided
+        let futuraPaths = [
+            "/Library/Fonts/futuralight.ttf", 
+            "/System/Library/Fonts/Supplemental/Futura.ttc"
+        ]
+        
+        // Register fonts for use
+        for path in futuraPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                var error: Unmanaged<CFError>?
+                CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: path) as CFURL, .process, &error)
+            }
+        }
+        
+        // Try different possible font names for Futura Light
+        let fontNames = ["FuturaLight", "Futura-Light", "Futura Light"]
+        for name in fontNames {
+            if let loadedFont = NSFont(name: name, size: 11) {
+                font = loadedFont
+                break
+            }
+        }
+        
+        // Fallback to system font if Futura Light isn't available
+        if font == nil {
+            font = NSFont.systemFont(ofSize: 11)
+        }
+        
+        print("Using font: \(font!.fontName)")
 
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
+            .font: font!,
             .foregroundColor: NSColor.black,
             .paragraphStyle: paragraphStyle,
         ]
@@ -167,7 +240,7 @@ enum CoverLetterPDFGenerator {
             )
 
             // Create a new font with the current size
-            let currentFont = NSFont(name: font.fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+            let currentFont = NSFont(name: font!.fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
             let currentAttributes = attributes.merging([.font: currentFont]) { _, new in new }
 
             // Create a framesetter for the current attributed text
@@ -224,7 +297,7 @@ enum CoverLetterPDFGenerator {
             )
             
             // Create attributes with minimum font size
-            let currentFont = NSFont(name: font.fontName, size: minFontSize) ?? NSFont.systemFont(ofSize: minFontSize)
+            let currentFont = NSFont(name: font!.fontName, size: minFontSize) ?? NSFont.systemFont(ofSize: minFontSize)
             let currentAttributes = attributes.merging([.font: currentFont]) { _, new in new }
             
             // Create a blank document
@@ -273,7 +346,7 @@ enum CoverLetterPDFGenerator {
         // Draw text using CoreText
         let attributedString = NSAttributedString(string: text, attributes: attributes)
         let framePath = CGPath(rect: CGRect(x: textRect.origin.x, 
-                                           y: pageRect.height - textRect.origin.y - textRect.height,
+                                           y: 0,
                                            width: textRect.width, 
                                            height: textRect.height), 
                               transform: nil)
@@ -282,6 +355,9 @@ enum CoverLetterPDFGenerator {
         let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), framePath, nil)
         
         CTFrameDraw(frame, pdfContext)
+        
+        // Try to add signature image if available
+        addSignature(to: pdfContext, in: textRect)
         pdfContext.restoreGState()
         
         // End the PDF page
