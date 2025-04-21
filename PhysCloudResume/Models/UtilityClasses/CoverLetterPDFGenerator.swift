@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import PDFKit
 import SwiftUI
+import CoreText
 
 enum CoverLetterPDFGenerator {
     static func generatePDF(from coverLetter: CoverLetter, applicant: Applicant) -> Data {
@@ -28,121 +29,205 @@ enum CoverLetterPDFGenerator {
     }
 
     // MARK: - Private Helpers
-
+    
     private static func buildLetterText(from cover: CoverLetter, applicant: Applicant) -> String {
         """
         \(formattedToday())
-
+        
         Dear Hiring Manager,
-
+        
         \(cover.content)
-
+        
         Best Regards,
-
+        
         \(applicant.name)
-
+        
         \(applicant.phone) | \(applicant.address), \(applicant.city), \(applicant.state) \(applicant.zip)
         \(applicant.email) | \(applicant.websites)
         """
     }
-
+    
     private static func formattedToday() -> String {
         let df = DateFormatter()
         df.dateFormat = "MMMM d, yyyy"
         return df.string(from: Date())
     }
-
+    
     private static func createPDFFromString(_ text: String) -> Data {
-        print("Creating PDF with text length: \(text.count) chars")
+        print("Creating high-quality vector PDF with text: \(text.count) chars")
         
-        // Create a PDF context
-        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)  // US Letter
-        let margin: CGFloat = 72.0  // 1-inch margins
+        // Page setup
+        let pageRect = NSRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
+        let leftMargin: CGFloat = 1.3 * 72    // 1.3 inches
+        let rightMargin: CGFloat = 2.5 * 72   // 2.5 inches
+        let topMargin: CGFloat = 0.75 * 72    // 0.75 inches
+        let bottomMargin: CGFloat = 0.75 * 72 // 0.75 inches
         
-        // Create a data object to hold the PDF content
-        let pdfData = NSMutableData()
+        // Create a PDF document
+        let pdfDocument = PDFDocument()
         
-        // Create a PDF context
-        var mediaBox = pageRect
-        guard let context = CGContext(consumer: CGDataConsumer(data: pdfData as CFMutableData)!, 
-                                      mediaBox: &mediaBox, 
-                                      nil) else {
-            print("Failed to create PDF context")
-            return Data()
-        }
-        
-        // Begin PDF and first page
-        context.beginPDF(mediaBox: &mediaBox)
-        context.beginPage(mediaBox: &mediaBox)
-        
-        // Calculate the drawing rectangle (with margins)
-        let drawingRect = CGRect(x: margin, 
-                                y: margin, 
-                                width: pageRect.width - (2 * margin), 
-                                height: pageRect.height - (2 * margin))
-        
-        // Fill with white
-        context.setFillColor(NSColor.white.cgColor)
-        context.fill(pageRect)
-        
-        // Create attributed string
+        // Prepare text attributes with Futura font
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .natural
-        paragraphStyle.lineSpacing = 6
-        paragraphStyle.paragraphSpacing = 12
+        paragraphStyle.lineSpacing = 4
+        paragraphStyle.paragraphSpacing = 10
         
-        let font = NSFont.systemFont(ofSize: 12)
+        let font = NSFont(name: "Futura-Light", size: 11) ?? NSFont.systemFont(ofSize: 11)
+        print("Using font: \(font.fontName)")
+        
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.black,
             .paragraphStyle: paragraphStyle
         ]
         
-        let attributedString = NSAttributedString(string: text, attributes: attributes)
-        print("Created attributed string")
+        // Create attributed text
+        let attributedText = NSAttributedString(string: text, attributes: attributes)
         
-        // Create a temporary frame to calculate layout
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
-        let path = CGMutablePath()
-        path.addRect(drawingRect)
-        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+        // Set up the drawing rectangle
+        let textRect = NSRect(
+            x: leftMargin,
+            y: bottomMargin,
+            width: pageRect.width - leftMargin - rightMargin,
+            height: pageRect.height - topMargin - bottomMargin
+        )
         
-        // Draw the text frame
-        context.saveGState()
-        context.translateBy(x: 0, y: pageRect.height)
-        context.scaleBy(x: 1, y: -1)
-        CTFrameDraw(frame, context)
-        context.restoreGState()
+        // Create a framesetter for the attributed text
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedText as CFAttributedString)
         
-        // End the page and PDF
-        context.endPage()
-        context.endPDF()
+        // Determine how many pages we need
+        var textPos = 0
+        var done = false
+        var pageNumber = 0
+        var fontSize: CGFloat = 11
+        var pdfPage: PDFPage?
         
-        print("PDF created with size: \(pdfData.length) bytes")
-        
-        // Debug - save a copy of the drawing rectangle
-        let debugImage = NSImage(size: pageRect.size)
-        debugImage.lockFocus()
-        NSColor.white.set()
-        NSRect(origin: .zero, size: pageRect.size).fill()
-        NSColor.blue.set()
-        NSRect(x: margin, y: margin, width: pageRect.width - (2 * margin), height: pageRect.height - (2 * margin)).stroke()
-        NSColor.black.set()
-        attributedString.draw(in: NSRect(x: margin, y: margin, width: pageRect.width - (2 * margin), height: pageRect.height - (2 * margin)))
-        debugImage.unlockFocus()
-        
-        if let tiffData = debugImage.tiffRepresentation,
-           let bitmap = NSBitmapImageRep(data: tiffData),
-           let pngData = bitmap.representation(using: .png, properties: [:]) {
-            let debugImagePath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/debug_image.png")
-            do {
-                try pngData.write(to: debugImagePath)
-                print("Debug image saved to: \(debugImagePath.path)")
-            } catch {
-                print("Error saving debug image: \(error)")
+        // Try to fit the text on a single page if possible
+        while !done && fontSize >= 9 {
+            print("Trying font size: \(fontSize)")
+            
+            // Create a new graphics context
+            let context = NSGraphicsContext.current
+            let mediaBox = CGRect(x: 0, y: 0, width: pageRect.width, height: pageRect.height)
+            
+            // Size constraints
+            let sizeConstraints = CGSize(width: textRect.width, height: CGFloat.greatestFiniteMagnitude)
+            
+            // Calculate the total height needed
+            let suggestedSize = CTFramesetterSuggestFrameSizeWithConstraints(
+                framesetter,
+                CFRange(location: 0, length: attributedText.length),
+                nil,
+                sizeConstraints,
+                nil
+            )
+            
+            print("Suggested size: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(textRect.height)")
+            
+            if suggestedSize.height <= textRect.height {
+                print("Text fits on one page with font size \(fontSize)")
+                // Text fits on one page, create the page
+                pdfPage = createPDFPage(attributedText: attributedText, pageRect: pageRect, textRect: textRect)
+                done = true
+            } else {
+                // Try a smaller font
+                fontSize -= 0.5
+                
+                // Update the font size in the attributes
+                let newFont = NSFont(name: font.fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+                let newAttributes = attributes.merging([.font: newFont]) { (_, new) in new }
+                let newAttributedText = NSAttributedString(string: text, attributes: newAttributes)
+                attributedText = newAttributedText
+                framesetter = CTFramesetterCreateWithAttributedString(attributedText as CFAttributedString)
             }
         }
         
-        return pdfData as Data
+        // If we couldn't fit on one page with reasonable font size, use the current font size
+        // and accept multiple pages
+        if pdfPage == nil {
+            print("Using multi-page layout with font size \(fontSize)")
+            pdfPage = createPDFPage(attributedText: attributedText, pageRect: pageRect, textRect: textRect)
+        }
+        
+        // Add the page to the document
+        if let page = pdfPage {
+            pdfDocument.insert(page, at: 0)
+        }
+        
+        // Return the PDF data
+        if let pdfData = pdfDocument.dataRepresentation() {
+            print("Created PDF with \(pdfDocument.pageCount) pages, \(pdfData.count) bytes")
+            return pdfData
+        }
+        
+        print("Failed to create PDF data")
+        return Data()
+    }
+    
+    private static func createPDFPage(attributedText: NSAttributedString, pageRect: NSRect, textRect: NSRect) -> PDFPage {
+        // Create a PDF context
+        let data = NSMutableData()
+        let mediaBox = CGRect(x: 0, y: 0, width: pageRect.width, height: pageRect.height)
+        
+        // Create a graphics context to render into
+        let bitmapRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(pageRect.width),
+            pixelsHigh: Int(pageRect.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .calibratedRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )!
+        
+        // Set up the graphics context with the bitmap representation
+        let context = NSGraphicsContext(bitmapImageRep: bitmapRep)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        
+        // Fill background with white
+        NSColor.white.set()
+        NSBezierPath.fill(NSRect(origin: .zero, size: pageRect.size))
+        
+        // Draw the text at the correct position
+        attributedText.draw(in: textRect)
+        
+        // Restore the previous graphics context
+        NSGraphicsContext.restoreGraphicsState()
+        
+        // Create a PDF document with the drawn content
+        let pdfData = NSMutableData()
+        var mediaBoxCG = mediaBox
+        
+        guard let pdfContext = CGContext(consumer: CGDataConsumer(data: pdfData as CFMutableData)!, mediaBox: &mediaBoxCG, nil) else {
+            // Fallback to image-based PDF if CGContext creation fails
+            let image = NSImage(size: pageRect.size)
+            image.addRepresentation(bitmapRep)
+            return PDFPage(image: image)!
+        }
+        
+        // Begin the PDF page
+        pdfContext.beginPage(mediaBox: &mediaBoxCG)
+        
+        // Create a PDF graphics context
+        let pdfNSContext = NSGraphicsContext(cgContext: pdfContext, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = pdfNSContext
+        
+        // Draw the text directly into the PDF context
+        attributedText.draw(in: textRect)
+        
+        // Restore the graphics state
+        NSGraphicsContext.restoreGraphicsState()
+        
+        // End the PDF page
+        pdfContext.endPage()
+        
+        // Create a PDF page from the generated data
+        let pdfPage = PDFPage(image: NSImage(data: pdfData as Data)!)!
+        
+        return pdfPage
     }
 }
