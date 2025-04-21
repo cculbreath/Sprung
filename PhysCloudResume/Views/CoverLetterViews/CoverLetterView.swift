@@ -17,7 +17,7 @@ struct CoverLetterView: View {
         @Bindable var coverLetterStore = coverLetterStore
         @Bindable var jobAppStore = jobAppStore
 
-        if let jobApp = $jobAppStore.wrappedValue.selectedApp {
+        if let jobApp = jobAppStore.selectedApp {
             VStack {
                 CoverLetterContentView(
                     jobApp: jobApp,
@@ -25,7 +25,7 @@ struct CoverLetterView: View {
                 )
             }
             .inspector(isPresented: $buttons.showInspector) {
-                if $coverLetterStore.wrappedValue.cL != nil {
+                if coverLetterStore.cL != nil {
                     VStack(alignment: .leading) {
                         Picker("", selection: $selectedInspectorTab) {
                             Text("References").tag(InspectorTab.references)
@@ -89,7 +89,7 @@ struct CoverLetterContentView: View {
                         coverLetters: bindApp.coverLetters.sorted(by: { $0.moddedDate < $1.moddedDate }),
                         selection: $bindApp.selectedCover,
                         includeNoneOption: false,
-                        label: "Load existing cover letter"
+                        label: ""
                     )
                     .padding()
 
@@ -113,12 +113,12 @@ struct CoverLetterContentView: View {
                     .onHover { hovering in isHoveringDelete = hovering }
 
                     // Edit/Preview toggle Button
-                    Button(action: { buttons.wrappedValue.isEditing.toggle() }) {
+                    Button(action: { buttons.isEditing.toggle() }) {
                         HStack {
-                            Image(systemName: buttons.wrappedValue.isEditing ? "doc.text.viewfinder" : "pencil")
+                            Image(systemName: buttons.isEditing ? "doc.text.viewfinder" : "pencil")
                                 .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
                                 .font(.system(size: 14))
-                            Text(buttons.wrappedValue.isEditing ? "Preview" : "Edit")
+                            Text(buttons.isEditing ? "Preview" : "Edit")
                                 .font(.caption)
                                 .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
                         }
@@ -129,16 +129,19 @@ struct CoverLetterContentView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .onHover { hovering in isHoveringEdit = hovering }
-                    .disabled(!buttons.wrappedValue.canEdit)
+                    .disabled(!buttons.canEdit)
 
-                    if $buttons.wrappedValue.runRequested {
+                    if buttons.runRequested {
                         ProgressView()
                     } else {
                         EmptyView()
                     }
                 }
-                // Editable cover letter name
-                if let cL = bindApp.selectedCover {
+                // Toggle between editing raw content and PDF preview
+                if buttons.isEditing {
+                    Text("Editing - Last modified \(cL.modDate)")
+                        .font(.caption)
+                    // Editable cover letter name
                     let nameBinding = Binding<String>(
                         get: { cL.name },
                         set: { newName in
@@ -149,11 +152,6 @@ struct CoverLetterContentView: View {
                     TextField("Cover Letter Name", text: nameBinding)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .padding(.horizontal)
-                }
-                // Toggle between editing raw content and PDF preview
-                if buttons.isEditing {
-                    Text("Editing - Last modified \(cL.modDate)")
-                        .font(.caption)
                     // Bind to the cover letter content for editing
                     let contentBinding = Binding<String>(
                         get: { cL.content },
