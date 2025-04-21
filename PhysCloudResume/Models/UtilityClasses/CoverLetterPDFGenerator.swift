@@ -8,7 +8,9 @@ enum CoverLetterPDFGenerator {
     static func generatePDF(from coverLetter: CoverLetter, applicant: Applicant) -> Data {
         print("Generating PDF from cover letter...")
         let text = buildLetterText(from: coverLetter, applicant: applicant)
-        let pdfData = createPDFFromString(text, applicant: applicant)
+        
+        // Use a better PDF generation approach that guarantees vector text
+        let pdfData = createVectorPDFFromString(text)
 
         // Debug - save PDF to desktop
         saveDebugPDF(pdfData)
@@ -304,11 +306,11 @@ enum CoverLetterPDFGenerator {
 
             // Create formatted text with hyperlinks
             let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: urlAttributes, applicant: applicant)
-            
+
             // Force all hyperlinks to be black
             let forcedBlackText = forceBlackHyperlinks(attributedText: formattedText)
 
-            // Create a direct vector PDF page - NEVER use the image-based fallback 
+            // Create a direct vector PDF page - NEVER use the image-based fallback
             let defaultPage = createDirectPDFPage(attributedText: forcedBlackText, pageRect: pageRect, textRect: textRect)
             if let page = defaultPage {
                 pdfDocument.insert(page, at: 0)
@@ -446,7 +448,7 @@ enum CoverLetterPDFGenerator {
     /// Creates a simple PDF page using PDFKit's built-in capabilities - AVOID USING THIS
     private static func createSimplePDFPage(attributedText: NSAttributedString, pageRect: NSRect, textRect: NSRect) -> PDFPage? {
         // THIS METHOD CREATES RASTER IMAGES INSTEAD OF VECTOR TEXT - AVOID IF POSSIBLE
-        
+
         // Create a drawing area and draw into it
         let image = NSImage(size: pageRect.size)
         image.lockFocus()
@@ -464,11 +466,11 @@ enum CoverLetterPDFGenerator {
         // Create PDF page from image
         return PDFPage(image: image)
     }
-    
+
     /// Force all hyperlinks to be black, regardless of default system behavior
     private static func forceBlackHyperlinks(attributedText: NSAttributedString) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: attributedText)
-        
+
         // Find all hyperlinks and force them to be black
         attributedText.enumerateAttribute(.link, in: NSRange(location: 0, length: attributedText.length)) { value, range, _ in
             if value != nil {
@@ -479,7 +481,209 @@ enum CoverLetterPDFGenerator {
                 result.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
             }
         }
-        
+
         return result
+    }
+    
+    /// Creates a PDF with guaranteed vector text using NSAttributedString and PDFKit
+    private static func createVectorPDFFromString(_ text: String) -> Data {
+        print("Creating vector PDF from text using PDFKit...")
+        
+        // Page setup with our preferred margins
+        let pageRect = CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
+        let leftMargin: CGFloat = 1.3 * 72 // Left margin (1.3 inches)
+        let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches)
+        let topMargin: CGFloat = 0.75 * 72 // Top margin (0.75 inches)
+        let bottomMargin: CGFloat = 0.5 * 72 // Bottom margin (0.5 inches)
+        
+        // Set up text rectangle
+        let textRect = CGRect(
+            x: leftMargin,
+            y: topMargin,
+            width: pageRect.width - leftMargin - rightMargin,
+            height: pageRect.height - topMargin - bottomMargin
+        )
+        
+        // Prepare paragraph style with exact spacing requirements
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 11.5 - 9.8 // 11.5pt line spacing
+        paragraphStyle.paragraphSpacing = 7.0 // 7pt after paragraph spacing
+        paragraphStyle.alignment = .natural
+        
+        // Set up Futura Light font
+        var font: NSFont?
+        let fontSize: CGFloat = 9.8
+        
+        // Try to load the font
+        if let loadedFont = NSFont(name: "Futura Light", size: fontSize) {
+            font = loadedFont
+            print("Using existing Futura Light font at \(fontSize)pt")
+        } else {
+            // Try registering Futura Light from the specific path
+            let specificFuturaLightPath = "/Library/Fonts/Futura Light.otf"
+            if FileManager.default.fileExists(atPath: specificFuturaLightPath) {
+                var error: Unmanaged<CFError>?
+                CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: specificFuturaLightPath) as CFURL, .process, &error)
+                print("Registered Futura Light for vector PDF")
+                
+                // Try loading the font again after registration
+                if let loadedFont = NSFont(name: "Futura Light", size: fontSize) {
+                    font = loadedFont
+                } else {
+                    // Fallback to system font
+                    font = NSFont.systemFont(ofSize: fontSize)
+                    print("Falling back to system font at \(fontSize)pt")
+                }
+            } else {
+                // Fallback to system font
+                font = NSFont.systemFont(ofSize: fontSize)
+                print("Falling back to system font at \(fontSize)pt - Font not found")
+            }
+        }
+        
+        // Create base text attributes
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font!,
+            .foregroundColor: NSColor.black,
+            .paragraphStyle: paragraphStyle
+        ]
+        
+        // Create link attributes with BLACK links (which is key!)
+        let urlAttributes: [NSAttributedString.Key: Any] = [
+            .font: font!,
+            .foregroundColor: NSColor.black, 
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .underlineColor: NSColor.black
+        ]
+        
+        // Create initial attributed string
+        let attributedString = NSMutableAttributedString(string: text, attributes: attributes)
+        
+        // Find and format hyperlinks
+        let emailPattern = #"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,64}"#
+        let urlPattern = #"(https?://)?(www\.)?[A-Za-z0-9.-]+\.(com|org|net|edu|io|dev)"#
+        
+        if let emailRegex = try? NSRegularExpression(pattern: emailPattern),
+           let urlRegex = try? NSRegularExpression(pattern: urlPattern) {
+           
+            // Find and format emails
+            let emailMatches = emailRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            for match in emailMatches {
+                if let range = Range(match.range, in: text) {
+                    let email = String(text[range])
+                    var linkAttrs = urlAttributes
+                    linkAttrs[.link] = URL(string: "mailto:\(email)")
+                    attributedString.setAttributes(linkAttrs, range: match.range)
+                    print("Added mailto link for: \(email)")
+                }
+            }
+            
+            // Find and format URLs
+            let urlMatches = urlRegex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            for match in urlMatches {
+                if let range = Range(match.range, in: text) {
+                    let urlString = String(text[range])
+                    var linkAttrs = urlAttributes
+                    let fullURL = urlString.hasPrefix("http") ? urlString : "https://\(urlString)"
+                    linkAttrs[.link] = URL(string: fullURL)
+                    attributedString.setAttributes(linkAttrs, range: match.range)
+                    print("Added http link for: \(urlString)")
+                }
+            }
+        }
+        
+        // Create a proper PDF context for macOS
+        let pdfMetaData = [
+            kCGPDFContextCreator: "Physics Cloud Resume" as CFString,
+            kCGPDFContextTitle: "Cover Letter" as CFString
+        ]
+        
+        let data = NSMutableData()
+        var mediaBox = pageRect
+        
+        // Create a PDF context directly using CGContext
+        guard let pdfContext = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!,
+                                      mediaBox: &mediaBox,
+                                      pdfMetaData as CFDictionary) else {
+            print("Failed to create PDF context")
+            return Data()
+        }
+        
+        // Begin a PDF page
+        pdfContext.beginPage(mediaBox: &mediaBox)
+        
+        // Fill with white background
+        pdfContext.setFillColor(NSColor.white.cgColor)
+        pdfContext.fill(mediaBox)
+        
+        // Flip for proper text orientation (PDF has bottom-left origin)
+        pdfContext.saveGState()
+        pdfContext.translateBy(x: 0, y: pageRect.height)
+        pdfContext.scaleBy(x: 1.0, y: -1.0)
+        
+        // Create frame for the text
+        let framePath = CGPath(rect: CGRect(x: textRect.origin.x, 
+                                            y: 0,  // Position at the top after flipping 
+                                            width: textRect.width, 
+                                            height: textRect.height),
+                           transform: nil)
+                           
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), framePath, nil)
+        
+        // Draw the text
+        CTFrameDraw(frame, pdfContext)
+        
+        // Restore graphics state and end the page
+        pdfContext.restoreGState() 
+        pdfContext.endPage()
+        pdfContext.closePDF()
+        
+        // Create the final PDF document
+        if let pdfDoc = PDFDocument(data: data as Data), pdfDoc.pageCount > 0 {
+            print("Successfully created vector PDF with \(pdfDoc.pageCount) pages and size: \(data.length) bytes")
+            return data as Data
+        }
+        
+        print("Failed to create vector PDF - trying alternate approach")
+        
+        // Pure AppKit fallback for macOS using NSPDFImageRep
+        print("Using NSGraphicsContext-based method for PDFs")
+        
+        // Create a PDF representation
+        guard let pdfRep = NSPDFImageRep(bounds: pageRect) else {
+            print("Could not create PDF representation")
+            return Data()
+        }
+        
+        // Begin PDF document
+        pdfRep.prepareContext { (context) in
+            // Clear the page
+            NSColor.white.set()
+            NSRectFill(pageRect)
+            
+            // Draw the text with proper flipping
+            let flippedContext = context as! CGContext
+            flippedContext.saveGState()
+            flippedContext.translateBy(x: 0, y: pageRect.height)
+            flippedContext.scaleBy(x: 1.0, y: -1.0)
+            
+            // Drawing using Core Text for best vector text results
+            let path = CGPath(rect: CGRect(x: textRect.origin.x, y: 0, width: textRect.width, height: textRect.height), transform: nil)
+            let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
+            let frame = CTFramesetterCreateFrame(framesetter, CFRangeMake(0, 0), path, nil)
+            CTFrameDraw(frame, flippedContext)
+            
+            flippedContext.restoreGState()
+        }
+        
+        // Get PDF data
+        if let pdfData = pdfRep.pdfRepresentation {
+            print("Created PDF with NSPDFImageRep, size: \(pdfData.count)")
+            return pdfData
+        }
+        
+        print("All PDF generation methods failed")
+        return Data()
     }
 }
