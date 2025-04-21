@@ -55,7 +55,7 @@ enum CoverLetterPDFGenerator {
     }
 
     /// Extract only the body of the letter, removing salutation, signature, date, etc.
-    private static func extractLetterBody(from content: String) -> String {
+    static func extractLetterBody(from content: String) -> String {
         // First check if we have "best regards" or similar closing text
         let commonClosings = [
             "Best Regards", "Best regards", "Sincerely", "Thank you,",

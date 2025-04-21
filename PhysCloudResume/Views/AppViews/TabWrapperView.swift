@@ -106,13 +106,21 @@ struct TabWrapperView: View {
     func updateMyLetter() {
         print("update cover letter")
         if let selectedApp = jobAppStore.selectedApp {
+            // Determine or create the cover letter
+            let letter: CoverLetter
             if let lastLetter = selectedApp.coverLetters.last {
-                coverLetterStore.cL = lastLetter
+                letter = lastLetter
             } else {
-                coverLetterStore.cL = coverLetterStore.create(jobApp: selectedApp)
+                letter = coverLetterStore.create(jobApp: selectedApp)
             }
+            coverLetterStore.cL = letter
+            // Reset editing state and allow edit only if letter is generated
+            coverLetterButtons.isEditing = false
+            coverLetterButtons.canEdit = letter.generated
         } else {
             coverLetterStore.cL = nil
+            coverLetterButtons.isEditing = false
+            coverLetterButtons.canEdit = false
         }
     }
 }
@@ -126,6 +134,10 @@ struct SaveButtons {
 struct CoverLetterButtons {
     var showInspector: Bool = false
     var runRequested: Bool = false
+    /// Toggle between editing raw text and previewing PDF
+    var isEditing: Bool = false
+    /// Whether the current cover letter is editable (i.e., already generated)
+    var canEdit: Bool = true
 }
 
 struct ResumeButtons {

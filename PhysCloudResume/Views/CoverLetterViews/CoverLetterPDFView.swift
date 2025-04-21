@@ -66,7 +66,7 @@ struct PDFKitView: NSViewRepresentable {
     func makeNSView(context _: Context) -> PDFView {
         let pdfView = PDFView()
         pdfView.autoScales = true
-        pdfView.displayMode = .singlePage
+        pdfView.displayMode = .singlePageContinuous
         pdfView.backgroundColor = .white
 
         if let document = PDFDocument(data: data) {
