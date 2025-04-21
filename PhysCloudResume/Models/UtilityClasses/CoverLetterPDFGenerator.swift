@@ -36,7 +36,6 @@ enum CoverLetterPDFGenerator {
 
         return """
         \(formattedToday())
-
         Dear Hiring Manager,
         \(letterContent)
 
@@ -131,13 +130,13 @@ enum CoverLetterPDFGenerator {
         let pageRect = NSRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
         // Fixed margins - don't auto-adjust these!
         let leftMargin: CGFloat = 1.3 * 72 // Left margin (1.3 inches)
-        let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches) 
+        let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches)
         let topMargin: CGFloat = 0.75 * 72 // 0.75 inches
         let bottomMargin: CGFloat = 0.75 * 72 // 0.75 inches
 
         // Prepare text attributes with Futura Light font
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 14.0 - 9.8 // 14pt line spacing (line height minus font size)
+        paragraphStyle.lineSpacing = 13.0 - 9.8 // 13pt line spacing (reduced from 14pt for better match)
         paragraphStyle.paragraphSpacing = 7.0 // 7pt after paragraph spacing
         paragraphStyle.alignment = .natural
 
@@ -257,7 +256,7 @@ enum CoverLetterPDFGenerator {
 
             // Always create the page with our fixed margins, even if the text doesn't fit perfectly
             print("Creating PDF page with fixed margins: left=\(leftMargin / 72)in, right=\(rightMargin / 72)in")
-            
+
             // Use direct PDF generation with our specified margins
             let page = createDirectPDFPage(attributedText: formattedText, pageRect: pageRect, textRect: currentTextRect)
             if let page = page {
@@ -268,15 +267,15 @@ enum CoverLetterPDFGenerator {
                 print("Failed to create page with fixed margins")
                 // If page creation fails, we'll fall back to the simplified approach
             }
-            
+
             // Exit the do block - we're done trying
         }
-        
+
         // Skip the margin and font size adjustment, just use fixed settings
         /* Disabled auto-adjustment code - we want fixed margins and font size
-        // Auto-adjustment code was previously here
-        */
-        
+         // Auto-adjustment code was previously here
+         */
+
         // If we couldn't create a PDF, create a simplified fallback version
         if pdfDocument.pageCount == 0 {
             print("Creating fallback PDF with fixed settings")
@@ -290,8 +289,8 @@ enum CoverLetterPDFGenerator {
             )
 
             // Create attributes with our fixed font size
-            let currentAttributes = attributes 
-            
+            let currentAttributes = attributes
+
             // Create formatted text with hyperlinks
             let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: urlAttributes, applicant: applicant)
 
@@ -329,18 +328,18 @@ enum CoverLetterPDFGenerator {
             for match in emailMatches {
                 if let range = Range(match.range, in: text) {
                     let email = String(text[range])
-                    
+
                     // Make a copy of urlAttributes with black text and underline
                     var emailAttributes = urlAttributes
-                    
+
                     // Force black color for email links
                     emailAttributes[.foregroundColor] = NSColor.black
                     emailAttributes[.underlineColor] = NSColor.black
-                    
+
                     // Create a proper email mailto link using either the detected email or the applicant's email
                     let emailToUse = email == applicant.email ? applicant.email : email
                     emailAttributes[.link] = URL(string: "mailto:\(emailToUse)")
-                    
+
                     // Apply these black settings
                     attributedText.setAttributes(emailAttributes, range: match.range)
                 }
@@ -351,19 +350,19 @@ enum CoverLetterPDFGenerator {
             for match in urlMatches {
                 if let range = Range(match.range, in: text) {
                     let urlString = String(text[range])
-                    
+
                     // Make a copy of urlAttributes with black text and underline
                     var websiteAttributes = urlAttributes
-                    
+
                     // Force black color for website links
                     websiteAttributes[.foregroundColor] = NSColor.black
                     websiteAttributes[.underlineColor] = NSColor.black
-                    
+
                     // Create a proper web URL using either the detected URL or the applicant's website
                     let websiteToUse = urlString == applicant.websites ? applicant.websites : urlString
                     let fullURL = websiteToUse.hasPrefix("http") ? websiteToUse : "https://\(websiteToUse)"
                     websiteAttributes[.link] = URL(string: fullURL)
-                    
+
                     // Apply these black settings
                     attributedText.setAttributes(websiteAttributes, range: match.range)
                 }
