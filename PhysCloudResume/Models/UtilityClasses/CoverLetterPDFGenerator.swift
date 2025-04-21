@@ -322,10 +322,10 @@ enum CoverLetterPDFGenerator {
                 nil
             )
 
-            print("Suggested size with font \(fontSize)pt: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(finalTextRect.height)")
+            print("Suggested size with font \(currentFontSize)pt: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(finalTextRect.height)")
 
             if suggestedSize.height <= finalTextRect.height {
-                print("Text fits on one page with font size \(fontSize)pt and minimum margins")
+                print("Text fits on one page with font size \(currentFontSize)pt and minimum margins")
                 // Text fits on one page, create the page
                 let page = createDirectPDFPage(attributedText: formattedText, pageRect: pageRect, textRect: finalTextRect)
                 if let page = page {
