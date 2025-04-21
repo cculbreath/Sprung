@@ -55,6 +55,7 @@ enum CoverLetterPDFGenerator {
         // 1. First try to extract content between "Dear" and "Best Regards" (or similar closings)
         let commonClosings = ["Best Regards", "Sincerely", "Thank you", "Regards", "Best", "Yours"]
         let lines = content.components(separatedBy: .newlines)
+        let applicantName = "Christopher Culbreath" // Hardcoded for now
         
         // Find the start and end indices
         var startIndex = -1
@@ -79,7 +80,7 @@ enum CoverLetterPDFGenerator {
             }
             
             // Also look for the name in the signature
-            if line.contains(applicant.name) && i > startIndex && i < endIndex {
+            if line.contains(applicantName) && i > startIndex && i < endIndex {
                 endIndex = i
             }
         }
