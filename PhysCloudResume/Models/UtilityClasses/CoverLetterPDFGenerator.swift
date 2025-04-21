@@ -53,8 +53,8 @@ enum CoverLetterPDFGenerator {
     private static func extractLetterBody(from content: String) -> String {
         // First check if we have "best regards" or similar closing text
         let commonClosings = [
-            "Best Regards", "Best regards", "Sincerely", "Thank you,", 
-            "Thank you for your consideration,", "Regards,", "Best,", "Yours,"
+            "Best Regards", "Best regards", "Sincerely", "Thank you,",
+            "Thank you for your consideration,", "Regards,", "Best,", "Yours,",
         ]
         let lines = content.components(separatedBy: .newlines)
         let applicantName = "Christopher Culbreath" // Hardcoded for now
@@ -62,11 +62,11 @@ enum CoverLetterPDFGenerator {
         // Find the start and end indices
         var startIndex = -1
         var endIndex = lines.count
-        
+
         // Clean lowercase closings with case-insensitive search
         for (i, line) in lines.enumerated() {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            
+
             // Try to find where salutation ends
             if trimmedLine.contains("Dear") && startIndex == -1 {
                 startIndex = i + 1 // Start after "Dear" line
@@ -97,16 +97,16 @@ enum CoverLetterPDFGenerator {
 
             // Clean up common issues and preserve paragraph structure
             var cleanedText = bodyText
-                .replacingOccurrences(of: "\n\n\n", with: "\n\n")  // Triple newlines to double
+                .replacingOccurrences(of: "\n\n\n", with: "\n\n") // Triple newlines to double
                 .replacingOccurrences(of: "best regards", with: "", options: .caseInsensitive) // Remove any embedded closing
                 .replacingOccurrences(of: "sincerely", with: "", options: .caseInsensitive) // Remove any embedded closing
                 .trimmingCharacters(in: .whitespacesAndNewlines) // Trim start/end whitespace
-            
+
             // Ensure no trailing commas at the end from partial closings
             if cleanedText.hasSuffix(",") {
                 cleanedText = String(cleanedText.dropLast())
             }
-            
+
             return cleanedText
         }
 
@@ -127,10 +127,11 @@ enum CoverLetterPDFGenerator {
     private static func createPDFFromString(_ text: String, applicant: Applicant) -> Data {
         print("Creating high-quality vector PDF with text: \(text.count) chars")
 
-        // Page setup
+        // Page setup - use exact measurements that match desired output
         let pageRect = NSRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
+        // Fixed margins - don't auto-adjust these!
         let leftMargin: CGFloat = 1.3 * 72 // Left margin (1.3 inches)
-        let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches)
+        let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches) 
         let topMargin: CGFloat = 0.75 * 72 // 0.75 inches
         let bottomMargin: CGFloat = 0.75 * 72 // 0.75 inches
 
@@ -194,11 +195,12 @@ enum CoverLetterPDFGenerator {
 
         // Create URL attributes for email and website with proper hyperlinking
         let linkFont = font!
+        // IMPORTANT: These must be entirely black, not blue!
         let urlAttributes: [NSAttributedString.Key: Any] = [
             .font: linkFont,
-            .foregroundColor: NSColor.black, // Black text instead of blue
+            .foregroundColor: NSColor.black, // MUST be black text
             .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .underlineColor: NSColor.black, // Black underline instead of blue
+            .underlineColor: NSColor.black, // MUST be black underline
             // No hardcoded email - we'll set proper links in createFormattedText
         ]
 
@@ -217,15 +219,16 @@ enum CoverLetterPDFGenerator {
         // Create a direct PDF approach - no image conversion
         let pdfDocument = PDFDocument()
 
-        // Try different margin and font size combinations
-        while !done && (currentLeftMargin >= 0.5 * 72 || currentRightMargin >= 0.5 * 72) {
-            print("Trying with margins: left=\(currentLeftMargin / 72)in, right=\(currentRightMargin / 72)in")
+        // Skip margin adjustments and use exact specified margins
+        // Only one attempt with the exact margins we specified
+        do {
+            print("Using fixed margins: left=\(leftMargin / 72)in, right=\(rightMargin / 72)in")
 
-            // Recalculate the text rectangle with current margins
+            // Use exact text rectangle with our specified margins
             let currentTextRect = NSRect(
-                x: currentLeftMargin,
+                x: leftMargin,
                 y: bottomMargin,
-                width: pageRect.width - currentLeftMargin - currentRightMargin,
+                width: pageRect.width - leftMargin - rightMargin,
                 height: pageRect.height - topMargin - bottomMargin
             )
 
@@ -252,125 +255,51 @@ enum CoverLetterPDFGenerator {
 
             print("Suggested size: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(currentTextRect.height)")
 
-            if suggestedSize.height <= currentTextRect.height {
-                print("Text fits on one page with margins: left=\(currentLeftMargin / 72)in, right=\(currentRightMargin / 72)in")
-                // Text fits on one page, create the page using direct PDF generation
-                let page = createDirectPDFPage(attributedText: formattedText, pageRect: pageRect, textRect: currentTextRect)
-                if let page = page {
-                    pdfDocument.insert(page, at: 0)
-                    done = true
-                } else {
-                    print("Failed to create page, trying different margins")
-                }
+            // Always create the page with our fixed margins, even if the text doesn't fit perfectly
+            print("Creating PDF page with fixed margins: left=\(leftMargin / 72)in, right=\(rightMargin / 72)in")
+            
+            // Use direct PDF generation with our specified margins
+            let page = createDirectPDFPage(attributedText: formattedText, pageRect: pageRect, textRect: currentTextRect)
+            if let page = page {
+                pdfDocument.insert(page, at: 0)
+                done = true
+                print("Successfully created PDF page with fixed margins")
+            } else {
+                print("Failed to create page with fixed margins")
+                // If page creation fails, we'll fall back to the simplified approach
             }
-
-            if !done {
-                // Try reducing margins first (evenly from both sides)
-                if currentLeftMargin > 0.5 * 72 && currentRightMargin > 0.5 * 72 {
-                    // Reduce both margins by 0.1 inches
-                    currentLeftMargin -= 0.1 * 72
-                    currentRightMargin -= 0.1 * 72
-                } else if currentLeftMargin > 0.5 * 72 {
-                    // Only reduce left margin
-                    currentLeftMargin -= 0.1 * 72
-                } else if currentRightMargin > 0.5 * 72 {
-                    // Only reduce right margin
-                    currentRightMargin -= 0.1 * 72
-                } else {
-                    // Minimum margins reached, try reducing font size next
-                    break
-                }
-            }
+            
+            // Exit the do block - we're done trying
         }
-
-        // If reducing margins didn't work, try reducing font size
-        while !done && currentFontSize >= 7 {
-            print("Trying font size: \(currentFontSize)")
-
-            // Use minimum margins
-            let minLeftMargin: CGFloat = 0.5 * 72
-            let minRightMargin: CGFloat = 0.5 * 72
-
-            // Recalculate the text rectangle with minimum margins
-            let finalTextRect = NSRect(
-                x: minLeftMargin,
-                y: bottomMargin,
-                width: pageRect.width - minLeftMargin - minRightMargin,
-                height: pageRect.height - topMargin - bottomMargin
-            )
-
-            // Create a new font with the current size
-            let currentFont = NSFont(name: font!.fontName, size: currentFontSize) ?? NSFont.systemFont(ofSize: currentFontSize)
-            let currentAttributes = attributes.merging([.font: currentFont]) { _, new in new }
-            let currentLinkAttributes = urlAttributes.merging([.font: currentFont]) { _, new in new }
-
-            // Create formatted text with hyperlinks
-            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: currentLinkAttributes, applicant: applicant)
-
-            // Create a framesetter
-            let framesetter = CTFramesetterCreateWithAttributedString(formattedText as CFAttributedString)
-
-            // Size constraints
-            let sizeConstraints = CGSize(width: finalTextRect.width, height: CGFloat.greatestFiniteMagnitude)
-
-            // Calculate the total height needed
-            let suggestedSize = CTFramesetterSuggestFrameSizeWithConstraints(
-                framesetter,
-                CFRange(location: 0, length: formattedText.length),
-                nil,
-                sizeConstraints,
-                nil
-            )
-
-            print("Suggested size with font \(currentFontSize)pt: \(suggestedSize.width)x\(suggestedSize.height), text rect height: \(finalTextRect.height)")
-
-            if suggestedSize.height <= finalTextRect.height {
-                print("Text fits on one page with font size \(currentFontSize)pt and minimum margins")
-                // Text fits on one page, create the page
-                let page = createDirectPDFPage(attributedText: formattedText, pageRect: pageRect, textRect: finalTextRect)
-                if let page = page {
-                    pdfDocument.insert(page, at: 0)
-                    done = true
-                } else {
-                    print("Failed to create page, trying smaller font")
-                }
-            }
-
-            if !done {
-                // Try a smaller font size
-                currentFontSize -= 0.5
-            }
-        }
-
-        // If we couldn't fit on one page, create a multi-page PDF document
+        
+        // Skip the margin and font size adjustment, just use fixed settings
+        /* Disabled auto-adjustment code - we want fixed margins and font size
+        // Auto-adjustment code was previously here
+        */
+        
+        // If we couldn't create a PDF, create a simplified fallback version
         if pdfDocument.pageCount == 0 {
-            print("Creating multi-page PDF with minimum settings")
+            print("Creating fallback PDF with fixed settings")
 
-            // Use minimum margins and font size
-            let minLeftMargin: CGFloat = 0.5 * 72
-            let minRightMargin: CGFloat = 0.5 * 72
-            let minFontSize: CGFloat = 7
-
-            // Recalculate the text rectangle with minimum margins
-            let finalTextRect = NSRect(
-                x: minLeftMargin,
+            // Use the same fixed margins and font
+            let textRect = NSRect(
+                x: leftMargin,
                 y: bottomMargin,
-                width: pageRect.width - minLeftMargin - minRightMargin,
+                width: pageRect.width - leftMargin - rightMargin,
                 height: pageRect.height - topMargin - bottomMargin
             )
 
-            // Create attributes with minimum font size
-            let currentFont = NSFont(name: font!.fontName, size: minFontSize) ?? NSFont.systemFont(ofSize: minFontSize)
-            let currentAttributes = attributes.merging([.font: currentFont]) { _, new in new }
-            let currentLinkAttributes = urlAttributes.merging([.font: currentFont]) { _, new in new }
-
+            // Create attributes with our fixed font size
+            let currentAttributes = attributes 
+            
             // Create formatted text with hyperlinks
-            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: currentLinkAttributes, applicant: applicant)
+            let formattedText = createFormattedText(text: text, attributes: currentAttributes, urlAttributes: urlAttributes, applicant: applicant)
 
-            // Create a blank document
-            let defaultPage = createSimplePDFPage(attributedText: formattedText, pageRect: pageRect, textRect: finalTextRect)
+            // Create a simple PDF page
+            let defaultPage = createSimplePDFPage(attributedText: formattedText, pageRect: pageRect, textRect: textRect)
             if let page = defaultPage {
                 pdfDocument.insert(page, at: 0)
+                print("Created fallback PDF page")
             }
         }
 
@@ -400,10 +329,19 @@ enum CoverLetterPDFGenerator {
             for match in emailMatches {
                 if let range = Range(match.range, in: text) {
                     let email = String(text[range])
+                    
+                    // Make a copy of urlAttributes with black text and underline
                     var emailAttributes = urlAttributes
+                    
+                    // Force black color for email links
+                    emailAttributes[.foregroundColor] = NSColor.black
+                    emailAttributes[.underlineColor] = NSColor.black
+                    
                     // Create a proper email mailto link using either the detected email or the applicant's email
                     let emailToUse = email == applicant.email ? applicant.email : email
                     emailAttributes[.link] = URL(string: "mailto:\(emailToUse)")
+                    
+                    // Apply these black settings
                     attributedText.setAttributes(emailAttributes, range: match.range)
                 }
             }
@@ -413,11 +351,20 @@ enum CoverLetterPDFGenerator {
             for match in urlMatches {
                 if let range = Range(match.range, in: text) {
                     let urlString = String(text[range])
+                    
+                    // Make a copy of urlAttributes with black text and underline
                     var websiteAttributes = urlAttributes
+                    
+                    // Force black color for website links
+                    websiteAttributes[.foregroundColor] = NSColor.black
+                    websiteAttributes[.underlineColor] = NSColor.black
+                    
                     // Create a proper web URL using either the detected URL or the applicant's website
                     let websiteToUse = urlString == applicant.websites ? applicant.websites : urlString
                     let fullURL = websiteToUse.hasPrefix("http") ? websiteToUse : "https://\(websiteToUse)"
                     websiteAttributes[.link] = URL(string: fullURL)
+                    
+                    // Apply these black settings
                     attributedText.setAttributes(websiteAttributes, range: match.range)
                 }
             }
