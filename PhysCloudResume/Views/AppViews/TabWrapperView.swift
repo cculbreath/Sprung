@@ -134,6 +134,8 @@ struct SaveButtons {
 struct CoverLetterButtons {
     var showInspector: Bool = false
     var runRequested: Bool = false
+    /// Indicates a choose-best operation is in flight
+    var chooseBestRequested: Bool = false
     /// Toggle between editing raw text and previewing PDF
     var isEditing: Bool = false
     /// Whether the current cover letter is editable (i.e., already generated)

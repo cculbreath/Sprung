@@ -37,6 +37,8 @@ struct CoverLetterAiContentView: View {
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
+    // Wrapper for displaying result notifications or errors
+    @State private var errorWrapper: ErrorMessageWrapper? = nil
 
     init(
         service: OpenAIService,
@@ -49,40 +51,136 @@ struct CoverLetterAiContentView: View {
         _refresh = refresh
     }
 
-    var body: some View {
-        if jobAppStore.selectedApp?.selectedCover != nil {
-            @Bindable var cL = jobAppStore.selectedApp!.selectedCover!
+    var cL: Binding<CoverLetter> {
+        guard let selectedApp = jobAppStore.selectedApp else {
+            fatalError("No selected app")
+        }
+        return Binding(get: {
+            selectedApp.selectedCover!
+        }, set: {
+            selectedApp.selectedCover = $0
+        })
+    }
 
-            HStack(spacing: 4) {
-                VStack {
-                    if !$buttons.wrappedValue.runRequested {
-                        Button(action: {
-                            print("Not loading")
-                            if !cL.generated {
-                                cL.currentMode = .generate
-                            } else {
-                                @Bindable var newCL = coverLetterStore.createDuplicate(letter: cL)
-                                cL = newCL // Assign new instance
-                                print("new cover letter")
+    var body: some View {
+        Group {
+            if jobAppStore.selectedApp?.selectedCover != nil {
+                HStack(spacing: 16) {
+                    // Generate New Cover Letter
+                    VStack {
+                        if !buttons.runRequested {
+                            Button(action: {
+                                print("Generate cover letter")
+                                if !cL.wrappedValue.generated {
+                                    cL.wrappedValue.currentMode = .generate
+                                } else {
+                                    let newCL = coverLetterStore.createDuplicate(letter: cL.wrappedValue)
+                                    cL.wrappedValue = newCL
+                                    print("Duplicated for regeneration")
+                                }
+                                chatProvider.coverChatAction(
+                                    res: jobAppStore.selectedApp?.selectedRes,
+                                    jobAppStore: jobAppStore,
+                                    chatProvider: chatProvider,
+                                    buttons: $buttons
+                                )
+                            }) {
+                                Image("ai-squiggle")
+                                    .font(.system(size: 20, weight: .regular))
                             }
-                            chatProvider.coverChatAction(
-                                res: jobAppStore.selectedApp?.selectedRes,
-                                jobAppStore: jobAppStore,
-                                chatProvider: chatProvider,
-                                buttons: $buttons
-                            )
-                        }) {
-                            Image("ai-squiggle")
-                                .font(.system(size: 20, weight: .regular))
+                            .help("Generate new Cover Letter")
+                        } else {
+                            ProgressView()
+                                .scaleEffect(0.75, anchor: .center)
                         }
-                        .help("Generate new Cover Letter")
-                    } else {
-                        ProgressView()
-                            .scaleEffect(0.75, anchor: .center)
                     }
+                    .padding()
+                    .onAppear { print("AI content") }
+
+                    // Choose Best Cover Letter
+                    VStack {
+                        if buttons.chooseBestRequested {
+                            ProgressView()
+                                .scaleEffect(0.75, anchor: .center)
+                        } else {
+                            Button(action: {
+                                chooseBestCoverLetter()
+                            }) {
+                                Image(systemName: "hand.thumbsup")
+                                    .font(.system(size: 20, weight: .regular))
+                            }
+                            .disabled(
+                                jobAppStore.selectedApp?.coverLetters.count ?? 0 <= 1
+                                    || cL.wrappedValue.writingSamplesString.isEmpty
+                            )
+                            .help(
+                                (jobAppStore.selectedApp?.coverLetters.count ?? 0) <= 1
+                                    ? "At least two cover letters are required"
+                                    : cL.wrappedValue.writingSamplesString.isEmpty
+                                    ? "Add writing samples to enable choosing best cover letter"
+                                    : "Select the best cover letter based on style and voice"
+                            )
+                        }
+                    }
+                    .padding()
                 }
-                .padding()
-                .onAppear { print("AI content") }
+            }
+        }
+        // Show alert on result or error
+        .alert(item: $errorWrapper) { wrapper in
+            Alert(
+                title: Text("Cover Letter Recommendation"),
+                message: Text(wrapper.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+
+    // MARK: - Actions
+
+    /// Initiates the choose‑best‑cover‑letter operation
+    func chooseBestCoverLetter() {
+        guard let jobApp = jobAppStore.selectedApp else { return }
+        let letters = jobApp.coverLetters
+        buttons.chooseBestRequested = true
+
+        // Capture writing samples from any existing cover letter
+        let writingSamples = letters.first?.writingSamplesString ?? ""
+        Task {
+            do {
+                let provider = CoverLetterRecommendationProvider(
+                    service: service,
+                    jobApp: jobApp,
+                    writingSamples: writingSamples
+                )
+                let result = try await provider.fetchBestCoverLetter()
+                await MainActor.run {
+                    // Update selected cover and notify user
+                    if let uuid = UUID(uuidString: result.bestLetterUuid),
+                       let best = jobApp.coverLetters.first(where: { $0.id == uuid })
+                    {
+                        jobAppStore.selectedApp?.selectedCover = best
+                        let message = """
+                        Selected "\(best.name)" as best cover letter.
+
+                        Analysis:
+                        \(result.strengthAndVoiceAnalysis)
+
+                        Reason:
+                        \(result.verdict)
+                        """
+                        errorWrapper = ErrorMessageWrapper(message: message)
+                    }
+                    buttons.chooseBestRequested = false
+                }
+            } catch {
+                await MainActor.run {
+                    print("Choose best error: \(error.localizedDescription)")
+                    buttons.chooseBestRequested = false
+                    errorWrapper = ErrorMessageWrapper(
+                        message: "Error choosing best cover letter: \(error.localizedDescription)"
+                    )
+                }
             }
         }
     }
