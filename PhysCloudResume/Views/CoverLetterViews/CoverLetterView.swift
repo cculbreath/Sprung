@@ -141,6 +141,7 @@ struct CoverLetterContentView: View {
                 if buttons.isEditing {
                     Text("Editing - Last modified \(cL.modDate)")
                         .font(.caption)
+                        .padding(.horizontal)
                     // Editable cover letter name
                     let nameBinding = Binding<String>(
                         get: { cL.name },
@@ -162,6 +163,7 @@ struct CoverLetterContentView: View {
                     )
                     TextEditor(text: contentBinding)
                         .frame(maxHeight: .infinity)
+                        .padding(.horizontal)
                 } else {
                     Text("PDF Preview - Generated \(cL.modDate)")
                         .font(.caption)
