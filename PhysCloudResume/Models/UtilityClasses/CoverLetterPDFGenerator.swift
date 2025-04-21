@@ -2,6 +2,7 @@ import Foundation
 import CoreText
 import PDFKit
 import SwiftUI
+import AppKit
 
 struct CoverLetterPDFGenerator {
     
@@ -40,7 +41,7 @@ struct CoverLetterPDFGenerator {
         var margins = NSEdgeInsets(top: 54, left: 94, bottom: 54, right: 180)
         var fontSize: CGFloat = 11                                   // starting size
         
-        func attributed(_ text: String, size: CGFloat) -> CFAttributedString {
+        func attributed(_ text: String, size: CGFloat) -> NSAttributedString {
             let para = NSMutableParagraphStyle()
             para.lineSpacing = 2
             para.paragraphSpacing = 6
@@ -48,23 +49,22 @@ struct CoverLetterPDFGenerator {
                 .font: NSFont(name: "FuturaPT-Light", size: size) ?? .systemFont(ofSize: size),
                 .paragraphStyle: para
             ]
-            return NSAttributedString(string: text, attributes: attrs) as CFAttributedString
+            return NSAttributedString(string: text, attributes: attrs)
         }
         
         func layOut(fontSize: CGFloat, margins: NSEdgeInsets) -> (Data, pages: Int) {
-            let buf = NSMutableData()
-            UIGraphicsBeginPDFContextToData(buf,
-                                        CGRect(origin: .zero, size: pageSize),
-                                        nil)
-            guard let ctx = UIGraphicsGetCurrentContext() else { fatalError() }
+            let data = NSMutableData()
+            let pdfContext = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!,
+                                       mediaBox: CGRect(origin: .zero, size: pageSize),
+                                       nil)!
             
             let attr = attributed(text, size: fontSize)
-            let setter = CTFramesetterCreateWithAttributedString(attr)
+            let setter = CTFramesetterCreateWithAttributedString(attr as CFAttributedString)
             var loc: CFIndex = 0
             var pages = 0
             
             repeat {
-                UIGraphicsBeginPDFPage()
+                pdfContext.beginPage(mediaBox: CGRect(origin: .zero, size: pageSize))
                 pages += 1
                 let frameRect = CGRect(x: margins.left,
                                    y: margins.bottom,
@@ -74,13 +74,14 @@ struct CoverLetterPDFGenerator {
                 let frame = CTFramesetterCreateFrame(setter,
                                                  CFRange(location: loc, length: 0),
                                                  framePath, nil)
-                CTFrameDraw(frame, ctx)
+                CTFrameDraw(frame, pdfContext)
                 let visible = CTFrameGetVisibleStringRange(frame)
                 loc = visible.location + visible.length
-            } while loc < attr.length
+            } while loc < CFAttributedStringGetLength(attr as CFAttributedString)
             
-            UIGraphicsEndPDFContext()
-            return (buf as Data, pages)
+            pdfContext.endPage()
+            pdfContext.closePDF()
+            return (data as Data, pages)
         }
         
         // Try to fit on one sheet
