@@ -10,7 +10,6 @@ func CoverLetterToolbar(
             refresh: refresh
         )
 
-
         Button(action: {
             buttons.wrappedValue.showInspector.toggle()
         }) {

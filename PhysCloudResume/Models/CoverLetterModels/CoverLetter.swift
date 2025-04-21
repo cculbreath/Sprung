@@ -72,6 +72,14 @@ class CoverLetter: Identifiable, Hashable {
         return enabledRefs.filter { $0.type == CoverRefType.writingSample }
             .map { $0.content }.joined(separator: "\n\n")
     }
+    
+    /// 1-based index of this cover letter within its job application (ordered by creation date)
+    var sequenceNumber: Int {
+        guard let app = jobApp else { return 0 }
+        let sortedLetters = app.coverLetters.sorted { $0.createdDate < $1.createdDate }
+        guard let index = sortedLetters.firstIndex(where: { $0.id == self.id }) else { return 0 }
+        return index + 1
+    }
 }
 
 @Model
