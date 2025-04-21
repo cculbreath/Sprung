@@ -84,6 +84,8 @@ final class CoverChatProvider {
         print("processResults")
 
         coverLetter.generated = true
+        // Once generated, allow editing
+        buttons.wrappedValue.canEdit = true
         // Update modification date
         coverLetter.moddedDate = Date()
         // Determine the human-readable operation name
