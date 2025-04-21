@@ -34,16 +34,21 @@ enum CoverLetterPDFGenerator {
         // Extract just the body of the letter
         let letterContent = extractLetterBody(from: cover.content)
 
-        return """
-        \(formattedToday())
-        Dear Hiring Manager,
-        \(letterContent)
+        // Create explicit signature block to ensure it's not cut off
+        let signatureBlock = """
         Best Regards,
 
         \(applicant.name)
 
         \(applicant.phone) | \(applicant.address), \(applicant.city), \(applicant.state)
         \(applicant.email) | \(applicant.websites)
+        """
+
+        return """
+        \(formattedToday())
+        Dear Hiring Manager,
+        \(letterContent)
+        \(signatureBlock)
         """
     }
 
@@ -131,11 +136,11 @@ enum CoverLetterPDFGenerator {
         let leftMargin: CGFloat = 1.3 * 72 // Left margin (1.3 inches)
         let rightMargin: CGFloat = 2.5 * 72 // Right margin (2.5 inches)
         let topMargin: CGFloat = 0.75 * 72 // 0.75 inches
-        let bottomMargin: CGFloat = 0.75 * 72 // 0.75 inches
+        let bottomMargin: CGFloat = 0.5 * 72 // Reduced bottom margin to ensure contact info is visible
 
         // Prepare text attributes with Futura Light font
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 13.0 - 9.8 // 13pt line spacing (reduced from 14pt for better match)
+        paragraphStyle.lineSpacing = 11.5 - 9.8 // 11.5pt line spacing (reduced further for exact match)
         paragraphStyle.paragraphSpacing = 7.0 // 7pt after paragraph spacing
         paragraphStyle.alignment = .natural
 
