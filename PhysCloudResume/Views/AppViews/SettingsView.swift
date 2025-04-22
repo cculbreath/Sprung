@@ -14,7 +14,7 @@ struct SettingsView: View {
     @AppStorage("proxycurlApiKey") var proxycurlApiKey: String = "none"
     @AppStorage("preferredApi") var preferredApi: apis = .scrapingDog
     @AppStorage("preferredOpenAIModel") var preferredOpenAIModel: String = "gpt-4o-2024-08-06"
-    
+
     // TTS Settings
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
@@ -40,7 +40,7 @@ struct SettingsView: View {
     @State private var availableModels: [String] = []
     @State private var isLoadingModels: Bool = false
     @State private var modelError: String? = nil
-    
+
     // TTS preview state
     @State private var ttsProvider: OpenAITTSProvider?
     @State private var isPreviewingVoice: Bool = false
@@ -49,8 +49,8 @@ struct SettingsView: View {
 
     var body: some View {
         VStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 15) {
                     Text("API Keys")
                         .font(.headline)
                         .padding(.bottom, 5)
@@ -185,12 +185,12 @@ struct SettingsView: View {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.gray.opacity(0.7), lineWidth: 1)
                     )
-                    
+
                     // Text-to-Speech Settings
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Text-to-Speech")
                             .font(.headline)
-                        
+
                         // Enable TTS Toggle
                         Toggle("Enable Text-to-Speech", isOn: $ttsEnabled)
                             .toggleStyle(.switch)
@@ -198,22 +198,22 @@ struct SettingsView: View {
                             .onChange(of: ttsEnabled) { oldValue, newValue in
                                 print("TTS enabled changed: \(oldValue) → \(newValue)")
                             }
-                        
+
                         if openAiApiKey == "none" {
                             Text("Add OpenAI API key to enable TTS")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         // Voice Selection
                         if ttsEnabled {
                             Divider()
                                 .padding(.vertical, 5)
-                            
+
                             Text("Voice")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            
+
                             Picker("TTS Voice", selection: $ttsVoice) {
                                 Group {
                                     Text("Alloy (Neutral)").tag("alloy")
@@ -224,13 +224,14 @@ struct SettingsView: View {
                                     Text("Shimmer (Soft Female)").tag("shimmer")
                                 }
                             }
-                            .pickerStyle(.segmented)
-                            
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
                             // Voice Preview
                             HStack {
                                 Spacer()
                                 Button(action: previewVoice) {
-                                    Label(isPreviewingVoice ? "Stop Preview" : "Preview Voice", 
+                                    Label(isPreviewingVoice ? "Stop Preview" : "Preview Voice",
                                           systemImage: isPreviewingVoice ? "speaker.wave.3.fill" : "speaker.wave.2")
                                 }
                                 .disabled(openAiApiKey == "none")
@@ -240,19 +241,19 @@ struct SettingsView: View {
                                 Spacer()
                             }
                             .padding(.top, 5)
-                            
+
                             // Voice Instructions
                             Divider()
                                 .padding(.vertical, 5)
-                            
+
                             VStack(alignment: .leading, spacing: 5) {
                                 HStack {
                                     Text("Voice Instructions")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
-                                    
+
                                     Spacer()
-                                    
+
                                     Button("Reset to Default") {
                                         resetToDefaultInstructions()
                                     }
@@ -260,15 +261,15 @@ struct SettingsView: View {
                                     .controlSize(.small)
                                     .font(.caption)
                                 }
-                                
+
                                 TextEditor(text: $ttsInstructions)
                                     .font(.system(.caption, design: .monospaced))
-                                    .frame(height: 150)
+                                    .frame(minHeight: 100, idealHeight: 150, maxHeight: .infinity)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)
                                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                     )
-                                
+
                                 Text("Instructions tell the AI how to style the voice. Changes apply to all TTS operations.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -283,19 +284,36 @@ struct SettingsView: View {
                             .stroke(Color.gray.opacity(0.7), lineWidth: 1)
                     )
 
-                    Picker("Preferred API", selection: $preferredApi) {
-                        ForEach(apis.allCases) { api in
-                            Text(api.rawValue)
+                    // Preferred API Selection
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Preferred API")
+                            .font(.headline)
+                        
+                        Picker("Preferred API", selection: $preferredApi) {
+                            ForEach(apis.allCases) { api in
+                                Text(api.rawValue)
+                            }
                         }
+                        .pickerStyle(.radioGroup)
                     }
-                    .pickerStyle(.radioGroup)
+                    .padding(10)
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+                    )
 //                    DatabaseBackupView()
                 }
                 .padding()
             }
         }
-        .frame(minWidth: 450, idealWidth: 600, maxWidth: 800,
-               minHeight: 500, idealHeight: 600, maxHeight: 800)
+        .frame(minWidth: 450, idealWidth: 600, maxWidth: .infinity,
+               minHeight: 500, idealHeight: 600, maxHeight: .infinity)
+        .padding(.vertical)
+        // Allow the sheet to be resized
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .onAppear {
             loadAvailableStyles()
             if openAiApiKey != "none" {
@@ -424,7 +442,7 @@ struct SettingsView: View {
         }
         availableStylesString = availableStyles.joined(separator: ", ")
     }
-    
+
     /// Preview the currently selected TTS voice
     private func previewVoice() {
         // If already previewing, stop the current preview
@@ -433,39 +451,37 @@ struct SettingsView: View {
             isPreviewingVoice = false
             return
         }
-        
+
         // Make sure we have a provider and API key
         guard openAiApiKey != "none" else {
             ttsError = "OpenAI API key is required for TTS"
             showTTSError = true
             return
         }
-        
+
         // Initialize provider if needed
         if ttsProvider == nil {
             ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
         }
-        
+
         // Sample text for preview
         let sampleText = "This is a preview of the \(ttsVoice) voice with custom instructions. It can be used to read your resumes and cover letters aloud."
-        
+
         // Set preview state
         isPreviewingVoice = true
-        
+
         // Get the selected voice
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
-        
+
         // Get voice instructions (if any)
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-        
+
         // Speak the sample text with instructions
-        ttsProvider?.speakText(sampleText, voice: voice, instructions: instructions) { [weak self] error in
+        ttsProvider?.speakText(sampleText, voice: voice, instructions: instructions) { error in
             DispatchQueue.main.async {
-                guard let self = self else { return }
-                
                 // Reset preview state
                 self.isPreviewingVoice = false
-                
+
                 // Handle any errors
                 if let error = error {
                     self.ttsError = error.localizedDescription
@@ -475,7 +491,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     /// Reset voice instructions to the default value
     private func resetToDefaultInstructions() {
         ttsInstructions = "Voice Affect: Confident, composed, and respectful; project well-supported authority and confidence without hubris.\nTone: Sincere, empathetic, and authoritative—but not arrogant. Express genuine humility while conveying competence.\nPacing: Brisk and confident, but unrushed. Slow moderately for emphasis, demonstrating thoughtfulness while prioritizing efficiency and respect for your audience's time.\nEmotion: Engaged and confident; speak with warmth and charisma. Lean into rising pitch, confident resolution, and the identifiable rhythms of a skilled orator.\nPronunciation: Clear and precise, emphasizing understanding and fluency with technical concepts, and a deft handling of even the most stubborn aspects of the English language.\nPauses: Brief pauses for emphasis and gravitas, but with an overall cadence of efficiency and forward momentum."
