@@ -67,62 +67,63 @@ struct CoverLetterAiContentView: View {
             if jobAppStore.selectedApp?.selectedCover != nil {
                 HStack(spacing: 16) {
                     // Generate New Cover Letter
-                    VStack {
-                        if !buttons.runRequested {
-                            Button(action: {
-                                print("Generate cover letter")
-                                if !cL.wrappedValue.generated {
-                                    cL.wrappedValue.currentMode = .generate
-                                } else {
-                                    let newCL = coverLetterStore.createDuplicate(letter: cL.wrappedValue)
-                                    cL.wrappedValue = newCL
-                                    print("Duplicated for regeneration")
-                                }
-                                chatProvider.coverChatAction(
-                                    res: jobAppStore.selectedApp?.selectedRes,
-                                    jobAppStore: jobAppStore,
-                                    chatProvider: chatProvider,
-                                    buttons: $buttons
-                                )
-                            }) {
-                                Image("ai-squiggle")
-                                    .font(.system(size: 20, weight: .regular))
+                    if !buttons.runRequested {
+                        Button(action: {
+                            print("Generate cover letter")
+                            if !cL.wrappedValue.generated {
+                                cL.wrappedValue.currentMode = .generate
+                            } else {
+                                let newCL = coverLetterStore.createDuplicate(letter: cL.wrappedValue)
+                                cL.wrappedValue = newCL
+                                print("Duplicated for regeneration")
                             }
-                            .help("Generate new Cover Letter")
-                        } else {
-                            ProgressView()
-                                .scaleEffect(0.75, anchor: .center)
+                            chatProvider.coverChatAction(
+                                res: jobAppStore.selectedApp?.selectedRes,
+                                jobAppStore: jobAppStore,
+                                chatProvider: chatProvider,
+                                buttons: $buttons
+                            )
+                        }) {
+                            Image("ai-squiggle")
+                                .font(.system(size: 20, weight: .regular))
+                                .frame(width: 36, height: 36)
                         }
+                        .buttonStyle(.plain)
+                        .help("Generate new Cover Letter")
+                    } else {
+                        ProgressView()
+                            .scaleEffect(0.75, anchor: .center)
+                            .frame(width: 36, height: 36)
                     }
-                    .padding()
-                    .onAppear { print("AI content") }
 
                     // Choose Best Cover Letter
-                    VStack {
-                        if buttons.chooseBestRequested {
-                            ProgressView()
-                                .scaleEffect(0.75, anchor: .center)
-                        } else {
-                            Button(action: {
-                                chooseBestCoverLetter()
-                            }) {
-                                Image(systemName: "hand.thumbsup")
-                                    .font(.system(size: 20, weight: .regular))
-                            }
-                            .disabled(
-                                jobAppStore.selectedApp?.coverLetters.count ?? 0 <= 1
-                                    || cL.wrappedValue.writingSamplesString.isEmpty
-                            )
-                            .help(
-                                (jobAppStore.selectedApp?.coverLetters.count ?? 0) <= 1
-                                    ? "At least two cover letters are required"
-                                    : cL.wrappedValue.writingSamplesString.isEmpty
-                                    ? "Add writing samples to enable choosing best cover letter"
-                                    : "Select the best cover letter based on style and voice"
-                            )
+                    if buttons.chooseBestRequested {
+                        ProgressView()
+                            .scaleEffect(0.75, anchor: .center)
+                            .frame(width: 36, height: 36)
+                    } else {
+                        Button(action: {
+                            chooseBestCoverLetter()
+                        }) {
+                            Image(systemName: "medal.fill")
+                                .font(.system(size: 20, weight: .regular))
+                                .frame(width: 36, height: 36)
                         }
+                        .buttonStyle(.plain)
+                        .disabled(
+                            jobAppStore.selectedApp?.coverLetters.count ?? 0 <= 1
+                                || cL.wrappedValue.writingSamplesString.isEmpty
+                        )
+                        .help(
+                            (jobAppStore.selectedApp?.coverLetters.count ?? 0) <= 1
+                                ? "At least two cover letters are required"
+                                : cL.wrappedValue.writingSamplesString.isEmpty
+                                ? "Add writing samples to enable choosing best cover letter"
+                                : "Select the best cover letter based on style and voice"
+                        )
                     }
-                    .padding()
+                }
+                .onAppear { print("AI content") }
                 }
             }
         }
@@ -161,7 +162,7 @@ struct CoverLetterAiContentView: View {
                     {
                         jobAppStore.selectedApp?.selectedCover = best
                         let message = """
-                        Selected "\(best.name)" as best cover letter.
+                        Selected "\(best.sequencedName)" as best cover letter.
 
                         Analysis:
                         \(result.strengthAndVoiceAnalysis)
