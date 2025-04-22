@@ -615,63 +615,105 @@ enum CoverLetterPDFGenerator {
 
             // Draw signature image if available and this is the first/only page
             if currentLocation == 0, let signatureImage = signatureImage {
-                // Look for "Best Regards," in the source text
-                let bestRegardsMarker = "Best Regards,"
+                // Look for signature markers in the source text
+                let regardsMarkers = ["Best Regards,", "Best regards,", "Sincerely,", "Thank you,", "Regards,"]
                 let nameMarker = "Christopher Culbreath"
-                
+
                 // Get all lines from the frame for proper positioning
                 let frameLines = CTFrameGetLines(frame) as? [CTLine] ?? []
                 var origins = Array(repeating: CGPoint.zero, count: frameLines.count)
                 CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &origins)
-                
-                // Find the line containing "Best Regards," and the next line with the name
-                var bestRegardsLineIndex: Int?
+
+                // Find the lines containing signature elements
+                var regardsLineIndex: Int?
                 var nameLineIndex: Int?
-                
+                var emptyLineAfterRegards: Int?
+
                 for (idx, line) in frameLines.enumerated() {
                     let lineRange = CTLineGetStringRange(line)
                     if lineRange.length > 0 {
                         let lineStart = lineRange.location
-                        let lineEnd = lineStart + lineRange.length
-                        
                         let nsString = attributedString.string as NSString
                         let lineContent = nsString.substring(with: NSRange(location: lineStart, length: lineRange.length))
-                        
-                        if lineContent.contains(bestRegardsMarker) {
-                            bestRegardsLineIndex = idx
-                        } else if lineContent.contains(nameMarker) {
+                        let trimmedContent = lineContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                            
+                        // Look for closing markers
+                        for marker in regardsMarkers {
+                            if trimmedContent.contains(marker) {
+                                regardsLineIndex = idx
+                                    
+                                // Check for empty line after regards
+                                if idx + 1 < frameLines.count {
+                                    let nextLineRange = CTLineGetStringRange(frameLines[idx + 1])
+                                    if nextLineRange.length > 0 {
+                                        let nextContent = nsString.substring(with: NSRange(location: nextLineRange.location, length: nextLineRange.length))
+                                        if nextContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            emptyLineAfterRegards = idx + 1
+                                        }
+                                    }
+                                }
+                                break
+                            }
+                        }
+                            
+                        // Look for name
+                        if trimmedContent.contains(nameMarker) {
                             nameLineIndex = idx
-                            break // Found what we need
                         }
                     }
                 }
-                
-                // Default positioning 
+
+                // Default positioning (fallback)
                 var signatureY = textRect.origin.y + 100
-                
-                // If we found the name line, position relative to it
+                var idealPosition = false
+                    
+                // Dynamically position based on what we found
                 if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                    signatureY = origins[nameIdx].y + 5 // Position just above the name line
-                } else if let regardsIdx = bestRegardsLineIndex, regardsIdx < origins.count {
-                    signatureY = origins[regardsIdx].y - 30 // Position below "Best Regards,"
+                    if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
+                        // Position between "Best Regards" and name - ideal case
+                        if nameIdx > regardsIdx + 1 {
+                            // Get the midpoint between regards and name
+                            let regardsY = origins[regardsIdx].y
+                            let nameY = origins[nameIdx].y
+                            // Position signature between regards and name with proper spacing
+                            signatureY = (regardsY + nameY) / 2
+                            idealPosition = true
+                        } else {
+                            // Regards and name are adjacent - position closely above name
+                            signatureY = origins[nameIdx].y + 20
+                        }
+                    } else {
+                        // Only name found - position above name
+                        signatureY = origins[nameIdx].y + 20
+                    }
+                } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
+                    // Only "Best Regards" found - position after it
+                    signatureY = origins[regardsIdx].y - 35
                 }
-                
-                // Size the signature appropriately
-                let signatureHeight: CGFloat = 45.0 // Smaller signature
+                    
+                // Adjust size based on whether we have an ideal position
+                let signatureHeight: CGFloat = idealPosition ? 50.0 : 45.0
                 let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
                 let signatureWidth = signatureHeight * imageAspectRatio
-                
+
                 // Position signature inline with text
                 let signatureRect = CGRect(
-                    x: textRect.origin.x,
-                    y: signatureY - (signatureHeight * 0.8), // Position to align with text baseline
-                    width: min(signatureWidth, textRect.width * 0.5), // Limit width
+                    x: textRect.origin.x + 10, // Slight indent from margin
+                    y: signatureY - (signatureHeight * 0.7), // Position to align with text baseline
+                    width: min(signatureWidth, textRect.width * 0.4), // Limit width to 40% of text width
                     height: signatureHeight
                 )
-                
+
                 // Draw the signature
                 if let cgImage = signatureImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    // Apply slight scaling based on available space
+                    pdfContext.saveGState()
+                        
+                    // Draw with slight transparency to ensure it doesn't overwhelm the document
+                    pdfContext.setAlpha(0.95)
                     pdfContext.draw(cgImage, in: signatureRect)
+                    pdfContext.restoreGState()
+                        
                     print("Signature image drawn at \(signatureRect)")
                 }
             }

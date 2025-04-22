@@ -147,16 +147,9 @@ struct CoverLetterAiContentView: View {
                         Button(action: {
                             speakCoverLetter()
                         }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
-                                    .font(.system(size: 16, weight: .regular))
-                                Text(isSpeaking ? "Stop" : "Read Aloud")
-                                    .font(.caption)
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
-                            .background(Color.accentColor.opacity(0.1))
-                            .cornerRadius(4)
+                            Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
+                                .font(.system(size: 20, weight: .regular))
+                                .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.plain)
                         .help(isSpeaking ? "Stop speaking" : "Read cover letter aloud")
@@ -193,7 +186,8 @@ struct CoverLetterAiContentView: View {
         }
 
         // Get the content from the current cover letter
-        guard let content = cL.wrappedValue.content, !content.isEmpty else {
+        let content = cL.wrappedValue.content
+        guard !content.isEmpty else {
             ttsError = "No content to speak"
             showTTSError = true
             return
@@ -215,10 +209,8 @@ struct CoverLetterAiContentView: View {
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
 
         // Request TTS conversion and playback with instructions
-        ttsProvider.speakText(cleanContent, voice: voice, instructions: instructions) { [weak self] error in
+        ttsProvider.speakText(cleanContent, voice: voice, instructions: instructions) { error in
             DispatchQueue.main.async {
-                guard let self = self else { return }
-
                 // Reset speaking state when playback completes
                 self.isSpeaking = false
 
