@@ -54,7 +54,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     func sendChatCompletion(
         messages: [ChatMessage],
         model: String,
-        temperature: Double = 0.7,
+        temperature: Double,
         onComplete: @escaping (Result<ChatCompletionResponse, Error>) -> Void
     ) {
         // Convert our messages to MacPaw's format
@@ -99,7 +99,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     func sendChatCompletionAsync(
         messages: [ChatMessage],
         model: String,
-        temperature: Double = 0.7
+        temperature: Double
     ) async throws -> ChatCompletionResponse {
         // Convert our messages to MacPaw's format
         let chatMessages = messages.compactMap { convertMessage($0) }
@@ -145,7 +145,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     func sendChatCompletionStreaming(
         messages: [ChatMessage],
         model: String,
-        temperature: Double = 0.7,
+        temperature: Double,
         onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
@@ -189,7 +189,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     func sendTTSRequest(
         text: String,
         voice: String,
-        instructions: String? = nil,
+        instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
         // Map voice string to MacPaw's voice type
@@ -209,13 +209,9 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             model: .gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
+            instructions: instructions ?? "",
             responseFormat: .mp3
         )
-        
-        // Add voice instructions if provided
-        if let instructions = instructions, !instructions.isEmpty {
-            query.instructions = instructions
-        }
 
         // Send the TTS request
         client.audioCreateSpeech(query: query) { result in
@@ -238,7 +234,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     func sendTTSStreamingRequest(
         text: String,
         voice: String,
-        instructions: String? = nil,
+        instructions: String?,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
@@ -259,13 +255,9 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             model: .gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
+            instructions: instructions ?? "",
             responseFormat: .mp3
         )
-        
-        // Add voice instructions if provided
-        if let instructions = instructions, !instructions.isEmpty {
-            query.instructions = instructions
-        }
 
         // Send the streaming TTS request
         client.audioCreateSpeechStream(query: query) { partialResult in

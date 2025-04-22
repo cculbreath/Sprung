@@ -51,14 +51,20 @@ class OpenAITTSProvider {
     ///   - instructions: Custom voice instructions (optional)
     ///   - onComplete: Called when audio playback is complete or fails
     func speakText(_ text: String, voice: Voice = .nova, instructions: String? = nil, onComplete: @escaping (Error?) -> Void) {
-        client.sendTTSRequest(text: text, voice: voice.rawValue, instructions: instructions) { [weak self] result in
-            switch result {
-            case let .success(audioData):
-                self?.playAudio(audioData, onComplete: onComplete)
-            case let .failure(error):
-                onComplete(error)
+        // Call the client with the voice and instructions
+        client.sendTTSRequest(
+            text: text,
+            voice: voice.rawValue,
+            instructions: instructions,
+            onComplete: { [weak self] result in
+                switch result {
+                case .success(let audioData):
+                    self?.playAudio(audioData, onComplete: onComplete)
+                case .failure(let error):
+                    onComplete(error)
+                }
             }
-        }
+        )
     }
 
     /// Converts text to speech with streaming
@@ -69,14 +75,21 @@ class OpenAITTSProvider {
     ///   - onChunk: Called for each received audio chunk
     ///   - onComplete: Called when streaming is complete
     func streamText(_ text: String, voice: Voice = .nova, instructions: String? = nil, onChunk: @escaping (Data) -> Void, onComplete: @escaping (Error?) -> Void) {
-        client.sendTTSStreamingRequest(text: text, voice: voice.rawValue, instructions: instructions, onChunk: { result in
-            switch result {
-            case let .success(audioData):
-                onChunk(audioData)
-            case let .failure(error):
-                print("TTS streaming error: \(error)")
-            }
-        }, onComplete: onComplete)
+        // Call the client with the voice and instructions
+        client.sendTTSStreamingRequest(
+            text: text,
+            voice: voice.rawValue,
+            instructions: instructions,
+            onChunk: { result in
+                switch result {
+                case .success(let audioData):
+                    onChunk(audioData)
+                case .failure(let error):
+                    print("TTS streaming error: \(error)")
+                }
+            },
+            onComplete: onComplete
+        )
     }
 
     /// Stops the currently playing speech
@@ -84,7 +97,7 @@ class OpenAITTSProvider {
         audioPlayer?.stop()
         audioPlayer = nil
     }
-    
+
     /// Plays the audio data
     /// - Parameters:
     ///   - audioData: The audio data to play
@@ -93,7 +106,7 @@ class OpenAITTSProvider {
         do {
             // Stop any existing playback
             stopSpeaking()
-            
+
             // Create and configure the new player
             audioPlayer = try AVAudioPlayer(data: audioData)
             audioPlayer?.delegate = AudioPlayerDelegate(onComplete: onComplete)
