@@ -6,7 +6,7 @@ import SwiftUI
 protocol OpenAIClientProtocol {
     /// The API key to use for requests
     var apiKey: String { get }
-    
+
     /// Sends a chat completion request
     /// - Parameters:
     ///   - messages: The conversation history
@@ -20,7 +20,7 @@ protocol OpenAIClientProtocol {
         temperature: Double,
         onComplete: @escaping (Result<ChatCompletionResponse, Error>) -> Void
     )
-    
+
     /// Sends a chat completion request using async/await
     /// - Parameters:
     ///   - messages: The conversation history
@@ -32,6 +32,45 @@ protocol OpenAIClientProtocol {
         model: String,
         temperature: Double
     ) async throws -> ChatCompletionResponse
+    
+    /// Sends a chat completion request with streaming
+    /// - Parameters:
+    ///   - messages: The conversation history
+    ///   - model: The model to use for completion
+    ///   - temperature: Controls randomness (0-1)
+    ///   - onChunk: Callback for each chunk of the streaming response
+    ///   - onComplete: Callback when streaming is complete
+    func sendChatCompletionStreaming(
+        messages: [ChatMessage],
+        model: String,
+        temperature: Double,
+        onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
+        onComplete: @escaping (Error?) -> Void
+    )
+    
+    /// Sends a TTS (Text-to-Speech) request
+    /// - Parameters:
+    ///   - text: The text to convert to speech
+    ///   - voice: The voice to use
+    ///   - onComplete: Callback with audio data
+    func sendTTSRequest(
+        text: String,
+        voice: String,
+        onComplete: @escaping (Result<Data, Error>) -> Void
+    )
+    
+    /// Sends a streaming TTS (Text-to-Speech) request
+    /// - Parameters:
+    ///   - text: The text to convert to speech
+    ///   - voice: The voice to use
+    ///   - onChunk: Callback for each chunk of audio data
+    ///   - onComplete: Callback when streaming is complete
+    func sendTTSStreamingRequest(
+        text: String, 
+        voice: String,
+        onChunk: @escaping (Result<Data, Error>) -> Void,
+        onComplete: @escaping (Error?) -> Void
+    )
 }
 
 /// Represents a chat message in a conversation
@@ -40,7 +79,7 @@ struct ChatMessage: Codable, Equatable {
     let role: ChatRole
     /// The content of the message
     let content: String
-    
+
     /// Creates a new chat message
     /// - Parameters:
     ///   - role: The role of the message sender
@@ -49,7 +88,7 @@ struct ChatMessage: Codable, Equatable {
         self.role = role
         self.content = content
     }
-    
+
     enum ChatRole: String, Codable {
         case system
         case user
@@ -63,7 +102,7 @@ struct ChatCompletionResponse: Codable, Equatable {
     let content: String
     /// The model used for the completion
     let model: String
-    
+
     init(content: String, model: String) {
         self.content = content
         self.model = model
