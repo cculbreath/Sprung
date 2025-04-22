@@ -4,6 +4,8 @@ import SwiftUI
 
 struct CoverLetterAiView: View {
     @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
+    @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
+    @AppStorage("ttsVoice") var ttsVoice: String = "nova"
     @Binding var buttons: CoverLetterButtons
     @Binding var refresh: Bool
 
@@ -16,11 +18,21 @@ struct CoverLetterAiView: View {
         let service = OpenAIServiceFactory.service(
             apiKey: openAiApiKey, configuration: configuration, debugEnabled: false
         )
+        
+        // Create OpenAI client using our abstraction layer
+        let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
+        
+        // Initialize TTS provider
+        let ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
 
         return CoverLetterAiContentView(
             service: service,
+            openAIClient: openAIClient,
+            ttsProvider: ttsProvider,
             buttons: $buttons,
-            refresh: $refresh
+            refresh: $refresh,
+            ttsEnabled: $ttsEnabled,
+            ttsVoice: $ttsVoice
         )
         .onAppear { print("Ai Cover Letter") }
     }
@@ -33,7 +45,20 @@ struct CoverLetterAiContentView: View {
     @State var aiMode: CoverAiMode = .none
     @Binding var buttons: CoverLetterButtons
     @Binding var refresh: Bool
+    
+    // Legacy service for backward compatibility
     let service: OpenAIService
+    // Abstraction layer for OpenAI
+    let openAIClient: OpenAIClientProtocol
+    // TTS provider for speech synthesis
+    let ttsProvider: OpenAITTSProvider
+    
+    // TTS related state
+    @Binding var ttsEnabled: Bool
+    @Binding var ttsVoice: String
+    @State private var isSpeaking: Bool = false
+    @State private var ttsError: String? = nil
+    @State private var showTTSError: Bool = false
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
@@ -42,13 +67,21 @@ struct CoverLetterAiContentView: View {
 
     init(
         service: OpenAIService,
+        openAIClient: OpenAIClientProtocol,
+        ttsProvider: OpenAITTSProvider,
         buttons: Binding<CoverLetterButtons>,
-        refresh: Binding<Bool>
+        refresh: Binding<Bool>,
+        ttsEnabled: Binding<Bool> = .constant(false),
+        ttsVoice: Binding<String> = .constant("nova")
     ) {
         self.service = service
+        self.openAIClient = openAIClient
+        self.ttsProvider = ttsProvider
         _buttons = buttons
         chatProvider = CoverChatProvider(service: service)
         _refresh = refresh
+        _ttsEnabled = ttsEnabled
+        _ttsVoice = ttsVoice
     }
 
     var cL: Binding<CoverLetter> {
@@ -122,6 +155,27 @@ struct CoverLetterAiContentView: View {
                                 : "Select the best cover letter based on style and voice"
                         )
                     }
+                    
+                    // TTS Button - only show if TTS is enabled and we have content
+                    if ttsEnabled && cL.wrappedValue.generated && !cL.wrappedValue.content.isEmpty {
+                        Button(action: {
+                            speakCoverLetter()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
+                                    .font(.system(size: 16, weight: .regular))
+                                Text(isSpeaking ? "Stop" : "Read Aloud")
+                                    .font(.caption)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.1))
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help(isSpeaking ? "Stop speaking" : "Read cover letter aloud")
+                        .disabled(buttons.runRequested || buttons.chooseBestRequested)
+                    }
                 }
                 .onAppear { print("AI content") }
             }
@@ -134,9 +188,60 @@ struct CoverLetterAiContentView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .alert("TTS Error", isPresented: $showTTSError) {
+            Button("OK") { showTTSError = false }
+        } message: {
+            Text(ttsError ?? "An error occurred with text-to-speech")
+        }
     }
 
     // MARK: - Actions
+    
+    /// Read the cover letter aloud using TTS
+    func speakCoverLetter() {
+        // If currently speaking, stop playback
+        if isSpeaking {
+            ttsProvider.stopSpeaking()
+            isSpeaking = false
+            return
+        }
+        
+        // Get the content from the current cover letter
+        guard let content = cL.wrappedValue.content, !content.isEmpty else {
+            ttsError = "No content to speak"
+            showTTSError = true
+            return
+        }
+        
+        // Prepare the text for speech - remove markdown formatting if needed
+        let cleanContent = content
+            .replacingOccurrences(of: "#", with: "")
+            .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "*", with: "")
+        
+        // Set UI state to speaking
+        isSpeaking = true
+        
+        // Get the voice from the user preference
+        let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
+        
+        // Request TTS conversion and playback
+        ttsProvider.speakText(cleanContent, voice: voice) { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                // Reset speaking state when playback completes
+                self.isSpeaking = false
+                
+                // Handle any errors
+                if let error = error {
+                    self.ttsError = error.localizedDescription
+                    self.showTTSError = true
+                    print("TTS error: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
 
     /// Initiates the choose‑best‑cover‑letter operation
     func chooseBestCoverLetter() {
