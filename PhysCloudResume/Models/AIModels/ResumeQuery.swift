@@ -117,10 +117,11 @@ import SwiftOpenAI
 
     // MARK: - Initialization
 
+    @MainActor
     init(resume: Resume, saveDebugPrompt: Bool = true) {
         // Optionally let users pass in the debug flag during initialization
         res = resume
-        applicant = Applicant() // Extend for custom applicant data
+        applicant = Applicant() // Uses the custom applicant profile
         self.saveDebugPrompt = saveDebugPrompt
     }
 

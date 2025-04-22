@@ -16,7 +16,8 @@ struct ApplicantProfileView: View {
     @State private var hasChanges = false
     
     init() {
-        _profile = State(initialValue: ApplicantProfileManager.shared.getProfile())
+        // Initialize with a default profile, then update it in onAppear
+        _profile = State(initialValue: ApplicantProfile())
     }
     
     var body: some View {
@@ -73,7 +74,11 @@ struct ApplicantProfileView: View {
             
             Section {
                 Button("Save Profile") {
-                    saveProfile()
+                    Task {
+                        await MainActor.run {
+                            saveProfile()
+                        }
+                    }
                 }
                 .disabled(!hasChanges)
                 
@@ -91,6 +96,10 @@ struct ApplicantProfileView: View {
             allowsMultipleSelection: false
         ) { result in
             handleSignatureSelection(result)
+        }
+        .task {
+            // Load profile from manager
+            await loadProfile()
         }
     }
     
@@ -117,6 +126,12 @@ struct ApplicantProfileView: View {
         }
     }
     
+    @MainActor
+    private func loadProfile() async {
+        profile = ApplicantProfileManager.shared.getProfile()
+    }
+    
+    @MainActor
     private func saveProfile() {
         ApplicantProfileManager.shared.saveProfile(profile)
         successMessage = "Profile saved successfully"
