@@ -615,38 +615,60 @@ enum CoverLetterPDFGenerator {
 
             // Draw signature image if available and this is the first/only page
             if currentLocation == 0, let signatureImage = signatureImage {
-                // Find where to place the signature
-                let signatureMarker = "Best Regards,"
-                let lines = text.components(separatedBy: .newlines)
-                var lineIndex = 0
-                for (idx, line) in lines.enumerated() {
-                    if line.contains(signatureMarker) {
-                        lineIndex = idx
-                        break
+                // Look for "Best Regards," in the source text
+                let bestRegardsMarker = "Best Regards,"
+                let nameMarker = "Christopher Culbreath"
+                
+                // Get all lines from the frame for proper positioning
+                let frameLines = CTFrameGetLines(frame) as? [CTLine] ?? []
+                var origins = Array(repeating: CGPoint.zero, count: frameLines.count)
+                CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &origins)
+                
+                // Find the line containing "Best Regards," and the next line with the name
+                var bestRegardsLineIndex: Int?
+                var nameLineIndex: Int?
+                
+                for (idx, line) in frameLines.enumerated() {
+                    let lineRange = CTLineGetStringRange(line)
+                    if lineRange.length > 0 {
+                        let lineStart = lineRange.location
+                        let lineEnd = lineStart + lineRange.length
+                        
+                        let nsString = attributedString.string as NSString
+                        let lineContent = nsString.substring(with: NSRange(location: lineStart, length: lineRange.length))
+                        
+                        if lineContent.contains(bestRegardsMarker) {
+                            bestRegardsLineIndex = idx
+                        } else if lineContent.contains(nameMarker) {
+                            nameLineIndex = idx
+                            break // Found what we need
+                        }
                     }
                 }
-
-                // Signature should be placed after "Best Regards," and before name (typically 2 lines gap)
-                let bestRegardsLineHeight: CGFloat = (finalFont.ascender - finalFont.descender)
-                let lineSpacing: CGFloat = baseLineSpacing + 7.0 // Line spacing + paragraph spacing
-
-                // Calculate signature position
-                let signatureY = textRect.origin.y + textRect.height - CGFloat(lineIndex + 2) * (bestRegardsLineHeight + lineSpacing)
-                let signatureHeight: CGFloat = 60.0 // Reasonable height for signature
-
-                // Scale signature while maintaining aspect ratio
+                
+                // Default positioning 
+                var signatureY = textRect.origin.y + 100
+                
+                // If we found the name line, position relative to it
+                if let nameIdx = nameLineIndex, nameIdx < origins.count {
+                    signatureY = origins[nameIdx].y + 5 // Position just above the name line
+                } else if let regardsIdx = bestRegardsLineIndex, regardsIdx < origins.count {
+                    signatureY = origins[regardsIdx].y - 30 // Position below "Best Regards,"
+                }
+                
+                // Size the signature appropriately
+                let signatureHeight: CGFloat = 45.0 // Smaller signature
                 let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
                 let signatureWidth = signatureHeight * imageAspectRatio
-
-                // Signature should be aligned with text
-                let signatureX = textRect.origin.x
+                
+                // Position signature inline with text
                 let signatureRect = CGRect(
-                    x: signatureX,
-                    y: signatureY - signatureHeight + 10, // Adjust to align with name line
-                    width: min(signatureWidth, textRect.width * 0.7), // Limit width to 70% of text width
+                    x: textRect.origin.x,
+                    y: signatureY - (signatureHeight * 0.8), // Position to align with text baseline
+                    width: min(signatureWidth, textRect.width * 0.5), // Limit width
                     height: signatureHeight
                 )
-
+                
                 // Draw the signature
                 if let cgImage = signatureImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     pdfContext.draw(cgImage, in: signatureRect)

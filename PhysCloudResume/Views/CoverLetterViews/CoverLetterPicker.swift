@@ -24,10 +24,11 @@ struct CoverLetterPicker: View {
                     Text(letter.sequencedName)
                         .tag(letter as CoverLetter?)
                 } else {
-                    Text("Ungenerated draft")
+                    Text(selection == letter ? letter.sequencedName : "Ungenerated draft")
                         .tag(letter as CoverLetter?)
                 }
             }
         }
+        .id(selection?.id) // Force refresh when selection changes
     }
 }
