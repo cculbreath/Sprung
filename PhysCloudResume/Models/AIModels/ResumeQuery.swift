@@ -70,7 +70,8 @@ import SwiftOpenAI
         )
     )
 
-    let applicant: Applicant
+    // Make this var instead of let so it can be updated
+    var applicant: Applicant 
     var queryString: String = ""
     let attentionGrab: Int = 2
     let res: Resume
@@ -125,11 +126,21 @@ import SwiftOpenAI
         self.saveDebugPrompt = saveDebugPrompt
     }
     
-    // Secondary initializer with custom applicant profile to avoid MainActor requirement
+    // Secondary initializer that creates a non-MainActor placeholder applicant
     init(resume: Resume, applicantProfile: ApplicantProfile, saveDebugPrompt: Bool = false) {
         res = resume
-        // Create an Applicant with the provided profile
-        applicant = Applicant(profile: applicantProfile)
+        // Create a basic applicant without using the MainActor-isolated initializer
+        // This is safe because we're just creating a data container with the provided values
+        applicant = Applicant(
+            name: applicantProfile.name,
+            address: applicantProfile.address,
+            city: applicantProfile.city,
+            state: applicantProfile.state,
+            zip: applicantProfile.zip,
+            websites: applicantProfile.websites,
+            email: applicantProfile.email,
+            phone: applicantProfile.phone
+        )
         self.saveDebugPrompt = saveDebugPrompt
     }
     

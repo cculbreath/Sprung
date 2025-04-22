@@ -64,6 +64,30 @@ struct Applicant {
         self.profile = profile ?? ApplicantProfileManager.shared.getProfile()
     }
     
+    // Non-MainActor initializer that directly sets values - for use in non-MainActor contexts
+    init(
+        name: String,
+        address: String,
+        city: String,
+        state: String,
+        zip: String,
+        websites: String,
+        email: String,
+        phone: String
+    ) {
+        // Create a standalone ApplicantProfile without accessing MainActor-isolated code
+        self.profile = ApplicantProfile(
+            name: name, 
+            address: address,
+            city: city,
+            state: state,
+            zip: zip,
+            websites: websites,
+            email: email,
+            phone: phone
+        )
+    }
+    
     // Forward properties to maintain backward compatibility
     var name: String { profile.name }
     var address: String { profile.address }
