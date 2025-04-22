@@ -102,15 +102,15 @@ final class CoverLetterRecommendationProvider {
                 let result = try await macPawClient.openAIClient.chats(query: query)
                 
                 // Extract structured output response
-                guard let choice = result.choices.first, let structuredOutput = choice.message.structuredOutput as? BestCoverLetterResponse else {
+                if let structuredOutput = result.choices.first?.message.output?.value as? BestCoverLetterResponse {
+                    return structuredOutput
+                } else {
                     throw NSError(
                         domain: "CoverLetterRecommendationProvider",
                         code: 1002,
                         userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output"]
                     )
                 }
-                
-                return structuredOutput
             } else {
                 // Fallback to the old method for non-MacPaw clients
                 let response = try await openAIClient.sendChatCompletionAsync(

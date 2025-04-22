@@ -129,8 +129,7 @@ final class ResumeChatProvider {
                             let result = try await macPawClient.openAIClient.chats(query: query)
                             
                             // Extract structured output response
-                            guard let choice = result.choices.first, 
-                                  let structuredOutput = choice.message.structuredOutput as? RevisionsContainer else {
+                            guard let structuredOutput = result.choices.first?.message.output?.value as? RevisionsContainer else {
                                 throw NSError(
                                     domain: "ResumeChatProviderError",
                                     code: 1002,

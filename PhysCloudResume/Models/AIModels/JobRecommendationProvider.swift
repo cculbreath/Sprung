@@ -124,7 +124,7 @@ import OpenAI
                 let result = try await macPawClient.openAIClient.chats(query: query)
                 
                 // Extract structured output response
-                guard let choice = result.choices.first, let structuredOutput = choice.message.structuredOutput as? JobRecommendation else {
+                guard let structuredOutput = result.choices.first?.message.output?.value as? JobRecommendation else {
                     throw NSError(
                         domain: "JobRecommendationProvider",
                         code: 1002,
