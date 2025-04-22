@@ -34,8 +34,11 @@ struct AddCoverRefForm: View {
             HStack {
                 Button("Add") {
                     saveForm()
-                    resetForm()
-                    dismissForm()
+                    // Delay dismissal briefly so SwiftData can publish the new item before unmounting
+                    DispatchQueue.main.async {
+                        resetForm()
+                        dismissForm()
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 Button("Cancel") {
