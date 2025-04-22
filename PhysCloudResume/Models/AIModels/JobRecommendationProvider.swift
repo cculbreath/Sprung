@@ -116,8 +116,8 @@ import OpenAI
                 let query = ChatQuery(
                     messages: chatMessages,
                     model: modelString,
-                    temperature: 1.0,
-                    responseFormat: .jsonSchema(name: "job-recommendation", type: JobRecommendation.self)
+                    responseFormat: .jsonSchema(name: "job-recommendation", type: JobRecommendation.self),
+                    temperature: 1.0
                 )
                 
                 // Make the API call with structured output

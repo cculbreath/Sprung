@@ -16,7 +16,7 @@ struct ProposedRevisionNode: Codable, Equatable {
     var why: String = ""
 }
 
-struct RevisionsContainer: Codable, OpenAI.StructuredOutput {
+struct RevisionsContainer: Codable, StructuredOutput {
     var revArray: [ProposedRevisionNode]
     
     static let example: Self = {
