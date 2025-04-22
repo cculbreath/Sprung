@@ -521,7 +521,8 @@ enum CoverLetterPDFGenerator {
         }
 
         // Adjust signature block spacing: reduce paragraphSpacing for contact lines
-        let signatureSpacing: CGFloat = 4.0
+        let signatureSpacing: CGFloat = 2.0 // Reduced from 4.0 to tighten spacing between address and email lines
+        let contactLineSpacing: CGFloat = baseLineSpacing - 2.0 // Tighter line spacing for contact info
         let textNSString = attributedString.string as NSString
         textNSString.enumerateSubstrings(in: fullRange, options: .byParagraphs) { substring, substringRange, _, _ in
             guard let substring = substring else { return }
@@ -529,6 +530,13 @@ enum CoverLetterPDFGenerator {
             if trimmed.contains("|") {
                 let newPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
                 newPS.paragraphSpacing = signatureSpacing
+                
+                // Apply tighter line spacing to the contact info lines
+                if trimmed.contains("@") || trimmed.contains(".com") {
+                    // This is likely the email/website line that follows the address line
+                    newPS.lineSpacing = contactLineSpacing
+                }
+                
                 attributedString.addAttribute(.paragraphStyle, value: newPS, range: substringRange)
             }
         }
