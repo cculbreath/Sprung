@@ -615,8 +615,16 @@ enum CoverLetterPDFGenerator {
 
             // Draw signature image if available and this is the first/only page
             if currentLocation == 0, let signatureImage = signatureImage {
-                // Look for signature markers in the source text
-                let regardsMarkers = ["Best Regards,", "Best regards,", "Sincerely,", "Thank you,", "Regards,"]
+                // Look for signature markers in the source text (with and without commas)
+                let regardsMarkers = [
+                    "Best Regards,", "Best regards,", "Best Regards", "Best regards",
+                    "Sincerely,", "Sincerely", "Sincerely yours,", "Sincerely Yours", 
+                    "Thank you,", "Thank you",
+                    "Regards,", "Regards",
+                    "Warm Regards,", "Warm regards,", "Warm Regards", "Warm regards",
+                    "Yours truly,", "Yours Truly,", "Yours truly", "Yours Truly",
+                    "Respectfully,", "Respectfully"
+                ]
                 let nameMarker = "Christopher Culbreath"
 
                 // Get all lines from the frame for proper positioning
@@ -636,12 +644,12 @@ enum CoverLetterPDFGenerator {
                         let nsString = attributedString.string as NSString
                         let lineContent = nsString.substring(with: NSRange(location: lineStart, length: lineRange.length))
                         let trimmedContent = lineContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                            
+
                         // Look for closing markers
                         for marker in regardsMarkers {
                             if trimmedContent.contains(marker) {
                                 regardsLineIndex = idx
-                                    
+
                                 // Check for empty line after regards
                                 if idx + 1 < frameLines.count {
                                     let nextLineRange = CTLineGetStringRange(frameLines[idx + 1])
@@ -655,7 +663,7 @@ enum CoverLetterPDFGenerator {
                                 break
                             }
                         }
-                            
+
                         // Look for name
                         if trimmedContent.contains(nameMarker) {
                             nameLineIndex = idx
@@ -666,7 +674,7 @@ enum CoverLetterPDFGenerator {
                 // Default positioning (fallback)
                 var signatureY = textRect.origin.y + 100
                 var idealPosition = false
-                    
+
                 // Dynamically position based on what we found
                 if let nameIdx = nameLineIndex, nameIdx < origins.count {
                     if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
@@ -690,7 +698,7 @@ enum CoverLetterPDFGenerator {
                     // Only "Best Regards" found - position after it
                     signatureY = origins[regardsIdx].y - 35
                 }
-                    
+
                 // Adjust size based on whether we have an ideal position
                 let signatureHeight: CGFloat = idealPosition ? 50.0 : 45.0
                 let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
@@ -708,12 +716,12 @@ enum CoverLetterPDFGenerator {
                 if let cgImage = signatureImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     // Apply slight scaling based on available space
                     pdfContext.saveGState()
-                        
+
                     // Draw with slight transparency to ensure it doesn't overwhelm the document
                     pdfContext.setAlpha(0.95)
                     pdfContext.draw(cgImage, in: signatureRect)
                     pdfContext.restoreGState()
-                        
+
                     print("Signature image drawn at \(signatureRect)")
                 }
             }
