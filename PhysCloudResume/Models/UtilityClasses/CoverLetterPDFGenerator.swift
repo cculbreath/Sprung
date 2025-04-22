@@ -521,24 +521,40 @@ enum CoverLetterPDFGenerator {
         }
 
         // Adjust signature block spacing: reduce paragraphSpacing for contact lines
-        let signatureSpacing: CGFloat = 2.0 // Reduced from 4.0 to tighten spacing between address and email lines
-        let contactLineSpacing: CGFloat = baseLineSpacing - 2.0 // Tighter line spacing for contact info
+        let signatureSpacing: CGFloat = 0.0 // Remove paragraph spacing completely between contact lines
+        let contactLineSpacing: CGFloat = baseLineSpacing - 4.0 // Much tighter line spacing for contact info
+        
+        // Get the indices of the contact info lines to apply custom styling
+        var addressLineRange: NSRange?
+        var emailLineRange: NSRange?
+        
+        // First identify the contact lines
         let textNSString = attributedString.string as NSString
         textNSString.enumerateSubstrings(in: fullRange, options: .byParagraphs) { substring, substringRange, _, _ in
             guard let substring = substring else { return }
             let trimmed = substring.trimmingCharacters(in: .whitespacesAndNewlines)
+            
             if trimmed.contains("|") {
-                let newPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
-                newPS.paragraphSpacing = signatureSpacing
-                
-                // Apply tighter line spacing to the contact info lines
                 if trimmed.contains("@") || trimmed.contains(".com") {
-                    // This is likely the email/website line that follows the address line
-                    newPS.lineSpacing = contactLineSpacing
+                    emailLineRange = substringRange
+                } else {
+                    addressLineRange = substringRange
                 }
-                
-                attributedString.addAttribute(.paragraphStyle, value: newPS, range: substringRange)
             }
+        }
+        
+        // Apply ultra-tight spacing between address and email lines
+        if let addressRange = addressLineRange {
+            let addressPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
+            addressPS.paragraphSpacing = signatureSpacing // Remove paragraph spacing after address line
+            attributedString.addAttribute(.paragraphStyle, value: addressPS, range: addressRange)
+        }
+        
+        // Apply tight line spacing to the email/website line
+        if let emailRange = emailLineRange {
+            let emailPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
+            emailPS.lineSpacing = contactLineSpacing // Much tighter line spacing
+            attributedString.addAttribute(.paragraphStyle, value: emailPS, range: emailRange)
         }
 
         // Setup PDF context
