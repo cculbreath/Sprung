@@ -201,9 +201,10 @@ final class CoverChatProvider {
             appendUserMessage(feedbackPrompt)
         } else {
             // Use the prompt template from the editor prompts
+            let promptTemplate = letter.editorPrompt ?? .zissner
             let rewritePrompt = """
                 My initial draft of a cover letter to accompany my application is included below.
-                \(letter.editorPrompt?.rawValue ?? "")
+                \(promptTemplate.rawValue)
                 
                 Cover Letter initial draft:
                 \(letter.content)
