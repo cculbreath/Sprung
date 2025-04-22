@@ -7,8 +7,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.setupAppMenu()
+        }
+
+        // Also add the top-level Profile menu to make sure it's available
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.addProfileMainMenu()
+        }
+    }
+
+    private func addProfileMainMenu() {
+        // Add a top-level Profile menu
+        guard let mainMenu = NSApp.mainMenu else {
+            print("Main menu not available for Profile menu")
+            return
+        }
+
+        // Create new Profile menu
+        let profileMenu = NSMenu(title: "Profile")
+        let profileMenuItem = NSMenuItem(title: "Profile", action: nil, keyEquivalent: "")
+        profileMenuItem.submenu = profileMenu
+
+        // Add items to the menu
+        let applicantMenuItem = NSMenuItem(
+            title: "Applicant Profile...",
+            action: #selector(showApplicantProfileWindow),
+            keyEquivalent: "P"
+        )
+        applicantMenuItem.keyEquivalentModifierMask = [.command, .shift]
+        applicantMenuItem.target = self
+        profileMenu.addItem(applicantMenuItem)
+
+        // Insert between Edit and View menus
+        let insertPosition = 2 // Typically after Edit menu
+        if mainMenu.numberOfItems > insertPosition {
+            mainMenu.insertItem(profileMenuItem, at: insertPosition)
+            print("Added top-level Profile menu at position \(insertPosition)")
+        } else {
+            mainMenu.addItem(profileMenuItem)
+            print("Added top-level Profile menu at end")
         }
     }
 
@@ -111,20 +149,53 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func showApplicantProfileWindow() {
+        print("showApplicantProfileWindow called")
+
+        // If window exists but was closed, reset it
+        if let window = applicantProfileWindow, !window.isVisible {
+            applicantProfileWindow = nil
+            print("Window exists but is not visible, recreating")
+        }
+
         if applicantProfileWindow == nil {
+            print("Creating new applicant profile window")
             let profileView = ApplicantProfileView()
+            let hostingView = NSHostingView(rootView: profileView)
+
             applicantProfileWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered, defer: false
             )
             applicantProfileWindow?.title = "Applicant Profile"
-            applicantProfileWindow?.contentView = NSHostingView(rootView: profileView)
+            applicantProfileWindow?.contentView = hostingView
             applicantProfileWindow?.isReleasedWhenClosed = false
-
-            // Center the window on the screen
             applicantProfileWindow?.center()
+
+            // Set a minimum size for the window
+            applicantProfileWindow?.minSize = NSSize(width: 500, height: 400)
+
+            // Register for notifications when window is closed
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowWillClose(_:)),
+                name: NSWindow.willCloseNotification,
+                object: applicantProfileWindow
+            )
         }
+
+        // Bring the window to the front
         applicantProfileWindow?.makeKeyAndOrderFront(nil)
+
+        // Activate the app to ensure focus
+        NSApp.activate(ignoringOtherApps: true)
+
+        print("Profile window should now be visible")
+    }
+
+    @objc func windowWillClose(_ notification: Notification) {
+        if notification.object as? NSWindow == applicantProfileWindow {
+            print("Applicant profile window will close")
+        }
     }
 }
