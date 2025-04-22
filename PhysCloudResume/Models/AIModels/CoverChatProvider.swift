@@ -1,78 +1,180 @@
 import Foundation
-import SwiftOpenAI
 import SwiftUI
+import SwiftOpenAI // Will be removed later in the migration
 
 @Observable
 final class CoverChatProvider {
-    private let service: OpenAIService
+    // The OpenAI client that will be used for API calls
+    private let openAIClient: OpenAIClientProtocol
+    // For backward compatibility during migration
+    private let service: OpenAIService?
+    
     var message: String = ""
     var messages: [String] = []
+    // For backward compatibility - will be replaced with our new message type
     var messageHist: [ChatCompletionParameters.Message] = []
+    // Stores generic chat messages for the new abstraction layer
+    var genericMessages: [ChatMessage] = []
     var errorMessage: String = ""
     var resultsAvailable: Bool = false
     var lastResponse: String = ""
 
-    // MARK: - Initializer
-
+    // MARK: - Initializers
+    
+    /// Initialize with the new abstraction layer client
+    /// - Parameter client: An OpenAI client conforming to OpenAIClientProtocol
+    init(client: OpenAIClientProtocol) {
+        self.openAIClient = client
+        self.service = nil
+    }
+    
+    /// Initialize with the legacy SwiftOpenAI service (for backward compatibility)
+    /// - Parameter service: The OpenAIService from SwiftOpenAI
     init(service: OpenAIService) {
         self.service = service
+        self.openAIClient = SwiftOpenAIClient(apiKey: service.apiKey)
     }
 
+    // Legacy method - uses SwiftOpenAI directly
     func startChat(
         parameters: ChatCompletionParameters,
-        onComplete: (_: String) -> Void
+        onComplete: @escaping (_: String) -> Void
     ) async throws {
-        do {
-            print("sending request")
-            let result = try await service.startChat(parameters: parameters)
-            let choices = result.choices ?? []
+        // If we have a service, use it directly for backward compatibility
+        if let service = service {
+            do {
+                print("sending request using legacy service")
+                let result = try await service.startChat(parameters: parameters)
+                let choices = result.choices ?? []
 
-            // Process messages using proper optional handling
-            messages = choices.compactMap { choice in
-                if let message = choice.message, let content = message.content {
-                    return content.asJsonFormatted()
+                // Process messages using proper optional handling
+                messages = choices.compactMap { choice in
+                    if let message = choice.message, let content = message.content {
+                        return content.asJsonFormatted()
+                    }
+                    return nil
                 }
-                return nil
-            }
-            assert(messages.count == 1)
-            print(messages.last ?? "Nothin")
-            // Get the last response content safely
-            let lastContent: String = {
-                if let lastChoice = choices.last,
-                   let message = lastChoice.message,
-                   let content = message.content
-                {
-                    return content
-                }
-                return ""
-            }()
+                assert(messages.count == 1)
+                print(messages.last ?? "Nothing")
+                // Get the last response content safely
+                let lastContent: String = {
+                    if let lastChoice = choices.last,
+                       let message = lastChoice.message,
+                       let content = message.content
+                    {
+                        return content
+                    }
+                    return ""
+                }()
 
-            messageHist.append(
-                .init(
-                    role: .assistant,
-                    content: .text(lastContent)
+                messageHist.append(
+                    .init(
+                        role: .assistant,
+                        content: .text(lastContent)
+                    )
                 )
-            )
 
-            lastResponse = lastContent
-            resultsAvailable = true
+                lastResponse = lastContent
+                resultsAvailable = true
 
-            // Check for refusal safely
-            errorMessage = {
-                if let firstChoice = choices.first,
-                   let message = firstChoice.message,
-                   let refusal = message.refusal
-                {
-                    return refusal
+                // Check for refusal safely
+                errorMessage = {
+                    if let firstChoice = choices.first,
+                       let message = firstChoice.message,
+                       let refusal = message.refusal
+                    {
+                        return refusal
+                    }
+                    return ""
+                }()
+                onComplete(lastResponse)
+            } catch let APIError.responseUnsuccessful(description, statusCode) {
+                self.errorMessage =
+                    "Network error with status code: \(statusCode) and description: \(description)"
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        } else {
+            // Use the abstraction layer if no service is available
+            await withCheckedContinuation { continuation in
+                startChatWithGenericClient(parameters: parameters) { result in
+                    onComplete(result)
+                    continuation.resume()
                 }
-                return ""
-            }()
-            onComplete(lastResponse)
-        } catch let APIError.responseUnsuccessful(description, statusCode) {
-            self.errorMessage =
-                "Network error with status code: \(statusCode) and description: \(description)"
-        } catch {
-            errorMessage = error.localizedDescription
+            }
+        }
+    }
+    
+    /// New method using the abstraction layer
+    func startChatWithGenericClient(
+        parameters: ChatCompletionParameters,
+        onComplete: @escaping (_: String) -> Void
+    ) {
+        print("sending request using abstraction layer")
+        
+        // Convert SwiftOpenAI messages to generic format
+        let genericMessages = parameters.messages.map { message in
+            let role = ChatMessage.ChatRole(rawValue: message.role.rawValue) ?? .user
+            let content: String
+            
+            switch message.content {
+            case let .text(text):
+                content = text
+            case let .contentArray(array):
+                // Simplified handling of content array - this might need enhancement
+                // based on actual usage in your application
+                content = array.compactMap { item in
+                    switch item {
+                    case let .text(text):
+                        return text
+                    default:
+                        return nil
+                    }
+                }.joined(separator: "\n")
+            }
+            
+            return ChatMessage(role: role, content: content)
+        }
+        
+        // Store for future reference
+        self.genericMessages = genericMessages
+        
+        // Get model as string
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Send the request using our abstraction layer
+        openAIClient.sendChatCompletion(
+            messages: genericMessages,
+            model: modelString,
+            temperature: parameters.temperature ?? 0.7
+        ) { [weak self] result in
+            guard let self = self else { return }
+            
+            switch result {
+            case .success(let response):
+                let content = response.content
+                
+                // Update state to match legacy behavior
+                self.messages = [content.asJsonFormatted()]
+                self.lastResponse = content
+                self.resultsAvailable = true
+                
+                // Also update legacy message history for compatibility
+                self.messageHist.append(
+                    .init(
+                        role: .assistant,
+                        content: .text(content)
+                    )
+                )
+                
+                // Add to generic message history
+                self.genericMessages.append(ChatMessage(role: .assistant, content: content))
+                
+                onComplete(content)
+                
+            case .failure(let error):
+                self.errorMessage = error.localizedDescription
+            }
         }
     }
 
