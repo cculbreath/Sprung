@@ -8,10 +8,17 @@
 import Foundation
 import SwiftOpenAI
 
+/// Provides model fetching and conversion utilities for OpenAI models
 class OpenAIModelFetcher {
-    /// Get the configured preferred model from UserDefaults
-    static func getPreferredModel() -> Model {
+    /// Get the configured preferred model string from UserDefaults
+    static func getPreferredModelString() -> String {
         let modelString = UserDefaults.standard.string(forKey: "preferredOpenAIModel") ?? "gpt-4o-2024-08-06"
+        return modelString
+    }
+    
+    /// Get the configured preferred model as a SwiftOpenAI Model enum
+    static func getPreferredModel() -> Model {
+        let modelString = getPreferredModelString()
         let model = modelFromString(modelString)
         print("Retrieved preferred model: \(modelString) → \(model)")
         return model
@@ -89,4 +96,11 @@ class OpenAIModelFetcher {
     }
 
     /// Convert a model string to the corresponding SwiftOpenAI Model enum
+    
+    /// MacPaw/OpenAI model mapping (will be used when we integrate MacPaw/OpenAI)
+    static func getMacPawModelString(_ modelId: String) -> String {
+        // MacPaw/OpenAI uses string constants for models
+        // This is a placeholder for future implementation
+        return modelId
+    }
 }
