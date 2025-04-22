@@ -116,9 +116,19 @@ final class CoverChatProvider {
 
         // Convert SwiftOpenAI messages to generic format
         let genericMessages = parameters.messages.map { message in
-            // Convert the role string directly
-            let roleString = message.role.rawValue
-            let role = ChatMessage.ChatRole(rawValue: roleString) ?? .user
+            // Map the roles directly - we know all the possible values from SwiftOpenAI
+            let role: ChatMessage.ChatRole
+            switch message.role {
+            case .user:
+                role = .user
+            case .assistant:
+                role = .assistant
+            case .system:
+                role = .system
+            default:
+                role = .user // Default fallback
+            }
+            
             let content: String
 
             switch message.content {
