@@ -21,7 +21,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             organizationIdentifier: nil,
             timeoutInterval: 60.0
         )
-        self.client = OpenAI(configuration: configuration)
+        client = OpenAI(configuration: configuration)
     }
 
     /// Converts our ChatMessage to MacPaw's ChatQuery.ChatCompletionMessageParam
@@ -29,7 +29,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     /// - Returns: The converted message
     private func convertMessage(_ message: ChatMessage) -> ChatQuery.ChatCompletionMessageParam? {
         let role: ChatQuery.ChatCompletionMessageParam.Role
-        
+
         switch message.role {
         case .system:
             role = .system
@@ -38,7 +38,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         case .assistant:
             role = .assistant
         }
-        
+
         return ChatQuery.ChatCompletionMessageParam(
             role: role,
             content: message.content
@@ -59,18 +59,18 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     ) {
         // Convert our messages to MacPaw's format
         let chatMessages = messages.compactMap { convertMessage($0) }
-        
+
         // Create the query with the converted messages
         let query = ChatQuery(
             messages: chatMessages,
             model: model,
             temperature: temperature
         )
-        
+
         // Send the chat completion request
         client.chats(query: query) { result in
             switch result {
-            case .success(let chatResult):
+            case let .success(chatResult):
                 if let choice = chatResult.choices.first, let content = choice.message.content {
                     let response = ChatCompletionResponse(
                         content: content,
@@ -84,7 +84,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
                         userInfo: [NSLocalizedDescriptionKey: "No valid response content"]
                     )))
                 }
-            case .failure(let error):
+            case let .failure(error):
                 onComplete(.failure(error))
             }
         }
@@ -103,18 +103,18 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     ) async throws -> ChatCompletionResponse {
         // Convert our messages to MacPaw's format
         let chatMessages = messages.compactMap { convertMessage($0) }
-        
+
         // Create the query with the converted messages
         let query = ChatQuery(
             messages: chatMessages,
             model: model,
             temperature: temperature
         )
-        
+
         do {
             // Send the chat completion request
             let result = try await client.chats(query: query)
-            
+
             // Extract the response content from the first choice
             guard let choice = result.choices.first, let content = choice.message.content else {
                 throw NSError(
@@ -123,7 +123,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
                     userInfo: [NSLocalizedDescriptionKey: "No valid response content"]
                 )
             }
-            
+
             // Create and return the chat completion response
             return ChatCompletionResponse(
                 content: content,
@@ -134,7 +134,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             throw error
         }
     }
-    
+
     /// Sends a chat completion request with streaming
     /// - Parameters:
     ///   - messages: The conversation history
@@ -151,7 +151,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     ) {
         // Convert our messages to MacPaw's format
         let chatMessages = messages.compactMap { convertMessage($0) }
-        
+
         // Create streamable query with the converted messages
         var query = ChatQuery(
             messages: chatMessages,
@@ -159,11 +159,11 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             temperature: temperature
         )
         query.stream = true
-        
+
         // Start the streaming request
         client.chatsStream(query: query) { chunkResult in
             switch chunkResult {
-            case .success(let streamResult):
+            case let .success(streamResult):
                 // Map the stream chunk to our response format
                 if let choice = streamResult.choices.first, let content = choice.delta.content {
                     let response = ChatCompletionResponse(
@@ -172,22 +172,24 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
                     )
                     onChunk(.success(response))
                 }
-            case .failure(let error):
+            case let .failure(error):
                 onChunk(.failure(error))
             }
         } completion: { error in
             onComplete(error)
         }
     }
-    
+
     /// Sends a TTS (Text-to-Speech) request
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onComplete: Callback with audio data
     func sendTTSRequest(
         text: String,
         voice: String,
+        instructions: String? = nil,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
         // Map voice string to MacPaw's voice type
@@ -201,35 +203,42 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         case "shimmer": mappedVoice = .shimmer
         default: mappedVoice = .alloy
         }
-        
+
         // Create the query
-        let query = AudioSpeechQuery(
+        var query = AudioSpeechQuery(
             model: .tts_1,
             input: text,
             voice: mappedVoice,
             responseFormat: .mp3
         )
         
+        // Add voice instructions if provided
+        if let instructions = instructions, !instructions.isEmpty {
+            query.voice_instructions = instructions
+        }
+
         // Send the TTS request
         client.audioCreateSpeech(query: query) { result in
             switch result {
-            case .success(let audioResult):
+            case let .success(audioResult):
                 onComplete(.success(audioResult.audio))
-            case .failure(let error):
+            case let .failure(error):
                 onComplete(.failure(error))
             }
         }
     }
-    
+
     /// Sends a streaming TTS (Text-to-Speech) request
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onChunk: Callback for each chunk of audio data
     ///   - onComplete: Callback when streaming is complete
     func sendTTSStreamingRequest(
         text: String,
         voice: String,
+        instructions: String? = nil,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
@@ -244,21 +253,26 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         case "shimmer": mappedVoice = .shimmer
         default: mappedVoice = .alloy
         }
-        
+
         // Create the query
-        let query = AudioSpeechQuery(
+        var query = AudioSpeechQuery(
             model: .tts_1,
             input: text,
             voice: mappedVoice,
             responseFormat: .mp3
         )
         
+        // Add voice instructions if provided
+        if let instructions = instructions, !instructions.isEmpty {
+            query.voice_instructions = instructions
+        }
+
         // Send the streaming TTS request
         client.audioCreateSpeechStream(query: query) { partialResult in
             switch partialResult {
-            case .success(let chunk):
+            case let .success(chunk):
                 onChunk(.success(chunk.audio))
-            case .failure(let error):
+            case let .failure(error):
                 onChunk(.failure(error))
             }
         } completion: { error in

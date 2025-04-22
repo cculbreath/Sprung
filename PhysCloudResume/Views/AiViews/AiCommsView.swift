@@ -1,6 +1,7 @@
 import Foundation
 import SwiftOpenAI
 import SwiftUI
+import AVFoundation
 
 struct AiCommsView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
@@ -18,10 +19,36 @@ struct AiCommsView: View {
     @State private var showError: Bool = false
     @State private var retryCount: Int = 0
     @State private var isRetrying: Bool = false
-    init(service: OpenAIService, query: ResumeApiQuery, res: Binding<Resume?>) {
+    
+    // TTS related state
+    @Binding var ttsEnabled: Bool
+    @Binding var ttsVoice: String
+    @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
+    @State private var isSpeaking: Bool = false
+    @State private var ttsError: String? = nil
+    @State private var showTTSError: Bool = false
+    
+    // Store references to clients for AI operations
+    private let openAIClient: OpenAIClientProtocol
+    private let ttsProvider: OpenAITTSProvider
+    
+    init(
+        service: OpenAIService, 
+        openAIClient: OpenAIClientProtocol,
+        ttsProvider: OpenAITTSProvider,
+        query: ResumeApiQuery, 
+        res: Binding<Resume?>,
+        ttsEnabled: Binding<Bool> = .constant(false),
+        ttsVoice: Binding<String> = .constant("nova")
+    ) {
+        // Initialize with both legacy service and new abstraction layer client
         _chatProvider = State(initialValue: ResumeChatProvider(service: service))
+        self.openAIClient = openAIClient
+        self.ttsProvider = ttsProvider
         _q = State(initialValue: query)
         _myRes = res
+        _ttsEnabled = ttsEnabled
+        _ttsVoice = ttsVoice
     }
 
     var body: some View {
@@ -120,7 +147,7 @@ struct AiCommsView: View {
     }
 
     var execQuery: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             VStack {
                 if !isLoading {
                     if
@@ -149,7 +176,32 @@ struct AiCommsView: View {
                     }
                 }
             }
-            .padding()
+            .padding(.vertical)
+            
+            // TTS controls - only show when TTS is enabled in settings
+            if ttsEnabled && !revisions.isEmpty {
+                Button(action: {
+                    speakRevisions()
+                }) {
+                    Label {
+                        Text(isSpeaking ? "Stop" : "Speak")
+                            .font(.caption)
+                    } icon: {
+                        Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
+                            .font(.system(size: 16))
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .disabled(isLoading)
+                .help(isSpeaking ? "Stop speaking" : "Speak revision suggestions")
+            }
+        }
+        .padding(.horizontal)
+        .alert("TTS Error", isPresented: $showTTSError) {
+            Button("OK") { showTTSError = false }
+        } message: {
+            Text(ttsError ?? "An error occurred with text-to-speech")
         }
     }
 
@@ -183,6 +235,63 @@ struct AiCommsView: View {
         return nil
     }
 
+    /// Uses TTS to speak the AI revision suggestions
+    func speakRevisions() {
+        // If currently speaking, stop playback
+        if isSpeaking {
+            // Tell the TTS provider to stop playback
+            isSpeaking = false
+            return
+        }
+        
+        // Make sure we have revisions to speak
+        guard !revisions.isEmpty else {
+            return
+        }
+        
+        // Format the revisions into a readable script
+        var speechText = "Here are my suggested revisions for your résumé:\n\n"
+        
+        for (index, revision) in revisions.enumerated() {
+            // For title nodes, provide context about the section
+            if revision.isTitleNode {
+                speechText += "For the section \(revision.oldValue.trimmingCharacters(in: .whitespacesAndNewlines)), "
+                speechText += "I suggest changing it to \(revision.newValue.trimmingCharacters(in: .whitespacesAndNewlines)).\n\n"
+            } else {
+                speechText += "Revision \(index + 1): "
+                speechText += "I suggest changing \"\(revision.oldValue.trimmingCharacters(in: .whitespacesAndNewlines))\" "
+                speechText += "to \"\(revision.newValue.trimmingCharacters(in: .whitespacesAndNewlines))\".\n\n"
+            }
+            
+            // Add the reasoning if available
+            if !revision.explanation.isEmpty {
+                speechText += "Here's why: \(revision.explanation)\n\n"
+            }
+        }
+        
+        // Set UI state to speaking
+        isSpeaking = true
+        
+        // Get selected voice (default to nova if not valid)
+        let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
+        
+        // Get voice instructions if available
+        let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
+        
+        // Request TTS conversion and playback with instructions
+        ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { [weak self] error in
+            // Update UI state when speech completes or errors
+            DispatchQueue.main.async {
+                self?.isSpeaking = false
+                
+                if let error = error {
+                    self?.ttsError = "Text-to-speech error: \(error.localizedDescription)"
+                    self?.showTTSError = true
+                }
+            }
+        }
+    }
+    
     func chatAction(hasRevisions: Bool = false) {
         if let jobApp = jobAppStore.selectedApp {
             jobApp.status = .inProgress

@@ -48,9 +48,10 @@ class OpenAITTSProvider {
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Custom voice instructions (optional)
     ///   - onComplete: Called when audio playback is complete or fails
-    func speakText(_ text: String, voice: Voice = .nova, onComplete: @escaping (Error?) -> Void) {
-        client.sendTTSRequest(text: text, voice: voice.rawValue) { [weak self] result in
+    func speakText(_ text: String, voice: Voice = .nova, instructions: String? = nil, onComplete: @escaping (Error?) -> Void) {
+        client.sendTTSRequest(text: text, voice: voice.rawValue, instructions: instructions) { [weak self] result in
             switch result {
             case let .success(audioData):
                 self?.playAudio(audioData, onComplete: onComplete)
@@ -64,10 +65,11 @@ class OpenAITTSProvider {
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Custom voice instructions (optional)
     ///   - onChunk: Called for each received audio chunk
     ///   - onComplete: Called when streaming is complete
-    func streamText(_ text: String, voice: Voice = .nova, onChunk: @escaping (Data) -> Void, onComplete: @escaping (Error?) -> Void) {
-        client.sendTTSStreamingRequest(text: text, voice: voice.rawValue, onChunk: { result in
+    func streamText(_ text: String, voice: Voice = .nova, instructions: String? = nil, onChunk: @escaping (Data) -> Void, onComplete: @escaping (Error?) -> Void) {
+        client.sendTTSStreamingRequest(text: text, voice: voice.rawValue, instructions: instructions, onChunk: { result in
             switch result {
             case let .success(audioData):
                 onChunk(audioData)
