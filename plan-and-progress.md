@@ -53,10 +53,10 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
 
 ## UI Updates
 
-- [ ] Update AI Views
-  - [ ] Modify `AiCommsView.swift`
-  - [ ] Update `AiFunctionView.swift`
-  - [ ] Update `CoverLetterAiView.swift`
+- [x] Update AI Views
+  - [x] Modify `AiCommsView.swift`
+  - [x] Update `AiFunctionView.swift`
+  - [x] Update `CoverLetterAiView.swift`
 
 - [ ] Update Progress/Loading indicators for compatibility
 
@@ -83,9 +83,10 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
   - [x] Implement both standard and streaming TTS methods
   - [x] Add AVFoundation playback capabilities
 
-- [ ] TTS UI Components
-  - [ ] Add TTS controls to relevant views
-  - [ ] Create audio playback indicator
+- [x] TTS UI Components
+  - [x] Add TTS controls to relevant views
+  - [x] Create audio playback indicator
+  - [x] Add voice selection to SettingsView
 
 ## Testing & Cleanup
 
@@ -115,12 +116,12 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
 - [x] Add TTS streaming capabilities
 - [ ] Optimize API call efficiency
 - [ ] Implement any MacPaw-specific performance improvements
-- [ ] Add voice selection UI for TTS features
+- [x] Add voice selection UI for TTS features
 - [ ] Implement audio file saving for generated speech
 
 ## Migration Progress Tracking
 
-**Current status**: MacPaw/OpenAI Integration - TTS Capabilities Implementation
+**Current status**: UI Integration Complete - Ready for Testing
 
 **Estimated completion**: TBD
 
@@ -128,5 +129,5 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
 
 **Remaining Tasks**:
 1. Test with MacPaw client for existing features
-2. Add UI components for TTS capabilities 
-3. Comprehensive testing
+2. Comprehensive testing
+3. Remove SwiftOpenAI dependency (if decided)
