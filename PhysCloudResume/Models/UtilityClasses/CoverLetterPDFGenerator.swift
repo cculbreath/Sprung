@@ -736,7 +736,7 @@ enum CoverLetterPDFGenerator {
                                            abs((nameLineIndex ?? 0) - (regardsLineIndex ?? 0)) > 1
                 
                 // First, calculate optimal signature position
-                let adjustedSignatureY: CGFloat
+                var adjustedSignatureY: CGFloat
                 
                 if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
                     // If we have the regards line, place signature below it
