@@ -32,7 +32,7 @@ protocol OpenAIClientProtocol {
         model: String,
         temperature: Double
     ) async throws -> ChatCompletionResponse
-    
+
     /// Sends a chat completion request with streaming
     /// - Parameters:
     ///   - messages: The conversation history
@@ -47,27 +47,31 @@ protocol OpenAIClientProtocol {
         onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     )
-    
+
     /// Sends a TTS (Text-to-Speech) request
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onComplete: Callback with audio data
     func sendTTSRequest(
         text: String,
         voice: String,
+        instructions: String? = nil,
         onComplete: @escaping (Result<Data, Error>) -> Void
     )
-    
+
     /// Sends a streaming TTS (Text-to-Speech) request
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onChunk: Callback for each chunk of audio data
     ///   - onComplete: Callback when streaming is complete
     func sendTTSStreamingRequest(
-        text: String, 
+        text: String,
         voice: String,
+        instructions: String? = nil,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     )

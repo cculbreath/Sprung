@@ -56,6 +56,7 @@ struct CoverLetterAiContentView: View {
     // TTS related state
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
+    @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
     @State private var isSpeaking: Bool = false
     @State private var ttsError: String? = nil
     @State private var showTTSError: Bool = false
@@ -225,8 +226,11 @@ struct CoverLetterAiContentView: View {
         // Get the voice from the user preference
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         
-        // Request TTS conversion and playback
-        ttsProvider.speakText(cleanContent, voice: voice) { [weak self] error in
+        // Get voice instructions if available
+        let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
+        
+        // Request TTS conversion and playback with instructions
+        ttsProvider.speakText(cleanContent, voice: voice, instructions: instructions) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 

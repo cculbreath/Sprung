@@ -18,6 +18,7 @@ struct SettingsView: View {
     // TTS Settings
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
+    @AppStorage("ttsInstructions") var ttsInstructions: String = "Voice Affect: Confident, composed, and respectful; project well-supported authority and confidence without hubris.\nTone: Sincere, empathetic, and authoritative—but not arrogant. Express genuine humility while conveying competence.\nPacing: Brisk and confident, but unrushed. Slow moderately for emphasis, demonstrating thoughtfulness while prioritizing efficiency and respect for your audience's time.\nEmotion: Engaged and confident; speak with warmth and charisma. Lean into rising pitch, confident resolution, and the identifiable rhythms of a skilled orator.\nPronunciation: Clear and precise, emphasizing understanding and fluency with technical concepts, and a deft handling of even the most stubborn aspects of the English language.\nPauses: Brief pauses for emphasis and gravitas, but with an overall cadence of efficiency and forward momentum."
 
     @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableStyles: [String] = []
@@ -239,6 +240,39 @@ struct SettingsView: View {
                                 Spacer()
                             }
                             .padding(.top, 5)
+                            
+                            // Voice Instructions
+                            Divider()
+                                .padding(.vertical, 5)
+                            
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack {
+                                    Text("Voice Instructions")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                    
+                                    Button("Reset to Default") {
+                                        resetToDefaultInstructions()
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .controlSize(.small)
+                                    .font(.caption)
+                                }
+                                
+                                TextEditor(text: $ttsInstructions)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(height: 150)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                Text("Instructions tell the AI how to style the voice. Changes apply to all TTS operations.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                     .padding(10)
@@ -413,7 +447,7 @@ struct SettingsView: View {
         }
         
         // Sample text for preview
-        let sampleText = "This is a preview of the \(ttsVoice) voice. It can be used to read your resumes and cover letters aloud."
+        let sampleText = "This is a preview of the \(ttsVoice) voice with custom instructions. It can be used to read your resumes and cover letters aloud."
         
         // Set preview state
         isPreviewingVoice = true
@@ -421,8 +455,11 @@ struct SettingsView: View {
         // Get the selected voice
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         
-        // Speak the sample text
-        ttsProvider?.speakText(sampleText, voice: voice) { [weak self] error in
+        // Get voice instructions (if any)
+        let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
+        
+        // Speak the sample text with instructions
+        ttsProvider?.speakText(sampleText, voice: voice, instructions: instructions) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 
@@ -437,5 +474,10 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+    
+    /// Reset voice instructions to the default value
+    private func resetToDefaultInstructions() {
+        ttsInstructions = "Voice Affect: Confident, composed, and respectful; project well-supported authority and confidence without hubris.\nTone: Sincere, empathetic, and authoritative—but not arrogant. Express genuine humility while conveying competence.\nPacing: Brisk and confident, but unrushed. Slow moderately for emphasis, demonstrating thoughtfulness while prioritizing efficiency and respect for your audience's time.\nEmotion: Engaged and confident; speak with warmth and charisma. Lean into rising pitch, confident resolution, and the identifiable rhythms of a skilled orator.\nPronunciation: Clear and precise, emphasizing understanding and fluency with technical concepts, and a deft handling of even the most stubborn aspects of the English language.\nPauses: Brief pauses for emphasis and gravitas, but with an overall cadence of efficiency and forward momentum."
     }
 }

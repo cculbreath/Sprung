@@ -14,10 +14,10 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
     /// Initializes a new client with the given API key
     /// - Parameter apiKey: The API key to use for requests
     init(apiKey: String) {
-        self.apiKeyValue = apiKey
+        apiKeyValue = apiKey
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 60.0
-        self.service = OpenAIServiceFactory.service(
+        service = OpenAIServiceFactory.service(
             apiKey: apiKey,
             configuration: configuration,
             debugEnabled: false
@@ -131,7 +131,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             model: model
         )
     }
-    
+
     /// Sends a chat completion request with streaming - NOT SUPPORTED in SwiftOpenAI
     /// - Parameters:
     ///   - messages: The conversation history
@@ -140,9 +140,9 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
     ///   - onChunk: Callback for each chunk of the streaming response
     ///   - onComplete: Callback when streaming is complete
     func sendChatCompletionStreaming(
-        messages: [ChatMessage],
-        model: String,
-        temperature: Double = 0.7,
+        messages _: [ChatMessage],
+        model _: String,
+        temperature _: Double = 0.7,
         onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
@@ -151,20 +151,22 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             code: 1002,
             userInfo: [NSLocalizedDescriptionKey: "Streaming is not supported in SwiftOpenAI - use MacPawOpenAIClient instead"]
         )
-        
+
         // Notify of error and complete
         onChunk(.failure(error))
         onComplete(error)
     }
-    
+
     /// Sends a TTS (Text-to-Speech) request - NOT SUPPORTED in SwiftOpenAI
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onComplete: Callback with audio data
     func sendTTSRequest(
-        text: String,
-        voice: String,
+        text _: String,
+        voice _: String,
+        instructions _: String? = nil,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
         let error = NSError(
@@ -172,20 +174,22 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             code: 1003,
             userInfo: [NSLocalizedDescriptionKey: "TTS is not supported in SwiftOpenAI - use MacPawOpenAIClient instead"]
         )
-        
+
         // Notify of error
         onComplete(.failure(error))
     }
-    
+
     /// Sends a streaming TTS (Text-to-Speech) request - NOT SUPPORTED in SwiftOpenAI
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
+    ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onChunk: Callback for each chunk of audio data
     ///   - onComplete: Callback when streaming is complete
     func sendTTSStreamingRequest(
-        text: String,
-        voice: String,
+        text _: String,
+        voice _: String,
+        instructions _: String? = nil,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
@@ -194,7 +198,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             code: 1004,
             userInfo: [NSLocalizedDescriptionKey: "TTS streaming is not supported in SwiftOpenAI - use MacPawOpenAIClient instead"]
         )
-        
+
         // Notify of error and complete
         onChunk(.failure(error))
         onComplete(error)
