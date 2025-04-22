@@ -102,13 +102,25 @@ final class CoverLetterRecommendationProvider {
                 let result = try await macPawClient.openAIClient.chats(query: query)
                 
                 // Extract structured output response
-                if let structuredOutput = result.choices.first?.message.output?.value as? BestCoverLetterResponse {
-                    return structuredOutput
+                // For MacPaw/OpenAI structured outputs, we need to check the content string
+                // since there's no structured output property directly accessible
+                if let content = result.choices.first?.message.content,
+                   let data = content.data(using: .utf8) {
+                    do {
+                        let structuredOutput = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
+                        return structuredOutput
+                    } catch {
+                        throw NSError(
+                            domain: "CoverLetterRecommendationProvider",
+                            code: 1003,
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to decode structured output: \(error.localizedDescription)"]
+                        )
+                    }
                 } else {
                     throw NSError(
                         domain: "CoverLetterRecommendationProvider",
                         code: 1002,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output"]
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output content"]
                     )
                 }
             } else {
