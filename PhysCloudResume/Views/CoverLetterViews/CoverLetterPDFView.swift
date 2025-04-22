@@ -3,10 +3,26 @@ import SwiftUI
 
 struct CoverLetterPDFView: View {
     let coverLetter: CoverLetter
-    let applicant: Applicant
+    @State private var applicant: Applicant
     @State private var pdfData: Data = .init()
     @State private var isLoading: Bool = true
     @State private var errorMessage: String? = nil
+    
+    init(coverLetter: CoverLetter, applicant: Applicant? = nil) {
+        self.coverLetter = coverLetter
+        // Use provided applicant or create a default one
+        // The real applicant will be loaded in onAppear
+        _applicant = State(initialValue: applicant ?? Applicant(
+            name: "Christopher Culbreath",
+            address: "7317 Shadywood Drive",
+            city: "Austin",
+            state: "Texas",
+            zip: "78745",
+            websites: "culbreath.net",
+            email: "cc@physicscloud.net",
+            phone: "(805) 234-0847"
+        ))
+    }
 
     var body: some View {
         VStack {
@@ -29,7 +45,9 @@ struct CoverLetterPDFView: View {
                     }
             }
         }
-        .onAppear {
+        .task {
+            // Get the latest applicant profile with signature from the manager
+            await loadApplicantProfile()
             generatePDF()
         }
     }
@@ -56,6 +74,17 @@ struct CoverLetterPDFView: View {
                 }
                 self.isLoading = false
             }
+        }
+    }
+    
+    @MainActor
+    private func loadApplicantProfile() async {
+        do {
+            // Get the latest profile from the manager to ensure we have the signature
+            applicant = Applicant() // This will use the profile from ApplicantProfileManager
+            print("Loaded applicant profile - signature available: \(applicant.profile.signatureData != nil)")
+        } catch {
+            print("Error loading applicant profile: \(error)")
         }
     }
 }
