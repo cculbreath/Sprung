@@ -124,6 +124,17 @@ import SwiftOpenAI
         applicant = Applicant() // Uses the custom applicant profile
         self.saveDebugPrompt = saveDebugPrompt
     }
+    
+    // Secondary initializer that skips applicant initialization for temporary objects
+    init(resume: Resume, skipApplicant: Bool, saveDebugPrompt: Bool = false) {
+        res = resume
+        // Create a default Applicant with empty values to avoid MainActor issues
+        applicant = Applicant(profile: ApplicantProfile(
+            name: "", address: "", city: "", state: "", zip: "", 
+            websites: "", email: "", phone: ""
+        ))
+        self.saveDebugPrompt = saveDebugPrompt
+    }
 
     // MARK: - Prompt Building
 
