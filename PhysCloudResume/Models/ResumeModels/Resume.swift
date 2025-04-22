@@ -12,8 +12,21 @@ class Resume: Identifiable, Hashable {
     var rootNode: TreeNode? // The top-level node
     var fontSizeNodes: [FontSizeNode] = []
     var includeFonts: Bool = false
+    // Labels for keys previously imported; persisted as keyLabels map
     var keyLabels: [String: String] = [:]
-    var importedEditorKeys: [String] = []
+    // Stored raw JSON data for imported editor keys; persisted as Data
+    var importedEditorKeysData: Data? = nil
+    /// Transient array of editor keys, backed by JSON in importedEditorKeysData
+    var importedEditorKeys: [String] {
+        get {
+            guard let data = importedEditorKeysData else { return [] }
+            return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        }
+        set {
+            importedEditorKeysData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
     func label(_ key: String) -> String {
         if let myLabel = keyLabels[key] {
             return myLabel
@@ -93,22 +106,22 @@ class Resume: Identifiable, Hashable {
     func generateQuery() async -> ResumeApiQuery {
         return ResumeApiQuery(resume: self)
     }
-    
+
     // Synchronous wrapper for backward compatibility, uses Task for MainActor isolation
     func generateQuery() -> ResumeApiQuery {
         // Create a placeholder with empty profile to avoid MainActor requirement
         let emptyProfile = ApplicantProfile(
-            name: "", address: "", city: "", state: "", zip: "", 
+            name: "", address: "", city: "", state: "", zip: "",
             websites: "", email: "", phone: ""
         )
         let query = ResumeApiQuery(resume: self, applicantProfile: emptyProfile)
-        
+
         // Start a task to update it with real data when possible
         Task { @MainActor in
             let realApplicant = Applicant()
             query.updateApplicant(realApplicant)
         }
-        
+
         return query
     }
 

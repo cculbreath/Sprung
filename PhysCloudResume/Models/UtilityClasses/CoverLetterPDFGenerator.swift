@@ -12,7 +12,7 @@ enum CoverLetterPDFGenerator {
 
         // Get signature image from the applicant profile
         let signatureImage = getSignatureImage(from: applicant)
-        
+
         // Use a better PDF generation approach that guarantees vector text
         let pdfData = createPaginatedPDFFromString(text, signatureImage: signatureImage)
 
@@ -21,19 +21,19 @@ enum CoverLetterPDFGenerator {
 
         return pdfData
     }
-    
+
     /// Retrieves the signature image from the applicant profile
     private static func getSignatureImage(from applicant: Applicant) -> NSImage? {
         guard let signatureData = applicant.profile.signatureData else {
             print("No signature image available in applicant profile")
             return nil
         }
-        
+
         guard let image = NSImage(data: signatureData) else {
             print("Failed to create image from signature data")
             return nil
         }
-        
+
         print("Successfully retrieved signature image: \(image.size.width)x\(image.size.height)")
         return image
     }
@@ -612,7 +612,7 @@ enum CoverLetterPDFGenerator {
                                                  framePath,
                                                  nil)
             CTFrameDraw(frame, pdfContext)
-            
+
             // Draw signature image if available and this is the first/only page
             if currentLocation == 0, let signatureImage = signatureImage {
                 // Find where to place the signature
@@ -625,19 +625,19 @@ enum CoverLetterPDFGenerator {
                         break
                     }
                 }
-                
+
                 // Signature should be placed after "Best Regards," and before name (typically 2 lines gap)
                 let bestRegardsLineHeight: CGFloat = (finalFont.ascender - finalFont.descender)
                 let lineSpacing: CGFloat = baseLineSpacing + 7.0 // Line spacing + paragraph spacing
-                
+
                 // Calculate signature position
                 let signatureY = textRect.origin.y + textRect.height - CGFloat(lineIndex + 2) * (bestRegardsLineHeight + lineSpacing)
-                let signatureHeight: CGFloat = 60.0  // Reasonable height for signature
-                
+                let signatureHeight: CGFloat = 60.0 // Reasonable height for signature
+
                 // Scale signature while maintaining aspect ratio
                 let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
                 let signatureWidth = signatureHeight * imageAspectRatio
-                
+
                 // Signature should be aligned with text
                 let signatureX = textRect.origin.x
                 let signatureRect = CGRect(
@@ -646,14 +646,14 @@ enum CoverLetterPDFGenerator {
                     width: min(signatureWidth, textRect.width * 0.7), // Limit width to 70% of text width
                     height: signatureHeight
                 )
-                
+
                 // Draw the signature
                 if let cgImage = signatureImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     pdfContext.draw(cgImage, in: signatureRect)
                     print("Signature image drawn at \(signatureRect)")
                 }
             }
-            
+
             pdfContext.restoreGState()
             pdfContext.endPage()
 

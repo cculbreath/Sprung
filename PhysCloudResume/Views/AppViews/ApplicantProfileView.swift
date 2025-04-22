@@ -32,44 +32,44 @@ struct ApplicantProfileView: View {
                         TextField("Name", text: $profile.name)
                             .onChange(of: profile.name) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
-                        
+
                         TextField("Email", text: $profile.email)
                             .onChange(of: profile.email) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
-                        
+
                         TextField("Phone", text: $profile.phone)
                             .onChange(of: profile.phone) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
-                        
+
                         TextField("Websites", text: $profile.websites)
                             .onChange(of: profile.websites) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
                     }
-                    
+
                     Section("Address") {
                         TextField("Street Address", text: $profile.address)
                             .onChange(of: profile.address) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
-                        
+
                         TextField("City", text: $profile.city)
                             .onChange(of: profile.city) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
-                        
+
                         TextField("State", text: $profile.state)
                             .onChange(of: profile.state) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
-                        
+
                         TextField("ZIP Code", text: $profile.zip)
                             .onChange(of: profile.zip) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
                     }
-                    
+
                     Section("Signature") {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Signature image will be used on cover letters and official documents")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            
+
                             HStack {
                                 if let image = profile.getSignatureImage() {
                                     image
@@ -87,13 +87,13 @@ struct ApplicantProfileView: View {
                                         .background(Color.white)
                                 }
                             }
-                            
+
                             HStack {
                                 Button("Choose Image...") {
                                     showImagePicker = true
                                 }
                                 .buttonStyle(.bordered)
-                                
+
                                 if profile.signatureData != nil {
                                     Button("Remove") {
                                         profile.signatureData = nil
@@ -102,12 +102,12 @@ struct ApplicantProfileView: View {
                                     .buttonStyle(.bordered)
                                     .foregroundColor(.red)
                                 }
-                                
+
                                 Spacer()
                             }
                         }
                     }
-                    
+
                     Section {
                         HStack {
                             Button("Save Profile") {
@@ -119,14 +119,14 @@ struct ApplicantProfileView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(!hasChanges)
-                            
+
                             if !successMessage.isEmpty {
                                 Text(successMessage)
                                     .foregroundColor(.green)
                                     .font(.callout)
                                     .padding(.leading)
                             }
-                            
+
                             Spacer()
                         }
                     }

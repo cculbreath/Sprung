@@ -71,7 +71,7 @@ import SwiftOpenAI
     )
 
     // Make this var instead of let so it can be updated
-    var applicant: Applicant 
+    var applicant: Applicant
     var queryString: String = ""
     let attentionGrab: Int = 2
     let res: Resume
@@ -125,7 +125,7 @@ import SwiftOpenAI
         applicant = Applicant() // Uses the custom applicant profile
         self.saveDebugPrompt = saveDebugPrompt
     }
-    
+
     // Secondary initializer that creates a non-MainActor placeholder applicant
     init(resume: Resume, applicantProfile: ApplicantProfile, saveDebugPrompt: Bool = false) {
         res = resume
@@ -143,7 +143,7 @@ import SwiftOpenAI
         )
         self.saveDebugPrompt = saveDebugPrompt
     }
-    
+
     // Method to update the applicant data later
     func updateApplicant(_ newApplicant: Applicant) {
         applicant = newApplicant
