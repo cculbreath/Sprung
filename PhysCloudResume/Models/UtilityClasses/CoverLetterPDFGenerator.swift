@@ -10,13 +10,32 @@ enum CoverLetterPDFGenerator {
         print("Generating PDF from cover letter...")
         let text = buildLetterText(from: coverLetter, applicant: applicant)
 
+        // Get signature image from the applicant profile
+        let signatureImage = getSignatureImage(from: applicant)
+        
         // Use a better PDF generation approach that guarantees vector text
-        let pdfData = createPaginatedPDFFromString(text)
+        let pdfData = createPaginatedPDFFromString(text, signatureImage: signatureImage)
 
         // Debug - save PDF to desktop
         saveDebugPDF(pdfData)
 
         return pdfData
+    }
+    
+    /// Retrieves the signature image from the applicant profile
+    private static func getSignatureImage(from applicant: Applicant) -> NSImage? {
+        guard let signatureData = applicant.profile.signatureData else {
+            print("No signature image available in applicant profile")
+            return nil
+        }
+        
+        guard let image = NSImage(data: signatureData) else {
+            print("Failed to create image from signature data")
+            return nil
+        }
+        
+        print("Successfully retrieved signature image: \(image.size.width)x\(image.size.height)")
+        return image
     }
 
     private static func saveDebugPDF(_ data: Data) {
@@ -353,7 +372,7 @@ enum CoverLetterPDFGenerator {
     }
 
     /// Paginated vector PDF generation using CoreText framesetter
-    private static func createPaginatedPDFFromString(_ text: String) -> Data {
+    private static func createPaginatedPDFFromString(_ text: String, signatureImage: NSImage? = nil) -> Data {
         // Register and log Futura Light font file usage
         let specificFuturaPath = "/Library/Fonts/Futura Light.otf"
         var registeredFontFilePath: String? = nil
@@ -523,17 +542,17 @@ enum CoverLetterPDFGenerator {
         // Adjust signature block spacing: reduce paragraphSpacing for contact lines
         let signatureSpacing: CGFloat = 0.0 // Remove paragraph spacing completely between contact lines
         let contactLineSpacing: CGFloat = baseLineSpacing - 4.0 // Much tighter line spacing for contact info
-        
+
         // Get the indices of the contact info lines to apply custom styling
         var addressLineRange: NSRange?
         var emailLineRange: NSRange?
-        
+
         // First identify the contact lines
         let textNSString = attributedString.string as NSString
         textNSString.enumerateSubstrings(in: fullRange, options: .byParagraphs) { substring, substringRange, _, _ in
             guard let substring = substring else { return }
             let trimmed = substring.trimmingCharacters(in: .whitespacesAndNewlines)
-            
+
             if trimmed.contains("|") {
                 if trimmed.contains("@") || trimmed.contains(".com") {
                     emailLineRange = substringRange
@@ -542,14 +561,14 @@ enum CoverLetterPDFGenerator {
                 }
             }
         }
-        
+
         // Apply ultra-tight spacing between address and email lines
         if let addressRange = addressLineRange {
             let addressPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
             addressPS.paragraphSpacing = signatureSpacing // Remove paragraph spacing after address line
             attributedString.addAttribute(.paragraphStyle, value: addressPS, range: addressRange)
         }
-        
+
         // Apply tight line spacing to the email/website line
         if let emailRange = emailLineRange {
             let emailPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
@@ -593,6 +612,48 @@ enum CoverLetterPDFGenerator {
                                                  framePath,
                                                  nil)
             CTFrameDraw(frame, pdfContext)
+            
+            // Draw signature image if available and this is the first/only page
+            if currentLocation == 0, let signatureImage = signatureImage {
+                // Find where to place the signature
+                let signatureMarker = "Best Regards,"
+                let lines = text.components(separatedBy: .newlines)
+                var lineIndex = 0
+                for (idx, line) in lines.enumerated() {
+                    if line.contains(signatureMarker) {
+                        lineIndex = idx
+                        break
+                    }
+                }
+                
+                // Signature should be placed after "Best Regards," and before name (typically 2 lines gap)
+                let bestRegardsLineHeight: CGFloat = (finalFont.ascender - finalFont.descender)
+                let lineSpacing: CGFloat = baseLineSpacing + 7.0 // Line spacing + paragraph spacing
+                
+                // Calculate signature position
+                let signatureY = textRect.origin.y + textRect.height - CGFloat(lineIndex + 2) * (bestRegardsLineHeight + lineSpacing)
+                let signatureHeight: CGFloat = 60.0  // Reasonable height for signature
+                
+                // Scale signature while maintaining aspect ratio
+                let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
+                let signatureWidth = signatureHeight * imageAspectRatio
+                
+                // Signature should be aligned with text
+                let signatureX = textRect.origin.x
+                let signatureRect = CGRect(
+                    x: signatureX,
+                    y: signatureY - signatureHeight + 10, // Adjust to align with name line
+                    width: min(signatureWidth, textRect.width * 0.7), // Limit width to 70% of text width
+                    height: signatureHeight
+                )
+                
+                // Draw the signature
+                if let cgImage = signatureImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    pdfContext.draw(cgImage, in: signatureRect)
+                    print("Signature image drawn at \(signatureRect)")
+                }
+            }
+            
             pdfContext.restoreGState()
             pdfContext.endPage()
 
