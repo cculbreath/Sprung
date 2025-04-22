@@ -116,16 +116,17 @@ final class CoverChatProvider {
 
         // Convert SwiftOpenAI messages to generic format
         let genericMessages = parameters.messages.map { message in
-            // Map the roles directly - we know all the possible values from SwiftOpenAI
+            // Map the roles directly - convert the role string to our enum
+            let roleString = message.role.rawValue
             let role: ChatMessage.ChatRole
-            switch message.role {
-            case .user:
+            
+            if roleString == "user" {
                 role = .user
-            case .assistant:
+            } else if roleString == "assistant" {
                 role = .assistant
-            case .system:
+            } else if roleString == "system" {
                 role = .system
-            default:
+            } else {
                 role = .user // Default fallback
             }
             
