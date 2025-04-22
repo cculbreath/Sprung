@@ -42,7 +42,7 @@ final class CoverLetterRecommendationProvider {
             throw NSError(domain: "CoverLetterRecommendationProvider", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "At least two cover letters are required"])
         }
-        let applicant = Applicant()
+        let applicant = await MainActor.run { Applicant() }
         var prompt = "\(applicant.name) is applying for this job: \(jobApp.jobPosition) at \(jobApp.companyName).\n\n"
         prompt += "Here are several cover letter options:\n"
         for letter in letters {

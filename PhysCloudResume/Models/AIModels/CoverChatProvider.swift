@@ -136,7 +136,8 @@ final class CoverChatProvider {
             }
 
             print("revise")
-            let prompt = CoverLetterPrompts.generate(
+            // Access MainActor-isolated method
+            let prompt = await CoverLetterPrompts.generate(
                 coverLetter: cL, resume: resume, mode: cL.currentMode ?? .revise,
                 customFeedbackString: customFeedback.wrappedValue
             )
@@ -196,7 +197,8 @@ final class CoverChatProvider {
             }
 
             print("generate")
-            let prompt = CoverLetterPrompts.generate(
+            // Access MainActor-isolated method
+            let prompt = await CoverLetterPrompts.generate(
                 coverLetter: cL, resume: resume, mode: cL.currentMode ?? .generate
             )
             print("prompt: \(prompt)")

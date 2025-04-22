@@ -20,8 +20,9 @@ enum CoverLetterPrompts {
         content: .text("You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for a job application, based on the job listing and resume provided below. The cover letter should be in plain text with no commentary or annotations. IMPORTANT: Return ONLY the body content of the letter - do not include date, address, salutation (like 'Dear Hiring Manager'), signature, name, or contact information. Your response should start immediately with the first paragraph of the letter body and end with the final paragraph. The letter should use block-format paragraphs with no indentation, and just a single new line at the end of each paragraph. Do not add a blank line between paragraphs.")
     )
 
+    @MainActor
     static func generate(coverLetter: CoverLetter, resume: Resume, mode: CoverAiMode, customFeedbackString: String? = "") -> String {
-        let applicant = Applicant() // TODO: Fix Hardcoded applicant info
+        let applicant = Applicant() // Using customizable applicant profile
         let app = coverLetter.jobApp
         let formatter = DateFormatter()
         formatter.dateStyle = .long // Automatically formats as "January 1, 2025"
