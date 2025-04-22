@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import SwiftOpenAI
+import SwiftOpenAI // Will be removed later in the migration
 import SwiftUI
 
 @Observable class JobRecommendationProvider {
@@ -14,7 +14,8 @@ import SwiftUI
 
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
-
+    
+    // The system message in SwiftOpenAI format (for backward compatibility)
     let systemMessage = ChatCompletionParameters.Message(
         role: .system,
         content: .text("""
@@ -23,8 +24,22 @@ import SwiftUI
         IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The recommendedJobId field must contain the exact UUID string from the id field of the chosen job in the job listings JSON array. Do not modify the UUID format in any way.
         """)
     )
+    
+    // The system message in generic format (for abstraction layer)
+    let genericSystemMessage = ChatMessage(
+        role: .system,
+        content: """
+        You are an expert career advisor specializing in job application prioritization. Your task is to analyze a list of job applications and recommend the one that best matches the candidate's qualifications and career goals. You will be provided with job descriptions, the candidate's resume, and additional background information. Choose the job that offers the best match in terms of skills, experience, and potential career growth.
 
-    private let service: OpenAIService
+        IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The recommendedJobId field must contain the exact UUID string from the id field of the chosen job in the job listings JSON array. Do not modify the UUID format in any way.
+        """
+    )
+
+    // For backward compatibility during migration
+    private let service: OpenAIService?
+    // The new abstraction layer client
+    private let openAIClient: OpenAIClientProtocol
+    
     var savePromptToFile: Bool
     var jobApps: [JobApp] = []
     var resume: Resume?
@@ -44,6 +59,25 @@ import SwiftUI
 
     // MARK: - Initialization
 
+    /// Initialize with specific OpenAI client
+    /// - Parameters:
+    ///   - jobApps: List of job applications
+    ///   - resume: The resume to use
+    ///   - client: Custom OpenAI client to use
+    ///   - savePromptToFile: Whether to save debug files
+    init(jobApps: [JobApp], resume: Resume?, client: OpenAIClientProtocol, savePromptToFile: Bool = false) {
+        self.jobApps = jobApps
+        self.resume = resume
+        self.savePromptToFile = savePromptToFile
+        self.openAIClient = client
+        self.service = nil
+    }
+    
+    /// Default initializer - uses factory to create client
+    /// - Parameters:
+    ///   - jobApps: List of job applications
+    ///   - resume: The resume to use
+    ///   - savePromptToFile: Whether to save debug files
     init(jobApps: [JobApp], resume: Resume?, savePromptToFile: Bool = false) {
         self.jobApps = jobApps
         self.resume = resume
@@ -52,21 +86,26 @@ import SwiftUI
         // Get API key from UserDefaults directly to avoid conflict with @Observable
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
 
-        // Create service using the factory
+        // For backward compatibility
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 360 // 360 seconds extended timeout
 
-        service = OpenAIServiceFactory.service(
+        self.service = OpenAIServiceFactory.service(
             apiKey: apiKey,
             configuration: configuration,
             debugEnabled: false
         )
+        
+        // Create client using our factory
+        self.openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
     }
 
     // MARK: - API Call Functions
-
-    func fetchRecommendation() async throws -> (UUID, String) {
-        guard let resume = resume, let model = resume.model else {
+    
+    /// Fetches job recommendation using the abstraction layer directly
+    /// - Returns: A tuple containing the recommended job ID and reason
+    func fetchRecommendationWithGenericClient() async throws -> (UUID, String) {
+        guard let resume = resume, let resumeModel = resume.model else {
             throw NSError(domain: "JobRecommendationProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "No resume available"])
         }
 
@@ -79,6 +118,59 @@ import SwiftUI
 
         if savePromptToFile {
             savePromptToDownloads(content: prompt, fileName: "jobRecommendationPrompt.txt")
+        }
+        
+        // Use our generic message format with the abstraction layer
+        let messages = [
+            genericSystemMessage,
+            ChatMessage(role: .user, content: prompt)
+        ]
+        
+        // Get the model string
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        
+        do {
+            // Make the API call using our abstraction layer
+            let response = try await openAIClient.sendChatCompletionAsync(
+                messages: messages,
+                model: modelString,
+                temperature: 0.2 // Lower temperature for more deterministic results with structured outputs
+            )
+            
+            // Process the response
+            let decodedResponse = try decodeRecommendation(from: response.content)
+            return decodedResponse
+        } catch {
+            print("Error fetching recommendation with generic client: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Legacy method that uses SwiftOpenAI directly
+    func fetchRecommendation() async throws -> (UUID, String) {
+        // If we have our abstraction layer set up but no service, use the generic client
+        if service == nil {
+            return try await fetchRecommendationWithGenericClient()
+        }
+        
+        guard let resume = resume, let resumeModel = resume.model else {
+            throw NSError(domain: "JobRecommendationProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "No resume available"])
+        }
+
+        let newJobApps = jobApps.filter { $0.status == .new }
+        if newJobApps.isEmpty {
+            throw NSError(domain: "JobRecommendationProvider", code: 2, userInfo: [NSLocalizedDescriptionKey: "No new job applications available"])
+        }
+
+        let prompt = buildPrompt(newJobApps: newJobApps, resume: resume)
+
+        if savePromptToFile {
+            savePromptToDownloads(content: prompt, fileName: "jobRecommendationPrompt.txt")
+        }
+        
+        // For backward compatibility
+        guard let service = service else {
+            return try await fetchRecommendationWithGenericClient()
         }
 
         let preferredModel = OpenAIModelFetcher.getPreferredModel()
