@@ -4,7 +4,7 @@
 //
 //  Introduces a tiny helper that obtains/refreshes a `cf_clearance` cookie
 //  for a Cloudflare‑protected domain by spinning up an invisible `WKWebView`.
-//  The cookie is cached in `UserDefaults` (per‑domain) so that subsequent
+//  The cookie is cached to disk in Application Support (per‑domain) so that subsequent
 //  headless fetches can re‑use it without triggering a challenge again.
 //
 //  This file is macOS‑only; iOS would work the same but you may need to adapt
@@ -42,7 +42,8 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
         // Drop any previously cached cookie so that `clearance(for:)` performs
         // a new challenge.
         if let host = url.host {
-            UserDefaults.standard.removeObject(forKey: key(for: host))
+            let fileURL = cookieFileURL(for: host)
+            try? FileManager.default.removeItem(at: fileURL)
         }
         return await clearance(for: url)
     }
@@ -115,14 +116,29 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
 
     private static func key(for domain: String) -> String { "cf_clearance_\(domain)" }
 
+    /// Directory where cookies are stored as plist files under Application Support.
+    private static func cookieDirectoryURL() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = base.appendingPathComponent("CloudflareCookieManager", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        return dir
+    }
+
+    /// File URL for the stored cookie plist for a given domain.
+    private static func cookieFileURL(for domain: String) -> URL {
+        let filename = key(for: domain) + ".plist"
+        return cookieDirectoryURL().appendingPathComponent(filename)
+    }
+
     // We serialise cookie.properties (a `[HTTPCookiePropertyKey: Any]` dictionary)
     // using `PropertyListSerialization` as it is fully Codable‑free and avoids
     // the NSCoding requirement (HTTPCookie does *not* conform to NSCoding on all
     // platforms).
 
     private static func existingCookie(for domain: String) -> HTTPCookie? {
+        let fileURL = cookieFileURL(for: domain)
         guard
-            let data = UserDefaults.standard.data(forKey: key(for: domain)),
+            let data = try? Data(contentsOf: fileURL),
             let rawDict = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
         else { return nil }
 
@@ -144,9 +160,11 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
         // Convert keys to String for property‑list
         let stringDict = Dictionary(uniqueKeysWithValues: props.map { ($0.key.rawValue, $0.value) })
 
-        if let data = try? PropertyListSerialization.data(fromPropertyList: stringDict, format: .binary, options: 0) {
-            UserDefaults.standard.set(data, forKey: key(for: cookie.domain))
-            print("[CloudflareCookieManager] stored cf_clearance=\(cookie.value) for domain \(cookie.domain)")
+        guard let data = try? PropertyListSerialization.data(fromPropertyList: stringDict, format: .binary, options: 0) else {
+            return
         }
+        let fileURL = cookieFileURL(for: cookie.domain)
+        try? data.write(to: fileURL, options: .atomic)
+        print("[CloudflareCookieManager] stored cf_clearance=\(cookie.value) for domain \(cookie.domain) at \(fileURL.path)")
     }
 }

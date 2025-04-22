@@ -6,8 +6,7 @@ import SwiftData
 @MainActor
 final class ResModelStore: SwiftDataStore {
     unowned let modelContext: ModelContext
-    // JSON backup for ResModel
-    private let jsonBacking = JSONFileStore<ResModel>(filename: "ResModels.json")
+    // SwiftData is now the single source of truth – no JSON backup.
     var resModels: [ResModel] {
         (try? modelContext.fetch(FetchDescriptor<ResModel>())) ?? []
     }
@@ -19,19 +18,6 @@ final class ResModelStore: SwiftDataStore {
     init(context: ModelContext, resStore: ResStore) {
         modelContext = context
         self.resStore = resStore
-        // Import JSON backup into SwiftData (one-way)
-        do {
-            let loaded: [ResModel] = try jsonBacking.load()
-            for model in loaded where (try? modelContext.fetch(
-                FetchDescriptor<ResModel>(predicate: #Predicate { $0.id == model.id })
-            ))?.isEmpty ?? true {
-                modelContext.insert(model)
-            }
-        } catch {
-            #if DEBUG
-                print("ResModelStore: Failed to import JSON backup – \(error)")
-            #endif
-        }
         print("Model Store Init: \(resModels.count) models")
     }
 
@@ -41,13 +27,11 @@ final class ResModelStore: SwiftDataStore {
     func addResModel(_ resModel: ResModel) {
         modelContext.insert(resModel)
         saveContext()
-        persistToJSON()
     }
 
     /// Persist updates on the supplied model
     func updateResModel(_: ResModel) {
         _ = saveContext()
-        persistToJSON()
     }
 
     /// Deletes a model and associated resumes
@@ -58,7 +42,6 @@ final class ResModelStore: SwiftDataStore {
 
         modelContext.delete(resModel)
         saveContext()
-        persistToJSON()
     }
 
     /// Enforces uniqueness when a `ResRef` is assigned a `modelRef`
@@ -72,18 +55,5 @@ final class ResModelStore: SwiftDataStore {
         }
     }
 
-    // MARK: - JSON File Backing
-
-    /// Serialises the current collection to disk. Failures are ignored in production.
-    private func persistToJSON() {
-        #if DEBUG
-            do {
-                try jsonBacking.save(resModels)
-            } catch {
-                print("ResModelStore: Failed to write JSON backup – \(error)")
-            }
-        #else
-            try? jsonBacking.save(resModels)
-        #endif
-    }
+    // `saveContext()` now in `SwiftDataStore`.
 }

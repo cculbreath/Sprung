@@ -7,7 +7,7 @@ struct CoverLetterPDFView: View {
     @State private var pdfData: Data = .init()
     @State private var isLoading: Bool = true
     @State private var errorMessage: String? = nil
-    
+
     init(coverLetter: CoverLetter, applicant: Applicant? = nil) {
         self.coverLetter = coverLetter
         // Use provided applicant or create a default one
@@ -76,7 +76,7 @@ struct CoverLetterPDFView: View {
             }
         }
     }
-    
+
     @MainActor
     private func loadApplicantProfile() async {
         do {

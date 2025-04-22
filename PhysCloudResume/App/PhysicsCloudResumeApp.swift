@@ -12,7 +12,18 @@ struct PhysicsCloudResumeApp: App {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization
                 .environment(appState)
         }
-        .modelContainer(for: [JobApp.self, Resume.self, ResRef.self, TreeNode.self, CoverLetter.self, MessageParams.self, CoverRef.self, ApplicantProfile.self])
+        .modelContainer(for: [
+            JobApp.self,
+            Resume.self,
+            ResRef.self,
+            TreeNode.self,
+            FontSizeNode.self,
+            CoverLetter.self,
+            MessageParams.self,
+            CoverRef.self,
+            ApplicantProfile.self,
+            ResModel.self,
+        ])
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
         .commands {
             // Add a standalone profile command in the main menu
@@ -22,7 +33,7 @@ struct PhysicsCloudResumeApp: App {
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
             }
-            
+
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
                     appDelegate.showSettingsWindow()
