@@ -110,7 +110,7 @@ final class ResumeChatProvider {
         // Convert SwiftOpenAI messages to generic format
         let genericMessages = parameters.messages.map { message in
             // Map the roles directly - convert the role string to our enum
-            let roleString = message.role.rawValue
+            let roleString = String(describing: message.role)
             let role: ChatMessage.ChatRole
             
             if roleString == "user" {

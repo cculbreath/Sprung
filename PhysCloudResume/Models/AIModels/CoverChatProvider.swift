@@ -116,8 +116,8 @@ final class CoverChatProvider {
 
         // Convert SwiftOpenAI messages to generic format
         let genericMessages = parameters.messages.map { message in
-            // Map the roles directly - convert the role string to our enum
-            let roleString = message.role.rawValue
+            // Map the roles directly
+            let roleString = String(describing: message.role)
             let role: ChatMessage.ChatRole
             
             if roleString == "user" {
@@ -270,7 +270,7 @@ final class CoverChatProvider {
             self.messageHist = cL.messageHistory.map { messageParam in
                 ChatCompletionParameters.Message(
                     role: ChatCompletionParameters.Message.Role(
-                        rawValue: messageParam.role.rawValue) ?? .user, // Assuming a fallback to `.user`
+                        rawValue: String(describing: messageParam.role)) ?? .user, // Assuming a fallback to `.user`
                     content: .text(messageParam.content), // Assuming content is text-based
                     refusal: nil, // Assuming no refusal messages
                     name: nil, // Assuming no specific name

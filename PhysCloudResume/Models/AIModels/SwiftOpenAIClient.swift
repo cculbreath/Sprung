@@ -31,7 +31,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         // Convert input messages to SwiftOpenAI format
         let chatMessages = messages.map { message in
             ChatCompletionParameters.Message(
-                role: ChatCompletionParameters.Message.Role(rawValue: message.role.rawValue) ?? .user,
+                role: ChatCompletionParameters.Message.Role(rawValue: String(describing: message.role)) ?? .user,
                 content: .text(message.content)
             )
         }
@@ -89,7 +89,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         // Convert input messages to SwiftOpenAI format
         let chatMessages = messages.map { message in
             ChatCompletionParameters.Message(
-                role: ChatCompletionParameters.Message.Role(rawValue: message.role.rawValue) ?? .user,
+                role: ChatCompletionParameters.Message.Role(rawValue: String(describing: message.role)) ?? .user,
                 content: .text(message.content)
             )
         }
