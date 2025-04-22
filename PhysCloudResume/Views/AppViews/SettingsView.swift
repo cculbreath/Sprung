@@ -14,6 +14,10 @@ struct SettingsView: View {
     @AppStorage("proxycurlApiKey") var proxycurlApiKey: String = "none"
     @AppStorage("preferredApi") var preferredApi: apis = .scrapingDog
     @AppStorage("preferredOpenAIModel") var preferredOpenAIModel: String = "gpt-4o-2024-08-06"
+    
+    // TTS Settings
+    @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
+    @AppStorage("ttsVoice") var ttsVoice: String = "nova"
 
     @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableStyles: [String] = []
@@ -35,6 +39,12 @@ struct SettingsView: View {
     @State private var availableModels: [String] = []
     @State private var isLoadingModels: Bool = false
     @State private var modelError: String? = nil
+    
+    // TTS preview state
+    @State private var ttsProvider: OpenAITTSProvider?
+    @State private var isPreviewingVoice: Bool = false
+    @State private var ttsError: String? = nil
+    @State private var showTTSError: Bool = false
 
     var body: some View {
         VStack {
@@ -174,6 +184,70 @@ struct SettingsView: View {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.gray.opacity(0.7), lineWidth: 1)
                     )
+                    
+                    // Text-to-Speech Settings
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Text-to-Speech")
+                            .font(.headline)
+                        
+                        // Enable TTS Toggle
+                        Toggle("Enable Text-to-Speech", isOn: $ttsEnabled)
+                            .toggleStyle(.switch)
+                            .disabled(openAiApiKey == "none")
+                            .onChange(of: ttsEnabled) { oldValue, newValue in
+                                print("TTS enabled changed: \(oldValue) → \(newValue)")
+                            }
+                        
+                        if openAiApiKey == "none" {
+                            Text("Add OpenAI API key to enable TTS")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        // Voice Selection
+                        if ttsEnabled {
+                            Divider()
+                                .padding(.vertical, 5)
+                            
+                            Text("Voice")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            Picker("TTS Voice", selection: $ttsVoice) {
+                                Group {
+                                    Text("Alloy (Neutral)").tag("alloy")
+                                    Text("Echo (Male)").tag("echo")
+                                    Text("Fable (British)").tag("fable")
+                                    Text("Nova (Female)").tag("nova")
+                                    Text("Onyx (Deep Male)").tag("onyx")
+                                    Text("Shimmer (Soft Female)").tag("shimmer")
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            
+                            // Voice Preview
+                            HStack {
+                                Spacer()
+                                Button(action: previewVoice) {
+                                    Label(isPreviewingVoice ? "Stop Preview" : "Preview Voice", 
+                                          systemImage: isPreviewingVoice ? "speaker.wave.3.fill" : "speaker.wave.2")
+                                }
+                                .disabled(openAiApiKey == "none")
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .help(isPreviewingVoice ? "Stop voice preview" : "Preview the selected voice")
+                                Spacer()
+                            }
+                            .padding(.top, 5)
+                        }
+                    }
+                    .padding(10)
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+                    )
 
                     Picker("Preferred API", selection: $preferredApi) {
                         ForEach(apis.allCases) { api in
@@ -192,7 +266,16 @@ struct SettingsView: View {
             loadAvailableStyles()
             if openAiApiKey != "none" {
                 fetchOpenAIModels()
+                // Initialize TTS provider if not already initialized
+                if ttsProvider == nil {
+                    ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
+                }
             }
+        }
+        .alert("TTS Error", isPresented: $showTTSError) {
+            Button("OK") { showTTSError = false }
+        } message: {
+            Text(ttsError ?? "An error occurred with text-to-speech")
         }
     }
 
@@ -306,5 +389,53 @@ struct SettingsView: View {
             availableStyles = ["Typewriter"]
         }
         availableStylesString = availableStyles.joined(separator: ", ")
+    }
+    
+    /// Preview the currently selected TTS voice
+    private func previewVoice() {
+        // If already previewing, stop the current preview
+        if isPreviewingVoice {
+            ttsProvider?.stopSpeaking()
+            isPreviewingVoice = false
+            return
+        }
+        
+        // Make sure we have a provider and API key
+        guard openAiApiKey != "none" else {
+            ttsError = "OpenAI API key is required for TTS"
+            showTTSError = true
+            return
+        }
+        
+        // Initialize provider if needed
+        if ttsProvider == nil {
+            ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
+        }
+        
+        // Sample text for preview
+        let sampleText = "This is a preview of the \(ttsVoice) voice. It can be used to read your resumes and cover letters aloud."
+        
+        // Set preview state
+        isPreviewingVoice = true
+        
+        // Get the selected voice
+        let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
+        
+        // Speak the sample text
+        ttsProvider?.speakText(sampleText, voice: voice) { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                // Reset preview state
+                self.isPreviewingVoice = false
+                
+                // Handle any errors
+                if let error = error {
+                    self.ttsError = error.localizedDescription
+                    self.showTTSError = true
+                    print("TTS preview error: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 }
