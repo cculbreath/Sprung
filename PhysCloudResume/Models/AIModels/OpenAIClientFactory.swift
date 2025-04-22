@@ -10,9 +10,9 @@ enum OpenAIClientType {
 
 /// Factory for creating OpenAI clients
 class OpenAIClientFactory {
-    /// Default client type to use
-    static var defaultType: OpenAIClientType = .swiftOpenAI
-    
+    /// Default client type to use - MacPaw/OpenAI for TTS support
+    static var defaultType: OpenAIClientType = .macPawOpenAI
+
     /// Creates an OpenAI client with the given API key
     /// - Parameters:
     ///   - apiKey: The API key to use for requests
@@ -20,12 +20,20 @@ class OpenAIClientFactory {
     /// - Returns: An instance conforming to OpenAIClientProtocol
     static func createClient(apiKey: String, type: OpenAIClientType? = nil) -> OpenAIClientProtocol {
         let clientType = type ?? defaultType
-        
+
         switch clientType {
         case .swiftOpenAI:
             return SwiftOpenAIClient(apiKey: apiKey)
         case .macPawOpenAI:
             return MacPawOpenAIClient(apiKey: apiKey)
         }
+    }
+    
+    /// Creates a TTS-capable client
+    /// - Parameter apiKey: The API key to use for requests
+    /// - Returns: An OpenAIClientProtocol that supports TTS
+    static func createTTSClient(apiKey: String) -> OpenAIClientProtocol {
+        // MacPaw/OpenAI is required for TTS
+        return MacPawOpenAIClient(apiKey: apiKey)
     }
 }

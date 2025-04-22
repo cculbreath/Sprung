@@ -62,14 +62,30 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
 
 ## MacPaw/OpenAI Integration
 
-- [ ] Implement MacPaw/OpenAI client
-  - [ ] Complete MacPawOpenAIClient implementation
-  - [ ] Add conversion functions for MacPaw's message formats
-  - [ ] Add proper model mapping
+- [x] Implement MacPaw/OpenAI client
+  - [x] Complete MacPawOpenAIClient implementation
+  - [x] Add conversion functions for MacPaw's message formats
+  - [x] Add proper model mapping
 
-- [ ] Switch to MacPaw Client
-  - [ ] Update factory to default to MacPaw client
+- [x] Switch to MacPaw Client
+  - [x] Update factory to default to MacPaw client
   - [ ] Test with MacPaw client
+
+## TTS Capabilities
+
+- [x] Extend OpenAIClientProtocol for TTS support
+  - [x] Add TTS methods to OpenAIClientProtocol
+  - [x] Implement TTS in MacPawOpenAIClient
+  - [x] Add placeholder implementations in SwiftOpenAIClient
+
+- [x] Create TTS Provider Layer
+  - [x] Create OpenAITTSProvider class
+  - [x] Implement both standard and streaming TTS methods
+  - [x] Add AVFoundation playback capabilities
+
+- [ ] TTS UI Components
+  - [ ] Add TTS controls to relevant views
+  - [ ] Create audio playback indicator
 
 ## Testing & Cleanup
 
@@ -77,6 +93,7 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
   - [ ] Test cover letter generation [Skip for now]
   - [ ] Test resume chat [Skip for now]
   - [ ] Test job recommendations [Skip for now]
+  - [ ] Test TTS capabilities [Skip for now]
 
 - [ ] Remove SwiftOpenAI dependency
   - [ ] Remove import statements
@@ -95,14 +112,21 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
 
 ## Future Enhancements (Post-Migration)
 
-- [ ] Add TTS streaming capabilities
+- [x] Add TTS streaming capabilities
 - [ ] Optimize API call efficiency
 - [ ] Implement any MacPaw-specific performance improvements
+- [ ] Add voice selection UI for TTS features
+- [ ] Implement audio file saving for generated speech
 
 ## Migration Progress Tracking
 
-**Current status**: Feature Migration & MacPaw/OpenAI Integration
+**Current status**: MacPaw/OpenAI Integration - TTS Capabilities Implementation
 
 **Estimated completion**: TBD
 
 **Key blockers**: None identified yet
+
+**Remaining Tasks**:
+1. Test with MacPaw client for existing features
+2. Add UI components for TTS capabilities 
+3. Comprehensive testing
