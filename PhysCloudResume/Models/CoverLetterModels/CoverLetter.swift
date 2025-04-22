@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import SwiftOpenAI
 
 @Model
 class CoverLetter: Identifiable, Hashable {

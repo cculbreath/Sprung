@@ -1,5 +1,4 @@
 import Foundation
-import SwiftOpenAI // Will be removed later in the migration
 import SwiftUI
 
 @Observable
@@ -119,7 +118,7 @@ final class CoverChatProvider {
             // Map the roles directly
             let roleString = String(describing: message.role)
             let role: ChatMessage.ChatRole
-            
+
             if roleString == "user" {
                 role = .user
             } else if roleString == "assistant" {
@@ -129,7 +128,7 @@ final class CoverChatProvider {
             } else {
                 role = .user // Default fallback
             }
-            
+
             let content: String
 
             switch message.content {
@@ -366,7 +365,7 @@ final class CoverChatProvider {
             )
 
             // Process the results
-            self.processResults(
+            processResults(
                 newMessage: response.content,
                 coverLetter: cL,
                 buttons: buttons

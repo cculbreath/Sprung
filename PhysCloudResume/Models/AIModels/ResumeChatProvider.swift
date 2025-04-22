@@ -6,10 +6,9 @@
 //
 
 import Foundation
-import SwiftOpenAI // Will be removed later in the migration
 import SwiftUI
 
-/// Helper for handling resume chat functionality 
+/// Helper for handling resume chat functionality
 
 @Observable
 final class ResumeChatProvider {
@@ -17,7 +16,7 @@ final class ResumeChatProvider {
     private let service: OpenAIService?
     // The new abstraction layer client
     private let openAIClient: OpenAIClientProtocol
-    
+
     private var streamTask: Task<Void, Never>?
     var message: String = ""
     var messages: [String] = []
@@ -29,21 +28,21 @@ final class ResumeChatProvider {
     var lastRevNodeArray: [ProposedRevisionNode] = []
 
     // MARK: - Initializers
-    
+
     /// Initialize with the new abstraction layer client
     /// - Parameter client: An OpenAI client conforming to OpenAIClientProtocol
     init(client: OpenAIClientProtocol) {
-        self.openAIClient = client
-        self.service = nil
+        openAIClient = client
+        service = nil
     }
-    
+
     /// Legacy initializer using SwiftOpenAI directly
     /// - Parameter service: The SwiftOpenAI service
     init(service: OpenAIService) {
         self.service = service
         // Get API key from UserDefaults since OpenAIService doesn't expose it
         let apiKey = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
-        self.openAIClient = SwiftOpenAIClient(apiKey: apiKey)
+        openAIClient = SwiftOpenAIClient(apiKey: apiKey)
     }
 
     private func convertJsonToNodes(_ jsonString: String?) -> [ProposedRevisionNode]? {
@@ -106,13 +105,13 @@ final class ResumeChatProvider {
     ) async throws {
         // Clear previous error message before starting
         errorMessage = ""
-        
+
         // Convert SwiftOpenAI messages to generic format
         let genericMessages = parameters.messages.map { message in
             // Map the roles directly - convert the role string to our enum
             let roleString = String(describing: message.role)
             let role: ChatMessage.ChatRole
-            
+
             if roleString == "user" {
                 role = .user
             } else if roleString == "assistant" {
@@ -122,7 +121,7 @@ final class ResumeChatProvider {
             } else {
                 role = .user // Default fallback
             }
-            
+
             // Extract content
             let content: String
             switch message.content {
@@ -139,26 +138,26 @@ final class ResumeChatProvider {
                     }
                 }.joined(separator: "\n")
             }
-            
+
             return ChatMessage(role: role, content: content)
         }
-        
+
         // Store for reference
         self.genericMessages = genericMessages
-        
+
         // Get model as string
         let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
+
         // Use our abstraction layer with a timeout
         let timeoutError = NSError(
             domain: "ResumeChatProviderError",
             code: -1001,
             userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
         )
-        
+
         // Create a coordinator for safe continuation resumption
         let coordinator = ContinuationCoordinator()
-        
+
         do {
             // Start a task with specific timeout for the API call
             let response = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ChatCompletionResponse, Error>) in
@@ -174,7 +173,7 @@ final class ResumeChatProvider {
                         await coordinator.resumeWithError(error, continuation: continuation)
                     }
                 }
-                
+
                 // Set up a timeout task
                 Task {
                     try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
@@ -184,13 +183,13 @@ final class ResumeChatProvider {
                     }
                 }
             }
-            
+
             // Process the response
             let content = response.content
-            
+
             // Process messages format and store in messages array
             messages = [content.asJsonFormatted()]
-            
+
             if messages.isEmpty {
                 throw NSError(
                     domain: "ResumeChatProviderError",
@@ -198,29 +197,29 @@ final class ResumeChatProvider {
                     userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
                 )
             }
-            
+
             print("AI response received: \(messages.last?.prefix(100) ?? "Empty")")
-            
+
             // Try to convert to nodes
             lastRevNodeArray = convertJsonToNodes(messages.last) ?? []
-            
+
             // Add to message history
             let lastContent = content
-            
+
             // Keep legacy format in sync for backward compatibility
             messageHist.append(
                 .init(role: .assistant, content: .text(lastContent))
             )
-            
+
             // Update generic messages
             self.genericMessages.append(ChatMessage(role: .assistant, content: lastContent))
-            
+
         } catch {
             errorMessage = error.localizedDescription
             throw error
         }
     }
-    
+
     /// Legacy method that uses SwiftOpenAI directly
     func startChat(
         parameters: ChatCompletionParameters
@@ -229,14 +228,14 @@ final class ResumeChatProvider {
         if service == nil {
             return try await startChatWithGenericClient(parameters: parameters)
         }
-        
+
         // Clear previous error message before starting
         errorMessage = ""
 
         do {
             // Create a coordinator for safe continuation resumption
             let coordinator = ContinuationCoordinator()
-            
+
             guard let service = service else {
                 return try await startChatWithGenericClient(parameters: parameters)
             }
@@ -333,7 +332,7 @@ final class ResumeChatProvider {
     ) async throws {
         // Clear any previous error message
         errorMessage = ""
-        
+
         // If we don't have a service, use non-streaming version with abstraction layer
         if service == nil {
             // Fall back to non-streaming version with our abstraction layer
@@ -345,7 +344,7 @@ final class ResumeChatProvider {
             }
             return
         }
-        
+
         guard let service = service else {
             try await startChatWithGenericClient(parameters: parameters)
             return
