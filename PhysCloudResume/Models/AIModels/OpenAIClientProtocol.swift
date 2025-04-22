@@ -57,7 +57,7 @@ protocol OpenAIClientProtocol {
     func sendTTSRequest(
         text: String,
         voice: String,
-        instructions: String? = nil,
+        instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     )
 
@@ -71,7 +71,7 @@ protocol OpenAIClientProtocol {
     func sendTTSStreamingRequest(
         text: String,
         voice: String,
-        instructions: String? = nil,
+        instructions: String?,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     )
