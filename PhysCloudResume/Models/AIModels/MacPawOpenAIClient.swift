@@ -62,8 +62,8 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         
         // Create the query with the converted messages
         let query = ChatQuery(
-            model: model,
             messages: chatMessages,
+            model: model,
             temperature: temperature
         )
         
@@ -106,8 +106,8 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         
         // Create the query with the converted messages
         let query = ChatQuery(
-            model: model,
             messages: chatMessages,
+            model: model,
             temperature: temperature
         )
         
@@ -154,8 +154,8 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         
         // Create streamable query with the converted messages
         var query = ChatQuery(
-            model: model,
             messages: chatMessages,
+            model: model,
             temperature: temperature
         )
         query.stream = true
@@ -191,7 +191,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
         // Map voice string to MacPaw's voice type
-        let mappedVoice: AudioSpeechQuery.Voice
+        let mappedVoice: AudioSpeechQuery.AudioSpeechVoice
         switch voice.lowercased() {
         case "alloy": mappedVoice = .alloy
         case "echo": mappedVoice = .echo
@@ -234,7 +234,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         onComplete: @escaping (Error?) -> Void
     ) {
         // Map voice string to MacPaw's voice type
-        let mappedVoice: AudioSpeechQuery.Voice
+        let mappedVoice: AudioSpeechQuery.AudioSpeechVoice
         switch voice.lowercased() {
         case "alloy": mappedVoice = .alloy
         case "echo": mappedVoice = .echo
