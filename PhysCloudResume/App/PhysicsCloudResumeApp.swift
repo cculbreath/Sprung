@@ -1,6 +1,6 @@
 import Foundation
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct PhysicsCloudResumeApp: App {
@@ -15,11 +15,25 @@ struct PhysicsCloudResumeApp: App {
         .modelContainer(for: [JobApp.self, Resume.self, ResRef.self, TreeNode.self, CoverLetter.self, MessageParams.self, CoverRef.self, ApplicantProfile.self])
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
         .commands {
+            // Add a standalone profile command in the main menu
+            CommandMenu("Profile") {
+                Button("Applicant Profile...") {
+                    appDelegate.showApplicantProfileWindow()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+            }
+            
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
                     appDelegate.showSettingsWindow()
                 }
                 .keyboardShortcut(",", modifiers: .command)
+
+                Divider()
+
+                Button("Applicant Profile...") {
+                    appDelegate.showApplicantProfileWindow()
+                }
             }
         }
     }
