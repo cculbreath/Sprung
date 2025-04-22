@@ -14,17 +14,7 @@ import SwiftUI
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
 
-    // The system message in SwiftOpenAI format (for backward compatibility)
-    let systemMessage = ChatCompletionParameters.Message(
-        role: .system,
-        content: .text("""
-        You are an expert career advisor specializing in job application prioritization. Your task is to analyze a list of job applications and recommend the one that best matches the candidate's qualifications and career goals. You will be provided with job descriptions, the candidate's resume, and additional background information. Choose the job that offers the best match in terms of skills, experience, and potential career growth.
-
-        IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The recommendedJobId field must contain the exact UUID string from the id field of the chosen job in the job listings JSON array. Do not modify the UUID format in any way.
-        """)
-    )
-
-    // The system message in generic format (for abstraction layer)
+    // The system message in generic format for abstraction layer
     let genericSystemMessage = ChatMessage(
         role: .system,
         content: """
@@ -34,8 +24,6 @@ import SwiftUI
         """
     )
 
-    // For backward compatibility during migration
-    private let service: OpenAIService?
     // The new abstraction layer client
     private let openAIClient: OpenAIClientProtocol
 
@@ -69,7 +57,6 @@ import SwiftUI
         self.resume = resume
         self.savePromptToFile = savePromptToFile
         openAIClient = client
-        service = nil
     }
 
     /// Default initializer - uses factory to create client
@@ -85,25 +72,15 @@ import SwiftUI
         // Get API key from UserDefaults directly to avoid conflict with @Observable
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
 
-        // For backward compatibility
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 360 // 360 seconds extended timeout
-
-        service = OpenAIServiceFactory.service(
-            apiKey: apiKey,
-            configuration: configuration,
-            debugEnabled: false
-        )
-
         // Create client using our factory
         openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
     }
 
     // MARK: - API Call Functions
 
-    /// Fetches job recommendation using the abstraction layer directly
+    /// Fetches job recommendation using the abstraction layer
     /// - Returns: A tuple containing the recommended job ID and reason
-    func fetchRecommendationWithGenericClient() async throws -> (UUID, String) {
+    func fetchRecommendation() async throws -> (UUID, String) {
         guard let resume = resume, let resumeModel = resume.model else {
             throw NSError(domain: "JobRecommendationProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "No resume available"])
         }
@@ -133,91 +110,11 @@ import SwiftUI
             let response = try await openAIClient.sendChatCompletionAsync(
                 messages: messages,
                 model: modelString,
-                temperature: 0.2 // Lower temperature for more deterministic results with structured outputs
+                temperature: 1.0 // Using standard temperature of 1.0 as requested
             )
 
             // Process the response
             let decodedResponse = try decodeRecommendation(from: response.content)
-            return decodedResponse
-        } catch {
-            print("Error fetching recommendation with generic client: \(error.localizedDescription)")
-            throw error
-        }
-    }
-
-    /// Legacy method that uses SwiftOpenAI directly
-    func fetchRecommendation() async throws -> (UUID, String) {
-        // If we have our abstraction layer set up but no service, use the generic client
-        if service == nil {
-            return try await fetchRecommendationWithGenericClient()
-        }
-
-        guard let resume = resume, let resumeModel = resume.model else {
-            throw NSError(domain: "JobRecommendationProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "No resume available"])
-        }
-
-        let newJobApps = jobApps.filter { $0.status == .new }
-        if newJobApps.isEmpty {
-            throw NSError(domain: "JobRecommendationProvider", code: 2, userInfo: [NSLocalizedDescriptionKey: "No new job applications available"])
-        }
-
-        let prompt = buildPrompt(newJobApps: newJobApps, resume: resume)
-
-        if savePromptToFile {
-            savePromptToDownloads(content: prompt, fileName: "jobRecommendationPrompt.txt")
-        }
-
-        // For backward compatibility
-        guard let service = service else {
-            return try await fetchRecommendationWithGenericClient()
-        }
-
-        let preferredModel = OpenAIModelFetcher.getPreferredModel()
-
-        let messages = [
-            systemMessage,
-            ChatCompletionParameters.Message(role: .user, content: .text(prompt)),
-        ]
-
-        // Create a JSON schema for the recommended job response
-        let recommendationSchema = JSONSchemaResponseFormat(
-            name: "job_recommendation_response",
-            strict: true,
-            schema: JSONSchema(
-                type: .object,
-                properties: [
-                    "recommendedJobId": JSONSchema(
-                        type: .string,
-                        description: "The exact UUID string from the id field of the recommended job"
-                    ),
-                    "reason": JSONSchema(
-                        type: .string,
-                        description: "A brief explanation of why this job is recommended"
-                    ),
-                ],
-                required: ["recommendedJobId", "reason"],
-                additionalProperties: false
-            )
-        )
-
-        // Set response format to use the JSON schema
-        let parameters = ChatCompletionParameters(
-            messages: messages,
-            model: preferredModel,
-            responseFormat: .jsonSchema(recommendationSchema)
-        )
-
-        do {
-            let result = try await service.startChat(parameters: parameters)
-            guard let choices = result.choices,
-                  let choice = choices.first,
-                  let message = choice.message,
-                  let content = message.content
-            else {
-                throw NSError(domain: "JobRecommendationProvider", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])
-            }
-
-            let decodedResponse = try decodeRecommendation(from: content)
             return decodedResponse
         } catch {
             print("Error fetching recommendation: \(error.localizedDescription)")
@@ -288,7 +185,7 @@ import SwiftUI
             savePromptToDownloads(content: responseText, fileName: "jobRecommendationResponse.txt")
         }
 
-        // With JSONSchemaResponseFormat, the response should already be valid JSON
+        // Try to parse the JSON response
         guard let data = responseText.data(using: .utf8) else {
             throw NSError(domain: "JobRecommendationProvider", code: 4, userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
         }
