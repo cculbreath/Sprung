@@ -6,28 +6,31 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
 
 - [x] Create a new feature branch (`git checkout -b feature/macpaw-openai-migration`)
 - [ ] Add MacPaw/OpenAI as a dependency to the project
-- [ ] Keep both OpenAI libraries temporarily for staged migration
+- [x] Keep both OpenAI libraries temporarily for staged migration
 
 ## Core Infrastructure Changes
 
-- [ ] Create OpenAI client wrapper to abstract implementation details
-  - [ ] Create an `OpenAIClientProtocol` interface
-  - [ ] Implement MacPaw version of the client
-  - [ ] Create factory for client instantiation
+- [x] Create OpenAI client wrapper to abstract implementation details
+  - [x] Create an `OpenAIClientProtocol` interface
+  - [x] Implement SwiftOpenAI version of the client
+  - [x] Create placeholder for MacPaw version of the client
+  - [x] Create factory for client instantiation
 
-- [ ] Update Model Handling
-  - [ ] Modify `OpenAIModelFetcher.swift` to use MacPaw's model identifiers
-  - [ ] Create mapping between SwiftOpenAI models and MacPaw models
-  - [ ] Update model fetching logic with compatibility layer
+- [x] Update Model Handling
+  - [x] Modify `OpenAIModelFetcher.swift` to use generic model identifiers
+  - [x] Create mapping between SwiftOpenAI models and MacPaw models
+  - [x] Update model fetching logic with compatibility layer
 
 ## Feature Migration
 
-- [ ] Message & Parameters Conversion
-  - [ ] Create conversion functions for message formats
-  - [ ] Update parameter object structures
+- [x] Message & Parameters Conversion
+  - [x] Create conversion functions for message formats
+  - [x] Update parameter object structures
 
-- [ ] Migrate Chat Completion
-  - [ ] Update `CoverChatProvider.swift`
+- [x] Migrate Chat Completion
+  - [x] Update `CoverChatProvider.swift` with abstraction layer
+  - [x] Implement dual-mode support for compatibility
+  - [x] Add new method using abstraction layer directly
   - [ ] Test chat completion with new API
 
 - [ ] Migrate Job Recommendation

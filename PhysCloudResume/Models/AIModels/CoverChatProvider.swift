@@ -243,9 +243,15 @@ final class CoverChatProvider {
                 coverLetter: cL, resume: resume, mode: cL.currentMode ?? .revise,
                 customFeedbackString: customFeedback.wrappedValue
             )
-            let myContent: ChatCompletionParameters.Message.ContentType = .text(
-                prompt)
+            
+            // Add message to cover letter history
             cL.messageHistory.append(.init(content: prompt, role: .user))
+            
+            // Add to generic message history
+            self.genericMessages.append(ChatMessage(role: .user, content: prompt))
+            
+            // Update legacy message history for backwards compatibility
+            let myContent: ChatCompletionParameters.Message.ContentType = .text(prompt)
             self.messageHist = cL.messageHistory.map { messageParam in
                 ChatCompletionParameters.Message(
                     role: ChatCompletionParameters.Message.Role(
@@ -261,13 +267,19 @@ final class CoverChatProvider {
             }
 
             print("message count: \(self.messageHist.count)")
-            let model = OpenAIModelFetcher.getPreferredModel()
-            print("Using OpenAI model: \(model)")
+            
+            // We'll use both the string and Model versions during transition
+            let modelString = OpenAIModelFetcher.getPreferredModelString()
+            let swiftOpenAIModel = OpenAIModelFetcher.getPreferredModel()
+            print("Using OpenAI model: \(modelString)")
+            
+            // Legacy parameters for backward compatibility
             let parameters = ChatCompletionParameters(
                 messages: self.messageHist,
-                model: model,
+                model: swiftOpenAIModel,
                 responseFormat: .text
             )
+            
             try await self.startChat(
                 parameters: parameters,
                 onComplete: { @MainActor newMessage in
@@ -281,6 +293,76 @@ final class CoverChatProvider {
         }
     }
 
+    /// New method that uses the abstraction layer directly
+    @MainActor
+    func coverChatActionWithGenericClient(
+        res: Resume?,
+        jobAppStore: JobAppStore,
+        buttons: Binding<CoverLetterButtons>
+    ) async {
+        print("chatAction with generic client")
+        buttons.wrappedValue.runRequested = true
+
+        guard let resume = res, let cL = jobAppStore.selectedApp?.selectedCover
+        else {
+            print("guard fail")
+            return
+        }
+
+        print("generate with abstraction layer")
+        // Access MainActor-isolated method
+        let prompt = await CoverLetterPrompts.generate(
+            coverLetter: cL, resume: resume, mode: cL.currentMode ?? .generate
+        )
+        
+        // Extract system message content
+        let systemContent: String = {
+            switch CoverLetterPrompts.systemMessage.content {
+            case let .text(text): return text
+            case .contentArray: return "" // Handle as needed
+            }
+        }()
+        
+        // Store message history in generic format
+        let messages = [
+            ChatMessage(role: .system, content: systemContent),
+            ChatMessage(role: .user, content: prompt)
+        ]
+        
+        // Update state
+        self.genericMessages = messages
+        
+        // Add to cover letter's history
+        cL.messageHistory = [
+            .init(content: systemContent, role: .system),
+            .init(content: prompt, role: .user),
+        ]
+        
+        // Get model as string
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        print("Using OpenAI model: \(modelString)")
+        
+        do {
+            // Use our abstraction layer directly with async/await
+            let response = try await openAIClient.sendChatCompletionAsync(
+                messages: messages,
+                model: modelString,
+                temperature: 0.7
+            )
+            
+            // Process the results
+            processResults(
+                newMessage: response.content,
+                coverLetter: cL,
+                buttons: buttons
+            )
+        } catch {
+            // Handle any errors
+            errorMessage = error.localizedDescription
+            buttons.wrappedValue.runRequested = false
+        }
+    }
+    
     @MainActor
     func coverChatAction(
         res: Resume?,
@@ -304,32 +386,54 @@ final class CoverChatProvider {
                 coverLetter: cL, resume: resume, mode: cL.currentMode ?? .generate
             )
             print("prompt: \(prompt)")
-            let myContent: ChatCompletionParameters.Message.ContentType = .text(
-                prompt)
+            
+            // For backward compatibility, store in legacy format
+            let myContent: ChatCompletionParameters.Message.ContentType = .text(prompt)
+            
+            // Extract system message content for generic storage
+            let systemContent: String = {
+                switch CoverLetterPrompts.systemMessage.content {
+                case let .text(text): return text
+                case .contentArray: return "" // Handle as needed
+                }
+            }()
+            
+            // Store message history in both formats for transition period
+            
+            // 1. Legacy format for SwiftOpenAI
             self.messageHist = [
                 CoverLetterPrompts.systemMessage,
                 .init(role: .user, content: myContent),
             ]
+            
+            // 2. Generic format for our abstraction layer
+            self.genericMessages = [
+                ChatMessage(role: .system, content: systemContent),
+                ChatMessage(role: .user, content: prompt)
+            ]
+            
+            // 3. Cover letter's own history
             cL.messageHistory = [
-                .init(
-                    content: {
-                        switch CoverLetterPrompts.systemMessage.content {
-                        case let .text(text): return text
-                        case .contentArray: return "" // Handle as needed
-                        }
-                    }(), role: .system
-                ),
+                .init(content: systemContent, role: .system),
                 .init(content: prompt, role: .user),
             ]
+            
             print("handler message count: \(self.messageHist.count)")
-            print("CL message count:  \(cL.messageHistory.count)")
-            let model = OpenAIModelFetcher.getPreferredModel()
-            print("Using OpenAI model: \(model)")
+            print("Generic message count: \(self.genericMessages.count)")
+            print("CL message count: \(cL.messageHistory.count)")
+            
+            // Get model in both formats
+            let modelString = OpenAIModelFetcher.getPreferredModelString()
+            let swiftOpenAIModel = OpenAIModelFetcher.getPreferredModel()
+            print("Using OpenAI model: \(modelString)")
+            
+            // Use legacy format parameters for now
             let parameters = ChatCompletionParameters(
                 messages: self.messageHist,
-                model: model,
+                model: swiftOpenAIModel,
                 responseFormat: .text
             )
+            
             try await self.startChat(
                 parameters: parameters,
                 onComplete: { @MainActor newMessage in
