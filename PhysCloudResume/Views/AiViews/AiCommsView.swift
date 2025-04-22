@@ -262,8 +262,8 @@ struct AiCommsView: View {
             }
 
             // Add the reasoning if available
-            if !revision.explanation.isEmpty {
-                speechText += "Here's why: \(revision.explanation)\n\n"
+            if !revision.why.isEmpty {
+                speechText += "Here's why: \(revision.why)\n\n"
             }
         }
 
@@ -277,14 +277,14 @@ struct AiCommsView: View {
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
 
         // Request TTS conversion and playback with instructions
-        ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { [weak self] error in
+        ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { error in
             // Update UI state when speech completes or errors
             DispatchQueue.main.async {
-                self?.isSpeaking = false
+                isSpeaking = false
 
                 if let error = error {
-                    self?.ttsError = "Text-to-speech error: \(error.localizedDescription)"
-                    self?.showTTSError = true
+                    ttsError = "Text-to-speech error: \(error.localizedDescription)"
+                    showTTSError = true
                 }
             }
         }
@@ -300,24 +300,23 @@ struct AiCommsView: View {
             isLoading = true
 
             do {
+                // Prepare messages for API call using our abstraction layer
                 if !hasRevisions {
-                    let content: ChatCompletionParameters.Message.ContentType = .text(q.wholeResumeQueryString)
-
-                    chatProvider.messageHist = [
-                        q.systemMessage,
-                        .init(role: .user, content: content),
+                    // Set up system and user messages for initial query
+                    chatProvider.genericMessages = [
+                        q.genericSystemMessage,
+                        ChatMessage(role: .user, content: q.wholeResumeQueryString)
                     ]
                 } else {
-                    chatProvider.messageHist.append(.init(role: .user, content: .text(q.revisionPrompt(fbnodes))))
+                    // Add revision feedback prompt to existing message history
+                    chatProvider.genericMessages.append(
+                        ChatMessage(role: .user, content: q.revisionPrompt(fbnodes))
+                    )
                 }
 
-                let model = OpenAIModelFetcher.getPreferredModel()
-                print("Using OpenAI model for resume query: \(model)")
-                let parameters = ChatCompletionParameters(
-                    messages: chatProvider.messageHist,
-                    model: model,
-                    responseFormat: .jsonSchema(ResumeApiQuery.revNodeArraySchema)
-                )
+                // Get the model string
+                let modelString = OpenAIModelFetcher.getPreferredModelString()
+                print("Using OpenAI model for resume query: \(modelString)")
 
                 // Set up a timeout task that will run if the main task takes too long
                 let timeoutTask = Task {
@@ -327,8 +326,8 @@ struct AiCommsView: View {
                     }
                 }
 
-                // Execute the API call
-                try await chatProvider.startChat(parameters: parameters)
+                // Execute the API call with our abstraction layer
+                try await chatProvider.startChat(messages: chatProvider.genericMessages)
 
                 // Cancel the timeout task since we completed successfully
                 timeoutTask.cancel()
