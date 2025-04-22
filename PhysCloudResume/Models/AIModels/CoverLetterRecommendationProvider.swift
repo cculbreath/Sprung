@@ -46,11 +46,12 @@ final class CoverLetterRecommendationProvider {
         var prompt = "\(applicant.name) is applying for this job: \(jobApp.jobPosition) at \(jobApp.companyName).\n\n"
         prompt += "Here are several cover letter options:\n"
         for letter in letters {
-            prompt += "ID: \(letter.id.uuidString)\n\(letter.content)\n\n"
+            prompt += "id: \(letter.id.uuidString), name: \(letter.sequencedName), content:\n\(letter.content)\n\n"
         }
         prompt += "For reference here are some of \(applicant.name)'s previous cover letters that he's particularly satisfied with:\n"
         prompt += "\(writingSamples)\n\n"
-        prompt += "Which of the cover letters is strongest? Which cover letter best matches the style, voice and quality of \(applicant.name)'s previous letters? For your response, please return a brief summary ranking/assessment of each letter's relative strength and the degree to which it captures the author's voice and style, determine the one letter that is the strongest and most convincingly in the author's voice, and a brief reason for your ultimate choice."
+        prompt += "Which of the cover letters is strongest? Which cover letter best matches the style, voice and quality of \\(applicant.name)'s previous letters? For your response, please return a brief summary ranking/assessment of each letter's relative strength and the degree to which it captures the author's voice and style, determine the one letter that is the strongest and most convincingly in the author's voice, and a brief reason for your ultimate choice."
+        prompt += "\\nWhen providing the strength-and-voice-analysis and verdict responses, reference each letter by its name, not its id.\\n"
 
         // Define JSON schema for response
         let schema = JSONSchemaResponseFormat(
