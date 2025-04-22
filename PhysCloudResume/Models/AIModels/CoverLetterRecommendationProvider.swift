@@ -94,8 +94,8 @@ final class CoverLetterRecommendationProvider {
                 let query = ChatQuery(
                     messages: chatMessages,
                     model: modelString,
-                    temperature: 1.0,
-                    responseFormat: .jsonSchema(name: "cover-letter-recommendation", type: BestCoverLetterResponse.self)
+                    responseFormat: .jsonSchema(name: "cover-letter-recommendation", type: BestCoverLetterResponse.self),
+                    temperature: 1.0
                 )
                 
                 // Make the API call with structured output

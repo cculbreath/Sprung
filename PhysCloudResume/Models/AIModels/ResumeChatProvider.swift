@@ -121,8 +121,8 @@ final class ResumeChatProvider {
                             let query = ChatQuery(
                                 messages: chatMessages,
                                 model: modelString,
-                                temperature: 1.0,
-                                responseFormat: .jsonSchema(name: "resume-revisions", type: RevisionsContainer.self)
+                                responseFormat: .jsonSchema(name: "resume-revisions", type: RevisionsContainer.self),
+                                temperature: 1.0
                             )
                             
                             // Make the API call with structured output
