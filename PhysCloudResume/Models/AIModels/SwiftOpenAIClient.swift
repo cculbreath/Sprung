@@ -4,16 +4,24 @@ import SwiftOpenAI
 /// Implementation of OpenAIClientProtocol using SwiftOpenAI library
 class SwiftOpenAIClient: OpenAIClientProtocol {
     private let service: OpenAIService
+    private let apiKeyValue: String
 
     /// The API key used for requests
     var apiKey: String {
-        service.apiKey
+        return apiKeyValue
     }
 
     /// Initializes a new client with the given API key
     /// - Parameter apiKey: The API key to use for requests
     init(apiKey: String) {
-        service = OpenAIService(apiKey: apiKey)
+        self.apiKeyValue = apiKey
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 60.0
+        self.service = OpenAIServiceFactory.service(
+            apiKey: apiKey,
+            configuration: configuration,
+            debugEnabled: false
+        )
     }
 
     /// Sends a chat completion request
@@ -40,8 +48,8 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         let parameters = ChatCompletionParameters(
             messages: chatMessages,
             model: OpenAIModelFetcher.modelFromString(model),
-            temperature: temperature,
-            responseFormat: .text
+            responseFormat: .text,
+            temperature: temperature
         )
 
         // Send the request
@@ -98,8 +106,8 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         let parameters = ChatCompletionParameters(
             messages: chatMessages,
             model: OpenAIModelFetcher.modelFromString(model),
-            temperature: temperature,
-            responseFormat: .text
+            responseFormat: .text,
+            temperature: temperature
         )
 
         // Send the request and await the result
