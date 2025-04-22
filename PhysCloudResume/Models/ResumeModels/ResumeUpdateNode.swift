@@ -5,6 +5,7 @@
 //  Created by Christopher Culbreath on 9/2/24.
 //
 import Foundation
+import OpenAI
 
 struct ProposedRevisionNode: Codable, Equatable {
     var id: String = ""
@@ -15,8 +16,21 @@ struct ProposedRevisionNode: Codable, Equatable {
     var why: String = ""
 }
 
-struct RevisionsContainer: Codable {
+struct RevisionsContainer: Codable, OpenAI.StructuredOutput {
     var revArray: [ProposedRevisionNode]
+    
+    static let example: Self = {
+        .init(revArray: [
+            ProposedRevisionNode(
+                id: "example-id-1",
+                oldValue: "Example old value",
+                newValue: "Example new value",
+                valueChanged: true,
+                isTitleNode: false,
+                why: "Improved clarity and impact"
+            )
+        ])
+    }()
 }
 
 enum PostReviewAction: String, Codable {
