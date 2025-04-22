@@ -206,7 +206,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Create the query
         var query = AudioSpeechQuery(
-            model: .tts_1,
+            model: .gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
             responseFormat: .mp3
@@ -256,7 +256,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Create the query
         var query = AudioSpeechQuery(
-            model: .tts_1,
+            model: .gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
             responseFormat: .mp3
