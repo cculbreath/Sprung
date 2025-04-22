@@ -618,12 +618,12 @@ enum CoverLetterPDFGenerator {
                 // Look for signature markers in the source text (with and without commas)
                 let regardsMarkers = [
                     "Best Regards,", "Best regards,", "Best Regards", "Best regards",
-                    "Sincerely,", "Sincerely", "Sincerely yours,", "Sincerely Yours", 
+                    "Sincerely,", "Sincerely", "Sincerely yours,", "Sincerely Yours",
                     "Thank you,", "Thank you",
                     "Regards,", "Regards",
                     "Warm Regards,", "Warm regards,", "Warm Regards", "Warm regards",
                     "Yours truly,", "Yours Truly,", "Yours truly", "Yours Truly",
-                    "Respectfully,", "Respectfully"
+                    "Respectfully,", "Respectfully",
                 ]
                 let nameMarker = "Christopher Culbreath"
 
@@ -670,21 +670,23 @@ enum CoverLetterPDFGenerator {
                         if trimmedContent.contains(nameMarker) {
                             nameLineIndex = idx
                         }
-                        
+
                         // Detect contact info lines (phone/address) using robust patterns
                         if trimmedContent.contains("(") || trimmedContent.contains(")") || // Capture phone number patterns
-                           trimmedContent.contains("-") || // Capture phone or address patterns
-                           trimmedContent.contains("Shadywood") || 
-                           trimmedContent.contains("Austin") || trimmedContent.contains("Texas") ||
-                           trimmedContent.contains("Drive") || trimmedContent.contains("Dr") {
+                            trimmedContent.contains("-") || // Capture phone or address patterns
+                            trimmedContent.contains("Shadywood") ||
+                            trimmedContent.contains("Austin") || trimmedContent.contains("Texas") ||
+                            trimmedContent.contains("Drive") || trimmedContent.contains("Dr")
+                        {
                             contactInfoLineIndex = idx
                         }
-                        
+
                         // Detect email line with robust patterns
                         if trimmedContent.contains("@") || // Universal email indicator
-                           trimmedContent.contains(".net") || trimmedContent.contains(".com") || // Domain extensions
-                           trimmedContent.contains("physics") || trimmedContent.contains("cloud") ||
-                           trimmedContent.contains("culbreath") { // Parts of common domains
+                            trimmedContent.contains(".net") || trimmedContent.contains(".com") || // Domain extensions
+                            trimmedContent.contains("physics") || trimmedContent.contains("cloud") ||
+                            trimmedContent.contains("culbreath")
+                        { // Parts of common domains
                             emailLineIndex = idx
                         }
                     }
@@ -726,45 +728,55 @@ enum CoverLetterPDFGenerator {
 
                 // Determine the right position based on the content
                 var signatureX = textRect.origin.x + 10 // Default indent from margin
-                
+
                 // Position signature intelligently based on all detected signature elements
-                
+
                 // Determine where there's space to place the signature
                 let hasContactLines = contactInfoLineIndex != nil || emailLineIndex != nil
                 let betweenRegardsAndName = regardsLineIndex != nil && nameLineIndex != nil &&
-                                           (nameLineIndex ?? 0) > (regardsLineIndex ?? 0) &&
-                                           abs((nameLineIndex ?? 0) - (regardsLineIndex ?? 0)) > 1
-                
+                    (nameLineIndex ?? 0) > (regardsLineIndex ?? 0) &&
+                    abs((nameLineIndex ?? 0) - (regardsLineIndex ?? 0)) > 1
+
                 // First, calculate optimal signature position
                 var adjustedSignatureY: CGFloat
-                
-                if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
-                    // If we have the regards line, place signature below it
-                    if nameLineIndex == regardsIdx + 1 || nameLineIndex == regardsIdx + 2 {
-                        // Name immediately follows "Regards" - put signature BEFORE name
-                        if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                            adjustedSignatureY = origins[nameIdx].y + 22 // Well above name
-                        } else {
-                            adjustedSignatureY = origins[regardsIdx].y - 40
-                        }
+
+                // Check if we have both regards and name lines for optimal positioning
+                if let regardsIdx = regardsLineIndex, let nameIdx = nameLineIndex,
+                   regardsIdx < origins.count, nameIdx < origins.count
+                {
+                    // We have both regards and name - position precisely between them
+                    let regardsY = origins[regardsIdx].y
+                    let nameY = origins[nameIdx].y
+
+                    // Position EXTREMELY high right at the regards line
+                    // The signature needs to appear almost at the same line as the closing text
+                    if nameIdx == regardsIdx + 1 {
+                        // Name immediately follows regards - place directly on the regards line
+                        adjustedSignatureY = regardsY + 5 // Right on the regards line
+                    } else if nameIdx == regardsIdx + 2 {
+                        // One line gap - still place directly on the regards line
+                        adjustedSignatureY = regardsY + 5
                     } else {
-                        // Enough space between regards and name (if there is a name)
-                        adjustedSignatureY = origins[regardsIdx].y - 35
+                        // Multiple lines - still position right at regards line
+                        adjustedSignatureY = regardsY + 2
                     }
+                } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
+                    // Only have regards line - position right ON the regards line
+                    adjustedSignatureY = origins[regardsIdx].y + 5 // Right on the regards line
                 } else if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                    // If we only have name, place signature before it
-                    adjustedSignatureY = origins[nameIdx].y + 28
+                    // Only have name - position much higher than before
+                    adjustedSignatureY = origins[nameIdx].y + 45 // Far above name
                 } else {
                     // No clear positioning guidance, use safe default
                     adjustedSignatureY = textRect.origin.y + 100
                 }
-                
+
                 // Now check for overlaps with contact info
                 if hasContactLines {
                     // Make sure we're not overlapping contact lines
                     if let contactIdx = contactInfoLineIndex, contactIdx < origins.count {
                         let contactY = origins[contactIdx].y
-                        
+
                         // If signature would overlap with contact info, adjust position
                         if abs(adjustedSignatureY - contactY) < signatureHeight {
                             // Move signature up significantly to avoid contact info
@@ -776,12 +788,12 @@ enum CoverLetterPDFGenerator {
                         }
                     }
                 }
-                
+
                 // Create the final signature rectangle
                 // Create signature rectangle with fixed height and proportional width
                 let signatureRect = CGRect(
                     x: signatureX,
-                    y: adjustedSignatureY - (signatureHeight * 0.5), // Position vertically
+                    y: adjustedSignatureY, // Position directly at calculated Y without offset
                     width: signatureWidth, // Use natural width based on aspect ratio
                     height: signatureHeight // Fixed height for consistency
                 )
