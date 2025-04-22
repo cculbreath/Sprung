@@ -635,6 +635,8 @@ enum CoverLetterPDFGenerator {
                 // Find the lines containing signature elements
                 var regardsLineIndex: Int?
                 var nameLineIndex: Int?
+                var contactInfoLineIndex: Int? // For phone/address line
+                var emailLineIndex: Int? // For email line
                 var emptyLineAfterRegards: Int?
 
                 for (idx, line) in frameLines.enumerated() {
@@ -668,6 +670,23 @@ enum CoverLetterPDFGenerator {
                         if trimmedContent.contains(nameMarker) {
                             nameLineIndex = idx
                         }
+                        
+                        // Detect contact info lines (phone/address) using robust patterns
+                        if trimmedContent.contains("(") || trimmedContent.contains(")") || // Capture phone number patterns
+                           trimmedContent.contains("-") || // Capture phone or address patterns
+                           trimmedContent.contains("Shadywood") || 
+                           trimmedContent.contains("Austin") || trimmedContent.contains("Texas") ||
+                           trimmedContent.contains("Drive") || trimmedContent.contains("Dr") {
+                            contactInfoLineIndex = idx
+                        }
+                        
+                        // Detect email line with robust patterns
+                        if trimmedContent.contains("@") || // Universal email indicator
+                           trimmedContent.contains(".net") || trimmedContent.contains(".com") || // Domain extensions
+                           trimmedContent.contains("physics") || trimmedContent.contains("cloud") ||
+                           trimmedContent.contains("culbreath") { // Parts of common domains
+                            emailLineIndex = idx
+                        }
                     }
                 }
 
@@ -699,16 +718,70 @@ enum CoverLetterPDFGenerator {
                     signatureY = origins[regardsIdx].y - 35
                 }
 
-                // Adjust size based on whether we have an ideal position
-                let signatureHeight: CGFloat = idealPosition ? 50.0 : 45.0
+                // Make signature much smaller with fixed height to avoid overlapping text
+                let signatureHeight: CGFloat = 30.0 // Very small signature to fit between text lines
                 let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
                 let signatureWidth = signatureHeight * imageAspectRatio
 
-                // Position signature inline with text
+                // Determine the right position based on the content
+                var signatureX = textRect.origin.x + 10 // Default indent from margin
+                
+                // Position signature intelligently based on all detected signature elements
+                
+                // Determine where there's space to place the signature
+                let hasContactLines = contactInfoLineIndex != nil || emailLineIndex != nil
+                let betweenRegardsAndName = regardsLineIndex != nil && nameLineIndex != nil &&
+                                           (nameLineIndex ?? 0) > (regardsLineIndex ?? 0) &&
+                                           abs((nameLineIndex ?? 0) - (regardsLineIndex ?? 0)) > 1
+                
+                // First, calculate optimal signature position
+                let adjustedSignatureY: CGFloat
+                
+                if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
+                    // If we have the regards line, place signature below it
+                    if nameLineIndex == regardsIdx + 1 || nameLineIndex == regardsIdx + 2 {
+                        // Name immediately follows "Regards" - put signature BEFORE name
+                        if let nameIdx = nameLineIndex, nameIdx < origins.count {
+                            adjustedSignatureY = origins[nameIdx].y + 22 // Well above name
+                        } else {
+                            adjustedSignatureY = origins[regardsIdx].y - 40
+                        }
+                    } else {
+                        // Enough space between regards and name (if there is a name)
+                        adjustedSignatureY = origins[regardsIdx].y - 35
+                    }
+                } else if let nameIdx = nameLineIndex, nameIdx < origins.count {
+                    // If we only have name, place signature before it
+                    adjustedSignatureY = origins[nameIdx].y + 28
+                } else {
+                    // No clear positioning guidance, use safe default
+                    adjustedSignatureY = textRect.origin.y + 100
+                }
+                
+                // Now check for overlaps with contact info
+                if hasContactLines {
+                    // Make sure we're not overlapping contact lines
+                    if let contactIdx = contactInfoLineIndex, contactIdx < origins.count {
+                        let contactY = origins[contactIdx].y
+                        
+                        // If signature would overlap with contact info, adjust position
+                        if abs(adjustedSignatureY - contactY) < signatureHeight {
+                            // Move signature up significantly to avoid contact info
+                            if let nameIdx = nameLineIndex, nameIdx < origins.count {
+                                adjustedSignatureY = origins[nameIdx].y + 28 // Well above name line
+                            } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
+                                adjustedSignatureY = origins[regardsIdx].y - 28 // Well below regards
+                            }
+                        }
+                    }
+                }
+                
+                // Create the final signature rectangle
+                // Calculate the final signature rectangle with even smaller width
                 let signatureRect = CGRect(
-                    x: textRect.origin.x + 10, // Slight indent from margin
-                    y: signatureY - (signatureHeight * 0.7), // Position to align with text baseline
-                    width: min(signatureWidth, textRect.width * 0.4), // Limit width to 40% of text width
+                    x: signatureX,
+                    y: adjustedSignatureY - (signatureHeight * 0.5), // Clear vertical space
+                    width: min(signatureWidth, textRect.width * 0.25), // Limit width to 25% of text width
                     height: signatureHeight
                 )
 
@@ -722,7 +795,9 @@ enum CoverLetterPDFGenerator {
                     pdfContext.draw(cgImage, in: signatureRect)
                     pdfContext.restoreGState()
 
-                    print("Signature image drawn at \(signatureRect)")
+                    // Detailed debug info about signature placement
+                    print("Signature image drawn: size=\(signatureWidth)x\(signatureHeight), position=(\(signatureRect.origin.x),\(signatureRect.origin.y))")
+                    print("Placement info: regardsLine=\(regardsLineIndex ?? -1), nameLine=\(nameLineIndex ?? -1), contactLine=\(contactInfoLineIndex ?? -1), emailLine=\(emailLineIndex ?? -1)")
                 }
             }
 
