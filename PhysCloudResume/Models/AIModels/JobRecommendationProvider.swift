@@ -124,40 +124,52 @@ import OpenAI
                 let result = try await macPawClient.openAIClient.chats(query: query)
                 
                 // Extract structured output response
-                guard let structuredOutput = result.choices.first?.message.output?.value as? JobRecommendation else {
+                // For MacPaw/OpenAI structured outputs, we need to check the content string
+                // since there's no structured output property directly accessible
+                guard let content = result.choices.first?.message.content,
+                      let data = content.data(using: .utf8) else {
                     throw NSError(
                         domain: "JobRecommendationProvider",
                         code: 1002,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output"]
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output content"]
                     )
                 }
                 
-                // Process the structured output
-                guard let uuid = UUID(uuidString: structuredOutput.recommendedJobId) else {
-                    throw NSError(
-                        domain: "JobRecommendationProvider",
-                        code: 5,
-                        userInfo: [
-                            NSLocalizedDescriptionKey: "Invalid UUID format in response: \(structuredOutput.recommendedJobId)",
-                        ]
-                    )
-                }
-                
-                // Look for the job with this UUID
-                if let _ = jobApps.first(where: { $0.id == uuid }) {
-                    return (uuid, structuredOutput.reason)
-                } else {
-                    // Log all job IDs for debugging
-                    let availableIds = jobApps.map { $0.id.uuidString }
-                    print("Available job IDs: \(availableIds)")
-                    print("Looking for ID: \(uuid)")
+                do {
+                    let structuredOutput = try JSONDecoder().decode(JobRecommendation.self, from: data)
+                    // Process the structured output
+                    guard let uuid = UUID(uuidString: structuredOutput.recommendedJobId) else {
+                        throw NSError(
+                            domain: "JobRecommendationProvider",
+                            code: 5,
+                            userInfo: [
+                                NSLocalizedDescriptionKey: "Invalid UUID format in response: \(structuredOutput.recommendedJobId)",
+                            ]
+                        )
+                    }
                     
+                    // Look for the job with this UUID
+                    if let _ = jobApps.first(where: { $0.id == uuid }) {
+                        return (uuid, structuredOutput.reason)
+                    } else {
+                        // Log all job IDs for debugging
+                        let availableIds = jobApps.map { $0.id.uuidString }
+                        print("Available job IDs: \(availableIds)")
+                        print("Looking for ID: \(uuid)")
+                        
+                        throw NSError(
+                            domain: "JobRecommendationProvider",
+                            code: 6,
+                            userInfo: [
+                                NSLocalizedDescriptionKey: "Job with ID \(uuid.uuidString) not found in job applications",
+                            ]
+                        )
+                    }
+                } catch {
                     throw NSError(
                         domain: "JobRecommendationProvider",
-                        code: 6,
-                        userInfo: [
-                            NSLocalizedDescriptionKey: "Job with ID \(uuid.uuidString) not found in job applications",
-                        ]
+                        code: 1003,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to decode structured output: \(error.localizedDescription)"]
                     )
                 }
             } else {
