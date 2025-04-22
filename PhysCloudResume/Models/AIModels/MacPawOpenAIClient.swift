@@ -214,7 +214,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         
         // Add voice instructions if provided
         if let instructions = instructions, !instructions.isEmpty {
-            query.voice_instructions = instructions
+            query.instructions = instructions
         }
 
         // Send the TTS request
@@ -264,7 +264,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         
         // Add voice instructions if provided
         if let instructions = instructions, !instructions.isEmpty {
-            query.voice_instructions = instructions
+            query.instructions = instructions
         }
 
         // Send the streaming TTS request
