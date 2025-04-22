@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import OpenAI
 
 /// Provider for selecting the best cover letter among existing ones using OpenAI JSON schema responses
 final class CoverLetterRecommendationProvider {
@@ -18,7 +19,7 @@ final class CoverLetterRecommendationProvider {
     private let writingSamples: String
 
     /// Response schema for best cover letter selection
-    struct BestCoverLetterResponse: Decodable {
+    struct BestCoverLetterResponse: Codable, StructuredOutput {
         let strengthAndVoiceAnalysis: String
         let bestLetterUuid: String
         let verdict: String
@@ -28,6 +29,14 @@ final class CoverLetterRecommendationProvider {
             case bestLetterUuid = "best-letter-uuid"
             case verdict
         }
+        
+        static let example: Self = {
+            .init(
+                strengthAndVoiceAnalysis: "Letter A has strong technical details but formal tone. Letter B has a more conversational style with good examples.",
+                bestLetterUuid: "00000000-0000-0000-0000-000000000000", 
+                verdict: "Letter B has the best balance of professional content and personal voice."
+            )
+        }()
     }
 
     /// Initialize with our abstraction layer client
@@ -76,23 +85,51 @@ final class CoverLetterRecommendationProvider {
         let modelString = OpenAIModelFetcher.getPreferredModelString()
 
         do {
-            // Make the API call using our abstraction layer
-            let response = try await openAIClient.sendChatCompletionAsync(
-                messages: messages,
-                model: modelString,
-                temperature: 1.0 // Using standard temperature of 1.0 as requested
-            )
-
-            // Process the response
-            let content = response.content
-
-            guard let data = content.data(using: .utf8) else {
-                throw NSError(domain: "CoverLetterRecommendationProvider", code: 3,
-                              userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
+            // Check if we're using the MacPaw client
+            if let macPawClient = openAIClient as? MacPawOpenAIClient {
+                // Convert our messages to MacPaw's format
+                let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
+                
+                // Create the query with structured output format
+                let query = ChatQuery(
+                    messages: chatMessages,
+                    model: modelString,
+                    temperature: 1.0,
+                    responseFormat: .jsonSchema(name: "cover-letter-recommendation", type: BestCoverLetterResponse.self)
+                )
+                
+                // Make the API call with structured output
+                let result = try await macPawClient.openAIClient.chats(query: query)
+                
+                // Extract structured output response
+                guard let choice = result.choices.first, let structuredOutput = choice.message.structuredOutput as? BestCoverLetterResponse else {
+                    throw NSError(
+                        domain: "CoverLetterRecommendationProvider",
+                        code: 1002,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output"]
+                    )
+                }
+                
+                return structuredOutput
+            } else {
+                // Fallback to the old method for non-MacPaw clients
+                let response = try await openAIClient.sendChatCompletionAsync(
+                    messages: messages,
+                    model: modelString,
+                    temperature: 1.0
+                )
+                
+                // Process the response
+                let content = response.content
+                
+                guard let data = content.data(using: .utf8) else {
+                    throw NSError(domain: "CoverLetterRecommendationProvider", code: 3,
+                                  userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
+                }
+                
+                let decoded = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
+                return decoded
             }
-
-            let decoded = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
-            return decoded
         } catch {
             print("Error fetching best cover letter: \(error.localizedDescription)")
             throw error

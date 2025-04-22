@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import OpenAI
 
 /// Helper for handling resume chat functionality
 
@@ -107,55 +108,127 @@ final class ResumeChatProvider {
         let coordinator = ContinuationCoordinator()
 
         do {
-            // Start a task with specific timeout for the API call
-            let response = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ChatCompletionResponse, Error>) in
-                let apiTask = Task {
-                    do {
-                        let result = try await openAIClient.sendChatCompletionAsync(
-                            messages: messages,
-                            model: modelString,
-                            temperature: 1.0 // Using standard temperature of 1.0 as requested
-                        )
-                        await coordinator.resumeWithValue(result, continuation: continuation)
-                    } catch {
-                        await coordinator.resumeWithError(error, continuation: continuation)
+            // Check if we're using the MacPaw client
+            if let macPawClient = openAIClient as? MacPawOpenAIClient {
+                // Start a task with specific timeout for the API call
+                let response = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RevisionsContainer, Error>) in
+                    let apiTask = Task {
+                        do {
+                            // Convert our messages to MacPaw's format
+                            let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
+                            
+                            // Create the query with structured output format
+                            let query = ChatQuery(
+                                messages: chatMessages,
+                                model: modelString,
+                                temperature: 1.0,
+                                responseFormat: .jsonSchema(name: "resume-revisions", type: RevisionsContainer.self)
+                            )
+                            
+                            // Make the API call with structured output
+                            let result = try await macPawClient.openAIClient.chats(query: query)
+                            
+                            // Extract structured output response
+                            guard let choice = result.choices.first, 
+                                  let structuredOutput = choice.message.structuredOutput as? RevisionsContainer else {
+                                throw NSError(
+                                    domain: "ResumeChatProviderError",
+                                    code: 1002,
+                                    userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output"]
+                                )
+                            }
+                            
+                            await coordinator.resumeWithValue(structuredOutput, continuation: continuation)
+                        } catch {
+                            await coordinator.resumeWithError(error, continuation: continuation)
+                        }
+                    }
+                    
+                    // Set up a timeout task
+                    Task {
+                        try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
+                        if !apiTask.isCancelled {
+                            apiTask.cancel()
+                            await coordinator.resumeWithError(timeoutError, continuation: continuation)
+                        }
                     }
                 }
-
-                // Set up a timeout task
-                Task {
-                    try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
-                    if !apiTask.isCancelled {
-                        apiTask.cancel()
-                        await coordinator.resumeWithError(timeoutError, continuation: continuation)
+                
+                // Convert structured response to JSON for compatibility with existing code
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let jsonData = try encoder.encode(response)
+                let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
+                
+                // Store the JSON string in messages array
+                self.messages = [jsonString]
+                
+                if self.messages.isEmpty {
+                    throw NSError(
+                        domain: "ResumeChatProviderError",
+                        code: 1002,
+                        userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
+                    )
+                }
+                
+                print("AI response received (structured): \(self.messages.last?.prefix(100) ?? "Empty")")
+                
+                // Get the revision nodes directly from the structured response
+                lastRevNodeArray = response.revArray
+                
+                // Update generic messages for history
+                genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
+            } else {
+                // Fallback to the old method for non-MacPaw clients
+                let response = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ChatCompletionResponse, Error>) in
+                    let apiTask = Task {
+                        do {
+                            let result = try await openAIClient.sendChatCompletionAsync(
+                                messages: messages,
+                                model: modelString,
+                                temperature: 1.0 // Using standard temperature of 1.0 as requested
+                            )
+                            await coordinator.resumeWithValue(result, continuation: continuation)
+                        } catch {
+                            await coordinator.resumeWithError(error, continuation: continuation)
+                        }
+                    }
+                    
+                    // Set up a timeout task
+                    Task {
+                        try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
+                        if !apiTask.isCancelled {
+                            apiTask.cancel()
+                            await coordinator.resumeWithError(timeoutError, continuation: continuation)
+                        }
                     }
                 }
+                
+                // Process the response
+                let content = response.content
+                
+                // Process messages format and store in messages array
+                self.messages = [content.asJsonFormatted()]
+                
+                if self.messages.isEmpty {
+                    throw NSError(
+                        domain: "ResumeChatProviderError",
+                        code: 1002,
+                        userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
+                    )
+                }
+                
+                print("AI response received: \(self.messages.last?.prefix(100) ?? "Empty")")
+                
+                // Try to convert to nodes
+                lastRevNodeArray = convertJsonToNodes(self.messages.last) ?? []
+                
+                // Add to message history
+                let lastContent = content
+                
+                // Update generic messages
+                genericMessages.append(ChatMessage(role: .assistant, content: lastContent))
             }
-
-            // Process the response
-            let content = response.content
-
-            // Process messages format and store in messages array
-            self.messages = [content.asJsonFormatted()]
-
-            if self.messages.isEmpty {
-                throw NSError(
-                    domain: "ResumeChatProviderError",
-                    code: 1002,
-                    userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
-                )
-            }
-
-            print("AI response received: \(self.messages.last?.prefix(100) ?? "Empty")")
-
-            // Try to convert to nodes
-            lastRevNodeArray = convertJsonToNodes(self.messages.last) ?? []
-
-            // Add to message history
-            let lastContent = content
-
-            // Update generic messages
-            genericMessages.append(ChatMessage(role: .assistant, content: lastContent))
 
         } catch {
             errorMessage = error.localizedDescription

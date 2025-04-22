@@ -24,10 +24,15 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         client = OpenAI(configuration: configuration)
     }
 
+    /// Exposes the internal OpenAI client instance for direct access
+    var openAIClient: OpenAI {
+        return self.client
+    }
+    
     /// Converts our ChatMessage to MacPaw's ChatQuery.ChatCompletionMessageParam
     /// - Parameter message: The message to convert
     /// - Returns: The converted message
-    private func convertMessage(_ message: ChatMessage) -> ChatQuery.ChatCompletionMessageParam? {
+    func convertMessage(_ message: ChatMessage) -> ChatQuery.ChatCompletionMessageParam? {
         let role: ChatQuery.ChatCompletionMessageParam.Role
 
         switch message.role {

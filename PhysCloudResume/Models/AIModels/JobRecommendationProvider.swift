@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import OpenAI
 
 @Observable class JobRecommendationProvider {
     // MARK: - Properties
@@ -106,16 +107,71 @@ import SwiftUI
         let modelString = OpenAIModelFetcher.getPreferredModelString()
 
         do {
-            // Make the API call using our abstraction layer
-            let response = try await openAIClient.sendChatCompletionAsync(
-                messages: messages,
-                model: modelString,
-                temperature: 1.0 // Using standard temperature of 1.0 as requested
-            )
-
-            // Process the response
-            let decodedResponse = try decodeRecommendation(from: response.content)
-            return decodedResponse
+            // Check if we're using the MacPaw client
+            if let macPawClient = openAIClient as? MacPawOpenAIClient {
+                // Convert our messages to MacPaw's format
+                let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
+                
+                // Create the query with structured output format
+                let query = ChatQuery(
+                    messages: chatMessages,
+                    model: modelString,
+                    temperature: 1.0,
+                    responseFormat: .jsonSchema(name: "job-recommendation", type: JobRecommendation.self)
+                )
+                
+                // Make the API call with structured output
+                let result = try await macPawClient.openAIClient.chats(query: query)
+                
+                // Extract structured output response
+                guard let choice = result.choices.first, let structuredOutput = choice.message.structuredOutput as? JobRecommendation else {
+                    throw NSError(
+                        domain: "JobRecommendationProvider",
+                        code: 1002,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output"]
+                    )
+                }
+                
+                // Process the structured output
+                guard let uuid = UUID(uuidString: structuredOutput.recommendedJobId) else {
+                    throw NSError(
+                        domain: "JobRecommendationProvider",
+                        code: 5,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Invalid UUID format in response: \(structuredOutput.recommendedJobId)",
+                        ]
+                    )
+                }
+                
+                // Look for the job with this UUID
+                if let _ = jobApps.first(where: { $0.id == uuid }) {
+                    return (uuid, structuredOutput.reason)
+                } else {
+                    // Log all job IDs for debugging
+                    let availableIds = jobApps.map { $0.id.uuidString }
+                    print("Available job IDs: \(availableIds)")
+                    print("Looking for ID: \(uuid)")
+                    
+                    throw NSError(
+                        domain: "JobRecommendationProvider",
+                        code: 6,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Job with ID \(uuid.uuidString) not found in job applications",
+                        ]
+                    )
+                }
+            } else {
+                // Fallback to the old method for non-MacPaw clients
+                let response = try await openAIClient.sendChatCompletionAsync(
+                    messages: messages,
+                    model: modelString,
+                    temperature: 1.0
+                )
+                
+                // Process the response using the old method
+                let decodedResponse = try decodeRecommendation(from: response.content)
+                return decodedResponse
+            }
         } catch {
             print("Error fetching recommendation: \(error.localizedDescription)")
             throw error
@@ -174,12 +230,20 @@ import SwiftUI
         return prompt
     }
 
+    // Define structured output schema for job recommendations
+    struct JobRecommendation: Codable, StructuredOutput {
+        let recommendedJobId: String
+        let reason: String
+        
+        static let example: Self = {
+            .init(
+                recommendedJobId: "00000000-0000-0000-0000-000000000000",
+                reason: "This job aligns with the candidate's experience in software development and interests in AI"
+            )
+        }()
+    }
+    
     private func decodeRecommendation(from responseText: String) throws -> (UUID, String) {
-        struct Recommendation: Decodable {
-            let recommendedJobId: String
-            let reason: String
-        }
-
         // Save complete response for debugging
         if savePromptToFile {
             savePromptToDownloads(content: responseText, fileName: "jobRecommendationResponse.txt")
@@ -191,9 +255,9 @@ import SwiftUI
         }
 
         // Decode the recommendation
-        let recommendation: Recommendation
+        let recommendation: JobRecommendation
         do {
-            recommendation = try JSONDecoder().decode(Recommendation.self, from: data)
+            recommendation = try JSONDecoder().decode(JobRecommendation.self, from: data)
         } catch {
             print("JSON decode error: \(error.localizedDescription)")
             if savePromptToFile {
