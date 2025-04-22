@@ -59,6 +59,7 @@ class ApplicantProfile {
 struct Applicant {
     var profile: ApplicantProfile
     
+    @MainActor
     init(profile: ApplicantProfile? = nil) {
         self.profile = profile ?? ApplicantProfileManager.shared.getProfile()
     }
@@ -75,11 +76,23 @@ struct Applicant {
 }
 
 // Singleton manager for ApplicantProfile
+@MainActor
 class ApplicantProfileManager {
     static let shared = ApplicantProfileManager()
     private var cachedProfile: ApplicantProfile?
+    private var modelContainer: ModelContainer?
     
-    private init() {}
+    private init() {
+        setupModelContainer()
+    }
+    
+    private func setupModelContainer() {
+        do {
+            modelContainer = try ModelContainer(for: ApplicantProfile.self)
+        } catch {
+            print("Failed to create model container: \(error)")
+        }
+    }
     
     func getProfile() -> ApplicantProfile {
         if let cachedProfile {
@@ -100,9 +113,12 @@ class ApplicantProfileManager {
     }
     
     private func loadProfileFromSwiftData() -> ApplicantProfile? {
+        guard let context = modelContainer?.mainContext else {
+            print("Model container not initialized")
+            return nil
+        }
+        
         do {
-            let modelContainer = try ModelContainer(for: ApplicantProfile.self)
-            let context = modelContainer.mainContext
             let descriptor = FetchDescriptor<ApplicantProfile>(sortBy: [])
             let profiles = try context.fetch(descriptor)
             return profiles.first
@@ -113,10 +129,12 @@ class ApplicantProfileManager {
     }
     
     func saveProfile(_ profile: ApplicantProfile) {
+        guard let context = modelContainer?.mainContext else {
+            print("Model container not initialized")
+            return
+        }
+        
         do {
-            let modelContainer = try ModelContainer(for: ApplicantProfile.self)
-            let context = modelContainer.mainContext
-            
             // Check if we already have a profile
             let descriptor = FetchDescriptor<ApplicantProfile>(sortBy: [])
             let existingProfiles = try context.fetch(descriptor)
