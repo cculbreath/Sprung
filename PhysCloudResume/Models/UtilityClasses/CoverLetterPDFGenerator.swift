@@ -718,8 +718,9 @@ enum CoverLetterPDFGenerator {
                     signatureY = origins[regardsIdx].y - 35
                 }
 
-                // Make signature much smaller with fixed height to avoid overlapping text
-                let signatureHeight: CGFloat = 30.0 // Very small signature to fit between text lines
+                // Use a single fixed height for the signature, regardless of other parameters
+                // This provides consistent sizing across all documents
+                let signatureHeight: CGFloat = 28.0 // Fixed signature height for consistency
                 let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
                 let signatureWidth = signatureHeight * imageAspectRatio
 
@@ -777,12 +778,12 @@ enum CoverLetterPDFGenerator {
                 }
                 
                 // Create the final signature rectangle
-                // Calculate the final signature rectangle with even smaller width
+                // Create signature rectangle with fixed height and proportional width
                 let signatureRect = CGRect(
                     x: signatureX,
-                    y: adjustedSignatureY - (signatureHeight * 0.5), // Clear vertical space
-                    width: min(signatureWidth, textRect.width * 0.25), // Limit width to 25% of text width
-                    height: signatureHeight
+                    y: adjustedSignatureY - (signatureHeight * 0.5), // Position vertically
+                    width: signatureWidth, // Use natural width based on aspect ratio
+                    height: signatureHeight // Fixed height for consistency
                 )
 
                 // Draw the signature
