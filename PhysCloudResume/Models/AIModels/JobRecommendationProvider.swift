@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftOpenAI // Will be removed later in the migration
 import SwiftUI
 
 @Observable class JobRecommendationProvider {
@@ -14,7 +13,7 @@ import SwiftUI
 
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
-    
+
     // The system message in SwiftOpenAI format (for backward compatibility)
     let systemMessage = ChatCompletionParameters.Message(
         role: .system,
@@ -24,7 +23,7 @@ import SwiftUI
         IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The recommendedJobId field must contain the exact UUID string from the id field of the chosen job in the job listings JSON array. Do not modify the UUID format in any way.
         """)
     )
-    
+
     // The system message in generic format (for abstraction layer)
     let genericSystemMessage = ChatMessage(
         role: .system,
@@ -39,7 +38,7 @@ import SwiftUI
     private let service: OpenAIService?
     // The new abstraction layer client
     private let openAIClient: OpenAIClientProtocol
-    
+
     var savePromptToFile: Bool
     var jobApps: [JobApp] = []
     var resume: Resume?
@@ -69,10 +68,10 @@ import SwiftUI
         self.jobApps = jobApps
         self.resume = resume
         self.savePromptToFile = savePromptToFile
-        self.openAIClient = client
-        self.service = nil
+        openAIClient = client
+        service = nil
     }
-    
+
     /// Default initializer - uses factory to create client
     /// - Parameters:
     ///   - jobApps: List of job applications
@@ -90,18 +89,18 @@ import SwiftUI
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 360 // 360 seconds extended timeout
 
-        self.service = OpenAIServiceFactory.service(
+        service = OpenAIServiceFactory.service(
             apiKey: apiKey,
             configuration: configuration,
             debugEnabled: false
         )
-        
+
         // Create client using our factory
-        self.openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
+        openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
     }
 
     // MARK: - API Call Functions
-    
+
     /// Fetches job recommendation using the abstraction layer directly
     /// - Returns: A tuple containing the recommended job ID and reason
     func fetchRecommendationWithGenericClient() async throws -> (UUID, String) {
@@ -119,16 +118,16 @@ import SwiftUI
         if savePromptToFile {
             savePromptToDownloads(content: prompt, fileName: "jobRecommendationPrompt.txt")
         }
-        
+
         // Use our generic message format with the abstraction layer
         let messages = [
             genericSystemMessage,
-            ChatMessage(role: .user, content: prompt)
+            ChatMessage(role: .user, content: prompt),
         ]
-        
+
         // Get the model string
         let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
+
         do {
             // Make the API call using our abstraction layer
             let response = try await openAIClient.sendChatCompletionAsync(
@@ -136,7 +135,7 @@ import SwiftUI
                 model: modelString,
                 temperature: 0.2 // Lower temperature for more deterministic results with structured outputs
             )
-            
+
             // Process the response
             let decodedResponse = try decodeRecommendation(from: response.content)
             return decodedResponse
@@ -152,7 +151,7 @@ import SwiftUI
         if service == nil {
             return try await fetchRecommendationWithGenericClient()
         }
-        
+
         guard let resume = resume, let resumeModel = resume.model else {
             throw NSError(domain: "JobRecommendationProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "No resume available"])
         }
@@ -167,7 +166,7 @@ import SwiftUI
         if savePromptToFile {
             savePromptToDownloads(content: prompt, fileName: "jobRecommendationPrompt.txt")
         }
-        
+
         // For backward compatibility
         guard let service = service else {
             return try await fetchRecommendationWithGenericClient()

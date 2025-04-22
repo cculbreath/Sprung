@@ -5,7 +5,6 @@
 //  Created by Christopher Culbreath on 9/14/24.
 //
 
-import SwiftOpenAI
 import SwiftUI
 
 struct CoverRevisionsView: View {
@@ -13,10 +12,11 @@ struct CoverRevisionsView: View {
     @Binding var buttons: CoverLetterButtons
 
     var body: some View {
+        // Create client using our abstraction layer
+        let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
+
         RevisionsViewContent(
-            service: OpenAIServiceFactory.service(
-                apiKey: openAiApiKey, debugEnabled: false
-            ),
+            openAIClient: openAIClient,
             buttons: $buttons
         )
         .onAppear { print("Ai Cover Letterv2") }
@@ -30,18 +30,18 @@ struct RevisionsViewContent: View {
     @State var aiMode: CoverAiMode = .none
     @State private var customFeedback: String = ""
     @Binding var buttons: CoverLetterButtons
-    let service: OpenAIService
+    let openAIClient: OpenAIClientProtocol
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
 
     init(
-        service: OpenAIService,
+        openAIClient: OpenAIClientProtocol,
         buttons: Binding<CoverLetterButtons>
     ) {
-        self.service = service
+        self.openAIClient = openAIClient
         _buttons = buttons
-        chatProvider = CoverChatProvider(service: service)
+        chatProvider = CoverChatProvider(client: openAIClient)
     }
 
     var body: some View {

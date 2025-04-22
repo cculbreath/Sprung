@@ -1,5 +1,4 @@
 import Foundation
-import SwiftOpenAI // Will be removed later in the migration
 import SwiftUI
 
 /// Provider for selecting the best cover letter among existing ones using OpenAI JSON schema responses
@@ -12,20 +11,20 @@ final class CoverLetterRecommendationProvider {
             """
         )
     )
-    
+
     /// System prompt in generic format for abstraction layer
     let genericSystemMessage = ChatMessage(
         role: .system,
         content: """
-            You are an expert career advisor and professional writer specializing in evaluating cover letters. Your task is to analyze a list of cover letters for a specific job application and select the one that best matches the candidate's voice, style, and quality. You will be provided with job details, several cover letter drafts, and writing samples that represent the candidate's preferred style. Return a JSON object strictly conforming to the provided schema.
-            """
+        You are an expert career advisor and professional writer specializing in evaluating cover letters. Your task is to analyze a list of cover letters for a specific job application and select the one that best matches the candidate's voice, style, and quality. You will be provided with job details, several cover letter drafts, and writing samples that represent the candidate's preferred style. Return a JSON object strictly conforming to the provided schema.
+        """
     )
-    
+
     // For backward compatibility
     private let service: OpenAIService?
     // The new abstraction layer client
     private let openAIClient: OpenAIClientProtocol
-    
+
     private let jobApp: JobApp
     private let writingSamples: String
 
@@ -48,12 +47,12 @@ final class CoverLetterRecommendationProvider {
     ///   - jobApp: The job application containing cover letters
     ///   - writingSamples: Writing samples for style reference
     init(client: OpenAIClientProtocol, jobApp: JobApp, writingSamples: String) {
-        self.openAIClient = client
-        self.service = nil
+        openAIClient = client
+        service = nil
         self.jobApp = jobApp
         self.writingSamples = writingSamples
     }
-    
+
     /// Legacy initializer using SwiftOpenAI service directly
     /// - Parameters:
     ///   - service: The OpenAIService from SwiftOpenAI
@@ -63,7 +62,7 @@ final class CoverLetterRecommendationProvider {
         self.service = service
         // Get API key from UserDefaults since OpenAIService doesn't expose it
         let apiKey = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
-        self.openAIClient = SwiftOpenAIClient(apiKey: apiKey)
+        openAIClient = SwiftOpenAIClient(apiKey: apiKey)
         self.jobApp = jobApp
         self.writingSamples = writingSamples
     }
@@ -92,16 +91,16 @@ final class CoverLetterRecommendationProvider {
         prompt += "  \"best-letter-uuid\": \"UUID of the selected best cover letter\",\n"
         prompt += "  \"verdict\": \"Reason for the ultimate choice\"\n"
         prompt += "}\n"
-        
+
         // Create generic messages for the abstraction layer
         let messages = [
             genericSystemMessage,
-            ChatMessage(role: .user, content: prompt)
+            ChatMessage(role: .user, content: prompt),
         ]
-        
+
         // Get model as string
         let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
+
         do {
             // Make the API call using our abstraction layer
             let response = try await openAIClient.sendChatCompletionAsync(
@@ -109,15 +108,15 @@ final class CoverLetterRecommendationProvider {
                 model: modelString,
                 temperature: 0.2 // Lower temperature for more deterministic structured outputs
             )
-            
+
             // Process the response
             let content = response.content
-            
+
             guard let data = content.data(using: .utf8) else {
                 throw NSError(domain: "CoverLetterRecommendationProvider", code: 3,
                               userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
             }
-            
+
             let decoded = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
             return decoded
         } catch {
@@ -125,18 +124,18 @@ final class CoverLetterRecommendationProvider {
             throw error
         }
     }
-    
+
     /// Fetch the best cover letter according to AI analysis
     func fetchBestCoverLetter() async throws -> BestCoverLetterResponse {
         // If we don't have a service, use the abstraction layer
         if service == nil {
             return try await fetchBestCoverLetterWithGenericClient()
         }
-        
+
         guard let service = service else {
             return try await fetchBestCoverLetterWithGenericClient()
         }
-        
+
         let letters = jobApp.coverLetters
         guard letters.count > 1 else {
             throw NSError(domain: "CoverLetterRecommendationProvider", code: 1,

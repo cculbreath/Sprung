@@ -1,11 +1,15 @@
-import SwiftOpenAI
 import SwiftUI
 
 struct AiFunctionView: View {
     @Binding var res: Resume?
     @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
+    @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
+    @AppStorage("ttsVoice") var ttsVoice: String = "nova"
 
-    private var service: OpenAIService!
+    // Use our abstraction layer for OpenAI
+    private var openAIClient: OpenAIClientProtocol
+    // For TTS functionality
+    private var ttsProvider: OpenAITTSProvider
 
     init(res: Binding<Resume?>) {
         _res = res
@@ -17,21 +21,26 @@ struct AiFunctionView: View {
         // Increase the connections per host for better performance
         configuration.httpMaximumConnectionsPerHost = 6
 
-        service = OpenAIServiceFactory.service(
-            apiKey: openAiApiKey, configuration: configuration, debugEnabled: false
-        )
+        // Use our abstraction layer for OpenAI
+        openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
+
+        // Initialize TTS provider
+        ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
     }
 
     var body: some View {
         if let myRes = res {
             AiCommsView(
-                service: service,
+                openAIClient: openAIClient,
+                ttsProvider: ttsProvider,
                 query: myRes.generateQuery(),
-                res: $res
+                res: $res,
+                ttsEnabled: $ttsEnabled,
+                ttsVoice: $ttsVoice
             )
-            .onAppear { myRes.debounceExport() } // Use `myRes` instead of force-unwrapping
+            .onAppear { myRes.debounceExport() }
         } else {
-            Text("No Resume Available") // Optionally, handle the case when `res` is nil
+            Text("No Resume Available")
         }
     }
 }

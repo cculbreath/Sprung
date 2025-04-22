@@ -1,7 +1,6 @@
-import Foundation
-import SwiftOpenAI
-import SwiftUI
 import AVFoundation
+import Foundation
+import SwiftUI
 
 struct AiCommsView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
@@ -19,7 +18,7 @@ struct AiCommsView: View {
     @State private var showError: Bool = false
     @State private var retryCount: Int = 0
     @State private var isRetrying: Bool = false
-    
+
     // TTS related state
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
@@ -27,22 +26,21 @@ struct AiCommsView: View {
     @State private var isSpeaking: Bool = false
     @State private var ttsError: String? = nil
     @State private var showTTSError: Bool = false
-    
+
     // Store references to clients for AI operations
     private let openAIClient: OpenAIClientProtocol
     private let ttsProvider: OpenAITTSProvider
-    
+
     init(
-        service: OpenAIService, 
         openAIClient: OpenAIClientProtocol,
         ttsProvider: OpenAITTSProvider,
-        query: ResumeApiQuery, 
+        query: ResumeApiQuery,
         res: Binding<Resume?>,
         ttsEnabled: Binding<Bool> = .constant(false),
         ttsVoice: Binding<String> = .constant("nova")
     ) {
-        // Initialize with both legacy service and new abstraction layer client
-        _chatProvider = State(initialValue: ResumeChatProvider(service: service))
+        // Initialize with abstraction layer client
+        _chatProvider = State(initialValue: ResumeChatProvider(client: openAIClient))
         self.openAIClient = openAIClient
         self.ttsProvider = ttsProvider
         _q = State(initialValue: query)
@@ -177,7 +175,7 @@ struct AiCommsView: View {
                 }
             }
             .padding(.vertical)
-            
+
             // TTS controls - only show when TTS is enabled in settings
             if ttsEnabled && !revisions.isEmpty {
                 Button(action: {
@@ -243,15 +241,15 @@ struct AiCommsView: View {
             isSpeaking = false
             return
         }
-        
+
         // Make sure we have revisions to speak
         guard !revisions.isEmpty else {
             return
         }
-        
+
         // Format the revisions into a readable script
         var speechText = "Here are my suggested revisions for your résumé:\n\n"
-        
+
         for (index, revision) in revisions.enumerated() {
             // For title nodes, provide context about the section
             if revision.isTitleNode {
@@ -262,28 +260,28 @@ struct AiCommsView: View {
                 speechText += "I suggest changing \"\(revision.oldValue.trimmingCharacters(in: .whitespacesAndNewlines))\" "
                 speechText += "to \"\(revision.newValue.trimmingCharacters(in: .whitespacesAndNewlines))\".\n\n"
             }
-            
+
             // Add the reasoning if available
             if !revision.explanation.isEmpty {
                 speechText += "Here's why: \(revision.explanation)\n\n"
             }
         }
-        
+
         // Set UI state to speaking
         isSpeaking = true
-        
+
         // Get selected voice (default to nova if not valid)
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
-        
+
         // Get voice instructions if available
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-        
+
         // Request TTS conversion and playback with instructions
         ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { [weak self] error in
             // Update UI state when speech completes or errors
             DispatchQueue.main.async {
                 self?.isSpeaking = false
-                
+
                 if let error = error {
                     self?.ttsError = "Text-to-speech error: \(error.localizedDescription)"
                     self?.showTTSError = true
@@ -291,7 +289,7 @@ struct AiCommsView: View {
             }
         }
     }
-    
+
     func chatAction(hasRevisions: Bool = false) {
         if let jobApp = jobAppStore.selectedApp {
             jobApp.status = .inProgress

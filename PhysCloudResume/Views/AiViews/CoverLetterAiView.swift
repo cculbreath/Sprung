@@ -1,5 +1,4 @@
 import Foundation
-import SwiftOpenAI
 import SwiftUI
 
 struct CoverLetterAiView: View {
@@ -10,23 +9,13 @@ struct CoverLetterAiView: View {
     @Binding var refresh: Bool
 
     var body: some View {
-        // Create a custom URLSessionConfiguration with extended timeout
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 360 // 360 seconds for extended timeout
-
-        // Initialize the service with the custom configuration and pass debugEnabled as false
-        let service = OpenAIServiceFactory.service(
-            apiKey: openAiApiKey, configuration: configuration, debugEnabled: false
-        )
-        
         // Create OpenAI client using our abstraction layer
         let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
-        
+
         // Initialize TTS provider
         let ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
 
         return CoverLetterAiContentView(
-            service: service,
             openAIClient: openAIClient,
             ttsProvider: ttsProvider,
             buttons: $buttons,
@@ -45,14 +34,12 @@ struct CoverLetterAiContentView: View {
     @State var aiMode: CoverAiMode = .none
     @Binding var buttons: CoverLetterButtons
     @Binding var refresh: Bool
-    
-    // Legacy service for backward compatibility
-    let service: OpenAIService
+
     // Abstraction layer for OpenAI
     let openAIClient: OpenAIClientProtocol
     // TTS provider for speech synthesis
     let ttsProvider: OpenAITTSProvider
-    
+
     // TTS related state
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
@@ -67,7 +54,6 @@ struct CoverLetterAiContentView: View {
     @State private var errorWrapper: ErrorMessageWrapper? = nil
 
     init(
-        service: OpenAIService,
         openAIClient: OpenAIClientProtocol,
         ttsProvider: OpenAITTSProvider,
         buttons: Binding<CoverLetterButtons>,
@@ -75,11 +61,10 @@ struct CoverLetterAiContentView: View {
         ttsEnabled: Binding<Bool> = .constant(false),
         ttsVoice: Binding<String> = .constant("nova")
     ) {
-        self.service = service
         self.openAIClient = openAIClient
         self.ttsProvider = ttsProvider
         _buttons = buttons
-        chatProvider = CoverChatProvider(service: service)
+        chatProvider = CoverChatProvider(client: openAIClient)
         _refresh = refresh
         _ttsEnabled = ttsEnabled
         _ttsVoice = ttsVoice
@@ -156,7 +141,7 @@ struct CoverLetterAiContentView: View {
                                 : "Select the best cover letter based on style and voice"
                         )
                     }
-                    
+
                     // TTS Button - only show if TTS is enabled and we have content
                     if ttsEnabled && cL.wrappedValue.generated && !cL.wrappedValue.content.isEmpty {
                         Button(action: {
@@ -197,7 +182,7 @@ struct CoverLetterAiContentView: View {
     }
 
     // MARK: - Actions
-    
+
     /// Read the cover letter aloud using TTS
     func speakCoverLetter() {
         // If currently speaking, stop playback
@@ -206,37 +191,37 @@ struct CoverLetterAiContentView: View {
             isSpeaking = false
             return
         }
-        
+
         // Get the content from the current cover letter
         guard let content = cL.wrappedValue.content, !content.isEmpty else {
             ttsError = "No content to speak"
             showTTSError = true
             return
         }
-        
+
         // Prepare the text for speech - remove markdown formatting if needed
         let cleanContent = content
             .replacingOccurrences(of: "#", with: "")
             .replacingOccurrences(of: "**", with: "")
             .replacingOccurrences(of: "*", with: "")
-        
+
         // Set UI state to speaking
         isSpeaking = true
-        
+
         // Get the voice from the user preference
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
-        
+
         // Get voice instructions if available
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-        
+
         // Request TTS conversion and playback with instructions
         ttsProvider.speakText(cleanContent, voice: voice, instructions: instructions) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                
+
                 // Reset speaking state when playback completes
                 self.isSpeaking = false
-                
+
                 // Handle any errors
                 if let error = error {
                     self.ttsError = error.localizedDescription
@@ -258,7 +243,7 @@ struct CoverLetterAiContentView: View {
         Task {
             do {
                 let provider = CoverLetterRecommendationProvider(
-                    service: service,
+                    client: openAIClient,
                     jobApp: jobApp,
                     writingSamples: writingSamples
                 )

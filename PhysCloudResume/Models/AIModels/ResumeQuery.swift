@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftOpenAI
 
 @Observable class ResumeApiQuery {
     // MARK: - Properties
@@ -14,60 +13,56 @@ import SwiftOpenAI
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
 
-    static let revNodeArraySchema =
-        JSONSchemaResponseFormat(
-            name: "revNode_array_response",
-            strict: true,
-            schema: JSONSchema(
-                type: .object,
-                properties: [
-                    "revArray": JSONSchema(
-                        type: .array,
-                        items: JSONSchema(
-                            type: .object,
-                            properties: [
-                                "id": JSONSchema(
-                                    type: .string,
-                                    description: "The identifier for the node provided in the original EditableNode"
-                                ),
-                                "oldValue": JSONSchema(
-                                    type: .string,
-                                    description: "The original value before revision provided in the original EditableNode"
-                                ),
-                                "newValue": JSONSchema(
-                                    type: .string,
-                                    description: "The proposed new value after revision"
-                                ),
-                                "valueChanged": JSONSchema(
-                                    type: .boolean,
-                                    description: "Indicates if the value is changed by the proposed revision."
-                                ),
-                                "why": JSONSchema(
-                                    type: .string,
-                                    description: "Explanation for the proposed revision. Leave blank if the reason is trivial or obvious."
-                                ),
-                                "isTitleNode": JSONSchema(
-                                    type: .boolean,
-                                    description: "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
-                                ),
-                            ],
-                            required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode"],
-                            additionalProperties: false
-                        )
-                    ),
-                ],
-                required: ["revArray"],
-                additionalProperties: false
-            )
-        )
+    // JSON Schema for revisions (used to be JSONSchemaResponseFormat from SwiftOpenAI)
+    static let revNodeArraySchemaString = """
+    {
+        "type": "object",
+        "properties": {
+            "revArray": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "The identifier for the node provided in the original EditableNode"
+                        },
+                        "oldValue": {
+                            "type": "string",
+                            "description": "The original value before revision provided in the original EditableNode"
+                        },
+                        "newValue": {
+                            "type": "string",
+                            "description": "The proposed new value after revision"
+                        },
+                        "valueChanged": {
+                            "type": "boolean",
+                            "description": "Indicates if the value is changed by the proposed revision."
+                        },
+                        "why": {
+                            "type": "string",
+                            "description": "Explanation for the proposed revision. Leave blank if the reason is trivial or obvious."
+                        },
+                        "isTitleNode": {
+                            "type": "boolean",
+                            "description": "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
+                        }
+                    },
+                    "required": ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "required": ["revArray"],
+        "additionalProperties": false
+    }
+    """
 
-    let systemMessage = ChatCompletionParameters.Message(
+    let systemMessage = ChatMessage(
         role: .system,
-        content: .text(
-            """
+        content: """
             You are an expert career coach with a specialization in crafting and refining technical resumes to optimize them for job applications. With extensive experience in helping candidates secure interviews at top companies, you understand the importance of aligning resume content with job descriptions and the subtleties of tailoring resumes to specific roles. Your goal is to propose revisions that truthfully showcase the candidate's relevant achievements, experiences, and skills. Make the resume compelling, concise, and closely aligned with the target job posting, without adding any fabricated details.
             """
-        )
     )
 
     // Make this var instead of let so it can be updated
