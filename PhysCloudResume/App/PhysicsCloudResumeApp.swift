@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import SwiftData
 
 @main
 struct PhysicsCloudResumeApp: App {
@@ -11,7 +12,7 @@ struct PhysicsCloudResumeApp: App {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization
                 .environment(appState)
         }
-        .modelContainer(for: [JobApp.self, Resume.self, ResRef.self, TreeNode.self, CoverLetter.self, MessageParams.self, CoverRef.self])
+        .modelContainer(for: [JobApp.self, Resume.self, ResRef.self, TreeNode.self, CoverLetter.self, MessageParams.self, CoverRef.self, ApplicantProfile.self])
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
         .commands {
             CommandGroup(replacing: .appSettings) {
