@@ -72,13 +72,34 @@ class CoverLetter: Identifiable, Hashable {
         return enabledRefs.filter { $0.type == CoverRefType.writingSample }
             .map { $0.content }.joined(separator: "\n\n")
     }
-    
+
     /// 1-based index of this cover letter within its job application (ordered by creation date)
     var sequenceNumber: Int {
         guard let app = jobApp else { return 0 }
         let sortedLetters = app.coverLetters.sorted { $0.createdDate < $1.createdDate }
         guard let index = sortedLetters.firstIndex(where: { $0.id == self.id }) else { return 0 }
         return index + 1
+    }
+
+    /// Converts a positive integer into letters: 1->A, 2->B, ..., 27->AA, etc.
+    private static func letterLabel(for number: Int) -> String {
+        guard number > 0 else { return "" }
+        var n = number
+        var label = ""
+        while n > 0 {
+            let rem = (n - 1) % 26
+            if let scalar = UnicodeScalar(65 + rem) {
+                label = String(scalar) + label
+            }
+            n = (n - 1) / 26
+        }
+        return label
+    }
+
+    /// A friendly name prefixed with its alphabetic option and the custom name
+    var sequencedName: String {
+        let letter = Self.letterLabel(for: sequenceNumber)
+        return "Option \(letter)\(name.isEmpty ? "" : ": \(name)")"
     }
 }
 

@@ -124,7 +124,6 @@ struct CoverLetterAiContentView: View {
                     }
                 }
                 .onAppear { print("AI content") }
-                }
             }
         }
         // Show alert on result or error
