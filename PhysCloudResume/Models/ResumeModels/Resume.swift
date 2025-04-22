@@ -89,8 +89,22 @@ class Resume: Identifiable, Hashable {
         self.enabledSources = enabledSources
     }
 
-    func generateQuery() -> ResumeApiQuery {
+    @MainActor
+    func generateQuery() async -> ResumeApiQuery {
         return ResumeApiQuery(resume: self)
+    }
+    
+    // Synchronous wrapper for backward compatibility, uses Task for MainActor isolation
+    func generateQuery() -> ResumeApiQuery {
+        // Create a temporary placeholder that will be replaced
+        var query = ResumeApiQuery(resume: self, skipApplicant: true)
+        
+        // Start a task to update it properly
+        Task { @MainActor in
+            query = ResumeApiQuery(resume: self)
+        }
+        
+        return query
     }
 
     /// Loads PDF data from disk into `pdfData` on a background queue.
