@@ -45,8 +45,10 @@ This document outlines the step-by-step process to migrate PhysCloudResume from 
   - [x] Add fallback for streaming functionality
   - [ ] Test resume chat features
 
-- [ ] Migrate Cover Letter Recommendation
-  - [ ] Update `CoverLetterRecommendationProvider.swift`
+- [x] Migrate Cover Letter Recommendation
+  - [x] Update `CoverLetterRecommendationProvider.swift` with abstraction layer
+  - [x] Implement dual-mode support for compatibility
+  - [x] Add new method using abstraction layer directly
   - [ ] Test cover letter recommendation features
 
 ## UI Updates
