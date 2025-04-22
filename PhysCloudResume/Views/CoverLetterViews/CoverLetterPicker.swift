@@ -21,7 +21,7 @@ struct CoverLetterPicker: View {
             }
             ForEach(coverLetters, id: \.id) { letter in
                 if letter.generated {
-                    Text(letter.name)
+                    Text(letter.sequencedName)
                         .tag(letter as CoverLetter?)
                 } else {
                     Text("Ungenerated draft")
