@@ -125,15 +125,17 @@ import SwiftOpenAI
         self.saveDebugPrompt = saveDebugPrompt
     }
     
-    // Secondary initializer that skips applicant initialization for temporary objects
-    init(resume: Resume, skipApplicant: Bool, saveDebugPrompt: Bool = false) {
+    // Secondary initializer with custom applicant profile to avoid MainActor requirement
+    init(resume: Resume, applicantProfile: ApplicantProfile, saveDebugPrompt: Bool = false) {
         res = resume
-        // Create a default Applicant with empty values to avoid MainActor issues
-        applicant = Applicant(profile: ApplicantProfile(
-            name: "", address: "", city: "", state: "", zip: "", 
-            websites: "", email: "", phone: ""
-        ))
+        // Create an Applicant with the provided profile
+        applicant = Applicant(profile: applicantProfile)
         self.saveDebugPrompt = saveDebugPrompt
+    }
+    
+    // Method to update the applicant data later
+    func updateApplicant(_ newApplicant: Applicant) {
+        applicant = newApplicant
     }
 
     // MARK: - Prompt Building

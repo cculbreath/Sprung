@@ -96,12 +96,17 @@ class Resume: Identifiable, Hashable {
     
     // Synchronous wrapper for backward compatibility, uses Task for MainActor isolation
     func generateQuery() -> ResumeApiQuery {
-        // Create a temporary placeholder that will be replaced
-        var query = ResumeApiQuery(resume: self, skipApplicant: true)
+        // Create a placeholder with empty profile to avoid MainActor requirement
+        let emptyProfile = ApplicantProfile(
+            name: "", address: "", city: "", state: "", zip: "", 
+            websites: "", email: "", phone: ""
+        )
+        let query = ResumeApiQuery(resume: self, applicantProfile: emptyProfile)
         
-        // Start a task to update it properly
+        // Start a task to update it with real data when possible
         Task { @MainActor in
-            query = ResumeApiQuery(resume: self)
+            let realApplicant = Applicant()
+            query.updateApplicant(realApplicant)
         }
         
         return query
