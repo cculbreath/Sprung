@@ -5,7 +5,7 @@ import SwiftUI
 final class CoverChatProvider {
     // The OpenAI client that will be used for API calls
     private let openAIClient: OpenAIClientProtocol
-    
+
     var message: String = ""
     var messages: [String] = []
     // Stores generic chat messages for the abstraction layer
@@ -21,76 +21,77 @@ final class CoverChatProvider {
     init(client: OpenAIClientProtocol) {
         openAIClient = client
     }
-    
+
     /// Add a user message to the chat history
     /// - Parameter text: The message text
     func appendUserMessage(_ text: String) {
         let message = ChatMessage(role: .user, content: text)
         genericMessages.append(message)
     }
-    
+
     /// Add a system message to the chat history
     /// - Parameter text: The message text
     func appendSystemMessage(_ text: String) {
         let message = ChatMessage(role: .system, content: text)
         genericMessages.append(message)
     }
-    
+
     /// Add an assistant message to the chat history
     /// - Parameter text: The message text
     func appendAssistantMessage(_ text: String) {
         let message = ChatMessage(role: .assistant, content: text)
         genericMessages.append(message)
     }
-    
+
     /// Calls the OpenAI API to generate a cover letter
     /// - Parameters:
     ///   - res: The resume to use
     ///   - jobAppStore: The job app store
     ///   - chatProvider: The chat provider
     ///   - buttons: The cover letter buttons
+    @MainActor
     func coverChatAction(
         res: Resume?,
         jobAppStore: JobAppStore,
-        chatProvider: CoverChatProvider,
+        chatProvider _: CoverChatProvider,
         buttons: Binding<CoverLetterButtons>
     ) {
         guard let app = jobAppStore.selectedApp else { return }
-        
+
         // Get the current cover letter
-        let letter = app.selectedCover!
-        
+        guard let letter = app.selectedCover else { return }
+
         buttons.wrappedValue.runRequested = true
         print("Cover letter mode: \(String(describing: letter.currentMode))")
-        
+
         // Set up the system message
         let systemMessage = CoverLetterPrompts.systemMessage
-        
+
         // Add the system message
         genericMessages = [systemMessage]
-        
+
         // Get the userMessage based on the mode
         let userMessage = CoverLetterPrompts.generate(
             coverLetter: letter,
             resume: res!,
             mode: letter.currentMode ?? .none
         )
-        
+
         // Add the user message to the history
         appendUserMessage(userMessage)
-        
+
         // Get the preferred model
         let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
+
         // Send the completion request
         Task {
             do {
                 let response = try await openAIClient.sendChatCompletionAsync(
                     messages: genericMessages,
                     model: modelString,
-                    temperature: 0.7
+                    temperature: 1.0
                 )
-                
+
                 // Process the results on the main thread
                 await MainActor.run {
                     processResults(
@@ -109,7 +110,7 @@ final class CoverChatProvider {
             }
         }
     }
-    
+
     /// Process the results from the OpenAI API
     /// - Parameters:
     ///   - newMessage: The new message to process
@@ -122,22 +123,22 @@ final class CoverChatProvider {
     ) {
         // Add the assistant message to the history
         appendAssistantMessage(newMessage)
-        
+
         // Update the cover letter with the results
         coverLetter.content = newMessage
         coverLetter.generated = true
         coverLetter.moddedDate = Date()
         buttons.wrappedValue.runRequested = false
-        
+
         // Save the message history for potential revisions later
-        coverLetter.messageHistory = genericMessages.map { 
+        coverLetter.messageHistory = genericMessages.map {
             MessageParams(
                 content: $0.content,
                 role: messageRoleFromChatRole($0.role)
             )
         }
     }
-    
+
     /// Converts a ChatRole to a MessageRole
     /// - Parameter chatRole: The ChatRole to convert
     /// - Returns: The corresponding MessageRole
@@ -149,6 +150,95 @@ final class CoverChatProvider {
             return .user
         case .assistant:
             return .assistant
+        }
+    }
+
+    /// Calls the OpenAI API to revise a cover letter
+    /// - Parameters:
+    ///   - res: The resume to use
+    ///   - jobAppStore: The job app store
+    ///   - chatProvider: The chat provider
+    ///   - buttons: The cover letter buttons
+    ///   - customFeedback: Custom feedback for revision
+    @MainActor
+    func coverChatRevise(
+        res: Resume?,
+        jobAppStore: JobAppStore,
+        chatProvider _: CoverChatProvider,
+        buttons: Binding<CoverLetterButtons>,
+        customFeedback: Binding<String>
+    ) {
+        guard let app = jobAppStore.selectedApp else { return }
+
+        // Get the current cover letter
+        guard let letter = app.selectedCover else { return }
+
+        buttons.wrappedValue.runRequested = true
+        print("Cover letter revision mode: \(String(describing: letter.currentMode))")
+
+        // Set up the system message
+        let systemMessage = CoverLetterPrompts.systemMessage
+
+        // Add the system message
+        genericMessages = [systemMessage]
+
+        // Get the userMessage based on the mode
+        let userMessage: String
+        if letter.editorPrompt == .custom {
+            // Use the feedback provided by the user
+            let feedbackPrompt = """
+                Upon reading your latest draft, \(Applicant().name) has provided the following feedback:
+
+                    \(customFeedback.wrappedValue)
+
+                Please prepare a revised draft that improves upon the original while incorporating this feedback. 
+                Your response should only include the plain full text of the revised letter draft without any 
+                markdown formatting or additional explanations or reasoning.
+                
+                Current draft:
+                \(letter.content)
+            """
+            appendUserMessage(feedbackPrompt)
+        } else {
+            // Use the prompt template from the editor prompts
+            let rewritePrompt = """
+                My initial draft of a cover letter to accompany my application is included below.
+                \(letter.editorPrompt?.rawValue ?? "")
+                
+                Cover Letter initial draft:
+                \(letter.content)
+            """
+            appendUserMessage(rewritePrompt)
+        }
+
+        // Get the preferred model
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+
+        // Send the completion request
+        Task {
+            do {
+                let response = try await openAIClient.sendChatCompletionAsync(
+                    messages: genericMessages,
+                    model: modelString,
+                    temperature: 1.0
+                )
+
+                // Process the results on the main thread
+                await MainActor.run {
+                    processResults(
+                        newMessage: response.content,
+                        coverLetter: letter,
+                        buttons: buttons
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    // Handle any errors
+                    print("Chat completion error: \(error.localizedDescription)")
+                    buttons.wrappedValue.runRequested = false
+                    errorMessage = "Error: \(error.localizedDescription)"
+                }
+            }
         }
     }
 }
