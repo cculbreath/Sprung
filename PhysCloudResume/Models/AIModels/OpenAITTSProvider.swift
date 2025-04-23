@@ -31,6 +31,9 @@ class OpenAITTSProvider {
     /// The audio player for playing audio
     private var audioPlayer: AVAudioPlayer?
 
+    /// Engine‑based streaming player (incremental playback)
+    private var streamingPlayer: StreamingTTSPlayer?
+
     /// Initializes a new TTS provider with a specific API key
     /// - Parameter apiKey: The OpenAI API key to use
     init(apiKey: String) {
@@ -58,9 +61,9 @@ class OpenAITTSProvider {
             instructions: instructions,
             onComplete: { [weak self] result in
                 switch result {
-                case .success(let audioData):
+                case let .success(audioData):
                     self?.playAudio(audioData, onComplete: onComplete)
-                case .failure(let error):
+                case let .failure(error):
                     onComplete(error)
                 }
             }
@@ -82,9 +85,9 @@ class OpenAITTSProvider {
             instructions: instructions,
             onChunk: { result in
                 switch result {
-                case .success(let audioData):
+                case let .success(audioData):
                     onChunk(audioData)
-                case .failure(let error):
+                case let .failure(error):
                     print("TTS streaming error: \(error)")
                 }
             },
@@ -96,6 +99,9 @@ class OpenAITTSProvider {
     func stopSpeaking() {
         audioPlayer?.stop()
         audioPlayer = nil
+
+        streamingPlayer?.stop()
+        streamingPlayer = nil
     }
 
     /// Plays the audio data
@@ -133,5 +139,80 @@ class OpenAITTSProvider {
         func audioPlayerDecodeErrorDidOccur(_: AVAudioPlayer, error: Error?) {
             onComplete(error ?? NSError(domain: "OpenAITTSProvider", code: 2001, userInfo: [NSLocalizedDescriptionKey: "Audio decode error"]))
         }
+    }
+
+    /// Plays raw audio data (e.g., after streaming)
+    /// - Parameters:
+    ///   - audioData: The full audio data to play
+    ///   - onComplete: Called when playback is complete or fails
+    func playAudioData(_ audioData: Data, onComplete: @escaping (Error?) -> Void) {
+        playAudio(audioData, onComplete: onComplete)
+    }
+
+    // MARK: – Streaming playback (incremental)
+
+    /// Streams TTS audio **and** plays it as the chunks arrive using
+    /// AVAudioEngine + AVAudioConverter under the hood.
+    ///
+    /// - Parameters:
+    ///   - text:         The text to speak.
+    ///   - voice:        Desired OpenAI voice.
+    ///   - instructions: Optional voice‑tuning instructions.
+    ///   - onStart:      Called once the first audio chunk has been scheduled.
+    ///   - onComplete:   Called when **network** streaming is complete (note:
+    ///                   audio may still be draining from the buffers).
+    func streamAndPlayText(
+        _ text: String,
+        voice: Voice = .nova,
+        instructions: String? = nil,
+        onStart: (() -> Void)? = nil,
+        onComplete: @escaping (Error?) -> Void
+    ) {
+        // Stop any existing playback to avoid overlap.
+        stopSpeaking()
+
+        let player = StreamingTTSPlayer()
+        streamingPlayer = player
+
+        var didStart = false
+
+        client.sendTTSStreamingRequest(
+            text: text,
+            voice: voice.rawValue,
+            instructions: instructions,
+            onChunk: { [weak self] result in
+                guard let self = self else { return }
+                switch result {
+                case let .success(data):
+                    player.append(data)
+                    if !didStart {
+                        didStart = true
+                        DispatchQueue.main.async {
+                            onStart?()
+                        }
+                    }
+                case let .failure(error):
+                    print("[OpenAITTSProvider] streaming chunk error: \(error)")
+                }
+            },
+            onComplete: { [weak self] error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        onComplete(error)
+                    }
+                } else {
+                    // Network stream finished – leave engine playing out the
+                    // remaining buffers.  We invoke onComplete immediately.
+                    DispatchQueue.main.async {
+                        onComplete(nil)
+                    }
+                }
+                // Keep reference to player until draining done (best‑effort).
+                // We do not explicitly stop – the view is responsible for
+                // calling `stopSpeaking()` if user taps the stop button.
+                // To avoid leaks we nil‑out once streaming finished.
+                self?.streamingPlayer = nil
+            }
+        )
     }
 }
