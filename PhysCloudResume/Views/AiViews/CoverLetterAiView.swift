@@ -52,7 +52,6 @@ struct CoverLetterAiContentView: View {
     // Accumulated audio data from stream
     @State private var pendingAudioData: Data = .init()
     // Wiggle animation toggle
-    @State private var wiggle: Bool = false
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
@@ -156,20 +155,18 @@ struct CoverLetterAiContentView: View {
                             Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
                                 .font(.system(size: 20, weight: .regular))
                                 .frame(width: 36, height: 36)
-                                // Yellow wiggle while buffering, blue accent when playing
-                                .foregroundColor(isBuffering ? .yellow : (isSpeaking ? .accentColor : .primary))
-                                .rotationEffect(.degrees(isBuffering ? (wiggle ? -3 : 3) : 0), anchor: .center)
-                                .animation(isBuffering ? Animation.easeInOut(duration: 0.15).repeatForever(autoreverses: true) : .default, value: wiggle)
+                                .foregroundColor(
+                                    isBuffering ? .orange : (isSpeaking ? .accentColor : .primary)
+                                )
                         }
                         .buttonStyle(.plain)
                         .help(isSpeaking ? "Stop speaking" : "Read cover letter aloud")
                         .disabled(buttons.runRequested || buttons.chooseBestRequested)
                     }
                 }
-                .onAppear { print("AI content") }
             }
         }
-        // Show alert on result or error
+        .onAppear { print("AI content") }
         .alert(item: $errorWrapper) { wrapper in
             Alert(
                 title: Text("Cover Letter Recommendation"),
@@ -194,7 +191,6 @@ struct CoverLetterAiContentView: View {
             isBuffering = false
             isSpeaking = false
             pendingAudioData = Data()
-            wiggle = false
             return
         }
 
@@ -214,9 +210,6 @@ struct CoverLetterAiContentView: View {
 
         // Initialize buffering state and start wiggle animation
         isBuffering = true
-        withAnimation(Animation.easeInOut(duration: 0.15).repeatForever(autoreverses: true)) {
-            wiggle.toggle()
-        }
 
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
@@ -229,7 +222,6 @@ struct CoverLetterAiContentView: View {
             onStart: {
                 // First audio chunk has been queued – stop buffering UI.
                 self.isBuffering = false
-                self.wiggle = false
                 self.isSpeaking = true
             },
             onComplete: { error in

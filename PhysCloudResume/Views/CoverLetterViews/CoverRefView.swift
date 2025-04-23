@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct CoverRefView: View {
@@ -19,6 +20,17 @@ struct CoverRefViewWrapped: View {
     // we can do `$coverRefStore` updates if needed.
     @Bindable var coverRefStore: CoverRefStore
     @Bindable var cL: CoverLetter
+
+    // Live SwiftData query to automatically refresh on model changes
+    @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
+
+    private var backgroundFacts: [CoverRef] {
+        allCoverRefs.filter { $0.type == .backgroundFact }
+    }
+
+    private var writingSamples: [CoverRef] {
+        allCoverRefs.filter { $0.type == .writingSample }
+    }
 
     @State private var showAddBackgroundFactSheet = false
     @State private var showAddWritingSampleSheet = false
@@ -55,7 +67,7 @@ struct CoverRefViewWrapped: View {
                 }
 
             // Show existing background facts
-            ForEach(coverRefStore.backgroundFacts, id: \.id) { fact in
+            ForEach(backgroundFacts) { fact in
                 RefRow(
                     cL: cL,
                     element: fact,
@@ -87,7 +99,7 @@ struct CoverRefViewWrapped: View {
                     )
                 }
 
-            ForEach(coverRefStore.writingSamples, id: \.id) { sample in
+            ForEach(writingSamples) { sample in
                 RefRow(
                     cL: cL,
                     element: sample,

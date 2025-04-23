@@ -201,17 +201,16 @@ class OpenAITTSProvider {
                         onComplete(error)
                     }
                 } else {
-                    // Network stream finished – leave engine playing out the
-                    // remaining buffers.  We invoke onComplete immediately.
+                    // Network stream finished – the AVAudioEngine will keep
+                    // playing remaining queued buffers.  We notify caller but
+                    // intentionally keep the `streamingPlayer` alive so audio
+                    // is not cut off prematurely.  Caller should invoke
+                    // `stopSpeaking()` (e.g. when the user taps the button)
+                    // to tear everything down once playback audibly completes.
                     DispatchQueue.main.async {
                         onComplete(nil)
                     }
                 }
-                // Keep reference to player until draining done (best‑effort).
-                // We do not explicitly stop – the view is responsible for
-                // calling `stopSpeaking()` if user taps the stop button.
-                // To avoid leaks we nil‑out once streaming finished.
-                self?.streamingPlayer = nil
             }
         )
     }
