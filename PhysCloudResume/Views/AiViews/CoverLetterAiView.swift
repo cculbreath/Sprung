@@ -47,6 +47,12 @@ struct CoverLetterAiContentView: View {
     @State private var isSpeaking: Bool = false
     @State private var ttsError: String? = nil
     @State private var showTTSError: Bool = false
+    // Buffering state for streaming TTS
+    @State private var isBuffering: Bool = false
+    // Accumulated audio data from stream
+    @State private var pendingAudioData: Data = .init()
+    // Wiggle animation toggle
+    @State private var wiggle: Bool = false
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
@@ -150,6 +156,10 @@ struct CoverLetterAiContentView: View {
                             Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
                                 .font(.system(size: 20, weight: .regular))
                                 .frame(width: 36, height: 36)
+                                // Yellow wiggle while buffering, blue accent when playing
+                                .foregroundColor(isBuffering ? .yellow : (isSpeaking ? .accentColor : .primary))
+                                .rotationEffect(.degrees(isBuffering ? (wiggle ? -3 : 3) : 0), anchor: .center)
+                                .animation(isBuffering ? Animation.easeInOut(duration: 0.15).repeatForever(autoreverses: true) : .default, value: wiggle)
                         }
                         .buttonStyle(.plain)
                         .help(isSpeaking ? "Stop speaking" : "Read cover letter aloud")
@@ -176,12 +186,15 @@ struct CoverLetterAiContentView: View {
 
     // MARK: - Actions
 
-    /// Read the cover letter aloud using TTS
+    /// Read the cover letter aloud using streaming TTS with buffering and animations
     func speakCoverLetter() {
-        // If currently speaking, stop playback
-        if isSpeaking {
+        // If currently playing or buffering, stop everything
+        if isSpeaking || isBuffering {
             ttsProvider.stopSpeaking()
+            isBuffering = false
             isSpeaking = false
+            pendingAudioData = Data()
+            wiggle = false
             return
         }
 
@@ -193,35 +206,43 @@ struct CoverLetterAiContentView: View {
             return
         }
 
-        // Prepare the text for speech - remove markdown formatting if needed
+        // Clean up markdown formatting if present
         let cleanContent = content
             .replacingOccurrences(of: "#", with: "")
             .replacingOccurrences(of: "**", with: "")
             .replacingOccurrences(of: "*", with: "")
 
-        // Set UI state to speaking
-        isSpeaking = true
+        // Initialize buffering state and start wiggle animation
+        isBuffering = true
+        withAnimation(Animation.easeInOut(duration: 0.15).repeatForever(autoreverses: true)) {
+            wiggle.toggle()
+        }
 
-        // Get the voice from the user preference
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
-
-        // Get voice instructions if available
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
 
-        // Request TTS conversion and playback with instructions
-        ttsProvider.speakText(cleanContent, voice: voice, instructions: instructions) { error in
-            DispatchQueue.main.async {
-                // Reset speaking state when playback completes
-                self.isSpeaking = false
-
-                // Handle any errors
-                if let error = error {
-                    self.ttsError = error.localizedDescription
-                    self.showTTSError = true
-                    print("TTS error: \(error.localizedDescription)")
+        // Stream and play simultaneously
+        ttsProvider.streamAndPlayText(
+            cleanContent,
+            voice: voice,
+            instructions: instructions,
+            onStart: {
+                // First audio chunk has been queued – stop buffering UI.
+                self.isBuffering = false
+                self.wiggle = false
+                self.isSpeaking = true
+            },
+            onComplete: { error in
+                DispatchQueue.main.async {
+                    self.isSpeaking = false
+                    if let error = error {
+                        self.ttsError = error.localizedDescription
+                        self.showTTSError = true
+                        print("TTS streaming error: \(error.localizedDescription)")
+                    }
                 }
             }
-        }
+        )
     }
 
     /// Initiates the choose‑best‑cover‑letter operation
@@ -233,6 +254,8 @@ struct CoverLetterAiContentView: View {
         // Capture writing samples from any existing cover letter
         let writingSamples = letters.first?.writingSamplesString ?? ""
         Task {
+            // Debug: log initiation of chooseBestCoverLetter
+            print("[CoverLetterAiView] Initiating chooseBestCoverLetter for job: \(jobApp.jobPosition), letters: \(letters.map { $0.id.uuidString })")
             do {
                 let provider = CoverLetterRecommendationProvider(
                     client: openAIClient,
@@ -240,9 +263,13 @@ struct CoverLetterAiContentView: View {
                     writingSamples: writingSamples
                 )
                 let result = try await provider.fetchBestCoverLetter()
+                // Debug: log received BestCoverLetterResponse
+                print("[CoverLetterAiView] Received BestCoverLetterResponse: \(result)")
                 await MainActor.run {
-                    // Update selected cover and notify user
-                    if let uuid = UUID(uuidString: result.bestLetterUuid),
+                    // Debug: attempt to select best cover letter by UUID
+                    let uuidString = result.bestLetterUuid
+                    print("[CoverLetterAiView] Best letter UUID from response: \(uuidString)")
+                    if let uuid = UUID(uuidString: uuidString),
                        let best = jobApp.coverLetters.first(where: { $0.id == uuid })
                     {
                         jobAppStore.selectedApp?.selectedCover = best
@@ -256,6 +283,12 @@ struct CoverLetterAiContentView: View {
                         \(result.verdict)
                         """
                         errorWrapper = ErrorMessageWrapper(message: message)
+                    } else {
+                        // Debug: no matching cover letter found
+                        print("[CoverLetterAiView] No cover letter found matching UUID: \(uuidString)")
+                        errorWrapper = ErrorMessageWrapper(
+                            message: "No matching cover letter found for UUID: \(uuidString)"
+                        )
                     }
                     buttons.chooseBestRequested = false
                 }
