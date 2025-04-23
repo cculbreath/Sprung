@@ -232,7 +232,7 @@ struct SettingsView: View {
                                 Spacer()
                                 Button(action: previewVoice) {
                                     Label(isPreviewingVoice ? "Stop Preview" : "Preview Voice",
-                                          systemImage: isPreviewingVoice ? "speaker.wave.3.fill" : "speaker.wave.2")
+                                          systemImage: isPreviewingVoice ? "speaker.wave.3.fill" : "speaker.wave.3")
                                 }
                                 .disabled(openAiApiKey == "none")
                                 .buttonStyle(.bordered)
