@@ -26,9 +26,9 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
     /// Exposes the internal OpenAI client instance for direct access
     var openAIClient: OpenAI {
-        return self.client
+        return client
     }
-    
+
     /// Converts our ChatMessage to MacPaw's ChatQuery.ChatCompletionMessageParam
     /// - Parameter message: The message to convert
     /// - Returns: The converted message

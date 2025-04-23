@@ -18,19 +18,17 @@ struct ProposedRevisionNode: Codable, Equatable {
 
 struct RevisionsContainer: Codable, StructuredOutput {
     var revArray: [ProposedRevisionNode]
-    
-    static let example: Self = {
-        .init(revArray: [
-            ProposedRevisionNode(
-                id: "example-id-1",
-                oldValue: "Example old value",
-                newValue: "Example new value",
-                valueChanged: true,
-                isTitleNode: false,
-                why: "Improved clarity and impact"
-            )
-        ])
-    }()
+
+    static let example: Self = .init(revArray: [
+        ProposedRevisionNode(
+            id: "example-id-1",
+            oldValue: "Example old value",
+            newValue: "Example new value",
+            valueChanged: true,
+            isTitleNode: false,
+            why: "Improved clarity and impact"
+        ),
+    ])
 }
 
 enum PostReviewAction: String, Codable {

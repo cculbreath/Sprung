@@ -162,7 +162,7 @@ final class CoverChatProvider {
     ///   - customFeedback: Custom feedback for revision
     @MainActor
     func coverChatRevise(
-        res: Resume?,
+        res _: Resume?,
         jobAppStore: JobAppStore,
         chatProvider _: CoverChatProvider,
         buttons: Binding<CoverLetterButtons>,
@@ -194,7 +194,7 @@ final class CoverChatProvider {
                 Please prepare a revised draft that improves upon the original while incorporating this feedback. 
                 Your response should only include the plain full text of the revised letter draft without any 
                 markdown formatting or additional explanations or reasoning.
-                
+
                 Current draft:
                 \(letter.content)
             """
@@ -205,7 +205,7 @@ final class CoverChatProvider {
             let rewritePrompt = """
                 My initial draft of a cover letter to accompany my application is included below.
                 \(promptTemplate.rawValue)
-                
+
                 Cover Letter initial draft:
                 \(letter.content)
             """

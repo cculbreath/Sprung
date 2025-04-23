@@ -305,7 +305,7 @@ struct AiCommsView: View {
                     // Set up system and user messages for initial query
                     chatProvider.genericMessages = [
                         q.genericSystemMessage,
-                        ChatMessage(role: .user, content: q.wholeResumeQueryString)
+                        ChatMessage(role: .user, content: q.wholeResumeQueryString),
                     ]
                 } else {
                     // Add revision feedback prompt to existing message history

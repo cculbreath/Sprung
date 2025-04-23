@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import SwiftUI
 import OpenAI
+import SwiftUI
 
 /// Helper for handling resume chat functionality
 
@@ -116,7 +116,7 @@ final class ResumeChatProvider {
                         do {
                             // Convert our messages to MacPaw's format
                             let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
-                            
+
                             // Create the query with structured output format
                             let query = ChatQuery(
                                 messages: chatMessages,
@@ -124,22 +124,23 @@ final class ResumeChatProvider {
                                 responseFormat: .jsonSchema(name: "resume-revisions", type: RevisionsContainer.self),
                                 temperature: 1.0
                             )
-                            
+
                             // Make the API call with structured output
                             let result = try await macPawClient.openAIClient.chats(query: query)
-                            
+
                             // Extract structured output response
                             // For MacPaw/OpenAI structured outputs, we need to check the content string
                             // since there's no structured output property directly accessible
                             guard let content = result.choices.first?.message.content,
-                                  let data = content.data(using: .utf8) else {
+                                  let data = content.data(using: .utf8)
+                            else {
                                 throw NSError(
                                     domain: "ResumeChatProviderError",
                                     code: 1002,
                                     userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output content"]
                                 )
                             }
-                            
+
                             // Decode the JSON content into RevisionsContainer
                             let structuredOutput: RevisionsContainer
                             do {
@@ -151,13 +152,13 @@ final class ResumeChatProvider {
                                     userInfo: [NSLocalizedDescriptionKey: "Failed to decode structured output: \(error.localizedDescription)"]
                                 )
                             }
-                            
+
                             await coordinator.resumeWithValue(structuredOutput, continuation: continuation)
                         } catch {
                             await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
-                    
+
                     // Set up a timeout task
                     Task {
                         try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
@@ -167,16 +168,16 @@ final class ResumeChatProvider {
                         }
                     }
                 }
-                
+
                 // Convert structured response to JSON for compatibility with existing code
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                 let jsonData = try encoder.encode(response)
                 let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
-                
+
                 // Store the JSON string in messages array
                 self.messages = [jsonString]
-                
+
                 if self.messages.isEmpty {
                     throw NSError(
                         domain: "ResumeChatProviderError",
@@ -184,12 +185,12 @@ final class ResumeChatProvider {
                         userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
                     )
                 }
-                
+
                 print("AI response received (structured): \(self.messages.last?.prefix(100) ?? "Empty")")
-                
+
                 // Get the revision nodes directly from the structured response
                 lastRevNodeArray = response.revArray
-                
+
                 // Update generic messages for history
                 genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
             } else {
@@ -207,7 +208,7 @@ final class ResumeChatProvider {
                             await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
-                    
+
                     // Set up a timeout task
                     Task {
                         try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
@@ -217,13 +218,13 @@ final class ResumeChatProvider {
                         }
                     }
                 }
-                
+
                 // Process the response
                 let content = response.content
-                
+
                 // Process messages format and store in messages array
                 self.messages = [content.asJsonFormatted()]
-                
+
                 if self.messages.isEmpty {
                     throw NSError(
                         domain: "ResumeChatProviderError",
@@ -231,15 +232,15 @@ final class ResumeChatProvider {
                         userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
                     )
                 }
-                
+
                 print("AI response received: \(self.messages.last?.prefix(100) ?? "Empty")")
-                
+
                 // Try to convert to nodes
                 lastRevNodeArray = convertJsonToNodes(self.messages.last) ?? []
-                
+
                 // Add to message history
                 let lastContent = content
-                
+
                 // Update generic messages
                 genericMessages.append(ChatMessage(role: .assistant, content: lastContent))
             }

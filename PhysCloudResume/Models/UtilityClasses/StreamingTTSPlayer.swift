@@ -140,20 +140,26 @@ final class StreamingTTSPlayer {
         let compressedBuffer = AVAudioCompressedBuffer(
             format: inputFormat,
             packetCapacity: AVAudioPacketCount(packetCount),
-            maximumPacketSize: Int(packetBytes / packetCount)
+            maximumPacketSize: Int(packetBytes) // ensure space for one full packet
         )
 
-        // Copy packet descriptions (if any) into the compressed buffer.
-        if let desc = packetDescriptions {
-            let dstDesc = compressedBuffer.packetDescriptions!
-            dstDesc.update(from: desc, count: Int(packetCount))
+        // Copy packet descriptions from AudioFileStream if provided and >0,
+        // otherwise synthesize a single‑packet description.
+        if packetCount > 0, let srcDesc = packetDescriptions, let dst = compressedBuffer.packetDescriptions {
+            dst.assign(from: srcDesc, count: Int(packetCount))
+            compressedBuffer.packetCount = AVAudioPacketCount(packetCount)
+        } else {
+            compressedBuffer.packetCount = 1
+            if let dst = compressedBuffer.packetDescriptions {
+                dst[0] = AudioStreamPacketDescription(mStartOffset: 0,
+                                                      mVariableFramesInPacket: 0,
+                                                      mDataByteSize: packetBytes)
+            }
         }
 
         // Copy raw mp3 bytes.
         compressedBuffer.byteLength = packetBytes
         memcpy(compressedBuffer.data, inputData, Int(packetBytes))
-
-        compressedBuffer.packetCount = AVAudioPacketCount(packetCount)
 
         // Prepare PCM buffer large enough to hold decoded audio.  We make a
         // generous estimate – converter will tell us exactly how many frames
@@ -161,10 +167,16 @@ final class StreamingTTSPlayer {
         guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: 8192) else { return }
 
         var error: NSError?
+        var bufferProvided = false
         let status = converter.convert(to: pcmBuffer, error: &error) { _, outStatus -> AVAudioBuffer? in
-            // Provide data on first invocation, then signal EOF.
-            outStatus.pointee = .haveData
-            return compressedBuffer
+            if bufferProvided {
+                outStatus.pointee = .endOfStream
+                return nil
+            } else {
+                bufferProvided = true
+                outStatus.pointee = .haveData
+                return compressedBuffer
+            }
         }
 
         if status == .error {

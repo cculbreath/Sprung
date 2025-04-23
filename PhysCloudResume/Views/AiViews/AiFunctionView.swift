@@ -6,26 +6,20 @@ struct AiFunctionView: View {
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
 
-    // Use our abstraction layer for OpenAI
-    private var openAIClient: OpenAIClientProtocol
+    // Use our abstraction layer for OpenAI. Fetch the key directly from
+    // UserDefaults instead of relying on the `@AppStorage` property wrapper in
+    // order to avoid the mutating‑getter compile error.
+    private let openAIClient: OpenAIClientProtocol
+
     // For TTS functionality
-    private var ttsProvider: OpenAITTSProvider
+    private let ttsProvider: OpenAITTSProvider
 
     init(res: Binding<Resume?>) {
         _res = res
 
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 600 // 10 minutes for extended timeout
-        configuration.timeoutIntervalForResource = 600 // Also set resource timeout
-
-        // Increase the connections per host for better performance
-        configuration.httpMaximumConnectionsPerHost = 6
-
-        // Use our abstraction layer for OpenAI
-        openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
-
-        // Initialize TTS provider
-        ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
+        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
+        ttsProvider = OpenAITTSProvider(apiKey: apiKey)
     }
 
     var body: some View {

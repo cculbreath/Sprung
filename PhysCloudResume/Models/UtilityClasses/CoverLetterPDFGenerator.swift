@@ -727,7 +727,7 @@ enum CoverLetterPDFGenerator {
                 let signatureWidth = signatureHeight * imageAspectRatio
 
                 // Determine the right position based on the content
-                var signatureX = textRect.origin.x + 10 // Default indent from margin
+                var signatureX = textRect.origin.x + 2 // Default indent from margin
 
                 // Position signature intelligently based on all detected signature elements
 
@@ -753,22 +753,28 @@ enum CoverLetterPDFGenerator {
                     if nameIdx == regardsIdx + 1 {
                         // Name immediately follows regards - place directly on the regards line
                         adjustedSignatureY = regardsY + 5 // Right on the regards line
+                        print("regards + 5a")
                     } else if nameIdx == regardsIdx + 2 {
                         // One line gap - still place directly on the regards line
-                        adjustedSignatureY = regardsY + 5
+                        adjustedSignatureY = regardsY + 2
+                        print("regards + 3b")
                     } else {
                         // Multiple lines - still position right at regards line
                         adjustedSignatureY = regardsY + 2
+                        print("regards + 2")
                     }
                 } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
                     // Only have regards line - position right ON the regards line
                     adjustedSignatureY = origins[regardsIdx].y + 5 // Right on the regards line
+                    print("origins[regardsIdx].y + 5")
                 } else if let nameIdx = nameLineIndex, nameIdx < origins.count {
                     // Only have name - position much higher than before
                     adjustedSignatureY = origins[nameIdx].y + 45 // Far above name
+                    print("origns[nameIdx].y + 45")
                 } else {
                     // No clear positioning guidance, use safe default
                     adjustedSignatureY = textRect.origin.y + 100
+                    print("wtf sig")
                 }
 
                 // Now check for overlaps with contact info
@@ -781,9 +787,11 @@ enum CoverLetterPDFGenerator {
                         if abs(adjustedSignatureY - contactY) < signatureHeight {
                             // Move signature up significantly to avoid contact info
                             if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                                adjustedSignatureY = origins[nameIdx].y + 28 // Well above name line
+                                adjustedSignatureY = origins[nameIdx].y + 26 // Well above name line
+                                print("contacts orgins + 26")
                             } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
-                                adjustedSignatureY = origins[regardsIdx].y - 28 // Well below regards
+                                adjustedSignatureY = origins[regardsIdx].y - 26 // Well below regards
+                                print("regards origins - 26")
                             }
                         }
                     }

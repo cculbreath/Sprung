@@ -18,7 +18,7 @@ struct SettingsView: View {
     // TTS Settings
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
-    @AppStorage("ttsInstructions") var ttsInstructions: String = "Voice Affect: Confident, composed, and respectful; project well-supported authority and confidence without hubris.\nTone: Sincere, empathetic, and authoritative—but not arrogant. Express genuine humility while conveying competence.\nPacing: Brisk and confident, but unrushed. Slow moderately for emphasis, demonstrating thoughtfulness while prioritizing efficiency and respect for your audience's time.\nEmotion: Engaged and confident; speak with warmth and charisma. Lean into rising pitch, confident resolution, and the identifiable rhythms of a skilled orator.\nPronunciation: Clear and precise, emphasizing understanding and fluency with technical concepts, and a deft handling of even the most stubborn aspects of the English language.\nPauses: Brief pauses for emphasis and gravitas, but with an overall cadence of efficiency and forward momentum."
+    @AppStorage("ttsInstructions") var ttsInstructions: String = "Voice Affect: Confident, composed, and respectful; project well-supported authority and confidence without hubris.\nTone: Sincere, empathetic, and authoritative—but not arrogant. Express genuine humility while conveying competence.\nPacing: Brisk and confident, quickly but intelligible. Faster than most would think appropriate but not to the point of sounding digitally sped up. Slow moderately for emphasis, demonstrating thoughtfulness while prioritizing efficiency and respect for your audience's time.\nEmotion: Engaged and confident; speak with warmth and charisma. Lean into rising pitch, confident resolution, and the identifiable rhythms of a skilled orator.\nPronunciation: Clear and precise, emphasizing understanding and fluency with technical concepts, and a deft handling of even the most stubborn aspects of the English language.\nPauses: Brief pauses for emphasis and gravitas, but with an overall cadence of efficiency and forward momentum."
 
     @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableStyles: [String] = []
@@ -288,7 +288,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Preferred API")
                             .font(.headline)
-                        
+
                         Picker("Preferred API", selection: $preferredApi) {
                             ForEach(apis.allCases) { api in
                                 Text(api.rawValue)
