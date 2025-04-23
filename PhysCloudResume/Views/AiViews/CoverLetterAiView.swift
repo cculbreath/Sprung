@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if os(macOS)
+    import AppKit
+#endif
 
 struct CoverLetterAiView: View {
     @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
@@ -49,6 +52,8 @@ struct CoverLetterAiContentView: View {
     @State private var showTTSError: Bool = false
     // Buffering state for streaming TTS
     @State private var isBuffering: Bool = false
+    // True when playback has been paused via the toolbar button
+    @State private var isPaused: Bool = false
     // Accumulated audio data from stream
     @State private var pendingAudioData: Data = .init()
     // Wiggle animation toggle
@@ -129,7 +134,7 @@ struct CoverLetterAiContentView: View {
                         Button(action: {
                             chooseBestCoverLetter()
                         }) {
-                            Image(systemName: "medal.fill")
+                            Image(systemName: "medal")
                                 .font(.system(size: 20, weight: .regular))
                                 .frame(width: 36, height: 36)
                         }
@@ -152,19 +157,44 @@ struct CoverLetterAiContentView: View {
                         Button(action: {
                             speakCoverLetter()
                         }) {
-                            Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
+                            let iconFilled = isSpeaking || isBuffering
+                            let iconName = iconFilled ? "speaker.wave.3.fill" : "speaker.wave.3"
+                            Image(systemName: iconName)
                                 .font(.system(size: 20, weight: .regular))
                                 .frame(width: 36, height: 36)
-                                .foregroundColor(
-                                    isBuffering ? .orange : (isSpeaking ? .accentColor : .primary)
-                                )
+                                .foregroundColor({ () -> Color in
+                                    if isBuffering { return .yellow }
+                                    else if isSpeaking { return .accentColor }
+                                    if isPaused { return .accentColor }
+                                    return .primary
+                                }())
+                                // Pulsing effect only while buffering
+                                .symbolEffect(.pulse, value: isBuffering)
                         }
                         .buttonStyle(.plain)
-                        .help(isSpeaking ? "Stop speaking" : "Read cover letter aloud")
+                        .help({ () -> String in
+                            if isBuffering { return "Cancel" }
+                            if isSpeaking { return "Pause playback" }
+                            if isPaused { return "Resume playback" }
+                            return "Read cover letter aloud"
+                        }())
                         .disabled(buttons.runRequested || buttons.chooseBestRequested)
                     }
                 }
             }
+        }
+        // Stop playback if the user switches to another cover letter
+        .onChange(of: cL.wrappedValue.id) { _ in
+            hardStopPlayback()
+        }
+        .onChange(of: isBuffering) { old, new in
+            print("buffering changed from \(old) to \(new)")
+        }
+        .onChange(of: isSpeaking) { old, new in
+            print("speaking changed from \(old) to \(new)")
+        }
+        .onChange(of: isPaused) { old, new in
+            print("paused changed from \(old) to \(new)")
         }
         .onAppear { print("AI content") }
         .alert(item: $errorWrapper) { wrapper in
@@ -183,18 +213,75 @@ struct CoverLetterAiContentView: View {
 
     // MARK: - Actions
 
-    /// Read the cover letter aloud using streaming TTS with buffering and animations
-    func speakCoverLetter() {
-        // If currently playing or buffering, stop everything
-        if isSpeaking || isBuffering {
-            ttsProvider.stopSpeaking()
-            isBuffering = false
-            isSpeaking = false
-            pendingAudioData = Data()
+    /// Handle toolbar TTS button interaction following the state‑chart specification.
+    ///
+    /// Behaviour summary
+    /// 1.  Default click cycles through: Idle → Buffering → Playing → Paused → Playing …
+    /// 2.  ⌥‑click always restarts a fresh streaming request from the beginning.
+    /// 3.  Cover‑letter change externally stops any ongoing playback (handled separately).
+    private func speakCoverLetter() {
+        let optionKeyPressed = NSEvent.modifierFlags.contains(.option)
+
+        //  ————————  Option‑click acts as a hard STOP (returns to idle)  ————————
+        if optionKeyPressed {
+            print("opt click stop req")
+            hardStopPlayback() // clear buffer & reset UI; no automatic restart
             return
         }
 
-        // Get the content from the current cover letter
+        //  ————————  State machine for normal click  ————————
+
+        // 1. Playing  →  Pause
+        if isSpeaking {
+            print("pause req")
+            if ttsProvider.pause() {
+                print("pause success")
+                isSpeaking = false
+                isPaused = true
+            }
+            return
+        }
+
+        // 2. Paused   →  Resume
+        if isPaused {
+            print("resume req")
+            if ttsProvider.resume() {
+                print("resume success")
+                isSpeaking = true
+                isPaused = false
+            }
+            return
+        }
+
+        // 3. Buffering → Cancel buffering (acts like a stop)
+        if isBuffering {
+            print("stop req")
+            hardStopPlayback()
+            return
+        }
+
+        // 4. Idle      →  Begin streaming & play
+        print("start req")
+        startStreamingFromBeginning()
+    }
+
+    // MARK: - Helper utilities
+
+    /// Resets every local and provider state.
+    private func hardStopPlayback() {
+        ttsProvider.stopSpeaking()
+        isSpeaking = false
+        isPaused = false
+        isBuffering = false
+        pendingAudioData = Data()
+    }
+
+    /// Begins a brand‑new streaming request for the currently‑selected cover letter.
+    private func startStreamingFromBeginning() {
+        // Reset first
+        hardStopPlayback()
+
+        // Ensure we have some text to speak
         let content = cL.wrappedValue.content
         guard !content.isEmpty else {
             ttsError = "No content to speak"
@@ -202,31 +289,37 @@ struct CoverLetterAiContentView: View {
             return
         }
 
-        // Clean up markdown formatting if present
+        // Strip basic markdown characters – this is *very* naive but sufficient for our use‑case.
         let cleanContent = content
             .replacingOccurrences(of: "#", with: "")
             .replacingOccurrences(of: "**", with: "")
             .replacingOccurrences(of: "*", with: "")
 
-        // Initialize buffering state and start wiggle animation
+        // Enter buffering state; UI will pulse yellow.
         isBuffering = true
+        isSpeaking = false
+        isPaused = false
 
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
 
-        // Stream and play simultaneously
+        // Kick off streaming request.  All provider callbacks trampoline
+        // back onto MainActor so we can safely mutate view‑state.
         ttsProvider.streamAndPlayText(
             cleanContent,
             voice: voice,
             instructions: instructions,
             onStart: {
-                // First audio chunk has been queued – stop buffering UI.
+                // Buffer filled enough – actual audio is about to start.
                 self.isBuffering = false
                 self.isSpeaking = true
+                self.isPaused = false
             },
             onComplete: { error in
                 DispatchQueue.main.async {
                     self.isSpeaking = false
+                    self.isPaused = false
+                    self.isBuffering = false // ensure UI fully resets on completion or error
                     if let error = error {
                         self.ttsError = error.localizedDescription
                         self.showTTSError = true

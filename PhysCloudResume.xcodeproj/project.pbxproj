@@ -10,6 +10,7 @@
 		571F75312C98F973007C8ADD /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75302C98F973007C8ADD /* Collections */; };
 		571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 571F75322C98F973007C8ADD /* OrderedCollections */; };
 		57CEE7F92DB7E0580029E183 /* OpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57CEE7F82DB7E0580029E183 /* OpenAI */; };
+		57CEE8162DB8B4270029E183 /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 57CEE8152DB8B4270029E183 /* ChunkedAudioPlayer */; };
 		57D02A782D54682F00A6C193 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57D02A772D54682F00A6C193 /* SwiftyJSON */; };
 		57D0478B2CA771AE00A601BC /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 57D0478A2CA771AE00A601BC /* SwiftSoup */; };
 /* End PBXBuildFile section */
@@ -54,6 +55,7 @@
 				57D0478B2CA771AE00A601BC /* SwiftSoup in Frameworks */,
 				57D02A782D54682F00A6C193 /* SwiftyJSON in Frameworks */,
 				571F75332C98F973007C8ADD /* OrderedCollections in Frameworks */,
+				57CEE8162DB8B4270029E183 /* ChunkedAudioPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -101,6 +103,7 @@
 				57D0478A2CA771AE00A601BC /* SwiftSoup */,
 				57D02A772D54682F00A6C193 /* SwiftyJSON */,
 				57CEE7F82DB7E0580029E183 /* OpenAI */,
+				57CEE8152DB8B4270029E183 /* ChunkedAudioPlayer */,
 			);
 			productName = PhysCloudResume;
 			productReference = 570FEC682C855BF50074D1E0 /* PhysCloudResume.app */;
@@ -134,6 +137,7 @@
 				57D047892CA771AE00A601BC /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				57D02A762D54682F00A6C193 /* XCRemoteSwiftPackageReference "SwiftyJSON" */,
 				57CEE7F72DB7E0580029E183 /* XCRemoteSwiftPackageReference "OpenAI" */,
+				57CEE8142DB8B4270029E183 /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */,
 			);
 			preferredProjectObjectVersion = 60;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
@@ -389,6 +393,14 @@
 				minimumVersion = 0.4.1;
 			};
 		};
+		57CEE8142DB8B4270029E183 /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/cculbreath/swift-chunked-audio-player";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		57D02A762D54682F00A6C193 /* XCRemoteSwiftPackageReference "SwiftyJSON" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/SwiftyJSON/SwiftyJSON.git";
@@ -422,6 +434,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 57CEE7F72DB7E0580029E183 /* XCRemoteSwiftPackageReference "OpenAI" */;
 			productName = OpenAI;
+		};
+		57CEE8152DB8B4270029E183 /* ChunkedAudioPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57CEE8142DB8B4270029E183 /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */;
+			productName = ChunkedAudioPlayer;
 		};
 		57D02A772D54682F00A6C193 /* SwiftyJSON */ = {
 			isa = XCSwiftPackageProductDependency;

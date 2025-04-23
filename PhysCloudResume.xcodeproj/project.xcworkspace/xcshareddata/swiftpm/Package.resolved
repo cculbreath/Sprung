@@ -1,5 +1,5 @@
 {
-  "originHash" : "0e0213f502046d746976b147e3903879ae22356dfc6cc7bf06d7a395ae3936cf",
+  "originHash" : "64952c21fe86132fc04c9fcba74567cf3d25e3b7aa61db2bb75a49b53e5e095e",
   "pins" : [
     {
       "identity" : "openai",
@@ -13,10 +13,10 @@
     {
       "identity" : "swift-chunked-audio-player",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/mihai8804858/swift-chunked-audio-player.git",
+      "location" : "https://github.com/cculbreath/swift-chunked-audio-player",
       "state" : {
-        "revision" : "5a376a809b206e47e7f83944c638097ba08bd5e3",
-        "version" : "1.1.0"
+        "branch" : "main",
+        "revision" : "2a0fe251d4a5ee46343dedfdd10f3edda2447c8a"
       }
     },
     {

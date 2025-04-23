@@ -1,3 +1,4 @@
+import AppKit // Needed for NSEvent modifier‑key inspection on macOS
 import AVFoundation
 import Foundation
 import SwiftUI
@@ -23,9 +24,18 @@ struct AiCommsView: View {
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
-    @State private var isSpeaking: Bool = false
     @State private var ttsError: String? = nil
     @State private var showTTSError: Bool = false
+
+    // Read‑aloud playback state
+    private enum ReadAloudState {
+        case idle
+        case buffering
+        case playing
+        case paused
+    }
+
+    @State private var readAloudState: ReadAloudState = .idle
 
     // Store references to clients for AI operations
     private let openAIClient: OpenAIClientProtocol
@@ -176,23 +186,22 @@ struct AiCommsView: View {
             }
             .padding(.vertical)
 
-            // TTS controls - only show when TTS is enabled in settings
             if ttsEnabled && !revisions.isEmpty {
                 Button(action: {
-                    speakRevisions()
+                    // Detect ⌥‑click to force a fresh TTS request
+                    let optionPressed = NSEvent.modifierFlags.contains(.option)
+                    readAloudButtonTapped(optionPressed: optionPressed)
                 }) {
-                    Label {
-                        Text(isSpeaking ? "Stop" : "Speak")
-                            .font(.caption)
-                    } icon: {
-                        Image(systemName: isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2")
-                            .font(.system(size: 16))
-                    }
+                    Image(systemName: readAloudIconName)
+                        .font(.system(size: 16))
+                        // Pulsing yellow while buffering
+                        .symbolEffect(.pulse, options: .repeating, value: readAloudState == .buffering)
+                        .foregroundColor(readAloudIconColor)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
                 .disabled(isLoading)
-                .help(isSpeaking ? "Stop speaking" : "Speak revision suggestions")
+                .help(readAloudHelpText)
             }
         }
         .padding(.horizontal)
@@ -201,6 +210,110 @@ struct AiCommsView: View {
         } message: {
             Text(ttsError ?? "An error occurred with text-to-speech")
         }
+    }
+
+    // MARK: ‑ Read‑Aloud Helpers
+
+    /// Write a read‑aloud debug line and flush stdout so it appears immediately.
+    private func log(_ msg: String) {
+        print("[ReadAloud] \(msg)")
+        fflush(stdout)
+    }
+
+    private var readAloudIconName: String {
+        switch readAloudState {
+        case .buffering, .playing:
+            return "speaker.wave.3.fill"
+        case .paused, .idle:
+            return "speaker.wave.3"
+        }
+    }
+
+    private var readAloudIconColor: Color {
+        switch readAloudState {
+        case .buffering:
+            return .yellow
+        case .playing, .paused:
+            return .blue
+        case .idle:
+            return .primary
+        }
+    }
+
+    private var readAloudHelpText: String {
+        switch readAloudState {
+        case .buffering:
+            return "Buffering…"
+        case .playing:
+            return "Pause playback"
+        case .paused:
+            return "Resume playback"
+        case .idle:
+            return "Read aloud"
+        }
+    }
+
+    private func readAloudButtonTapped(optionPressed: Bool) {
+        log("Button tapped. optionPressed: \(optionPressed), state: \(readAloudState)")
+        // Option‑click always restarts TTS from the beginning
+        if optionPressed {
+            log("option click -> stopPlayback + startPlayback")
+            stopPlayback()
+//            startPlayback()
+            return
+        }
+
+        // Handle state transitions
+        switch readAloudState {
+        case .buffering:
+            log("tap ignored during buffering")
+            return
+        case .idle:
+            log("idle -> startPlayback")
+            startPlayback()
+        case .playing:
+            log("playing -> pausePlayback")
+            pausePlayback()
+        case .paused:
+            log("paused -> resumePlayback")
+            resumePlayback()
+        }
+    }
+
+    private func startPlayback() {
+        guard !revisions.isEmpty else {
+            log("startPlayback aborted: no revisions")
+            return
+        }
+        log("startPlayback -> buffering")
+        readAloudState = .buffering
+        speakRevisions() // will flip to playing once audio starts
+    }
+
+    private func pausePlayback() {
+        log("pausePlayback requested")
+        if ttsProvider.pause() {
+            log("pausePlayback succeeded -> paused")
+            readAloudState = .paused
+        } else {
+            log("pausePlayback FAILED")
+        }
+    }
+
+    private func resumePlayback() {
+        log("resumePlayback requested")
+        if ttsProvider.resume() {
+            log("resumePlayback succeeded -> playing")
+            readAloudState = .playing
+        } else {
+            log("resumePlayback FAILED")
+        }
+    }
+
+    private func stopPlayback() {
+        log("stopPlayback invoked -> idle")
+        ttsProvider.stop()
+        readAloudState = .idle
     }
 
     // Validation function for revisions
@@ -235,17 +348,12 @@ struct AiCommsView: View {
 
     /// Uses TTS to speak the AI revision suggestions
     func speakRevisions() {
-        // If currently speaking, stop playback
-        if isSpeaking {
-            // Tell the TTS provider to stop playback
-            isSpeaking = false
-            return
-        }
-
+        log("speakRevisions called; requesting TTS for revisions")
         // Make sure we have revisions to speak
         guard !revisions.isEmpty else {
             return
         }
+        // Buffering state set by startPlayback
 
         // Format the revisions into a readable script
         var speechText = "Here are my suggested revisions for your résumé:\n\n"
@@ -267,8 +375,20 @@ struct AiCommsView: View {
             }
         }
 
-        // Set UI state to speaking
-        isSpeaking = true
+        // Callbacks to manage state transitions
+        ttsProvider.onReady = {
+            DispatchQueue.main.async {
+                log("onReady -> playing")
+                self.readAloudState = .playing
+            }
+        }
+
+        ttsProvider.onFinish = {
+            DispatchQueue.main.async {
+                log("onFinish -> idle")
+                self.readAloudState = .idle
+            }
+        }
 
         // Get selected voice (default to nova if not valid)
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
@@ -278,14 +398,15 @@ struct AiCommsView: View {
 
         // Request TTS conversion and playback with instructions
         ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { error in
-            // Update UI state when speech completes or errors
             DispatchQueue.main.async {
-                isSpeaking = false
-
                 if let error = error {
-                    ttsError = "Text-to-speech error: \(error.localizedDescription)"
-                    showTTSError = true
+                    log("speakText completion error: \(error.localizedDescription)")
+                    self.ttsError = "Text-to-speech error: \(error.localizedDescription)"
+                    self.showTTSError = true
+                } else {
+                    log("speakText completion success -> idle")
                 }
+                self.readAloudState = .idle
             }
         }
     }
