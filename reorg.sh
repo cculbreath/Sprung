@@ -1,15 +1,41 @@
 #!/usr/bin/env bash
-set -euo pipefail
+#
+# This script reorganizes specific Swift files within the PhysCloudResume project
+# based on the agreed-upon structure.
+# It moves ResModel.swift to the ResModels/Models directory and
+# web scraping utilities to the JobApplications/Utilities directory.
+# It uses 'git mv' if run within a Git repository, otherwise uses standard 'mv'.
 
-use_git=0
-if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  use_git=1
-fi
+set -euo pipefail # Exit on error, unset variable, or pipe failure
 
+# --- Configuration ---
+PROJECT_ROOT="PhysCloudResume" # Base directory of the project
+
+# --- Helper Function ---
+
+# Function to move files, creating destination directory if needed.
+# Uses 'git mv' if in a git repo, otherwise 'mv'.
 do_mv() {
-  local src="$1" dest="$2"
-  [[ -e "$src" ]] || { echo "⚠️  $src not found – skipping"; return; }
+  local src="$1"
+  local dest="$2"
+  local use_git=0
+
+  # Check if git is available and we are in a git repository
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    use_git=1
+  fi
+
+  # Check if source file exists
+  if [[ ! -e "$src" ]]; then
+    echo "⚠️ Source file not found, skipping: $src"
+    return 1 # Indicate failure
+  fi
+
+  # Ensure destination directory exists
   mkdir -p "$(dirname "$dest")"
+
+  # Perform the move
+  echo "  Moving '$src' to '$dest'"
   if [[ $use_git -eq 1 ]]; then
     git mv "$src" "$dest"
   else
@@ -17,47 +43,36 @@ do_mv() {
   fi
 }
 
-do_rm() {
-  local target="$1"
-  [[ -e "$target" ]] || return
-  if [[ $use_git -eq 1 ]]; then
-    git rm "$target"
-  else
-    rm -f "$target"
-  fi
-}
+# --- Main Reorganization Logic ---
 
-echo "🔄 Moving files..."
+echo "🔄 Starting file reorganization..."
 
-while IFS="|" read -r src dest; do
-  [[ -z "$src" || -z "$dest" ]] && continue
-  do_mv "$src" "$dest"
-done <<EOF
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeDetailView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeDetailView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/FontSizePanelView.swift|PhysCloudResume/Shared/Views/ResumeViews/FontSizePanelView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViewSetup.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeViewSetup.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumePDFView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumePDFView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeSplitView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeSplitView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/CreateNewResumeView.swift|PhysCloudResume/Shared/Views/ResumeViews/CreateNewResumeView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/SparkleButton.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/SparkleButton.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/ResumeToolbar.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/ResumeToolbar.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/DragInfo.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/DragInfo.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/TextRowViews.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/TextRowViews.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/ReorderableLeafRow.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/ReorderableLeafRow.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/EditingControls.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/EditingControls.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResInspectorToggleView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResInspectorToggleView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResInspectorViews/ResumeInpectorListView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResumeInpectorListView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResInspectorViews/ResumeInspectorView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResumeInspectorView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/ResModelFormView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelFormView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/JsonValidatingTextEditor.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/JsonValidatingTextEditor.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/ResModelView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/ResModelRowView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelRowView.swift
-EOF
+# 1. Move ResModel.swift
+SRC_RESMODEL="$PROJECT_ROOT/ResRefs/Models/ResModel.swift"
+DEST_RESMODEL="$PROJECT_ROOT/ResModels/Models/ResModel.swift"
+do_mv "$SRC_RESMODEL" "$DEST_RESMODEL"
 
-echo "🗑️ Deleting empty file..."
-do_rm "PhysCloudResume/Scripts/File.swift"
+# 2. Move Web Scraping Utilities
+UTILS_SRC_DIR="$PROJECT_ROOT/Shared/Utilities"
+UTILS_DEST_DIR="$PROJECT_ROOT/JobApplications/Utilities"
 
-echo "🧹 Removing empty directories..."
-find "PhysCloudResume/Shared/Views/ResumeViews/ResumeViews" -type d -empty -delete
+# Create the destination directory for utilities first
+mkdir -p "$UTILS_DEST_DIR"
 
-echo "✅ Done!"
+# List of utility files to move
+declare -a UTILITY_FILES=(
+  "HTMLFetcher.swift"
+  "CloudflareCookieManager.swift"
+  "WebViewHTMLFetcher.swift"
+)
+
+# Move each utility file
+for file in "${UTILITY_FILES[@]}"; do
+  SRC_UTIL="$UTILS_SRC_DIR/$file"
+  DEST_UTIL="$UTILS_DEST_DIR/$file"
+  do_mv "$SRC_UTIL" "$DEST_UTIL"
+done
+
+echo "✅ Reorganization complete."
+
+exit 0
