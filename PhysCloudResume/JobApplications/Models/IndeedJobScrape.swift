@@ -201,18 +201,18 @@ extension JobApp {
                 jobAppStore.selectedApp = existingJob
                 return existingJob
             }
-            
+
             // Or check if a job with the same position and company already exists
-            let existingJob = jobAppStore.jobApps.first { 
-                $0.jobPosition == jobApp.jobPosition && 
-                $0.companyName == jobApp.companyName
+            let existingJob = jobAppStore.jobApps.first {
+                $0.jobPosition == jobApp.jobPosition &&
+                    $0.companyName == jobApp.companyName
             }
             if let existing = existingJob {
                 // Update the existing job with any new information and select it
                 jobAppStore.selectedApp = existing
                 return existing
             }
-            
+
             // No duplicate found, persist in the store and return
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
             return jobApp
