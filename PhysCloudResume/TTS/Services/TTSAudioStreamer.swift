@@ -9,6 +9,12 @@ final class TTSAudioStreamer {
     private let fileType: AudioFileTypeID = kAudioFileMP3Type
     /// Continuation for feeding audio data stream
     private var continuation: AsyncThrowingStream<Data, Error>.Continuation?
+    /// Current AsyncThrowingStream instance (holds the stream for player.start)
+    private var currentStream: AsyncThrowingStream<Data, Error>?
+    /// Buffer of initial chunks before playback starts
+    private var initialChunks: [Data]?
+    /// Number of initial chunks to buffer before beginning playback
+    private let initialBufferChunkCount = 2
     /// Track local paused state because AudioPlayer does not expose playback flags
     private var isPausedFlag = false
     /// Audio player handling buffered streaming
@@ -41,20 +47,51 @@ final class TTSAudioStreamer {
 
     init() {}
 
-    /// Append a new chunk of audio data for playback
+    /// Append a new chunk of audio data for playback.
+    /// On the first chunk, buffer it before starting the player to ensure initial data is available.
     func append(_ data: Data) {
+        // New streaming session: buffer initial chunks up to threshold
         if continuation == nil {
+            // First chunk: create stream and start buffering
+            initialChunks = [data]
+            // Create the async stream and capture its continuation
             let stream = AsyncThrowingStream<Data, Error> { cont in
                 self.continuation = cont
                 cont.onTermination = { @Sendable _ in
                     Task { @MainActor [weak self] in
                         self?.continuation = nil
+                        self?.currentStream = nil
+                        self?.initialChunks = nil
                     }
                 }
             }
-            player.start(stream, type: fileType)
+            currentStream = stream
         }
-        Task { @MainActor in self.continuation?.yield(data) }
+        // If still buffering initial chunks, accumulate until threshold reached
+        else if let chunks = initialChunks {
+            initialChunks!.append(data)
+            if initialChunks!.count >= initialBufferChunkCount {
+                // Ready to start playback with buffered data
+                guard let cont = continuation, let stream = currentStream else { return }
+                let buffered = initialChunks!
+                initialChunks = nil
+                Task { @MainActor in
+                    // Yield buffered chunks first
+                    for chunk in buffered {
+                        cont.yield(chunk)
+                    }
+                    // Now start playback
+                    self.player.start(stream, type: self.fileType)
+                }
+            }
+        }
+        // Already started, yield chunks immediately
+        else {
+            guard let cont = continuation else { return }
+            Task { @MainActor in
+                cont.yield(data)
+            }
+        }
     }
 
     /// Stop playback and clear buffered data

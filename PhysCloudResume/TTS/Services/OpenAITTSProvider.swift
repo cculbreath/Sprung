@@ -27,14 +27,20 @@ class OpenAITTSProvider {
     }
 
     /// The OpenAI client to use for TTS
+    ///
     private let client: OpenAIClientProtocol
-
+    /// Token that identifies the currently active streaming request.
+    private var currentStreamID: UUID?
+    /// Marks the active request as cancelled so late chunks are ignored.
+    private var streamCancelled = false
     /// The audio player for playing audio
     private var audioPlayer: AVAudioPlayer?
     /// Strong reference so the delegate isn’t deallocated immediately
     private var audioPlayerDelegate: AudioPlayerDelegate?
     /// Tracks if the current streaming has been cancelled to ignore further chunks
     private var cancelRequested: Bool = false
+    /// Unique identifier for the active streaming session
+    private var streamToken: UUID?
 
     // MARK: - Playback state callbacks (wired to UI)
 
@@ -118,9 +124,10 @@ class OpenAITTSProvider {
 
     /// Stops the currently playing speech and cancels any ongoing streaming
     func stopSpeaking() {
-        // Mark cancellation so incoming chunks are ignored
-        cancelRequested = true
-        // Stop any in-flight audio playback
+        // mark any existing stream as cancelled
+        streamCancelled = true
+        currentStreamID = nil
+
         audioPlayer?.stop()
         audioPlayer = nil
 
@@ -205,10 +212,12 @@ class OpenAITTSProvider {
         onStart: (() -> Void)? = nil,
         onComplete: @escaping (Error?) -> Void
     ) {
-        // Stop any existing playback to avoid overlap, cancel previous streams
-        stopSpeaking()
-        // Reset cancellation for this new streaming session
-        cancelRequested = false
+        stopSpeaking() // hard reset
+
+        // ---- fresh stream token ----
+        let streamID = UUID()
+        currentStreamID = streamID
+        streamCancelled = false
 
         // Wire up callbacks to drive UI state.
         streamer.onReady = { [weak self] in
@@ -235,25 +244,19 @@ class OpenAITTSProvider {
             text: text,
             voice: voice.rawValue,
             instructions: instructions,
-            onChunk: { result in
+            onChunk: { [weak self] result in
+                guard let self,
+                      self.currentStreamID == streamID,
+                      !self.streamCancelled else { return }
+
                 switch result {
-                case let .success(data):
-                    // Only append if not cancelled
-                    if !self.cancelRequested {
-                        self.streamer.append(data)
-                    }
-                case let .failure(error):
-                    // Only report errors if not cancelled
-                    if !self.cancelRequested {
-                        self.streamer.onError?(error)
-                    }
+                case let .success(data): self.streamer.append(data)
+                case let .failure(error): self.streamer.onError?(error)
                 }
             },
-            onComplete: { error in
-                // Network streaming completed or errored.
-                if let error = error {
-                    self.streamer.onError?(error)
-                }
+            onComplete: { [weak self] error in
+                guard let self, self.currentStreamID == streamID else { return }
+                if let error = error { self.streamer.onError?(error) }
             }
         )
     }
