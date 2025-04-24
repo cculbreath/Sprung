@@ -5,7 +5,6 @@
 //  Created by Christopher Culbreath on 4/24/25.
 //
 
-
 //
 //  CoverLetterAiManager.swift
 //  PhysCloudResume
@@ -23,39 +22,39 @@ import SwiftUI
 /// Renamed from CoverLetterController to better reflect its comprehensive role
 struct CoverLetterAiManager: View {
     // MARK: - Environment
-    
+
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    
+
     // MARK: - State
-    
+
     @State var aiMode: CoverAiMode = .none
     @Binding var buttons: CoverLetterButtons
     @Binding var refresh: Bool
-    
+
     // MARK: - Bindings
-    
+
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
-    
+
     // MARK: - View Models
-    
+
     @StateObject private var ttsViewModel: TTSViewModel
     private let recommendationService: CoverLetterRecommendationService
-    
+
     // MARK: - UI State
-    
+
     @State private var showTTSError: Bool = false
     @State private var errorWrapper: ErrorMessageWrapper? = nil
-    
+
     // MARK: - Dependencies
-    
+
     private let openAIClient: OpenAIClientProtocol
     private let chatProvider: CoverChatProvider
-    
+
     // MARK: - Initialization
-    
+
     init(
         openAIClient: OpenAIClientProtocol,
         ttsProvider: OpenAITTSProvider,
@@ -65,20 +64,20 @@ struct CoverLetterAiManager: View {
         ttsVoice: Binding<String> = .constant("nova")
     ) {
         self.openAIClient = openAIClient
-        self.chatProvider = CoverChatProvider(client: openAIClient)
-        self.recommendationService = CoverLetterRecommendationService(client: openAIClient)
-        
+        chatProvider = CoverChatProvider(client: openAIClient)
+        recommendationService = CoverLetterRecommendationService(client: openAIClient)
+
         _buttons = buttons
         _refresh = refresh
         _ttsEnabled = ttsEnabled
         _ttsVoice = ttsVoice
-        
+
         // Initialize the TTS view model
         _ttsViewModel = StateObject(wrappedValue: TTSViewModel(ttsProvider: ttsProvider))
     }
-    
+
     // MARK: - Computed Properties
-    
+
     /// Binding to the currently selected cover letter
     var cL: Binding<CoverLetter> {
         guard let selectedApp = jobAppStore.selectedApp else {
@@ -90,9 +89,9 @@ struct CoverLetterAiManager: View {
             selectedApp.selectedCover = $0
         })
     }
-    
+
     // MARK: - Body
-    
+
     var body: some View {
         CoverLetterActionButtonsView(
             coverLetter: cL,
@@ -129,17 +128,17 @@ struct CoverLetterAiManager: View {
         }
         // Alert for TTS errors
         .alert("TTS Error", isPresented: $showTTSError) {
-            Button("OK") { 
-                showTTSError = false 
+            Button("OK") {
+                showTTSError = false
                 ttsViewModel.ttsError = nil
             }
         } message: {
             Text(ttsViewModel.ttsError ?? "An error occurred with text-to-speech")
         }
     }
-    
+
     // MARK: - TTS Actions
-    
+
     /// Handle toolbar TTS button interaction following the state‑chart specification.
     ///
     /// Behaviour summary
@@ -171,7 +170,10 @@ struct CoverLetterAiManager: View {
 
         // 3. Buffering → Cancel buffering (acts like a stop)
         if ttsViewModel.isBuffering {
+            print("CoverLetterAiManager: Canceling buffering")
             ttsViewModel.stop()
+            // Force buffering state to false (double-check)
+            ttsViewModel.isBuffering = false
             return
         }
 
@@ -182,15 +184,15 @@ struct CoverLetterAiManager: View {
             showTTSError = true
             return
         }
-        
+
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-        
+
         ttsViewModel.speakContent(content, voice: voice, instructions: instructions)
     }
-    
+
     // MARK: - AI Recommendation Actions
-    
+
     /// Initiates the choose‑best‑cover‑letter operation
     func chooseBestCoverLetter() {
         guard let jobApp = jobAppStore.selectedApp else { return }
@@ -199,14 +201,14 @@ struct CoverLetterAiManager: View {
 
         // Capture writing samples from any existing cover letter
         let writingSamples = letters.first?.writingSamplesString ?? ""
-        
+
         Task {
             do {
                 let result = try await recommendationService.chooseBestCoverLetter(
                     jobApp: jobApp,
                     writingSamples: writingSamples
                 )
-                
+
                 await MainActor.run {
                     // Attempt to select best cover letter by UUID
                     let uuidString = result.bestLetterUuid

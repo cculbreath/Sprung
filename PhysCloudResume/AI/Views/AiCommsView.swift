@@ -186,7 +186,7 @@ struct AiCommsView: View {
             }
             .padding(.vertical)
 
-            if ttsEnabled && !revisions.isEmpty {
+            if ttsEnabled && !revisions.isEmpty && false {
                 Button(action: {
                     // Detect ⌥‑click to force a fresh TTS request
                     let optionPressed = NSEvent.modifierFlags.contains(.option)
@@ -254,11 +254,10 @@ struct AiCommsView: View {
 
     private func readAloudButtonTapped(optionPressed: Bool) {
         log("Button tapped. optionPressed: \(optionPressed), state: \(readAloudState)")
-        // Option‑click always restarts TTS from the beginning
+        // Option‑click always stops playback completely
         if optionPressed {
-            log("option click -> stopPlayback + startPlayback")
+            log("option click -> stopPlayback")
             stopPlayback()
-//            startPlayback()
             return
         }
 
@@ -311,7 +310,7 @@ struct AiCommsView: View {
 
     private func stopPlayback() {
         log("stopPlayback invoked -> idle")
-        ttsProvider.stop()
+        ttsProvider.stopSpeaking()
         readAloudState = .idle
     }
 
@@ -368,6 +367,19 @@ struct AiCommsView: View {
             }
         }
 
+        // Set up buffering state handler
+        ttsProvider.onBufferingStateChanged = { buffering in
+            DispatchQueue.main.async {
+                log("onBufferingStateChanged -> \(buffering)")
+                // Only update UI state if we're currently in a compatible state
+                if buffering && self.readAloudState == .buffering {
+                    // Keep it in buffering state
+                } else if buffering && self.readAloudState == .idle {
+                    self.readAloudState = .buffering
+                }
+            }
+        }
+
         // Callbacks to manage state transitions
         ttsProvider.onReady = {
             DispatchQueue.main.async {
@@ -389,17 +401,15 @@ struct AiCommsView: View {
         // Get voice instructions if available
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
 
-        // Request TTS conversion and playback with instructions
-        ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { error in
+        // Request streaming TTS playback with instructions
+        ttsProvider.streamAndPlayText(speechText, voice: voice, instructions: instructions) { error in
             DispatchQueue.main.async {
                 if let error = error {
                     log("speakText completion error: \(error.localizedDescription)")
                     self.ttsError = "Text-to-speech error: \(error.localizedDescription)"
                     self.showTTSError = true
-                } else {
-                    log("speakText completion success -> idle")
+                    self.readAloudState = .idle
                 }
-                self.readAloudState = .idle
             }
         }
     }

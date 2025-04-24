@@ -12,6 +12,8 @@ func CoverLetterToolbar(
     refresh: Binding<Bool>
 ) -> some View {
     return HStack {
+        Spacer() // Add spacer to push content to the right
+
         CoverLetterAiView(
             buttons: buttons,
             refresh: refresh

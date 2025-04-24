@@ -594,8 +594,12 @@ enum CoverLetterPDFGenerator {
                                                  nil)
             CTFrameDraw(frame, pdfContext)
 
-            // Draw signature image if available and this is the first/only page
-            if currentLocation == 0, let signatureImage = signatureImage {
+            // Determine if this is the last page
+            let visibleRange = CTFrameGetVisibleStringRange(frame)
+            let isLastPage = (currentLocation + visibleRange.length >= totalLength)
+
+            // Draw signature image if available and this is the last page
+            if isLastPage, let signatureImage = signatureImage {
                 // Look for signature markers in the source text (with and without commas)
                 let regardsMarkers = [
                     "Best Regards,", "Best regards,", "Best Regards", "Best regards",
@@ -796,7 +800,7 @@ enum CoverLetterPDFGenerator {
             pdfContext.restoreGState()
             pdfContext.endPage()
 
-            let visibleRange = CTFrameGetVisibleStringRange(frame)
+            // Update current location using the visible range calculated earlier
             currentLocation += visibleRange.length
         }
 
