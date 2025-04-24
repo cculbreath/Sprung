@@ -33,25 +33,25 @@ while IFS="|" read -r src dest; do
   [[ -z "$src" || -z "$dest" ]] && continue
   do_mv "$src" "$dest"
 done <<EOF
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeDetailView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeDetailView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/FontSizePanelView.swift|PhysCloudResume/Shared/Views/ResumeViews/FontSizePanelView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeViewSetup.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeViewSetup.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumePDFView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumePDFView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeSplitView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeSplitView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/CreateNewResumeView.swift|PhysCloudResume/Shared/Views/ResumeViews/CreateNewResumeView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeUtilityViews/SparkleButton.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/SparkleButton.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeUtilityViews/ResumeToolbar.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/ResumeToolbar.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeUtilityViews/DragInfo.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/DragInfo.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeUtilityViews/TextRowViews.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/TextRowViews.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeUtilityViews/ReorderableLeafRow.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/ReorderableLeafRow.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResumeUtilityViews/EditingControls.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/EditingControls.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResInspectorViews/ResInspectorToggleView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResInspectorToggleView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResInspectorViews/ResumeInpectorListView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResumeInpectorListView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResInspectorViews/ResumeInspectorView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResumeInspectorView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResModelViews/ResModelFormView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelFormView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResModelViews/JsonValidatingTextEditor.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/JsonValidatingTextEditor.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResModelViews/ResModelView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelView.swift
-PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViews/ResModelViews/ResModelRowView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelRowView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeDetailView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeDetailView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/FontSizePanelView.swift|PhysCloudResume/Shared/Views/ResumeViews/FontSizePanelView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeViewSetup.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeViewSetup.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumePDFView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumePDFView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeSplitView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeSplitView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/CreateNewResumeView.swift|PhysCloudResume/Shared/Views/ResumeViews/CreateNewResumeView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/SparkleButton.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/SparkleButton.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/ResumeToolbar.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/ResumeToolbar.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/DragInfo.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/DragInfo.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/TextRowViews.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/TextRowViews.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/ReorderableLeafRow.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/ReorderableLeafRow.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResumeUtilityViews/EditingControls.swift|PhysCloudResume/Shared/Views/ResumeViews/ResumeUtilityViews/EditingControls.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResInspectorToggleView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResInspectorToggleView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResInspectorViews/ResumeInpectorListView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResumeInpectorListView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResInspectorViews/ResumeInspectorView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResInspectorViews/ResumeInspectorView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/ResModelFormView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelFormView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/JsonValidatingTextEditor.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/JsonValidatingTextEditor.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/ResModelView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelView.swift
+PhysCloudResume/Shared/Views/ResumeViews/ResumeViews/ResModelViews/ResModelRowView.swift|PhysCloudResume/Shared/Views/ResumeViews/ResModelViews/ResModelRowView.swift
 EOF
 
 echo "🗑️ Deleting empty file..."
