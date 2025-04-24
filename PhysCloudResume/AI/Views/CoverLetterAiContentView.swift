@@ -98,11 +98,11 @@ struct CoverLetterAiContentView: View {
         .onChange(of: cL.wrappedValue.id) { _ in
             hardStopPlayback()
         }
-        .onChange(of: isBuffering) { old, new in
+        .onChange(of: isBuffering) { _, _ in
         }
-        .onChange(of: isSpeaking) { old, new in
+        .onChange(of: isSpeaking) { _, _ in
         }
-        .onChange(of: isPaused) { old, new in
+        .onChange(of: isPaused) { _, _ in
         }
         .onAppear { print("AI content") }
         .alert(item: $errorWrapper) { wrapper in
