@@ -1,3 +1,10 @@
+//
+//  CoverLetterView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/12/24.
+//
+
 import SwiftUI
 
 struct CoverLetterView: View {
@@ -50,8 +57,7 @@ struct CoverLetterView: View {
             Text(jobAppStore.selectedApp?.selectedRes == nil ? "job app nil" : "No nil fail")
                 .onAppear {
                     if jobAppStore.selectedApp == nil {
-                    } else if jobAppStore.selectedApp?.selectedRes == nil {
-                    }
+                    } else if jobAppStore.selectedApp?.selectedRes == nil {}
                 }
         }
     }
@@ -174,7 +180,7 @@ struct CoverLetterContentView: View {
                         )
                         .frame(maxHeight: .infinity)
                         .id(cL.id)
-                        .onChange(of: bindApp.selectedCover) { _, newCover in
+                        .onChange(of: bindApp.selectedCover) { _, _ in
                         }
                     } else {
                         EmptyView()
@@ -202,6 +208,5 @@ struct CoverLetterContentView: View {
         {
             jobApp.selectedCover = mostRecentGenerated
         }
-
     }
 }

@@ -1,3 +1,10 @@
+//
+//  CoverLetterViewSetup.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 2/27/25.
+//
+
 import SwiftUI
 
 struct CoverLetterViewSetup: View {
@@ -14,7 +21,7 @@ struct CoverLetterViewSetup: View {
             } else {
                 CreateNewResumeView(refresh: $refresh)
             }
-        }.onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, newVal in
+        }.onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
         }
     }
 }

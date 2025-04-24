@@ -163,10 +163,8 @@ struct ApplicantProfileView: View {
                 let data = try Data(contentsOf: selectedFile)
                 profile.signatureData = data
                 hasChanges = true
-            } else {
-            }
-        } catch {
-        }
+            } else {}
+        } catch {}
     }
 
     @MainActor

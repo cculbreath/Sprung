@@ -1,3 +1,10 @@
+//
+//  Resume.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import Foundation
 import SwiftData
 
@@ -139,8 +146,7 @@ class Resume: Identifiable, Hashable {
                 let data = try Data(contentsOf: fileURL)
                 DispatchQueue.main.async { self?.pdfData = data }
             } catch {
-                DispatchQueue.main.async {
-                }
+                DispatchQueue.main.async {}
             }
         }
     }
@@ -157,7 +163,6 @@ class Resume: Identifiable, Hashable {
     func debounceExport(onStart: (() -> Void)? = nil,
                         onFinish: (() -> Void)? = nil)
     {
-
         exportWorkItem?.cancel()
 
         // Toggle the per‑resume loading flag and forward to any external
@@ -171,8 +176,7 @@ class Resume: Identifiable, Hashable {
                 Task {
                     do {
                         try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
-                    } catch {
-                    }
+                    } catch {}
 
                     // Regardless of success toggle the exporting flag off and
                     // notify any external observers on the main thread.

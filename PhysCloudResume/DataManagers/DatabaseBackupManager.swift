@@ -1,3 +1,10 @@
+//
+//  DatabaseBackupManager.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 2/27/25.
+//
+
 import Foundation
 
 enum DatabaseBackupManager {
@@ -27,12 +34,10 @@ enum DatabaseBackupManager {
             }
 
             // Try to list contents of source directory
-            if let contents = try? FileManager.default.contentsOfDirectory(at: sourceURL.deletingLastPathComponent(), includingPropertiesForKeys: nil) {
-            }
+            if let contents = try? FileManager.default.contentsOfDirectory(at: sourceURL.deletingLastPathComponent(), includingPropertiesForKeys: nil) {}
 
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-        } catch {
-        }
+        } catch {}
     }
 
     static func restoreDatabase(from backupURL: URL) {
@@ -45,8 +50,7 @@ enum DatabaseBackupManager {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.copyItem(at: backupURL, to: destinationURL)
-        } catch {
-        }
+        } catch {}
     }
 
     private static func getSourceStoreURL() -> URL? {

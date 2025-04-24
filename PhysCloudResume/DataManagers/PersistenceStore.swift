@@ -2,9 +2,9 @@
 //  PersistenceStore.swift
 //  PhysCloudResume
 //
-//  A tiny abstraction that encapsulates the repetitive boiler‑plate that
-//  previously lived in every *Store.swift file (manual JSON encoding/decoding,
-//  file‑URL resolution, atomic writes, and error‑handling).
+//  Created by Christopher Culbreath on 4/20/25.
+//
+
 //
 //  There are two pieces:
 //  1. `PersistenceStore` – a protocol that any concrete store can adopt.  It

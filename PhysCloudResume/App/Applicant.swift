@@ -1,4 +1,11 @@
 //
+//  Applicant.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
+//
 //  ResumeApplicant.swift
 //  PhysicsCloudResume
 //
@@ -135,8 +142,7 @@ class ApplicantProfileManager {
                 CoverRef.self,
                 ApplicantProfile.self,
                 ResModel.self)
-        } catch {
-        }
+        } catch {}
     }
 
     func getProfile() -> ApplicantProfile {
@@ -199,7 +205,6 @@ class ApplicantProfileManager {
 
             try context.save()
             cachedProfile = profile
-        } catch {
-        }
+        } catch {}
     }
 }

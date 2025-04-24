@@ -1,3 +1,10 @@
+//
+//  CoverLetterPDFView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/20/25.
+//
+
 import PDFKit
 import SwiftUI
 
@@ -37,8 +44,7 @@ struct CoverLetterPDFView: View {
                 PDFKitView(data: pdfData)
                     .onAppear {
                         if let doc = PDFDocument(data: pdfData) {
-                        } else {
-                        }
+                        } else {}
                     }
             }
         }
@@ -76,8 +82,7 @@ struct CoverLetterPDFView: View {
         do {
             // Get the latest profile from the manager to ensure we have the signature
             applicant = Applicant() // This will use the profile from ApplicantProfileManager
-        } catch {
-        }
+        } catch {}
     }
 }
 
@@ -92,8 +97,7 @@ struct PDFKitView: NSViewRepresentable {
 
         if let document = PDFDocument(data: data) {
             pdfView.document = document
-        } else {
-        }
+        } else {}
 
         return pdfView
     }
@@ -101,7 +105,6 @@ struct PDFKitView: NSViewRepresentable {
     func updateNSView(_ nsView: PDFView, context _: Context) {
         if let document = PDFDocument(data: data) {
             nsView.document = document
-        } else {
-        }
+        } else {}
     }
 }

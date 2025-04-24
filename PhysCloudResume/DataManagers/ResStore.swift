@@ -1,4 +1,11 @@
 //
+//  ResStore.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
+//
 //  swift
 //  PhysicsCloudResume
 //
@@ -28,7 +35,6 @@ final class ResStore: SwiftDataStore {
 
     @discardableResult
     func addResume(res: Resume, to jobApp: JobApp) -> Resume {
-
         jobApp.addResume(res)
         res.model!.resumes.append(res)
         modelContext.insert(res)
@@ -45,7 +51,6 @@ final class ResStore: SwiftDataStore {
         let resume = Resume(jobApp: jobApp, enabledSources: sources, model: model)
 
         if jobApp.selectedRes == nil {
-
             jobApp.selectedRes = resume
         }
 
@@ -61,11 +66,9 @@ final class ResStore: SwiftDataStore {
             modelContext.insert(resume)
             saveContext()
 
-
             resume.debounceExport()
 
-        } catch {
-        }
+        } catch {}
         return resume
     }
 

@@ -1,3 +1,10 @@
+//
+//  ChooseBestCoverLetterButton.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/23/25.
+//
+
 import SwiftUI
 
 /// Button for choosing the best cover letter via AI recommendation.

@@ -1,12 +1,12 @@
-//  ContentViewLaunch.swift
-//  Centralises creation of data stores and injects them into the SwiftUI
-//  environment so that downstream views (e.g. ContentView) can simply fetch
-//  them via `@Environment`.
+// PhysCloudResume/App/Views/ContentViewLaunch.swift
 
 import SwiftUI
 
 struct ContentViewLaunch: View {
     @Environment(\.modelContext) private var modelContext
+
+    // Create DragInfo instance here
+    @State private var dragInfo = DragInfo() // Use @State for Observable objects owned by the view
 
     var body: some View {
         // Initialise all stores once per scene.
@@ -17,6 +17,7 @@ struct ContentViewLaunch: View {
         let jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
         let resModelStore = ResModelStore(context: modelContext, resStore: resStore)
 
+        // Inject all stores AND DragInfo into the environment
         return ContentView()
             .environment(jobAppStore)
             .environment(resRefStore)
@@ -24,5 +25,7 @@ struct ContentViewLaunch: View {
             .environment(resStore)
             .environment(coverRefStore)
             .environment(coverLetterStore)
+            .environment(dragInfo) // Inject DragInfo here
+        // Note: AppState is already injected via .environment(appState) in PhysicsCloudResumeApp
     }
 }

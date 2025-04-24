@@ -1,3 +1,10 @@
+//
+//  Toolbar.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/12/24.
+//
+
 import SwiftUI
 
 struct BuildToolbar: ToolbarContent {

@@ -1,3 +1,10 @@
+//
+//  OpenAITTSProvider.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/22/25.
+//
+
 import AVFoundation
 import Foundation
 
@@ -35,36 +42,67 @@ class OpenAITTSProvider {
     private var streamCancelled = false
     /// The audio player for playing audio
     private var audioPlayer: AVAudioPlayer?
-    /// Strong reference so the delegate isn’t deallocated immediately
+    /// Strong reference so the delegate isn't deallocated immediately
     private var audioPlayerDelegate: AudioPlayerDelegate?
     /// Tracks if the current streaming has been cancelled to ignore further chunks
     private var cancelRequested: Bool = false
     /// Unique identifier for the active streaming session
     private var streamToken: UUID?
+    /// Tracks if we're currently buffering audio
+    private var isBufferingFlag: Bool = false
 
     // MARK: - Playback state callbacks (wired to UI)
 
     /// Fires when the first audio buffer starts playing (leaves buffering state).
+    var apiKey: String?
     var onReady: (() -> Void)?
     /// Fires when playback finishes naturally or is stopped.
     var onFinish: (() -> Void)?
     /// Fires when any playback/streaming error occurs.
     var onError: ((Error) -> Void)?
+    /// Fires when buffering state changes
+    var onBufferingStateChanged: ((Bool) -> Void)?
 
     // Adapter-based streaming player using ChunkedAudioPlayer
     private let streamer = TTSAudioStreamer()
 
+    /// Returns the current buffering state
+    var isBuffering: Bool {
+        return isBufferingFlag
+    }
+
+    /// Set the buffering state and notify listeners
+    private func setBufferingState(_ buffering: Bool) {
+        if isBufferingFlag != buffering {
+            isBufferingFlag = buffering
+            Task { @MainActor in
+                self.onBufferingStateChanged?(buffering)
+            }
+        }
+    }
+
     /// Initializes a new TTS provider with a specific API key
     /// - Parameter apiKey: The OpenAI API key to use
     init(apiKey: String) {
+        self.apiKey = apiKey
         // Always use MacPaw client as SwiftOpenAI doesn't support TTS
         client = OpenAIClientFactory.createTTSClient(apiKey: apiKey)
+
+        // Connect streamer buffering state to our provider
+        streamer.onBufferingStateChanged = { [weak self] isBuffering in
+            self?.setBufferingState(isBuffering)
+        }
     }
 
     /// Initializes a new TTS provider with a pre-configured client
     /// - Parameter client: The OpenAI client to use
     init(client: OpenAIClientProtocol) {
         self.client = client
+
+        // Connect streamer buffering state to our provider
+        streamer.onBufferingStateChanged = { [weak self] isBuffering in
+            self?.setBufferingState(isBuffering)
+        }
     }
 
     /// Converts text to speech and plays it
@@ -113,8 +151,7 @@ class OpenAITTSProvider {
                         onChunk(audioData)
                     }
                 case let .failure(error):
-                    if !self.cancelRequested {
-                    }
+                    if !self.cancelRequested {}
                 }
             },
             onComplete: onComplete
@@ -131,6 +168,7 @@ class OpenAITTSProvider {
         audioPlayer = nil
 
         streamer.stop()
+        setBufferingState(false)
         onFinish?()
     }
 
@@ -218,6 +256,9 @@ class OpenAITTSProvider {
         currentStreamID = streamID
         streamCancelled = false
 
+        // Set initial buffering state to true and notify listeners
+        setBufferingState(true)
+
         // Wire up callbacks to drive UI state.
         streamer.onReady = { [weak self] in
             DispatchQueue.main.async {
@@ -227,12 +268,14 @@ class OpenAITTSProvider {
         }
         streamer.onFinish = { [weak self] in
             DispatchQueue.main.async {
+                self?.setBufferingState(false)
                 self?.onFinish?()
                 onComplete(nil)
             }
         }
         streamer.onError = { [weak self] error in
             DispatchQueue.main.async {
+                self?.setBufferingState(false)
                 self?.onError?(error)
                 onComplete(error)
             }
@@ -255,7 +298,10 @@ class OpenAITTSProvider {
             },
             onComplete: { [weak self] error in
                 guard let self, self.currentStreamID == streamID else { return }
-                if let error = error { self.streamer.onError?(error) }
+                if let error = error {
+                    self.setBufferingState(false)
+                    self.streamer.onError?(error)
+                }
             }
         )
     }

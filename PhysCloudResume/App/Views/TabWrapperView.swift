@@ -1,3 +1,10 @@
+//
+//  TabWrapperView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import SwiftUI
 
 struct TabWrapperView: View {
@@ -75,7 +82,7 @@ struct TabWrapperView: View {
                 .onChange(of: jobAppStore.selectedApp) { _, _ in
                     updateMyLetter()
                 }
-                .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, newVal in
+                .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
                 }
                 .onChange(of: $tabRefresh.wrappedValue) { _, newvalue in print("Tab is is now + \(newvalue ? "true" : "false")") }
                 .onChange(of: selectedTab) { _, newTab in

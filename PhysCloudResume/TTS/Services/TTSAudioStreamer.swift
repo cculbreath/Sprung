@@ -1,3 +1,10 @@
+//
+//  TTSAudioStreamer.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/23/25.
+//
+
 import AudioToolbox // for AudioFileTypeID
 import ChunkedAudioPlayer
 import Foundation
@@ -17,6 +24,8 @@ final class TTSAudioStreamer {
     private let initialBufferChunkCount = 2
     /// Track local paused state because AudioPlayer does not expose playback flags
     private var isPausedFlag = false
+    /// Tracks if we're in the initial buffering phase
+    private var isBufferingFlag = false
     /// Audio player handling buffered streaming
     private lazy var player: AudioPlayer = .init(
         didStartPlaying: { [weak self] in
@@ -44,8 +53,25 @@ final class TTSAudioStreamer {
     var onFinish: (() -> Void)?
     /// Called on playback or decoding error
     var onError: ((Error) -> Void)?
+    /// Called when buffering state changes
+    var onBufferingStateChanged: ((Bool) -> Void)?
+
+    /// Returns the current buffering state
+    var isBuffering: Bool {
+        return isBufferingFlag
+    }
 
     init() {}
+
+    /// Set the buffering state and notify listeners
+    private func setBufferingState(_ buffering: Bool) {
+        if isBufferingFlag != buffering {
+            isBufferingFlag = buffering
+            Task { @MainActor in
+                self.onBufferingStateChanged?(buffering)
+            }
+        }
+    }
 
     /// Append a new chunk of audio data for playback.
     /// On the first chunk, buffer it before starting the player to ensure initial data is available.
@@ -54,6 +80,9 @@ final class TTSAudioStreamer {
         if continuation == nil {
             // First chunk: create stream and start buffering
             initialChunks = [data]
+            // Signal that we're buffering
+            setBufferingState(true)
+
             // Create the async stream and capture its continuation
             let stream = AsyncThrowingStream<Data, Error> { cont in
                 self.continuation = cont
@@ -62,6 +91,7 @@ final class TTSAudioStreamer {
                         self?.continuation = nil
                         self?.currentStream = nil
                         self?.initialChunks = nil
+                        self?.setBufferingState(false)
                     }
                 }
             }
@@ -75,6 +105,10 @@ final class TTSAudioStreamer {
                 guard let cont = continuation, let stream = currentStream else { return }
                 let buffered = initialChunks!
                 initialChunks = nil
+
+                // Signal that we're done buffering
+                setBufferingState(false)
+
                 Task { @MainActor in
                     // Yield buffered chunks first
                     for chunk in buffered {
@@ -100,6 +134,7 @@ final class TTSAudioStreamer {
             continuation?.finish()
             continuation = nil
             isPausedFlag = false
+            setBufferingState(false)
             player.stop()
             Task { @MainActor in self.onFinish?() }
         }

@@ -2,7 +2,7 @@
 //  FontSizePanelView.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 2/4/25.
+//  Created by Christopher Culbreath on 2/27/25.
 //
 
 import SwiftData
@@ -38,9 +38,8 @@ struct FontSizePanelView: View {
             }
         }
         .padding(.trailing, 16) // Avoid overlap on trailing side.
-        .onAppear(perform: { for node in jobAppStore.selectedApp?.selectedRes?.fontSizeNodes ?? [] {
-        }
-        if jobAppStore.selectedApp?.selectedRes?.fontSizeNodes == nil { print("Ah fuk. empty") }
+        .onAppear(perform: { for node in jobAppStore.selectedApp?.selectedRes?.fontSizeNodes ?? [] {}
+            if jobAppStore.selectedApp?.selectedRes?.fontSizeNodes == nil { print("Ah fuk. empty") }
         })
         }
     }

@@ -1,3 +1,10 @@
+//
+//  ReorderableLeafRow.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 1/31/25.
+//
+
 import SwiftUI
 
 struct ReorderableLeafRow: View {
@@ -117,8 +124,7 @@ struct LeafDropDelegate: DropDelegate {
         guard let fromIndex = array.firstIndex(of: draggedNode),
               let toIndex = array.firstIndex(of: overNode) else { return }
 
-        for (index, node) in array.enumerated() {
-        }
+        for (index, node) in array.enumerated() {}
 
         withAnimation(.easeInOut) {
             // Remove the dragged node from its original position
@@ -139,15 +145,13 @@ struct LeafDropDelegate: DropDelegate {
             // Save the reordered array back to the parent
             parent.children = array
 
-            for (index, node) in array.enumerated() {
-            }
+            for (index, node) in array.enumerated() {}
         }
 
         // Save changes to SwiftData
         do {
             try parent.resume.modelContext?.save()
-        } catch {
-        }
+        } catch {}
 
         // Notify the Resume model
         parent.resume.debounceExport()

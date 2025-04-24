@@ -2,7 +2,7 @@
 //  FileHandler.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 9/5/24.
+//  Created by Christopher Culbreath on 9/9/24.
 //
 
 import Foundation
@@ -20,8 +20,7 @@ class FileHandler {
             try fileManager.createDirectory(
                 at: appSupportDirectory, withIntermediateDirectories: true, attributes: nil
             )
-        } catch {
-        }
+        } catch {}
         return appSupportDirectory
     }()
 
@@ -59,8 +58,7 @@ class FileHandler {
                 try jsonData.write(to: fileURL)
                 return fileURL
             }
-        } catch {
-        }
+        } catch {}
         return nil
     }
 }

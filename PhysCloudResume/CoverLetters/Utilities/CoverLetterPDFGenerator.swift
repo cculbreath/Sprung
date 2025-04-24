@@ -1,3 +1,10 @@
+//
+//  CoverLetterPDFGenerator.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/20/25.
+//
+
 import AppKit
 import CoreText
 import Foundation
@@ -40,8 +47,7 @@ enum CoverLetterPDFGenerator {
 
         do {
             try data.write(to: debugPath)
-        } catch {
-        }
+        } catch {}
     }
 
     // MARK: - Private Helpers
@@ -149,7 +155,6 @@ enum CoverLetterPDFGenerator {
 
     /// Creates a PDF with guaranteed vector text using NSAttributedString and PDFKit
     private static func createVectorPDFFromString(_ text: String) -> Data {
-
         // Page setup with our preferred margins
         let pageRect = CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
         let leftMargin: CGFloat = 1.3 * 72 // Left margin (1.3 inches)
@@ -299,7 +304,6 @@ enum CoverLetterPDFGenerator {
             return data as Data
         }
 
-
         // Last resort: Direct PDF drawing with CGContext
 
         // Create a PDF context
@@ -375,8 +379,7 @@ enum CoverLetterPDFGenerator {
             }
         }
         if let path = registeredFontFilePath {
-        } else {
-        }
+        } else {}
 
         // Auto-fit settings
         let pageRect = CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72)

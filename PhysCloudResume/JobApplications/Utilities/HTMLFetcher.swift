@@ -2,9 +2,9 @@
 //  HTMLFetcher.swift
 //  PhysCloudResume
 //
-//  Shared helper that downloads raw HTML while handling Cloudflare cookies
-//  and basic browser headers.  Originally this lived inside
-//  AppleJobScrape.swift; it has been extracted so that all scrapers can reuse
+//  Created by Christopher Culbreath on 4/19/25.
+//
+
 //  the same implementation.
 //
 

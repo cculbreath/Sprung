@@ -1,8 +1,8 @@
 //
 //  ResumeSplitView.swift
-//  PhysicsCloudResume
+//  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 8/31/24.
+//  Created by Christopher Culbreath on 1/31/25.
 //
 
 import SwiftUI

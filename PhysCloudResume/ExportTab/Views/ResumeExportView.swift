@@ -1,3 +1,10 @@
+//
+//  ResumeExportView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/16/24.
+//
+
 import SwiftUI
 
 struct ResumeExportView: View {
@@ -152,8 +159,7 @@ struct ResumeExportView: View {
         do {
             try FileManager.default.createDirectory(at: downloadsURL, withIntermediateDirectories: true, attributes: nil)
             try pdfData.write(to: fileURL)
-        } catch {
-        }
+        } catch {}
     }
 
     private func exportResumeText() {
@@ -167,8 +173,7 @@ struct ResumeExportView: View {
 
         do {
             try resume.textRes.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {
-        }
+        } catch {}
     }
 
     private func exportResumeJSON() {
@@ -181,8 +186,7 @@ struct ResumeExportView: View {
         let jsonString = resume.jsonTxt
         do {
             try jsonString.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {
-        }
+        } catch {}
     }
 
     private func exportCoverLetterText() {

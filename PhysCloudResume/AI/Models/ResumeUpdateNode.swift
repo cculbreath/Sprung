@@ -2,10 +2,12 @@
 //  ResumeUpdateNode.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 9/2/24.
+//  Created by Christopher Culbreath on 9/9/24.
 //
+
 import Foundation
 import OpenAI
+import SwiftData
 
 struct ProposedRevisionNode: Codable, Equatable {
     var id: String = ""

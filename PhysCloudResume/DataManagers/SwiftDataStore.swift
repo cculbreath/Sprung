@@ -1,3 +1,10 @@
+//
+//  SwiftDataStore.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/20/25.
+//
+
 //  SwiftDataStore.swift
 //  PhysCloudResume
 //
@@ -18,7 +25,7 @@ extension SwiftDataStore {
     /// Attempts to `save()` and logs any thrown error (in *debug* builds only)
     /// so production performance isn't impacted.
     @discardableResult
-    func saveContext(file: StaticString = #fileID, line: UInt = #line) -> Bool {
+    func saveContext(file _: StaticString = #fileID, line _: UInt = #line) -> Bool {
         do {
             try modelContext.save()
             return true

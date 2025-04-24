@@ -2,7 +2,7 @@
 //  JsonToTree.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 2/4/25.
+//  Created by Christopher Culbreath on 2/27/25.
 //
 
 import Foundation
@@ -18,7 +18,6 @@ class JsonToTree {
     init?(resume: Resume, rawJson: String) {
         res = resume
         guard let orderedDictJson = JsonToTree.parseUnwrapJson(rawJson) else {
-
             return nil
         }
 
@@ -62,8 +61,7 @@ class JsonToTree {
             if let sectionType = JsonMap.sectionKeyToTypeDict[key] {
                 let function = treeFunction(for: sectionType)
                 function(key, rootNode)
-            } else {
-            }
+            } else {}
         }
         processKeyLabels()
         return rootNode
@@ -91,8 +89,7 @@ class JsonToTree {
                     res.keyLabels[key] = value as? String ?? "Error!" // Assigning the value correctly
                 }
             }
-        } else {
-        }
+        } else {}
     }
 
     private func parseFontSizeSection(key: String) -> [FontSizeNode] {
@@ -203,8 +200,7 @@ class JsonToTree {
                         resume: res
                     )
                 )
-            } else {
-            }
+            } else {}
         }
     }
 
@@ -249,7 +245,6 @@ class JsonToTree {
                 sectionNode.addChild(
                     TreeNode(name: key, value: valueString, inEditor: isInEditor(key), status: .saved, resume: res))
             }
-        } else {
-        }
+        } else {}
     }
 }
