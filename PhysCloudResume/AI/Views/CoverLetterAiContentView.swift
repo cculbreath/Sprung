@@ -4,31 +4,7 @@ import SwiftUI
     import AppKit
 #endif
 
-struct CoverLetterAiView: View {
-    @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
-    @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
-    @AppStorage("ttsVoice") var ttsVoice: String = "nova"
-    @Binding var buttons: CoverLetterButtons
-    @Binding var refresh: Bool
-
-    var body: some View {
-        // Create OpenAI client using our abstraction layer
-        let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
-
-        // Initialize TTS provider
-        let ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
-
-        return CoverLetterAiContentView(
-            openAIClient: openAIClient,
-            ttsProvider: ttsProvider,
-            buttons: $buttons,
-            refresh: $refresh,
-            ttsEnabled: $ttsEnabled,
-            ttsVoice: $ttsVoice
-        )
-        .onAppear { print("Ai Cover Letter") }
-    }
-}
+// Note: CoverLetterAiView has been moved to its own file: CoverLetterAiView.swift
 
 struct CoverLetterAiContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
@@ -95,91 +71,26 @@ struct CoverLetterAiContentView: View {
         Group {
             if jobAppStore.selectedApp?.selectedCover != nil {
                 HStack(spacing: 16) {
-                    // Generate New Cover Letter
-                    if !buttons.runRequested {
-                        Button(action: {
-                            print("Generate cover letter")
-                            if !cL.wrappedValue.generated {
-                                cL.wrappedValue.currentMode = .generate
-                            } else {
-                                let newCL = coverLetterStore.createDuplicate(letter: cL.wrappedValue)
-                                cL.wrappedValue = newCL
-                                print("Duplicated for regeneration")
-                            }
-                            chatProvider.coverChatAction(
-                                res: jobAppStore.selectedApp?.selectedRes,
-                                jobAppStore: jobAppStore,
-                                chatProvider: chatProvider,
-                                buttons: $buttons
-                            )
-                        }) {
-                            Image("ai-squiggle")
-                                .font(.system(size: 20, weight: .regular))
-                                .frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Generate new Cover Letter")
-                    } else {
-                        ProgressView()
-                            .scaleEffect(0.75, anchor: .center)
-                            .frame(width: 36, height: 36)
-                    }
-
-                    // Choose Best Cover Letter
-                    if buttons.chooseBestRequested {
-                        ProgressView()
-                            .scaleEffect(0.75, anchor: .center)
-                            .frame(width: 36, height: 36)
-                    } else {
-                        Button(action: {
-                            chooseBestCoverLetter()
-                        }) {
-                            Image(systemName: "medal")
-                                .font(.system(size: 20, weight: .regular))
-                                .frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(
-                            jobAppStore.selectedApp?.coverLetters.count ?? 0 <= 1
-                                || cL.wrappedValue.writingSamplesString.isEmpty
-                        )
-                        .help(
-                            (jobAppStore.selectedApp?.coverLetters.count ?? 0) <= 1
-                                ? "At least two cover letters are required"
-                                : cL.wrappedValue.writingSamplesString.isEmpty
-                                ? "Add writing samples to enable choosing best cover letter"
-                                : "Select the best cover letter based on style and voice"
-                        )
-                    }
-
-                    // TTS Button - only show if TTS is enabled and we have content
-                    if ttsEnabled && cL.wrappedValue.generated && !cL.wrappedValue.content.isEmpty {
-                        Button(action: {
-                            speakCoverLetter()
-                        }) {
-                            let iconFilled = isSpeaking || isBuffering
-                            let iconName = iconFilled ? "speaker.wave.3.fill" : "speaker.wave.3"
-                            Image(systemName: iconName)
-                                .font(.system(size: 20, weight: .regular))
-                                .frame(width: 36, height: 36)
-                                .foregroundColor({ () -> Color in
-                                    if isBuffering { return .yellow }
-                                    else if isSpeaking { return .accentColor }
-                                    if isPaused { return .accentColor }
-                                    return .primary
-                                }())
-                                // Pulsing effect only while buffering
-                                .symbolEffect(.pulse, value: isBuffering)
-                        }
-                        .buttonStyle(.plain)
-                        .help({ () -> String in
-                            if isBuffering { return "Cancel" }
-                            if isSpeaking { return "Pause playback" }
-                            if isPaused { return "Resume playback" }
-                            return "Read cover letter aloud"
-                        }())
-                        .disabled(buttons.runRequested || buttons.chooseBestRequested)
-                    }
+                    GenerateCoverLetterButton(
+                        cL: cL,
+                        buttons: $buttons,
+                        chatProvider: chatProvider
+                    )
+                    ChooseBestCoverLetterButton(
+                        cL: cL,
+                        buttons: $buttons,
+                        action: chooseBestCoverLetter
+                    )
+                    TTSCoverLetterButton(
+                        cL: cL,
+                        buttons: $buttons,
+                        ttsEnabled: $ttsEnabled,
+                        ttsVoice: $ttsVoice,
+                        isSpeaking: $isSpeaking,
+                        isPaused: $isPaused,
+                        isBuffering: $isBuffering,
+                        speakAction: speakCoverLetter
+                    )
                 }
             }
         }
@@ -188,13 +99,13 @@ struct CoverLetterAiContentView: View {
             hardStopPlayback()
         }
         .onChange(of: isBuffering) { old, new in
-            print("buffering changed from \(old) to \(new)")
+            print("[\(ISO8601DateFormatter().string(from: Date()))] buffering changed from \(old) to \(new)")
         }
         .onChange(of: isSpeaking) { old, new in
-            print("speaking changed from \(old) to \(new)")
+            print("[\(ISO8601DateFormatter().string(from: Date()))] speaking changed from \(old) to \(new)")
         }
         .onChange(of: isPaused) { old, new in
-            print("paused changed from \(old) to \(new)")
+            print("[\(ISO8601DateFormatter().string(from: Date()))] paused changed from \(old) to \(new)")
         }
         .onAppear { print("AI content") }
         .alert(item: $errorWrapper) { wrapper in

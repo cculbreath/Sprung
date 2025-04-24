@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 73;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -24,25 +24,13 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				"Models/UtilityClasses/OrderedDictionary+PrettyPrint.swift",
-				scripts,
 			);
 			target = 570FEC672C855BF50074D1E0 /* PhysCloudResume */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		5751991C2D4FA657005EC1E7 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = 570FEC662C855BF50074D1E0 /* Resources */;
-			membershipExceptions = (
-				"Models/UtilityClasses/OrderedDictionary+PrettyPrint.swift",
-			);
-		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		570FEC6A2C855BF50074D1E0 /* PhysCloudResume */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (575276262C8A60ED007576CF /* PBXFileSystemSynchronizedBuildFileExceptionSet */, 5751991C2D4FA657005EC1E7 /* PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (scripts, ); path = PhysCloudResume; sourceTree = "<group>"; };
+		570FEC6A2C855BF50074D1E0 /* PhysCloudResume */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (575276262C8A60ED007576CF /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = PhysCloudResume; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -125,6 +113,7 @@
 				};
 			};
 			buildConfigurationList = 570FEC632C855BF50074D1E0 /* Build configuration list for PBXProject "PhysCloudResume" */;
+			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -139,7 +128,6 @@
 				57CEE7F72DB7E0580029E183 /* XCRemoteSwiftPackageReference "OpenAI" */,
 				57CEE8142DB8B4270029E183 /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */,
 			);
-			preferredProjectObjectVersion = 60;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
