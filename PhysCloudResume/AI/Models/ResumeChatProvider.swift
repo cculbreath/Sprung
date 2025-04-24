@@ -2,7 +2,7 @@
 //  ResumeChatProvider.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 4/20/25.
+//  Created by Christopher Culbreath on 9/1/24.
 //
 
 import Foundation
@@ -53,8 +53,7 @@ final class ResumeChatProvider {
     func unloadResponse() -> [ProposedRevisionNode]? {
         if let nodes = convertJsonToNodes(messages[0]) {
             messages.removeFirst()
-            for node in nodes {
-            }
+            for node in nodes {}
             lastRevNodeArray = nodes
             return nodes
         } else {
@@ -181,7 +180,6 @@ final class ResumeChatProvider {
                     )
                 }
 
-
                 // Get the revision nodes directly from the structured response
                 lastRevNodeArray = response.revArray
 
@@ -226,7 +224,6 @@ final class ResumeChatProvider {
                         userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
                     )
                 }
-
 
                 // Try to convert to nodes
                 lastRevNodeArray = convertJsonToNodes(self.messages.last) ?? []
@@ -277,8 +274,7 @@ extension String {
                 // Convert formatted data back to string
                 return String(data: prettyPrintedData, encoding: .utf8) ?? self
             }
-        } catch {
-        }
+        } catch {}
         return self
     }
 

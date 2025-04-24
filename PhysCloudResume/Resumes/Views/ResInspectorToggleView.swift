@@ -1,3 +1,10 @@
+//
+//  ResInspectorToggleView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 1/31/25.
+//
+
 import AppKit // Import AppKit to use NSCursor
 import SwiftData
 import SwiftUI

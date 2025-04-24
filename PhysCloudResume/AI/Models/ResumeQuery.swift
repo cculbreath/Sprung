@@ -1,8 +1,8 @@
 //
 //  ResumeQuery.swift
-//  PhysicsCloudResume
+//  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 8/25/24.
+//  Created by Christopher Culbreath on 9/1/24.
 //
 
 import Foundation
@@ -249,7 +249,6 @@ import Foundation
 
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {
-        }
+        } catch {}
     }
 }

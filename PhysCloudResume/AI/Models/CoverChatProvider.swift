@@ -1,3 +1,10 @@
+//
+//  CoverChatProvider.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/14/24.
+//
+
 import Foundation
 import SwiftUI
 

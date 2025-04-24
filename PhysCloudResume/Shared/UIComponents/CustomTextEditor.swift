@@ -20,7 +20,7 @@ struct CustomTextEditor: View {
                     .stroke(isFocused ? Color.blue : Color.secondary, lineWidth: 1))
                 .focused($isFocused)
                 .onTapGesture { isFocused = true }
-                .onChange(of: isFocused) { newValue in
+                .onChange(of: isFocused) { _ in
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: 150)

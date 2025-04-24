@@ -1,3 +1,10 @@
+//
+//  JobAppStore.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import SwiftData
 
 // Shared helper for SwiftData persistence.

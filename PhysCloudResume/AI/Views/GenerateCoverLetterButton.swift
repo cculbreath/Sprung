@@ -1,3 +1,10 @@
+//
+//  GenerateCoverLetterButton.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/23/25.
+//
+
 import SwiftUI
 
 /// Button for generating or regenerating a cover letter via AI.

@@ -1,3 +1,10 @@
+//
+//  ReviewView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/9/24.
+//
+
 import SwiftData
 import SwiftUI
 
@@ -222,7 +229,7 @@ struct ReviewView: View {
                 .padding(.top, 0)
                 .padding(.bottom, 40)
                 .padding(.horizontal, 20)
-                .onChange(of: aiResub) { oldValue, newValue in
+                .onChange(of: aiResub) { _, newValue in
                     if !newValue {
                         currentRevNode = revisionArray.first
                         feedbackIndex = 0
@@ -264,6 +271,7 @@ struct ReviewView: View {
             case .noChange:
                 nextNode()
             default:
+                print("Default, you should not be here!!")
             }
         }
     }
@@ -298,8 +306,7 @@ struct ReviewView: View {
             if feedbackArray.contains(where: { node in
                 aiActions.contains(node.actionRequested)
             }) {
-                for fb in feedbackArray {
-                }
+                for fb in feedbackArray {}
                 aiResubmit()
             } else {
                 if var selRes = selRes {
@@ -325,12 +332,9 @@ struct ReviewView: View {
                             treeNode.value = node.proposedRevision
                         }
                     } else {
-
                         // Try to diagnose the issue by listing available node IDs
-                        for treeNode in selRes.nodes.prefix(10) {
-                        }
-                        if selRes.nodes.count > 10 {
-                        }
+                        for treeNode in selRes.nodes.prefix(10) {}
+                        if selRes.nodes.count > 10 {}
                     }
                 }
             }

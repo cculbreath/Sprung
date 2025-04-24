@@ -1,3 +1,10 @@
+//
+//  JsonValidatingTextEditor.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 2/27/25.
+//
+
 import AppKit
 import SwiftUI
 import SwiftyJSON
@@ -9,7 +16,6 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
     @Binding var isValidJSON: Bool
 
     func makeNSView(context: Context) -> NSScrollView {
-
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
@@ -72,7 +78,6 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             let newText = textView.string
 
-
             // Update source content immediately
             DispatchQueue.main.async {
                 self.parent.sourceContent = newText
@@ -91,7 +96,6 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
         }
 
         func validateJSON(_ text: String) {
-
             let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedText.isEmpty {
                 DispatchQueue.main.async {

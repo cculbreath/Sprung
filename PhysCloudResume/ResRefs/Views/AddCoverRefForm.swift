@@ -1,3 +1,10 @@
+//
+//  AddCoverRefForm.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/12/24.
+//
+
 import SwiftUI
 
 struct AddCoverRefForm: View {
@@ -77,7 +84,7 @@ struct AddCoverRefForm: View {
     func handleOnDrop(providers: [NSItemProvider]) -> Bool {
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier("public.file-url") {
-                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
                     guard let urlData = item as? Data,
                           let url = URL(dataRepresentation: urlData, relativeTo: nil)
                     else {
@@ -96,8 +103,7 @@ struct AddCoverRefForm: View {
                         self.self.newCoverRefEnabledByDefault = true
                         saveForm()
 
-                    } catch {
-                    }
+                    } catch {}
                 }
 
                 // If we handle a valid file drop, return true

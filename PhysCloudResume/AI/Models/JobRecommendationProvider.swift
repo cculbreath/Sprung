@@ -279,7 +279,6 @@ import SwiftUI
             )
         }
 
-
         // Try to create a UUID from the recommendedJobId and find matching job
         guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
             throw NSError(
@@ -317,7 +316,6 @@ import SwiftUI
 
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {
-        }
+        } catch {}
     }
 }

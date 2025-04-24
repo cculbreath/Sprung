@@ -1,3 +1,10 @@
+//
+//  JobAppInfoApplySectionView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import SwiftUI
 
 struct ApplySection: View {

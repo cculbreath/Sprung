@@ -1,3 +1,10 @@
+//
+//  JobAppDescriptionSectionView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import Foundation
 import SwiftData
 import SwiftUI
@@ -321,8 +328,7 @@ struct RichTextView: View {
                     result = (result as NSString).replacingCharacters(in: range, with: content)
                 }
             }
-        } catch {
-        }
+        } catch {}
 
         return result
     }

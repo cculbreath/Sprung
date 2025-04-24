@@ -2,7 +2,7 @@
 //  IndeedJobScrape.swift
 //  PhysCloudResume
 //
-//  Created by OpenAI Codex CLI on 2025-04-19.
+//  Created by Christopher Culbreath on 4/19/25.
 //
 
 import Foundation
@@ -77,7 +77,6 @@ extension JobApp {
             }
 
             guard let jobDict else {
-
                 // Dump HTML for debugging so the user can provide the file.
                 #if DEBUG
                     DebugFileWriter.write(html, prefix: "IndeedNoJSONLD")

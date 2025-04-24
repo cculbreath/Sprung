@@ -1,3 +1,10 @@
+//
+//  AiCommsView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/9/24.
+//
+
 import AppKit // Needed for NSEvent modifier‑key inspection on macOS
 import AVFoundation
 import Foundation
@@ -61,8 +68,7 @@ struct AiCommsView: View {
 
     var body: some View {
         execQuery
-            .sheet(isPresented: $sheetOn) {
-            } content: {
+            .sheet(isPresented: $sheetOn) {} content: {
                 if sheetOn {
                     ReviewView(
                         revisionArray: $revisions,
@@ -115,7 +121,6 @@ struct AiCommsView: View {
                     // Safety timeout to dismiss the review view if AI request takes too long
                     DispatchQueue.main.asyncAfter(deadline: .now() + 180) { // 3 minutes timeout
                         if isLoading && aiResub {
-
                             // If this is the first attempt, retry once
                             if retryCount == 0 {
                                 retryCount += 1
@@ -210,7 +215,7 @@ struct AiCommsView: View {
     // MARK: ‑ Read‑Aloud Helpers
 
     /// Write a read‑aloud debug line and flush stdout so it appears immediately.
-    private func log(_ msg: String) {
+    private func log(_: String) {
         fflush(stdout)
     }
 
@@ -327,9 +332,7 @@ struct AiCommsView: View {
                     // Make sure to preserve isTitleNode when matching by value
                     validRevs[index].isTitleNode = matchedByValue["isTitleNode"] as? Bool ?? false
 
-
-                } else {
-                }
+                } else {}
             }
             return validRevs
         }
@@ -430,8 +433,7 @@ struct AiCommsView: View {
                 // Set up a timeout task that will run if the main task takes too long
                 let timeoutTask = Task {
                     try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds - just for checking if progress is made
-                    if isLoading && !Task.isCancelled {
-                    }
+                    if isLoading && !Task.isCancelled {}
                 }
 
                 // Execute the API call with our abstraction layer
@@ -447,7 +449,6 @@ struct AiCommsView: View {
                                   userInfo: [NSLocalizedDescriptionKey: chatProvider.errorMessage])
                 }
             } catch {
-
                 // Update error state and show alert
                 await MainActor.run {
                     errorMessage = "An error occurred: \(error.localizedDescription)\n\nPlease try again or check your API key configuration."

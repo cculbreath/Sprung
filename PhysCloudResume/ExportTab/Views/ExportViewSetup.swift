@@ -1,3 +1,10 @@
+//
+//  ExportViewSetup.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 2/27/25.
+//
+
 import SwiftUI
 
 struct ExportViewSetup: View {
@@ -13,7 +20,7 @@ struct ExportViewSetup: View {
             } else {
                 CreateNewResumeView(refresh: $refresh)
             }
-        }.onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, newVal in
+        }.onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
         }
     }
 }

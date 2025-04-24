@@ -2,9 +2,9 @@
 //  CloudflareCookieManager.swift
 //  PhysCloudResume
 //
-//  Introduces a tiny helper that obtains/refreshes a `cf_clearance` cookie
-//  for a Cloudflare‑protected domain by spinning up an invisible `WKWebView`.
-//  The cookie is cached to disk in Application Support (per‑domain) so that subsequent
+//  Created by Christopher Culbreath on 4/19/25.
+//
+
 //  headless fetches can re‑use it without triggering a challenge again.
 //
 //  This file is macOS‑only; iOS would work the same but you may need to adapt

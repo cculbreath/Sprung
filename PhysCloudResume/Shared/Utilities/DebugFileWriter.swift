@@ -2,9 +2,9 @@
 //  DebugFileWriter.swift
 //  PhysCloudResume
 //
-//  Lightweight helper for writing debug text/HTML to a temporary file and
-//  printing the file‑URL to the console so the user can inspect or share it.
-//  The file will live in `NSTemporaryDirectory()` and therefore be cleaned up
+//  Created by Christopher Culbreath on 4/19/25.
+//
+
 //  automatically by the system at a later point.
 //
 

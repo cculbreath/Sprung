@@ -1,8 +1,8 @@
 //
 //  CreateNewResumeView.swift
-//  PhysicsCloudResume
+//  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 8/18/24.
+//  Created by Christopher Culbreath on 1/31/25.
 //
 
 import SwiftData
@@ -74,7 +74,6 @@ struct CreateNewResumeView: View {
             }
             .padding()
             .onAppear {
-
                 // Set default selection
                 if selectedJsonModel == nil, let firstModel = resModelStore.resModels.first {
                     selectedJsonModel = firstModel
@@ -89,13 +88,11 @@ struct CreateNewResumeView: View {
 
     // Separate function to handle resume creation
     private func createResume(with jobApp: JobApp) {
-
         guard let selectedModel = selectedJsonModel else {
             errorMessage = "Please select a template first"
             showErrorMessage = true
             return
         }
-
 
         if let newResume = resStore.create(
             jobApp: jobApp,
@@ -106,7 +103,6 @@ struct CreateNewResumeView: View {
 
             // Update UI
             refresh.toggle()
-
 
             // Ensure the UI updates fully
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

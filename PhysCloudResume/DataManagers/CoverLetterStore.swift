@@ -1,3 +1,9 @@
+//
+//  CoverLetterStore.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/12/24.
+//
 
 //
 //  swift
@@ -52,7 +58,6 @@ final class CoverLetterStore: SwiftDataStore {
 
     @discardableResult
     func create(jobApp: JobApp) -> CoverLetter {
-
         let letter = CoverLetter(
             enabledRefs: coverRefStore.defaultSources,
             jobApp: jobApp
@@ -92,8 +97,7 @@ final class CoverLetterStore: SwiftDataStore {
                 modelContext.delete(letter)
                 //      saveContext()
             }
-        } else {
-        }
+        } else {}
     }
 
     // `saveContext()` now provided by `SwiftDataStore` default implementation.

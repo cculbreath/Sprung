@@ -1,3 +1,10 @@
+//
+//  FormCellView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/9/24.
+//
+
 import AppKit
 import SwiftUI
 
@@ -39,8 +46,7 @@ struct Cell: View {
                             Button(action: {
                                 if let url = URL(string: val) {
                                     openURL(url)
-                                } else {
-                                }
+                                } else {}
                             }) {
                                 Image(systemName: "arrow.up.right.square")
                                     .foregroundColor(

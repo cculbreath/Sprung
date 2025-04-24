@@ -1,3 +1,10 @@
+//
+//  NewAppSheetView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import Foundation
 import SwiftUI
 
@@ -17,6 +24,7 @@ struct NewAppSheetView: View {
     @State private var verydelayed: Bool = false
     @State private var showCloudflareChallenge: Bool = false
     @State private var challengeURL: URL? = nil
+    @State private var baddomain: Bool = false
 
     @Binding var isPresented: Bool
 
@@ -32,6 +40,14 @@ struct NewAppSheetView: View {
                     }
                     if verydelayed {
                         Text("Something suss going on with scraper. Trying again in 200s").font(.caption)
+                    }
+                    if baddomain {
+                        VStack { Text("URL does not is not a supported job listing site").font(.caption).padding()
+                            Button("OK") {
+                                isLoading = false
+                                isPresented = false
+                            }
+                        }
                     }
                 }
             } else {
@@ -105,8 +121,7 @@ struct NewAppSheetView: View {
                         }
                         isLoading = false
                         isPresented = false
-                    } catch {
-                    }
+                    } catch {}
                 }
             case "www.indeed.com", "indeed.com":
                 isLoading = true
@@ -124,6 +139,7 @@ struct NewAppSheetView: View {
                     }
                 }
             default:
+                baddomain = true
             }
             return
         }
@@ -201,7 +217,6 @@ struct NewAppSheetView: View {
                    let jsonDict = jsonObject as? [String: Any],
                    let snapshotId = jsonDict["snapshot_id"] as? String
                 {
-
                     // Wait for the data to be ready (optional, depending on API behavior)
                     try await Task.sleep(nanoseconds: 5 * 1_000_000_000) // Sleep for 5 seconds
 
@@ -211,21 +226,18 @@ struct NewAppSheetView: View {
                 } else {
                     isLoading = false
                     isPresented = false
-
                 }
             } else {
                 // Handle HTTP error
                 isLoading = false
                 isPresented = false
 
-                if let responseBody = String(data: data, encoding: .utf8) {
-                }
+                if let responseBody = String(data: data, encoding: .utf8) {}
             }
         } catch {
             // Handle errors (e.g., serialization, network errors)
             isLoading = false
             isPresented = false
-
         }
         isLoading = false
     }
@@ -287,8 +299,7 @@ struct NewAppSheetView: View {
         if httpResponse?.statusCode == 200, let data = snapshotData {
             // Process the snapshot data
             if let jobDetail = JobApp.parseBrightDataJobApp(jobAppStore: jobAppStore, jsonData: data) {
-            } else {
-            }
+            } else {}
             isLoading = false
             isPresented = false
 
@@ -296,10 +307,8 @@ struct NewAppSheetView: View {
             // Handle HTTP error
             isLoading = false
             if let statusCode = httpResponse?.statusCode {
-            } else {
-            }
-            if let data = snapshotData, let responseBody = String(data: data, encoding: .utf8) {
-            }
+            } else {}
+            if let data = snapshotData, let responseBody = String(data: data, encoding: .utf8) {}
         }
     }
 
@@ -335,16 +344,13 @@ struct NewAppSheetView: View {
                         postingUrl: posting_url.absoluteString
                     ) {
                         isPresented = false
-                    } else {
-                    }
+                    } else {}
                 } else {
                     // Handle error response
-                    if let errorText = String(data: data, encoding: .utf8) {
-                    }
+                    if let errorText = String(data: data, encoding: .utf8) {}
                 }
             }
-        } catch {
-        }
+        } catch {}
 
         isLoading = false
     }

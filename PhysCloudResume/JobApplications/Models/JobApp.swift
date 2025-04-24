@@ -1,3 +1,10 @@
+//
+//  JobApp.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import Foundation
 import SwiftData
 
@@ -181,8 +188,7 @@ enum Statuses: String, Codable, CaseIterable {
         } else {
             if resumes.isEmpty {
             } else {
-                for (index, resume) in resumes.enumerated() {
-                }
+                for (index, resume) in resumes.enumerated() {}
             }
         }
 

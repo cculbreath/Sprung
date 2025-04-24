@@ -2,9 +2,9 @@
 //  WebViewHTMLFetcher.swift
 //  PhysCloudResume
 //
-//  A tiny utility that loads a URL in an invisible WKWebView (sharing the
-//  default data‑store, hence the same cookies as CloudflareCookieManager)
-//  and returns the final rendered HTML of the page once `didFinish` fires.
+//  Created by Christopher Culbreath on 4/19/25.
+//
+
 //  This is a heavier‑weight fallback for sites where a raw `URLSession` fetch
 //  continues to be blocked by Cloudflare even after solving the challenge.
 //

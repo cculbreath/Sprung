@@ -2,8 +2,8 @@
 //  AppleJobScrape.swift
 //  PhysCloudResume
 //
-//  Contains only the Apple‐specific HTML → JobApp parser.  The shared HTML
-//  downloader lives in UtilityClasses/HTMLFetcher.swift.
+//  Created by Christopher Culbreath on 1/31/25.
+//
 
 import Foundation
 import SwiftSoup
@@ -62,7 +62,6 @@ extension JobApp {
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
 
         } catch let Exception.Error(type, message) {
-        } catch {
-        }
+        } catch {}
     }
 }

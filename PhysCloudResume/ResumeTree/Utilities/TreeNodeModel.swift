@@ -1,3 +1,10 @@
+//
+//  TreeNodeModel.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import Foundation
 import SwiftData
 
@@ -164,10 +171,8 @@ enum LeafStatus: String, Codable, Hashable {
                     } else {
                         node.value = newValue
                     }
-                } else {
-                }
-            } else {
-            }
+                } else {}
+            } else {}
         }
 
         // Save the context to persist changes
@@ -191,8 +196,7 @@ enum LeafStatus: String, Codable, Hashable {
         // Save context to persist changes
         do {
             try context.save()
-        } catch {
-        }
+        } catch {}
     }
 
     func deepCopy(newResume: Resume) -> TreeNode {

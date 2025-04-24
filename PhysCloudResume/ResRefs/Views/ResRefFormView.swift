@@ -1,3 +1,10 @@
+//
+//  ResRefFormView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 1/31/25.
+//
+
 import SwiftUI
 
 struct ResRefFormView: View {
@@ -77,7 +84,7 @@ struct ResRefFormView: View {
         .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
             handleOnDrop(providers: providers)
         }
-        .onChange(of: isTargeted) { _, newValue in
+        .onChange(of: isTargeted) { _, _ in
         }
         .onAppear {
             if let resRef = existingResRef {
@@ -116,7 +123,7 @@ struct ResRefFormView: View {
         for provider in providers {
             var stop = false
             if provider.hasItemConformingToTypeIdentifier("public.file-url") {
-                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
                     guard let urlData = item as? Data,
                           let url = URL(dataRepresentation: urlData, relativeTo: nil)
                     else {
@@ -132,8 +139,7 @@ struct ResRefFormView: View {
                             saveRefForm()
                         }
 
-                    } catch {
-                    }
+                    } catch {}
                 }
 
                 // Continue to handle other providers

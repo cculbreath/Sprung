@@ -1,3 +1,10 @@
+//
+//  OpenAIClientProtocol.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/22/25.
+//
+
 import Foundation
 import SwiftUI
 

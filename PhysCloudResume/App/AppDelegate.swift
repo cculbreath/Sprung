@@ -1,3 +1,10 @@
+//
+//  AppDelegate.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 9/1/24.
+//
+
 import Cocoa
 import SwiftUI
 
@@ -64,7 +71,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-
         // Find the name of the application to look for the right menu item
         let appName = ProcessInfo.processInfo.processName
 
@@ -124,8 +130,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Print all menu items for debugging
         for i in 0 ..< appMenu.numberOfItems {
-            if let item = appMenu.item(at: i) {
-            }
+            if let item = appMenu.item(at: i) {}
         }
     }
 
@@ -148,7 +153,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func showApplicantProfileWindow() {
-
         // If window exists but was closed, reset it
         if let window = applicantProfileWindow, !window.isVisible {
             applicantProfileWindow = nil
@@ -185,11 +189,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Activate the app to ensure focus
         NSApp.activate(ignoringOtherApps: true)
-
     }
 
     @objc func windowWillClose(_ notification: Notification) {
-        if notification.object as? NSWindow == applicantProfileWindow {
-        }
+        if notification.object as? NSWindow == applicantProfileWindow {}
     }
 }

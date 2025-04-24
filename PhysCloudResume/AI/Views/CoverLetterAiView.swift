@@ -1,3 +1,10 @@
+//
+//  CoverLetterAiView.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/23/25.
+//
+
 import Foundation
 import SwiftUI
 #if os(macOS)

@@ -2,9 +2,9 @@
 //  IndexProvider.swift
 //  PhysCloudResume
 //
-//  Created by OpenAI Codex on 2025‑04‑17.
+//  Created by Christopher Culbreath on 4/16/25.
 //
-//  Thread‑safe, re‑entrant incremental integer generator.
+
 //  Unlike the previous `static` counters this helper is an ordinary class
 //  instance.  Each caller can keep its own provider, so indices are local to
 //  the operation (e.g. building a Resume tree) and tests can reset the state

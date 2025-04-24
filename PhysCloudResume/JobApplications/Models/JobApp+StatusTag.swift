@@ -1,3 +1,10 @@
+//
+//  JobApp+StatusTag.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 4/16/25.
+//
+
 import SwiftUI
 
 // MARK: – UI helpers for JobApp (kept outside the core model)
