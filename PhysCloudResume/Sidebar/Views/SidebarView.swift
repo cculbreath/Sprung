@@ -28,6 +28,14 @@ struct SidebarView: View {
             // --- Main Content ---
             // Main Job Application List
             List(selection: $selectedApp) {
+                // Add empty spacer section to ensure the first real section isn't hidden under the toolbar
+                Section {
+                    EmptyView()
+                }
+                .padding(.top, 8) // This padding acts as a spacer 
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                
                 ForEach(Statuses.allCases, id: \.self) { status in
                     let filteredApps = jobApps.filter { $0.status == status }
                     if !filteredApps.isEmpty {

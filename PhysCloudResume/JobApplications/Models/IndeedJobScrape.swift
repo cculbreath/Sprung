@@ -193,9 +193,28 @@ extension JobApp {
             // Default status.
             jobApp.status = .new
 
-            // 5. Persist in the store and return.
+            // 5. Check for duplicates before persisting
+            // Check if a job with the same URL already exists
+            let existingJobWithURL = jobAppStore.allJobApps().first { $0.postingURL == url }
+            if let existingJob = existingJobWithURL {
+                // Update the existing job with any new information and select it
+                jobAppStore.selectedApp = existingJob
+                return existingJob
+            }
+            
+            // Or check if a job with the same position and company already exists
+            let existingJob = jobAppStore.allJobApps().first { 
+                $0.jobPosition == jobApp.jobPosition && 
+                $0.companyName == jobApp.companyName
+            }
+            if let existing = existingJob {
+                // Update the existing job with any new information and select it
+                jobAppStore.selectedApp = existing
+                return existing
+            }
+            
+            // No duplicate found, persist in the store and return
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
-
             return jobApp
 
         } catch {
