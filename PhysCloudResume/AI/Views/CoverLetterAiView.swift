@@ -13,11 +13,18 @@ import SwiftUI
 
 /// Wrapper view for Cover Letter AI content. Initializes dependencies.
 struct CoverLetterAiView: View {
+    // MARK: - App Storage
+
     @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
+
+    // MARK: - Bindings
+
     @Binding var buttons: CoverLetterButtons
     @Binding var refresh: Bool
+
+    // MARK: - Body
 
     var body: some View {
         // Create OpenAI client using our abstraction layer
@@ -26,7 +33,8 @@ struct CoverLetterAiView: View {
         // Initialize TTS provider
         let ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
 
-        CoverLetterAiContentView(
+        // Initialize our main manager (renamed from CoverLetterController)
+        CoverLetterAiManager(
             openAIClient: openAIClient,
             ttsProvider: ttsProvider,
             buttons: $buttons,
@@ -34,6 +42,6 @@ struct CoverLetterAiView: View {
             ttsEnabled: $ttsEnabled,
             ttsVoice: $ttsVoice
         )
-        .onAppear { print("Ai Cover Letter") }
+        .onAppear { print("AI Cover Letter View") }
     }
 }

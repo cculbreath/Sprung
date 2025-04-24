@@ -18,12 +18,12 @@ struct ChooseBestCoverLetterButton: View {
         if buttons.chooseBestRequested {
             ProgressView()
                 .scaleEffect(0.75, anchor: .center)
-                .frame(width: 36, height: 36)
+                .frame(width: 28, height: 28)
         } else {
             Button(action: action) {
                 Image(systemName: "medal")
-                    .font(.system(size: 20, weight: .regular))
-                    .frame(width: 36, height: 36)
+                    .font(.system(size: 16, weight: .regular))
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
             .disabled(

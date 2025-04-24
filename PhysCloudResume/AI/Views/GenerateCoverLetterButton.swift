@@ -32,15 +32,15 @@ struct GenerateCoverLetterButton: View {
                 )
             } label: {
                 Image("ai-squiggle")
-                    .font(.system(size: 20, weight: .regular))
-                    .frame(width: 36, height: 36)
+                    .font(.system(size: 16, weight: .regular))
+                    .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
             .help("Generate new Cover Letter")
         } else {
             ProgressView()
                 .scaleEffect(0.75, anchor: .center)
-                .frame(width: 36, height: 36)
+                .frame(width: 28, height: 28)
         }
     }
 }
