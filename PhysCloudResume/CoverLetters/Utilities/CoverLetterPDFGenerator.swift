@@ -7,7 +7,6 @@ import PDFKit
 
 enum CoverLetterPDFGenerator {
     static func generatePDF(from coverLetter: CoverLetter, applicant: Applicant) -> Data {
-        print("Generating PDF from cover letter...")
         let text = buildLetterText(from: coverLetter, applicant: applicant)
 
         // Get signature image from the applicant profile
@@ -25,16 +24,13 @@ enum CoverLetterPDFGenerator {
     /// Retrieves the signature image from the applicant profile
     private static func getSignatureImage(from applicant: Applicant) -> NSImage? {
         guard let signatureData = applicant.profile.signatureData else {
-            print("No signature image available in applicant profile")
             return nil
         }
 
         guard let image = NSImage(data: signatureData) else {
-            print("Failed to create image from signature data")
             return nil
         }
 
-        print("Successfully retrieved signature image: \(image.size.width)x\(image.size.height)")
         return image
     }
 
@@ -44,9 +40,7 @@ enum CoverLetterPDFGenerator {
 
         do {
             try data.write(to: debugPath)
-            print("Debug PDF saved to: \(debugPath.path)")
         } catch {
-            print("Error saving debug PDF: \(error)")
         }
     }
 
@@ -155,7 +149,6 @@ enum CoverLetterPDFGenerator {
 
     /// Creates a PDF with guaranteed vector text using NSAttributedString and PDFKit
     private static func createVectorPDFFromString(_ text: String) -> Data {
-        print("Creating vector PDF from text using PDFKit...")
 
         // Page setup with our preferred margins
         let pageRect = CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72) // Letter size
@@ -185,14 +178,12 @@ enum CoverLetterPDFGenerator {
         // Try to load the font
         if let loadedFont = NSFont(name: "Futura Light", size: fontSize) {
             font = loadedFont
-            print("Using existing Futura Light font at \(fontSize)pt")
         } else {
             // Try registering Futura Light from the specific path
             let specificFuturaLightPath = "/Library/Fonts/Futura Light.otf"
             if FileManager.default.fileExists(atPath: specificFuturaLightPath) {
                 var error: Unmanaged<CFError>?
                 CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: specificFuturaLightPath) as CFURL, .process, &error)
-                print("Registered Futura Light for vector PDF")
 
                 // Try loading the font again after registration
                 if let loadedFont = NSFont(name: "Futura Light", size: fontSize) {
@@ -200,12 +191,10 @@ enum CoverLetterPDFGenerator {
                 } else {
                     // Fallback to system font
                     font = NSFont.systemFont(ofSize: fontSize)
-                    print("Falling back to system font at \(fontSize)pt")
                 }
             } else {
                 // Fallback to system font
                 font = NSFont.systemFont(ofSize: fontSize)
-                print("Falling back to system font at \(fontSize)pt - Font not found")
             }
         }
 
@@ -242,7 +231,6 @@ enum CoverLetterPDFGenerator {
                     var linkAttrs = urlAttributes
                     linkAttrs[.link] = URL(string: "mailto:\(email)")
                     attributedString.setAttributes(linkAttrs, range: match.range)
-                    print("Added mailto link for: \(email)")
                 }
             }
 
@@ -255,7 +243,6 @@ enum CoverLetterPDFGenerator {
                     let fullURL = urlString.hasPrefix("http") ? urlString : "https://\(urlString)"
                     linkAttrs[.link] = URL(string: fullURL)
                     attributedString.setAttributes(linkAttrs, range: match.range)
-                    print("Added http link for: \(urlString)")
                 }
             }
         }
@@ -274,7 +261,6 @@ enum CoverLetterPDFGenerator {
                                          mediaBox: &mediaBox,
                                          pdfMetaData as CFDictionary)
         else {
-            print("Failed to create PDF context")
             return Data()
         }
 
@@ -310,14 +296,11 @@ enum CoverLetterPDFGenerator {
 
         // Create the final PDF document
         if let pdfDoc = PDFDocument(data: data as Data), pdfDoc.pageCount > 0 {
-            print("Successfully created vector PDF with \(pdfDoc.pageCount) pages and size: \(data.length) bytes")
             return data as Data
         }
 
-        print("Failed to create vector PDF - trying alternate approach")
 
         // Last resort: Direct PDF drawing with CGContext
-        print("Using direct PDF drawing with CGContext...")
 
         // Create a PDF context
         let pdfData = NSMutableData()
@@ -327,7 +310,6 @@ enum CoverLetterPDFGenerator {
                                          mediaBox: &pdfMediaBox,
                                          nil)
         else {
-            print("Failed to create direct PDF context")
             return Data()
         }
 
@@ -363,11 +345,9 @@ enum CoverLetterPDFGenerator {
 
         // Get PDF data
         if pdfData.length > 0 {
-            print("Created direct vector PDF with size: \(pdfData.length)")
             return pdfData as Data
         }
 
-        print("All PDF generation methods failed")
         return Data()
     }
 
@@ -395,9 +375,7 @@ enum CoverLetterPDFGenerator {
             }
         }
         if let path = registeredFontFilePath {
-            print("Using Futura Light font from file: \(path)")
         } else {
-            print("No Futura Light font file found, relying on system fonts")
         }
 
         // Auto-fit settings
@@ -753,28 +731,22 @@ enum CoverLetterPDFGenerator {
                     if nameIdx == regardsIdx + 1 {
                         // Name immediately follows regards - place directly on the regards line
                         adjustedSignatureY = regardsY + 5 // Right on the regards line
-                        print("regards + 5a")
                     } else if nameIdx == regardsIdx + 2 {
                         // One line gap - still place directly on the regards line
                         adjustedSignatureY = regardsY + 2
-                        print("regards + 3b")
                     } else {
                         // Multiple lines - still position right at regards line
                         adjustedSignatureY = regardsY + 2
-                        print("regards + 2")
                     }
                 } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
                     // Only have regards line - position right ON the regards line
                     adjustedSignatureY = origins[regardsIdx].y + 5 // Right on the regards line
-                    print("origins[regardsIdx].y + 5")
                 } else if let nameIdx = nameLineIndex, nameIdx < origins.count {
                     // Only have name - position much higher than before
                     adjustedSignatureY = origins[nameIdx].y + 45 // Far above name
-                    print("origns[nameIdx].y + 45")
                 } else {
                     // No clear positioning guidance, use safe default
                     adjustedSignatureY = textRect.origin.y + 100
-                    print("wtf sig")
                 }
 
                 // Now check for overlaps with contact info
@@ -788,10 +760,8 @@ enum CoverLetterPDFGenerator {
                             // Move signature up significantly to avoid contact info
                             if let nameIdx = nameLineIndex, nameIdx < origins.count {
                                 adjustedSignatureY = origins[nameIdx].y + 26 // Well above name line
-                                print("contacts orgins + 26")
                             } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
                                 adjustedSignatureY = origins[regardsIdx].y - 26 // Well below regards
-                                print("regards origins - 26")
                             }
                         }
                     }
@@ -817,8 +787,6 @@ enum CoverLetterPDFGenerator {
                     pdfContext.restoreGState()
 
                     // Detailed debug info about signature placement
-                    print("Signature image drawn: size=\(signatureWidth)x\(signatureHeight), position=(\(signatureRect.origin.x),\(signatureRect.origin.y))")
-                    print("Placement info: regardsLine=\(regardsLineIndex ?? -1), nameLine=\(nameLineIndex ?? -1), contactLine=\(contactInfoLineIndex ?? -1), emailLine=\(emailLineIndex ?? -1)")
                 }
             }
 

@@ -77,7 +77,6 @@ extension JobApp {
             }
 
             guard let jobDict else {
-                print("[IndeedJobScrape] JobPosting JSON‑LD not found")
 
                 // Dump HTML for debugging so the user can provide the file.
                 #if DEBUG
@@ -201,7 +200,6 @@ extension JobApp {
             return jobApp
 
         } catch {
-            print("[IndeedJobScrape] Parsing error: \(error)")
             return nil
         }
     }
@@ -263,7 +261,6 @@ extension JobApp {
 
             return JobApp.parseIndeedJobListing(jobAppStore: jobAppStore, html: html, url: urlString)
         } catch {
-            print("[IndeedJobScrape] Failed to download HTML – \(error)")
             return nil
         }
     }

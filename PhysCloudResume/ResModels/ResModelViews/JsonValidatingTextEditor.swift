@@ -9,7 +9,6 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
     @Binding var isValidJSON: Bool
 
     func makeNSView(context: Context) -> NSScrollView {
-        print("📝 makeNSView called") // Debug log
 
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
@@ -51,14 +50,12 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
         guard let textView = nsView.documentView as? NSTextView else { return }
 
         if textView.string != sourceContent {
-            print("📝 updateNSView: Content changed externally") // Debug log
             textView.string = sourceContent
             context.coordinator.validateJSON(sourceContent)
         }
     }
 
     func makeCoordinator() -> Coordinator {
-        print("📝 makeCoordinator called") // Debug log
         return Coordinator(self)
     }
 
@@ -69,14 +66,12 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
         init(_ parent: JsonValidatingTextEditor) {
             self.parent = parent
             super.init()
-            print("📝 Coordinator initialized") // Debug log
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             let newText = textView.string
 
-            print("📝 textDidChange triggered") // Debug log
 
             // Update source content immediately
             DispatchQueue.main.async {
@@ -88,7 +83,6 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
 
             // Create new validation task
             let workItem = DispatchWorkItem { [weak self] in
-                print("📝 Validation work item executing") // Debug log
                 self?.validateJSON(newText)
             }
 
@@ -97,11 +91,9 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
         }
 
         func validateJSON(_ text: String) {
-            print("📝 validateJSON called with text: \(text.prefix(50))...") // Debug log
 
             let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedText.isEmpty {
-                print("📝 Empty text - considering valid") // Debug log
                 DispatchQueue.main.async {
                     self.parent.isValidJSON = true
                 }
@@ -111,18 +103,15 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
             do {
                 if let jsonData = text.data(using: .utf8) {
                     _ = try JSON(data: jsonData)
-                    print("📝 JSON is valid") // Debug log
                     DispatchQueue.main.async {
                         self.parent.isValidJSON = true
                     }
                 } else {
-                    print("📝 Failed to convert to data") // Debug log
                     DispatchQueue.main.async {
                         self.parent.isValidJSON = false
                     }
                 }
             } catch {
-                print("📝 JSON validation error: \(error)") // Debug log
                 DispatchQueue.main.async {
                     self.parent.isValidJSON = false
                 }

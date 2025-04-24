@@ -81,7 +81,6 @@ struct BuildToolbar: ToolbarContent {
 
     func saveButton() -> some View {
         Button(action: {
-            print("Save button pressed")
             listingButtons.save.toggle()
         }) {
             Image(systemName: "checkmark.circle")
@@ -96,7 +95,6 @@ struct BuildToolbar: ToolbarContent {
     func toggleEditButton() -> some View {
         return Button(action: {
             listingButtons.edit.toggle()
-            print("Edit button toggled")
         }) {
             Image(systemName: "pencil.and.list.clipboard")
                 .font(.system(size: 20, weight: .light))

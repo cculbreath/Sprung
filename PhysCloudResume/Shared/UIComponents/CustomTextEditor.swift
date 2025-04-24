@@ -21,7 +21,6 @@ struct CustomTextEditor: View {
                 .focused($isFocused)
                 .onTapGesture { isFocused = true }
                 .onChange(of: isFocused) { newValue in
-                    print("isFocused changed to:", newValue)
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: 150)

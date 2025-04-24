@@ -223,7 +223,6 @@ struct ReviewView: View {
                 .padding(.bottom, 40)
                 .padding(.horizontal, 20)
                 .onChange(of: aiResub) { oldValue, newValue in
-                    print("aiResub changed from \(oldValue ? "true" : "false") to \(newValue ? "true" : "false")")
                     if !newValue {
                         currentRevNode = revisionArray.first
                         feedbackIndex = 0
@@ -265,7 +264,6 @@ struct ReviewView: View {
             case .noChange:
                 nextNode()
             default:
-                print("default")
             }
         }
     }
@@ -275,7 +273,6 @@ struct ReviewView: View {
 
         if let currentFeedbackNode = currentFeedbackNode {
             feedbackArray.append(currentFeedbackNode)
-            print(feedbackArray.count)
             feedbackIndex += 1
         }
         if feedbackIndex < revisionArray.count {
@@ -302,8 +299,6 @@ struct ReviewView: View {
                 aiActions.contains(node.actionRequested)
             }) {
                 for fb in feedbackArray {
-                    print(fb.proposedRevision)
-                    print("Action: \(String(describing: fb.actionRequested))")
                 }
                 aiResubmit()
             } else {
@@ -323,26 +318,18 @@ struct ReviewView: View {
                 if let selRes = selRes {
                     if let treeNode = selRes.nodes.first(where: { $0.id == node.id }) {
                         // Debug logging to help diagnose issues
-                        print("Processing node ID: \(node.id)")
-                        print("isTitleNode value: \(node.isTitleNode)")
 
                         if node.isTitleNode {
-                            print("Updating NAME to: \(node.proposedRevision)")
                             treeNode.name = node.proposedRevision
                         } else {
-                            print("Updating VALUE to: \(node.proposedRevision)")
                             treeNode.value = node.proposedRevision
                         }
                     } else {
-                        print("❌ ERROR: Node not found with ID: \(node.id)")
 
                         // Try to diagnose the issue by listing available node IDs
-                        print("Available node IDs:")
                         for treeNode in selRes.nodes.prefix(10) {
-                            print("- \(treeNode.id)")
                         }
                         if selRes.nodes.count > 10 {
-                            print("... and \(selRes.nodes.count - 10) more")
                         }
                     }
                 }
@@ -366,7 +353,6 @@ struct ReviewView: View {
         // as this likely indicates a communication issue with the AI service
         DispatchQueue.main.asyncAfter(deadline: .now() + 120) { // 2 minute timeout
             if aiResub {
-                print("AI resubmission timeout detected - automatically dismissing")
                 aiResub = false
                 sheetOn = false
             }

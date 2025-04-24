@@ -87,12 +87,10 @@ struct RevisionsViewContent: View {
         customFeedback: Binding<String>
     ) {
         guard let currentResume = jobAppStore.selectedApp?.selectedRes else {
-            print("No resume selected")
             return
         }
 
         guard let selectedCover = jobAppStore.selectedApp?.selectedCover else {
-            print("No selected cover letter")
             return
         }
 
@@ -102,7 +100,6 @@ struct RevisionsViewContent: View {
         }) {
             // Load the existing letter
             jobAppStore.selectedApp?.selectedCover = existingLetter
-            print("Loaded existing draft cover letter")
         } else {
             // No existing draft, create a new cover letter
             let oldContent = selectedCover.content // Unwrapped safely
@@ -111,7 +108,6 @@ struct RevisionsViewContent: View {
             jobAppStore.selectedApp?.selectedCover?.currentMode = (tempMode == .custom) ? .revise : .rewrite
             jobAppStore.selectedApp?.selectedCover?.content = oldContent
             jobAppStore.selectedApp?.selectedCover?.editorPrompt = tempMode
-            print("Created new cover letter draft")
         }
 
         // Perform the revision or rewrite operation

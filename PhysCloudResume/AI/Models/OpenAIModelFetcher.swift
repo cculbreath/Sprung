@@ -26,7 +26,6 @@ class OpenAIModelFetcher {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                print("Error fetching models: invalid response")
                 return []
             }
 
@@ -46,7 +45,6 @@ class OpenAIModelFetcher {
 
             return chatModels
         } catch {
-            print("Error fetching models: \(error)")
             return []
         }
     }

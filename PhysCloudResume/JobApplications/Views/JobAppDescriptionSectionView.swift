@@ -165,7 +165,6 @@ struct RichTextView: View {
                 }
             }
         } catch {
-            print("Regex error in processBoldInlineText: \(error)")
             return Text(processEmailLinks(content))
                 .foregroundColor(.primary)
         }
@@ -292,7 +291,6 @@ struct RichTextView: View {
                 }
             } catch {
                 // Regex error - use the section as is
-                print("Regex error: \(error)")
                 result.append(Paragraph(content: section, type: .normal))
             }
         }
@@ -324,7 +322,6 @@ struct RichTextView: View {
                 }
             }
         } catch {
-            print("Regex cleanup error: \(error)")
         }
 
         return result

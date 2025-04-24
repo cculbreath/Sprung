@@ -62,9 +62,7 @@ extension JobApp {
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
 
         } catch let Exception.Error(type, message) {
-            print("[AppleJobScrape] SwiftSoup error type \(type) – \(message)")
         } catch {
-            print("[AppleJobScrape] Unexpected error: \(error)")
         }
     }
 }

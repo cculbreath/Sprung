@@ -18,7 +18,6 @@ class JsonToTree {
     init?(resume: Resume, rawJson: String) {
         res = resume
         guard let orderedDictJson = JsonToTree.parseUnwrapJson(rawJson) else {
-            print("Error converting JSON content")
 
             return nil
         }
@@ -33,7 +32,6 @@ class JsonToTree {
 
     private static func parseUnwrapJson(_ rawJson: String) -> OrderedDictionary<String, Any>? {
         guard let jsonData = rawJson.data(using: .utf8) else {
-            print("Error converting JSON string to Data")
             return nil
         }
 
@@ -48,7 +46,6 @@ class JsonToTree {
                 return nil
             }
         } catch {
-            print("Error during JSON parsing/unwrapping: \(error)")
             return nil
         }
     }
@@ -63,11 +60,9 @@ class JsonToTree {
         parseSpecialKeys()
         for key in treeKeys {
             if let sectionType = JsonMap.sectionKeyToTypeDict[key] {
-                print("DEBUG: Building tree for key='\(key)' with type=\(sectionType)")
                 let function = treeFunction(for: sectionType)
                 function(key, rootNode)
             } else {
-                print("DEBUG: No mapping found for key='\(key)'")
             }
         }
         processKeyLabels()
@@ -76,9 +71,7 @@ class JsonToTree {
 
     private func parseInclude(key: String) -> Bool {
         if let myString = json[key] as? String {
-            print("myString detected as \(myString)")
             if myString == "true" {
-                print("myString matched true")
                 return true
             }
         }
@@ -89,7 +82,6 @@ class JsonToTree {
         res.fontSizeNodes = parseFontSizeSection(key: "font-sizes")
         res.includeFonts = parseInclude(key: "include-fonts")
         res.importedEditorKeys = parseStringArray(key: "keys-in-editor")
-        print("!!!! importedKeys: \(res.importedEditorKeys)")
     }
 
     private func processKeyLabels() {
@@ -97,11 +89,9 @@ class JsonToTree {
             for key in labelDict.keys {
                 if let value = labelDict[key] { // Correct dictionary access
                     res.keyLabels[key] = value as? String ?? "Error!" // Assigning the value correctly
-                    print("labeltime: key:\(key) label:\(value) value:\(labelDict)")
                 }
             }
         } else {
-            print("label cast problem")
         }
     }
 
@@ -112,7 +102,6 @@ class JsonToTree {
         res.needToFont = false
         guard let fontArray = json[key] as? OrderedDictionary<String, Any>
         else {
-            print("Font sizes could not be cast")
             return []
         }
 
@@ -120,12 +109,10 @@ class JsonToTree {
         for (myKey, myValue) in fontArray {
             let fontString = myValue as? String ?? ""
             let idx = indexProvider.make()
-            print("Adding FontSizeNode: key = \(myKey), fontString = \(fontString), index = \(idx)")
             let node = FontSizeNode(key: myKey, index: idx, fontString: fontString)
             nodes.append(node)
         }
 
-        print("Completed parsing font sizes. Count: \(nodes.count)")
         return nodes
     }
 
@@ -178,14 +165,12 @@ class JsonToTree {
 
         // 1) If the value is an OrderedDictionary<String, Any> (a single dictionary).
         if let dict = json[key] as? OrderedDictionary<String, Any> {
-            print("\(key) is an OrderedDictionary")
             buildSubtree(from: dict, parent: sectionNode, inEditor: inEditor)
             return
         }
 
         // 2) If the value is an array of OrderedDictionary<String, Any>.
         if let arrayOfODicts = json[key] as? [OrderedDictionary<String, Any>] {
-            print("\(key) is an array of OrderedDictionaries with count \(arrayOfODicts.count)")
             for (index, subDict) in arrayOfODicts.enumerated() {
                 let itemTitle = "\(subDict["journal"] ?? key) · \(subDict["year"] ?? String(index + 1))" // or pick a field from subDict if you prefer
                 let itemNode = sectionNode.addChild(
@@ -197,7 +182,6 @@ class JsonToTree {
         }
 
         // 3) Catch-all / fallback so you actually see a console message if everything else fails.
-        print("Warning: \(key) is missing or not in expected format (not a dictionary or array-of-dictionaries).")
     }
 
     private func buildSubtree(from dict: OrderedDictionary<String, Any>, parent: TreeNode, inEditor: Bool) {
@@ -220,14 +204,12 @@ class JsonToTree {
                     )
                 )
             } else {
-                print("Warning: Unexpected type for key \(subKey)")
             }
         }
     }
 
     private func treeTwoKeyObjectsSection(key: String, parent: TreeNode, keyOne: String, keyTwo: String) {
         guard let sectionArray = json[key] as? [OrderedDictionary<String, Any>] else {
-            print("Warning: \(key) is missing or not in expected format")
             return
         }
 
@@ -239,7 +221,6 @@ class JsonToTree {
             guard let valueOne = element[keyOne] as? String,
                   let valueTwo = element[keyTwo] as? String
             else {
-                print("Warning: Skipping malformed entry in \(key)")
                 continue
             }
             // Add the node with name = valueOne, value = valueTwo
@@ -263,14 +244,12 @@ class JsonToTree {
                 TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
             for (key, myValue) in sectionDict {
                 guard let valueString = myValue as? String else {
-                    print("\(key) json error")
                     return
                 }
                 sectionNode.addChild(
                     TreeNode(name: key, value: valueString, inEditor: isInEditor(key), status: .saved, resume: res))
             }
         } else {
-            print("!!!!Warning: \(key)  missing or not the expected type.")
         }
     }
 }

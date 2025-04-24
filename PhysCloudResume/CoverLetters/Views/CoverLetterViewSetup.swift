@@ -15,7 +15,6 @@ struct CoverLetterViewSetup: View {
                 CreateNewResumeView(refresh: $refresh)
             }
         }.onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, newVal in
-            print(newVal ? "change resExists" : "change res doesn't exist")
         }
     }
 }

@@ -19,12 +19,10 @@ struct ResumeViewSetup: View {
         }
         .id(jobAppStore.selectedApp?.id)
         .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, newVal in
-            print(newVal ? "✅ Job app now has resumes" : "⚠️ Job app has no resumes")
 
             // Force refresh when resume status changes
             if newVal {
                 DispatchQueue.main.async {
-                    print("🔄 Resume status changed - forcing refresh")
                     refresh.toggle()
                 }
             }

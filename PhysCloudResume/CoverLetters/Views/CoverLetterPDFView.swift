@@ -36,11 +36,8 @@ struct CoverLetterPDFView: View {
             } else {
                 PDFKitView(data: pdfData)
                     .onAppear {
-                        print("PDF view appearing with data size: \(pdfData.count)")
                         if let doc = PDFDocument(data: pdfData) {
-                            print("PDF has \(doc.pageCount) pages")
                         } else {
-                            print("Could not create PDF document from data")
                         }
                     }
             }
@@ -53,7 +50,6 @@ struct CoverLetterPDFView: View {
     }
 
     private func generatePDF() {
-        print("Generating PDF view for cover letter...")
         isLoading = true
 
         // Use a background thread for PDF generation
@@ -65,11 +61,9 @@ struct CoverLetterPDFView: View {
 
             DispatchQueue.main.async {
                 if !generatedData.isEmpty {
-                    print("Successfully created PDF data with size: \(generatedData.count)")
                     self.pdfData = generatedData
                     self.errorMessage = nil
                 } else {
-                    print("Failed to create PDF data")
                     self.errorMessage = "Could not generate PDF"
                 }
                 self.isLoading = false
@@ -82,9 +76,7 @@ struct CoverLetterPDFView: View {
         do {
             // Get the latest profile from the manager to ensure we have the signature
             applicant = Applicant() // This will use the profile from ApplicantProfileManager
-            print("Loaded applicant profile - signature available: \(applicant.profile.signatureData != nil)")
         } catch {
-            print("Error loading applicant profile: \(error)")
         }
     }
 }
@@ -99,10 +91,8 @@ struct PDFKitView: NSViewRepresentable {
         pdfView.backgroundColor = .white
 
         if let document = PDFDocument(data: data) {
-            print("Creating PDFView with document containing \(document.pageCount) pages")
             pdfView.document = document
         } else {
-            print("Failed to create PDFDocument in makeNSView")
         }
 
         return pdfView
@@ -110,10 +100,8 @@ struct PDFKitView: NSViewRepresentable {
 
     func updateNSView(_ nsView: PDFView, context _: Context) {
         if let document = PDFDocument(data: data) {
-            print("Updating PDFView with document containing \(document.pageCount) pages")
             nsView.document = document
         } else {
-            print("Failed to create PDFDocument in updateNSView")
         }
     }
 }

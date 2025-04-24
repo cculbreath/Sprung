@@ -11,13 +11,11 @@ struct GenerateCoverLetterButton: View {
     var body: some View {
         if !buttons.runRequested {
             Button {
-                print("Generate cover letter")
                 if !cL.generated {
                     cL.currentMode = .generate
                 } else {
                     let newCL = coverLetterStore.createDuplicate(letter: cL)
                     cL = newCL
-                    print("Duplicated for regeneration")
                 }
                 chatProvider.coverChatAction(
                     res: jobAppStore.selectedApp?.selectedRes,

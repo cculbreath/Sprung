@@ -21,7 +21,6 @@ class FileHandler {
                 at: appSupportDirectory, withIntermediateDirectories: true, attributes: nil
             )
         } catch {
-            print("Error creating Application Support directory: \(error)")
         }
         return appSupportDirectory
     }()
@@ -58,11 +57,9 @@ class FileHandler {
         do {
             if let jsonData = jsonString.data(using: .utf8) {
                 try jsonData.write(to: fileURL)
-                print("JSON file saved successfully at \(fileURL.path)")
                 return fileURL
             }
         } catch {
-            print("Error saving JSON file: \(error)")
         }
         return nil
     }

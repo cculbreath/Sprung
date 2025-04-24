@@ -74,13 +74,10 @@ struct CreateNewResumeView: View {
             }
             .padding()
             .onAppear {
-                print("⏺️ CreateNewResumeView appeared")
-                print("📋 Available models: \(resModelStore.resModels.count)")
 
                 // Set default selection
                 if selectedJsonModel == nil, let firstModel = resModelStore.resModels.first {
                     selectedJsonModel = firstModel
-                    print("✓ Default model selected: \(firstModel.name)")
                 }
             }
         } else {
@@ -92,17 +89,13 @@ struct CreateNewResumeView: View {
 
     // Separate function to handle resume creation
     private func createResume(with jobApp: JobApp) {
-        print("🔘 Create button tapped")
 
         guard let selectedModel = selectedJsonModel else {
             errorMessage = "Please select a template first"
             showErrorMessage = true
-            print("⚠️ No template selected")
             return
         }
 
-        print("Creating resume with model: \(selectedModel.id)")
-        print("Using job app: \(jobApp.id)")
 
         if let newResume = resStore.create(
             jobApp: jobApp,
@@ -114,18 +107,14 @@ struct CreateNewResumeView: View {
             // Update UI
             refresh.toggle()
 
-            print("✅ Resume created successfully: \(newResume.id)")
-            print("✅ Job app now has \(jobApp.resumes.count) resumes")
 
             // Ensure the UI updates fully
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                print("🔄 Forcing another refresh")
                 refresh.toggle()
             }
         } else {
             errorMessage = "Failed to create resume"
             showErrorMessage = true
-            print("❌ Failed to create resume")
         }
     }
 }

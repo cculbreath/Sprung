@@ -116,7 +116,6 @@ struct SettingsView: View {
                                 }
                             }
                             .onChange(of: preferredOpenAIModel) { oldValue, newValue in
-                                print("Changed OpenAI model: \(oldValue) → \(newValue)")
                             }
                             .disabled(isLoadingModels || availableModels.isEmpty)
                             .frame(maxWidth: .infinity)
@@ -196,7 +195,6 @@ struct SettingsView: View {
                             .toggleStyle(.switch)
                             .disabled(openAiApiKey == "none")
                             .onChange(of: ttsEnabled) { oldValue, newValue in
-                                print("TTS enabled changed: \(oldValue) → \(newValue)")
                             }
 
                         if openAiApiKey == "none" {
@@ -486,7 +484,6 @@ struct SettingsView: View {
                 if let error = error {
                     self.ttsError = error.localizedDescription
                     self.showTTSError = true
-                    print("TTS preview error: \(error.localizedDescription)")
                 }
             }
         }

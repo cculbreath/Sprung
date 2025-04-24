@@ -62,7 +62,6 @@ final class CoverChatProvider {
         guard let letter = app.selectedCover else { return }
 
         buttons.wrappedValue.runRequested = true
-        print("Cover letter mode: \(String(describing: letter.currentMode))")
 
         // Set up the system message
         let systemMessage = CoverLetterPrompts.systemMessage
@@ -103,7 +102,6 @@ final class CoverChatProvider {
             } catch {
                 await MainActor.run {
                     // Handle any errors
-                    print("Chat completion error: \(error.localizedDescription)")
                     buttons.wrappedValue.runRequested = false
                     errorMessage = "Error: \(error.localizedDescription)"
                 }
@@ -174,7 +172,6 @@ final class CoverChatProvider {
         guard let letter = app.selectedCover else { return }
 
         buttons.wrappedValue.runRequested = true
-        print("Cover letter revision mode: \(String(describing: letter.currentMode))")
 
         // Set up the system message
         let systemMessage = CoverLetterPrompts.systemMessage
@@ -235,7 +232,6 @@ final class CoverChatProvider {
             } catch {
                 await MainActor.run {
                     // Handle any errors
-                    print("Chat completion error: \(error.localizedDescription)")
                     buttons.wrappedValue.runRequested = false
                     errorMessage = "Error: \(error.localizedDescription)"
                 }

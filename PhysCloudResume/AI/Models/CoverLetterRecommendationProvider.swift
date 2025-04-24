@@ -74,8 +74,6 @@ final class CoverLetterRecommendationProvider {
             ChatMessage(role: .user, content: prompt),
         ]
         // Debug: show prompt and messages to be sent
-        print("[CoverLetterRecommendationProvider] Prompt (first 200 chars): \(prompt.prefix(200))")
-        print("[CoverLetterRecommendationProvider] Messages: \(messages)")
 
         // Get model as string
         let modelString = OpenAIModelFetcher.getPreferredModelString()
@@ -94,15 +92,12 @@ final class CoverLetterRecommendationProvider {
                     temperature: 1.0
                 )
                 // Debug: print converted chat messages
-                print("[CoverLetterRecommendationProvider] ChatMessages: \(chatMessages)")
 
                 // Make the API call with structured output
                 // Debug: print query details
-                print("[CoverLetterRecommendationProvider] ChatQuery -> model: \(modelString), responseFormat: cover-letter-recommendation, temperature: 1.0")
                 // Call API with structured output
                 let result = try await macPawClient.openAIClient.chats(query: query)
                 // Debug: print raw API result object
-                print("[CoverLetterRecommendationProvider] API result: \(result)")
 
                 // Extract structured output response
                 // For MacPaw/OpenAI structured outputs, we need to check the content string
@@ -112,18 +107,14 @@ final class CoverLetterRecommendationProvider {
                    let data = content.data(using: .utf8)
                 {
                     // Debug: print raw content and JSON payload
-                    print("[CoverLetterRecommendationProvider] Raw content (first 200 chars): \(content.prefix(200))")
                     if let jsonString = String(data: data, encoding: .utf8) {
-                        print("[CoverLetterRecommendationProvider] Raw JSON string (first 200 chars): \(jsonString.prefix(200))")
                     }
                     do {
                         let structuredOutput = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
                         // Debug: print decoded structured output
-                        print("[CoverLetterRecommendationProvider] Decoded StructuredOutput: \(structuredOutput)")
                         return structuredOutput
                     } catch {
                         // Debug: decoding failure
-                        print("[CoverLetterRecommendationProvider] Decoding error: \(error.localizedDescription)")
                         throw NSError(
                             domain: "CoverLetterRecommendationProvider",
                             code: 1003,
@@ -143,7 +134,6 @@ final class CoverLetterRecommendationProvider {
             }
 
         } catch {
-            print("Error fetching best cover letter: \(error.localizedDescription)")
             throw error
         }
     }

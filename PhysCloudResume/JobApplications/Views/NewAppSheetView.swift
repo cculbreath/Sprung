@@ -82,17 +82,14 @@ struct NewAppSheetView: View {
             case "www.linkedin.com":
                 isLoading = true
                 if preferredApi == .scrapingDog {
-                    print("linkedin - ScrapingDog")
                     if let jobID = url.pathComponents.last {
                         await ScrapingDogfetchLinkedInJobDetails(jobID: jobID, posting_url: url)
                     }
                 }
                 if preferredApi == .brightData {
-                    print("linkedin - BrightData")
                     await BrightDatafetchLinkedInJobDetails(posting_url: url)
                 }
                 if preferredApi == .proxycurl {
-                    print("linkedin - Proxycurl")
                     await ProxycurlfetchLinkedInJobDetails(posting_url: url)
                 }
             case "jobs.apple.com":
@@ -105,20 +102,12 @@ struct NewAppSheetView: View {
                         )
                         if let jobApp = jobAppStore.selectedApp {
                             // Now you can access the extracted data from jobApp
-                            print("Job Position: \(jobApp.jobPosition)")
-                            print("Job Location: \(jobApp.jobLocation)")
-                            print("Company Name: \(jobApp.companyName)")
-                            print("Job Posting Time: \(jobApp.jobPostingTime)")
-                            print("Job Description: \(jobApp.jobDescription)")
-                            print("Job Function: \(jobApp.jobFunction)")
                         }
                         isLoading = false
                         isPresented = false
                     } catch {
-                        print("Error fetching HTML content: \(error)")
                     }
                 }
-                print("apple")
             case "www.indeed.com", "indeed.com":
                 isLoading = true
                 Task {
@@ -135,7 +124,6 @@ struct NewAppSheetView: View {
                     }
                 }
             default:
-                print("Only Apple, Indeed, and LinkedIn are supported")
             }
             return
         }
@@ -149,14 +137,12 @@ struct NewAppSheetView: View {
         guard let url = URL(string: requestURL) else { return }
 
         do {
-            print(requestURL)
             let (data, response) = try await URLSession.shared.data(from: url)
 
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode != 200
             {
                 // Handle HTTP error (non-200 status code)
-                print("HTTP error: \(httpResponse.statusCode)")
                 isLoading = false
                 return
             }
@@ -169,7 +155,6 @@ struct NewAppSheetView: View {
             }
         } catch {
             // Handle network or decoding error
-            print("Error: \(error)")
         }
 
         isLoading = false
@@ -204,7 +189,6 @@ struct NewAppSheetView: View {
 
             // Check the HTTP response status
             guard let httpResponse = response as? HTTPURLResponse else {
-                print("Invalid response")
                 isLoading = false
                 isPresented = false
 
@@ -217,7 +201,6 @@ struct NewAppSheetView: View {
                    let jsonDict = jsonObject as? [String: Any],
                    let snapshotId = jsonDict["snapshot_id"] as? String
                 {
-                    print("Received snapshot_id: \(snapshotId)")
 
                     // Wait for the data to be ready (optional, depending on API behavior)
                     try await Task.sleep(nanoseconds: 5 * 1_000_000_000) // Sleep for 5 seconds
@@ -229,16 +212,13 @@ struct NewAppSheetView: View {
                     isLoading = false
                     isPresented = false
 
-                    print("Failed to parse snapshot_id from response")
                 }
             } else {
                 // Handle HTTP error
                 isLoading = false
                 isPresented = false
 
-                print("HTTP error: \(httpResponse.statusCode)")
                 if let responseBody = String(data: data, encoding: .utf8) {
-                    print("Response body: \(responseBody)")
                 }
             }
         } catch {
@@ -246,7 +226,6 @@ struct NewAppSheetView: View {
             isLoading = false
             isPresented = false
 
-            print("Error during first request: \(error.localizedDescription)")
         }
         isLoading = false
     }
@@ -255,7 +234,6 @@ struct NewAppSheetView: View {
         // Construct the request URL for the snapshot
         let snapshotURLString = "https://api.brightdata.com/datasets/v3/snapshot/\(snapshotId)?format=json"
         guard let snapshotURL = URL(string: snapshotURLString) else {
-            print("Invalid snapshot URL")
             return
         }
 
@@ -279,7 +257,6 @@ struct NewAppSheetView: View {
 
             // Check the HTTP response status
             guard let responseHttp = response as? HTTPURLResponse else {
-                print("Invalid snapshot response")
                 return
             }
             httpResponse = responseHttp
@@ -288,17 +265,14 @@ struct NewAppSheetView: View {
             if httpResponse?.statusCode == 202 {
                 // Data not ready, wait and retry
                 if retryCount < 1 {
-                    print("Snapshot not ready (HTTP 202), waiting 10 seconds before retrying...")
                     delayed = true
                     try await Task.sleep(nanoseconds: 10 * 1_000_000_000) // Sleep for 10 seconds
                     retryCount += 1
                 } else if retryCount < maxRetries {
-                    print("Snapshot still not ready (HTTP 202), waiting 10 seconds before retrying...")
                     delayed = false
                     verydelayed = true
                     try await Task.sleep(nanoseconds: 200 * 1_000_000_000) // Sleep for 10 seconds
                 } else {
-                    print("Snapshot not ready after retries")
                     isLoading = false
                     // Optionally, you can throw an error or handle it as needed
                     return
@@ -313,9 +287,7 @@ struct NewAppSheetView: View {
         if httpResponse?.statusCode == 200, let data = snapshotData {
             // Process the snapshot data
             if let jobDetail = JobApp.parseBrightDataJobApp(jobAppStore: jobAppStore, jsonData: data) {
-                print("parsed BrightData!")
             } else {
-                print("parsing error :(")
             }
             isLoading = false
             isPresented = false
@@ -324,12 +296,9 @@ struct NewAppSheetView: View {
             // Handle HTTP error
             isLoading = false
             if let statusCode = httpResponse?.statusCode {
-                print("HTTP error during snapshot request: \(statusCode)")
             } else {
-                print("Unknown HTTP error during snapshot request")
             }
             if let data = snapshotData, let responseBody = String(data: data, encoding: .utf8) {
-                print("Response body: \(responseBody)")
             }
         }
     }
@@ -345,7 +314,6 @@ struct NewAppSheetView: View {
         ]
 
         guard let requestURL = components?.url else {
-            print("Invalid URL construction")
             isLoading = false
             return
         }
@@ -356,7 +324,6 @@ struct NewAppSheetView: View {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
         do {
-            print("Fetching from Proxycurl: \(requestURL)")
             let (data, response) = try await URLSession.shared.data(for: request)
 
             if let httpResponse = response as? HTTPURLResponse {
@@ -367,21 +334,16 @@ struct NewAppSheetView: View {
                         jsonData: data,
                         postingUrl: posting_url.absoluteString
                     ) {
-                        print("Successfully parsed Proxycurl job data")
                         isPresented = false
                     } else {
-                        print("Error parsing Proxycurl response")
                     }
                 } else {
                     // Handle error response
-                    print("HTTP error: \(httpResponse.statusCode)")
                     if let errorText = String(data: data, encoding: .utf8) {
-                        print("Error response: \(errorText)")
                     }
                 }
             }
         } catch {
-            print("Network request error: \(error.localizedDescription)")
         }
 
         isLoading = false

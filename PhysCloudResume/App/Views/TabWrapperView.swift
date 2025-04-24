@@ -76,7 +76,6 @@ struct TabWrapperView: View {
                     updateMyLetter()
                 }
                 .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, newVal in
-                    print(newVal ? "tab resExists" : "change res doesn't exist")
                 }
                 .onChange(of: $tabRefresh.wrappedValue) { _, newvalue in print("Tab is is now + \(newvalue ? "true" : "false")") }
                 .onChange(of: selectedTab) { _, newTab in
@@ -104,7 +103,6 @@ struct TabWrapperView: View {
     }
 
     func updateMyLetter() {
-        print("update cover letter")
         if let selectedApp = jobAppStore.selectedApp {
             // Determine or create the cover letter
             let letter: CoverLetter

@@ -17,7 +17,6 @@ final class ResRefStore: SwiftDataStore {
 
     init(context: ModelContext) {
         modelContext = context
-        print("RefStore Initialized: \(resRefs.count) refs")
     }
 
     /// Adds a new `ResRef` to the store

@@ -178,20 +178,16 @@ enum Statuses: String, Codable, CaseIterable {
         if !resumes.contains(where: { $0.id == resume.id }) {
             resumes.append(resume)
             selectedRes = resume
-            print("JobApp resume added, jobApp.hasAnyResume is \(hasAnyRes ? "true" : "false")")
         } else {
             if resumes.isEmpty {
-                print("Uniqueness test fails: resumes array is empty")
             } else {
                 for (index, resume) in resumes.enumerated() {
-                    print("resume array \(index): \(resume.createdDateString)")
                 }
             }
         }
 
         if selectedRes == nil {
             selectedRes = resume
-            print("selected res set to newly added res")
         }
     }
 

@@ -144,7 +144,6 @@ struct ResumeExportView: View {
 
     private func exportResumePDF() {
         guard let resume = selectedResume, let pdfData = resume.pdfData else {
-            print("No PDF data available for this resume")
             return
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
@@ -153,15 +152,12 @@ struct ResumeExportView: View {
         do {
             try FileManager.default.createDirectory(at: downloadsURL, withIntermediateDirectories: true, attributes: nil)
             try pdfData.write(to: fileURL)
-            print("PDF exported to \(fileURL)")
         } catch {
-            print("Failed to export PDF: \(error)")
         }
     }
 
     private func exportResumeText() {
         guard let resume = selectedResume else {
-            print("No resume selected")
             return
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
@@ -171,15 +167,12 @@ struct ResumeExportView: View {
 
         do {
             try resume.textRes.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("Text file exported to \(fileURL)")
         } catch {
-            print("Failed to export resume text: \(error)")
         }
     }
 
     private func exportResumeJSON() {
         guard let resume = selectedResume else {
-            print("No resume selected")
             return
         }
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
@@ -188,15 +181,12 @@ struct ResumeExportView: View {
         let jsonString = resume.jsonTxt
         do {
             try jsonString.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("JSON file exported to \(fileURL)")
         } catch {
-            print("Failed to export resume JSON: \(error)")
         }
     }
 
     private func exportCoverLetterText() {
         guard let coverLetter = selectedCoverLetter else {
-            print("No cover letter selected")
             exportAlertMessage = "No cover letter selected. Please select a cover letter first."
             showExportAlert = true
             return
@@ -207,11 +197,9 @@ struct ResumeExportView: View {
 
         do {
             try coverLetter.content.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("Cover letter text file exported to \(fileURL)")
             exportAlertMessage = "Cover letter has been exported to \"\(filename)\""
             showExportAlert = true
         } catch {
-            print("Failed to export cover letter text: \(error)")
             exportAlertMessage = "Failed to export: \(error.localizedDescription)"
             showExportAlert = true
         }
@@ -231,11 +219,9 @@ struct ResumeExportView: View {
 
         do {
             try pdfData.write(to: fileURL)
-            print("Cover letter PDF exported to \(fileURL)")
             exportAlertMessage = "Cover letter PDF has been exported to \"\(filename)\""
             showExportAlert = true
         } catch {
-            print("Failed to export cover letter PDF: \(error)")
             exportAlertMessage = "Failed to export PDF: \(error.localizedDescription)"
             showExportAlert = true
         }
@@ -243,7 +229,6 @@ struct ResumeExportView: View {
 
     private func exportAllCoverLetters() {
         guard let jobApp = jobAppStore.selectedApp else {
-            print("No job application selected")
             return
         }
 
@@ -251,7 +236,6 @@ struct ResumeExportView: View {
         let allCoverLetters = jobApp.coverLetters.filter { $0.generated }.sorted(by: { $0.moddedDate > $1.moddedDate })
 
         if allCoverLetters.isEmpty {
-            print("No cover letters available to export")
             exportAlertMessage = "No cover letters available to export for this job application."
             showExportAlert = true
             return
@@ -292,7 +276,6 @@ struct ResumeExportView: View {
             exportAlertMessage = "\(allCoverLetters.count) cover letter options have been exported as text and PDFs"
             showExportAlert = true
         } catch {
-            print("Failed to export all cover letters: \(error)")
             exportAlertMessage = "Failed to export: \(error.localizedDescription)"
             showExportAlert = true
         }

@@ -114,7 +114,6 @@ class OpenAITTSProvider {
                     }
                 case let .failure(error):
                     if !self.cancelRequested {
-                        print("TTS streaming error: \(error)")
                     }
                 }
             },

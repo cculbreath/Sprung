@@ -40,7 +40,6 @@ struct Cell: View {
                                 if let url = URL(string: val) {
                                     openURL(url)
                                 } else {
-                                    print("URL Problem")
                                 }
                             }) {
                                 Image(systemName: "arrow.up.right.square")

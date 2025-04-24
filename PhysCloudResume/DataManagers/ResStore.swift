@@ -28,14 +28,12 @@ final class ResStore: SwiftDataStore {
 
     @discardableResult
     func addResume(res: Resume, to jobApp: JobApp) -> Resume {
-        print("Current resumes count: \(res.jobApp!.resumes.count)")
 
         jobApp.addResume(res)
         res.model!.resumes.append(res)
         modelContext.insert(res)
         saveContext()
 
-        print("ResStore resume added, jobApp.hasAnyResume is \(jobApp.hasAnyRes ? "true" : "false")")
         return res
     }
 
@@ -43,27 +41,19 @@ final class ResStore: SwiftDataStore {
     func create(jobApp: JobApp, sources: [ResRef], model: ResModel) -> Resume? {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
-        print("Model context available")
-        print("Creating resume for job application: \(jobApp)")
-        print("Current resumes count: \(jobApp.resumes.count)")
 
         let resume = Resume(jobApp: jobApp, enabledSources: sources, model: model)
-        print("Current resumes count: \(resume.jobApp!.resumes.count)")
 
         if jobApp.selectedRes == nil {
-            print("Set Selection")
 
             jobApp.selectedRes = resume
         }
-        print("Resume object created")
 
         do {
             guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
                 return nil
             }
             resume.rootNode = builder.buildTree()
-            print("Resume tree built from JSON data")
-            print("1 Current resumes count: \(resume.jobApp!.resumes.count)")
 //                print(builder.json)
 
             // Persist new resume (and trigger observers)
@@ -71,13 +61,10 @@ final class ResStore: SwiftDataStore {
             modelContext.insert(resume)
             saveContext()
 
-            print("2 Current resumes count: \(resume.jobApp!.resumes.count)")
 
-            print("Resume successfully saved and processed")
             resume.debounceExport()
 
         } catch {
-            print("Could not unwrap JSON")
         }
         return resume
     }
@@ -100,7 +87,6 @@ final class ResStore: SwiftDataStore {
             do {
                 try context.save()
             } catch {
-                print("Failed to save duplicated resume: \(error)")
                 return nil
             }
 
