@@ -97,7 +97,6 @@ import Foundation
 
     var updatableFieldsString: String {
         guard let rootNode = res.rootNode else {
-            print("rootnode error")
             return ""
         }
         let exportDict = TreeNode.traverseAndExportNodes(node: rootNode)
@@ -107,7 +106,6 @@ import Foundation
             )
             return String(data: updatableJsonData, encoding: .utf8) ?? ""
         } catch {
-            print("Error serializing JSON: \(error.localizedDescription)")
             return ""
         }
     }
@@ -251,9 +249,7 @@ import Foundation
 
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("Prompt saved to \(fileURL.path)")
         } catch {
-            print("Error writing prompt to file: \(error.localizedDescription)")
         }
     }
 }

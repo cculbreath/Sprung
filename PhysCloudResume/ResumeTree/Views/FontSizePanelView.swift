@@ -39,7 +39,6 @@ struct FontSizePanelView: View {
         }
         .padding(.trailing, 16) // Avoid overlap on trailing side.
         .onAppear(perform: { for node in jobAppStore.selectedApp?.selectedRes?.fontSizeNodes ?? [] {
-            print("nooodeFONT: \(node.key): \(node.fontString)")
         }
         if jobAppStore.selectedApp?.selectedRes?.fontSizeNodes == nil { print("Ah fuk. empty") }
         })

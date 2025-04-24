@@ -97,7 +97,6 @@ struct AddCoverRefForm: View {
                         saveForm()
 
                     } catch {
-                        print("Error reading file: \(error.localizedDescription)")
                     }
                 }
 

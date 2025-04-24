@@ -136,7 +136,6 @@ class ApplicantProfileManager {
                 ApplicantProfile.self,
                 ResModel.self)
         } catch {
-            print("Failed to create model container with all models: \(error)")
         }
     }
 
@@ -160,7 +159,6 @@ class ApplicantProfileManager {
 
     private func loadProfileFromSwiftData() -> ApplicantProfile? {
         guard let context = modelContainer?.mainContext else {
-            print("Model container not initialized")
             return nil
         }
 
@@ -169,14 +167,12 @@ class ApplicantProfileManager {
             let profiles = try context.fetch(descriptor)
             return profiles.first
         } catch {
-            print("Failed to load ApplicantProfile: \(error)")
             return nil
         }
     }
 
     func saveProfile(_ profile: ApplicantProfile) {
         guard let context = modelContainer?.mainContext else {
-            print("Model container not initialized")
             return
         }
 
@@ -204,7 +200,6 @@ class ApplicantProfileManager {
             try context.save()
             cachedProfile = profile
         } catch {
-            print("Failed to save ApplicantProfile: \(error)")
         }
     }
 }

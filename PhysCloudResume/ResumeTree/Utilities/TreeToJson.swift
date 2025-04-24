@@ -154,7 +154,6 @@ class TreeToJson {
                 }
 
                 else {
-                    print("sorted children prob")
                     return nil
                 }
             } else {
@@ -169,7 +168,6 @@ class TreeToJson {
         _ sectionName: String, keyOne: String = "name", keyTwo: String = "value"
     ) -> String? {
         guard let sectionNode = rootNode.children?.first(where: { $0.name == sectionName }) else {
-            print("export problem: \(sectionName) is expected, but not found")
             return nil
         }
 
@@ -188,7 +186,6 @@ class TreeToJson {
                     }
                     """
                 } else {
-                    print("!&! empty node found")
                     return nil
                 }
             }

@@ -31,7 +31,6 @@ extension JobApp {
 
             return jobApp
         } else {
-            print("Failed to parse JSON or JSON structure is unexpected")
             return nil
         }
     }

@@ -27,7 +27,6 @@ final class CoverLetterStore: SwiftDataStore {
     init(context: ModelContext, refStore: CoverRefStore) {
         modelContext = context
         coverRefStore = refStore
-        print("CoverLetterStore Initialized")
     }
 
     @discardableResult
@@ -53,14 +52,11 @@ final class CoverLetterStore: SwiftDataStore {
 
     @discardableResult
     func create(jobApp: JobApp) -> CoverLetter {
-        print("Model context available")
-        print("Creating cover letter for job application: \(jobApp)")
 
         let letter = CoverLetter(
             enabledRefs: coverRefStore.defaultSources,
             jobApp: jobApp
         )
-        print("CoverLetter object created")
 
         modelContext.insert(letter)
 //      try? modelContext.save()
@@ -97,7 +93,6 @@ final class CoverLetterStore: SwiftDataStore {
                 //      saveContext()
             }
         } else {
-            print("letter not attached to jobapp!")
         }
     }
 

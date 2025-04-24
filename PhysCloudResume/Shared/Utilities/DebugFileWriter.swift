@@ -26,10 +26,8 @@ enum DebugFileWriter {
 
         do {
             try text.write(to: tempURL, atomically: true, encoding: .utf8)
-            print("[DebugFileWriter] Wrote HTML dump to \(tempURL.path)")
             return tempURL
         } catch {
-            print("[DebugFileWriter] Failed to write dump – \(error)")
             return nil
         }
     }

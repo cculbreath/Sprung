@@ -154,7 +154,6 @@ struct ApplicantProfileView: View {
             let selectedFile = try result.get().first
 
             guard let selectedFile = selectedFile else {
-                print("No file selected")
                 return
             }
 
@@ -165,10 +164,8 @@ struct ApplicantProfileView: View {
                 profile.signatureData = data
                 hasChanges = true
             } else {
-                print("Failed to access file")
             }
         } catch {
-            print("Error selecting signature: \(error)")
         }
     }
 

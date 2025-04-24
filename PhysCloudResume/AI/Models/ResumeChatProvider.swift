@@ -34,7 +34,6 @@ final class ResumeChatProvider {
 
     private func convertJsonToNodes(_ jsonString: String?) -> [ProposedRevisionNode]? {
         guard let jsonString = jsonString, let jsonData = jsonString.data(using: .utf8) else {
-            print("Error converting string to data")
             return nil
         }
 
@@ -45,7 +44,6 @@ final class ResumeChatProvider {
             // Return the array of ProposedRevisionNode
             return revisionsContainer.revArray
         } catch {
-            print("Failed to decode JSON: \(error)")
             return nil
         }
     }
@@ -55,14 +53,11 @@ final class ResumeChatProvider {
     func unloadResponse() -> [ProposedRevisionNode]? {
         if let nodes = convertJsonToNodes(messages[0]) {
             messages.removeFirst()
-            print("Nodes processed from JSON response:")
             for node in nodes {
-                print("Node ID: \(node.id), isTitleNode: \(node.isTitleNode), oldValue: \(node.oldValue.prefix(20))...")
             }
             lastRevNodeArray = nodes
             return nodes
         } else {
-            print("❌ ERROR: Failed to convert JSON response to nodes")
             return nil
         }
     }
@@ -186,7 +181,6 @@ final class ResumeChatProvider {
                     )
                 }
 
-                print("AI response received (structured): \(self.messages.last?.prefix(100) ?? "Empty")")
 
                 // Get the revision nodes directly from the structured response
                 lastRevNodeArray = response.revArray
@@ -233,7 +227,6 @@ final class ResumeChatProvider {
                     )
                 }
 
-                print("AI response received: \(self.messages.last?.prefix(100) ?? "Empty")")
 
                 // Try to convert to nodes
                 lastRevNodeArray = convertJsonToNodes(self.messages.last) ?? []
@@ -285,7 +278,6 @@ extension String {
                 return String(data: prettyPrintedData, encoding: .utf8) ?? self
             }
         } catch {
-            print("Error formatting JSON: \(error)")
         }
         return self
     }

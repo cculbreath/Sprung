@@ -18,7 +18,6 @@ final class ResModelStore: SwiftDataStore {
     init(context: ModelContext, resStore: ResStore) {
         modelContext = context
         self.resStore = resStore
-        print("Model Store Init: \(resModels.count) models")
     }
 
     /// Ensures that each modelRef is unique across `resRefs`

@@ -99,13 +99,10 @@ struct CoverLetterAiContentView: View {
             hardStopPlayback()
         }
         .onChange(of: isBuffering) { old, new in
-            print("[\(ISO8601DateFormatter().string(from: Date()))] buffering changed from \(old) to \(new)")
         }
         .onChange(of: isSpeaking) { old, new in
-            print("[\(ISO8601DateFormatter().string(from: Date()))] speaking changed from \(old) to \(new)")
         }
         .onChange(of: isPaused) { old, new in
-            print("[\(ISO8601DateFormatter().string(from: Date()))] paused changed from \(old) to \(new)")
         }
         .onAppear { print("AI content") }
         .alert(item: $errorWrapper) { wrapper in
@@ -135,7 +132,6 @@ struct CoverLetterAiContentView: View {
 
         //  ————————  Option‑click acts as a hard STOP (returns to idle)  ————————
         if optionKeyPressed {
-            print("opt click stop req")
             hardStopPlayback() // clear buffer & reset UI; no automatic restart
             return
         }
@@ -144,9 +140,7 @@ struct CoverLetterAiContentView: View {
 
         // 1. Playing  →  Pause
         if isSpeaking {
-            print("pause req")
             if ttsProvider.pause() {
-                print("pause success")
                 isSpeaking = false
                 isPaused = true
             }
@@ -155,9 +149,7 @@ struct CoverLetterAiContentView: View {
 
         // 2. Paused   →  Resume
         if isPaused {
-            print("resume req")
             if ttsProvider.resume() {
-                print("resume success")
                 isSpeaking = true
                 isPaused = false
             }
@@ -166,13 +158,11 @@ struct CoverLetterAiContentView: View {
 
         // 3. Buffering → Cancel buffering (acts like a stop)
         if isBuffering {
-            print("stop req")
             hardStopPlayback()
             return
         }
 
         // 4. Idle      →  Begin streaming & play
-        print("start req")
         startStreamingFromBeginning()
     }
 
@@ -234,7 +224,6 @@ struct CoverLetterAiContentView: View {
                     if let error = error {
                         self.ttsError = error.localizedDescription
                         self.showTTSError = true
-                        print("TTS streaming error: \(error.localizedDescription)")
                     }
                 }
             }
@@ -251,7 +240,6 @@ struct CoverLetterAiContentView: View {
         let writingSamples = letters.first?.writingSamplesString ?? ""
         Task {
             // Debug: log initiation of chooseBestCoverLetter
-            print("[CoverLetterAiView] Initiating chooseBestCoverLetter for job: \(jobApp.jobPosition), letters: \(letters.map { $0.id.uuidString })")
             do {
                 let provider = CoverLetterRecommendationProvider(
                     client: openAIClient,
@@ -260,11 +248,9 @@ struct CoverLetterAiContentView: View {
                 )
                 let result = try await provider.fetchBestCoverLetter()
                 // Debug: log received BestCoverLetterResponse
-                print("[CoverLetterAiView] Received BestCoverLetterResponse: \(result)")
                 await MainActor.run {
                     // Debug: attempt to select best cover letter by UUID
                     let uuidString = result.bestLetterUuid
-                    print("[CoverLetterAiView] Best letter UUID from response: \(uuidString)")
                     if let uuid = UUID(uuidString: uuidString),
                        let best = jobApp.coverLetters.first(where: { $0.id == uuid })
                     {
@@ -281,7 +267,6 @@ struct CoverLetterAiContentView: View {
                         errorWrapper = ErrorMessageWrapper(message: message)
                     } else {
                         // Debug: no matching cover letter found
-                        print("[CoverLetterAiView] No cover letter found matching UUID: \(uuidString)")
                         errorWrapper = ErrorMessageWrapper(
                             message: "No matching cover letter found for UUID: \(uuidString)"
                         )
@@ -290,7 +275,6 @@ struct CoverLetterAiContentView: View {
                 }
             } catch {
                 await MainActor.run {
-                    print("Choose best error: \(error.localizedDescription)")
                     buttons.chooseBestRequested = false
                     errorWrapper = ErrorMessageWrapper(
                         message: "Error choosing best cover letter: \(error.localizedDescription)"

@@ -50,9 +50,7 @@ struct CoverLetterView: View {
             Text(jobAppStore.selectedApp?.selectedRes == nil ? "job app nil" : "No nil fail")
                 .onAppear {
                     if jobAppStore.selectedApp == nil {
-                        print("no job app")
                     } else if jobAppStore.selectedApp?.selectedRes == nil {
-                        print("no resume")
                     }
                 }
         }
@@ -177,7 +175,6 @@ struct CoverLetterContentView: View {
                         .frame(maxHeight: .infinity)
                         .id(cL.id)
                         .onChange(of: bindApp.selectedCover) { _, newCover in
-                            print("Cover letter changed to: \(newCover?.modDate ?? "None")")
                         }
                     } else {
                         EmptyView()
@@ -206,6 +203,5 @@ struct CoverLetterContentView: View {
             jobApp.selectedCover = mostRecentGenerated
         }
 
-        print("Deleted cover letter. Selected most recent generated letter, if available.")
     }
 }

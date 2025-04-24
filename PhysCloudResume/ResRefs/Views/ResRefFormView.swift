@@ -78,7 +78,6 @@ struct ResRefFormView: View {
             handleOnDrop(providers: providers)
         }
         .onChange(of: isTargeted) { _, newValue in
-            print("isTargeted:", newValue)
         }
         .onAppear {
             if let resRef = existingResRef {
@@ -126,7 +125,6 @@ struct ResRefFormView: View {
 
                     do {
                         let fileName = url.deletingPathExtension().lastPathComponent
-                        print("Dropped file name:", fileName)
                         let text = try String(contentsOf: url, encoding: .utf8)
                         DispatchQueue.main.async {
                             self.sourceName = fileName
@@ -135,7 +133,6 @@ struct ResRefFormView: View {
                         }
 
                     } catch {
-                        print("Error reading file: \(error.localizedDescription)")
                     }
                 }
 

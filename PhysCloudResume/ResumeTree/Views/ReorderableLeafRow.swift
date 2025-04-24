@@ -117,12 +117,7 @@ struct LeafDropDelegate: DropDelegate {
         guard let fromIndex = array.firstIndex(of: draggedNode),
               let toIndex = array.firstIndex(of: overNode) else { return }
 
-        print("\n--- Reorder Start ---")
-        print("Dragged Node: Index \(fromIndex), Value: \(draggedNode.value.prefix(30))")
-        print("Over Node: Index \(toIndex), Value: \(overNode.value.prefix(30))")
-        print("Initial Array (sorted by myIndex):")
         for (index, node) in array.enumerated() {
-            print("Index \(index): \(node.value.prefix(30)), myIndex: \(node.myIndex)")
         }
 
         withAnimation(.easeInOut) {
@@ -144,18 +139,14 @@ struct LeafDropDelegate: DropDelegate {
             // Save the reordered array back to the parent
             parent.children = array
 
-            print("Updated Array After Reordering (sorted by myIndex):")
             for (index, node) in array.enumerated() {
-                print("Index \(index): \(node.value.prefix(30)), myIndex: \(node.myIndex)")
             }
-            print("--- Reorder End ---\n")
         }
 
         // Save changes to SwiftData
         do {
             try parent.resume.modelContext?.save()
         } catch {
-            print("Failed to save reordered nodes: \(error)")
         }
 
         // Notify the Resume model

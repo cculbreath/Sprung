@@ -98,7 +98,6 @@ struct ContentView: View {
                 .first?
                 .appendingPathComponent("Model.sqlite")
             {
-                print("Database location: \(storeURL.path)")
             }
         }
         .environment(dragInfo)

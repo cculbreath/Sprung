@@ -58,7 +58,6 @@ struct ResModelView: View {
                                         $refresh.wrappedValue = true
                                     }
                                 }
-                                print("Button Tab is now \($refresh.wrappedValue ? "true" : "false")")
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }

@@ -92,15 +92,12 @@ struct SidebarRecommendButton: View {
                         // as it breaks the ability to create new resumes
                         if isUsingFallbackResume {
                             // When using a fallback resume, we should not affect the selected resume
-                            print("⚠️ INFO: Using fallback resume for recommendation only, not changing selectedResId")
                             // Do not modify selectedResId at all
                         } else {
                             // Even with a legitimate selected resume, verify it's still valid
                             if let selectedResume = recommendedJob.selectedRes {
-                                print("✓ Valid resume selected: \(selectedResume.id)")
                             } else {
                                 // Do not clear the selectedResId as it breaks the CreateNewResumeView
-                                print("⚠️ ALERT: Resume reference needs attention")
                             }
                         }
 

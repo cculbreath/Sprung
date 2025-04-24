@@ -75,7 +75,6 @@ extension JobApp {
 
             return jobApp
         } catch {
-            print("Failed to parse Proxycurl JSON: \(error)")
             return nil
         }
     }

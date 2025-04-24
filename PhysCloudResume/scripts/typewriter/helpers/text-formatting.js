@@ -38,7 +38,6 @@ Sample helper definitions for HackMyResume's "basis" example theme.
       }).join(', ');
     },
 	footer: function(contact) {
-		console.log(contact)
 		let string = `
 		@page :first{
 		  @bottom-center{
@@ -55,7 +54,6 @@ Sample helper definitions for HackMyResume's "basis" example theme.
 			margin-top: -22px;
 		  }
 		}`
-		console.log(string)
 		return string;
 	}
 

@@ -165,6 +165,5 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
         }
         let fileURL = cookieFileURL(for: cookie.domain)
         try? data.write(to: fileURL, options: .atomic)
-        print("[CloudflareCookieManager] stored cf_clearance=\(cookie.value) for domain \(cookie.domain) at \(fileURL.path)")
     }
 }

@@ -155,8 +155,6 @@ import SwiftUI
                     } else {
                         // Log all job IDs for debugging
                         let availableIds = jobApps.map { $0.id.uuidString }
-                        print("Available job IDs: \(availableIds)")
-                        print("Looking for ID: \(uuid)")
 
                         throw NSError(
                             domain: "JobRecommendationProvider",
@@ -186,7 +184,6 @@ import SwiftUI
                 return decodedResponse
             }
         } catch {
-            print("Error fetching recommendation: \(error.localizedDescription)")
             throw error
         }
     }
@@ -270,7 +267,6 @@ import SwiftUI
         do {
             recommendation = try JSONDecoder().decode(JobRecommendation.self, from: data)
         } catch {
-            print("JSON decode error: \(error.localizedDescription)")
             if savePromptToFile {
                 savePromptToDownloads(content: "JSON decode error: \(error)\nJSON: \(responseText)", fileName: "jsonError.txt")
             }
@@ -283,7 +279,6 @@ import SwiftUI
             )
         }
 
-        print("Received recommendedJobId: \(recommendation.recommendedJobId)")
 
         // Try to create a UUID from the recommendedJobId and find matching job
         guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
@@ -303,8 +298,6 @@ import SwiftUI
 
         // Log all job IDs for debugging
         let availableIds = jobApps.map { $0.id.uuidString }
-        print("Available job IDs: \(availableIds)")
-        print("Looking for ID: \(uuid)")
 
         throw NSError(
             domain: "JobRecommendationProvider",
@@ -324,9 +317,7 @@ import SwiftUI
 
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("Prompt saved to \(fileURL.path)")
         } catch {
-            print("Error writing prompt to file: \(error.localizedDescription)")
         }
     }
 }

@@ -24,7 +24,6 @@ extension SwiftDataStore {
             return true
         } catch {
             #if DEBUG
-                print("[SwiftDataStore] Failed to save context (\(file):\(line)) –\n  \(error)")
             #endif
             return false
         }

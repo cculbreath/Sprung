@@ -99,11 +99,9 @@ func fbToJson(_ feedbackNodes: [FeedbackNode]) -> String? {
         if let jsonString = String(data: jsonData, encoding: .utf8) {
             return jsonString
         } else {
-            print("Error converting JSON data to String")
             return nil
         }
     } catch {
-        print("Error encoding FeedbackNodes to JSON: \(error)")
         return nil
     }
 }

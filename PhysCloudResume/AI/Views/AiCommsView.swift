@@ -62,7 +62,6 @@ struct AiCommsView: View {
     var body: some View {
         execQuery
             .sheet(isPresented: $sheetOn) {
-                print("sheet dismissed")
             } content: {
                 if sheetOn {
                     ReviewView(
@@ -116,11 +115,9 @@ struct AiCommsView: View {
                     // Safety timeout to dismiss the review view if AI request takes too long
                     DispatchQueue.main.asyncAfter(deadline: .now() + 180) { // 3 minutes timeout
                         if isLoading && aiResub {
-                            print("Request timeout triggered in AiCommsView")
 
                             // If this is the first attempt, retry once
                             if retryCount == 0 {
-                                print("Retrying AI request after timeout")
                                 retryCount += 1
                                 isRetrying = true
 
@@ -130,7 +127,6 @@ struct AiCommsView: View {
                                 // Set another timeout for the retry
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 180) { // 3 minutes for retry
                                     if isLoading && aiResub {
-                                        print("Retry request timeout triggered - dismissing UI")
                                         self.showError = true
                                         self.errorMessage = "The AI request is still taking longer than expected. Please try again later."
                                         aiResub = false
@@ -163,7 +159,6 @@ struct AiCommsView: View {
                         > 0
                     {
                         Button(action: {
-                            print("Notloading")
                             chatAction()
                         }) {
                             Image("ai-squiggle")
@@ -216,7 +211,6 @@ struct AiCommsView: View {
 
     /// Write a read‑aloud debug line and flush stdout so it appears immediately.
     private func log(_ msg: String) {
-        print("[ReadAloud] \(msg)")
         fflush(stdout)
     }
 
@@ -318,7 +312,6 @@ struct AiCommsView: View {
 
     // Validation function for revisions
     func validateRevs(res: Resume?, revs: [ProposedRevisionNode]) -> [ProposedRevisionNode]? {
-        print("Validating revisions...")
         var validRevs = revs
         if let myRes = res {
             let updateNodes = myRes.getUpdatableNodes()
@@ -326,7 +319,6 @@ struct AiCommsView: View {
             for (index, item) in validRevs.enumerated() {
                 // Check by ID first
                 if let matchedNode = updateNodes.first(where: { $0["id"] as? String == item.id }) {
-                    print("\(item.id) found")
                     continue
                 } else if let matchedByValue = updateNodes.first(where: { $0["value"] as? String == item.oldValue }), let id = matchedByValue["id"] as? String {
                     // Update revision's ID if matched by value
@@ -335,10 +327,8 @@ struct AiCommsView: View {
                     // Make sure to preserve isTitleNode when matching by value
                     validRevs[index].isTitleNode = matchedByValue["isTitleNode"] as? Bool ?? false
 
-                    print("\(item.id) updated to use ID from matched node. isTitleNode: \(validRevs[index].isTitleNode)")
 
                 } else {
-                    print("No match found for revision: \(item.id) - \(item.oldValue)")
                 }
             }
             return validRevs
@@ -417,7 +407,6 @@ struct AiCommsView: View {
         }
 
         Task {
-            print("chatAction starting")
             isLoading = true
 
             do {
@@ -437,13 +426,11 @@ struct AiCommsView: View {
 
                 // Get the model string
                 let modelString = OpenAIModelFetcher.getPreferredModelString()
-                print("Using OpenAI model for resume query: \(modelString)")
 
                 // Set up a timeout task that will run if the main task takes too long
                 let timeoutTask = Task {
                     try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds - just for checking if progress is made
                     if isLoading && !Task.isCancelled {
-                        print("AI operation in progress...")
                     }
                 }
 
@@ -460,7 +447,6 @@ struct AiCommsView: View {
                                   userInfo: [NSLocalizedDescriptionKey: chatProvider.errorMessage])
                 }
             } catch {
-                print("Error in chatAction: \(error.localizedDescription)")
 
                 // Update error state and show alert
                 await MainActor.run {

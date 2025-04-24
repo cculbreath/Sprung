@@ -140,7 +140,6 @@ class Resume: Identifiable, Hashable {
                 DispatchQueue.main.async { self?.pdfData = data }
             } catch {
                 DispatchQueue.main.async {
-                    print("Failed to load PDF file: \(error.localizedDescription)")
                 }
             }
         }
@@ -158,7 +157,6 @@ class Resume: Identifiable, Hashable {
     func debounceExport(onStart: (() -> Void)? = nil,
                         onFinish: (() -> Void)? = nil)
     {
-        print("pdf refresh")
 
         exportWorkItem?.cancel()
 
@@ -174,7 +172,6 @@ class Resume: Identifiable, Hashable {
                     do {
                         try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
                     } catch {
-                        print("Resume export failed: \(error)")
                     }
 
                     // Regardless of success toggle the exporting flag off and

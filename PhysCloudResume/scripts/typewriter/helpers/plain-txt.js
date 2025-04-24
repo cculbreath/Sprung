@@ -65,7 +65,6 @@
 		},
 		myLogger: function(txt, options) {
 			Object.keys(txt).forEach(key => {
-			    console.log(key);
 			});		},
 		sectionLine: function(title, options) {
 			const stripTags = function stripTags(html) {
@@ -93,9 +92,6 @@
 			const spaceBetween = width - strA.length - strB.length
 
 			if (spaceBetween < 0) {
-				console.log(strA)
-				console.log(strB)
-				console.log(strA.length + strB.length)
 				throw new Error('Total length of strA and strB exceeds the specified width')
 
 			}
