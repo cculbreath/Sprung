@@ -26,16 +26,24 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             // --- Main Content ---
-            // Main Job Application List
-            List(selection: $selectedApp) {
+            // Main Job Application List - keep JobAppStore in sync with sidebar selection
+            List(selection: Binding(
+                get: { self.selectedApp },
+                set: { newSelection in
+                    // Update our binding first
+                    self.selectedApp = newSelection
+                    // Then ensure JobAppStore is kept in sync - single source of truth
+                    jobAppStore.selectedApp = newSelection
+                }
+            )) {
                 // Add empty spacer section to ensure the first real section isn't hidden under the toolbar
                 Section {
                     EmptyView()
                 }
-                .padding(.top, 8) // This padding acts as a spacer 
+                .padding(.top, 8) // This padding acts as a spacer
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
-                
+
                 ForEach(Statuses.allCases, id: \.self) { status in
                     let filteredApps = jobApps.filter { $0.status == status }
                     if !filteredApps.isEmpty {
