@@ -331,7 +331,7 @@ final class ResumeChatProvider {
             if let macPawClient = openAIClient as? MacPawOpenAIClient {
                 // Convert our messages to MacPaw's format
                 let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
-                
+
                 // Create the query with structured output format
                 let query = ChatQuery(
                     messages: chatMessages,
@@ -339,24 +339,24 @@ final class ResumeChatProvider {
                     responseFormat: .jsonObject,
                     temperature: 1.0
                 )
-                
+
                 // Make direct HTTP request to bypass the system_fingerprint null issue
                 let url = URL(string: "https://api.openai.com/v1/chat/completions")!
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.addValue("Bearer \(macPawClient.apiKey)", forHTTPHeaderField: "Authorization")
                 request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-                
+
                 // Encode the query
                 let encoder = JSONEncoder()
                 encoder.keyEncodingStrategy = .convertToSnakeCase
                 request.httpBody = try encoder.encode(query)
-                
+
                 print("Sending direct API request to OpenAI with model: \(modelString)")
-                
+
                 // Execute the request
                 let (data, response) = try await URLSession.shared.data(for: request)
-                
+
                 // Log response for debugging
                 if let httpResponse = response as? HTTPURLResponse {
                     print("HTTP Status: \(httpResponse.statusCode)")
@@ -370,61 +370,156 @@ final class ResumeChatProvider {
                         )
                     }
                 }
-                
+
                 // Extract just the content string from the response
                 struct ChatChoiceContent: Decodable {
                     struct Choice: Decodable {
                         struct Message: Decodable {
                             let content: String?
                         }
+
                         let message: Message
                     }
+
                     let choices: [Choice]
                 }
-                
+
                 // Decode with a simplified structure to avoid system_fingerprint
                 let decoder = JSONDecoder()
                 decoder.keyDecodingStrategy = .convertFromSnakeCase
-                
+
                 print("Decoding API response...")
                 let contentResult = try decoder.decode(ChatChoiceContent.self, from: data)
-                
+
                 guard let content = contentResult.choices.first?.message.content,
-                      !content.isEmpty else {
+                      !content.isEmpty
+                else {
                     throw NSError(
                         domain: "ResumeChatProviderError",
                         code: 1002,
                         userInfo: [NSLocalizedDescriptionKey: "No content in API response"]
                     )
                 }
-                
+
                 print("Content extracted successfully, length: \(content.count)")
                 print("Content first 100 chars: \(String(content.prefix(100)))")
-                
+
                 // Parse the JSON content to extract the RevNode array
                 if let responseData = content.data(using: .utf8) {
                     do {
                         print("Parsing JSON content to RevNode array...")
-                        let revContainer = try JSONDecoder().decode(RevisionsContainer.self, from: responseData)
-                        print("Successfully decoded JSON with \(revContainer.revArray.count) revision nodes")
                         
+                        // First try to parse with a custom decoder that maps different key cases
+                        // Define a custom case-insensitive structure to handle different key cases
+                        struct CaseInsensitiveRevisionsContainer: Decodable {
+                            let revArray: [ProposedRevisionNode]
+                            
+                            enum CodingKeys: String, CodingKey {
+                                case revArray
+                                case RevArray // Uppercase variant
+                            }
+                            
+                            init(from decoder: Decoder) throws {
+                                let container = try decoder.container(keyedBy: CodingKeys.self)
+                                
+                                // Try with lowercase first, then uppercase
+                                if container.contains(.revArray) {
+                                    revArray = try container.decode([ProposedRevisionNode].self, forKey: .revArray)
+                                } else if container.contains(.RevArray) {
+                                    revArray = try container.decode([ProposedRevisionNode].self, forKey: .RevArray)
+                                } else {
+                                    revArray = [] // Empty array as fallback
+                                }
+                            }
+                        }
+                        
+                        // Try to decode with the case-insensitive container
+                        let caseInsensitiveDecoder = JSONDecoder()
+                        let caseInsensitiveContainer = try caseInsensitiveDecoder.decode(CaseInsensitiveRevisionsContainer.self, from: responseData)
+                        
+                        // Create a standard RevisionsContainer from our case-insensitive version
+                        let revContainer = RevisionsContainer(revArray: caseInsensitiveContainer.revArray)
+                        
+                        print("Successfully decoded JSON with \(revContainer.revArray.count) revision nodes")
+
                         // Convert to JSON string for compatibility with existing code
                         let encoder = JSONEncoder()
                         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                         let jsonData = try encoder.encode(revContainer)
                         let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
-                        
+
                         // Store the JSON string in messages array
                         self.messages = [jsonString]
-                        
+
                         // Get the revision nodes directly
                         lastRevNodeArray = revContainer.revArray
-                        
+
                         // Update generic messages for history
                         genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
                     } catch {
                         print("JSON parsing error: \(error.localizedDescription)")
                         print("Raw content: \(content)")
+                        
+                        // Fallback: Try manual JSON parsing if structured decoding fails
+                        do {
+                            // Try to parse as a dictionary first
+                            if let jsonObj = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
+                                print("Attempting manual JSON parsing...")
+                                
+                                // Look for RevArray or revArray
+                                let revArrayData: [[String: Any]]
+                                if let upperArray = jsonObj["RevArray"] as? [[String: Any]] {
+                                    revArrayData = upperArray
+                                    print("Found 'RevArray' key (uppercase) with \(upperArray.count) elements")
+                                } else if let lowerArray = jsonObj["revArray"] as? [[String: Any]] {
+                                    revArrayData = lowerArray
+                                    print("Found 'revArray' key (lowercase) with \(lowerArray.count) elements")
+                                } else {
+                                    print("Neither 'RevArray' nor 'revArray' keys found in JSON")
+                                    throw NSError(domain: "JSONParsingError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not find revArray in JSON"])
+                                }
+                                
+                                // Manually convert each dictionary to a ProposedRevisionNode
+                                var nodes: [ProposedRevisionNode] = []
+                                for item in revArrayData {
+                                    let node = ProposedRevisionNode(
+                                        id: item["id"] as? String ?? "",
+                                        oldValue: item["oldValue"] as? String ?? "",
+                                        newValue: item["newValue"] as? String ?? "",
+                                        valueChanged: item["valueChanged"] as? Bool ?? false,
+                                        isTitleNode: item["isTitleNode"] as? Bool ?? false,
+                                        why: item["why"] as? String ?? ""
+                                    )
+                                    nodes.append(node)
+                                }
+                                
+                                // Create a RevisionsContainer from our manually parsed nodes
+                                let revContainer = RevisionsContainer(revArray: nodes)
+                                print("Successfully manually parsed JSON with \(revContainer.revArray.count) revision nodes")
+                                
+                                // Convert to JSON string for compatibility with existing code
+                                let encoder = JSONEncoder()
+                                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                                let jsonData = try encoder.encode(revContainer)
+                                let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
+                                
+                                // Store the JSON string in messages array
+                                self.messages = [jsonString]
+                                
+                                // Get the revision nodes directly
+                                lastRevNodeArray = revContainer.revArray
+                                
+                                // Update generic messages for history
+                                genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
+                                
+                                // Success! Return early
+                                return
+                            }
+                        } catch {
+                            print("Manual JSON parsing also failed: \(error.localizedDescription)")
+                        }
+                        
+                        // If we got here, both structured and manual parsing failed
                         throw error
                     }
                 } else {
@@ -441,13 +536,13 @@ final class ResumeChatProvider {
                     model: modelString,
                     temperature: 1.0
                 )
-                
+
                 // Process the response
                 let content = response.content
-                
+
                 // Process messages format and store in messages array
                 self.messages = [content.asJsonFormatted()]
-                
+
                 if self.messages.isEmpty {
                     throw NSError(
                         domain: "ResumeChatProviderError",
@@ -455,10 +550,10 @@ final class ResumeChatProvider {
                         userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
                     )
                 }
-                
+
                 // Try to convert to nodes
                 lastRevNodeArray = convertJsonToNodes(self.messages.last) ?? []
-                
+
                 // Update generic messages
                 genericMessages.append(ChatMessage(role: .assistant, content: content))
             }
