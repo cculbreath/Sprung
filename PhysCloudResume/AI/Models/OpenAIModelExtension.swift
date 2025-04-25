@@ -10,14 +10,15 @@ import OpenAI
 
 // Constants for OpenAI model names
 // These are defined as String constants that can be used directly with the API
-struct AIModels {
+enum AIModels {
     // GPT-4.5 family of models
     static let gpt4_5 = "gpt-4.5"
     static let gpt4_5_preview = "gpt-4.5-preview"
-    
+
     // GPT-4o family of models
     static let gpt4o_mini = "gpt-4o-mini"
-    
+    static let gpt4o_latest = "gpt-4o-latest"
+
     // GPT-4o TTS model
     static let gpt_4o_mini_tts = "gpt-4o-mini-tts"
 }
@@ -25,7 +26,7 @@ struct AIModels {
 // Extension to AudioSpeechQuery for TTS models
 extension AudioSpeechQuery {
     // Adding the GPT-4o mini TTS model to the available models
-    struct CustomTTSModels {
+    enum CustomTTSModels {
         // You can use this directly in code as .gpt4o_mini_tts
         static let gpt4o_mini_tts = AIModels.gpt_4o_mini_tts
     }
