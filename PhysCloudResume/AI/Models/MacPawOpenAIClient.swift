@@ -26,7 +26,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         let configuration = OpenAI.Configuration(
             token: apiKey,
             organizationIdentifier: nil,
-            timeoutInterval: 60.0
+            timeoutInterval: 300.0  // Increased timeout to 5 minutes
         )
         client = OpenAI(configuration: configuration)
     }
