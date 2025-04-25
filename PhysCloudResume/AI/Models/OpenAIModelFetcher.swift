@@ -12,7 +12,7 @@ class OpenAIModelFetcher {
     /// Get the configured preferred model string from UserDefaults
     static func getPreferredModelString() -> String {
         // Use GPT-4.5-preview as the default model if no preference is set
-        let modelString = UserDefaults.standard.string(forKey: "preferredOpenAIModel") ?? "gpt-4.5-preview"
+        let modelString = UserDefaults.standard.string(forKey: "preferredOpenAIModel") ?? AIModels.gpt4_5_preview
         return modelString
     }
 

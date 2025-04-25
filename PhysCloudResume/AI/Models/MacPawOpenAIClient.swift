@@ -7,6 +7,7 @@
 
 import Foundation
 import OpenAI
+// Import the AIModels struct from our extension file
 
 /// Custom URLSession delegate to log network activity
 class NetworkLoggingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDataDelegate {
@@ -272,7 +273,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Create the query
         var query = AudioSpeechQuery(
-            model: .gpt_4o_mini_tts,
+            model: AIModels.gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
             instructions: instructions ?? "",
@@ -318,7 +319,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Create the query
         var query = AudioSpeechQuery(
-            model: .gpt_4o_mini_tts,
+            model: AIModels.gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
             instructions: instructions ?? "",
