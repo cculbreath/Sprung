@@ -124,6 +124,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         let chatMessages = messages.compactMap { convertMessage($0) }
 
         // Create the query with the converted messages
+        // We can directly use the model string since the ChatQuery init accepts any string value
         let query = ChatQuery(
             messages: chatMessages,
             model: model,
@@ -168,6 +169,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         let chatMessages = messages.compactMap { convertMessage($0) }
 
         // Create the query with the converted messages
+        // We can directly use the model string since the ChatQuery init accepts any string value
         let query = ChatQuery(
             messages: chatMessages,
             model: model,
@@ -216,6 +218,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         let chatMessages = messages.compactMap { convertMessage($0) }
 
         // Create streamable query with the converted messages
+        // We can directly use the model string since the ChatQuery init accepts any string value
         var query = ChatQuery(
             messages: chatMessages,
             model: model,
