@@ -11,8 +11,8 @@ import Foundation
 class OpenAIModelFetcher {
     /// Get the configured preferred model string from UserDefaults
     static func getPreferredModelString() -> String {
-        // Use GPT-4.5-preview as the default model if no preference is set
-        let modelString = UserDefaults.standard.string(forKey: "preferredOpenAIModel") ?? AIModels.gpt4_5_preview
+        // Use gpt-4o-latest as the default model if no preference is set
+        let modelString = UserDefaults.standard.string(forKey: "preferredOpenAIModel") ?? AIModels.gpt4o_latest
         return modelString
     }
 
@@ -41,12 +41,12 @@ class OpenAIModelFetcher {
             let modelResponse = try JSONDecoder().decode(ModelResponse.self, from: data)
             let chatModels = modelResponse.data
                 .map { $0.id }
-                .filter { 
-                    $0.contains("gpt") || 
-                    $0.contains("o1") || 
-                    $0.contains("o3") || 
-                    $0.contains("4.5") ||
-                    $0.contains("4o") 
+                .filter {
+                    $0.contains("gpt") ||
+                        $0.contains("o1") ||
+                        $0.contains("o3") ||
+                        $0.contains("4.5") ||
+                        $0.contains("4o")
                 }
                 .sorted()
 
