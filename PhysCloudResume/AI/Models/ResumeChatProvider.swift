@@ -120,25 +120,73 @@ final class ResumeChatProvider {
                             )
 
                             // Make the API call with structured output
-                            print("Sending structured output chat request to OpenAI")
-                            let result = try await macPawClient.openAIClient.chats(query: query)
-                            print("Received response from OpenAI API")
+                            print("Sending structured output chat request to OpenAI with model: \(modelString)")
+                            print("Request payload structure: \(chatMessages.count) messages, responseFormat: jsonSchema")
+                            
+                            do {
+                                let result = try await macPawClient.openAIClient.chats(query: query)
+                                print("✅ Received response from OpenAI API")
+                                
+                                if let resultJson = try? JSONEncoder().encode(result),
+                                   let resultString = String(data: resultJson, encoding: .utf8) {
+                                    print("Raw API response: \(resultString)")
+                                }
+                            } catch {
+                                print("❌❌❌ OpenAI API request failed with error: \(error)")
+                                if let nsError = error as NSError? {
+                                    print("Error domain: \(nsError.domain), code: \(nsError.code)")
+                                    print("Error user info: \(nsError.userInfo)")
+                                }
+                                throw error
+                            }
 
                             // Extract structured output response
                             // For MacPaw/OpenAI structured outputs, we need to check the content string
                             // since there's no structured output property directly accessible
                             print("Extracting content from response")
-                            guard let choice = result.choices.first else {
+                            
+                            // We need to handle the result variable, which may be undefined in the outer scope
+                            // if our nested try-catch block had an error
+                            let apiResult: ChatResult
+                            do {
+                                // Re-get the result to ensure it's properly defined
+                                apiResult = try await macPawClient.openAIClient.chats(query: query)
+                                print("Response choice count: \(apiResult.choices.count)")
+                            } catch {
+                                print("❌ Failed to re-fetch API result: \(error)")
+                                throw error
+                            }
+                            
+                            guard let choice = apiResult.choices.first else {
+                                print("❌ No choices found in API response")
                                 throw NSError(
                                     domain: "ResumeChatProviderError",
                                     code: 1002,
                                     userInfo: [NSLocalizedDescriptionKey: "No choices in API response"]
                                 )
                             }
+
+                            print("Message role: \(choice.message.role)")
+                            if let content = choice.message.content {
+                                print("Content length: \(content.count) characters")
+                                print("Content first 100 chars: \(String(content.prefix(100)))")
+                            } else {
+                                print("❌ Content is nil")
+                            }
                             
                             guard let content = choice.message.content,
-                                  let data = content.data(using: .utf8)
+                                  !content.isEmpty
                             else {
+                                print("❌ Content is empty or nil")
+                                throw NSError(
+                                    domain: "ResumeChatProviderError",
+                                    code: 1002,
+                                    userInfo: [NSLocalizedDescriptionKey: "Empty content in API response"]
+                                )
+                            }
+                            
+                            guard let data = content.data(using: .utf8) else {
+                                print("❌ Failed to convert content to data")
                                 throw NSError(
                                     domain: "ResumeChatProviderError",
                                     code: 1002,
