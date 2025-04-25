@@ -448,11 +448,11 @@ struct AiCommsView: View {
                     }
                 }
 
-                // Execute the API call with our abstraction layer
+                // Execute the API call with our patched method that handles null system_fingerprint
                 print("Starting API call with model: \(modelString)")
-                try await chatProvider.startChat(messages: chatProvider.genericMessages)
+                try await chatProvider.startChatPatched(messages: chatProvider.genericMessages)
                 print("API call completed successfully")
-                
+
                 // Cancel the timeout task since we completed successfully
                 timeoutTask.cancel()
 
