@@ -8,18 +8,25 @@
 import Foundation
 import OpenAI
 
-// Extension for OpenAI models to include newer model variations
-public extension ChatQuery.Model {
-    /// GPT-4.5 family of models
+// Constants for OpenAI model names
+// These are defined as String constants that can be used directly with the API
+struct AIModels {
+    // GPT-4.5 family of models
     static let gpt4_5 = "gpt-4.5"
     static let gpt4_5_preview = "gpt-4.5-preview"
     
-    /// GPT-4o family of models
+    // GPT-4o family of models
     static let gpt4o_mini = "gpt-4o-mini"
+    
+    // GPT-4o TTS model
+    static let gpt_4o_mini_tts = "gpt-4o-mini-tts"
 }
 
-// Extension for audio speech models
-public extension AudioSpeechQuery.AudioSpeechModel {
-    /// GPT-4o mini TTS model
-    static let gpt_4o_mini_tts = "gpt-4o-mini-tts"
+// Extension to AudioSpeechQuery for TTS models
+extension AudioSpeechQuery {
+    // Adding the GPT-4o mini TTS model to the available models
+    struct CustomTTSModels {
+        // You can use this directly in code as .gpt4o_mini_tts
+        static let gpt4o_mini_tts = AIModels.gpt_4o_mini_tts
+    }
 }
