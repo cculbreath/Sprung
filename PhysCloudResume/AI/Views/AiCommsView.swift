@@ -443,12 +443,16 @@ struct AiCommsView: View {
                 // Set up a timeout task that will run if the main task takes too long
                 let timeoutTask = Task {
                     try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds - just for checking if progress is made
-                    if isLoading && !Task.isCancelled {}
+                    if isLoading && !Task.isCancelled {
+                        print("API call still in progress after 5 seconds")
+                    }
                 }
 
                 // Execute the API call with our abstraction layer
+                print("Starting API call with model: \(modelString)")
                 try await chatProvider.startChat(messages: chatProvider.genericMessages)
-
+                print("API call completed successfully")
+                
                 // Cancel the timeout task since we completed successfully
                 timeoutTask.cancel()
 
@@ -460,6 +464,7 @@ struct AiCommsView: View {
                 }
             } catch {
                 // Update error state and show alert
+                print("API call failed with error: \(error.localizedDescription)")
                 await MainActor.run {
                     errorMessage = "An error occurred: \(error.localizedDescription)\n\nPlease try again or check your API key configuration."
                     showError = true
