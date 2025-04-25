@@ -120,12 +120,23 @@ final class ResumeChatProvider {
                             )
 
                             // Make the API call with structured output
+                            print("Sending structured output chat request to OpenAI")
                             let result = try await macPawClient.openAIClient.chats(query: query)
+                            print("Received response from OpenAI API")
 
                             // Extract structured output response
                             // For MacPaw/OpenAI structured outputs, we need to check the content string
                             // since there's no structured output property directly accessible
-                            guard let content = result.choices.first?.message.content,
+                            print("Extracting content from response")
+                            guard let choice = result.choices.first else {
+                                throw NSError(
+                                    domain: "ResumeChatProviderError",
+                                    code: 1002,
+                                    userInfo: [NSLocalizedDescriptionKey: "No choices in API response"]
+                                )
+                            }
+                            
+                            guard let content = choice.message.content,
                                   let data = content.data(using: .utf8)
                             else {
                                 throw NSError(
@@ -138,8 +149,11 @@ final class ResumeChatProvider {
                             // Decode the JSON content into RevisionsContainer
                             let structuredOutput: RevisionsContainer
                             do {
+                                print("Decoding JSON data: \(String(data: data, encoding: .utf8) ?? "invalid data")")
                                 structuredOutput = try JSONDecoder().decode(RevisionsContainer.self, from: data)
+                                print("Successfully decoded structured output with \(structuredOutput.revArray.count) revision nodes")
                             } catch {
+                                print("JSON decoding error: \(error.localizedDescription)")
                                 throw NSError(
                                     domain: "ResumeChatProviderError",
                                     code: 1003,
@@ -149,6 +163,7 @@ final class ResumeChatProvider {
 
                             await coordinator.resumeWithValue(structuredOutput, continuation: continuation)
                         } catch {
+                            print("API call error: \(error.localizedDescription)")
                             await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
@@ -197,6 +212,7 @@ final class ResumeChatProvider {
                             )
                             await coordinator.resumeWithValue(result, continuation: continuation)
                         } catch {
+                            print("API call error: \(error.localizedDescription)")
                             await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
