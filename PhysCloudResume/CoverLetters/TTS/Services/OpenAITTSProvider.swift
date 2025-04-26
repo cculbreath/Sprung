@@ -14,21 +14,31 @@ class OpenAITTSProvider {
     /// Available voices for TTS
     enum Voice: String, CaseIterable {
         case alloy
+        case ash
+        case ballad
+        case coral
         case echo
         case fable
         case onyx
         case nova
+        case sage
         case shimmer
+        case verse
 
         /// Returns a user-friendly display name for the voice
         var displayName: String {
             switch self {
-            case .alloy: return "Alloy (Neutral)"
-            case .echo: return "Echo (Male)"
-            case .fable: return "Fable (British)"
-            case .onyx: return "Onyx (Deep Male)"
-            case .nova: return "Nova (Female)"
-            case .shimmer: return "Shimmer (Soft Female)"
+            case .alloy: return "Alloy (Male, Professional)"
+            case .ash: return "Ash (Neutral, Calm)"
+            case .ballad: return "Ballad (Female, British)"
+            case .coral: return "Coral (Female, Expressive)"
+            case .echo: return "Echo (Male, Engaging)"
+            case .fable: return "Fable (Female, Storytelling)"
+            case .onyx: return "Onyx (Male, Authoritative)"
+            case .nova: return "Nova (Female, Energetic)"
+            case .sage: return "Sage (Neutral, Thoughtful)"
+            case .shimmer: return "Shimmer (Female, British)"
+            case .verse: return "Verse (Female, British Poetic)"
             }
         }
     }
