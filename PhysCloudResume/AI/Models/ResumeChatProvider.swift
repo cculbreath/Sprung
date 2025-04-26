@@ -408,20 +408,20 @@ final class ResumeChatProvider {
                 if let responseData = content.data(using: .utf8) {
                     do {
                         print("Parsing JSON content to RevNode array...")
-                        
+
                         // First try to parse with a custom decoder that maps different key cases
                         // Define a custom case-insensitive structure to handle different key cases
                         struct CaseInsensitiveRevisionsContainer: Decodable {
                             let revArray: [ProposedRevisionNode]
-                            
+
                             enum CodingKeys: String, CodingKey {
                                 case revArray
                                 case RevArray // Uppercase variant
                             }
-                            
+
                             init(from decoder: Decoder) throws {
                                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                                
+
                                 // Try with lowercase first, then uppercase
                                 if container.contains(.revArray) {
                                     revArray = try container.decode([ProposedRevisionNode].self, forKey: .revArray)
@@ -432,14 +432,14 @@ final class ResumeChatProvider {
                                 }
                             }
                         }
-                        
+
                         // Try to decode with the case-insensitive container
                         let caseInsensitiveDecoder = JSONDecoder()
                         let caseInsensitiveContainer = try caseInsensitiveDecoder.decode(CaseInsensitiveRevisionsContainer.self, from: responseData)
-                        
+
                         // Create a standard RevisionsContainer from our case-insensitive version
                         let revContainer = RevisionsContainer(revArray: caseInsensitiveContainer.revArray)
-                        
+
                         print("Successfully decoded JSON with \(revContainer.revArray.count) revision nodes")
 
                         // Convert to JSON string for compatibility with existing code
@@ -459,13 +459,13 @@ final class ResumeChatProvider {
                     } catch {
                         print("JSON parsing error: \(error.localizedDescription)")
                         print("Raw content: \(content)")
-                        
+
                         // Fallback: Try manual JSON parsing if structured decoding fails
                         do {
                             // Try to parse as a dictionary first
                             if let jsonObj = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
                                 print("Attempting manual JSON parsing...")
-                                
+
                                 // Look for RevArray or revArray
                                 let revArrayData: [[String: Any]]
                                 if let upperArray = jsonObj["RevArray"] as? [[String: Any]] {
@@ -478,7 +478,7 @@ final class ResumeChatProvider {
                                     print("Neither 'RevArray' nor 'revArray' keys found in JSON")
                                     throw NSError(domain: "JSONParsingError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not find revArray in JSON"])
                                 }
-                                
+
                                 // Manually convert each dictionary to a ProposedRevisionNode
                                 var nodes: [ProposedRevisionNode] = []
                                 for item in revArrayData {
@@ -492,33 +492,33 @@ final class ResumeChatProvider {
                                     )
                                     nodes.append(node)
                                 }
-                                
+
                                 // Create a RevisionsContainer from our manually parsed nodes
                                 let revContainer = RevisionsContainer(revArray: nodes)
                                 print("Successfully manually parsed JSON with \(revContainer.revArray.count) revision nodes")
-                                
+
                                 // Convert to JSON string for compatibility with existing code
                                 let encoder = JSONEncoder()
                                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                                 let jsonData = try encoder.encode(revContainer)
                                 let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
-                                
+
                                 // Store the JSON string in messages array
                                 self.messages = [jsonString]
-                                
+
                                 // Get the revision nodes directly
                                 lastRevNodeArray = revContainer.revArray
-                                
+
                                 // Update generic messages for history
                                 genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
-                                
+
                                 // Success! Return early
                                 return
                             }
                         } catch {
                             print("Manual JSON parsing also failed: \(error.localizedDescription)")
                         }
-                        
+
                         // If we got here, both structured and manual parsing failed
                         throw error
                     }

@@ -7,43 +7,46 @@
 
 import Foundation
 import OpenAI
+
 // Import the AIModels struct from our extension file
 
 /// Custom URLSession delegate to log network activity
 class NetworkLoggingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDataDelegate {
-    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+    func urlSession(_: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
         guard let request = task.currentRequest,
-              let response = task.response as? HTTPURLResponse else {
+              let response = task.response as? HTTPURLResponse
+        else {
             return
         }
-        
+
         let url = request.url?.absoluteString ?? "unknown"
         let statusCode = response.statusCode
         let headers = response.allHeaderFields
-        
+
         print("🌐 Request completed for URL: \(url)")
         print("📊 HTTP Status: \(statusCode)")
         print("⏱️ Request timing:")
-        
-        metrics.transactionMetrics.forEach { metric in
+
+        for metric in metrics.transactionMetrics {
             if let fetchStartDate = metric.fetchStartDate,
-               let responseEndDate = metric.responseEndDate {
+               let responseEndDate = metric.responseEndDate
+            {
                 let duration = responseEndDate.timeIntervalSince(fetchStartDate)
                 print("   - Duration: \(duration) seconds")
             }
         }
-        
+
         print("📝 Response Headers:")
         for (key, value) in headers {
             print("   \(key): \(value)")
         }
-        
+
         if statusCode >= 400 {
             print("❌ Error response with status code: \(statusCode)")
         }
     }
-    
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+
+    func urlSession(_: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         if let response = dataTask.response as? HTTPURLResponse {
             let statusCode = response.statusCode
             if statusCode >= 400 {
@@ -72,9 +75,9 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         // Create custom URLSession that logs network activity
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.timeoutIntervalForRequest = 300.0 // 5 minutes
-        
+
         let loggingSession = URLSession(configuration: sessionConfig, delegate: NetworkLoggingDelegate(), delegateQueue: nil)
-        
+
         let configuration = OpenAI.Configuration(
             token: apiKey,
             organizationIdentifier: nil,
