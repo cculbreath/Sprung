@@ -272,6 +272,21 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         case "onyx": mappedVoice = .onyx
         case "nova": mappedVoice = .nova
         case "shimmer": mappedVoice = .shimmer
+        // New voices - safe access through string initialization if available
+        case "ash", "ballad", "coral", "sage", "verse":
+            // Try to create the voice enum value directly from the string
+            if let newVoice = AudioSpeechQuery.AudioSpeechVoice(rawValue: voice.lowercased()) {
+                mappedVoice = newVoice
+            } else {
+                // Fallbacks based on similarity if not directly supported
+                switch voice.lowercased() {
+                case "ash": mappedVoice = .alloy  // Neutral fallback
+                case "ballad", "verse": mappedVoice = .fable  // British fallbacks
+                case "coral": mappedVoice = .nova  // Female fallback
+                case "sage": mappedVoice = .alloy  // Neutral fallback
+                default: mappedVoice = .alloy
+                }
+            }
         default: mappedVoice = .alloy
         }
 
@@ -318,6 +333,21 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         case "onyx": mappedVoice = .onyx
         case "nova": mappedVoice = .nova
         case "shimmer": mappedVoice = .shimmer
+        // New voices - safe access through string initialization if available
+        case "ash", "ballad", "coral", "sage", "verse":
+            // Try to create the voice enum value directly from the string
+            if let newVoice = AudioSpeechQuery.AudioSpeechVoice(rawValue: voice.lowercased()) {
+                mappedVoice = newVoice
+            } else {
+                // Fallbacks based on similarity if not directly supported
+                switch voice.lowercased() {
+                case "ash": mappedVoice = .alloy  // Neutral fallback
+                case "ballad", "verse": mappedVoice = .fable  // British fallbacks
+                case "coral": mappedVoice = .nova  // Female fallback
+                case "sage": mappedVoice = .alloy  // Neutral fallback
+                default: mappedVoice = .alloy
+                }
+            }
         default: mappedVoice = .alloy
         }
 
@@ -489,7 +519,8 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         message: String,
         model: String,
         temperature: Double,
-        previousResponseId: String?
+        previousResponseId: String?,
+        schema: String? = nil
     ) async throws -> ResponsesAPIResponse {
         // Create the URL
         guard let url = URL(string: "https://api.openai.com/v1/responses") else {
