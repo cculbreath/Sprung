@@ -80,12 +80,14 @@ protocol OpenAIClientProtocol {
     ///   - model: The model to use
     ///   - temperature: Controls randomness (0-1)
     ///   - previousResponseId: Optional ID from a previous response for conversation state
+    ///   - schema: Optional JSON schema for structured output
     /// - Returns: The response from the Responses API
     func sendResponseRequestAsync(
         message: String,
         model: String,
         temperature: Double,
-        previousResponseId: String?
+        previousResponseId: String?,
+        schema: String?
     ) async throws -> ResponsesAPIResponse
 
     /// Sends a streaming request to the OpenAI Responses API

@@ -317,12 +317,16 @@ final class ResumeChatProvider {
         }
 
         do {
-            // Call the Responses API
+            // Get the JSON schema for revisions
+            let schema = ResumeApiQuery.revNodeArraySchemaString
+            
+            // Call the Responses API with structured output schema
             let response = try await openAIClient.sendResponseRequestAsync(
                 message: combinedMessage,
                 model: modelString,
                 temperature: 1.0,
-                previousResponseId: previousResponseId
+                previousResponseId: previousResponseId,
+                schema: schema
             )
 
             print("✅ Received response from OpenAI Responses API with ID: \(response.id)")
