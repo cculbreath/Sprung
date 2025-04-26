@@ -335,7 +335,8 @@ struct AiCommsView: View {
 
                     // Make sure to preserve isTitleNode when matching by value
                     validRevs[index].isTitleNode = matchedByValue["isTitleNode"] as? Bool ?? false
-                } else if let treePath = item.treePath, !treePath.isEmpty {
+                } else if !item.treePath.isEmpty {
+                    let treePath = item.treePath
                     // If we have a treePath, try to find a matching node by that path
                     let components = treePath.components(separatedBy: " > ")
                     if components.count > 1 {

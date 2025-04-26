@@ -373,27 +373,6 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         }
     }
 
-    // MARK: - Voice Support Helper
-    
-    /// Checks if a voice is supported by the MacPaw library
-    /// - Parameter voice: The voice identifier string to check
-    /// - Returns: True if the voice is likely supported
-    func isVoiceSupported(_ voice: String) -> Bool {
-        // These voices are guaranteed supported in MacPaw's library
-        let coreVoices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-        
-        // Core voices are always supported
-        if coreVoices.contains(voice.lowercased()) {
-            return true
-        }
-        
-        // For newer voices, we use our custom fallback mapping in sendTTSRequest,
-        // so we can consider them "supported" even if the library doesn't directly support them
-        let supportedNewVoices = ["ash", "ballad", "coral", "sage", "verse"]
-        
-        return supportedNewVoices.contains(voice.lowercased())
-    }
-    
     // MARK: - Responses API Methods
 
     /// Sends a request to the OpenAI Responses API

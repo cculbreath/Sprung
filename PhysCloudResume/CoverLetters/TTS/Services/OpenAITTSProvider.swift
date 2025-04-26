@@ -28,17 +28,17 @@ class OpenAITTSProvider {
         /// Returns a user-friendly display name for the voice
         var displayName: String {
             switch self {
-            case .alloy: return "Alloy (Male, Professional)"
-            case .ash: return "Ash (Neutral, Calm)"
-            case .ballad: return "Ballad (Female, British)"
+            case .alloy: return "Alloy (Female, Professional)"
+            case .ash: return "Ash (Male, Authoritative)"
+            case .ballad: return "Ballad (Male, Young British)"
             case .coral: return "Coral (Female, Expressive)"
             case .echo: return "Echo (Male, Engaging)"
-            case .fable: return "Fable (Female, Storytelling)"
-            case .onyx: return "Onyx (Male, Authoritative)"
-            case .nova: return "Nova (Female, Energetic)"
-            case .sage: return "Sage (Neutral, Thoughtful)"
-            case .shimmer: return "Shimmer (Female, British)"
-            case .verse: return "Verse (Female, British Poetic)"
+            case .fable: return "Fable (Neutral, British Professional)"
+            case .onyx: return "Onyx (Male, Professional)"
+            case .nova: return "Nova (Female, Professional)"
+            case .sage: return "Sage (Female, Engaging)"
+            case .shimmer: return "Shimmer (Female, Authoritative)"
+            case .verse: return "Verse (Neutral, Energetic)"
             }
         }
     }
