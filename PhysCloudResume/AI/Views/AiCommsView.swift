@@ -186,7 +186,7 @@ struct AiCommsView: View {
             }
             .padding(.vertical)
 
-            if ttsEnabled && !revisions.isEmpty && false {
+            if ttsEnabled && !revisions.isEmpty {
                 Button(action: {
                     // Detect ⌥‑click to force a fresh TTS request
                     let optionPressed = NSEvent.modifierFlags.contains(.option)
@@ -254,10 +254,11 @@ struct AiCommsView: View {
 
     private func readAloudButtonTapped(optionPressed: Bool) {
         log("Button tapped. optionPressed: \(optionPressed), state: \(readAloudState)")
-        // Option‑click always stops playback completely
+        // Option‑click always restarts TTS from the beginning
         if optionPressed {
-            log("option click -> stopPlayback")
+            log("option click -> stopPlayback + startPlayback")
             stopPlayback()
+//            startPlayback()
             return
         }
 
@@ -310,7 +311,7 @@ struct AiCommsView: View {
 
     private func stopPlayback() {
         log("stopPlayback invoked -> idle")
-        ttsProvider.stopSpeaking()
+        ttsProvider.stop()
         readAloudState = .idle
     }
 
@@ -323,6 +324,10 @@ struct AiCommsView: View {
             for (index, item) in validRevs.enumerated() {
                 // Check by ID first
                 if let matchedNode = updateNodes.first(where: { $0["id"] as? String == item.id }) {
+                    // If we have a match but empty oldValue, populate it from the node
+                    if validRevs[index].oldValue.isEmpty {
+                        validRevs[index].oldValue = matchedNode["value"] as? String ?? ""
+                    }
                     continue
                 } else if let matchedByValue = updateNodes.first(where: { $0["value"] as? String == item.oldValue }), let id = matchedByValue["id"] as? String {
                     // Update revision's ID if matched by value
@@ -330,8 +335,31 @@ struct AiCommsView: View {
 
                     // Make sure to preserve isTitleNode when matching by value
                     validRevs[index].isTitleNode = matchedByValue["isTitleNode"] as? Bool ?? false
-
-                } else {}
+                } else if let treePath = item.treePath, !treePath.isEmpty {
+                    // If we have a treePath, try to find a matching node by that path
+                    let components = treePath.components(separatedBy: " > ")
+                    if components.count > 1 {
+                        // Find nodes that might be at that path
+                        let potentialMatches = updateNodes.filter { node in
+                            let nodePath = node["tree_path"] as? String ?? ""
+                            return nodePath == treePath || nodePath.hasSuffix(treePath)
+                        }
+                        
+                        if let match = potentialMatches.first {
+                            // We found a match, update the oldValue and ID
+                            validRevs[index].id = match["id"] as? String ?? item.id
+                            validRevs[index].oldValue = match["value"] as? String ?? ""
+                            validRevs[index].isTitleNode = match["isTitleNode"] as? Bool ?? false
+                        }
+                    }
+                } 
+                
+                // As a last resort, try to find the node in the resume's nodes by ID
+                if validRevs[index].oldValue.isEmpty && !validRevs[index].id.isEmpty {
+                    if let treeNode = myRes.nodes.first(where: { $0.id == validRevs[index].id }) {
+                        validRevs[index].oldValue = treeNode.value
+                    }
+                }
             }
             return validRevs
         }
@@ -367,19 +395,6 @@ struct AiCommsView: View {
             }
         }
 
-        // Set up buffering state handler
-        ttsProvider.onBufferingStateChanged = { buffering in
-            DispatchQueue.main.async {
-                log("onBufferingStateChanged -> \(buffering)")
-                // Only update UI state if we're currently in a compatible state
-                if buffering && self.readAloudState == .buffering {
-                    // Keep it in buffering state
-                } else if buffering && self.readAloudState == .idle {
-                    self.readAloudState = .buffering
-                }
-            }
-        }
-
         // Callbacks to manage state transitions
         ttsProvider.onReady = {
             DispatchQueue.main.async {
@@ -401,15 +416,17 @@ struct AiCommsView: View {
         // Get voice instructions if available
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
 
-        // Request streaming TTS playback with instructions
-        ttsProvider.streamAndPlayText(speechText, voice: voice, instructions: instructions) { error in
+        // Request TTS conversion and playback with instructions
+        ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { error in
             DispatchQueue.main.async {
                 if let error = error {
                     log("speakText completion error: \(error.localizedDescription)")
                     self.ttsError = "Text-to-speech error: \(error.localizedDescription)"
                     self.showTTSError = true
-                    self.readAloudState = .idle
+                } else {
+                    log("speakText completion success -> idle")
                 }
+                self.readAloudState = .idle
             }
         }
     }
@@ -443,14 +460,12 @@ struct AiCommsView: View {
                 // Set up a timeout task that will run if the main task takes too long
                 let timeoutTask = Task {
                     try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds - just for checking if progress is made
-                    if isLoading && !Task.isCancelled {
-                        print("API call still in progress after 5 seconds")
-                    }
+                    if isLoading && !Task.isCancelled {}
                 }
 
-                // Execute the API call with our patched method that handles null system_fingerprint
+                // Execute the API call with our new Responses API method
                 print("Starting API call with model: \(modelString)")
-                try await chatProvider.startChatPatched(messages: chatProvider.genericMessages)
+                try await chatProvider.startChat(messages: chatProvider.genericMessages, resume: myRes)
                 print("API call completed successfully")
 
                 // Cancel the timeout task since we completed successfully
@@ -464,7 +479,6 @@ struct AiCommsView: View {
                 }
             } catch {
                 // Update error state and show alert
-                print("API call failed with error: \(error.localizedDescription)")
                 await MainActor.run {
                     errorMessage = "An error occurred: \(error.localizedDescription)\n\nPlease try again or check your API key configuration."
                     showError = true

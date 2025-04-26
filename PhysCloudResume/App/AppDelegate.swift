@@ -30,10 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.setupAppMenu()
         }
 
-        // Also add the top-level Profile menu to make sure it's available
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.addProfileMainMenu()
-        }
+        // We no longer add a separate Profile main menu to avoid duplication
     }
 
     private func addProfileMainMenu() {

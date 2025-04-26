@@ -76,7 +76,8 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.timeoutIntervalForRequest = 300.0 // 5 minutes
 
-        let loggingSession = URLSession(configuration: sessionConfig, delegate: NetworkLoggingDelegate(), delegateQueue: nil)
+        // Create a logging session (unused directly, but kept for reference)
+        _ = URLSession(configuration: sessionConfig, delegate: NetworkLoggingDelegate(), delegateQueue: nil)
 
         let configuration = OpenAI.Configuration(
             token: apiKey,
@@ -275,7 +276,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         }
 
         // Create the query
-        var query = AudioSpeechQuery(
+        let query = AudioSpeechQuery(
             model: AIModels.gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
@@ -321,7 +322,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         }
 
         // Create the query
-        var query = AudioSpeechQuery(
+        let query = AudioSpeechQuery(
             model: AIModels.gpt_4o_mini_tts,
             input: text,
             voice: mappedVoice,
@@ -339,6 +340,276 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             }
         } completion: { error in
             onComplete(error)
+        }
+    }
+
+    // MARK: - Responses API Methods
+
+    /// Sends a request to the OpenAI Responses API
+    /// - Parameters:
+    ///   - message: The current message content
+    ///   - model: The model to use
+    ///   - temperature: Controls randomness (0-1)
+    ///   - previousResponseId: Optional ID from a previous response for conversation state
+    ///   - onComplete: Callback with the response
+    func sendResponseRequest(
+        message: String,
+        model: String,
+        temperature: Double,
+        previousResponseId: String?,
+        onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
+    ) {
+        // Create the request URL
+        guard let url = URL(string: "https://api.openai.com/v1/responses") else {
+            onComplete(.failure(NSError(
+                domain: "MacPawOpenAIClient",
+                code: 1000,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]
+            )))
+            return
+        }
+
+        // Create the request
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 300 // 5 minutes
+        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Create the request payload
+        let payload = ResponsesAPIRequest(
+            model: model,
+            input: message,
+            temperature: temperature,
+            previousResponseId: previousResponseId
+        )
+
+        do {
+            // Encode the payload
+            let encoder = JSONEncoder()
+            request.httpBody = try encoder.encode(payload)
+
+            // Log the request for debugging
+            print("🌐 Sending request to OpenAI Responses API")
+
+            // Send the request
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                // Handle network errors
+                if let error = error {
+                    onComplete(.failure(error))
+                    return
+                }
+
+                // Check for HTTP response
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    onComplete(.failure(NSError(
+                        domain: "MacPawOpenAIClient",
+                        code: 1001,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"]
+                    )))
+                    return
+                }
+
+                // Log the response for debugging
+                print("📊 HTTP Status: \(httpResponse.statusCode)")
+
+                // Check for error status codes
+                guard (200 ... 299).contains(httpResponse.statusCode) else {
+                    // Try to parse the error response
+                    if let data = data {
+                        do {
+                            let errorResponse = try JSONDecoder().decode(ResponsesAPIErrorResponse.self, from: data)
+                            onComplete(.failure(NSError(
+                                domain: "OpenAIAPI",
+                                code: httpResponse.statusCode,
+                                userInfo: [NSLocalizedDescriptionKey: errorResponse.error.message]
+                            )))
+                        } catch {
+                            onComplete(.failure(NSError(
+                                domain: "MacPawOpenAIClient",
+                                code: httpResponse.statusCode,
+                                userInfo: [NSLocalizedDescriptionKey: "HTTP Error: \(httpResponse.statusCode)"]
+                            )))
+                        }
+                    } else {
+                        onComplete(.failure(NSError(
+                            domain: "MacPawOpenAIClient",
+                            code: httpResponse.statusCode,
+                            userInfo: [NSLocalizedDescriptionKey: "HTTP Error: \(httpResponse.statusCode)"]
+                        )))
+                    }
+                    return
+                }
+
+                // Parse the response data
+                guard let data = data else {
+                    onComplete(.failure(NSError(
+                        domain: "MacPawOpenAIClient",
+                        code: 1002,
+                        userInfo: [NSLocalizedDescriptionKey: "No response data"]
+                    )))
+                    return
+                }
+
+                do {
+                    // Log the response data for debugging
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("📝 Response data: \(responseString)")
+                    }
+
+                    // Decode the response
+                    let response = try JSONDecoder().decode(ResponsesAPIResponseWrapper.self, from: data)
+
+                    // Convert to our ResponsesAPIResponse format
+                    let apiResponse = response.toResponsesAPIResponse()
+
+                    // Return the response
+                    onComplete(.success(apiResponse))
+                } catch {
+                    print("❌ Error decoding response: \(error.localizedDescription)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("📝 Failed to decode: \(responseString)")
+                    }
+                    onComplete(.failure(error))
+                }
+            }.resume()
+        } catch {
+            onComplete(.failure(error))
+        }
+    }
+
+    /// Sends a request to the OpenAI Responses API using async/await
+    /// - Parameters:
+    ///   - message: The current message content
+    ///   - model: The model to use
+    ///   - temperature: Controls randomness (0-1)
+    ///   - previousResponseId: Optional ID from a previous response for conversation state
+    /// - Returns: The response from the Responses API
+    func sendResponseRequestAsync(
+        message: String,
+        model: String,
+        temperature: Double,
+        previousResponseId: String?
+    ) async throws -> ResponsesAPIResponse {
+        // Create the URL
+        guard let url = URL(string: "https://api.openai.com/v1/responses") else {
+            throw NSError(
+                domain: "MacPawOpenAIClient",
+                code: 1000,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]
+            )
+        }
+
+        // Create the request
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 300 // 5 minutes
+        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Create the request payload
+        let payload = ResponsesAPIRequest(
+            model: model,
+            input: message,
+            temperature: temperature,
+            previousResponseId: previousResponseId
+        )
+
+        // Encode the payload
+        let encoder = JSONEncoder()
+        request.httpBody = try encoder.encode(payload)
+
+        // Log the request for debugging
+        print("🌐 Sending request to OpenAI Responses API")
+
+        // Send the request
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        // Check for HTTP response
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(
+                domain: "MacPawOpenAIClient",
+                code: 1001,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"]
+            )
+        }
+
+        // Log the response for debugging
+        print("📊 HTTP Status: \(httpResponse.statusCode)")
+
+        // Check for error status codes
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
+            // Try to parse the error response
+            do {
+                let errorResponse = try JSONDecoder().decode(ResponsesAPIErrorResponse.self, from: data)
+                throw NSError(
+                    domain: "OpenAIAPI",
+                    code: httpResponse.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: errorResponse.error.message]
+                )
+            } catch {
+                throw NSError(
+                    domain: "MacPawOpenAIClient",
+                    code: httpResponse.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: "HTTP Error: \(httpResponse.statusCode)"]
+                )
+            }
+        }
+
+        // Log the response data for debugging
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("📝 Response data: \(responseString)")
+        }
+
+        // Decode the response
+        let responseWrapper = try JSONDecoder().decode(ResponsesAPIResponseWrapper.self, from: data)
+
+        // Convert to our ResponsesAPIResponse format
+        return responseWrapper.toResponsesAPIResponse()
+    }
+
+    /// Sends a streaming request to the OpenAI Responses API
+    /// - Parameters:
+    ///   - message: The current message content
+    ///   - model: The model to use
+    ///   - temperature: Controls randomness (0-1)
+    ///   - previousResponseId: Optional ID from a previous response for conversation state
+    ///   - onChunk: Callback for each chunk of the streaming response
+    ///   - onComplete: Callback when streaming is complete
+    func sendResponseRequestStreaming(
+        message: String,
+        model: String,
+        temperature: Double,
+        previousResponseId: String?,
+        onChunk: @escaping (Result<ResponsesAPIStreamChunk, Error>) -> Void,
+        onComplete: @escaping (Error?) -> Void
+    ) {
+        // For now, use the non-streaming version since streaming requires more complex handling
+        // This is a temporary fallback solution
+        print("⚠️ Warning: Streaming for Responses API not fully implemented")
+
+        Task {
+            do {
+                let response = try await sendResponseRequestAsync(
+                    message: message,
+                    model: model,
+                    temperature: temperature,
+                    previousResponseId: previousResponseId
+                )
+
+                // Send the full response as a single chunk
+                let chunk = ResponsesAPIStreamChunk(
+                    id: response.id,
+                    content: response.content,
+                    model: response.model
+                )
+
+                onChunk(.success(chunk))
+                onComplete(nil)
+            } catch {
+                onChunk(.failure(error))
+                onComplete(error)
+            }
         }
     }
 }

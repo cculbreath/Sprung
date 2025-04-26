@@ -80,8 +80,14 @@ final class ResumeChatProvider {
 
     /// Send a chat completion request to the OpenAI API
     /// - Parameter messages: The message history to use for context
+    /// - Parameter resume: Optional resume to update with response ID for server-side conversation state
     /// - Returns: void - results are stored in the message property
-    func startChat(messages: [ChatMessage]) async throws {
+    func startChat(messages: [ChatMessage], resume: Resume? = nil) async throws {
+        // Check if we should use the new Responses API implementation
+        if isResponsesAPIEnabled() {
+            try await startChatWithResponsesAPI(messages: messages, resume: resume)
+            return
+        }
         // Clear previous error message before starting
         errorMessage = ""
 
@@ -120,74 +126,14 @@ final class ResumeChatProvider {
                             )
 
                             // Make the API call with structured output
-                            print("Sending structured output chat request to OpenAI with model: \(modelString)")
-                            print("Request payload structure: \(chatMessages.count) messages, responseFormat: jsonSchema")
-
-                            do {
-                                let result = try await macPawClient.openAIClient.chats(query: query)
-                                print("✅ Received response from OpenAI API")
-
-                                if let resultJson = try? JSONEncoder().encode(result),
-                                   let resultString = String(data: resultJson, encoding: .utf8)
-                                {
-                                    print("Raw API response: \(resultString)")
-                                }
-                            } catch {
-                                print("❌❌❌ OpenAI API request failed with error: \(error)")
-                                if let nsError = error as NSError? {
-                                    print("Error domain: \(nsError.domain), code: \(nsError.code)")
-                                    print("Error user info: \(nsError.userInfo)")
-                                }
-                                throw error
-                            }
+                            let result = try await macPawClient.openAIClient.chats(query: query)
 
                             // Extract structured output response
                             // For MacPaw/OpenAI structured outputs, we need to check the content string
                             // since there's no structured output property directly accessible
-                            print("Extracting content from response")
-
-                            // We need to handle the result variable, which may be undefined in the outer scope
-                            // if our nested try-catch block had an error
-                            let apiResult: ChatResult
-                            do {
-                                // Re-get the result to ensure it's properly defined
-                                apiResult = try await macPawClient.openAIClient.chats(query: query)
-                                print("Response choice count: \(apiResult.choices.count)")
-                            } catch {
-                                print("❌ Failed to re-fetch API result: \(error)")
-                                throw error
-                            }
-
-                            guard let choice = apiResult.choices.first else {
-                                print("❌ No choices found in API response")
-                                throw NSError(
-                                    domain: "ResumeChatProviderError",
-                                    code: 1002,
-                                    userInfo: [NSLocalizedDescriptionKey: "No choices in API response"]
-                                )
-                            }
-
-                            print("Message role: \(choice.message.role)")
-                            if let content = choice.message.content {
-                                print("Content length: \(content.count) characters")
-                                print("Content first 100 chars: \(String(content.prefix(100)))")
-                            } else {
-                                print("❌ Content is nil")
-                            }
-
-                            guard let content = choice.message.content,
-                                  !content.isEmpty
+                            guard let content = result.choices.first?.message.content,
+                                  let data = content.data(using: .utf8)
                             else {
-                                print("❌ Content is empty or nil")
-                                throw NSError(
-                                    domain: "ResumeChatProviderError",
-                                    code: 1002,
-                                    userInfo: [NSLocalizedDescriptionKey: "Empty content in API response"]
-                                )
-                            }
-
-                            guard let data = content.data(using: .utf8) else {
-                                print("❌ Failed to convert content to data")
                                 throw NSError(
                                     domain: "ResumeChatProviderError",
                                     code: 1002,
@@ -198,11 +144,8 @@ final class ResumeChatProvider {
                             // Decode the JSON content into RevisionsContainer
                             let structuredOutput: RevisionsContainer
                             do {
-                                print("Decoding JSON data: \(String(data: data, encoding: .utf8) ?? "invalid data")")
                                 structuredOutput = try JSONDecoder().decode(RevisionsContainer.self, from: data)
-                                print("Successfully decoded structured output with \(structuredOutput.revArray.count) revision nodes")
                             } catch {
-                                print("JSON decoding error: \(error.localizedDescription)")
                                 throw NSError(
                                     domain: "ResumeChatProviderError",
                                     code: 1003,
@@ -212,7 +155,6 @@ final class ResumeChatProvider {
 
                             await coordinator.resumeWithValue(structuredOutput, continuation: continuation)
                         } catch {
-                            print("API call error: \(error.localizedDescription)")
                             await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
@@ -261,7 +203,6 @@ final class ResumeChatProvider {
                             )
                             await coordinator.resumeWithValue(result, continuation: continuation)
                         } catch {
-                            print("API call error: \(error.localizedDescription)")
                             await coordinator.resumeWithError(error, continuation: continuation)
                         }
                     }
@@ -306,10 +247,20 @@ final class ResumeChatProvider {
         }
     }
 
-    /// Send a chat completion request to the OpenAI API - patched version that handles null system_fingerprint
-    /// - Parameter messages: The message history to use for context
-    /// - Returns: void - results are stored in the message property
-    func startChatPatched(messages: [ChatMessage]) async throws {
+    /// Check if the Responses API should be used
+    /// - Returns: True if the Responses API should be used
+    private func isResponsesAPIEnabled() -> Bool {
+        // We can add a feature flag here in the future
+        // For now, always return true to use the new API
+        return true
+    }
+
+    /// Sends a request to the OpenAI Responses API
+    /// - Parameters:
+    ///   - messages: The message history for context
+    ///   - resume: The resume to update with the response ID
+    /// - Returns: void - results are stored in properties
+    func startChatWithResponsesAPI(messages: [ChatMessage], resume: Resume?) async throws {
         // Clear previous error message before starting
         errorMessage = ""
 
@@ -326,236 +277,135 @@ final class ResumeChatProvider {
             userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
         )
 
+        // Extract the system and user messages
+        var systemMessage = ""
+        var userMessage = ""
+
+        for message in messages {
+            switch message.role {
+            case .system:
+                if !systemMessage.isEmpty {
+                    systemMessage += "\n\n"
+                }
+                systemMessage += message.content
+            case .user:
+                if !userMessage.isEmpty {
+                    userMessage += "\n\n"
+                }
+                userMessage += message.content
+            default:
+                break
+            }
+        }
+
+        // Combine for the final message
+        let combinedMessage = """
+        System context:
+        \(systemMessage)
+
+        User message:
+        \(userMessage)
+        """
+
+        // Determine if this is a new conversation or continuation
+        let previousResponseId = resume?.previousResponseId
+        let isNewConversation = previousResponseId == nil
+
+        print("Starting \(isNewConversation ? "new" : "continuation") conversation with Responses API")
+        if !isNewConversation {
+            print("Using previous response ID: \(previousResponseId ?? "nil")")
+        }
+
         do {
-            // Check if we're using the MacPaw client
-            if let macPawClient = openAIClient as? MacPawOpenAIClient {
-                // Convert our messages to MacPaw's format
-                let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
+            // Call the Responses API
+            let response = try await openAIClient.sendResponseRequestAsync(
+                message: combinedMessage,
+                model: modelString,
+                temperature: 1.0,
+                previousResponseId: previousResponseId
+            )
 
-                // Create the query with structured output format
-                let query = ChatQuery(
-                    messages: chatMessages,
-                    model: modelString,
-                    responseFormat: .jsonObject,
-                    temperature: 1.0
-                )
+            print("✅ Received response from OpenAI Responses API with ID: \(response.id)")
 
-                // Make direct HTTP request to bypass the system_fingerprint null issue
-                let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.addValue("Bearer \(macPawClient.apiKey)", forHTTPHeaderField: "Authorization")
-                request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            // Store the response ID in the resume if provided
+            if let resume = resume {
+                resume.previousResponseId = response.id
+            }
 
-                // Encode the query
-                let encoder = JSONEncoder()
-                encoder.keyEncodingStrategy = .convertToSnakeCase
-                request.httpBody = try encoder.encode(query)
+            // Process the response content
+            let content = response.content
 
-                print("Sending direct API request to OpenAI with model: \(modelString)")
+            // Parse the JSON content to extract the RevNode array
+            if let responseData = content.data(using: .utf8) {
+                do {
+                    print("Parsing JSON content to RevNode array...")
 
-                // Execute the request
-                let (data, response) = try await URLSession.shared.data(for: request)
+                    // Try first as a direct array (Responses API format)
+                    if let jsonArray = try? JSONSerialization.jsonObject(with: responseData) as? [[String: Any]] {
+                        print("Detected direct JSON array format")
 
-                // Log response for debugging
-                if let httpResponse = response as? HTTPURLResponse {
-                    print("HTTP Status: \(httpResponse.statusCode)")
-                    if httpResponse.statusCode >= 400 {
-                        let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
-                        print("API Error: \(errorString)")
-                        throw NSError(
-                            domain: "ResumeChatProviderError",
-                            code: httpResponse.statusCode,
-                            userInfo: [NSLocalizedDescriptionKey: errorString]
-                        )
-                    }
-                }
-
-                // Extract just the content string from the response
-                struct ChatChoiceContent: Decodable {
-                    struct Choice: Decodable {
-                        struct Message: Decodable {
-                            let content: String?
+                        var nodes: [ProposedRevisionNode] = []
+                        for item in jsonArray {
+                            // Get the node properties with appropriate fallbacks
+                            let nodeId = item["id"] as? String ?? ""
+                            let treePath = item["tree_path"] as? String ?? ""
+                            let oldValue = item["oldValue"] as? String ?? ""
+                            
+                            let node = ProposedRevisionNode(
+                                id: nodeId,
+                                oldValue: oldValue,
+                                newValue: item["newValue"] as? String ?? "",
+                                valueChanged: item["valueChanged"] as? Bool ?? false,
+                                isTitleNode: item["isTitleNode"] as? Bool ?? false,
+                                why: item["why"] as? String ?? "",
+                                treePath: treePath
+                            )
+                            nodes.append(node)
                         }
 
-                        let message: Message
-                    }
+                        // Create a container with our nodes
+                        let revContainer = RevisionsContainer(revArray: nodes)
+                        print("Successfully parsed JSON array with \(nodes.count) revision nodes")
 
-                    let choices: [Choice]
-                }
-
-                // Decode with a simplified structure to avoid system_fingerprint
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-
-                print("Decoding API response...")
-                let contentResult = try decoder.decode(ChatChoiceContent.self, from: data)
-
-                guard let content = contentResult.choices.first?.message.content,
-                      !content.isEmpty
-                else {
-                    throw NSError(
-                        domain: "ResumeChatProviderError",
-                        code: 1002,
-                        userInfo: [NSLocalizedDescriptionKey: "No content in API response"]
-                    )
-                }
-
-                print("Content extracted successfully, length: \(content.count)")
-                print("Content first 100 chars: \(String(content.prefix(100)))")
-
-                // Parse the JSON content to extract the RevNode array
-                if let responseData = content.data(using: .utf8) {
-                    do {
-                        print("Parsing JSON content to RevNode array...")
-
-                        // First try to parse with a custom decoder that maps different key cases
-                        // Define a custom case-insensitive structure to handle different key cases
-                        struct CaseInsensitiveRevisionsContainer: Decodable {
-                            let revArray: [ProposedRevisionNode]
-
-                            enum CodingKeys: String, CodingKey {
-                                case revArray
-                                case RevArray // Uppercase variant
-                            }
-
-                            init(from decoder: Decoder) throws {
-                                let container = try decoder.container(keyedBy: CodingKeys.self)
-
-                                // Try with lowercase first, then uppercase
-                                if container.contains(.revArray) {
-                                    revArray = try container.decode([ProposedRevisionNode].self, forKey: .revArray)
-                                } else if container.contains(.RevArray) {
-                                    revArray = try container.decode([ProposedRevisionNode].self, forKey: .RevArray)
-                                } else {
-                                    revArray = [] // Empty array as fallback
-                                }
-                            }
-                        }
-
-                        // Try to decode with the case-insensitive container
-                        let caseInsensitiveDecoder = JSONDecoder()
-                        let caseInsensitiveContainer = try caseInsensitiveDecoder.decode(CaseInsensitiveRevisionsContainer.self, from: responseData)
-
-                        // Create a standard RevisionsContainer from our case-insensitive version
-                        let revContainer = RevisionsContainer(revArray: caseInsensitiveContainer.revArray)
-
-                        print("Successfully decoded JSON with \(revContainer.revArray.count) revision nodes")
-
-                        // Convert to JSON string for compatibility with existing code
+                        // Format for storage
                         let encoder = JSONEncoder()
                         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                         let jsonData = try encoder.encode(revContainer)
                         let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
 
-                        // Store the JSON string in messages array
+                        // Store results
                         self.messages = [jsonString]
-
-                        // Get the revision nodes directly
                         lastRevNodeArray = revContainer.revArray
-
-                        // Update generic messages for history
                         genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
-                    } catch {
-                        print("JSON parsing error: \(error.localizedDescription)")
-                        print("Raw content: \(content)")
-
-                        // Fallback: Try manual JSON parsing if structured decoding fails
-                        do {
-                            // Try to parse as a dictionary first
-                            if let jsonObj = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
-                                print("Attempting manual JSON parsing...")
-
-                                // Look for RevArray or revArray
-                                let revArrayData: [[String: Any]]
-                                if let upperArray = jsonObj["RevArray"] as? [[String: Any]] {
-                                    revArrayData = upperArray
-                                    print("Found 'RevArray' key (uppercase) with \(upperArray.count) elements")
-                                } else if let lowerArray = jsonObj["revArray"] as? [[String: Any]] {
-                                    revArrayData = lowerArray
-                                    print("Found 'revArray' key (lowercase) with \(lowerArray.count) elements")
-                                } else {
-                                    print("Neither 'RevArray' nor 'revArray' keys found in JSON")
-                                    throw NSError(domain: "JSONParsingError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not find revArray in JSON"])
-                                }
-
-                                // Manually convert each dictionary to a ProposedRevisionNode
-                                var nodes: [ProposedRevisionNode] = []
-                                for item in revArrayData {
-                                    let node = ProposedRevisionNode(
-                                        id: item["id"] as? String ?? "",
-                                        oldValue: item["oldValue"] as? String ?? "",
-                                        newValue: item["newValue"] as? String ?? "",
-                                        valueChanged: item["valueChanged"] as? Bool ?? false,
-                                        isTitleNode: item["isTitleNode"] as? Bool ?? false,
-                                        why: item["why"] as? String ?? ""
-                                    )
-                                    nodes.append(node)
-                                }
-
-                                // Create a RevisionsContainer from our manually parsed nodes
-                                let revContainer = RevisionsContainer(revArray: nodes)
-                                print("Successfully manually parsed JSON with \(revContainer.revArray.count) revision nodes")
-
-                                // Convert to JSON string for compatibility with existing code
-                                let encoder = JSONEncoder()
-                                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                                let jsonData = try encoder.encode(revContainer)
-                                let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
-
-                                // Store the JSON string in messages array
-                                self.messages = [jsonString]
-
-                                // Get the revision nodes directly
-                                lastRevNodeArray = revContainer.revArray
-
-                                // Update generic messages for history
-                                genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
-
-                                // Success! Return early
-                                return
-                            }
-                        } catch {
-                            print("Manual JSON parsing also failed: \(error.localizedDescription)")
-                        }
-
-                        // If we got here, both structured and manual parsing failed
-                        throw error
+                        return
                     }
-                } else {
-                    throw NSError(
-                        domain: "ResumeChatProviderError",
-                        code: 1003,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to convert content to data"]
-                    )
+
+                    // Try as a container with revArray property (legacy format)
+                    let container = try JSONDecoder().decode(RevisionsContainer.self, from: responseData)
+                    print("Successfully decoded JSON with container format: \(container.revArray.count) revision nodes")
+
+                    // Format for storage
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                    let jsonData = try encoder.encode(container)
+                    let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
+
+                    // Store results
+                    self.messages = [jsonString]
+                    lastRevNodeArray = container.revArray
+                    genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
+
+                } catch {
+                    print("JSON parsing error: \(error.localizedDescription)")
+                    print("Raw content: \(content)")
+                    throw error
                 }
             } else {
-                // Fallback to the old method for non-MacPaw clients
-                let response = try await openAIClient.sendChatCompletionAsync(
-                    messages: messages,
-                    model: modelString,
-                    temperature: 1.0
+                throw NSError(
+                    domain: "ResumeChatProviderError",
+                    code: 1003,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to convert content to data"]
                 )
-
-                // Process the response
-                let content = response.content
-
-                // Process messages format and store in messages array
-                self.messages = [content.asJsonFormatted()]
-
-                if self.messages.isEmpty {
-                    throw NSError(
-                        domain: "ResumeChatProviderError",
-                        code: 1002,
-                        userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
-                    )
-                }
-
-                // Try to convert to nodes
-                lastRevNodeArray = convertJsonToNodes(self.messages.last) ?? []
-
-                // Update generic messages
-                genericMessages.append(ChatMessage(role: .assistant, content: content))
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -570,7 +420,7 @@ final class ResumeChatProvider {
         errorMessage = ""
 
         // Fall back to non-streaming version with our abstraction layer
-        try await startChatPatched(messages: messages)
+        try await startChat(messages: messages)
     }
 
     func cancelStream() {

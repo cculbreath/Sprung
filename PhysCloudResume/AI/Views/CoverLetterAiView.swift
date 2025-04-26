@@ -24,6 +24,17 @@ struct CoverLetterAiView: View {
     @Binding var buttons: CoverLetterButtons
     @Binding var refresh: Bool
 
+    // Flag to determine if this is a new conversation or not
+    private let isNewConversation: Bool
+
+    // MARK: - Initialization
+
+    init(buttons: Binding<CoverLetterButtons>, refresh: Binding<Bool>, isNewConversation: Bool = true) {
+        _buttons = buttons
+        _refresh = refresh
+        self.isNewConversation = isNewConversation
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -40,7 +51,8 @@ struct CoverLetterAiView: View {
             buttons: $buttons,
             refresh: $refresh,
             ttsEnabled: $ttsEnabled,
-            ttsVoice: $ttsVoice
+            ttsVoice: $ttsVoice,
+            isNewConversation: isNewConversation
         )
         .onAppear { print("AI Cover Letter View") }
     }
