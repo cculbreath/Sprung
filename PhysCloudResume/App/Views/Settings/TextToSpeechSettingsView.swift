@@ -20,6 +20,9 @@ struct TextToSpeechSettingsView: View {
     @State private var isPreviewingVoice: Bool = false
     @State private var ttsError: String? = nil
     @State private var showTTSErrorAlert: Bool = false // Use a different name to avoid conflict
+    
+    // Dynamically determined list of supported voices
+    @State private var supportedVoices: [OpenAITTSProvider.Voice] = []
 
     // Default instructions constant
     private let defaultInstructions = """
@@ -68,8 +71,8 @@ struct TextToSpeechSettingsView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     Picker("", selection: $ttsVoice) {
-                        // Use OpenAITTSProvider.Voice enum for options
-                        ForEach(OpenAITTSProvider.Voice.allCases, id: \.rawValue) { voice in
+                        // Only show voices that have descriptions and are likely supported
+                        ForEach(supportedVoices, id: \.rawValue) { voice in
                             Text(voice.displayName).tag(voice.rawValue)
                         }
                     }
@@ -134,6 +137,9 @@ struct TextToSpeechSettingsView: View {
             // Initialize TTS provider on appear if enabled and key exists
             if ttsEnabled && openAiApiKey != "none" {
                 initializeTTSProvider()
+            } else {
+                // Set default voices if no provider is available yet
+                supportedVoices = [.alloy, .echo, .fable, .onyx, .nova, .shimmer]
             }
         }
         .onChange(of: openAiApiKey) { _, newKey in
@@ -157,6 +163,64 @@ struct TextToSpeechSettingsView: View {
         // Avoid re-initializing if the key hasn't changed
         if ttsProvider?.apiKey != openAiApiKey {
             ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
+            // After initializing the provider, determine supported voices
+            determineSupportedVoices()
+        }
+    }
+    
+    /// Determines which voices are supported by the MacPaw library and have proper descriptions
+    private func determineSupportedVoices() {
+        // Start with the known core voices that are directly supported
+        let guaranteedVoices: [OpenAITTSProvider.Voice] = [
+            .alloy, .echo, .fable, .onyx, .nova, .shimmer
+        ]
+        
+        // Check additional voices with the AudioSpeechVoice initializer
+        var availableVoices = guaranteedVoices
+        
+        // Try each voice from the full set
+        for voice in OpenAITTSProvider.Voice.allCases {
+            // Skip voices we already know are supported
+            if guaranteedVoices.contains(where: { $0 == voice }) {
+                continue
+            }
+            
+            // Check if the voice is supported by trying to create it with the initializer
+            if let client = ttsProvider?.client as? MacPawOpenAIClient {
+                // Use reflection to check if the voice is supported (without actually making an API call)
+                // We're checking if AudioSpeechQuery.AudioSpeechVoice(rawValue:) returns non-nil
+                let voiceIsLikelySupported = client.isVoiceSupported(voice.rawValue)
+                if voiceIsLikelySupported {
+                    availableVoices.append(voice)
+                }
+            }
+        }
+        
+        // Sort the voices by gender and name for a more organized display
+        let sortedVoices = availableVoices.sorted { voice1, voice2 in
+            // Group by gender first, then alphabetically within each group
+            // Order: Female, Male, Neutral
+            let gender1 = getGenderFromDisplayName(voice1.displayName)
+            let gender2 = getGenderFromDisplayName(voice2.displayName)
+            
+            if gender1 != gender2 {
+                // Gender order: Female, Male, Neutral
+                if gender1 == "Female" { return true }
+                if gender2 == "Female" { return false }
+                if gender1 == "Male" { return true }
+                return false
+            }
+            
+            // If same gender, sort alphabetically by voice name
+            return voice1.rawValue < voice2.rawValue
+        }
+        
+        // Update the supported voices list
+        self.supportedVoices = sortedVoices
+        
+        // If the current voice is not supported, default to nova
+        if !availableVoices.contains(where: { $0.rawValue == ttsVoice }) {
+            ttsVoice = "nova"
         }
     }
 
@@ -196,6 +260,19 @@ struct TextToSpeechSettingsView: View {
                     self.showTTSErrorAlert = true
                 }
             }
+        }
+    }
+    
+    /// Helper function to extract gender from a voice display name
+    /// - Parameter displayName: The voice display name, e.g., "Nova (Female, Energetic)"
+    /// - Returns: "Female", "Male", or "Neutral"
+    private func getGenderFromDisplayName(_ displayName: String) -> String {
+        if displayName.contains("Female") { 
+            return "Female" 
+        } else if displayName.contains("Male") { 
+            return "Male" 
+        } else { 
+            return "Neutral" 
         }
     }
 }
