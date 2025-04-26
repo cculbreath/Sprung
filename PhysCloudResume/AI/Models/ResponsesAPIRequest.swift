@@ -17,12 +17,23 @@ struct ResponsesAPIRequest: Encodable {
     let temperature: Double
     /// Optional ID of the previous response for conversation state
     let previousResponseId: String?
+    /// Optional JSON schema for structured output
+    let schema: String?
 
     enum CodingKeys: String, CodingKey {
         case model
         case input
         case temperature
         case previousResponseId = "previous_response_id"
+        case schema
+    }
+    
+    init(model: String, input: String, temperature: Double, previousResponseId: String?, schema: String? = nil) {
+        self.model = model
+        self.input = input
+        self.temperature = temperature
+        self.previousResponseId = previousResponseId
+        self.schema = schema
     }
 }
 
