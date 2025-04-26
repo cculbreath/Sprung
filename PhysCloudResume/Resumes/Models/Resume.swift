@@ -12,6 +12,9 @@ import SwiftData
 class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
 
+    /// Stores the OpenAI response ID for server-side conversation state
+    var previousResponseId: String? = nil
+
     var needToTree: Bool = true
     var needToFont: Bool = true
 

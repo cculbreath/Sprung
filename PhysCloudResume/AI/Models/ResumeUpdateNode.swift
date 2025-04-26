@@ -16,6 +16,7 @@ struct ProposedRevisionNode: Codable, Equatable {
     var valueChanged: Bool = false
     var isTitleNode: Bool = false
     var why: String = ""
+    var treePath: String = ""
 }
 
 struct RevisionsContainer: Codable, StructuredOutput {
@@ -28,7 +29,8 @@ struct RevisionsContainer: Codable, StructuredOutput {
             newValue: "Example new value",
             valueChanged: true,
             isTitleNode: false,
-            why: "Improved clarity and impact"
+            why: "Improved clarity and impact",
+            treePath: "Resume > section > subsection"
         ),
     ])
 }

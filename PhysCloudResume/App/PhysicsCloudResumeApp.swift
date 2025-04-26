@@ -33,14 +33,6 @@ struct PhysicsCloudResumeApp: App {
         ])
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
         .commands {
-            // Add a standalone profile command in the main menu
-            CommandMenu("Profile") {
-                Button("Applicant Profile...") {
-                    appDelegate.showApplicantProfileWindow()
-                }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-            }
-
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
                     appDelegate.showSettingsWindow()
@@ -52,6 +44,7 @@ struct PhysicsCloudResumeApp: App {
                 Button("Applicant Profile...") {
                     appDelegate.showApplicantProfileWindow()
                 }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
             }
         }
     }

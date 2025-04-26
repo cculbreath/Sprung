@@ -61,7 +61,8 @@ struct CoverLetterAiManager: View {
         buttons: Binding<CoverLetterButtons>,
         refresh: Binding<Bool>,
         ttsEnabled: Binding<Bool> = .constant(false),
-        ttsVoice: Binding<String> = .constant("nova")
+        ttsVoice: Binding<String> = .constant("nova"),
+        isNewConversation: Bool = true
     ) {
         self.openAIClient = openAIClient
         chatProvider = CoverChatProvider(client: openAIClient)
@@ -74,7 +75,15 @@ struct CoverLetterAiManager: View {
 
         // Initialize the TTS view model
         _ttsViewModel = StateObject(wrappedValue: TTSViewModel(ttsProvider: ttsProvider))
+
+        // Handle new conversation state for toolbar button presses -
+        // we'll handle this in onAppear instead of during initialization
+        // to avoid escaping closure capturing mutable self issues
+        handleNewConversation = isNewConversation
     }
+
+    // Flag to track if this is a new conversation
+    @State private var handleNewConversation: Bool = false
 
     // MARK: - Computed Properties
 
@@ -117,6 +126,18 @@ struct CoverLetterAiManager: View {
         }
         .onAppear {
             print("CoverLetterAiManager appeared")
+
+            // Handle new conversation if needed
+            if handleNewConversation {
+                if let jobApp = jobAppStore.selectedApp,
+                   let letter = jobApp.selectedCover
+                {
+                    // Clear previousResponseId to start a new conversation
+                    letter.previousResponseId = nil
+                    // Reset flag
+                    handleNewConversation = false
+                }
+            }
         }
         // Alert for recommendation results
         .alert(item: $errorWrapper) { wrapper in

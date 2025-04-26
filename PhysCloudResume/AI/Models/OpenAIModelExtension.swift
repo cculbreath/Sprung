@@ -17,7 +17,8 @@ enum AIModels {
 
     // GPT-4o family of models
     static let gpt4o_mini = "gpt-4o-mini"
-    static let gpt4o_latest = "gpt-4o-latest"
+    static let gpt4o = "gpt-4o"
+    static let gpt4o_latest = "gpt-4o" // Map latest to the current model
 
     // GPT-4o TTS model
     static let gpt_4o_mini_tts = "gpt-4o-mini-tts"

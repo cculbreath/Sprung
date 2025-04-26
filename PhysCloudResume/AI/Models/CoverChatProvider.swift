@@ -56,12 +56,14 @@ final class CoverChatProvider {
     ///   - jobAppStore: The job app store
     ///   - chatProvider: The chat provider
     ///   - buttons: The cover letter buttons
+    ///   - isNewConversation: Whether this is a new conversation (toolbar button press)
     @MainActor
     func coverChatAction(
         res: Resume?,
         jobAppStore: JobAppStore,
         chatProvider _: CoverChatProvider,
-        buttons: Binding<CoverLetterButtons>
+        buttons: Binding<CoverLetterButtons>,
+        isNewConversation: Bool = true
     ) {
         guard let app = jobAppStore.selectedApp else { return }
 
@@ -69,6 +71,11 @@ final class CoverChatProvider {
         guard let letter = app.selectedCover else { return }
 
         buttons.wrappedValue.runRequested = true
+
+        // If this is a new conversation from toolbar button, clear the response ID
+        if isNewConversation {
+            letter.previousResponseId = nil
+        }
 
         // Set up the system message
         let systemMessage = CoverLetterPrompts.systemMessage
@@ -92,19 +99,45 @@ final class CoverChatProvider {
         // Send the completion request
         Task {
             do {
-                let response = try await openAIClient.sendChatCompletionAsync(
-                    messages: genericMessages,
-                    model: modelString,
-                    temperature: 1.0
-                )
+                // Use the Responses API if available
+                if isResponsesAPIEnabled() {
+                    // Combine messages for the Responses API
+                    var combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
 
-                // Process the results on the main thread
-                await MainActor.run {
-                    processResults(
-                        newMessage: response.content,
-                        coverLetter: letter,
-                        buttons: buttons
+                    let response = try await openAIClient.sendResponseRequestAsync(
+                        message: combinedMessage,
+                        model: modelString,
+                        temperature: 1.0,
+                        previousResponseId: letter.previousResponseId
                     )
+
+                    // Save the response ID for future continuations
+                    letter.previousResponseId = response.id
+
+                    // Process the results on the main thread
+                    await MainActor.run {
+                        processResults(
+                            newMessage: response.content,
+                            coverLetter: letter,
+                            buttons: buttons
+                        )
+                    }
+                } else {
+                    // Fallback to the original ChatCompletion API
+                    let response = try await openAIClient.sendChatCompletionAsync(
+                        messages: genericMessages,
+                        model: modelString,
+                        temperature: 1.0
+                    )
+
+                    // Process the results on the main thread
+                    await MainActor.run {
+                        processResults(
+                            newMessage: response.content,
+                            coverLetter: letter,
+                            buttons: buttons
+                        )
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -114,6 +147,14 @@ final class CoverChatProvider {
                 }
             }
         }
+    }
+
+    /// Check if the Responses API should be used
+    /// - Returns: True if the Responses API should be used
+    private func isResponsesAPIEnabled() -> Bool {
+        // We can add a feature flag here in the future
+        // For now, always return true to use the new API
+        return true
     }
 
     /// Process the results from the OpenAI API
@@ -165,13 +206,15 @@ final class CoverChatProvider {
     ///   - chatProvider: The chat provider
     ///   - buttons: The cover letter buttons
     ///   - customFeedback: Custom feedback for revision
+    ///   - isNewConversation: Whether this is a new conversation (default false for revisions)
     @MainActor
     func coverChatRevise(
         res _: Resume?,
         jobAppStore: JobAppStore,
         chatProvider _: CoverChatProvider,
         buttons: Binding<CoverLetterButtons>,
-        customFeedback: Binding<String>
+        customFeedback: Binding<String>,
+        isNewConversation: Bool = false
     ) {
         guard let app = jobAppStore.selectedApp else { return }
 
@@ -179,6 +222,11 @@ final class CoverChatProvider {
         guard let letter = app.selectedCover else { return }
 
         buttons.wrappedValue.runRequested = true
+
+        // If this is a new conversation, clear the response ID
+        if isNewConversation {
+            letter.previousResponseId = nil
+        }
 
         // Set up the system message
         let systemMessage = CoverLetterPrompts.systemMessage
@@ -190,7 +238,7 @@ final class CoverChatProvider {
         let userMessage: String
         if letter.editorPrompt == .custom {
             // Use the feedback provided by the user
-            let feedbackPrompt = """
+            userMessage = """
                 Upon reading your latest draft, \(Applicant().name) has provided the following feedback:
 
                     \(customFeedback.wrappedValue)
@@ -202,19 +250,20 @@ final class CoverChatProvider {
                 Current draft:
                 \(letter.content)
             """
-            appendUserMessage(feedbackPrompt)
         } else {
             // Use the prompt template from the editor prompts
             let promptTemplate = letter.editorPrompt ?? .zissner
-            let rewritePrompt = """
+            userMessage = """
                 My initial draft of a cover letter to accompany my application is included below.
                 \(promptTemplate.rawValue)
 
                 Cover Letter initial draft:
                 \(letter.content)
             """
-            appendUserMessage(rewritePrompt)
         }
+
+        // For legacy API, add the user message to the message history
+        appendUserMessage(userMessage)
 
         // Get the preferred model
         let modelString = OpenAIModelFetcher.getPreferredModelString()
@@ -222,19 +271,45 @@ final class CoverChatProvider {
         // Send the completion request
         Task {
             do {
-                let response = try await openAIClient.sendChatCompletionAsync(
-                    messages: genericMessages,
-                    model: modelString,
-                    temperature: 1.0
-                )
+                // Use the Responses API if available
+                if isResponsesAPIEnabled() {
+                    // Combine messages for the Responses API
+                    let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
 
-                // Process the results on the main thread
-                await MainActor.run {
-                    processResults(
-                        newMessage: response.content,
-                        coverLetter: letter,
-                        buttons: buttons
+                    let response = try await openAIClient.sendResponseRequestAsync(
+                        message: combinedMessage,
+                        model: modelString,
+                        temperature: 1.0,
+                        previousResponseId: letter.previousResponseId
                     )
+
+                    // Save the response ID for future continuations
+                    letter.previousResponseId = response.id
+
+                    // Process the results on the main thread
+                    await MainActor.run {
+                        processResults(
+                            newMessage: response.content,
+                            coverLetter: letter,
+                            buttons: buttons
+                        )
+                    }
+                } else {
+                    // Fallback to the original ChatCompletion API
+                    let response = try await openAIClient.sendChatCompletionAsync(
+                        messages: genericMessages,
+                        model: modelString,
+                        temperature: 1.0
+                    )
+
+                    // Process the results on the main thread
+                    await MainActor.run {
+                        processResults(
+                            newMessage: response.content,
+                            coverLetter: letter,
+                            buttons: buttons
+                        )
+                    }
                 }
             } catch {
                 await MainActor.run {

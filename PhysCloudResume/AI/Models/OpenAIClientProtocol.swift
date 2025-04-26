@@ -14,6 +14,8 @@ protocol OpenAIClientProtocol {
     /// The API key to use for requests
     var apiKey: String { get }
 
+    // MARK: - Chat Completion API (Legacy)
+
     /// Sends a chat completion request
     /// - Parameters:
     ///   - messages: The conversation history
@@ -54,6 +56,56 @@ protocol OpenAIClientProtocol {
         onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     )
+
+    // MARK: - Responses API (New)
+
+    /// Sends a request to the OpenAI Responses API
+    /// - Parameters:
+    ///   - message: The current message content
+    ///   - model: The model to use
+    ///   - temperature: Controls randomness (0-1)
+    ///   - previousResponseId: Optional ID from a previous response for conversation state
+    ///   - onComplete: Callback with the response
+    func sendResponseRequest(
+        message: String,
+        model: String,
+        temperature: Double,
+        previousResponseId: String?,
+        onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
+    )
+
+    /// Sends a request to the OpenAI Responses API using async/await
+    /// - Parameters:
+    ///   - message: The current message content
+    ///   - model: The model to use
+    ///   - temperature: Controls randomness (0-1)
+    ///   - previousResponseId: Optional ID from a previous response for conversation state
+    /// - Returns: The response from the Responses API
+    func sendResponseRequestAsync(
+        message: String,
+        model: String,
+        temperature: Double,
+        previousResponseId: String?
+    ) async throws -> ResponsesAPIResponse
+
+    /// Sends a streaming request to the OpenAI Responses API
+    /// - Parameters:
+    ///   - message: The current message content
+    ///   - model: The model to use
+    ///   - temperature: Controls randomness (0-1)
+    ///   - previousResponseId: Optional ID from a previous response for conversation state
+    ///   - onChunk: Callback for each chunk of the streaming response
+    ///   - onComplete: Callback when streaming is complete
+    func sendResponseRequestStreaming(
+        message: String,
+        model: String,
+        temperature: Double,
+        previousResponseId: String?,
+        onChunk: @escaping (Result<ResponsesAPIStreamChunk, Error>) -> Void,
+        onComplete: @escaping (Error?) -> Void
+    )
+
+    // MARK: - Text-to-Speech API
 
     /// Sends a TTS (Text-to-Speech) request
     /// - Parameters:
@@ -113,9 +165,37 @@ struct ChatCompletionResponse: Codable, Equatable {
     let content: String
     /// The model used for the completion
     let model: String
+    /// The response ID from OpenAI (used for the Responses API)
+    var id: String?
 
-    init(content: String, model: String) {
+    init(content: String, model: String, id: String? = nil) {
         self.content = content
         self.model = model
+        self.id = id
     }
+}
+
+/// Response from an OpenAI Responses API request
+struct ResponsesAPIResponse: Codable, Equatable {
+    /// The unique ID of the response (used for continuation)
+    let id: String
+    /// The content of the response
+    let content: String
+    /// The model used for the response
+    let model: String
+
+    /// Converts to a ChatCompletionResponse for backward compatibility
+    func toChatCompletionResponse() -> ChatCompletionResponse {
+        return ChatCompletionResponse(content: content, model: model, id: id)
+    }
+}
+
+/// A chunk from a streaming Responses API request
+struct ResponsesAPIStreamChunk: Codable, Equatable {
+    /// The ID of the response (only present in the final chunk)
+    let id: String?
+    /// The content of the chunk
+    let content: String
+    /// The model used for the response
+    let model: String
 }

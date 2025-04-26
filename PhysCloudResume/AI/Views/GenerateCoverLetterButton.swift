@@ -28,7 +28,8 @@ struct GenerateCoverLetterButton: View {
                     res: jobAppStore.selectedApp?.selectedRes,
                     jobAppStore: jobAppStore,
                     chatProvider: chatProvider,
-                    buttons: $buttons
+                    buttons: $buttons,
+                    isNewConversation: true // Explicitly start a new conversation
                 )
             } label: {
                 Image("ai-squiggle")

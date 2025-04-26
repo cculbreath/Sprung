@@ -12,6 +12,10 @@ import SwiftData
 class CoverLetter: Identifiable, Hashable {
     var jobApp: JobApp? = nil
     @Attribute(.unique) var id: UUID = UUID() // Explicit id field
+
+    /// Stores the OpenAI response ID for server-side conversation state
+    var previousResponseId: String? = nil
+
     var createdDate: Date = Date()
     var moddedDate: Date = Date()
     // Editable name of the cover letter, shown in pickers and exports
