@@ -10,18 +10,12 @@ import SwiftUI
 
 struct FontSizePanelView: View {
     @State var isExpanded: Bool = false
-    @Binding var refresher: Bool
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
 
     var body: some View {
         HStack {
             ToggleChevronView(isExpanded: $isExpanded, toggleAction: {
-                withAnimation {
-                    isExpanded.toggle()
-                    if !isExpanded {
-                        refresher.toggle()
-                    }
-                }
+                withAnimation { isExpanded.toggle() }
             })
             Text("Font Sizes")
                 .font(.headline)
@@ -34,7 +28,7 @@ struct FontSizePanelView: View {
                 jobAppStore.selectedApp?.selectedRes?.fontSizeNodes.sorted { $0.index < $1.index } ?? [],
                 id: \.self
             ) { node in
-                FontNodeView(node: node, refresher: $refresher)
+                FontNodeView(node: node)
             }
         }
         .padding(.trailing, 16) // Avoid overlap on trailing side.

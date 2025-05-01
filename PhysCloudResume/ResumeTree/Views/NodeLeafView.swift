@@ -13,7 +13,6 @@ struct NodeLeafView: View {
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
 
     @State var node: TreeNode
-    @Binding var refresher: Bool
 
     // Local UI state (hover effects)
     @State private var isHoveringEdit: Bool = false
@@ -116,6 +115,5 @@ struct NodeLeafView: View {
         let resume = node.resume
         TreeNode.deleteTreeNode(node: node, context: context)
         resume.debounceExport()
-        refresher.toggle()
     }
 }

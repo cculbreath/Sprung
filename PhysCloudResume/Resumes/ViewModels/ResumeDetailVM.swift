@@ -23,9 +23,6 @@ final class ResumeDetailVM {
     /// Width toggle previously handled by the view hierarchy.
     var isWide: Bool = false
 
-    /// Triggers a view refresh when nodes change order / values.
-    var refresher: Bool = false
-
     /// Whether the optional font‑size panel should be shown. This setting is
     /// mirrored from the underlying model but owned by the view‑model so that
     /// the view no longer touches the model layer directly.
@@ -62,7 +59,6 @@ final class ResumeDetailVM {
         )
         // Editing state is now tracked solely in the view‑model.
         parent.addChild(newNode)
-        refresher.toggle()
     }
 
     /// Persists the current tree structure back to the database and triggers
@@ -104,7 +100,6 @@ final class ResumeDetailVM {
 
         // Trigger PDF export and view refresh
         refreshPDF()
-        refresher.toggle()
     }
 
     // MARK: - Expansion state ---------------------------------------------
@@ -120,6 +115,5 @@ final class ResumeDetailVM {
         } else {
             expandedIDs.insert(node.id)
         }
-        refresher.toggle() // trigger a UI update
     }
 }

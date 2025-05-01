@@ -324,9 +324,16 @@ struct AiCommsView: View {
             for (index, item) in validRevs.enumerated() {
                 // Check by ID first
                 if let matchedNode = updateNodes.first(where: { $0["id"] as? String == item.id }) {
-                    // If we have a match but empty oldValue, populate it from the node
+                    // If we have a match but empty oldValue, populate it based on isTitleNode
                     if validRevs[index].oldValue.isEmpty {
-                        validRevs[index].oldValue = matchedNode["value"] as? String ?? ""
+                        // For title nodes, use the name property
+                        let isTitleNode = matchedNode["isTitleNode"] as? Bool ?? false
+                        if isTitleNode {
+                            validRevs[index].oldValue = matchedNode["name"] as? String ?? ""
+                        } else {
+                            validRevs[index].oldValue = matchedNode["value"] as? String ?? ""
+                        }
+                        validRevs[index].isTitleNode = isTitleNode
                     }
                     continue
                 } else if let matchedByValue = updateNodes.first(where: { $0["value"] as? String == item.oldValue }), let id = matchedByValue["id"] as? String {
@@ -345,20 +352,29 @@ struct AiCommsView: View {
                             let nodePath = node["tree_path"] as? String ?? ""
                             return nodePath == treePath || nodePath.hasSuffix(treePath)
                         }
-                        
+
                         if let match = potentialMatches.first {
                             // We found a match, update the oldValue and ID
                             validRevs[index].id = match["id"] as? String ?? item.id
-                            validRevs[index].oldValue = match["value"] as? String ?? ""
-                            validRevs[index].isTitleNode = match["isTitleNode"] as? Bool ?? false
+                            let isTitleNode = match["isTitleNode"] as? Bool ?? false
+                            if isTitleNode {
+                                validRevs[index].oldValue = match["name"] as? String ?? ""
+                            } else {
+                                validRevs[index].oldValue = match["value"] as? String ?? ""
+                            }
+                            validRevs[index].isTitleNode = isTitleNode
                         }
                     }
-                } 
-                
+                }
+
                 // As a last resort, try to find the node in the resume's nodes by ID
                 if validRevs[index].oldValue.isEmpty && !validRevs[index].id.isEmpty {
                     if let treeNode = myRes.nodes.first(where: { $0.id == validRevs[index].id }) {
-                        validRevs[index].oldValue = treeNode.value
+                        if validRevs[index].isTitleNode {
+                            validRevs[index].oldValue = treeNode.name
+                        } else {
+                            validRevs[index].oldValue = treeNode.value
+                        }
                     }
                 }
             }

@@ -319,7 +319,7 @@ final class ResumeChatProvider {
         do {
             // Get the JSON schema for revisions
             let schema = ResumeApiQuery.revNodeArraySchemaString
-            
+
             // Call the Responses API with structured output schema
             let response = try await openAIClient.sendResponseRequestAsync(
                 message: combinedMessage,
@@ -354,7 +354,7 @@ final class ResumeChatProvider {
                             let nodeId = item["id"] as? String ?? ""
                             let treePath = item["tree_path"] as? String ?? ""
                             let oldValue = item["oldValue"] as? String ?? ""
-                            
+
                             let node = ProposedRevisionNode(
                                 id: nodeId,
                                 oldValue: oldValue,
