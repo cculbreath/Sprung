@@ -21,10 +21,9 @@ struct NodeWithChildrenView: View {
             )
 
             // Show child nodes when expanded.
-            if vm.isExpanded(node),
-               let children = node.children?.sorted(by: { $0.myIndex < $1.myIndex })
-            {
-                NodeChildrenListView(children: children)
+            if vm.isExpanded(node) {
+                // one stable array identity -> zero diff-engine churn
+                NodeChildrenListView(children: node.orderedChildren)
             }
         }
     }

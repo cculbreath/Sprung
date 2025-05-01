@@ -19,7 +19,7 @@ enum LeafStatus: String, Codable, Hashable {
 // Example SwiftData model
 
 @Model class TreeNode: Identifiable {
-    var id = UUID().uuidString
+    let id = UUID().uuidString
     var name: String = ""
     var value: String
     var includeInEditor: Bool = false
@@ -29,21 +29,15 @@ enum LeafStatus: String, Codable, Hashable {
     var label: String { return resume.label(name) }
     @Relationship(deleteRule: .noAction) var resume: Resume
     var status: LeafStatus
-    private(set) var nodeDepth: Int
-    var depth: Int {
-        var current = self
-        var depthCount = 0
-
-        while let parent = current.parent {
-            depthCount += 1
-            current = parent
-        }
-
-        return depthCount
-    }
+    var depth: Int = 0
 
     var hasChildren: Bool {
         return !(children?.isEmpty ?? true)
+    }
+
+    /// Children sorted once on `myIndex`; keeps array identity across redraws
+    var orderedChildren: [TreeNode] {
+        (children ?? []).sorted { $0.myIndex < $1.myIndex }
     }
 
     var aiStatusChildren: Int {
@@ -76,7 +70,7 @@ enum LeafStatus: String, Codable, Hashable {
         self.status = status
         includeInEditor = inEditor
 
-        nodeDepth = 0
+        depth = parent != nil ? parent!.depth + 1 : 0
         self.resume = resume
         // No need to set status again, it's already set by default.
     }
@@ -90,12 +84,12 @@ enum LeafStatus: String, Codable, Hashable {
         child.parent = self
         // Assign index sequentially within the parent's children array.
         child.myIndex = (children?.count ?? 0)
-        child.nodeDepth = nodeDepth + 1
+        child.depth = depth + 1
         children?.append(child)
         return child
     }
 
-    var growDepth: Bool { return nodeDepth > 2 }
+    var growDepth: Bool { depth > 2 }
     static func traverseAndExportNodes(node: TreeNode, currentPath: String = "")
         -> [[String: Any]]
     {

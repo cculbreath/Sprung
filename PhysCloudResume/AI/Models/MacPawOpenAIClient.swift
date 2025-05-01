@@ -280,10 +280,10 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             } else {
                 // Fallbacks based on similarity if not directly supported
                 switch voice.lowercased() {
-                case "ash": mappedVoice = .alloy  // Neutral fallback
-                case "ballad", "verse": mappedVoice = .fable  // British fallbacks
-                case "coral": mappedVoice = .nova  // Female fallback
-                case "sage": mappedVoice = .alloy  // Neutral fallback
+                case "ash": mappedVoice = .alloy // Neutral fallback
+                case "ballad", "verse": mappedVoice = .fable // British fallbacks
+                case "coral": mappedVoice = .nova // Female fallback
+                case "sage": mappedVoice = .alloy // Neutral fallback
                 default: mappedVoice = .alloy
                 }
             }
@@ -341,10 +341,10 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             } else {
                 // Fallbacks based on similarity if not directly supported
                 switch voice.lowercased() {
-                case "ash": mappedVoice = .alloy  // Neutral fallback
-                case "ballad", "verse": mappedVoice = .fable  // British fallbacks
-                case "coral": mappedVoice = .nova  // Female fallback
-                case "sage": mappedVoice = .alloy  // Neutral fallback
+                case "ash": mappedVoice = .alloy // Neutral fallback
+                case "ballad", "verse": mappedVoice = .fable // British fallbacks
+                case "coral": mappedVoice = .nova // Female fallback
+                case "sage": mappedVoice = .alloy // Neutral fallback
                 default: mappedVoice = .alloy
                 }
             }
@@ -520,7 +520,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         model: String,
         temperature: Double,
         previousResponseId: String?,
-        schema: String? = nil
+        schema _: String? = nil
     ) async throws -> ResponsesAPIResponse {
         // Create the URL
         guard let url = URL(string: "https://api.openai.com/v1/responses") else {

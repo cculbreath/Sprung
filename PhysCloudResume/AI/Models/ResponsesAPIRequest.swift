@@ -27,7 +27,7 @@ struct ResponsesAPIRequest: Encodable {
         case previousResponseId = "previous_response_id"
         case schema
     }
-    
+
     init(model: String, input: String, temperature: Double, previousResponseId: String?, schema: String? = nil) {
         self.model = model
         self.input = input

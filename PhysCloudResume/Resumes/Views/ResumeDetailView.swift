@@ -40,7 +40,7 @@ struct ResumeDetailView: View {
                 }
 
                 if vm.includeFonts {
-                    FontSizePanelView(refresher: $vm.refresher).padding(10)
+                    FontSizePanelView().padding(10)
                 }
             }
         }
@@ -65,7 +65,7 @@ struct ResumeDetailView: View {
             if node.hasChildren {
                 NodeWithChildrenView(node: node)
             } else {
-                NodeLeafView(node: node, refresher: $vm.refresher)
+                NodeLeafView(node: node)
             }
         }
     }

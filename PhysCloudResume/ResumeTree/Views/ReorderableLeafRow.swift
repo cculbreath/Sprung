@@ -13,17 +13,16 @@ struct ReorderableLeafRow: View {
     let node: TreeNode
     var siblings: [TreeNode]
     let currentIndex: Int
-    @Binding var refresher: Bool // Add refresher as a binding
 
     @State private var isDropTargeted: Bool = false // Manage state locally
 
     var body: some View {
         ZStack(alignment: .top) {
-            NodeLeafView(node: node, refresher: $refresher)
+            NodeLeafView(node: node)
                 .scaleEffect(dragInfo.draggedNode == node ? 1.05 : 1.0) // Slightly enlarge the dragged node
                 .animation(.easeInOut, value: dragInfo.draggedNode) // Smoothly animate the scale effect
                 .background(Color.clear) // Highlight on drop
-                .padding(.leading, CGFloat(node.depth * 20)) // Adjust indentation based on depth
+                .padding(.leading, CGFloat(node.depth) * 20) // now O(1) stored Int
                 .onDrag {
                     dragInfo.draggedNode = node
                     return NSItemProvider(object: node.id as NSString)
@@ -52,7 +51,6 @@ struct ReorderableLeafRow: View {
             node: node,
             siblings: siblings,
             dragInfo: dragInfo,
-            refresher: $refresher,
             isDropTargeted: $isDropTargeted // Pass state to the delegate
         ))
     }
@@ -63,7 +61,6 @@ struct LeafDropDelegate: DropDelegate {
     let node: TreeNode
     var siblings: [TreeNode]
     var dragInfo: DragInfo
-    @Binding var refresher: Bool
     @Binding var isDropTargeted: Bool // Accept the binding for isDropTargeted
 
     func validateDrop(info _: DropInfo) -> Bool {
@@ -103,9 +100,7 @@ struct LeafDropDelegate: DropDelegate {
         dragInfo.draggedNode = nil
         dragInfo.dropTargetNode = nil
         dragInfo.dropPosition = .none
-        DispatchQueue.main.async {
-            refresher.toggle()
-        }
+
         return true
     }
 

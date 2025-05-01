@@ -108,7 +108,8 @@ final class CoverChatProvider {
                         message: combinedMessage,
                         model: modelString,
                         temperature: 1.0,
-                        previousResponseId: letter.previousResponseId
+                        previousResponseId: letter.previousResponseId,
+                        schema: nil
                     )
 
                     // Save the response ID for future continuations
@@ -280,7 +281,9 @@ final class CoverChatProvider {
                         message: combinedMessage,
                         model: modelString,
                         temperature: 1.0,
-                        previousResponseId: letter.previousResponseId
+
+                        previousResponseId: letter.previousResponseId,
+                        schema: nil
                     )
 
                     // Save the response ID for future continuations

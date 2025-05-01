@@ -12,7 +12,6 @@ struct FontNodeView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
 
     @State var node: FontSizeNode
-    @Binding var refresher: Bool
 
     // State variables for editing and hover actions.
     @State private var isEditing: Bool = false
