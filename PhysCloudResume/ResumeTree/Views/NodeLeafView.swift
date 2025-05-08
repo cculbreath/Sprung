@@ -88,9 +88,10 @@ struct NodeLeafView: View {
                 }
             }
         }
-        .onChange(of: node.value) { _ in vm.refreshPDF() }
-        .onChange(of: node.name) { _ in vm.refreshPDF() }
+        .onChange(of: node.value) { _, _ in vm.refreshPDF() }
+        .onChange(of: node.name) { _, _ in vm.refreshPDF() }
         .padding(.vertical, 4)
+        .padding(.trailing, 12) // ← new: 24-pt right margin
         .background(
             node.status == LeafStatus.aiToReplace
                 ? Color.accentColor.opacity(0.3)

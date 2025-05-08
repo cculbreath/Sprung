@@ -48,16 +48,30 @@ final class ResumeDetailVM {
 
     // MARK: - Intents -------------------------------------------------------
 
-    /// Adds an empty child node to the given parent.
+    /// Adds a new child node to the given parent. If the parent's existing children
+    /// already include both non-empty names and values (i.e. compound entries),
+    /// the new node is initialized with placeholder name and value so it renders
+    /// in the two-field editor; otherwise it defaults to a single-value entry.
     func addChild(to parent: TreeNode) {
+        // Determine if this parent uses both name & value fields in its children
+        let usesNameValue = parent.orderedChildren.contains { !$0.name.isEmpty && !$0.value.isEmpty }
+        // Set up default placeholders
+        let newName: String
+        let newValue: String
+        if usesNameValue {
+            newName = "New Name"
+            newValue = "New Value"
+        } else {
+            newName = ""
+            newValue = "New Child"
+        }
         let newNode = TreeNode(
-            name: "",
-            value: "New Child",
+            name: newName,
+            value: newValue,
             inEditor: true,
             status: .saved,
             resume: resume
         )
-        // Editing state is now tracked solely in the view‑model.
         parent.addChild(newNode)
     }
 

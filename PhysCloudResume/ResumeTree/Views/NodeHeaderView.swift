@@ -29,9 +29,7 @@ struct NodeHeaderView: View {
 
     var body: some View {
         HStack {
-            ToggleChevronView(isExpanded: isExpanded, toggleAction: {
-                vm.toggleExpansion(for: node)
-            })
+            ToggleChevronView(isExpanded: isExpanded,)
 
             if node.parent == nil {
                 HeaderTextRow()
@@ -45,7 +43,12 @@ struct NodeHeaderView: View {
 
             Spacer()
 
-            if vm.isExpanded(node) && node.parent != nil {
+            // Only allow adding a child when this node is expanded, is not root,
+            // and all of its existing children are leaves (i.e., none have their own children).
+            if vm.isExpanded(node)
+                && node.parent != nil
+                && node.orderedChildren.allSatisfy({ !$0.hasChildren })
+            {
                 Button(action: addChildAction) {
                     HStack {
                         Image(systemName: "plus.circle.fill")
@@ -69,5 +72,8 @@ struct NodeHeaderView: View {
         .padding(.horizontal, 10)
         .padding(.leading, CGFloat(node.depth * 20))
         .padding(.vertical, 5)
+        .onTapGesture {
+            vm.toggleExpansion(for: node)
+        }
     }
 }

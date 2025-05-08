@@ -14,11 +14,12 @@ struct FontSizePanelView: View {
 
     var body: some View {
         HStack {
-            ToggleChevronView(isExpanded: $isExpanded, toggleAction: {
-                withAnimation { isExpanded.toggle() }
-            })
+            ToggleChevronView(isExpanded: $isExpanded,)
             Text("Font Sizes")
                 .font(.headline)
+        }
+        .onTapGesture {
+            withAnimation { isExpanded.toggle() }
         }
         .cornerRadius(5)
         .padding(.vertical, 2)
