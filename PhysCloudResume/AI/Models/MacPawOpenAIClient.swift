@@ -137,7 +137,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         )
 
         // Send the chat completion request
-        client.chats(query: query) { result in
+        _ = client.chats(query: query) { result in
             switch result {
             case let .success(chatResult):
                 if let choice = chatResult.choices.first, let content = choice.message.content {
@@ -232,7 +232,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         query.stream = true
 
         // Start the streaming request
-        client.chatsStream(query: query) { chunkResult in
+        _ = client.chatsStream(query: query) { chunkResult in
             switch chunkResult {
             case let .success(streamResult):
                 // Map the stream chunk to our response format
@@ -300,7 +300,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         )
 
         // Send the TTS request
-        client.audioCreateSpeech(query: query) { result in
+        _ = client.audioCreateSpeech(query: query) { result in
             switch result {
             case let .success(audioResult):
                 onComplete(.success(audioResult.audio))
@@ -361,7 +361,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         )
 
         // Send the streaming TTS request
-        client.audioCreateSpeechStream(query: query) { partialResult in
+        _ = client.audioCreateSpeechStream(query: query) { partialResult in
             switch partialResult {
             case let .success(chunk):
                 onChunk(.success(chunk.audio))

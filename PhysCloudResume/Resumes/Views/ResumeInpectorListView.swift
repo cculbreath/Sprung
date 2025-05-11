@@ -51,7 +51,7 @@ struct ResumeInspectorListView: View {
         .onChange(of: availableStylesString) {
             updateAvailableStyles()
         }
-        .onChange(of: resumes.count) { _ in
+        .onChange(of: resumes.count) {
             updateAvailableStyles()
         }
     }

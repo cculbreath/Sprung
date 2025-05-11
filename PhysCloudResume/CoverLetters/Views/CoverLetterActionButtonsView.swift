@@ -54,34 +54,32 @@ struct CoverLetterActionButtonsView: View {
 
     var body: some View {
         Group {
-            if coverLetter.id != nil {
-                HStack(spacing: 16) {
-                    // Button to generate a new cover letter
-                    GenerateCoverLetterButton(
-                        cL: $coverLetter,
-                        buttons: $buttons,
-                        chatProvider: chatProvider
-                    )
+            HStack(spacing: 16) {
+                // Button to generate a new cover letter
+                GenerateCoverLetterButton(
+                    cL: $coverLetter,
+                    buttons: $buttons,
+                    chatProvider: chatProvider
+                )
 
-                    // Button to select the best cover letter
-                    ChooseBestCoverLetterButton(
-                        cL: $coverLetter,
-                        buttons: $buttons,
-                        action: chooseBestAction
-                    )
+                // Button to select the best cover letter
+                ChooseBestCoverLetterButton(
+                    cL: $coverLetter,
+                    buttons: $buttons,
+                    action: chooseBestAction
+                )
 
-                    // Button for text-to-speech functionality
-                    TTSCoverLetterButton(
-                        cL: $coverLetter,
-                        buttons: $buttons,
-                        ttsEnabled: $ttsEnabled,
-                        ttsVoice: $ttsVoice,
-                        isSpeaking: $isSpeaking,
-                        isPaused: $isPaused,
-                        isBuffering: $isBuffering,
-                        speakAction: speakAction
-                    )
-                }
+                // Button for text-to-speech functionality
+                TTSCoverLetterButton(
+                    cL: $coverLetter,
+                    buttons: $buttons,
+                    ttsEnabled: $ttsEnabled,
+                    ttsVoice: $ttsVoice,
+                    isSpeaking: $isSpeaking,
+                    isPaused: $isPaused,
+                    isBuffering: $isBuffering,
+                    speakAction: speakAction
+                )
             }
         }
     }

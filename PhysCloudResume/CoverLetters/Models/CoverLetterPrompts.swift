@@ -25,7 +25,7 @@ enum CoverLetterPrompts {
         let app = coverLetter.jobApp
         let formatter = DateFormatter()
         formatter.dateStyle = .long // Automatically formats as "January 1, 2025"
-        let formattedDate = formatter.string(from: Date())
+
         var resRefString = ""
         var prompt = ""
         switch mode {

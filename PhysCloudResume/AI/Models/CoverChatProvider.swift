@@ -102,7 +102,7 @@ final class CoverChatProvider {
                 // Use the Responses API if available
                 if isResponsesAPIEnabled() {
                     // Combine messages for the Responses API
-                    var combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
+                    let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
 
                     let response = try await openAIClient.sendResponseRequestAsync(
                         message: combinedMessage,
@@ -253,7 +253,7 @@ final class CoverChatProvider {
             """
         } else {
             // Use the prompt template from the editor prompts
-            let promptTemplate = letter.editorPrompt ?? .zissner
+            let promptTemplate = letter.editorPrompt
             userMessage = """
                 My initial draft of a cover letter to accompany my application is included below.
                 \(promptTemplate.rawValue)

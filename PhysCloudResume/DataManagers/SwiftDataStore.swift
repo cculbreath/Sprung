@@ -17,6 +17,7 @@
 import Foundation
 import SwiftData
 
+@MainActor
 protocol SwiftDataStore: AnyObject {
     var modelContext: ModelContext { get }
 }

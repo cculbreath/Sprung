@@ -306,11 +306,11 @@ struct ReviewView: View {
             if feedbackArray.contains(where: { node in
                 aiActions.contains(node.actionRequested)
             }) {
-                for fb in feedbackArray {}
+                for _ in feedbackArray {}
                 aiResubmit()
             } else {
-                if var selRes = selRes {
-                    if var selRes = resStore.createDuplicate(originalResume: selRes, context: context) {
+                if let selRes = selRes {
+                    if let selRes = resStore.createDuplicate(originalResume: selRes, context: context) {
                         selRes.debounceExport()
                     }
                 }
@@ -333,8 +333,6 @@ struct ReviewView: View {
                         }
                     } else {
                         // Try to diagnose the issue by listing available node IDs
-                        for treeNode in selRes.nodes.prefix(10) {}
-                        if selRes.nodes.count > 10 {}
                     }
                 }
             }

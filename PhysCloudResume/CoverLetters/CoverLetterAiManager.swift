@@ -115,7 +115,7 @@ struct CoverLetterAiManager: View {
             isBuffering: $ttsViewModel.isBuffering
         )
         // Stop playback if the user switches to another cover letter
-        .onChange(of: cL.wrappedValue.id) { _ in
+        .onChange(of: cL.wrappedValue.id) {
             ttsViewModel.stop()
         }
         // Show error alert when TTS errors occur

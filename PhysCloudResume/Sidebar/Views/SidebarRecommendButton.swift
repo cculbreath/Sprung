@@ -97,10 +97,6 @@ struct SidebarRecommendButton: View {
                             // Do not modify selectedResId at all
                         } else {
                             // Even with a legitimate selected resume, verify it's still valid
-                            if let selectedResume = recommendedJob.selectedRes {
-                            } else {
-                                // Do not clear the selectedResId as it breaks the CreateNewResumeView
-                            }
                         }
 
                         // Store the recommended job ID for highlighting

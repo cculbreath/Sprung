@@ -131,7 +131,7 @@ final class TTSAudioStreamer {
             currentStream = stream
         }
         // If still buffering initial chunks, accumulate until threshold reached
-        else if let chunks = initialChunks {
+        else if let _ = initialChunks {
             initialChunks!.append(data)
             print("TTSAudioStreamer: Added chunk to buffer, now have \(initialChunks!.count)/\(initialBufferChunkCount)")
 

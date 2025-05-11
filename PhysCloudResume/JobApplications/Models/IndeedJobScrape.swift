@@ -257,29 +257,23 @@ extension JobApp {
         urlString: String,
         jobAppStore: JobAppStore
     ) async -> JobApp? {
-        do {
-            // First attempt: Desktop URL via URLSession with Cloudflare cookie.
+        let html: String?
 
-            let html: String?
+        if let primary = try? await JobApp.fetchHTMLContent(from: urlString) {
+            html = primary
+        } else if let url = URL(string: urlString),
+                  let webHTML = try? await WebViewHTMLFetcher.html(for: url)
+        {
+            // Fallback: load the same desktop URL in a hidden WKWebView.
+            html = webHTML
+        } else {
+            html = nil
+        }
 
-            if let primary = try? await JobApp.fetchHTMLContent(from: urlString) {
-                html = primary
-            } else if let url = URL(string: urlString),
-                      let webHTML = try? await WebViewHTMLFetcher.html(for: url)
-            {
-                // Fallback: load the same desktop URL in a hidden WKWebView.
-                html = webHTML
-            } else {
-                html = nil
-            }
-
-            guard let html else {
-                return nil
-            }
-
-            return JobApp.parseIndeedJobListing(jobAppStore: jobAppStore, html: html, url: urlString)
-        } catch {
+        guard let html else {
             return nil
         }
+
+        return JobApp.parseIndeedJobListing(jobAppStore: jobAppStore, html: html, url: urlString)
     }
 }

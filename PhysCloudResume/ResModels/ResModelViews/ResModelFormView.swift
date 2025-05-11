@@ -166,7 +166,7 @@ struct ResModelFormView: View {
         let trimmedName = formName.trimmingCharacters(in: .whitespaces)
 
         if let resModel = resModelToEdit {
-            var updatedResModel = resModel
+            let updatedResModel = resModel
             updatedResModel.name = trimmedName
             updatedResModel.json = formJson
             updatedResModel.style = selectedStyle

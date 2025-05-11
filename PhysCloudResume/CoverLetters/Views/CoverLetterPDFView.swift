@@ -42,10 +42,9 @@ struct CoverLetterPDFView: View {
                     .frame(maxHeight: .infinity)
             } else {
                 PDFKitView(data: pdfData)
-                    .onAppear {
-                        if let doc = PDFDocument(data: pdfData) {
-                        } else {}
-                    }
+//                    .onAppear {
+//                        PDFDocument(data: pdfData)
+//                    }
             }
         }
         .task {
@@ -79,10 +78,7 @@ struct CoverLetterPDFView: View {
 
     @MainActor
     private func loadApplicantProfile() async {
-        do {
-            // Get the latest profile from the manager to ensure we have the signature
-            applicant = Applicant() // This will use the profile from ApplicantProfileManager
-        } catch {}
+        applicant = Applicant() // This will use the
     }
 }
 

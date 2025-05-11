@@ -114,7 +114,7 @@ final class CoverLetterRecommendationProvider {
                    let data = content.data(using: .utf8)
                 {
                     // Debug: print raw content and JSON payload
-                    if let jsonString = String(data: data, encoding: .utf8) {}
+
                     do {
                         let structuredOutput = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
                         // Debug: print decoded structured output

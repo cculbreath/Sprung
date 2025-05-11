@@ -82,7 +82,7 @@ import SwiftUI
     /// Fetches job recommendation using the abstraction layer
     /// - Returns: A tuple containing the recommended job ID and reason
     func fetchRecommendation() async throws -> (UUID, String) {
-        guard let resume = resume, let resumeModel = resume.model else {
+        guard let resume = resume, let _ = resume.model else {
             throw NSError(domain: "JobRecommendationProvider", code: 1, userInfo: [NSLocalizedDescriptionKey: "No resume available"])
         }
 
@@ -154,7 +154,6 @@ import SwiftUI
                         return (uuid, structuredOutput.reason)
                     } else {
                         // Log all job IDs for debugging
-                        let availableIds = jobApps.map { $0.id.uuidString }
 
                         throw NSError(
                             domain: "JobRecommendationProvider",
@@ -294,9 +293,6 @@ import SwiftUI
         if let _ = jobApps.first(where: { $0.id == uuid }) {
             return (uuid, recommendation.reason)
         }
-
-        // Log all job IDs for debugging
-        let availableIds = jobApps.map { $0.id.uuidString }
 
         throw NSError(
             domain: "JobRecommendationProvider",
