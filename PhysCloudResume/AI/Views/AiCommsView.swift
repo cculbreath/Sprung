@@ -46,11 +46,9 @@ struct AiCommsView: View {
 
     // Store references to clients for AI operations
     private let openAIClient: OpenAIClientProtocol
-    private let ttsProvider: OpenAITTSProvider
 
     init(
         openAIClient: OpenAIClientProtocol,
-        ttsProvider: OpenAITTSProvider,
         query: ResumeApiQuery,
         res: Binding<Resume?>,
         ttsEnabled: Binding<Bool> = .constant(false),
@@ -59,7 +57,6 @@ struct AiCommsView: View {
         // Initialize with abstraction layer client
         _chatProvider = State(initialValue: ResumeChatProvider(client: openAIClient))
         self.openAIClient = openAIClient
-        self.ttsProvider = ttsProvider
         _q = State(initialValue: query)
         _myRes = res
         _ttsEnabled = ttsEnabled
@@ -185,134 +182,7 @@ struct AiCommsView: View {
                 }
             }
             .padding(.vertical)
-
-            if ttsEnabled && !revisions.isEmpty {
-                Button(action: {
-                    // Detect ⌥‑click to force a fresh TTS request
-                    let optionPressed = NSEvent.modifierFlags.contains(.option)
-                    readAloudButtonTapped(optionPressed: optionPressed)
-                }) {
-                    Image(systemName: readAloudIconName)
-                        .font(.system(size: 16))
-                        // Pulsing yellow while buffering
-                        .symbolEffect(.pulse, options: .repeating, value: readAloudState == .buffering)
-                        .foregroundColor(readAloudIconColor)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .disabled(isLoading)
-                .help(readAloudHelpText)
-            }
         }
-        .padding(.horizontal)
-        .alert("TTS Error", isPresented: $showTTSError) {
-            Button("OK") { showTTSError = false }
-        } message: {
-            Text(ttsError ?? "An error occurred with text-to-speech")
-        }
-    }
-
-    // MARK: ‑ Read‑Aloud Helpers
-
-    /// Write a read‑aloud debug line and flush stdout so it appears immediately.
-    private func log(_: String) {
-        fflush(stdout)
-    }
-
-    private var readAloudIconName: String {
-        switch readAloudState {
-        case .buffering, .playing:
-            return "speaker.wave.3.fill"
-        case .paused, .idle:
-            return "speaker.wave.3"
-        }
-    }
-
-    private var readAloudIconColor: Color {
-        switch readAloudState {
-        case .buffering:
-            return .yellow
-        case .playing, .paused:
-            return .blue
-        case .idle:
-            return .primary
-        }
-    }
-
-    private var readAloudHelpText: String {
-        switch readAloudState {
-        case .buffering:
-            return "Buffering…"
-        case .playing:
-            return "Pause playback"
-        case .paused:
-            return "Resume playback"
-        case .idle:
-            return "Read aloud"
-        }
-    }
-
-    private func readAloudButtonTapped(optionPressed: Bool) {
-        log("Button tapped. optionPressed: \(optionPressed), state: \(readAloudState)")
-        // Option‑click always restarts TTS from the beginning
-        if optionPressed {
-            log("option click -> stopPlayback + startPlayback")
-            stopPlayback()
-//            startPlayback()
-            return
-        }
-
-        // Handle state transitions
-        switch readAloudState {
-        case .buffering:
-            log("tap ignored during buffering")
-            return
-        case .idle:
-            log("idle -> startPlayback")
-            startPlayback()
-        case .playing:
-            log("playing -> pausePlayback")
-            pausePlayback()
-        case .paused:
-            log("paused -> resumePlayback")
-            resumePlayback()
-        }
-    }
-
-    private func startPlayback() {
-        guard !revisions.isEmpty else {
-            log("startPlayback aborted: no revisions")
-            return
-        }
-        log("startPlayback -> buffering")
-        readAloudState = .buffering
-        speakRevisions() // will flip to playing once audio starts
-    }
-
-    private func pausePlayback() {
-        log("pausePlayback requested")
-        if ttsProvider.pause() {
-            log("pausePlayback succeeded -> paused")
-            readAloudState = .paused
-        } else {
-            log("pausePlayback FAILED")
-        }
-    }
-
-    private func resumePlayback() {
-        log("resumePlayback requested")
-        if ttsProvider.resume() {
-            log("resumePlayback succeeded -> playing")
-            readAloudState = .playing
-        } else {
-            log("resumePlayback FAILED")
-        }
-    }
-
-    private func stopPlayback() {
-        log("stopPlayback invoked -> idle")
-        ttsProvider.stop()
-        readAloudState = .idle
     }
 
     // Validation function for revisions
@@ -384,69 +254,6 @@ struct AiCommsView: View {
     }
 
     /// Uses TTS to speak the AI revision suggestions
-    func speakRevisions() {
-        log("speakRevisions called; requesting TTS for revisions")
-        // Make sure we have revisions to speak
-        guard !revisions.isEmpty else {
-            return
-        }
-        // Buffering state set by startPlayback
-
-        // Format the revisions into a readable script
-        var speechText = "Here are my suggested revisions for your résumé:\n\n"
-
-        for (index, revision) in revisions.enumerated() {
-            // For title nodes, provide context about the section
-            if revision.isTitleNode {
-                speechText += "For the section \(revision.oldValue.trimmingCharacters(in: .whitespacesAndNewlines)), "
-                speechText += "I suggest changing it to \(revision.newValue.trimmingCharacters(in: .whitespacesAndNewlines)).\n\n"
-            } else {
-                speechText += "Revision \(index + 1): "
-                speechText += "I suggest changing \"\(revision.oldValue.trimmingCharacters(in: .whitespacesAndNewlines))\" "
-                speechText += "to \"\(revision.newValue.trimmingCharacters(in: .whitespacesAndNewlines))\".\n\n"
-            }
-
-            // Add the reasoning if available
-            if !revision.why.isEmpty {
-                speechText += "Here's why: \(revision.why)\n\n"
-            }
-        }
-
-        // Callbacks to manage state transitions
-        ttsProvider.onReady = {
-            DispatchQueue.main.async {
-                log("onReady -> playing")
-                self.readAloudState = .playing
-            }
-        }
-
-        ttsProvider.onFinish = {
-            DispatchQueue.main.async {
-                log("onFinish -> idle")
-                self.readAloudState = .idle
-            }
-        }
-
-        // Get selected voice (default to nova if not valid)
-        let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
-
-        // Get voice instructions if available
-        let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-
-        // Request TTS conversion and playback with instructions
-        ttsProvider.speakText(speechText, voice: voice, instructions: instructions) { error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    log("speakText completion error: \(error.localizedDescription)")
-                    self.ttsError = "Text-to-speech error: \(error.localizedDescription)"
-                    self.showTTSError = true
-                } else {
-                    log("speakText completion success -> idle")
-                }
-                self.readAloudState = .idle
-            }
-        }
-    }
 
     func chatAction(hasRevisions: Bool = false) {
         if let jobApp = jobAppStore.selectedApp {
@@ -465,10 +272,12 @@ struct AiCommsView: View {
                         ChatMessage(role: .user, content: q.wholeResumeQueryString),
                     ]
                 } else {
-                    // Add revision feedback prompt to existing message history
-                    chatProvider.genericMessages.append(
-                        ChatMessage(role: .user, content: q.revisionPrompt(fbnodes))
-                    )
+                    // Start a new message list for the revision round – the
+                    // server will recover full context from `previousResponseId`.
+                    chatProvider.genericMessages = [
+                        q.genericSystemMessage,
+                        ChatMessage(role: .user, content: q.revisionPrompt(fbnodes)),
+                    ]
                 }
 
                 // Get the model string
@@ -482,7 +291,9 @@ struct AiCommsView: View {
 
                 // Execute the API call with our new Responses API method
                 print("Starting API call with model: \(modelString)")
-                try await chatProvider.startChat(messages: chatProvider.genericMessages, resume: myRes)
+                try await chatProvider.startChat(messages: chatProvider.genericMessages,
+                                                 resume: myRes,
+                                                 continueConversation: hasRevisions)
                 print("API call completed successfully")
 
                 // Cancel the timeout task since we completed successfully

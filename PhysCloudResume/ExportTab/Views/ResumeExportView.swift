@@ -28,7 +28,6 @@ struct ResumeExportView: View {
     @State private var toastTimer: Timer? = nil
 
     // Application review sheet control
-    @State private var exportButtons = ExportButtons()
 
     var body: some View {
         // Only show if we actually have a selected JobApp in the store
@@ -133,10 +132,6 @@ struct ResumeExportView: View {
             }
             .padding()
             .frame(maxHeight: .infinity, alignment: .top)
-
-            .toolbar {
-                applicationToolbar(jobApp: jobApp)
-            }
             .onAppear {
                 // Sync local state from the store's selectedApp
                 selectedStatus = jobApp.status
@@ -181,34 +176,6 @@ struct ResumeExportView: View {
     }
 
     // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private func applicationToolbar(jobApp: JobApp) -> some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                exportButtons.showApplicationReviewSheet.toggle()
-            } label: {
-                Label("Review Application", systemImage: "character.magnify")
-            }
-            .disabled(selectedResume == nil || selectedCoverLetter == nil)
-            .sheet(isPresented: $exportButtons.showApplicationReviewSheet) {
-                if let selRes = selectedResume {
-                    ApplicationReviewSheet(
-                        jobApp: jobApp,
-                        resume: selRes,
-                        availableCoverLetters: jobApp.coverLetters.sorted { $0.createdDate < $1.createdDate }
-                    )
-                } else {
-                    Text("Select a resume first")
-                        .padding()
-                }
-            }
-        }
-    }
-
-    // MARK: - Export Methods
-
-    // MARK: - Toast Notification
 
     private func showToastNotification(_ message: String) {
         // Cancel any existing timer
@@ -510,8 +477,4 @@ struct ResumeExportView: View {
 
         return combinedText
     }
-}
-
-struct ExportButtons {
-    var showApplicationReviewSheet: Bool = false
 }

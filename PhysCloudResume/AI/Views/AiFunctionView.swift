@@ -24,18 +24,16 @@ struct AiFunctionView: View {
     // Flag to determine if this is a new conversation or not
     private let isNewConversation: Bool
 
-    init(res: Binding<Resume?>, isNewConversation: Bool = false) {
+    init(res: Binding<Resume?>, isNewConversation _: Bool = false) {
         _res = res
-        self.isNewConversation = isNewConversation
+        isNewConversation = false // resume convo shouldn't be resumed. Prompts don't expect context
+        if let resume = res.wrappedValue {
+            resume.previousResponseId = nil // resume convo shouldn't be resumed. Prompts don't expect context
+        }
 
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
         openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
         ttsProvider = OpenAITTSProvider(apiKey: apiKey)
-
-        // If this is a new conversation, clear the previousResponseId during initialization
-        if isNewConversation, let resume = res.wrappedValue {
-            resume.previousResponseId = nil
-        }
     }
 
     var body: some View {
@@ -43,7 +41,6 @@ struct AiFunctionView: View {
             if let myRes = res {
                 AiCommsView(
                     openAIClient: openAIClient,
-                    ttsProvider: ttsProvider,
                     query: myRes.generateQuery(),
                     res: $res,
                     ttsEnabled: $ttsEnabled,

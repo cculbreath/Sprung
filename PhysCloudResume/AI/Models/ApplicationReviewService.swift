@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import SwiftUI
 import PDFKit
+import SwiftUI
 
 /// Service responsible for sending application packet reviews (cover letter + resume)
 class ApplicationReviewService: @unchecked Sendable {
@@ -134,16 +134,17 @@ class ApplicationReviewService: @unchecked Sendable {
     ) {
         if openAIClient == nil { initialize() }
         guard let client = openAIClient else {
-            onComplete(.failure(NSError(domain: "AppReview", code: 900, userInfo: [NSLocalizedDescriptionKey: "Client not initialised"])));
+            onComplete(.failure(NSError(domain: "AppReview", code: 900, userInfo: [NSLocalizedDescriptionKey: "Client not initialised"])))
             return
         }
 
         // Decide about image
         let supportsImages = checkIfModelSupportsImages()
-        var imageBase64: String? = nil
+        var imageBase64: String?
         if supportsImages,
-           (reviewType != .custom || (customOptions?.includeResumeImage ?? false)),
-           let pdfData = resume.pdfData {
+           reviewType != .custom || (customOptions?.includeResumeImage ?? false),
+           let pdfData = resume.pdfData
+        {
             imageBase64 = convertPDFToBase64Image(pdfData: pdfData)
         }
 
@@ -168,7 +169,7 @@ class ApplicationReviewService: @unchecked Sendable {
         let requestID = UUID(); currentRequestID = requestID
         let messages: [ChatMessage] = [
             ChatMessage(role: .system, content: "You are an expert recruiter reviewing job application packets."),
-            ChatMessage(role: .user, content: prompt)
+            ChatMessage(role: .user, content: prompt),
         ]
 
         client.sendChatCompletionStreaming(
@@ -178,8 +179,8 @@ class ApplicationReviewService: @unchecked Sendable {
             onChunk: { [weak self] result in
                 guard let self = self, self.currentRequestID == requestID else { return }
                 switch result {
-                case .success(let resp): onProgress(resp.content)
-                case .failure(let err): onComplete(.failure(err))
+                case let .success(resp): onProgress(resp.content)
+                case let .failure(err): onComplete(.failure(err))
                 }
             },
             onComplete: { [weak self] error in
@@ -210,22 +211,23 @@ class ApplicationReviewService: @unchecked Sendable {
             "model": AIModels.gpt4o,
             "messages": [
                 ["role": "system", "content": "You are an expert recruiter reviewing job application packets."],
-                ["role": "user", "content": [["type": "text", "text": promptText], ["type": "image_url", "image_url": ["url": imgURL]]]]
+                ["role": "user", "content": [["type": "text", "text": promptText], ["type": "image_url", "image_url": ["url": imgURL]]]],
             ],
             "stream": false,
-            "temperature": 0.7
+            "temperature": 0.7,
         ]
 
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
             guard self != nil else { return }
             if let err = error { onComplete(.failure(err)); return }
             guard let data = data else { onComplete(.failure(NSError(domain: "", code: -1))); return }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let choices = json["choices"] as? [[String: Any]],
                let msg = choices.first?["message"] as? [String: Any],
-               let content = msg["content"] as? String {
+               let content = msg["content"] as? String
+            {
                 DispatchQueue.main.async { onProgress(content); onComplete(.success("Done")) }
             } else {
                 DispatchQueue.main.async { onComplete(.failure(NSError(domain: "", code: -2))) }

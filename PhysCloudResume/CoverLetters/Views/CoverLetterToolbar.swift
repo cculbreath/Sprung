@@ -1,10 +1,4 @@
-//
-//  CoverLetterToolbar.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/12/24.
-//
-
+// PhysCloudResume/CoverLetters/Views/CoverLetterToolbar.swift
 import SwiftUI
 
 func CoverLetterToolbar(
@@ -12,6 +6,8 @@ func CoverLetterToolbar(
     refresh: Binding<Bool>
 ) -> some View {
     return HStack {
+        Spacer() // Added Spacer to push content to the trailing edge
+
         CoverLetterAiView(
             buttons: buttons,
             refresh: refresh

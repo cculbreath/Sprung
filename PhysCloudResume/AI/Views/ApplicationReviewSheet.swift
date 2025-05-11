@@ -13,6 +13,7 @@ struct ApplicationReviewSheet: View {
     let availableCoverLetters: [CoverLetter]
 
     // MARK: State
+
     @State private var reviewService = ApplicationReviewService()
     @State private var selectedType: ApplicationReviewType = .assessQuality
     @State private var customOptions = CustomApplicationReviewOptions()
@@ -67,6 +68,7 @@ struct ApplicationReviewSheet: View {
     }
 
     // MARK: - Custom Options View
+
     @ViewBuilder
     private var customOptionsView: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -107,6 +109,7 @@ struct ApplicationReviewSheet: View {
     }
 
     // MARK: - Submit
+
     private func submit() {
         isProcessing = true; responseText = ""; errorMessage = nil
 
@@ -127,7 +130,7 @@ struct ApplicationReviewSheet: View {
             onProgress: { chunk in responseText += chunk },
             onComplete: { result in
                 isProcessing = false
-                if case .failure(let err) = result { errorMessage = err.localizedDescription }
+                if case let .failure(err) = result { errorMessage = err.localizedDescription }
             }
         )
     }
