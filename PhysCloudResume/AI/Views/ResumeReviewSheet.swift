@@ -9,22 +9,22 @@ import SwiftUI
 
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     @Binding var selectedResume: Resume?
-    @State private var reviewService = ResumeReviewService()
+    private let reviewService = ResumeReviewService()
     @State private var selectedReviewType: ResumeReviewType = .assessQuality
     @State private var customOptions = CustomReviewOptions()
     @State private var responseText = ""
     @State private var isProcessing = false
     @State private var errorMessage: String?
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             Text("AI Resume Review")
                 .font(.title)
                 .padding(.bottom, 8)
-            
+
             // Review type selection
             Picker("Review Type", selection: $selectedReviewType) {
                 ForEach(ResumeReviewType.allCases) { type in
@@ -32,12 +32,12 @@ struct ResumeReviewSheet: View {
                 }
             }
             .pickerStyle(.menu)
-            
+
             // Custom options if custom type is selected
             if selectedReviewType == .custom {
                 customOptionsView
             }
-            
+
             // Response area
             Group {
                 if isProcessing {
@@ -66,7 +66,7 @@ struct ResumeReviewSheet: View {
                 }
             }
             .frame(minHeight: 200)
-            
+
             // Button row
             HStack {
                 Button("Cancel") {
@@ -75,9 +75,9 @@ struct ResumeReviewSheet: View {
                     }
                     dismiss()
                 }
-                
+
                 Spacer()
-                
+
                 if isProcessing {
                     Button("Stop") {
                         reviewService.cancelRequest()
@@ -96,23 +96,23 @@ struct ResumeReviewSheet: View {
         .padding()
         .frame(width: 600, height: 500)
     }
-    
+
     // Custom options view for custom review type
     private var customOptionsView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Custom Review Options")
                 .font(.headline)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Include Job Listing", isOn: $customOptions.includeJobListing)
                 Toggle("Include Resume Text", isOn: $customOptions.includeResumeText)
                 Toggle("Include Resume Image", isOn: $customOptions.includeResumeImage)
             }
-            
+
             Text("Custom Prompt")
                 .font(.headline)
                 .padding(.top, 4)
-            
+
             TextEditor(text: $customOptions.customPrompt)
                 .font(.body)
                 .padding(4)
@@ -124,15 +124,15 @@ struct ResumeReviewSheet: View {
         }
         .padding(.vertical, 8)
     }
-    
+
     // Submit the review request to the LLM
     private func submitReviewRequest() {
         guard let resume = selectedResume else { return }
-        
+
         isProcessing = true
         responseText = ""
         errorMessage = nil
-        
+
         Task { @MainActor in
             do {
                 // Use the review service to send the request
@@ -145,12 +145,12 @@ struct ResumeReviewSheet: View {
                     },
                     onComplete: { result in
                         isProcessing = false
-                        
+
                         switch result {
                         case .success:
                             // Already handled in onProgress
                             break
-                        case .failure(let error):
+                        case let .failure(error):
                             errorMessage = "Error: \(error.localizedDescription)"
                         }
                     }
@@ -163,11 +163,11 @@ struct ResumeReviewSheet: View {
 #Preview {
     struct PreviewWrapper: View {
         @State private var mockResume: Resume? = nil
-        
+
         var body: some View {
             ResumeReviewSheet(selectedResume: $mockResume)
         }
     }
-    
+
     return PreviewWrapper()
 }
