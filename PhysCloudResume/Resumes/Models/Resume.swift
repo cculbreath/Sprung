@@ -1,9 +1,4 @@
-//
-//  Resume.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/1/24.
-//
+// PhysCloudResume/Resumes/Models/Resume.swift
 
 import Foundation
 import SwiftData
@@ -45,9 +40,7 @@ class Resume: Identifiable, Hashable {
         }
     }
 
-    /// Computed list of all `TreeNode`s that belong to this resume.  This
-    /// replaces the previous stored `nodes` array to eliminate strong
-    /// reference cycles and manual bookkeeping.
+    /// Computed list of all `TreeNode`s that belong to this resume.
     var nodes: [TreeNode] {
         guard let rootNode else { return [] }
         return Resume.collectNodes(from: rootNode)
@@ -67,7 +60,7 @@ class Resume: Identifiable, Hashable {
     @Relationship(deleteRule: .nullify, inverse: \ResRef.enabledResumes)
     var enabledSources: [ResRef]
 
-    var model: ResModel? = nil // Now properly annotated
+    var model: ResModel? = nil
     var createdDateString: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -75,12 +68,8 @@ class Resume: Identifiable, Hashable {
     }
 
     var textRes: String = ""
-
     var pdfData: Data?
 
-    /// Indicates that a PDF export is currently running. This is **transient**
-    /// UI‑state only and is therefore excluded from persistence so it does
-    /// not pollute the database model.
     @Transient
     var isExporting: Bool = false
     var jsonTxt: String {
@@ -89,7 +78,6 @@ class Resume: Identifiable, Hashable {
         } else { return "" }
     }
 
-    // Example function
     func getUpdatableNodes() -> [[String: Any]] {
         if let node = rootNode {
             return TreeNode.traverseAndExportNodes(node: node)
@@ -100,13 +88,12 @@ class Resume: Identifiable, Hashable {
 
     var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
 
-    // Updated initializer to require `resumeModel`
     init(
         jobApp: JobApp,
         enabledSources: [ResRef],
-        model: ResModel // Added parameter
+        model: ResModel
     ) {
-        self.model = model // Set the required property
+        self.model = model
         self.jobApp = jobApp
         dateCreated = Date()
         self.enabledSources = enabledSources
@@ -117,29 +104,19 @@ class Resume: Identifiable, Hashable {
         return ResumeApiQuery(resume: self)
     }
 
-    // Synchronous wrapper for backward compatibility, uses Task for MainActor isolation
     func generateQuery() -> ResumeApiQuery {
-        // Create a placeholder with empty profile to avoid MainActor requirement
         let emptyProfile = ApplicantProfile(
             name: "", address: "", city: "", state: "", zip: "",
             websites: "", email: "", phone: ""
         )
         let query = ResumeApiQuery(resume: self, applicantProfile: emptyProfile)
-
-        // Start a task to update it with real data when possible
         Task { @MainActor in
             let realApplicant = Applicant()
             query.updateApplicant(realApplicant)
         }
-
         return query
     }
 
-    /// Loads PDF data from disk into `pdfData` on a background queue.
-    /// - Parameter fileURL: The location of the PDF on disk. Defaults to the
-    ///   standard `FileHandler.pdfUrl()` path.
-    /// - Parameter completion: Optional callback executed on the main queue
-    ///   when loading finishes (success or failure).
     func loadPDF(from fileURL: URL = FileHandler.pdfUrl(),
                  completion: (() -> Void)? = nil)
     {
@@ -149,6 +126,7 @@ class Resume: Identifiable, Hashable {
                 let data = try Data(contentsOf: fileURL)
                 DispatchQueue.main.async { self?.pdfData = data }
             } catch {
+                print("Error loading PDF from \(fileURL): \(error)")
                 DispatchQueue.main.async {}
             }
         }
@@ -156,56 +134,66 @@ class Resume: Identifiable, Hashable {
 
     @Transient private var exportWorkItem: DispatchWorkItem?
 
-    /// Debounces repeated export requests so that the network operation is
-    /// not triggered excessively while the user is typing.
-    /// - Parameters:
-    ///   - onStart:   Callback executed immediately when the debounce window
-    ///                begins – typically used to toggle a loading indicator.
-    ///   - onFinish:  Callback executed after the export attempt (success or
-    ///                failure) completes.
     func debounceExport(onStart: (() -> Void)? = nil,
                         onFinish: (() -> Void)? = nil)
     {
         exportWorkItem?.cancel()
-
-        // Toggle the per‑resume loading flag and forward to any external
-        // callback so view‑models can react.
         isExporting = true
         onStart?()
 
         exportWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonTxt) {
-                Task { @MainActor in
+                Task { @MainActor in // Ensure export service call and property updates are on MainActor
                     do {
+                        // This now calls the async version of export which updates pdfData and textRes
                         try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
-                    } catch {}
-
-                    // Since we're already on the MainActor, we can directly update properties
-                    // without dispatching to the main queue
+                    } catch {
+                        print("Error during debounced export: \(error)")
+                    }
                     self.isExporting = false
                     onFinish?()
                 }
             } else {
-                // No export – reset flag immediately.
-                func finalizeExport(_ resume: Resume?, onFinish: (() -> Void)?) {
-                    resume?.isExporting = false
+                print("Failed to save JSON to file for debounced export.")
+                Task { @MainActor in // Ensure UI updates are on MainActor
+                    self.isExporting = false
                     onFinish?()
-                }
-                DispatchQueue.main.async {
-                    finalizeExport(self, onFinish: onFinish)
                 }
             }
         }
-
-        // Delay half a second before exporting
         if let workItem = exportWorkItem {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
         }
     }
 
-    // MARK: - Hashable
+    // MARK: - Async Rendering and Export (Modified for Fix Overflow)
 
+    @MainActor // Ensure this function and its mutations run on the main actor
+    func ensureFreshRenderedText() async throws {
+        // Cancel any ongoing debounced export as we want a direct, awaitable one.
+        exportWorkItem?.cancel()
+        
+        isExporting = true
+        defer { isExporting = false }
+
+        guard let jsonFile = FileHandler.saveJSONToFile(jsonString: self.jsonTxt) else {
+            throw NSError(domain: "ResumeRender", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to save JSON to file for rendering."])
+        }
+
+        // Directly call the export service and await its completion.
+        // The ApiResumeExportService().export function is already async
+        // and should update self.pdfData and self.textRes upon completion.
+        do {
+            try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
+            print("ensureFreshRenderedText: Successfully exported and updated resume data.")
+        } catch {
+            print("ensureFreshRenderedText: Failed to export resume - \(error.localizedDescription)")
+            throw error // Re-throw the error to be caught by the caller
+        }
+    }
+
+    // MARK: - Hashable
     static func == (lhs: Resume, rhs: Resume) -> Bool {
         lhs.id == rhs.id
     }

@@ -21,7 +21,27 @@ struct CoverLetterViewSetup: View {
             } else {
                 CreateNewResumeView(refresh: $refresh)
             }
-        }.onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .automatic) { // .automatic is suitable for macOS toolbars
+                // Content from the original CoverLetterToolbar.swift
+                // The Spacer is no longer needed as placement handles alignment.
+
+                CoverLetterAiView(
+                    buttons: $coverLetterButtons,
+                    refresh: $refresh
+                )
+
+                Button(action: {
+                    coverLetterButtons.showInspector.toggle()
+                }) {
+                    Label("Toggle Inspector", systemImage: "sidebar.right")
+                }
+                // .onAppear { print("Toolbar Cover Letter") } // This was on the button in CoverLetterToolbar
+            }
+        }
+        .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
+            // Existing onChange logic
         }
     }
 }
