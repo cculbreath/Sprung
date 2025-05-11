@@ -110,8 +110,11 @@ class CoverLetter: Identifiable, Hashable {
     var sequencedName: String {
         let letter = Self.letterLabel(for: sequenceNumber)
         if generated {
+            // Add descriptive name with letter identifier
             return "Option \(letter)\(name.isEmpty ? "" : ": \(name)")"
-        } else { return "Ungenerated Draft" }
+        } else {
+            return "Ungenerated Draft"
+        }
     }
 }
 

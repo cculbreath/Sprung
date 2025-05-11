@@ -11,6 +11,15 @@ enum CoverAiMode: String, Codable {
     case revise
     case rewrite
     case none
+
+    var displayName: String {
+        switch self {
+        case .generate: return "Generate"
+        case .revise: return "Revise"
+        case .rewrite: return "Rewrite"
+        case .none: return ""
+        }
+    }
 }
 
 enum CoverLetterPrompts {

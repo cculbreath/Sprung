@@ -119,9 +119,9 @@ struct TabWrapperView: View {
                 letter = coverLetterStore.create(jobApp: selectedApp)
             }
             coverLetterStore.cL = letter
-            // Reset editing state and allow edit only if letter is generated
+            // Reset editing state and allow editing regardless of generation status
             coverLetterButtons.isEditing = false
-            coverLetterButtons.canEdit = letter.generated
+            coverLetterButtons.canEdit = true
         } else {
             coverLetterStore.cL = nil
             coverLetterButtons.isEditing = false

@@ -73,7 +73,7 @@ class ApplicationReviewService: @unchecked Sendable {
         prompt = prompt.replacingOccurrences(of: "{coverLetterText}", with: coverText)
 
         // Resume text
-        prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resume.model?.renderedResumeText ?? "")
+        prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resume.textRes == "" ? resume.model?.renderedResumeText ?? "" : resume.textRes)
 
         // Background docs placeholder
         let bgDocs = resume.enabledSources.map { "\($0.name):\n\($0.content)\n\n" }.joined()

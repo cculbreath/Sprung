@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import WebKit // Required for the MarkdownView
 
 struct ApplicationReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -26,28 +27,79 @@ struct ApplicationReviewSheet: View {
             Text("AI Application Review")
                 .font(.title)
 
-            Picker("Review Type", selection: $selectedType) {
-                ForEach(ApplicationReviewType.allCases) { t in
-                    Text(t.rawValue).tag(t)
+            // Application context section with information about what's being analyzed
+            GroupBox(label: Text("Analysis Context").fontWeight(.medium)) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Job information
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Position:")
+                                .fontWeight(.semibold)
+                                .frame(width: 80, alignment: .leading)
+                            Text(jobApp.jobPosition)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text("Company:")
+                                .fontWeight(.semibold)
+                                .frame(width: 80, alignment: .leading)
+                            Text(jobApp.companyName)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Divider()
+
+                    // Documents being analyzed
+                    HStack(alignment: .top, spacing: 16) {
+                        // Resume information
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Resume:")
+                                .fontWeight(.semibold)
+                            Text("Created at \(resume.createdDateString)")
+                                .foregroundColor(.secondary)
+                                .font(.callout)
+                        }
+
+                        Spacer()
+
+                        // Cover Letter information if available
+                        if !availableCoverLetters.isEmpty, let selectedCover = jobApp.selectedCover {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Cover Letter:")
+                                    .fontWeight(.semibold)
+                                Text(selectedCover.sequencedName)
+                                    .foregroundColor(.secondary)
+                                    .font(.callout)
+                            }
+                        }
+                    }
                 }
+                .padding(.vertical, 4)
             }
-            .pickerStyle(.menu)
+
+            // Review type selection
+            GroupBox(label: Text("Review Type").fontWeight(.medium)) {
+                Picker("Select review type", selection: $selectedType) {
+                    ForEach(ApplicationReviewType.allCases) { t in
+                        Text(t.rawValue).tag(t)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden() // Hide the redundant label
+                .padding(.vertical, 4)
+            }
 
             if selectedType == .custom {
                 customOptionsView
             }
 
             // Response area
-            Group {
-                if isProcessing {
-                    ScrollView { Text(responseText.isEmpty ? "Analyzing..." : responseText).frame(maxWidth: .infinity, alignment: .leading) }
-                } else if !responseText.isEmpty {
-                    ScrollView { Text(responseText).frame(maxWidth: .infinity, alignment: .leading) }
-                } else if let error = errorMessage {
-                    Text(error).foregroundColor(.red)
-                }
+            GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
+                responseContent
+                    .frame(minHeight: 200)
             }
-            .frame(minHeight: 200)
 
             // Buttons
             HStack {
@@ -64,42 +116,81 @@ struct ApplicationReviewSheet: View {
             }
         }
         .padding()
-        .frame(width: 650, height: 520, alignment: .topLeading)
+        .frame(width: 700, height: 600, alignment: .topLeading)
     }
 
     // MARK: - Custom Options View
 
     @ViewBuilder
     private var customOptionsView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Include Cover Letter", isOn: $customOptions.includeCoverLetter)
-                .onChange(of: customOptions.includeCoverLetter) { _, newVal in
-                    if newVal && customOptions.selectedCoverLetter == nil {
-                        customOptions.selectedCoverLetter = availableCoverLetters.first
+        GroupBox(label: Text("Custom Options").fontWeight(.medium)) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Include Cover Letter", isOn: $customOptions.includeCoverLetter)
+                    .onChange(of: customOptions.includeCoverLetter) { _, newVal in
+                        if newVal && customOptions.selectedCoverLetter == nil {
+                            customOptions.selectedCoverLetter = availableCoverLetters.first
+                        }
                     }
+
+                if customOptions.includeCoverLetter {
+                    Picker("Cover Letter", selection: Binding(
+                        get: { customOptions.selectedCoverLetter ?? availableCoverLetters.first },
+                        set: { customOptions.selectedCoverLetter = $0 }
+                    )) {
+                        ForEach(availableCoverLetters, id: \.self) { cl in
+                            Text(previewTitle(for: cl)).tag(cl as CoverLetter?)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
 
-            if customOptions.includeCoverLetter {
-                Picker("Cover Letter", selection: Binding(
-                    get: { customOptions.selectedCoverLetter ?? availableCoverLetters.first },
-                    set: { customOptions.selectedCoverLetter = $0 }
-                )) {
-                    ForEach(availableCoverLetters, id: \.self) { cl in
-                        Text(previewTitle(for: cl)).tag(cl as CoverLetter?)
-                    }
-                }
-                .pickerStyle(.menu)
+                Toggle("Include Resume Text", isOn: $customOptions.includeResumeText)
+                Toggle("Include Resume Image", isOn: $customOptions.includeResumeImage)
+                Toggle("Include Background Docs", isOn: $customOptions.includeBackgroundDocs)
+
+                Text("Custom Prompt")
+                    .font(.headline)
+                    .padding(.top, 4)
+                TextEditor(text: $customOptions.customPrompt)
+                    .frame(minHeight: 100)
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray.opacity(0.3)))
             }
+            .padding(.vertical, 4)
+        }
+    }
 
-            Toggle("Include Resume Text", isOn: $customOptions.includeResumeText)
-            Toggle("Include Resume Image", isOn: $customOptions.includeResumeImage)
-            Toggle("Include Background Docs", isOn: $customOptions.includeBackgroundDocs)
+    // MARK: - Response Content
 
-            Text("Custom Prompt")
-                .font(.headline)
-            TextEditor(text: $customOptions.customPrompt)
-                .frame(minHeight: 100)
-                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray.opacity(0.3)))
+    // A computed property for the response content to keep the main view clean
+    @ViewBuilder
+    private var responseContent: some View {
+        if isProcessing {
+            VStack {
+                Spacer()
+                ProgressView {
+                    Text(responseText.isEmpty ? "Analyzing application..." : responseText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        } else if !responseText.isEmpty {
+            // Use MarkdownView for rich text rendering
+            MarkdownView(markdown: responseText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(8)
+        } else if let error = errorMessage {
+            Text(error)
+                .foregroundColor(.red)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(8)
+        } else {
+            Text("Select a review type above and click 'Submit Request' to analyze this application.")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding()
         }
     }
 
@@ -111,7 +202,9 @@ struct ApplicationReviewSheet: View {
     // MARK: - Submit
 
     private func submit() {
-        isProcessing = true; responseText = ""; errorMessage = nil
+        isProcessing = true
+        responseText = "Submitting request..."
+        errorMessage = nil
 
         let coverLetterToUse: CoverLetter? = {
             if selectedType == .custom {
@@ -127,10 +220,18 @@ struct ApplicationReviewSheet: View {
             resume: resume,
             coverLetter: coverLetterToUse,
             customOptions: selectedType == .custom ? customOptions : nil,
-            onProgress: { chunk in responseText += chunk },
+            onProgress: { chunk in
+                DispatchQueue.main.async {
+                    // If we're just starting, clear any previous placeholder
+                    if responseText == "Submitting request..." { responseText = "" }
+                    responseText += chunk
+                }
+            },
             onComplete: { result in
-                isProcessing = false
-                if case let .failure(err) = result { errorMessage = err.localizedDescription }
+                DispatchQueue.main.async {
+                    isProcessing = false
+                    if case let .failure(err) = result { errorMessage = err.localizedDescription }
+                }
             }
         )
     }

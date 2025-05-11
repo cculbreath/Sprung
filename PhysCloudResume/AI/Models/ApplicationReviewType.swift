@@ -44,7 +44,7 @@ enum ApplicationReviewType: String, CaseIterable, Identifiable {
             You are a seasoned recruiter. Carefully evaluate the overall quality and persuasiveness of this application.
             1. Provide **exactly three strengths** that make the candidate stand out.
             2. Provide **exactly three improvements** the candidate should make before submitting.
-            3. Rate the likelihood of obtaining an interview on a **scale of 1-10** and explain the rating.
+            3. Rate the likelihood of obtaining an interview on a **scale of 1-10** and explain the rating. The rating should reflect the current state of the application materials, as if the materials were submitted as-is without revision. Typographical errors or other amateur blunders are likely disqualifying and applications with these issues should not be awarded scores greater than 5.
 
             Output format (markdown):
             ### Overall Assessment (Interview Likelihood: <1-10>)

@@ -27,7 +27,7 @@ enum LeafStatus: String, Codable, Hashable {
     // This property should be explicitly set when a node is created or its role changes.
     // It's not reliably computable based on name/value alone.
     // For the "Fix Overflow" feature, we will pass this to the LLM and expect it back.
-    var isTitleNode: Bool = false 
+    var isTitleNode: Bool = false
 
     var hasChildren: Bool {
         return !(children?.isEmpty ?? true)
@@ -80,7 +80,7 @@ enum LeafStatus: String, Codable, Hashable {
 
     var growDepth: Bool { depth > 2 }
 
-    static func traverseAndExportNodes(node: TreeNode, currentPath: String = "")
+    static func traverseAndExportNodes(node: TreeNode, currentPath _: String = "")
         -> [[String: Any]]
     {
         var result: [[String: Any]] = []
@@ -107,7 +107,7 @@ enum LeafStatus: String, Codable, Hashable {
             // The extractSkillsForLLM function will handle this specific logic.
             // This general function might send both if a title node also has a value and is aiToReplace.
             if !node.value.isEmpty && !node.isTitleNode { // Ensure this isn't a title node already processed
-                 let valueNodeData: [String: Any] = [
+                let valueNodeData: [String: Any] = [
                     "id": node.id,
                     "value": node.value, // Exporting node.value
                     "tree_path": newPath,
@@ -123,7 +123,7 @@ enum LeafStatus: String, Codable, Hashable {
         }
         return result
     }
-    
+
     static func updateValues(from jsonFileURL: URL, using context: ModelContext) throws {
         let jsonData = try Data(contentsOf: jsonFileURL)
         guard let jsonArray = try JSONSerialization.jsonObject(
@@ -135,7 +135,8 @@ enum LeafStatus: String, Codable, Hashable {
 
         for jsonObject in jsonArray {
             if let id = jsonObject["id"], let newValue = jsonObject["value"], let isTitleNodeString = jsonObject["isTitleNode"],
-               let isTitleNode = Bool(isTitleNodeString) {
+               let isTitleNode = Bool(isTitleNodeString)
+            {
                 let fetchRequest = FetchDescriptor<TreeNode>(
                     predicate: #Predicate { $0.id == id }
                 )
@@ -180,7 +181,7 @@ enum LeafStatus: String, Codable, Hashable {
             resume: newResume,
             isTitleNode: isTitleNode // Copy isTitleNode
         )
-        copyNode.myIndex = myIndex 
+        copyNode.myIndex = myIndex
 
         if let children = children {
             for child in children {
@@ -204,7 +205,7 @@ enum LeafStatus: String, Codable, Hashable {
                 componentName = String(node.value.prefix(20)) + (node.value.count > 20 ? "..." : "")
             }
             if node.parent == nil && node.name.lowercased() == "root" { // Check for root specifically
-                 componentName = "Resume"
+                componentName = "Resume"
             }
             pathComponents.insert(componentName, at: 0)
             currentNode = node.parent

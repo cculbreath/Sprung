@@ -88,7 +88,10 @@ import Foundation
     }
 
     var resumeText: String {
-        return res.model!.renderedResumeText
+        if res.textRes == "" {
+            print("⚠️BLANK TEXT RES⚠️")
+            return res.model!.renderedResumeText
+        } else { return res.textRes }
     }
 
     var resumeJson: String {

@@ -128,12 +128,13 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
 
             Output as a markdown table with columns: *Section*, *Why change?*, *Suggested Rewrite*.
             """
+
         case .fixOverflow:
             // This prompt is more complex and will be constructed within ResumeReviewService
             // as it involves image data and iterative calls.
             // A base instruction could be:
             return "The 'Skills and Expertise' section of the resume is overflowing. Please adjust the content to fit."
-            
+
         case .custom:
             // Custom prompt will be built dynamically; return empty string here.
             return ""
