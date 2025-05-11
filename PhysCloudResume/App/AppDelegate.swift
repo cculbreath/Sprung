@@ -124,11 +124,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         profileMenuItem.target = self
         appMenu.insertItem(profileMenuItem, at: aboutSeparatorIndex + 1)
-
-        // Print all menu items for debugging
-        for i in 0 ..< appMenu.numberOfItems {
-            if let item = appMenu.item(at: i) {}
-        }
     }
 
     @objc func showSettingsWindow() {

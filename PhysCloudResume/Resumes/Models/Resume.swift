@@ -176,23 +176,24 @@ class Resume: Identifiable, Hashable {
         exportWorkItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonTxt) {
-                Task {
+                Task { @MainActor in
                     do {
                         try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
                     } catch {}
 
-                    // Regardless of success toggle the exporting flag off and
-                    // notify any external observers on the main thread.
-                    DispatchQueue.main.async {
-                        self.isExporting = false
-                        onFinish?()
-                    }
+                    // Since we're already on the MainActor, we can directly update properties
+                    // without dispatching to the main queue
+                    self.isExporting = false
+                    onFinish?()
                 }
             } else {
                 // No export – reset flag immediately.
-                DispatchQueue.main.async {
-                    self.isExporting = false
+                func finalizeExport(_ resume: Resume?, onFinish: (() -> Void)?) {
+                    resume?.isExporting = false
                     onFinish?()
+                }
+                DispatchQueue.main.async {
+                    finalizeExport(self, onFinish: onFinish)
                 }
             }
         }

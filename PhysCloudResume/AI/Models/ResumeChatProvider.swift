@@ -53,7 +53,6 @@ final class ResumeChatProvider {
     func unloadResponse() -> [ProposedRevisionNode]? {
         if let nodes = convertJsonToNodes(messages[0]) {
             messages.removeFirst()
-            for node in nodes {}
             lastRevNodeArray = nodes
             return nodes
         } else {
@@ -269,13 +268,6 @@ final class ResumeChatProvider {
 
         // Get model as string
         let modelString = OpenAIModelFetcher.getPreferredModelString()
-
-        // Use our abstraction layer with a timeout
-        let timeoutError = NSError(
-            domain: "ResumeChatProviderError",
-            code: -1001,
-            userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
-        )
 
         // Extract the system and user messages
         var systemMessage = ""

@@ -119,8 +119,6 @@ struct LeafDropDelegate: DropDelegate {
         guard let fromIndex = array.firstIndex(of: draggedNode),
               let toIndex = array.firstIndex(of: overNode) else { return }
 
-        for (index, node) in array.enumerated() {}
-
         withAnimation(.easeInOut) {
             // Remove the dragged node from its original position
             array.remove(at: fromIndex)
@@ -139,8 +137,6 @@ struct LeafDropDelegate: DropDelegate {
 
             // Save the reordered array back to the parent
             parent.children = array
-
-            for (index, node) in array.enumerated() {}
         }
 
         // Save changes to SwiftData

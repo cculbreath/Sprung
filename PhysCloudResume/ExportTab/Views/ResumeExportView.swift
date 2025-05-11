@@ -123,7 +123,7 @@ struct ResumeExportView: View {
                 TextEditor(text: $notes)
                     .onChange(of: notes) { _, newValue in
                         // Build an updated copy of jobApp, then call store method
-                        var updated = jobApp
+                        let updated = jobApp
                         updated.notes = newValue
                         jobAppStore.updateJobApp(updated)
                     }

@@ -54,21 +54,19 @@ final class ResStore: SwiftDataStore {
             jobApp.selectedRes = resume
         }
 
-        do {
-            guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
-                return nil
-            }
-            resume.rootNode = builder.buildTree()
+        guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
+            return nil
+        }
+        resume.rootNode = builder.buildTree()
 //                print(builder.json)
 
-            // Persist new resume (and trigger observers)
-            jobApp.addResume(resume)
-            modelContext.insert(resume)
-            saveContext()
+        // Persist new resume (and trigger observers)
+        jobApp.addResume(resume)
+        modelContext.insert(resume)
+        saveContext()
 
-            resume.debounceExport()
+        resume.debounceExport()
 
-        } catch {}
         return resume
     }
 

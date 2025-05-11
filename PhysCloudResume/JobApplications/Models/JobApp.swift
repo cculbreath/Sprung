@@ -185,11 +185,6 @@ enum Statuses: String, Codable, CaseIterable {
         if !resumes.contains(where: { $0.id == resume.id }) {
             resumes.append(resume)
             selectedRes = resume
-        } else {
-            if resumes.isEmpty {
-            } else {
-                for (index, resume) in resumes.enumerated() {}
-            }
         }
 
         if selectedRes == nil {

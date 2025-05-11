@@ -116,9 +116,7 @@ struct NewAppSheetView: View {
                         JobApp.parseAppleJobListing(
                             jobAppStore: jobAppStore, html: htmlContent, url: urlText
                         )
-                        if let jobApp = jobAppStore.selectedApp {
-                            // Now you can access the extracted data from jobApp
-                        }
+
                         isLoading = false
                         isPresented = false
                     } catch {}
@@ -231,8 +229,6 @@ struct NewAppSheetView: View {
                 // Handle HTTP error
                 isLoading = false
                 isPresented = false
-
-                if let responseBody = String(data: data, encoding: .utf8) {}
             }
         } catch {
             // Handle errors (e.g., serialization, network errors)
@@ -260,19 +256,17 @@ struct NewAppSheetView: View {
         var retryCount = 0
         let maxRetries = 2
 
-        var snapshotData: Data?
         var httpResponse: HTTPURLResponse?
 
         repeat {
             // Perform the snapshot request
-            let (data, response) = try await URLSession.shared.data(for: snapshotRequest)
+            let (_, response) = try await URLSession.shared.data(for: snapshotRequest)
 
             // Check the HTTP response status
             guard let responseHttp = response as? HTTPURLResponse else {
                 return
             }
             httpResponse = responseHttp
-            snapshotData = data
 
             if httpResponse?.statusCode == 202 {
                 // Data not ready, wait and retry
@@ -296,19 +290,15 @@ struct NewAppSheetView: View {
             }
         } while retryCount <= maxRetries
 
-        if httpResponse?.statusCode == 200, let data = snapshotData {
+        if httpResponse?.statusCode == 200 {
             // Process the snapshot data
-            if let jobDetail = JobApp.parseBrightDataJobApp(jobAppStore: jobAppStore, jsonData: data) {
-            } else {}
+
             isLoading = false
             isPresented = false
 
         } else {
             // Handle HTTP error
             isLoading = false
-            if let statusCode = httpResponse?.statusCode {
-            } else {}
-            if let data = snapshotData, let responseBody = String(data: data, encoding: .utf8) {}
         }
     }
 
@@ -338,16 +328,15 @@ struct NewAppSheetView: View {
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 200 {
                     // Process successful response
-                    if let jobDetail = JobApp.parseProxycurlJobApp(
+                    if let _ = JobApp.parseProxycurlJobApp(
                         jobAppStore: jobAppStore,
                         jsonData: data,
                         postingUrl: posting_url.absoluteString
                     ) {
                         isPresented = false
-                    } else {}
+                    }
                 } else {
                     // Handle error response
-                    if let errorText = String(data: data, encoding: .utf8) {}
                 }
             }
         } catch {}

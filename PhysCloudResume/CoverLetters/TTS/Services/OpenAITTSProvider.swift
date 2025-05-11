@@ -172,8 +172,8 @@ class OpenAITTSProvider {
                     if !self.cancelRequested {
                         onChunk(audioData)
                     }
-                case let .failure(error):
-                    if !self.cancelRequested {}
+                case .failure:
+                    if !self.cancelRequested { print("failure") }
                 }
             },
             onComplete: onComplete

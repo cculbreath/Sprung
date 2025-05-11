@@ -17,7 +17,6 @@ enum DatabaseBackupManager {
         }
 
         // Check if source file exists
-        let fileExists = FileManager.default.fileExists(atPath: sourceURL.path)
 
         guard let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
             return
@@ -32,9 +31,6 @@ enum DatabaseBackupManager {
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
-
-            // Try to list contents of source directory
-            if let contents = try? FileManager.default.contentsOfDirectory(at: sourceURL.deletingLastPathComponent(), includingPropertiesForKeys: nil) {}
 
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
         } catch {}

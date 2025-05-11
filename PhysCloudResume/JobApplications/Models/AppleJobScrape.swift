@@ -61,7 +61,6 @@ extension JobApp {
 
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
 
-        } catch let Exception.Error(type, message) {
         } catch {}
     }
 }

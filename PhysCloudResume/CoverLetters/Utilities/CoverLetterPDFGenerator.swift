@@ -359,11 +359,9 @@ enum CoverLetterPDFGenerator {
     private static func createPaginatedPDFFromString(_ text: String, signatureImage: NSImage? = nil) -> Data {
         // Register and log Futura Light font file usage
         let specificFuturaPath = "/Library/Fonts/Futura Light.otf"
-        var registeredFontFilePath: String? = nil
         if FileManager.default.fileExists(atPath: specificFuturaPath) {
             var error: Unmanaged<CFError>?
             CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: specificFuturaPath) as CFURL, .process, &error)
-            registeredFontFilePath = specificFuturaPath
         } else {
             let futuraPaths = [
                 "/Library/Fonts/futuralight.ttf",
@@ -373,13 +371,10 @@ enum CoverLetterPDFGenerator {
                 if FileManager.default.fileExists(atPath: path) {
                     var error: Unmanaged<CFError>?
                     CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: path) as CFURL, .process, &error)
-                    registeredFontFilePath = path
                     break
                 }
             }
         }
-        if let path = registeredFontFilePath {
-        } else {}
 
         // Auto-fit settings
         let pageRect = CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72)
@@ -622,7 +617,6 @@ enum CoverLetterPDFGenerator {
                 var nameLineIndex: Int?
                 var contactInfoLineIndex: Int? // For phone/address line
                 var emailLineIndex: Int? // For email line
-                var emptyLineAfterRegards: Int?
 
                 for (idx, line) in frameLines.enumerated() {
                     let lineRange = CTLineGetStringRange(line)
@@ -642,9 +636,8 @@ enum CoverLetterPDFGenerator {
                                     let nextLineRange = CTLineGetStringRange(frameLines[idx + 1])
                                     if nextLineRange.length > 0 {
                                         let nextContent = nsString.substring(with: NSRange(location: nextLineRange.location, length: nextLineRange.length))
-                                        if nextContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                            emptyLineAfterRegards = idx + 1
-                                        }
+                                        // Check for empty lines, but no need to track them
+                                        _ = nextContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     }
                                 }
                                 break
@@ -678,10 +671,12 @@ enum CoverLetterPDFGenerator {
                 }
 
                 // Default positioning (fallback)
-                var signatureY = textRect.origin.y + 100
-                var idealPosition = false
+                // Position will be calculated dynamically later
 
                 // Dynamically position based on what we found
+                // Variable to store the calculated Y position for the signature
+                var adjustedSignatureY: CGFloat = textRect.origin.y + 100 // Default fallback position
+
                 if let nameIdx = nameLineIndex, nameIdx < origins.count {
                     if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
                         // Position between "Best Regards" and name - ideal case
@@ -690,19 +685,18 @@ enum CoverLetterPDFGenerator {
                             let regardsY = origins[regardsIdx].y
                             let nameY = origins[nameIdx].y
                             // Position signature between regards and name with proper spacing
-                            signatureY = (regardsY + nameY) / 2
-                            idealPosition = true
+                            adjustedSignatureY = (regardsY + nameY) / 2
                         } else {
                             // Regards and name are adjacent - position closely above name
-                            signatureY = origins[nameIdx].y + 20
+                            adjustedSignatureY = origins[nameIdx].y + 20
                         }
                     } else {
                         // Only name found - position above name
-                        signatureY = origins[nameIdx].y + 20
+                        adjustedSignatureY = origins[nameIdx].y + 20
                     }
                 } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
                     // Only "Best Regards" found - position after it
-                    signatureY = origins[regardsIdx].y - 35
+                    adjustedSignatureY = origins[regardsIdx].y - 35
                 }
 
                 // Use a single fixed height for the signature, regardless of other parameters
@@ -712,29 +706,30 @@ enum CoverLetterPDFGenerator {
                 let signatureWidth = signatureHeight * imageAspectRatio
 
                 // Determine the right position based on the content
-                var signatureX = textRect.origin.x + 2 // Default indent from margin
+                let signatureX = textRect.origin.x + 2 // Default indent from margin
 
                 // Position signature intelligently based on all detected signature elements
 
                 // Determine where there's space to place the signature
                 let hasContactLines = contactInfoLineIndex != nil || emailLineIndex != nil
-                let betweenRegardsAndName = regardsLineIndex != nil && nameLineIndex != nil &&
+                // Check if there's space between regards and name lines
+                _ = regardsLineIndex != nil && nameLineIndex != nil &&
                     (nameLineIndex ?? 0) > (regardsLineIndex ?? 0) &&
                     abs((nameLineIndex ?? 0) - (regardsLineIndex ?? 0)) > 1
 
                 // First, calculate optimal signature position
-                var adjustedSignatureY: CGFloat
+                // (already initialized above)
 
                 // Check if we have both regards and name lines for optimal positioning
                 if let regardsIdx = regardsLineIndex, let nameIdx = nameLineIndex,
                    regardsIdx < origins.count, nameIdx < origins.count
                 {
-                    // We have both regards and name - position precisely between them
-                    let regardsY = origins[regardsIdx].y
-                    let nameY = origins[nameIdx].y
+                    // We have both regards and name - position precisely
+                    // Use the Y position directly from origins array
 
                     // Position EXTREMELY high right at the regards line
                     // The signature needs to appear almost at the same line as the closing text
+                    let regardsY = origins[regardsIdx].y
                     if nameIdx == regardsIdx + 1 {
                         // Name immediately follows regards - place directly on the regards line
                         adjustedSignatureY = regardsY + 5 // Right on the regards line

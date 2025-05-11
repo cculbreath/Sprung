@@ -19,7 +19,7 @@ enum LeafStatus: String, Codable, Hashable {
 // Example SwiftData model
 
 @Model class TreeNode: Identifiable {
-    let id = UUID().uuidString
+    var id = UUID().uuidString
     var name: String = ""
     var value: String
     var includeInEditor: Bool = false

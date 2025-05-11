@@ -158,7 +158,6 @@ import Foundation
 
     var wholeResumeQueryString: String {
         // Generate language that controls how strongly we emphasize achievements
-        let attentionGrabLanguage: String
 //        switch res.attentionGrab {
 //        case 0:
 //            attentionGrabLanguage = ""

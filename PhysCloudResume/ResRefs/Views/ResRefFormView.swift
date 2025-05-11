@@ -97,7 +97,7 @@ struct ResRefFormView: View {
 
     private func saveRefForm() {
         if let resRef = existingResRef {
-            var updatedResRef = resRef
+            let updatedResRef = resRef
             updatedResRef.name = sourceName
             updatedResRef.content = sourceContent
             updatedResRef.enabledByDefault = enabledByDefault
@@ -121,7 +121,6 @@ struct ResRefFormView: View {
 
     private func handleOnDrop(providers: [NSItemProvider]) -> Bool {
         for provider in providers {
-            var stop = false
             if provider.hasItemConformingToTypeIdentifier("public.file-url") {
                 provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
                     guard let urlData = item as? Data,
