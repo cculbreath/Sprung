@@ -46,9 +46,13 @@ import Foundation
                         "isTitleNode": {
                             "type": "boolean",
                             "description": "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
+                        },
+                        "treePath": {
+                            "type": "string",
+                            "description": "The hierarchical path to the node (e.g., 'Resume > Experience > Bullet 1'). Return exactly the same value you received; do NOT modify it."
                         }
                     },
-                    "required": ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode"],
+                    "required": ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"],
                     "additionalProperties": false
                 }
             }
@@ -153,6 +157,10 @@ import Foundation
         let prompt = """
         \(applicant.name) has reviewed your proposed revision and has provided feedback. Please revise and rewrite as specified for each FeedbackNode below. Provide your updated revisions as an array of RevNodes (schema attached). The RevNodeArray should only include RevNodes for which your action is required (newValue != oldValue). No response is required for any FeedbackNode for which no action is needed.
 
+        IMPORTANT:
+        • Do **not** change the "id" or "treePath" fields — return them exactly as received so the application can locate the correct node in the résumé.
+
+
         Feedback Nodes:
         \(json ?? "none provided")
         """
@@ -226,6 +234,7 @@ import Foundation
         - For each original EditableNode, include exactly one RevNode in the RevArray. The array indices should match the order of EditableNodes in the updatableFieldsString.
         - If no change is required for a given node, set “newValue” to "" and “valueChanged” to false.
         - The “why” field can be an empty string if the reason is self-explanatory.
+        - Do **not** modify the "treePath" value. Always return the exact same string you received for a given node.
 
         SUMMARY:
         Make the resume as compelling and accurate as possible for the target job. Keep it honest, relevant, and ensure that any additions or modifications support \(applicant.name)’s candidacy for the role. Use strategic language to highlight achievements, mirror core keywords from the job posting, and present a polished, stand-out resume.

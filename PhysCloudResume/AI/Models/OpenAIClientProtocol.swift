@@ -71,6 +71,7 @@ protocol OpenAIClientProtocol {
         model: String,
         temperature: Double,
         previousResponseId: String?,
+        schema: String?,
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     )
 

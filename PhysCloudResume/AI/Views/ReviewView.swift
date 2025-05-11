@@ -23,6 +23,32 @@ struct ReviewView: View {
     @State var isCommenting: Bool = false
     @State var isMoreCommenting: Bool = false
 
+    // Helper to supply original text especially for title nodes where oldValue may be empty
+    private func originalText(for node: ProposedRevisionNode) -> String {
+        let trimmedOld = node.oldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmedOld.isEmpty {
+            return trimmedOld
+        }
+
+        // Fallback to updateNodes for original value if available
+        if let dict = updateNodes.first(where: {
+            ($0["id"] as? String) == node.id &&
+                ($0["isTitleNode"] as? Bool) == node.isTitleNode
+        }), let fallback = (dict["value"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        !fallback.isEmpty {
+            return fallback
+        }
+        // Fallback for title nodes: derive from treePath last component
+        if node.isTitleNode {
+            let parts = node.treePath.split(separator: ">").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            if let last = parts.last, !last.isEmpty {
+                return last
+            }
+        }
+        return "(no text)"
+    }
+
     var body: some View {
         if let selRes = selRes {
             if aiResub {
@@ -72,7 +98,7 @@ struct ReviewView: View {
                                         Text("Original Text")
                                             .font(.system(.headline, weight: .semibold))
                                             .transition(.move(edge: .trailing))
-                                        Text(currentRevNode.oldValue)
+                                        Text(originalText(for: currentRevNode))
                                             .font(.system(.headline, weight: .light))
                                             .foregroundStyle(.secondary)
                                             .transition(.move(edge: .trailing))

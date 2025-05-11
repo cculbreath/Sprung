@@ -81,10 +81,15 @@ final class ResumeChatProvider {
     /// - Parameter messages: The message history to use for context
     /// - Parameter resume: Optional resume to update with response ID for server-side conversation state
     /// - Returns: void - results are stored in the message property
-    func startChat(messages: [ChatMessage], resume: Resume? = nil) async throws {
+    func startChat(messages: [ChatMessage],
+                   resume: Resume? = nil,
+                   continueConversation: Bool = false) async throws
+    {
         // Check if we should use the new Responses API implementation
         if isResponsesAPIEnabled() {
-            try await startChatWithResponsesAPI(messages: messages, resume: resume)
+            try await startChatWithResponsesAPI(messages: messages,
+                                                resume: resume,
+                                                continueConversation: continueConversation)
             return
         }
         // Clear previous error message before starting
@@ -259,7 +264,10 @@ final class ResumeChatProvider {
     ///   - messages: The message history for context
     ///   - resume: The resume to update with the response ID
     /// - Returns: void - results are stored in properties
-    func startChatWithResponsesAPI(messages: [ChatMessage], resume: Resume?) async throws {
+    func startChatWithResponsesAPI(messages: [ChatMessage],
+                                   resume: Resume?,
+                                   continueConversation: Bool) async throws
+    {
         // Clear previous error message before starting
         errorMessage = ""
 
@@ -273,6 +281,17 @@ final class ResumeChatProvider {
         var systemMessage = ""
         var userMessage = ""
 
+        // For debug: capture updatableFields JSON from the resume if provided
+        if let resume = resume, let root = resume.rootNode {
+            let fieldsArr = TreeNode.traverseAndExportNodes(node: root)
+            if let data = try? JSONSerialization.data(withJSONObject: fieldsArr, options: .prettyPrinted),
+               let jsonString = String(data: data, encoding: .utf8)
+            {
+                print("▶️ JSON sent to LLM (updatableFields):\n", jsonString)
+            }
+            // Do *not* wipe previousResponseId here; it is needed for
+            // follow-up revision calls.
+        }
         for message in messages {
             switch message.role {
             case .system:
@@ -299,8 +318,8 @@ final class ResumeChatProvider {
         \(userMessage)
         """
 
-        // Determine if this is a new conversation or continuation
-        let previousResponseId = resume?.previousResponseId
+        // Decide whether to continue a previous conversation
+        let previousResponseId: String? = continueConversation ? resume?.previousResponseId : nil
         let isNewConversation = previousResponseId == nil
 
         print("Starting \(isNewConversation ? "new" : "continuation") conversation with Responses API")
@@ -338,46 +357,6 @@ final class ResumeChatProvider {
             if let responseData = content.data(using: .utf8) {
                 do {
                     print("Parsing JSON content to RevNode array...")
-
-                    // Try first as a direct array (Responses API format)
-                    if let jsonArray = try? JSONSerialization.jsonObject(with: responseData) as? [[String: Any]] {
-                        print("Detected direct JSON array format")
-
-                        var nodes: [ProposedRevisionNode] = []
-                        for item in jsonArray {
-                            // Get the node properties with appropriate fallbacks
-                            let nodeId = item["id"] as? String ?? ""
-                            let treePath = item["tree_path"] as? String ?? ""
-                            let oldValue = item["oldValue"] as? String ?? ""
-
-                            let node = ProposedRevisionNode(
-                                id: nodeId,
-                                oldValue: oldValue,
-                                newValue: item["newValue"] as? String ?? "",
-                                valueChanged: item["valueChanged"] as? Bool ?? false,
-                                isTitleNode: item["isTitleNode"] as? Bool ?? false,
-                                why: item["why"] as? String ?? "",
-                                treePath: treePath
-                            )
-                            nodes.append(node)
-                        }
-
-                        // Create a container with our nodes
-                        let revContainer = RevisionsContainer(revArray: nodes)
-                        print("Successfully parsed JSON array with \(nodes.count) revision nodes")
-
-                        // Format for storage
-                        let encoder = JSONEncoder()
-                        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                        let jsonData = try encoder.encode(revContainer)
-                        let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
-
-                        // Store results
-                        self.messages = [jsonString]
-                        lastRevNodeArray = revContainer.revArray
-                        genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
-                        return
-                    }
 
                     // Try as a container with revArray property (legacy format)
                     let container = try JSONDecoder().decode(RevisionsContainer.self, from: responseData)

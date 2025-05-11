@@ -1,7 +1,8 @@
 # Ignore vendored and generated artifacts
 weasy-dist/
 weasy/
-
+.build/
+test_*
 # Ignore root-level generated files
 PhysCloudResume.zip
 backup.txt

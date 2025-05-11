@@ -17,22 +17,41 @@ struct ProposedRevisionNode: Codable, Equatable {
     var isTitleNode: Bool = false
     var why: String = ""
     var treePath: String = ""
+
+    // `value` has been removed. `treePath` is retained so the model can
+    // provide a hierarchical hint when an ID match is ambiguous.
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case oldValue
+        case newValue
+        case valueChanged
+        case isTitleNode
+        case why
+        case treePath
+    }
+
+    // Custom decoder so that the struct stays compatible with older
+    // responses that may *not* include `treePath`.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
+        oldValue = try container.decodeIfPresent(String.self, forKey: .oldValue) ?? ""
+        newValue = try container.decodeIfPresent(String.self, forKey: .newValue) ?? ""
+        valueChanged = try container.decodeIfPresent(Bool.self, forKey: .valueChanged) ?? false
+        isTitleNode = try container.decodeIfPresent(Bool.self, forKey: .isTitleNode) ?? false
+        why = try container.decodeIfPresent(String.self, forKey: .why) ?? ""
+        treePath = try container.decodeIfPresent(String.self, forKey: .treePath) ?? ""
+    }
+
+    // Encodable synthesis is fine.
 }
 
 struct RevisionsContainer: Codable, StructuredOutput {
     var revArray: [ProposedRevisionNode]
 
-    static let example: Self = .init(revArray: [
-        ProposedRevisionNode(
-            id: "example-id-1",
-            oldValue: "Example old value",
-            newValue: "Example new value",
-            valueChanged: true,
-            isTitleNode: false,
-            why: "Improved clarity and impact",
-            treePath: "Resume > section > subsection"
-        ),
-    ])
+    static let example: Self = .init(revArray: [])
 }
 
 enum PostReviewAction: String, Codable {
