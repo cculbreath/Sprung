@@ -13,58 +13,126 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
     case assessQuality = "Assess Overall Resume Quality"
     case assessFit = "Assess Fit for Job Position"
     case custom = "Custom"
-    
+
     var id: String { rawValue }
-    
+
     /// Returns the prompt template for this review type
     func promptTemplate() -> String {
         switch self {
         case .assessQuality:
+            // Enhanced prompt – asks for a structured, actionable answer in markdown
             return """
-            I am applying for this job opening: 
-            {jobPosition}, {companyName}. 
-            Job Description:
-            {jobDescription}
-            ----------------------
-            Here is a draft of my current resume:
-            {resumeText}
-            
+            Context:
+            ────────────────────────────────────────────
+            • Applicant is applying for **{jobPosition}** at **{companyName}**.
+            • Full job description is included below.
+            • A draft of the applicant’s resume follows the job description.
             {includeImage}
-            Please assess the overall quality of my resume and its applicability to the current job opening. Please share three of its strengths along with three ways that it can be improved.
+
+            Job Description
+            ----------------
+            {jobDescription}
+
+            Resume Draft
+            -------------
+            {resumeText}
+
+            Task:
+            You are an expert hiring manager and resume coach.
+            1. Evaluate the overall quality and professionalism of the resume **for this particular role**.
+            2. Provide exactly 3 key strengths (bullet list).
+            3. Provide exactly 3 concrete, actionable improvements (bullet list).
+            4. Give the resume an **overall score from 1-10** for readiness to submit.
+
+            Output format (markdown):
+            ### Overall Assessment (Score: <1-10>)
+
+            **Strengths**
+            • …
+            • …
+            • …
+
+            **Areas to Improve**
+            • …
+            • …
+            • …
+
+            Keep the tone encouraging yet direct. Use concise, professional language.
             """
-            
+
         case .assessFit:
             return """
-            I am applying for this job opening: 
-            {jobPosition}, {companyName}. 
-            Job Description:
-            {jobDescription}
-            
-            Here is a draft of my current resume:
-            {resumeText}
-            
+            Context:
+            ────────────────────────────────────────────
+            • Applicant wishes to apply for **{jobPosition}** at **{companyName}**.
+            • Job description and resume draft are provided.
             {includeImage}
-            Do you think I'm a good fit for this position? What are the biggest gaps in my experience, as evident on my resume, relative to the requirements of the position. Do you think that it is worthwhile for me to apply? Based on my resume alone, how strong do you think my application is?
+
+            Job Description
+            ----------------
+            {jobDescription}
+
+            Resume Draft
+            -------------
+            {resumeText}
+
+            Task:
+            1. Assess how well the candidate’s background matches the role requirements.
+            2. List the **top 3 strengths** relevant to the job (bullet list).
+            3. List the **top 3 gaps** or missing qualifications (bullet list).
+            4. Give a **Fit Rating (1-10)** where 10 = perfect fit.
+            5. State in one sentence whether it is worthwhile to apply.
+
+            Output format (markdown):
+            ### Fit Analysis (Rating: <1-10>)
+            **Strengths**
+            • …
+            • …
+            • …
+
+            **Gaps / Weaknesses**
+            • …
+            • …
+            • …
+
+            **Recommendation**
+            <One-sentence recommendation>
             """
-            
+
         case .suggestChanges:
             return """
-            I am applying for this job opening: 
-            {jobPosition}, {companyName}. 
-            Job Description:
+            Context:
+            ────────────────────────────────────────────
+            • Target role: **{jobPosition}** at **{companyName}**
+            • Job description is supplied below.
+            • Current resume draft follows.
+            • Additional background docs (if any) are appended at the end.
+
+            Job Description
+            ----------------
             {jobDescription}
-            
-            Here is a draft of my current resume:
+
+            Resume Draft
+            -------------
             {resumeText}
-            
-            Here is some background information on me and my experience:
+
+            Background Docs
+            ---------------
             {backgroundDocs}
-            
-            Can you identify any job titles, skill headings, or specific job details that could particularly benefit from revision? Please specify which specific elements of my resume that I should consider for revision.
+
+            Task:
+            Identify resume sections (titles, bullet points, skill headings, summarized achievements, etc.) that should be **revised or strengthened** to maximise impact for this role.
+
+            For each suggested change give:
+            • The current text (quote succinctly)
+            • The rationale for change (1-2 sentences)
+            • A concise rewritten version (max 40 words)
+
+            Output as a markdown table with columns: *Section*, *Why change?*, *Suggested Rewrite*.
             """
-            
+
         case .custom:
-            // Custom prompt will be built using the user's input
+            // Custom prompt will be built dynamically; return empty string here.
             return ""
         }
     }
