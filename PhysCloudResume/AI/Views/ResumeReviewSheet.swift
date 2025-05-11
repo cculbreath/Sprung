@@ -69,32 +69,35 @@ struct ResumeReviewSheet: View {
 
             // Button row
             HStack {
-                Button("Cancel") {
-                    if isProcessing {
-                        reviewService.cancelRequest()
-                    }
-                    dismiss()
-                }
-
-                Spacer()
-
                 if isProcessing {
                     Button("Stop") {
                         reviewService.cancelRequest()
                         isProcessing = false
                     }
                     .buttonStyle(.bordered)
+
+                    Spacer()
+
+                    Button("Close") {
+                        dismiss()
+                    }
                 } else {
                     Button("Submit Request") {
                         submitReviewRequest()
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(selectedResume == nil)
+
+                    Spacer()
+
+                    Button("Close") {
+                        dismiss()
+                    }
                 }
             }
         }
         .padding()
-        .frame(width: 600, height: 500)
+        .frame(width: 600, height: 500, alignment: .topLeading)
     }
 
     // Custom options view for custom review type
