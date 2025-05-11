@@ -267,16 +267,18 @@ struct AiCommsView: View {
                 // Prepare messages for API call using our abstraction layer
                 if !hasRevisions {
                     // Set up system and user messages for initial query
+                    let userPromptContent = await q.wholeResumeQueryString() // Await the async prompt generation
                     chatProvider.genericMessages = [
                         q.genericSystemMessage,
-                        ChatMessage(role: .user, content: q.wholeResumeQueryString),
+                        ChatMessage(role: .user, content: userPromptContent), // Use awaited content
                     ]
                 } else {
                     // Start a new message list for the revision round – the
                     // server will recover full context from `previousResponseId`.
+                    let revisionUserPromptContent = await q.revisionPrompt(fbnodes) // Await the async prompt generation
                     chatProvider.genericMessages = [
                         q.genericSystemMessage,
-                        ChatMessage(role: .user, content: q.revisionPrompt(fbnodes)),
+                        ChatMessage(role: .user, content: revisionUserPromptContent), // Use awaited content
                     ]
                 }
 

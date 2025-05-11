@@ -1,9 +1,4 @@
-//
-//  ResumeReviewType.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 5/11/25.
-//
+// PhysCloudResume/AI/Models/ResumeReviewType.swift
 
 import Foundation
 
@@ -12,11 +7,14 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
     case suggestChanges = "Suggest Resume Fields to Change"
     case assessQuality = "Assess Overall Resume Quality"
     case assessFit = "Assess Fit for Job Position"
+    case fixOverflow = "Fix Skills & Expertise Overflow" // New case
     case custom = "Custom"
 
     var id: String { rawValue }
 
     /// Returns the prompt template for this review type
+    /// Note: The prompt for fixOverflow will be handled more dynamically by ResumeReviewService
+    /// due to its iterative nature and inclusion of image data.
     func promptTemplate() -> String {
         switch self {
         case .assessQuality:
@@ -103,7 +101,7 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
             return """
             Context:
             ────────────────────────────────────────────
-            • Target role: **{jobPosition}** at **{companyName}**
+            • Target role: **{jobPosition}** at **{companyName}**.
             • Job description is supplied below.
             • Current resume draft follows.
             • Additional background docs (if any) are appended at the end.
@@ -130,7 +128,12 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
 
             Output as a markdown table with columns: *Section*, *Why change?*, *Suggested Rewrite*.
             """
-
+        case .fixOverflow:
+            // This prompt is more complex and will be constructed within ResumeReviewService
+            // as it involves image data and iterative calls.
+            // A base instruction could be:
+            return "The 'Skills and Expertise' section of the resume is overflowing. Please adjust the content to fit."
+            
         case .custom:
             // Custom prompt will be built dynamically; return empty string here.
             return ""

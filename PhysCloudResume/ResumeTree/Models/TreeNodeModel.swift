@@ -1,9 +1,4 @@
-//
-//  TreeNodeModel.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/1/24.
-//
+// PhysCloudResume/ResumeTree/Models/TreeNodeModel.swift
 
 import Foundation
 import SwiftData
@@ -16,52 +11,49 @@ enum LeafStatus: String, Codable, Hashable {
     case isNotLeaf = "nodeIsNotLeaf"
 }
 
-// Example SwiftData model
-
 @Model class TreeNode: Identifiable {
     var id = UUID().uuidString
     var name: String = ""
     var value: String
     var includeInEditor: Bool = false
-    var myIndex: Int = -1
+    var myIndex: Int = -1 // Represents order within its parent's children array
     @Relationship(deleteRule: .cascade) var children: [TreeNode]? = nil
     weak var parent: TreeNode?
-    var label: String { return resume.label(name) }
+    var label: String { return resume.label(name) } // Assumes resume.label handles missing keys
     @Relationship(deleteRule: .noAction) var resume: Resume
     var status: LeafStatus
     var depth: Int = 0
+
+    // This property should be explicitly set when a node is created or its role changes.
+    // It's not reliably computable based on name/value alone.
+    // For the "Fix Overflow" feature, we will pass this to the LLM and expect it back.
+    var isTitleNode: Bool = false 
 
     var hasChildren: Bool {
         return !(children?.isEmpty ?? true)
     }
 
-    /// Children sorted once on `myIndex`; keeps array identity across redraws
     var orderedChildren: [TreeNode] {
         (children ?? []).sorted { $0.myIndex < $1.myIndex }
     }
 
     var aiStatusChildren: Int {
         var count = 0
-
-        // Check if the current node has the desired status
         if status == .aiToReplace {
             count += 1
         }
-
-        // Recursively count the descendants with the desired status
         if let children = children {
             for child in children {
                 count += child.aiStatusChildren
             }
         }
-
         return count
     }
 
     init(
         name: String, value: String = "", children: [TreeNode]? = nil,
         parent: TreeNode? = nil, inEditor: Bool, status: LeafStatus = LeafStatus.disabled,
-        resume: Resume
+        resume: Resume, isTitleNode: Bool = false // Added isTitleNode to initializer
     ) {
         self.name = name
         self.value = value
@@ -69,10 +61,9 @@ enum LeafStatus: String, Codable, Hashable {
         self.parent = parent
         self.status = status
         includeInEditor = inEditor
-
         depth = parent != nil ? parent!.depth + 1 : 0
         self.resume = resume
-        // No need to set status again, it's already set by default.
+        self.isTitleNode = isTitleNode // Initialize isTitleNode
     }
 
     @discardableResult
@@ -80,9 +71,7 @@ enum LeafStatus: String, Codable, Hashable {
         if children == nil {
             children = []
         }
-        //    print(child.resume.id)
         child.parent = self
-        // Assign index sequentially within the parent's children array.
         child.myIndex = (children?.count ?? 0)
         child.depth = depth + 1
         children?.append(child)
@@ -90,128 +79,136 @@ enum LeafStatus: String, Codable, Hashable {
     }
 
     var growDepth: Bool { depth > 2 }
+
     static func traverseAndExportNodes(node: TreeNode, currentPath: String = "")
         -> [[String: Any]]
     {
         var result: [[String: Any]] = []
-        var newPath: String
-        // Construct the current tree path
-        if node.parent == nil {
-            newPath = "Resume"
-        } else {
-            newPath =
-                currentPath.isEmpty ? node.name : "\(currentPath) > \(node.name)"
-        }
-        // If the node's status is .aiToReplace, add it to the result array
+        let newPath = node.buildTreePath() // Use the instance method
+
+        // Export node if it's marked for AI replacement OR if it's a title node (even if not for replacement, LLM might need context)
+        // For "Fix Overflow", we are specifically interested in nodes from the "Skills & Expertise" section,
+        // which will be filtered by the caller (extractSkillsForLLM in ResumeReviewService).
+        // This function is more general for AI updates.
         if node.status == .aiToReplace {
-            if node.name != "" && node.value != "" {
+            // If it's a title node (name is primary content)
+            if node.isTitleNode && !node.name.isEmpty { // Check isTitleNode first
                 let titleNodeData: [String: Any] = [
                     "id": node.id,
-                    "value": node.name,
-                    "tree_path": currentPath,
-                    "isTitleNode": true,
+                    "value": node.name, // Exporting node.name as "value" for the LLM
+                    "tree_path": newPath, // Path to this node
+                    "isTitleNode": true, // Explicitly mark as title node
                 ]
                 result.append(titleNodeData)
             }
-
-            let nodeData: [String: Any] = [
-                "id": node.id,
-                "value": node.value,
-                "tree_path": newPath,
-                "isTitleNode": false,
-            ]
-            result.append(nodeData)
+            // If it's a value node (value is primary content, or name is empty)
+            // Also include title nodes if they *also* have a value to be edited separately.
+            // For "Fix Overflow", we ensure only one piece of text (name or value) is sent per node ID for revision.
+            // The extractSkillsForLLM function will handle this specific logic.
+            // This general function might send both if a title node also has a value and is aiToReplace.
+            if !node.value.isEmpty && !node.isTitleNode { // Ensure this isn't a title node already processed
+                 let valueNodeData: [String: Any] = [
+                    "id": node.id,
+                    "value": node.value, // Exporting node.value
+                    "tree_path": newPath,
+                    "isTitleNode": false, // Explicitly mark as not a title node
+                ]
+                result.append(valueNodeData)
+            }
         }
 
-        // Recursively traverse the children
         for child in node.children ?? [] {
-            let childResults = traverseAndExportNodes(
-                node: child, currentPath: newPath
-            )
-            result.append(contentsOf: childResults)
+            // Pass the child's full path for its children's context
+            result.append(contentsOf: traverseAndExportNodes(node: child, currentPath: newPath))
         }
-
         return result
     }
-
-    /// Updates the values of TreeNode objects based on the provided JSON file.
-    /// - Parameters:
-    ///   - jsonFileURL: The URL of the JSON file containing the array of {id: String, value: String} objects.
-    ///   - context: The SwiftData context used to fetch and update the TreeNode objects.
-    /// - Throws: An error if reading the JSON file, parsing JSON, or saving the context fails.
+    
     static func updateValues(from jsonFileURL: URL, using context: ModelContext) throws {
-        // Load JSON data from the provided file URL
         let jsonData = try Data(contentsOf: jsonFileURL)
-
-        // Parse JSON data into an array of dictionaries
         guard let jsonArray = try JSONSerialization.jsonObject(
             with: jsonData, options: []
         ) as? [[String: String]] else {
+            print("Failed to parse JSON or JSON is not an array of dictionaries.")
             return
         }
 
-        // Iterate over the array and update corresponding TreeNodes
         for jsonObject in jsonArray {
-            if let id = jsonObject["id"], let newValue = jsonObject["value"], let titleNode = jsonObject["isTitleNode"] {
-                // Fetch the corresponding TreeNode from the SwiftData store manually
+            if let id = jsonObject["id"], let newValue = jsonObject["value"], let isTitleNodeString = jsonObject["isTitleNode"],
+               let isTitleNode = Bool(isTitleNodeString) {
                 let fetchRequest = FetchDescriptor<TreeNode>(
                     predicate: #Predicate { $0.id == id }
                 )
-
                 if let node = try context.fetch(fetchRequest).first {
-                    // Update the value of the TreeNode
-                    if titleNode == "true" {
+                    if isTitleNode {
                         node.name = newValue
                     } else {
                         node.value = newValue
                     }
-                } else {}
-            } else {}
+                } else {
+                    print("TreeNode with ID \(id) not found.")
+                }
+            } else {
+                print("Skipping invalid JSON object: \(jsonObject)")
+            }
         }
-
-        // Save the context to persist changes
         try context.save()
     }
 
     static func deleteTreeNode(node: TreeNode, context: ModelContext) {
-        // Recursively delete children
         for child in node.children ?? [] {
             deleteTreeNode(node: child, context: context)
         }
-        // Remove from parent's children array if necessary
         if let parent = node.parent, let index = parent.children?.firstIndex(of: node) {
             parent.children?.remove(at: index)
         }
-        // No need to manually maintain a nodes array; the computed property
-        // on `Resume` will pick up changes automatically.
-        // Delete the node itself
         context.delete(node)
-
-        // Save context to persist changes
         do {
             try context.save()
-        } catch {}
+        } catch {
+            print("Failed to save context after deleting TreeNode: \(error)")
+        }
     }
 
     func deepCopy(newResume: Resume) -> TreeNode {
-        // Create a copy of the current node with the new resume
         let copyNode = TreeNode(
             name: name,
             value: value,
-            parent: nil, // The parent will be set during recursion
+            parent: nil,
             inEditor: includeInEditor,
             status: status,
-            resume: newResume
+            resume: newResume,
+            isTitleNode: isTitleNode // Copy isTitleNode
         )
+        copyNode.myIndex = myIndex 
 
-        // Recursively copy the children
         if let children = children {
             for child in children {
                 let childCopy = child.deepCopy(newResume: newResume)
-                copyNode.addChild(childCopy) // Attach the child to the copied parent
+                copyNode.addChild(childCopy)
             }
         }
-
         return copyNode
+    }
+
+    /// Builds the hierarchical path string for this node.
+    /// Example: "Resume > Skills and Expertise > Software > Swift"
+    func buildTreePath() -> String {
+        var pathComponents: [String] = []
+        var currentNode: TreeNode? = self
+        while let node = currentNode {
+            var componentName = "Unnamed Node"
+            if !node.name.isEmpty {
+                componentName = node.name
+            } else if !node.value.isEmpty {
+                componentName = String(node.value.prefix(20)) + (node.value.count > 20 ? "..." : "")
+            }
+            if node.parent == nil && node.name.lowercased() == "root" { // Check for root specifically
+                 componentName = "Resume"
+            }
+            pathComponents.insert(componentName, at: 0)
+            currentNode = node.parent
+        }
+        return pathComponents.joined(separator: " > ")
     }
 }

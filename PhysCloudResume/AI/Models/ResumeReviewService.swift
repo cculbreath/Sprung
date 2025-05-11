@@ -1,163 +1,234 @@
-//
-//  ResumeReviewService.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 5/11/25.
-//
+// PhysCloudResume/AI/Models/ResumeReviewService.swift
 
 import AppKit
 import Foundation
 import PDFKit
-import SwiftUI
+import SwiftUI // For @MainActor
+
+// MARK: - Response Structs for Fix Overflow Feature
+
+/// Represents a single revised skill or expertise item from the LLM.
+/// Mirrors ProposedRevisionNode but is specific to this feature's LLM call.
+struct RevisedSkillNode: Codable, Equatable {
+    var id: String
+    var newValue: String
+    var originalValue: String // Echoed back by LLM for context
+    var treePath: String      // Echoed back by LLM
+    var isTitleNode: Bool     // Echoed back by LLM
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case newValue
+        case originalValue
+        case treePath
+        case isTitleNode
+    }
+}
+
+/// Container for the array of revised skills from the "fixFits" LLM call.
+struct FixFitsResponseContainer: Codable, Equatable {
+    var revisedSkillsAndExpertise: [RevisedSkillNode]
+
+    enum CodingKeys: String, CodingKey {
+        case revisedSkillsAndExpertise = "revised_skills_and_expertise"
+    }
+}
+
+/// Response struct for the "contentsFit" LLM call.
+struct ContentsFitResponse: Codable, Equatable {
+    var contentsFit: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case contentsFit = "contentsFit"
+    }
+}
+
 
 /// Service for handling resume review operations with LLM
 class ResumeReviewService: @unchecked Sendable {
-    private var openAIClient: OpenAIClientProtocol?
+    private var openAIClient: OpenAIClientProtocol? // Retained for other review types
     private var currentRequestID: UUID?
+    private let apiQueue = DispatchQueue(label: "com.physcloudresume.apirequest", qos: .userInitiated)
+
 
     @MainActor
     func initialize() {
         // Retrieve API key stored in UserDefaults / AppStorage.
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
         guard apiKey != "none" else { return }
+        // For non-fixOverflow types, we might still use the MacPaw client if it supports them without images.
+        // For fixOverflow, we'll use direct HTTP.
         openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
     }
 
-    // MARK: - PDF to Image Conversion
+    // MARK: - PDF to Image Conversion (Existing)
 
     /// Converts a PDF to a base64 encoded image
     /// - Parameter pdfData: PDF data to convert
     /// - Returns: Base64 encoded image string or nil if conversion failed
     func convertPDFToBase64Image(pdfData: Data) -> String? {
         guard let pdfDocument = PDFDocument(data: pdfData),
-              let pdfPage = pdfDocument.page(at: 0)
+              let pdfPage = pdfDocument.page(at: 0) // Always use the first page
         else {
             return nil
         }
 
-        // Create a bitmap representation of the PDF page
         let pageRect = pdfPage.bounds(for: .mediaBox)
         let renderer = NSImage(size: pageRect.size)
 
         renderer.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high
-
-        // Fill with white background
-        NSColor.white.set()
+        NSColor.white.set() // Ensure a white background
         NSRect(origin: .zero, size: pageRect.size).fill()
-
-        // Draw the PDF page
         pdfPage.draw(with: .mediaBox, to: NSGraphicsContext.current!.cgContext)
         renderer.unlockFocus()
 
-        // Convert to PNG data
         guard let tiffData = renderer.tiffRepresentation,
               let bitmapImage = NSBitmapImageRep(data: tiffData),
               let pngData = bitmapImage.representation(using: .png, properties: [:])
         else {
             return nil
         }
-
-        // Convert to base64
         return pngData.base64EncodedString()
     }
 
-    // MARK: - Prompt Building
-
-    /// Builds a prompt for the review operation
-    /// - Parameters:
-    ///   - reviewType: Type of review to perform
-    ///   - resume: Resume to review
-    ///   - includeImage: Whether the prompt should mention an attached image
-    ///   - customOptions: Custom options for the review (used when reviewType is .custom)
-    /// - Returns: The constructed prompt string
+    // MARK: - Prompt Building (Existing, with minor adjustments for clarity)
     func buildPrompt(
         reviewType: ResumeReviewType,
         resume: Resume,
-        includeImage: Bool,
+        includeImage: Bool, // This flag now informs the prompt text
         customOptions: CustomReviewOptions? = nil
     ) -> String {
-        // Check if we have a model to extract text
         guard let model = resume.model else {
             return "Error: No resume model available for review."
         }
-
-        // Check if we have a job app
         guard let jobApp = resume.jobApp else {
             return "Error: No job application associated with this resume."
         }
 
         var prompt = reviewType.promptTemplate()
 
-        // If this is a custom review, build the prompt from the custom options
         if reviewType == .custom, let options = customOptions {
             prompt = buildCustomPrompt(options: options)
         }
-
-        // Replace variables in the prompt
+        
         prompt = prompt.replacingOccurrences(of: "{jobPosition}", with: jobApp.jobPosition)
         prompt = prompt.replacingOccurrences(of: "{companyName}", with: jobApp.companyName)
         prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: model.renderedResumeText)
 
-        // Add background docs if available
-        let backgroundDocs = resume.enabledSources.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
+        let backgroundDocs = resume.enabledSources.map { "\($0.name):\n\($0.content)\n\n" }.joined()
         prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: backgroundDocs)
-
-        // Handle the image placeholder
-        if includeImage {
-            prompt = prompt.replacingOccurrences(of: "{includeImage}", with: "I've also attached an image so you can assess its overall professionalism and design.")
-        } else {
-            prompt = prompt.replacingOccurrences(of: "{includeImage}", with: "")
-        }
+        
+        let imagePlaceholder = includeImage ? "I've also attached an image for visual context." : ""
+        prompt = prompt.replacingOccurrences(of: "{includeImage}", with: imagePlaceholder)
 
         return prompt
     }
 
-    /// Builds a custom prompt based on user options
-    /// - Parameter options: Custom review options
-    /// - Returns: The custom prompt string
     private func buildCustomPrompt(options: CustomReviewOptions) -> String {
         var sections: [String] = []
-
-        // Add job listing if requested
         if options.includeJobListing {
             sections.append("""
-            I am applying for this job opening: 
-            {jobPosition}, {companyName}. 
+            I am applying for this job opening:
+            {jobPosition}, {companyName}.
             Job Description:
             {jobDescription}
             """)
         }
-
-        // Add resume text if requested
         if options.includeResumeText {
             sections.append("""
             Here is a draft of my current resume:
             {resumeText}
             """)
         }
-
-        // Add image placeholder if requested (will be replaced later)
-        if options.includeResumeImage {
+        if options.includeResumeImage { // This just affects the {includeImage} placeholder
             sections.append("{includeImage}")
         }
-
-        // Add custom prompt text
         sections.append(options.customPrompt)
-
         return sections.joined(separator: "\n\n")
     }
+    
+    // MARK: - Helper to Extract Skills and Expertise Nodes
+    
+    /// Extracts "Skills and Expertise" nodes into a JSON string format for the LLM.
+    /// - Parameter resume: The resume to extract skills from.
+    /// - Returns: A JSON string representing the skills and expertise, or nil if an error occurs.
+    func extractSkillsForLLM(resume: Resume) -> String? {
+        guard let rootNode = resume.rootNode,
+              let skillsSectionNode = rootNode.children?.first(where: { $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise" })
+        else {
+            // Try to find it by a common key if the name isn't exact
+            guard let skillsSectionNodeFromKey = rootNode.children?.first(where: { $0.name == "skills-and-expertise"}) else {
+                 print("Error: 'Skills and Expertise' section node not found in the resume.")
+                 return nil
+            }
+            return extractTreeNodesForLLM(parentNode: skillsSectionNodeFromKey)
+        }
+        return extractTreeNodesForLLM(parentNode: skillsSectionNode)
+    }
 
-    // MARK: - LLM Request
+    private func extractTreeNodesForLLM(parentNode: TreeNode) -> String? {
+        var nodesToProcess: [TreeNode] = []
 
-    /// Sends a review request to the LLM
-    /// - Parameters:
-    ///   - reviewType: Type of review to perform
-    ///   - resume: Resume to review
-    ///   - customOptions: Custom options for the review (used when reviewType is .custom)
-    ///   - onProgress: Callback for streaming progress
-    ///   - onComplete: Callback when the review is complete
+        // We only want to process the direct children of the "Skills and Expertise" section node,
+        // as these are the individual skills or skill categories.
+        parentNode.children?.forEach { childNode in
+            // If a child node itself has children (e.g. a category with bullet points),
+            // we add the category node (title) and then its children (values).
+            if childNode.hasChildren {
+                if childNode.includeInEditor || !childNode.name.isEmpty { // Add the category title node
+                    nodesToProcess.append(childNode)
+                }
+                childNode.children?.forEach { subChildNode in // Add its children (skill details)
+                     if subChildNode.includeInEditor || !subChildNode.value.isEmpty {
+                        nodesToProcess.append(subChildNode)
+                    }
+                }
+            } else { // It's a direct skill item
+                if childNode.includeInEditor || !childNode.name.isEmpty || !childNode.value.isEmpty {
+                    nodesToProcess.append(childNode)
+                }
+            }
+        }
+
+
+        let exportableNodes: [[String: Any]] = nodesToProcess.compactMap { node in
+            let textContent: String
+            let isTitle: Bool = node.isTitleNode 
+            
+            if isTitle { 
+                guard !node.name.isEmpty else { return nil } 
+                textContent = node.name
+            } else { 
+                guard !node.value.isEmpty || !node.name.isEmpty else { return nil } 
+                textContent = !node.value.isEmpty ? node.value : node.name 
+            }
+
+            return [
+                "id": node.id,
+                "originalValue": textContent, 
+                "isTitleNode": isTitle,
+                "treePath": node.buildTreePath() 
+            ]
+        }
+
+        guard !exportableNodes.isEmpty else {
+            print("Warning: No exportable skill/expertise nodes found under the identified section.")
+            return "[]" 
+        }
+
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: exportableNodes, options: [.prettyPrinted])
+            return String(data: jsonData, encoding: .utf8)
+        } catch {
+            print("Error serializing skills nodes to JSON: \(error)")
+            return nil
+        }
+    }
+
+
+    // MARK: - LLM Request (Existing, for non-fixOverflow types)
     @MainActor
     func sendReviewRequest(
         reviewType: ResumeReviewType,
@@ -166,289 +237,369 @@ class ResumeReviewService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        // Initialize client if needed
-        if openAIClient == nil {
-            initialize()
-        }
-
+        if openAIClient == nil { initialize() }
         guard let client = openAIClient else {
-            onComplete(.failure(NSError(
-                domain: "ResumeReviewService",
-                code: 1000,
-                userInfo: [NSLocalizedDescriptionKey: "OpenAI client not initialized"]
-            )))
+            onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "OpenAI client not initialized"])))
             return
         }
 
-        // Determine image support and attempt conversion early so the prompt accurately reflects attachments
         let supportsImages = checkIfModelSupportsImages()
-        var base64Image: String?
+        var base64Image: String? = nil
         if supportsImages,
-           reviewType != .custom || (customOptions?.includeResumeImage ?? false),
-           let pdfData = resume.pdfData
-        {
+           (reviewType != .custom && reviewType != .fixOverflow) || (customOptions?.includeResumeImage ?? false), // fixOverflow handles its own image
+           let pdfData = resume.pdfData {
             base64Image = convertPDFToBase64Image(pdfData: pdfData)
         }
+        let includeImageInPromptText = base64Image != nil
 
-        let includeImage = base64Image != nil
-
-        // Build the prompt AFTER determining whether an image will actually be attached
         let promptText = buildPrompt(
             reviewType: reviewType,
             resume: resume,
-            includeImage: includeImage,
+            includeImage: includeImageInPromptText,
             customOptions: customOptions
         )
 
-        var messages: [ChatMessage] = []
-
-        // Add system message
-        messages.append(ChatMessage(
-            role: .system,
-            content: "You are an expert AI resume reviewer with years of experience in the hiring industry. Your goal is to provide helpful, actionable, and structured feedback on resumes."
-        ))
-
-        // If we have an image, switch to the raw API helper
-        if includeImage, let encodedImage = base64Image {
-            sendImageReviewRequest(
+        let requestID = UUID(); currentRequestID = requestID
+        
+        if includeImageInPromptText, let img = base64Image { // Image request via direct HTTP
+            sendDirectOpenAIRequest(
                 promptText: promptText,
-                base64Image: encodedImage,
+                base64Image: img,
+                previousResponseId: resume.previousResponseId, // Pass along
+                schema: nil, // No specific schema for these general reviews yet
+                requestID: requestID,
                 onProgress: onProgress,
-                onComplete: onComplete
-            )
-            return
-        }
-
-        // Without image, use regular chat completion
-        messages.append(ChatMessage(role: .user, content: promptText))
-
-        // Generate a unique ID for this request
-        let requestID = UUID()
-        currentRequestID = requestID
-
-        // Use the latest LLM model (based on OpenAIModelExtension.swift)
-        let model = AIModels.gpt4o
-
-        // Send with streaming
-        client.sendChatCompletionStreaming(
-            messages: messages,
-            model: model,
-            temperature: 0.7,
-            onChunk: { result in
-                // Check if this is still the current request
-                guard self.currentRequestID == requestID else { return }
-
-                switch result {
-                case let .success(response):
-                    onProgress(response.content)
-                case let .failure(error):
-                    onComplete(.failure(error))
-                }
-            },
-            onComplete: { error in
-                // Check if this is still the current request
-                guard self.currentRequestID == requestID else { return }
-
-                if let error = error {
-                    onComplete(.failure(error))
-                } else {
-                    onComplete(.success("Review complete"))
-                }
-            }
-        )
-    }
-
-    /// Sends a review request with an image to the LLM using the Responses API
-    /// - Parameters:
-    ///   - promptText: The prompt text
-    ///   - base64Image: Base64 encoded image data
-    ///   - onProgress: Callback for streaming progress
-    ///   - onComplete: Callback when the review is complete
-    @MainActor
-    private func sendImageReviewRequest(
-        promptText: String,
-        base64Image: String,
-        onProgress: @escaping (String) -> Void,
-        onComplete: @escaping (Result<String, Error>) -> Void
-    ) {
-        // Generate a unique ID for this request
-        let requestID = UUID()
-        currentRequestID = requestID
-
-        // Create the URL for the OpenAI API
-        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
-            onComplete(.failure(NSError(
-                domain: "ResumeReviewService",
-                code: 1000,
-                userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]
-            )))
-            return
-        }
-
-        // Make sure we have an API key
-        guard let client = openAIClient else {
-            onComplete(.failure(NSError(
-                domain: "ResumeReviewService",
-                code: 1001,
-                userInfo: [NSLocalizedDescriptionKey: "OpenAI client not initialized"]
-            )))
-            return
-        }
-
-        onProgress("Analyzing resume with image...")
-
-        // Create the request
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(client.apiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Build the request payload with the image
-        let imageUrl = "data:image/png;base64,\(base64Image)"
-
-        // Create the messages array with proper content format for images
-        let requestBody: [String: Any] = [
-            "model": AIModels.gpt4o,
-            "messages": [
-                [
-                    "role": "system",
-                    "content": "You are an expert AI resume reviewer with years of experience in the hiring industry. Your goal is to provide helpful, actionable, and structured feedback on resumes.",
-                ],
-                [
-                    "role": "user",
-                    "content": [
-                        [
-                            "type": "text",
-                            "text": promptText,
-                        ],
-                        [
-                            "type": "image_url",
-                            "image_url": [
-                                "url": imageUrl,
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-            "stream": false,
-            "temperature": 0.7,
-        ]
-
-        // Convert the payload to JSON
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: requestBody, options: [])
-            request.httpBody = jsonData
-
-            // Create a task for handling the response
-            let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-                // Check for errors
-                guard let self = self else { return }
-
-                if let error = error {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self, self.currentRequestID == requestID else { return }
+                onComplete: { result in
+                    if case .success(let responseWrapper) = result {
+                        resume.previousResponseId = responseWrapper.id // Store new response ID
+                        onComplete(.success(responseWrapper.content))
+                    } else if case .failure(let error) = result {
                         onComplete(.failure(error))
                     }
-                    return
                 }
+            )
+        } else { // Text-only request, can use existing client methods if they support Responses API or fallback
+            Task {
+                 do {
+                    let response = try await client.sendResponseRequestAsync(
+                        message: promptText, // Assuming client handles system/user message structuring
+                        model: OpenAIModelFetcher.getPreferredModelString(),
+                        temperature: 0.7,
+                        previousResponseId: resume.previousResponseId,
+                        schema: nil // No specific schema for these general reviews
+                    )
+                    // Ensure request is still current
+                    guard self.currentRequestID == requestID else { return }
+                    resume.previousResponseId = response.id // Store new response ID
+                    onProgress(response.content) // Send full content as one "chunk"
+                    onComplete(.success("Review complete"))
+                } catch {
+                    guard self.currentRequestID == requestID else { return }
+                    onComplete(.failure(error))
+                }
+            }
+        }
+    }
 
-                // Check HTTP response
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self, self.currentRequestID == requestID else { return }
-                        onComplete(.failure(NSError(
-                            domain: "ResumeReviewService",
-                            code: 1002,
-                            userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"]
-                        )))
+    // MARK: - Fix Overflow Specific LLM Calls
+
+    /// Sends a request to the LLM to revise skills for fitting, expecting structured JSON output.
+    @MainActor
+    func sendFixFitsRequest(
+        resume: Resume,
+        skillsJsonString: String,
+        base64Image: String,
+        onComplete: @escaping (Result<FixFitsResponseContainer, Error>) -> Void
+    ) {
+        let prompt = """
+        You are an expert resume editor. The 'Skills and Expertise' section in the attached resume image is overflowing. Please revise the content of this section to fit the available space without sacrificing its impact. Prioritize shortening entries that are only slightly too long (e.g., a few words on the last line). Ensure revised entries remain strong and relevant to the job application. Do not shorten entries more than necessary to resolve the overflow and avoid overlapping with elements below. The current skills and expertise content is provided as a JSON array of nodes:
+
+        \(skillsJsonString)
+
+        Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter. Each node in your response must include the original 'id', 'originalValue', 'isTitleNode', and 'treePath' fields exactly as they were provided in the input. Provide your suggested change in the 'newValue' field. Set 'valueChanged' to true if you made a change, false otherwise.
+        """
+        
+        let schemaName = "fix_skills_overflow_schema"
+        let schema = ResumeReviewService.fixFitsSchemaString // Use the static schema string
+
+        let requestID = UUID(); currentRequestID = requestID
+
+        sendDirectOpenAIRequest(
+            promptText: prompt,
+            base64Image: base64Image,
+            previousResponseId: resume.previousResponseId,
+            schema: (name: schemaName, jsonString: schema),
+            requestID: requestID
+        ) { result in
+            guard self.currentRequestID == requestID else { return } // Check if request is still current
+            switch result {
+            case .success(let responseWrapper):
+                resume.previousResponseId = responseWrapper.id // Update previousResponseId
+                do {
+                    guard let responseData = responseWrapper.content.data(using: .utf8) else {
+                        throw NSError(domain: "ResumeReviewService", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data."])
                     }
-                    return
+                    let decodedResponse = try JSONDecoder().decode(FixFitsResponseContainer.self, from: responseData)
+                    onComplete(.success(decodedResponse))
+                } catch {
+                    onComplete(.failure(error))
                 }
+            case .failure(let error):
+                onComplete(.failure(error))
+            }
+        }
+    }
 
-                // Check for error status codes
-                guard (200 ... 299).contains(httpResponse.statusCode) else {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self, self.currentRequestID == requestID else { return }
+    /// Sends a request to the LLM to check if content fits, expecting structured JSON output.
+    @MainActor
+    func sendContentsFitRequest(
+        resume: Resume,
+        base64Image: String,
+        onComplete: @escaping (Result<ContentsFitResponse, Error>) -> Void
+    ) {
+        let prompt = """
+        You are an expert document layout analyzer. Examine the attached resume image, specifically the 'Skills and Experience' box. Does the content within this box fit neatly without overflowing its boundaries or overlapping with any content below it? Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter.
+        """
+        let schemaName = "check_content_fit_schema"
+        let schema = ResumeReviewService.contentsFitSchemaString // Use the static schema string
+        
+        let requestID = UUID(); currentRequestID = requestID
 
-                        var errorMessage = "HTTP Error: \(httpResponse.statusCode)"
-                        if let data = data, let responseString = String(data: data, encoding: .utf8) {
-                            errorMessage += " - \(responseString)"
+        sendDirectOpenAIRequest(
+            promptText: prompt,
+            base64Image: base64Image,
+            previousResponseId: resume.previousResponseId,
+            schema: (name: schemaName, jsonString: schema),
+            requestID: requestID
+        ) { result in
+            guard self.currentRequestID == requestID else { return } // Check if request is still current
+            switch result {
+            case .success(let responseWrapper):
+                resume.previousResponseId = responseWrapper.id // Update previousResponseId
+                do {
+                    guard let responseData = responseWrapper.content.data(using: .utf8) else {
+                        throw NSError(domain: "ResumeReviewService", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data for contentsFit."])
+                    }
+                    let decodedResponse = try JSONDecoder().decode(ContentsFitResponse.self, from: responseData)
+                    onComplete(.success(decodedResponse))
+                } catch {
+                    onComplete(.failure(error))
+                }
+            case .failure(let error):
+                onComplete(.failure(error))
+            }
+        }
+    }
+
+    // MARK: - Direct OpenAI HTTP Request Helper (for image + structured output)
+    
+    /// Generic helper to send requests to OpenAI's /v1/responses endpoint.
+    /// Handles image data and structured JSON output.
+    private func sendDirectOpenAIRequest(
+        promptText: String,
+        base64Image: String?,
+        previousResponseId: String?,
+        schema: (name: String, jsonString: String)?, // Optional schema tuple
+        requestID: UUID, // To track if the request is still current
+        onProgress: ((String) -> Void)? = nil, // For non-fixOverflow streaming (optional)
+        onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
+    ) {
+        apiQueue.async { // Perform network request on a background queue
+            guard let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey"), apiKey != "none" else {
+                DispatchQueue.main.async {
+                    onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1001, userInfo: [NSLocalizedDescriptionKey: "OpenAI API key not set."])))
+                }
+                return
+            }
+
+            guard let url = URL(string: "https://api.openai.com/v1/responses") else {
+                DispatchQueue.main.async {
+                    onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "Invalid API URL."])))
+                }
+                return
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            var userInputContent: [[String: Any]] = [["type": "text", "text": promptText]]
+            if let img = base64Image {
+                userInputContent.append(["type": "image_url", "image_url": ["url": "data:image/png;base64,\(img)"]])
+            }
+
+            var requestBodyDict: [String: Any] = [
+                "model": OpenAIModelFetcher.getPreferredModelString(),
+                "input": [ // Changed from 'messages' to 'input' as per Responses API
+                    ["role": "system", "content": "You are an expert AI assistant."], // Generic system message
+                    ["role": "user", "content": userInputContent]
+                ],
+                "temperature": 0.5 // A reasonable default, adjust as needed
+            ]
+
+            if let prevId = previousResponseId, !prevId.isEmpty {
+                requestBodyDict["previous_response_id"] = prevId
+            }
+
+            if let schemaInfo = schema,
+               let schemaData = schemaInfo.jsonString.data(using: .utf8),
+               let schemaJson = try? JSONSerialization.jsonObject(with: schemaData, options: []) as? [String: Any] {
+                requestBodyDict["text"] = [
+                    "format": [
+                        "type": "json_schema",
+                        "name": schemaInfo.name,
+                        "schema": schemaJson,
+                        "strict": true
+                    ]
+                ]
+            }
+            
+            // Debug: Print the request body
+            if let jsonData = try? JSONSerialization.data(withJSONObject: requestBodyDict, options: .prettyPrinted),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("OpenAI Request Body for \(schema?.name ?? "General Review"):\n\(jsonString)")
+            }
+
+
+            guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBodyDict) else {
+                DispatchQueue.main.async {
+                    onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize request body."])))
+                }
+                return
+            }
+            request.httpBody = httpBody
+
+            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                // Ensure the callback is on the main thread
+                DispatchQueue.main.async {
+                    guard self.currentRequestID == requestID else { // Check if request is still current
+                        print("Request \(requestID) was cancelled or superseded.")
+                        return
+                    }
+
+                    if let error = error {
+                        onComplete(.failure(error))
+                        return
+                    }
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1003, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response."])))
+                        return
+                    }
+                    
+                    guard let responseData = data else {
+                        onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1006, userInfo: [NSLocalizedDescriptionKey: "No data in API response."])))
+                        return
+                    }
+                    
+                    // Debug: Print raw response
+                    if let responseString = String(data: responseData, encoding: .utf8) {
+                         print("OpenAI Raw Response for \(schema?.name ?? "General Review") (Status: \(httpResponse.statusCode)):\n\(responseString)")
+                    }
+
+
+                    if !(200...299).contains(httpResponse.statusCode) {
+                        var errorMessage = "API Error: \(httpResponse.statusCode)."
+                        if let errorData = data, let errorDetails = String(data: errorData, encoding: .utf8) {
+                            errorMessage += " Details: \(errorDetails)"
                         }
-
-                        onComplete(.failure(NSError(
-                            domain: "ResumeReviewService",
-                            code: httpResponse.statusCode,
-                            userInfo: [NSLocalizedDescriptionKey: errorMessage]
-                        )))
+                        onComplete(.failure(NSError(domain: "ResumeReviewService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
+                        return
                     }
-                    return
-                }
-
-                // Process the response data
-                if let data = data, let responseString = String(data: data, encoding: .utf8) {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self, self.currentRequestID == requestID else { return }
-
-                        // For streaming responses, we'd need to parse each chunk
-                        // This is a simplified version that assumes a non-streaming response
-                        if responseString.contains("content") {
-                            do {
-                                if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-                                   let choices = json["choices"] as? [[String: Any]],
-                                   let choice = choices.first,
-                                   let message = choice["message"] as? [String: Any],
-                                   let content = message["content"] as? String
-                                {
-                                    onProgress(content)
-                                }
-                            } catch {
-                                onProgress("Error parsing response: \(error.localizedDescription)")
-                            }
-                        }
-
-                        onComplete(.success("Review complete"))
-                    }
-                } else {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self, self.currentRequestID == requestID else { return }
-                        onComplete(.failure(NSError(
-                            domain: "ResumeReviewService",
-                            code: 1003,
-                            userInfo: [NSLocalizedDescriptionKey: "No response data"]
-                        )))
+                    
+                    do {
+                        let decodedWrapper = try JSONDecoder().decode(ResponsesAPIResponseWrapper.self, from: responseData)
+                        onComplete(.success(decodedWrapper.toResponsesAPIResponse()))
+                    } catch let decodingError {
+                        print("Error decoding OpenAI Response: \(decodingError)")
+                        onComplete(.failure(decodingError))
                     }
                 }
             }
-
-            // Start the task
             task.resume()
-
-        } catch {
-            onComplete(.failure(error))
         }
     }
+
 
     /// Cancels the current review request
     func cancelRequest() {
-        currentRequestID = nil
+        currentRequestID = nil // This will cause ongoing callbacks to be ignored
     }
 
     // MARK: - Helpers
-
-    /// Checks if the current model supports image inputs
-    /// - Returns: True if the model supports images
     private func checkIfModelSupportsImages() -> Bool {
         let model = OpenAIModelFetcher.getPreferredModelString().lowercased()
-
-        // A minimal whitelist of vision-capable models. Extend as new models are released.
-        let visionModelsSubstrings = [
-            "gpt-4o", // gpt-4o family (mini, large, etc.)
-            "gpt-4.1", // gpt-4.1 vision-capable variants
-            "gpt-image", // multimodal GPT Image 1
-            "o4", // o4 vision models
-            "cua", // computer-use-preview etc.
-        ]
-
+        let visionModelsSubstrings = ["gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "gpt-image", "o4", "cua"]
         return visionModelsSubstrings.contains { model.contains($0) }
     }
+    
+    // MARK: - Schemas as static strings
+    
+    // Schema for the "fixFits" LLM response (RevisionsContainer equivalent)
+    static let fixFitsSchemaString = """
+    {
+      "type": "object",
+      "properties": {
+        "revised_skills_and_expertise": {
+          "type": "array",
+          "description": "An array of objects, each representing a skill or expertise item with its original ID and revised content.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { 
+                "type": "string", 
+                "description": "The original ID of the TreeNode for the skill." 
+              },
+              "newValue": { 
+                "type": "string", 
+                "description": "The revised content for the skill/expertise item. If no change, this should be the same as originalValue." 
+              },
+              "originalValue": {
+                 "type": "string",
+                 "description": "The original content of the skill/expertise item (echoed back)."
+               },
+              "treePath": {
+                "type": "string",
+                "description": "The original treePath of the skill TreeNode (echoed back)."
+              },
+              "isTitleNode": {
+                "type": "boolean",
+                "description": "Indicates if this skill entry is a title/heading (echoed back)."
+              }
+            },
+            "required": ["id", "newValue", "originalValue", "treePath", "isTitleNode"]
+          }
+        }
+      },
+      "required": ["revised_skills_and_expertise"]
+    }
+    """
+
+    // Schema for the "contentsFit" LLM response
+    static let contentsFitSchemaString = """
+    {
+      "type": "object",
+      "properties": {
+        "contentsFit": { 
+          "type": "boolean",
+          "description": "True if the content fits within its designated box without overflowing or overlapping other elements, false otherwise."
+        }
+      },
+      "required": ["contentsFit"]
+    }
+    """
 }
+
+// Extension to TreeNode to build its path (you might place this in TreeNodeModel.swift)
+// extension TreeNode { // This is now directly in TreeNodeModel.swift
+//    func buildTreePath() -> String {
+//        var pathComponents: [String] = []
+//        var currentNode: TreeNode? = self
+//        while let node = currentNode {
+//            let nameToUse = node.name.isEmpty ? (node.value.isEmpty ? "Unnamed Node" : String(node.value.prefix(20))) : node.name
+//            pathComponents.insert(nameToUse, at: 0)
+//            currentNode = node.parent
+//        }
+//        return pathComponents.joined(separator: " > ")
+//    }
+//}

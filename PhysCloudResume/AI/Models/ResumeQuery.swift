@@ -152,7 +152,12 @@ import Foundation
 
     // MARK: - Prompt Building
 
-    func revisionPrompt(_ fb: [FeedbackNode]) -> String {
+    @MainActor
+    func revisionPrompt(_ fb: [FeedbackNode]) async -> String {
+        // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
+        // This is important so the LLM has the latest version after user's accepted changes.
+        try? await res.ensureFreshRenderedText()
+
         let json = fbToJson(fb)
         let prompt = """
         \(applicant.name) has reviewed your proposed revision and has provided feedback. Please revise and rewrite as specified for each FeedbackNode below. Provide your updated revisions as an array of RevNodes (schema attached). The RevNodeArray should only include RevNodes for which your action is required (newValue != oldValue). No response is required for any FeedbackNode for which no action is needed.
@@ -160,14 +165,21 @@ import Foundation
         IMPORTANT:
         • Do **not** change the "id" or "treePath" fields — return them exactly as received so the application can locate the correct node in the résumé.
 
-
         Feedback Nodes:
         \(json ?? "none provided")
+
+        Here is the current version of the resume with all accepted changes applied:
+        \(resumeText)
         """
         return prompt
     }
 
-    var wholeResumeQueryString: String {
+    @MainActor
+    func wholeResumeQueryString() async -> String {
+        // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
+        // This assumes res.ensureFreshRenderedText() will update res.model.renderedResumeText.
+        try? await res.ensureFreshRenderedText()
+
         // Generate language that controls how strongly we emphasize achievements
 //        switch res.attentionGrab {
 //        case 0:
