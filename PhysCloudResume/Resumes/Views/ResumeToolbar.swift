@@ -22,7 +22,7 @@ func resumeToolbarContent(buttons: Binding<ResumeButtons>, selectedResume: Bindi
         Button {
             buttons.wrappedValue.showResumeReviewSheet.toggle()
         } label: {
-            Label("Review Resume", systemImage: "custom.character.magnify")
+            Label("Review Resume", systemImage: "character.magnify")
         }
         .help("AI Resume Review")
         .disabled(selectedResume.wrappedValue == nil)
