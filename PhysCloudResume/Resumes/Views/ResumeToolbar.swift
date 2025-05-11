@@ -17,6 +17,23 @@ func resumeToolbarContent(buttons: Binding<ResumeButtons>, selectedResume: Bindi
         }
     }
 
+    // AI resume review feature
+    ToolbarItem(placement: .automatic) {
+        Button {
+            buttons.wrappedValue.showResumeReviewSheet.toggle()
+        } label: {
+            Label("Review Resume", systemImage: "custom.character.magnify")
+        }
+        .help("AI Resume Review")
+        .disabled(selectedResume.wrappedValue == nil)
+        .sheet(isPresented: Binding(
+            get: { buttons.wrappedValue.showResumeReviewSheet },
+            set: { buttons.wrappedValue.showResumeReviewSheet = $0 }
+        )) {
+            ResumeReviewSheet(selectedResume: selectedResume)
+        }
+    }
+
     // Resume inspector toggle
     ToolbarItem(placement: .primaryAction) {
         Button(action: {

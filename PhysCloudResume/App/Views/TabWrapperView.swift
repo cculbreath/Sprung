@@ -20,7 +20,7 @@ struct TabWrapperView: View {
     @State private var refPopup: Bool = false
     @State private var coverLetterButtons: CoverLetterButtons = .init(showInspector: true, runRequested: false)
     @State private var resumeButtons: ResumeButtons = .init(
-        showResumeInspector: false, aiRunning: false
+        showResumeInspector: false, aiRunning: false, showResumeReviewSheet: false
     )
     @State private var hasVisitedResumeTab: Bool = false
     @Binding var tabRefresh: Bool
@@ -150,4 +150,5 @@ struct CoverLetterButtons {
 struct ResumeButtons {
     var showResumeInspector: Bool = false
     var aiRunning: Bool = false
+    var showResumeReviewSheet: Bool = false
 }
