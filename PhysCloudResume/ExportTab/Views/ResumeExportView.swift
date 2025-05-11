@@ -12,10 +12,6 @@ struct ResumeExportView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
 
-    // Local state for picking a resume or cover letter
-    @State private var selectedResume: Resume?
-    @State private var selectedCoverLetter: CoverLetter?
-
     // Local state for controlling the status picker
     @State private var selectedStatus: Statuses = .new
 
@@ -35,70 +31,121 @@ struct ResumeExportView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // MARK: - Resume Section
 
-                Text("Resume")
-                    .font(.headline)
-                    .padding(.top)
+                // Add a GroupBox to show the current resume and cover letter
+                GroupBox(label: Text("Export Documents").fontWeight(.medium)) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Job information
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Position:")
+                                    .fontWeight(.semibold)
+                                    .frame(width: 80, alignment: .leading)
+                                Text(jobApp.jobPosition)
+                                    .foregroundColor(.secondary)
+                            }
 
-                Picker("Select a Resume", selection: $selectedResume) {
-                    Text("None").tag(nil as Resume?)
-                    ForEach(
-                        jobApp.resumes.sorted(by: { $0.createdDateString > $1.createdDateString }),
-                        id: \.self
-                    ) { resume in
-                        Text("Created at \(resume.createdDateString)")
-                            .tag(resume as Resume?)
+                            HStack {
+                                Text("Company:")
+                                    .fontWeight(.semibold)
+                                    .frame(width: 80, alignment: .leading)
+                                Text(jobApp.companyName)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Divider()
+
+                        // Documents being exported
+                        HStack(alignment: .top, spacing: 16) {
+                            // Resume information
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Resume:")
+                                    .fontWeight(.semibold)
+                                if let resume = jobApp.selectedRes {
+                                    Text("Created at \(resume.createdDateString)")
+                                        .foregroundColor(.secondary)
+                                        .font(.callout)
+                                } else {
+                                    Text("None selected")
+                                        .foregroundColor(.secondary)
+                                        .font(.callout)
+                                        .italic()
+                                }
+                            }
+
+                            Spacer()
+
+                            // Cover Letter information if available
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Cover Letter:")
+                                    .fontWeight(.semibold)
+                                if let coverLetter = jobApp.selectedCover {
+                                    Text(coverLetter.sequencedName)
+                                        .foregroundColor(.secondary)
+                                        .font(.callout)
+                                } else {
+                                    Text("None selected")
+                                        .foregroundColor(.secondary)
+                                        .font(.callout)
+                                        .italic()
+                                }
+                            }
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
-                .pickerStyle(.menu)
 
-                HStack(spacing: 15) {
-                    Button("Export PDF") {
-                        exportResumePDF()
+                // Resume export buttons
+                GroupBox(label: Text("Resume Export").fontWeight(.medium)) {
+                    HStack(spacing: 15) {
+                        Button("Export PDF") {
+                            exportResumePDF()
+                        }
+                        .disabled(jobApp.selectedRes == nil)
+
+                        Button("Export Text") {
+                            exportResumeText()
+                        }
+                        .disabled(jobApp.selectedRes == nil)
+
+                        Button("Export JSON") {
+                            exportResumeJSON()
+                        }
+                        .disabled(jobApp.selectedRes == nil)
                     }
-                    Button("Export Text") {
-                        exportResumeText()
-                    }
-                    Button("Export JSON") {
-                        exportResumeJSON()
-                    }
+                    .padding(.vertical, 4)
                 }
 
-                Divider()
+                // Cover letter export buttons
+                GroupBox(label: Text("Cover Letter Export").fontWeight(.medium)) {
+                    HStack(spacing: 15) {
+                        Button("Export PDF") {
+                            exportCoverLetterPDF()
+                        }
+                        .disabled(jobApp.selectedCover == nil)
 
-                // MARK: - Cover Letter Section
+                        Button("Export Text") {
+                            exportCoverLetterText()
+                        }
+                        .disabled(jobApp.selectedCover == nil)
 
-                Text("Cover Letter")
-                    .font(.headline)
-
-                CoverLetterPicker(
-                    coverLetters: jobApp.coverLetters.sorted(by: { $0.moddedDate > $1.moddedDate }),
-                    selection: $selectedCoverLetter,
-                    includeNoneOption: true,
-                    noneLabel: "None",
-                    label: "Select a Cover Letter"
-                )
-                .pickerStyle(.menu)
-
-                HStack(spacing: 15) {
-                    Button("Export PDF") {
-                        exportCoverLetterPDF()
+                        Button("Export All Cover Letters") {
+                            exportAllCoverLetters()
+                        }
+                        .disabled(jobApp.coverLetters.isEmpty)
                     }
-
-                    Button("Export Text") {
-                        exportCoverLetterText()
-                    }
-
-                    Button("Export All Cover Letters") {
-                        exportAllCoverLetters()
-                    }
+                    .padding(.vertical, 4)
                 }
 
-                // Export Application Packet (resume + cover letter combined)
-                Button("Export Packet PDF") {
-                    exportApplicationPacket()
+                // Application packet export button
+                GroupBox(label: Text("Application Packet").fontWeight(.medium)) {
+                    Button("Export Complete Application (Resume + Cover Letter)") {
+                        exportApplicationPacket()
+                    }
+                    .disabled(jobApp.selectedRes == nil || jobApp.selectedCover == nil)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 4)
                 }
-                .disabled(selectedResume == nil || selectedCoverLetter == nil)
-                .padding(.top, 5)
 
                 Divider()
 
@@ -136,9 +183,6 @@ struct ResumeExportView: View {
                 // Sync local state from the store's selectedApp
                 selectedStatus = jobApp.status
                 notes = jobApp.notes
-                // Optionally, restore selectedResume/selectedCoverLetter if desired
-                // selectedResume = ...
-                // selectedCoverLetter = ...
             }
             .overlay(
                 // Toast notification overlay
@@ -263,7 +307,11 @@ struct ResumeExportView: View {
     // MARK: - Export Methods
 
     private func exportResumePDF() {
-        guard let resume = selectedResume, let pdfData = resume.pdfData else {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes,
+              let pdfData = resume.pdfData
+        else {
+            showToastNotification("No resume selected. Please select a resume first.")
             return
         }
 
@@ -287,7 +335,9 @@ struct ResumeExportView: View {
     }
 
     private func exportResumeText() {
-        guard let resume = selectedResume else {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes
+        else {
             showToastNotification("No resume selected. Please select a resume first.")
             return
         }
@@ -311,7 +361,9 @@ struct ResumeExportView: View {
     }
 
     private func exportResumeJSON() {
-        guard let resume = selectedResume else {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes
+        else {
             showToastNotification("No resume selected. Please select a resume first.")
             return
         }
@@ -336,7 +388,9 @@ struct ResumeExportView: View {
     }
 
     private func exportCoverLetterText() {
-        guard let coverLetter = selectedCoverLetter else {
+        guard let jobApp = jobAppStore.selectedApp,
+              let coverLetter = jobApp.selectedCover
+        else {
             showToastNotification("No cover letter selected. Please select a cover letter first.")
             return
         }
@@ -360,7 +414,9 @@ struct ResumeExportView: View {
     }
 
     private func exportCoverLetterPDF() {
-        guard let coverLetter = selectedCoverLetter else {
+        guard let jobApp = jobAppStore.selectedApp,
+              let coverLetter = jobApp.selectedCover
+        else {
             showToastNotification("No cover letter selected. Please select a cover letter first.")
             return
         }
@@ -386,12 +442,15 @@ struct ResumeExportView: View {
     }
 
     private func exportApplicationPacket() {
-        guard let resume = selectedResume, let resumePdfData = resume.pdfData else {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes,
+              let resumePdfData = resume.pdfData
+        else {
             showToastNotification("No resume selected. Please select a resume first.")
             return
         }
 
-        guard let coverLetter = selectedCoverLetter else {
+        guard let coverLetter = jobApp.selectedCover else {
             showToastNotification("No cover letter selected. Please select a cover letter first.")
             return
         }

@@ -33,6 +33,9 @@ final class CoverLetterStore: SwiftDataStore {
     init(context: ModelContext, refStore: CoverRefStore) {
         modelContext = context
         coverRefStore = refStore
+
+        // Perform one-time migration for existing cover letters
+        performMigrationForGeneratedFlag()
     }
 
     @discardableResult
@@ -76,6 +79,8 @@ final class CoverLetterStore: SwiftDataStore {
         )
         newLetter.includeResumeRefs = letter.includeResumeRefs
         newLetter.content = letter.content
+        // Set generated to false initially, it will be updated to true
+        // by processResults after AI generates content
         newLetter.generated = false
         newLetter.encodedMessageHistory = letter.encodedMessageHistory
         newLetter.currentMode = letter.currentMode
@@ -111,6 +116,48 @@ final class CoverLetterStore: SwiftDataStore {
     func exportAllCoverLetters(for jobApp: JobApp) -> [Data] {
         return jobApp.coverLetters.filter { $0.generated }.map { letter in
             exportService.exportPDF(from: letter, applicant: Applicant())
+        }
+    }
+
+    // MARK: - Migration
+
+    /// One-time migration to set generated = true for all existing cover letters with content
+    @MainActor
+    private func performMigrationForGeneratedFlag() {
+        // Use AppStorage to track migration status
+        let migrationKey = "CoverLetterGeneratedFlagMigrationCompleted"
+        let defaults = UserDefaults.standard
+
+        // Only run migration once
+        if defaults.bool(forKey: migrationKey) {
+            return
+        }
+
+        do {
+            // Fetch all cover letters
+            let descriptor = FetchDescriptor<CoverLetter>()
+            let allCoverLetters = try modelContext.fetch(descriptor)
+
+            var updatedCount = 0
+
+            // Update only those with content but not marked as generated
+            for letter in allCoverLetters {
+                if !letter.content.isEmpty && !letter.generated {
+                    letter.generated = true
+                    updatedCount += 1
+                }
+            }
+
+            if updatedCount > 0 {
+                print("Migration: Set generated=true for \(updatedCount) cover letters with content")
+                saveContext()
+            }
+
+            // Mark migration as completed
+            defaults.set(true, forKey: migrationKey)
+
+        } catch {
+            print("Failed to perform cover letter migration: \(error.localizedDescription)")
         }
     }
 }

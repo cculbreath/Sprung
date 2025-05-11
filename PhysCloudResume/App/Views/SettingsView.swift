@@ -5,10 +5,9 @@ import SwiftUI
 struct SettingsView: View {
     // State variable needed by APIKeysSettingsView callback
     @State private var forceModelFetch = false
-    
+
     // AppStorage for the new Fix Overflow setting
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
-
 
     var body: some View {
         // Use a ScrollView to handle potentially long content
@@ -34,10 +33,9 @@ struct SettingsView: View {
 
                 // Preferred API Selection Section
                 PreferredAPISettingsView()
-                
+
                 // Fix Overflow Iterations Setting
                 FixOverflowSettingsView(fixOverflowMaxIterations: $fixOverflowMaxIterations)
-
             }
             .padding() // Add padding around the entire content VStack
         }
@@ -64,13 +62,13 @@ struct FixOverflowSettingsView: View {
             HStack {
                 Text("Max Iterations for 'Fix Overflow':")
                 Spacer()
-                Stepper(value: $fixOverflowMaxIterations, in: 1...10) {
+                Stepper(value: $fixOverflowMaxIterations, in: 1 ... 10) {
                     Text("\(fixOverflowMaxIterations)")
                 }
                 .frame(width: 150) // Adjust width as needed
             }
             .padding(.horizontal, 10)
-            
+
             Text("Controls how many times the AI will attempt to fix overflowing text in the 'Skills & Expertise' section.")
                 .font(.caption)
                 .foregroundColor(.secondary)

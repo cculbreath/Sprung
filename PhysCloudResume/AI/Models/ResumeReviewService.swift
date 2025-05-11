@@ -13,8 +13,8 @@ struct RevisedSkillNode: Codable, Equatable {
     var id: String
     var newValue: String
     var originalValue: String // Echoed back by LLM for context
-    var treePath: String      // Echoed back by LLM
-    var isTitleNode: Bool     // Echoed back by LLM
+    var treePath: String // Echoed back by LLM
+    var isTitleNode: Bool // Echoed back by LLM
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -39,17 +39,15 @@ struct ContentsFitResponse: Codable, Equatable {
     var contentsFit: Bool
 
     enum CodingKeys: String, CodingKey {
-        case contentsFit = "contentsFit"
+        case contentsFit
     }
 }
-
 
 /// Service for handling resume review operations with LLM
 class ResumeReviewService: @unchecked Sendable {
     private var openAIClient: OpenAIClientProtocol? // Retained for other review types
     private var currentRequestID: UUID?
     private let apiQueue = DispatchQueue(label: "com.physcloudresume.apirequest", qos: .userInitiated)
-
 
     @MainActor
     func initialize() {
@@ -93,13 +91,14 @@ class ResumeReviewService: @unchecked Sendable {
     }
 
     // MARK: - Prompt Building (Existing, with minor adjustments for clarity)
+
     func buildPrompt(
         reviewType: ResumeReviewType,
         resume: Resume,
         includeImage: Bool, // This flag now informs the prompt text
         customOptions: CustomReviewOptions? = nil
     ) -> String {
-        guard let model = resume.model else {
+        if resume.model != nil {
             return "Error: No resume model available for review."
         }
         guard let jobApp = resume.jobApp else {
@@ -111,15 +110,15 @@ class ResumeReviewService: @unchecked Sendable {
         if reviewType == .custom, let options = customOptions {
             prompt = buildCustomPrompt(options: options)
         }
-        
+
         prompt = prompt.replacingOccurrences(of: "{jobPosition}", with: jobApp.jobPosition)
         prompt = prompt.replacingOccurrences(of: "{companyName}", with: jobApp.companyName)
         prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
-        prompt = prompt.replacingOccurrences(of: "{resumeText}", with: model.renderedResumeText)
+        prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resume.textRes)
 
         let backgroundDocs = resume.enabledSources.map { "\($0.name):\n\($0.content)\n\n" }.joined()
         prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: backgroundDocs)
-        
+
         let imagePlaceholder = includeImage ? "I've also attached an image for visual context." : ""
         prompt = prompt.replacingOccurrences(of: "{includeImage}", with: imagePlaceholder)
 
@@ -148,24 +147,36 @@ class ResumeReviewService: @unchecked Sendable {
         sections.append(options.customPrompt)
         return sections.joined(separator: "\n\n")
     }
-    
+
     // MARK: - Helper to Extract Skills and Expertise Nodes
-    
+
     /// Extracts "Skills and Expertise" nodes into a JSON string format for the LLM.
     /// - Parameter resume: The resume to extract skills from.
     /// - Returns: A JSON string representing the skills and expertise, or nil if an error occurs.
     func extractSkillsForLLM(resume: Resume) -> String? {
-        guard let rootNode = resume.rootNode,
-              let skillsSectionNode = rootNode.children?.first(where: { $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise" })
-        else {
-            // Try to find it by a common key if the name isn't exact
-            guard let skillsSectionNodeFromKey = rootNode.children?.first(where: { $0.name == "skills-and-expertise"}) else {
-                 print("Error: 'Skills and Expertise' section node not found in the resume.")
-                 return nil
-            }
-            return extractTreeNodesForLLM(parentNode: skillsSectionNodeFromKey)
+        // First, ensure the resume has a rootNode.
+        guard let actualRootNode = resume.rootNode else {
+            print("Error: Resume has no rootNode.")
+            return nil
         }
-        return extractTreeNodesForLLM(parentNode: skillsSectionNode)
+
+        // Attempt to find the "Skills and Expertise" section node.
+        var skillsSectionNode: TreeNode? = actualRootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        })
+
+        // If not found with primary names, try the fallback key.
+        if skillsSectionNode == nil {
+            skillsSectionNode = actualRootNode.children?.first(where: { $0.name == "skills-and-expertise" })
+        }
+
+        // If still not found after both attempts, print an error and return nil.
+        guard let finalSkillsSectionNode = skillsSectionNode else {
+            print("Error: 'Skills and Expertise' section node not found in the resume under rootNode.")
+            return nil
+        }
+
+        return extractTreeNodesForLLM(parentNode: finalSkillsSectionNode)
     }
 
     private func extractTreeNodesForLLM(parentNode: TreeNode) -> String? {
@@ -181,7 +192,7 @@ class ResumeReviewService: @unchecked Sendable {
                     nodesToProcess.append(childNode)
                 }
                 childNode.children?.forEach { subChildNode in // Add its children (skill details)
-                     if subChildNode.includeInEditor || !subChildNode.value.isEmpty {
+                    if subChildNode.includeInEditor || !subChildNode.value.isEmpty {
                         nodesToProcess.append(subChildNode)
                     }
                 }
@@ -192,30 +203,29 @@ class ResumeReviewService: @unchecked Sendable {
             }
         }
 
-
         let exportableNodes: [[String: Any]] = nodesToProcess.compactMap { node in
             let textContent: String
-            let isTitle: Bool = node.isTitleNode 
-            
-            if isTitle { 
-                guard !node.name.isEmpty else { return nil } 
+            let isTitle: Bool = node.isTitleNode
+
+            if isTitle {
+                guard !node.name.isEmpty else { return nil }
                 textContent = node.name
-            } else { 
-                guard !node.value.isEmpty || !node.name.isEmpty else { return nil } 
-                textContent = !node.value.isEmpty ? node.value : node.name 
+            } else {
+                guard !node.value.isEmpty || !node.name.isEmpty else { return nil }
+                textContent = !node.value.isEmpty ? node.value : node.name
             }
 
             return [
                 "id": node.id,
-                "originalValue": textContent, 
+                "originalValue": textContent,
                 "isTitleNode": isTitle,
-                "treePath": node.buildTreePath() 
+                "treePath": node.buildTreePath(),
             ]
         }
 
         guard !exportableNodes.isEmpty else {
             print("Warning: No exportable skill/expertise nodes found under the identified section.")
-            return "[]" 
+            return "[]"
         }
 
         do {
@@ -227,8 +237,8 @@ class ResumeReviewService: @unchecked Sendable {
         }
     }
 
-
     // MARK: - LLM Request (Existing, for non-fixOverflow types)
+
     @MainActor
     func sendReviewRequest(
         reviewType: ResumeReviewType,
@@ -244,10 +254,11 @@ class ResumeReviewService: @unchecked Sendable {
         }
 
         let supportsImages = checkIfModelSupportsImages()
-        var base64Image: String? = nil
+        var base64Image: String?
         if supportsImages,
            (reviewType != .custom && reviewType != .fixOverflow) || (customOptions?.includeResumeImage ?? false), // fixOverflow handles its own image
-           let pdfData = resume.pdfData {
+           let pdfData = resume.pdfData
+        {
             base64Image = convertPDFToBase64Image(pdfData: pdfData)
         }
         let includeImageInPromptText = base64Image != nil
@@ -260,7 +271,7 @@ class ResumeReviewService: @unchecked Sendable {
         )
 
         let requestID = UUID(); currentRequestID = requestID
-        
+
         if includeImageInPromptText, let img = base64Image { // Image request via direct HTTP
             sendDirectOpenAIRequest(
                 promptText: promptText,
@@ -270,17 +281,17 @@ class ResumeReviewService: @unchecked Sendable {
                 requestID: requestID,
                 onProgress: onProgress,
                 onComplete: { result in
-                    if case .success(let responseWrapper) = result {
+                    if case let .success(responseWrapper) = result {
                         resume.previousResponseId = responseWrapper.id // Store new response ID
                         onComplete(.success(responseWrapper.content))
-                    } else if case .failure(let error) = result {
+                    } else if case let .failure(error) = result {
                         onComplete(.failure(error))
                     }
                 }
             )
         } else { // Text-only request, can use existing client methods if they support Responses API or fallback
             Task {
-                 do {
+                do {
                     let response = try await client.sendResponseRequestAsync(
                         message: promptText, // Assuming client handles system/user message structuring
                         model: OpenAIModelFetcher.getPreferredModelString(),
@@ -318,7 +329,7 @@ class ResumeReviewService: @unchecked Sendable {
 
         Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter. Each node in your response must include the original 'id', 'originalValue', 'isTitleNode', and 'treePath' fields exactly as they were provided in the input. Provide your suggested change in the 'newValue' field. Set 'valueChanged' to true if you made a change, false otherwise.
         """
-        
+
         let schemaName = "fix_skills_overflow_schema"
         let schema = ResumeReviewService.fixFitsSchemaString // Use the static schema string
 
@@ -333,7 +344,7 @@ class ResumeReviewService: @unchecked Sendable {
         ) { result in
             guard self.currentRequestID == requestID else { return } // Check if request is still current
             switch result {
-            case .success(let responseWrapper):
+            case let .success(responseWrapper):
                 resume.previousResponseId = responseWrapper.id // Update previousResponseId
                 do {
                     guard let responseData = responseWrapper.content.data(using: .utf8) else {
@@ -344,7 +355,7 @@ class ResumeReviewService: @unchecked Sendable {
                 } catch {
                     onComplete(.failure(error))
                 }
-            case .failure(let error):
+            case let .failure(error):
                 onComplete(.failure(error))
             }
         }
@@ -358,11 +369,11 @@ class ResumeReviewService: @unchecked Sendable {
         onComplete: @escaping (Result<ContentsFitResponse, Error>) -> Void
     ) {
         let prompt = """
-        You are an expert document layout analyzer. Examine the attached resume image, specifically the 'Skills and Experience' box. Does the content within this box fit neatly without overflowing its boundaries or overlapping with any content below it? Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter.
+        You are an expert document layout analyzer. Examine the attached resume image, specifically the 'Skills and Experience' box. Does the content within this box fit neatly without overflowing its boundaries or overlapping with any content below it? When there is no overflow, there should be a small, blank, text free region between the lower border of the Skills and Experience box and the top border of the Education box. Be sure that these boxes are not overlapping. Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter.
         """
         let schemaName = "check_content_fit_schema"
         let schema = ResumeReviewService.contentsFitSchemaString // Use the static schema string
-        
+
         let requestID = UUID(); currentRequestID = requestID
 
         sendDirectOpenAIRequest(
@@ -374,7 +385,7 @@ class ResumeReviewService: @unchecked Sendable {
         ) { result in
             guard self.currentRequestID == requestID else { return } // Check if request is still current
             switch result {
-            case .success(let responseWrapper):
+            case let .success(responseWrapper):
                 resume.previousResponseId = responseWrapper.id // Update previousResponseId
                 do {
                     guard let responseData = responseWrapper.content.data(using: .utf8) else {
@@ -385,14 +396,14 @@ class ResumeReviewService: @unchecked Sendable {
                 } catch {
                     onComplete(.failure(error))
                 }
-            case .failure(let error):
+            case let .failure(error):
                 onComplete(.failure(error))
             }
         }
     }
 
     // MARK: - Direct OpenAI HTTP Request Helper (for image + structured output)
-    
+
     /// Generic helper to send requests to OpenAI's /v1/responses endpoint.
     /// Handles image data and structured JSON output.
     private func sendDirectOpenAIRequest(
@@ -401,7 +412,7 @@ class ResumeReviewService: @unchecked Sendable {
         previousResponseId: String?,
         schema: (name: String, jsonString: String)?, // Optional schema tuple
         requestID: UUID, // To track if the request is still current
-        onProgress: ((String) -> Void)? = nil, // For non-fixOverflow streaming (optional)
+        onProgress _: ((String) -> Void)? = nil, // For non-fixOverflow streaming (optional)
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     ) {
         apiQueue.async { // Perform network request on a background queue
@@ -424,18 +435,24 @@ class ResumeReviewService: @unchecked Sendable {
             request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
-            var userInputContent: [[String: Any]] = [["type": "text", "text": promptText]]
+            // Build the content array correctly
+            var userInputContent: [[String: Any]] = [["type": "input_text", "text": promptText]]
             if let img = base64Image {
-                userInputContent.append(["type": "image_url", "image_url": ["url": "data:image/png;base64,\(img)"]])
+                // Use correct structure for image data in responses API
+                userInputContent.append([
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,\(img)",
+                    "detail": "high", // Optional: consider making this configurable
+                ])
             }
 
             var requestBodyDict: [String: Any] = [
                 "model": OpenAIModelFetcher.getPreferredModelString(),
-                "input": [ // Changed from 'messages' to 'input' as per Responses API
-                    ["role": "system", "content": "You are an expert AI assistant."], // Generic system message
-                    ["role": "user", "content": userInputContent]
+                "input": [
+                    ["role": "system", "content": "You are an expert AI assistant."],
+                    ["role": "user", "content": userInputContent],
                 ],
-                "temperature": 0.5 // A reasonable default, adjust as needed
+                "temperature": 0.5,
             ]
 
             if let prevId = previousResponseId, !prevId.isEmpty {
@@ -444,23 +461,45 @@ class ResumeReviewService: @unchecked Sendable {
 
             if let schemaInfo = schema,
                let schemaData = schemaInfo.jsonString.data(using: .utf8),
-               let schemaJson = try? JSONSerialization.jsonObject(with: schemaData, options: []) as? [String: Any] {
+               let schemaJson = try? JSONSerialization.jsonObject(with: schemaData, options: []) as? [String: Any]
+            {
                 requestBodyDict["text"] = [
                     "format": [
                         "type": "json_schema",
                         "name": schemaInfo.name,
                         "schema": schemaJson,
-                        "strict": true
-                    ]
+                        "strict": true,
+                    ],
                 ]
             }
-            
-            // Debug: Print the request body
-            if let jsonData = try? JSONSerialization.data(withJSONObject: requestBodyDict, options: .prettyPrinted),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                print("OpenAI Request Body for \(schema?.name ?? "General Review"):\n\(jsonString)")
+
+            // Debug: Print the request body (with image data omitted or truncated)
+            var sanitizedRequestBodyDict = requestBodyDict
+            if let inputMessages = sanitizedRequestBodyDict["input"] as? [[String: Any]] {
+                var sanitizedInputMessages = inputMessages
+                for (i, message) in inputMessages.enumerated() {
+                    if let contentArray = message["content"] as? [[String: Any]] {
+                        var sanitizedContentArray = contentArray
+                        for (j, contentItem) in contentArray.enumerated() {
+                            if contentItem["type"] as? String == "input_image" {
+                                var mutableContentItem = contentItem
+                                mutableContentItem["image_url"] = "<base64_image_data_omitted>"
+                                sanitizedContentArray[j] = mutableContentItem
+                            }
+                        }
+                        var mutableMessage = message
+                        mutableMessage["content"] = sanitizedContentArray
+                        sanitizedInputMessages[i] = mutableMessage
+                    }
+                }
+                sanitizedRequestBodyDict["input"] = sanitizedInputMessages
             }
 
+            if let jsonData = try? JSONSerialization.data(withJSONObject: sanitizedRequestBodyDict, options: .prettyPrinted),
+               let jsonString = String(data: jsonData, encoding: .utf8)
+            {
+                print("OpenAI Request Body for \(schema?.name ?? "General Review") (Image Omitted):\n\(jsonString)")
+            }
 
             guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBodyDict) else {
                 DispatchQueue.main.async {
@@ -470,10 +509,11 @@ class ResumeReviewService: @unchecked Sendable {
             }
             request.httpBody = httpBody
 
+            // Rest of the function remains the same...
             let task = URLSession.shared.dataTask(with: request) { data, response, error in
                 // Ensure the callback is on the main thread
                 DispatchQueue.main.async {
-                    guard self.currentRequestID == requestID else { // Check if request is still current
+                    guard self.currentRequestID == requestID else {
                         print("Request \(requestID) was cancelled or superseded.")
                         return
                     }
@@ -486,19 +526,17 @@ class ResumeReviewService: @unchecked Sendable {
                         onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1003, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response."])))
                         return
                     }
-                    
+
                     guard let responseData = data else {
                         onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1006, userInfo: [NSLocalizedDescriptionKey: "No data in API response."])))
                         return
                     }
-                    
-                    // Debug: Print raw response
+
                     if let responseString = String(data: responseData, encoding: .utf8) {
-                         print("OpenAI Raw Response for \(schema?.name ?? "General Review") (Status: \(httpResponse.statusCode)):\n\(responseString)")
+                        print("OpenAI Raw Response for \(schema?.name ?? "General Review") (Status: \(httpResponse.statusCode)):\n\(responseString)")
                     }
 
-
-                    if !(200...299).contains(httpResponse.statusCode) {
+                    if !(200 ... 299).contains(httpResponse.statusCode) {
                         var errorMessage = "API Error: \(httpResponse.statusCode)."
                         if let errorData = data, let errorDetails = String(data: errorData, encoding: .utf8) {
                             errorMessage += " Details: \(errorDetails)"
@@ -506,7 +544,7 @@ class ResumeReviewService: @unchecked Sendable {
                         onComplete(.failure(NSError(domain: "ResumeReviewService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
                         return
                     }
-                    
+
                     do {
                         let decodedWrapper = try JSONDecoder().decode(ResponsesAPIResponseWrapper.self, from: responseData)
                         onComplete(.success(decodedWrapper.toResponsesAPIResponse()))
@@ -520,22 +558,21 @@ class ResumeReviewService: @unchecked Sendable {
         }
     }
 
-
     /// Cancels the current review request
     func cancelRequest() {
         currentRequestID = nil // This will cause ongoing callbacks to be ignored
     }
 
     // MARK: - Helpers
+
     private func checkIfModelSupportsImages() -> Bool {
         let model = OpenAIModelFetcher.getPreferredModelString().lowercased()
         let visionModelsSubstrings = ["gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "gpt-image", "o4", "cua"]
         return visionModelsSubstrings.contains { model.contains($0) }
     }
-    
+
     // MARK: - Schemas as static strings
-    
-    // Schema for the "fixFits" LLM response (RevisionsContainer equivalent)
+
     static let fixFitsSchemaString = """
     {
       "type": "object",
@@ -567,15 +604,16 @@ class ResumeReviewService: @unchecked Sendable {
                 "description": "Indicates if this skill entry is a title/heading (echoed back)."
               }
             },
-            "required": ["id", "newValue", "originalValue", "treePath", "isTitleNode"]
+            "required": ["id", "newValue", "originalValue", "treePath", "isTitleNode"],
+            "additionalProperties": false
           }
         }
       },
-      "required": ["revised_skills_and_expertise"]
+      "required": ["revised_skills_and_expertise"],
+      "additionalProperties": false
     }
     """
 
-    // Schema for the "contentsFit" LLM response
     static let contentsFitSchemaString = """
     {
       "type": "object",
@@ -585,21 +623,8 @@ class ResumeReviewService: @unchecked Sendable {
           "description": "True if the content fits within its designated box without overflowing or overlapping other elements, false otherwise."
         }
       },
-      "required": ["contentsFit"]
+      "required": ["contentsFit"],
+      "additionalProperties": false
     }
     """
 }
-
-// Extension to TreeNode to build its path (you might place this in TreeNodeModel.swift)
-// extension TreeNode { // This is now directly in TreeNodeModel.swift
-//    func buildTreePath() -> String {
-//        var pathComponents: [String] = []
-//        var currentNode: TreeNode? = self
-//        while let node = currentNode {
-//            let nameToUse = node.name.isEmpty ? (node.value.isEmpty ? "Unnamed Node" : String(node.value.prefix(20))) : node.name
-//            pathComponents.insert(nameToUse, at: 0)
-//            currentNode = node.parent
-//        }
-//        return pathComponents.joined(separator: " > ")
-//    }
-//}

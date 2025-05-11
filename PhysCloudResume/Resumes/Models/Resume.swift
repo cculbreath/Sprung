@@ -173,11 +173,11 @@ class Resume: Identifiable, Hashable {
     func ensureFreshRenderedText() async throws {
         // Cancel any ongoing debounced export as we want a direct, awaitable one.
         exportWorkItem?.cancel()
-        
+
         isExporting = true
         defer { isExporting = false }
 
-        guard let jsonFile = FileHandler.saveJSONToFile(jsonString: self.jsonTxt) else {
+        guard let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonTxt) else {
             throw NSError(domain: "ResumeRender", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to save JSON to file for rendering."])
         }
 
@@ -187,6 +187,7 @@ class Resume: Identifiable, Hashable {
         do {
             try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
             print("ensureFreshRenderedText: Successfully exported and updated resume data.")
+            print(textRes)
         } catch {
             print("ensureFreshRenderedText: Failed to export resume - \(error.localizedDescription)")
             throw error // Re-throw the error to be caught by the caller
@@ -194,6 +195,7 @@ class Resume: Identifiable, Hashable {
     }
 
     // MARK: - Hashable
+
     static func == (lhs: Resume, rhs: Resume) -> Bool {
         lhs.id == rhs.id
     }

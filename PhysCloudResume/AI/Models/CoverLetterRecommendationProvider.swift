@@ -61,9 +61,13 @@ final class CoverLetterRecommendationProvider {
         let applicant = await MainActor.run { Applicant() }
         var prompt = "\(applicant.name) is applying for this job: \(jobApp.jobPosition) at \(jobApp.companyName).\n\n"
         prompt += "Here are several cover letter options:\n"
+        var letterBundle = ""
         for letter in letters {
-            prompt += "id: \(letter.id.uuidString), name: \(letter.sequencedName), content:\n\(letter.content)\n\n"
+            letterBundle += "id: \(letter.id.uuidString), name: \(letter.sequencedName), content:\n\(letter.content)\n\n"
         }
+        print("================ letter bundle!!")
+        print(letterBundle)
+        prompt += letterBundle
         prompt += "For reference here are some of \(applicant.name)'s previous cover letters that he's particularly satisfied with:\n"
         prompt += "\(writingSamples)\n\n"
         prompt += "Which of the cover letters is strongest? Which cover letter best matches the style, voice and quality of \(applicant.name)'s previous letters? For your response, please return a brief summary ranking/assessment of each letter's relative strength and the degree to which it captures the author's voice and style, determine the one letter that is the strongest and most convincingly in the author's voice, and a brief reason for your ultimate choice."

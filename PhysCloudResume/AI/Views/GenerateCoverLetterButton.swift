@@ -18,12 +18,12 @@ struct GenerateCoverLetterButton: View {
     var body: some View {
         if !buttons.runRequested {
             Button {
-                if !cL.generated {
-                    cL.currentMode = .generate
-                } else {
-                    let newCL = coverLetterStore.createDuplicate(letter: cL)
-                    cL = newCL
-                }
+                // Always create a new cover letter for every LLM request
+                let newCL = coverLetterStore.createDuplicate(letter: cL)
+                // Set the appropriate mode
+                newCL.currentMode = .generate
+                // Update the current letter reference
+                cL = newCL
                 chatProvider.coverChatAction(
                     res: jobAppStore.selectedApp?.selectedRes,
                     jobAppStore: jobAppStore,

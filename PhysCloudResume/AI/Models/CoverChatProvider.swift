@@ -29,6 +29,38 @@ final class CoverChatProvider {
         openAIClient = client
     }
 
+    /// Formats the model name to a simplified version
+    /// - Parameter modelName: The full model name from the API
+    /// - Returns: A simplified model name without snapshot dates
+    private func formatModelName(_ modelName: String) -> String {
+        // Remove any date/snapshot information
+        let components = modelName.split(separator: "-")
+
+        // Handle different model naming patterns
+        if modelName.lowercased().contains("gpt") {
+            if components.count >= 2 {
+                // Extract main version (e.g., "GPT-4" from "gpt-4-1106-preview")
+                if components[1].allSatisfy({ $0.isNumber || $0 == "." }) {
+                    return "GPT-\(components[1])"
+                }
+            }
+        } else if modelName.lowercased().contains("claude") {
+            // Handle Claude models
+            if components.count >= 2 {
+                if components[1] == "3" && components.count >= 3 {
+                    // Handle "claude-3-opus-20240229" -> "Claude 3 Opus"
+                    return "Claude 3 \(components[2].capitalized)"
+                } else {
+                    // Handle other Claude versions
+                    return "Claude \(components[1])"
+                }
+            }
+        }
+
+        // Default fallback
+        return modelName.split(separator: "-").first?.capitalized ?? modelName.capitalized
+    }
+
     /// Add a user message to the chat history
     /// - Parameter text: The message text
     func appendUserMessage(_ text: String) {
@@ -120,7 +152,8 @@ final class CoverChatProvider {
                         processResults(
                             newMessage: response.content,
                             coverLetter: letter,
-                            buttons: buttons
+                            buttons: buttons,
+                            model: modelString
                         )
                     }
                 } else {
@@ -136,7 +169,8 @@ final class CoverChatProvider {
                         processResults(
                             newMessage: response.content,
                             coverLetter: letter,
-                            buttons: buttons
+                            buttons: buttons,
+                            model: modelString
                         )
                     }
                 }
@@ -163,10 +197,12 @@ final class CoverChatProvider {
     ///   - newMessage: The new message to process
     ///   - coverLetter: The cover letter to update
     ///   - buttons: The cover letter buttons
+    ///   - model: The model used for generation (optional)
     private func processResults(
         newMessage: String,
         coverLetter: CoverLetter,
-        buttons: Binding<CoverLetterButtons>
+        buttons: Binding<CoverLetterButtons>,
+        model: String? = nil
     ) {
         // Add the assistant message to the history
         appendAssistantMessage(newMessage)
@@ -175,6 +211,20 @@ final class CoverChatProvider {
         coverLetter.content = newMessage
         coverLetter.generated = true
         coverLetter.moddedDate = Date()
+
+        // Format the model name (simplified version without date)
+        let formattedModel = formatModelName(model ?? "LLM")
+
+        // Update letter name with model information
+        if coverLetter.name.isEmpty {
+            // First generation - just add the model name
+            coverLetter.name = formattedModel
+        } else {
+            // Add revision information to the existing name
+            let currentMode = coverLetter.currentMode?.displayName ?? "Revision"
+            coverLetter.name = "\(coverLetter.name), \(currentMode)"
+        }
+
         buttons.wrappedValue.runRequested = false
 
         // Save the message history for potential revisions later
@@ -294,7 +344,8 @@ final class CoverChatProvider {
                         processResults(
                             newMessage: response.content,
                             coverLetter: letter,
-                            buttons: buttons
+                            buttons: buttons,
+                            model: modelString
                         )
                     }
                 } else {
@@ -310,7 +361,8 @@ final class CoverChatProvider {
                         processResults(
                             newMessage: response.content,
                             coverLetter: letter,
-                            buttons: buttons
+                            buttons: buttons,
+                            model: modelString
                         )
                     }
                 }

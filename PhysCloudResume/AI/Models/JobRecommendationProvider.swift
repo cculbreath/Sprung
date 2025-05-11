@@ -190,7 +190,7 @@ import SwiftUI
     // MARK: - Helper Functions
 
     private func buildPrompt(newJobApps: [JobApp], resume: Resume) -> String {
-        let resumeText = resume.model?.renderedResumeText ?? ""
+        let resumeText = resume.textRes == "" ? resume.model?.renderedResumeText ?? "" : resume.textRes
 
         // Create JSON array of job listings
         var jobsArray: [[String: Any]] = []
