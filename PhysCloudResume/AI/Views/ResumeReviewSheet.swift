@@ -36,16 +36,22 @@ struct ResumeReviewSheet: View {
     private var contentView: some View {
         Group {
             if isProcessingGeneral {
-                VStack {
+                VStack(spacing: 16) {
                     Spacer()
-                    ProgressView { Text(reviewResponseText.isEmpty || reviewResponseText == "Submitting request..." ? "Analyzing resume..." : reviewResponseText) }
+                    ProgressView()
+                    Text(reviewResponseText.isEmpty || reviewResponseText == "Submitting request..." ? "Analyzing resume..." : reviewResponseText)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if isProcessingFixOverflow {
-                VStack {
+                VStack(spacing: 16) {
                     Spacer()
-                    ProgressView { Text(fixOverflowStatusMessage.isEmpty ? "Optimizing skills section..." : fixOverflowStatusMessage) }
+                    ProgressView()
+                    Text(fixOverflowStatusMessage.isEmpty ? "Optimizing skills section..." : fixOverflowStatusMessage)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

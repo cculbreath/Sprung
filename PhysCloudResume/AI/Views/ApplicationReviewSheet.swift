@@ -165,12 +165,12 @@ struct ApplicationReviewSheet: View {
     @ViewBuilder
     private var responseContent: some View {
         if isProcessing {
-            VStack {
+            VStack(spacing: 16) {
                 Spacer()
-                ProgressView {
-                    Text(responseText.isEmpty ? "Analyzing application..." : responseText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                ProgressView()
+                Text(responseText.isEmpty ? "Analyzing application..." : responseText)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             }
             .frame(maxWidth: .infinity)
