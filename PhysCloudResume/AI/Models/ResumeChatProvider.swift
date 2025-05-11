@@ -323,6 +323,9 @@ final class ResumeChatProvider {
 
             print("✅ Received response from OpenAI Responses API with ID: \(response.id)")
 
+            // Debug: print the raw JSON returned from the LLM for troubleshooting
+            print("🛬 JSON returned from LLM:\n", response.content)
+
             // Store the response ID in the resume if provided
             if let resume = resume {
                 resume.previousResponseId = response.id

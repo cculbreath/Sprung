@@ -118,6 +118,9 @@ import Foundation
         res = resume
         applicant = Applicant() // Uses the custom applicant profile
         self.saveDebugPrompt = saveDebugPrompt
+
+        // Debug: print JSON block that will be supplied to the LLM so we can verify content
+        print("▶️ updatableFieldsString JSON sent to LLM:\n", updatableFieldsString)
     }
 
     // Secondary initializer that creates a non-MainActor placeholder applicant
