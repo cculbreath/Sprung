@@ -22,7 +22,7 @@ class CoverLetter: Identifiable, Hashable {
     var name: String = ""
     var content: String = ""
     var generated: Bool = false
-    var includeResumeRefs: Bool = false
+    var includeResumeRefs: Bool = false // This flag will be used for naming
     var encodedEnabledRefs: Data? // Store as Data
     var encodedMessageHistory: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none
@@ -52,7 +52,10 @@ class CoverLetter: Identifiable, Hashable {
             do {
                 return try JSONDecoder().decode([MessageParams].self, from: data)
             } catch {
-                fatalError("Failed to decode messageHistory: \(error.localizedDescription)")
+                // It's better to log the error or handle it gracefully
+                // For now, returning an empty array to prevent crashes.
+                print("Failed to decode messageHistory: \(error.localizedDescription)")
+                return []
             }
         }
         set {
@@ -60,7 +63,8 @@ class CoverLetter: Identifiable, Hashable {
                 encodedMessageHistory = try JSONEncoder().encode(newValue)
 
             } catch {
-                fatalError("Failed to encode messageHistory: \(error.localizedDescription)")
+                // It's better to log the error or handle it gracefully
+                print("Failed to encode messageHistory: \(error.localizedDescription)")
             }
         }
     }
@@ -86,6 +90,7 @@ class CoverLetter: Identifiable, Hashable {
     /// 1-based index of this cover letter within its job application (ordered by creation date)
     var sequenceNumber: Int {
         guard let app = jobApp else { return 0 }
+        // Sort by creation date to ensure consistent numbering
         let sortedLetters = app.coverLetters.sorted { $0.createdDate < $1.createdDate }
         guard let index = sortedLetters.firstIndex(where: { $0.id == self.id }) else { return 0 }
         return index + 1
@@ -98,7 +103,7 @@ class CoverLetter: Identifiable, Hashable {
         var label = ""
         while n > 0 {
             let rem = (n - 1) % 26
-            if let scalar = UnicodeScalar(65 + rem) {
+            if let scalar = UnicodeScalar(65 + rem) { // 65 is 'A'
                 label = String(scalar) + label
             }
             n = (n - 1) / 26
@@ -106,11 +111,14 @@ class CoverLetter: Identifiable, Hashable {
         return label
     }
 
-    /// A friendly name prefixed with its alphabetic option and the custom name
+    /// A friendly name prefixed with its alphabetic option and the custom name.
+    /// Includes revision history in the name.
     var sequencedName: String {
         let letter = Self.letterLabel(for: sequenceNumber)
         if generated {
-            // Add descriptive name with letter identifier
+            // Base name is "Option X: modelName"
+            // If includeResumeRefs is true for the *initial* generation, append "Res Background"
+            // Revisions will append their type (e.g., zissner, mimic)
             return "Option \(letter)\(name.isEmpty ? "" : ": \(name)")"
         } else {
             return "Ungenerated Draft"
@@ -157,6 +165,7 @@ class MessageParams: Identifiable, Codable {
         case user
         case assistant
         case system
+        // Added none as a default case for safety, though it shouldn't be used.
         case none
     }
 }

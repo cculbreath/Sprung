@@ -17,10 +17,27 @@ struct ApplicationReviewSheet: View {
 
     @State private var reviewService = ApplicationReviewService()
     @State private var selectedType: ApplicationReviewType = .assessQuality
-    @State private var customOptions = CustomApplicationReviewOptions()
+    @State private var customOptions: CustomApplicationReviewOptions
     @State private var responseText: String = ""
     @State private var isProcessing = false
     @State private var errorMessage: String? = nil
+
+    init(jobApp: JobApp, resume: Resume, availableCoverLetters: [CoverLetter]) {
+        self.jobApp = jobApp
+        self.resume = resume
+        self.availableCoverLetters = availableCoverLetters
+
+        // Initialize customOptions with the jobApp's selectedCover if available
+        let initialCoverLetter = jobApp.selectedCover
+        _customOptions = State(initialValue: CustomApplicationReviewOptions(
+            includeCoverLetter: true,
+            includeResumeText: true,
+            includeResumeImage: true,
+            includeBackgroundDocs: false,
+            selectedCoverLetter: initialCoverLetter,
+            customPrompt: ""
+        ))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -128,17 +145,20 @@ struct ApplicationReviewSheet: View {
                 Toggle("Include Cover Letter", isOn: $customOptions.includeCoverLetter)
                     .onChange(of: customOptions.includeCoverLetter) { _, newVal in
                         if newVal && customOptions.selectedCoverLetter == nil {
-                            customOptions.selectedCoverLetter = availableCoverLetters.first
+                            // Default to the job app's selected cover letter
+                            customOptions.selectedCoverLetter = jobApp.selectedCover
                         }
                     }
 
                 if customOptions.includeCoverLetter {
                     Picker("Cover Letter", selection: Binding(
-                        get: { customOptions.selectedCoverLetter ?? availableCoverLetters.first },
+                        get: { customOptions.selectedCoverLetter ?? jobApp.selectedCover },
                         set: { customOptions.selectedCoverLetter = $0 }
                     )) {
                         ForEach(availableCoverLetters, id: \.self) { cl in
-                            Text(previewTitle(for: cl)).tag(cl as CoverLetter?)
+                            // Add a marker to indicate which is the current cover letter
+                            Text(previewTitle(for: cl) + (cl.id == jobApp.selectedCover?.id ? " (Current)" : ""))
+                                .tag(cl as CoverLetter?)
                         }
                     }
                     .pickerStyle(.menu)
@@ -208,9 +228,11 @@ struct ApplicationReviewSheet: View {
 
         let coverLetterToUse: CoverLetter? = {
             if selectedType == .custom {
+                // For custom reviews, use the cover letter specifically selected in the UI picker
                 return customOptions.selectedCoverLetter
             } else {
-                return availableCoverLetters.first(where: { $0 == customOptions.selectedCoverLetter }) ?? availableCoverLetters.first
+                // For standard reviews, always use the job app's selected cover letter
+                return jobApp.selectedCover
             }
         }()
 
