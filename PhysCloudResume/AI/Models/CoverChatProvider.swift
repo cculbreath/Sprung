@@ -40,7 +40,7 @@ final class CoverChatProvider {
         if modelName.lowercased().contains("gpt") {
             if components.count >= 2 {
                 // Extract main version (e.g., "GPT-4" from "gpt-4-1106-preview")
-                if components[1].allSatisfy({ $0.isNumber || $0 == "." }) {
+                if components[1].allSatisfy({ $0.isNumber || $0 == "." }) { // Check if it's a version number like 4 or 3.5
                     return "GPT-\(components[1])"
                 }
             }
@@ -56,8 +56,8 @@ final class CoverChatProvider {
                 }
             }
         }
-
-        // Default fallback
+        // Default fallback: Use the first part of the model name, capitalized.
+        // This handles cases like "gpt-4o-latest" -> "Gpt" or "gemini-pro" -> "Gemini"
         return modelName.split(separator: "-").first?.capitalized ?? modelName.capitalized
     }
 
@@ -93,7 +93,7 @@ final class CoverChatProvider {
     func coverChatAction(
         res: Resume?,
         jobAppStore: JobAppStore,
-        chatProvider _: CoverChatProvider,
+        chatProvider _: CoverChatProvider, // chatProvider is self, no need to pass
         buttons: Binding<CoverLetterButtons>,
         isNewConversation: Bool = true
     ) {
@@ -118,8 +118,8 @@ final class CoverChatProvider {
         // Get the userMessage based on the mode
         let userMessage = CoverLetterPrompts.generate(
             coverLetter: letter,
-            resume: res!,
-            mode: letter.currentMode ?? .none
+            resume: res!, // res is guaranteed to exist if we reach here due to app logic
+            mode: letter.currentMode ?? .none // Use .none as a fallback if currentMode is nil
         )
 
         // Add the user message to the history
@@ -139,9 +139,9 @@ final class CoverChatProvider {
                     let response = try await openAIClient.sendResponseRequestAsync(
                         message: combinedMessage,
                         model: modelString,
-                        temperature: 1.0,
-                        previousResponseId: letter.previousResponseId,
-                        schema: nil
+                        temperature: 1.0, // Standard temperature
+                        previousResponseId: letter.previousResponseId, // Pass previous ID for context
+                        schema: nil // No specific schema for cover letter generation
                     )
 
                     // Save the response ID for future continuations
@@ -153,7 +153,8 @@ final class CoverChatProvider {
                             newMessage: response.content,
                             coverLetter: letter,
                             buttons: buttons,
-                            model: modelString
+                            model: modelString,
+                            isRevision: !isNewConversation // It's a revision if not a new conversation
                         )
                     }
                 } else {
@@ -161,7 +162,7 @@ final class CoverChatProvider {
                     let response = try await openAIClient.sendChatCompletionAsync(
                         messages: genericMessages,
                         model: modelString,
-                        temperature: 1.0
+                        temperature: 1.0 // Standard temperature
                     )
 
                     // Process the results on the main thread
@@ -170,7 +171,8 @@ final class CoverChatProvider {
                             newMessage: response.content,
                             coverLetter: letter,
                             buttons: buttons,
-                            model: modelString
+                            model: modelString,
+                            isRevision: !isNewConversation // It's a revision if not a new conversation
                         )
                     }
                 }
@@ -198,31 +200,40 @@ final class CoverChatProvider {
     ///   - coverLetter: The cover letter to update
     ///   - buttons: The cover letter buttons
     ///   - model: The model used for generation (optional)
+    ///   - isRevision: A boolean indicating if this is a revision operation
     private func processResults(
         newMessage: String,
         coverLetter: CoverLetter,
         buttons: Binding<CoverLetterButtons>,
-        model: String? = nil
+        model: String? = nil,
+        isRevision: Bool
     ) {
         // Add the assistant message to the history
         appendAssistantMessage(newMessage)
 
         // Update the cover letter with the results
         coverLetter.content = newMessage
-        coverLetter.generated = true
-        coverLetter.moddedDate = Date()
+        coverLetter.generated = true // Mark as generated
+        coverLetter.moddedDate = Date() // Update modification date
 
         // Format the model name (simplified version without date)
         let formattedModel = formatModelName(model ?? "LLM")
 
-        // Update letter name with model information
-        if coverLetter.name.isEmpty {
-            // First generation - just add the model name
-            coverLetter.name = formattedModel
+        // Update letter name based on whether it's a new generation or a revision
+        if isRevision {
+            // Append revision type to the existing name
+            let revisionType = coverLetter.editorPrompt.operation.rawValue // e.g., "Mimic", "Zissner"
+            if !coverLetter.name.contains(revisionType) { // Avoid duplicate revision tags
+                coverLetter.name = "\(coverLetter.name), \(revisionType)"
+            }
         } else {
-            // Add revision information to the existing name
-            let currentMode = coverLetter.currentMode?.displayName ?? "Revision"
-            coverLetter.name = "\(coverLetter.name), \(currentMode)"
+            // First generation - set the model name
+            // Append "Res Background" if includeResumeRefs is true
+            var baseName = formattedModel
+            if coverLetter.includeResumeRefs {
+                baseName += ", Res Background"
+            }
+            coverLetter.name = baseName
         }
 
         buttons.wrappedValue.runRequested = false
@@ -260,12 +271,12 @@ final class CoverChatProvider {
     ///   - isNewConversation: Whether this is a new conversation (default false for revisions)
     @MainActor
     func coverChatRevise(
-        res _: Resume?,
+        res _: Resume?, // res is optional as it might not always be needed for revisions
         jobAppStore: JobAppStore,
-        chatProvider _: CoverChatProvider,
+        chatProvider _: CoverChatProvider, // chatProvider is self
         buttons: Binding<CoverLetterButtons>,
-        customFeedback: Binding<String>,
-        isNewConversation: Bool = false
+        customFeedback: Binding<String>, // For custom feedback mode
+        isNewConversation: Bool = false // Revisions are typically not new conversations
     ) {
         guard let app = jobAppStore.selectedApp else { return }
 
@@ -290,26 +301,26 @@ final class CoverChatProvider {
         if letter.editorPrompt == .custom {
             // Use the feedback provided by the user
             userMessage = """
-                Upon reading your latest draft, \(Applicant().name) has provided the following feedback:
+            Upon reading your latest draft, \(Applicant().name) has provided the following feedback:
 
-                    \(customFeedback.wrappedValue)
+                \(customFeedback.wrappedValue)
 
-                Please prepare a revised draft that improves upon the original while incorporating this feedback. 
-                Your response should only include the plain full text of the revised letter draft without any 
-                markdown formatting or additional explanations or reasoning.
+            Please prepare a revised draft that improves upon the original while incorporating this feedback. 
+            Your response should only include the plain full text of the revised letter draft without any 
+            markdown formatting or additional explanations or reasoning.
 
-                Current draft:
-                \(letter.content)
+            Current draft:
+            \(letter.content)
             """
         } else {
             // Use the prompt template from the editor prompts
             let promptTemplate = letter.editorPrompt
             userMessage = """
-                My initial draft of a cover letter to accompany my application is included below.
-                \(promptTemplate.rawValue)
+            My initial draft of a cover letter to accompany my application is included below.
+            \(promptTemplate.rawValue)
 
-                Cover Letter initial draft:
-                \(letter.content)
+            Cover Letter initial draft:
+            \(letter.content)
             """
         }
 
@@ -330,10 +341,9 @@ final class CoverChatProvider {
                     let response = try await openAIClient.sendResponseRequestAsync(
                         message: combinedMessage,
                         model: modelString,
-                        temperature: 1.0,
-
-                        previousResponseId: letter.previousResponseId,
-                        schema: nil
+                        temperature: 1.0, // Standard temperature
+                        previousResponseId: letter.previousResponseId, // Pass previous ID for context
+                        schema: nil // No specific schema for cover letter revision
                     )
 
                     // Save the response ID for future continuations
@@ -345,7 +355,8 @@ final class CoverChatProvider {
                             newMessage: response.content,
                             coverLetter: letter,
                             buttons: buttons,
-                            model: modelString
+                            model: modelString,
+                            isRevision: true // Revisions are always true here
                         )
                     }
                 } else {
@@ -353,7 +364,7 @@ final class CoverChatProvider {
                     let response = try await openAIClient.sendChatCompletionAsync(
                         messages: genericMessages,
                         model: modelString,
-                        temperature: 1.0
+                        temperature: 1.0 // Standard temperature
                     )
 
                     // Process the results on the main thread
@@ -362,7 +373,8 @@ final class CoverChatProvider {
                             newMessage: response.content,
                             coverLetter: letter,
                             buttons: buttons,
-                            model: modelString
+                            model: modelString,
+                            isRevision: true // Revisions are always true here
                         )
                     }
                 }

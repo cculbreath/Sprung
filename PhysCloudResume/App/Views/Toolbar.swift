@@ -147,17 +147,15 @@ struct BuildToolbar: ToolbarContent {
     private func coverLetterToolbarItem(for selApp: JobApp) -> some ToolbarContent {
         // Only create this toolbar item if we're on the cover letter tab
         if selectedTab == .coverLetter {
-            ToolbarItem(placement: .primaryAction) {
-                Group {
-                    if selApp.selectedCover != nil {
-                        CoverLetterToolbar(
-                            buttons: $letterButtons,
-                            refresh: $refresh
-                        )
-                        .layoutPriority(1)
-                    } else {
-                        Text("No Cover Letter Available")
-                    }
+            if selApp.selectedCover != nil {
+                // The CoverLetterToolbar now returns ToolbarContent directly
+                CoverLetterToolbar(
+                    buttons: $letterButtons,
+                    refresh: $refresh
+                )
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    Text("No Cover Letter Available")
                 }
             }
         }

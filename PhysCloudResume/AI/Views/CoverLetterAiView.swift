@@ -11,7 +11,27 @@ import SwiftUI
     import AppKit
 #endif
 
+/// Keeps a shared instance of the TTS provider to prevent recreation
+@MainActor
+final class TTSProviderManager {
+    static let shared = TTSProviderManager()
+    private var instance: OpenAITTSProvider?
+
+    private init() {}
+
+    func getProvider(apiKey: String) -> OpenAITTSProvider {
+        if let provider = instance {
+            return provider
+        } else {
+            let newProvider = OpenAITTSProvider(apiKey: apiKey)
+            instance = newProvider
+            return newProvider
+        }
+    }
+}
+
 /// Wrapper view for Cover Letter AI content. Initializes dependencies.
+@MainActor
 struct CoverLetterAiView: View {
     // MARK: - App Storage
 
@@ -27,6 +47,16 @@ struct CoverLetterAiView: View {
     // Flag to determine if this is a new conversation or not
     private let isNewConversation: Bool
 
+    // Keep client instance as a computed property to avoid body mutations
+    private var openAIClient: OpenAIClientProtocol {
+        OpenAIClientFactory.createClient(apiKey: openAiApiKey)
+    }
+
+    // Get shared TTS provider
+    private var ttsProvider: OpenAITTSProvider {
+        TTSProviderManager.shared.getProvider(apiKey: openAiApiKey)
+    }
+
     // MARK: - Initialization
 
     init(buttons: Binding<CoverLetterButtons>, refresh: Binding<Bool>, isNewConversation: Bool = true) {
@@ -38,13 +68,7 @@ struct CoverLetterAiView: View {
     // MARK: - Body
 
     var body: some View {
-        // Create OpenAI client using our abstraction layer
-        let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
-
-        // Initialize TTS provider
-        let ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
-
-        // Initialize our main manager (renamed from CoverLetterController)
+        // Initialize our main manager with stable provider instances
         CoverLetterAiManager(
             openAIClient: openAIClient,
             ttsProvider: ttsProvider,
@@ -54,6 +78,6 @@ struct CoverLetterAiView: View {
             ttsVoice: $ttsVoice,
             isNewConversation: isNewConversation
         )
-        .onAppear { print("AI Cover Letter View") }
+        .onAppear { print("AI Cover Letter View appeared") }
     }
 }

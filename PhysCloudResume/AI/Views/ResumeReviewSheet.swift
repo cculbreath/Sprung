@@ -428,20 +428,3 @@ struct ResumeReviewSheet: View {
         return resume.nodes.first { $0.id == id }
     }
 }
-
-// Preview wrapper struct for SwiftUI previews
-struct PreviewWrapper: View {
-    @State private var mockResume: Resume? = nil
-    // In a real preview, you'd need to provide a mock ModelContainer
-    // and potentially mock JobAppStore, ResStore, etc.
-    var body: some View {
-        Text("ResumeReviewSheet Preview (requires mock data setup)")
-        // Example of how you might try to instantiate it if mocks were available:
-        // ResumeReviewSheet(selectedResume: $mockResume)
-        //     .environment(\.modelContext, try! ModelContainer(for: Resume.self).mainContext)
-    }
-}
-
-#Preview {
-    return PreviewWrapper()
-}

@@ -1,4 +1,33 @@
-//
+/// Writes debug information to a file in the Downloads folder
+/// - Parameter content: The content to write
+private func writeDebugToFile(_ content: String) {
+    do {
+        // Get the home directory and downloads path
+        let fileManager = FileManager.default
+        let downloadsURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+
+        // Create a unique filename with timestamp
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        let timestamp = dateFormatter.string(from: Date())
+        let filename = "ai-prompt-cover-letter-recommendation-\(timestamp).md"
+        let fileURL = downloadsURL.appendingPathComponent(filename)
+
+        print("[DEBUG] Writing debug info to: \(fileURL.path)")
+
+        // Make sure the Downloads directory exists
+        if !fileManager.fileExists(atPath: downloadsURL.path) {
+            print("[DEBUG] Warning: Downloads directory doesn't exist at: \(downloadsURL.path)")
+            return
+        }
+
+        // Write to file
+        try content.write(to: fileURL, atomically: true, encoding: .utf8)
+        print("[DEBUG] Successfully wrote debug info to file: \(fileURL.path)")
+    } catch {
+        print("[DEBUG] Error writing debug info to file: \(error.localizedDescription)")
+    }
+} //
 //  CoverLetterRecommendationProvider.swift
 //  PhysCloudResume
 //
@@ -24,6 +53,37 @@ final class CoverLetterRecommendationProvider {
 
     private let jobApp: JobApp
     private let writingSamples: String
+
+    /// Writes debug information to a file in the Downloads folder
+    /// - Parameter content: The content to write
+    private func writeDebugToFile(_ content: String) {
+        do {
+            // Get the home directory and downloads path
+            let fileManager = FileManager.default
+            let downloadsURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+
+            // Create a unique filename with timestamp
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+            let timestamp = dateFormatter.string(from: Date())
+            let filename = "cover-letter-prompt-debug-\(timestamp).txt"
+            let fileURL = downloadsURL.appendingPathComponent(filename)
+
+            print("[DEBUG] Writing debug info to: \(fileURL.path)")
+
+            // Make sure the Downloads directory exists
+            if !fileManager.fileExists(atPath: downloadsURL.path) {
+                print("[DEBUG] Warning: Downloads directory doesn't exist at: \(downloadsURL.path)")
+                return
+            }
+
+            // Write to file
+            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("[DEBUG] Successfully wrote debug info to file: \(fileURL.path)")
+        } catch {
+            print("[DEBUG] Error writing debug info to file: \(error.localizedDescription)")
+        }
+    }
 
     /// Response schema for best cover letter selection
     struct BestCoverLetterResponse: Codable, StructuredOutput {
@@ -68,7 +128,8 @@ final class CoverLetterRecommendationProvider {
         print("================ letter bundle!!")
         print(letterBundle)
         prompt += letterBundle
-        prompt += "For reference here are some of \(applicant.name)'s previous cover letters that he's particularly satisfied with:\n"
+        prompt += "\n\n==================================================\n\n"
+        prompt += "**For reference here are some of \(applicant.name)'s previous cover letters that he's particularly satisfied with:\n**"
         prompt += "\(writingSamples)\n\n"
         prompt += "Which of the cover letters is strongest? Which cover letter best matches the style, voice and quality of \(applicant.name)'s previous letters? For your response, please return a brief summary ranking/assessment of each letter's relative strength and the degree to which it captures the author's voice and style, determine the one letter that is the strongest and most convincingly in the author's voice, and a brief reason for your ultimate choice."
         prompt += "\nWhen providing the strength-and-voice-analysis and verdict responses, reference each letter by its name, not its id.\n"
@@ -78,6 +139,11 @@ final class CoverLetterRecommendationProvider {
         prompt += "  \"best-letter-uuid\": \"UUID of the selected best cover letter\",\n"
         prompt += "  \"verdict\": \"Reason for the ultimate choice\"\n"
         prompt += "}\n"
+
+        // DEBUG: Write the full prompt to a file in Downloads
+        print("[DEBUG] Writing cover letter recommendation prompt to Downloads folder")
+        let fullPromptDebug = "SYSTEM PROMPT:\n\n\(genericSystemMessage.content)\n\nUSER PROMPT:\n\n\(prompt)\n\nJOB DESCRIPTION:\n\n\(jobApp.jobDescription)"
+        writeDebugToFile(fullPromptDebug)
 
         // Create generic messages for the abstraction layer
         let messages = [
@@ -110,6 +176,10 @@ final class CoverLetterRecommendationProvider {
                 let result = try await macPawClient.openAIClient.chats(query: query)
                 // Debug: print raw API result object
 
+                // DEBUG: Append response to our debug file
+                var responseDebug = "\n\nAPI RESPONSE:\n\n"
+                responseDebug += "Raw response:\n\(result)"
+
                 // Extract structured output response
                 // For MacPaw/OpenAI structured outputs, we need to check the content string
                 // since there's no structured output property directly accessible
@@ -118,13 +188,19 @@ final class CoverLetterRecommendationProvider {
                    let data = content.data(using: .utf8)
                 {
                     // Debug: print raw content and JSON payload
+                    responseDebug += "\n\nContent String:\n\(content)"
+                    writeDebugToFile(fullPromptDebug + responseDebug)
 
                     do {
                         let structuredOutput = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
                         // Debug: print decoded structured output
+                        let finalDebug = "\n\nPARSED STRUCTURED OUTPUT:\n\(structuredOutput)"
+                        writeDebugToFile(fullPromptDebug + responseDebug + finalDebug)
                         return structuredOutput
                     } catch {
                         // Debug: decoding failure
+                        let errorDebug = "\n\nDECODING ERROR:\n\(error.localizedDescription)"
+                        writeDebugToFile(fullPromptDebug + responseDebug + errorDebug)
                         throw NSError(
                             domain: "CoverLetterRecommendationProvider",
                             code: 1003,
@@ -132,6 +208,8 @@ final class CoverLetterRecommendationProvider {
                         )
                     }
                 } else {
+                    let noContentDebug = "\n\nERROR: No content in API response"
+                    writeDebugToFile(fullPromptDebug + responseDebug + noContentDebug)
                     throw NSError(
                         domain: "CoverLetterRecommendationProvider",
                         code: 1002,
@@ -139,11 +217,15 @@ final class CoverLetterRecommendationProvider {
                     )
                 }
             } else {
+                let unsupportedClientDebug = "\n\nERROR: Unsupported client type - not MacPawOpenAIClient"
+                writeDebugToFile(fullPromptDebug + unsupportedClientDebug)
                 throw NSError(domain: "CoverLetterRecommendationProvider", code: 3,
                               userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
             }
 
         } catch {
+            let generalErrorDebug = "\n\nGENERAL API ERROR:\n\(error.localizedDescription)"
+            writeDebugToFile(fullPromptDebug + generalErrorDebug)
             throw error
         }
     }
