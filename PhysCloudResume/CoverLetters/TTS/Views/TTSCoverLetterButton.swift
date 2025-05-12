@@ -38,8 +38,17 @@ struct TTSCoverLetterButton: View {
     // MARK: - Body
 
     var body: some View {
+        // Debug: Print the conditions for showing the button
+        let _ = print("[TTSCoverLetterButton] Evaluating conditions: ttsEnabled=\(ttsEnabled), cL.generated=\(cL.generated), !cL.content.isEmpty=\(!cL.content.isEmpty)")
+        // Debug: Print current playback state when the button view is built
+        let _ = print("[TTSCoverLetterButton] Current playback state: isSpeaking=\(isSpeaking), isPaused=\(isPaused), isBuffering=\(isBuffering)")
+
         if ttsEnabled && cL.generated && !cL.content.isEmpty {
-            Button(action: speakAction) {
+            Button(action: {
+                // Debug: Print when the action is triggered
+                print("[TTSCoverLetterButton] SpeakAction TRIGGERED. Current state: isSpeaking=\(isSpeaking), isPaused=\(isPaused), isBuffering=\(isBuffering)")
+                speakAction()
+            }) {
                 // Use different icon depending on playback state
                 // Icon is filled when speaking or buffering, unfilled when paused or idle
                 let iconFilled = isSpeaking || isBuffering
@@ -70,14 +79,19 @@ struct TTSCoverLetterButton: View {
             .help(helpText)
             .disabled(buttons.runRequested || buttons.chooseBestRequested)
             .onChange(of: isBuffering) { _, newValue in
-                print("TTSButton: buffering changed to \(newValue)")
+                print("[TTSCoverLetterButton] Buffering state changed to \(newValue)")
             }
             .onChange(of: isSpeaking) { _, newValue in
-                print("TTSButton: speaking changed to \(newValue)")
+                print("[TTSCoverLetterButton] Speaking state changed to \(newValue)")
             }
             .onChange(of: isPaused) { _, newValue in
-                print("TTSButton: paused changed to \(newValue)")
+                print("[TTSCoverLetterButton] Paused state changed to \(newValue)")
             }
+        } else {
+            // Debug: Print why the button is not shown
+            let _ = print("[TTSCoverLetterButton] Button NOT shown. Reasons: ttsEnabled=\(ttsEnabled), cL.generated=\(cL.generated), cL.content.isEmpty=\(cL.content.isEmpty)")
+            // Return an EmptyView or a disabled button if you want a placeholder
+            // For now, it will simply not render if conditions aren't met.
         }
     }
 

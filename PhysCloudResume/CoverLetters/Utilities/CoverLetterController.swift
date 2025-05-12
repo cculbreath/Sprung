@@ -13,6 +13,7 @@
 //
 
 import Foundation
+import Observation
 import SwiftUI
 #if os(macOS)
     import AppKit
@@ -40,7 +41,7 @@ struct CoverLetterController: View {
 
     // MARK: - View Models
 
-    @StateObject private var ttsViewModel: TTSViewModel
+    @State private var ttsViewModel: TTSViewModel
     private let recommendationService: CoverLetterRecommendationService
 
     // MARK: - UI State
@@ -73,7 +74,7 @@ struct CoverLetterController: View {
         _ttsVoice = ttsVoice
 
         // Initialize the TTS view model
-        _ttsViewModel = StateObject(wrappedValue: TTSViewModel(ttsProvider: ttsProvider))
+        ttsViewModel = TTSViewModel(ttsProvider: ttsProvider)
     }
 
     // MARK: - Computed Properties
@@ -101,9 +102,9 @@ struct CoverLetterController: View {
             speakAction: speakCoverLetter,
             ttsEnabled: $ttsEnabled,
             ttsVoice: $ttsVoice,
-            isSpeaking: $ttsViewModel.isSpeaking,
-            isPaused: $ttsViewModel.isPaused,
-            isBuffering: $ttsViewModel.isBuffering
+            isSpeaking: Binding(get: { ttsViewModel.isSpeaking }, set: { ttsViewModel.isSpeaking = $0 }),
+            isPaused: Binding(get: { ttsViewModel.isPaused }, set: { ttsViewModel.isPaused = $0 }),
+            isBuffering: Binding(get: { ttsViewModel.isBuffering }, set: { ttsViewModel.isBuffering = $0 })
         )
         // Stop playback if the user switches to another cover letter
         .onChange(of: cL.wrappedValue.id) { _, _ in

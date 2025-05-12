@@ -91,25 +91,24 @@ enum LeafStatus: String, Codable, Hashable {
         // which will be filtered by the caller (extractSkillsForLLM in ResumeReviewService).
         // This function is more general for AI updates.
         if node.status == .aiToReplace {
-            // If it's a title node (name is primary content)
-            if node.isTitleNode && !node.name.isEmpty { // Check isTitleNode first
+            // First, handle title node content if present (name field)
+            if !node.name.isEmpty { // Always export name field as a title node if it's not empty
                 let titleNodeData: [String: Any] = [
                     "id": node.id,
                     "value": node.name, // Exporting node.name as "value" for the LLM
+                    "name": node.name, // Also include the actual name field for context
                     "tree_path": newPath, // Path to this node
                     "isTitleNode": true, // Explicitly mark as title node
                 ]
                 result.append(titleNodeData)
             }
-            // If it's a value node (value is primary content, or name is empty)
-            // Also include title nodes if they *also* have a value to be edited separately.
-            // For "Fix Overflow", we ensure only one piece of text (name or value) is sent per node ID for revision.
-            // The extractSkillsForLLM function will handle this specific logic.
-            // This general function might send both if a title node also has a value and is aiToReplace.
-            if !node.value.isEmpty && !node.isTitleNode { // Ensure this isn't a title node already processed
+
+            // Then, handle value node content if present
+            if !node.value.isEmpty { // Always export value field as a content node if it's not empty
                 let valueNodeData: [String: Any] = [
                     "id": node.id,
                     "value": node.value, // Exporting node.value
+                    "name": node.name, // Include name for context/reference
                     "tree_path": newPath,
                     "isTitleNode": false, // Explicitly mark as not a title node
                 ]

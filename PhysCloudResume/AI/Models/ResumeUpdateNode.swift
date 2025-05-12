@@ -21,6 +21,17 @@ struct ProposedRevisionNode: Codable, Equatable {
     // `value` has been removed. `treePath` is retained so the model can
     // provide a hierarchical hint when an ID match is ambiguous.
 
+    // Custom initializer for creating nodes programmatically
+    init(id: String = "", oldValue: String = "", newValue: String = "", valueChanged: Bool = false, isTitleNode: Bool = false, why: String = "", treePath: String = "") {
+        self.id = id
+        self.oldValue = oldValue
+        self.newValue = newValue
+        self.valueChanged = valueChanged
+        self.isTitleNode = isTitleNode
+        self.why = why
+        self.treePath = treePath
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case oldValue
@@ -62,10 +73,9 @@ enum PostReviewAction: String, Codable {
     case revise =
         "Action Required: Please update your submission to incorporate the reviewer comments."
     case rewriteNoComment = "Action Required: Revsion rejected without comment, please try again."
-    case mandatedChangeNoComment =
-        "Action Required: Unchanged submission rejected. Please propose a revised value for this field"
+    case mandatedChangeNoComment = "Action Required:  Proposal to maintain original value rejected without comment. Please propose a  revised value for this field."
     case mandatedChange =
-        "Action Required: Unchanged submission rejected. Please propose a revised value for this field to incorporate reviewer comments"
+        "Action Required: Proposal to maintain original value rejected. Please propose a  revised value for this field and incorporate reviewer comments"
     case unevaluated = "Unevaluated"
 }
 

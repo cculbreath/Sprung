@@ -157,22 +157,34 @@ import Foundation
 
     @MainActor
     func revisionPrompt(_ fb: [FeedbackNode]) async -> String {
-        // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
-        // This is important so the LLM has the latest version after user's accepted changes.
+        // Resume text should already be up-to-date from the rendering called in aiResubmit
+        // but we'll ensure it again as a safety measure
         try? await res.ensureFreshRenderedText()
 
+        // At this point, fb should already contain only nodes that need revision
+        // due to our filtering in ReviewView's nextNode method
         let json = fbToJson(fb)
+
+        // Extract node IDs for more explicit instructions
+        let nodeIDs = fb.map { "\($0.id)" }.joined(separator: ", ")
+
         let prompt = """
-        \(applicant.name) has reviewed your proposed revision and has provided feedback. Please revise and rewrite as specified for each FeedbackNode below. Provide your updated revisions as an array of RevNodes (schema attached). The RevNodeArray should only include RevNodes for which your action is required (newValue != oldValue). No response is required for any FeedbackNode for which no action is needed.
+        \(applicant.name) has reviewed your proposed revision and has provided feedback. Please revise and rewrite ONLY the specific nodes listed below. Provide your updated revisions as an array of RevNodes (schema attached).
 
-        IMPORTANT:
-        • Do **not** change the "id" or "treePath" fields — return them exactly as received so the application can locate the correct node in the résumé.
+        IMPORTANT CONSTRAINTS - READ CAREFULLY:
+        • ONLY return nodes for the specific IDs provided in the feedback list below: [\(nodeIDs)]
+        • Do NOT include any nodes that aren't in the feedback list, even if you worked on them previously
+        • Do NOT include nodes that have already been accepted or don't need changes
+        • The resume text below INCLUDES all previously accepted changes
+        • Do NOT change the "id" or "treePath" fields — return them exactly as received
 
-        Feedback Nodes:
+        The ONLY nodes you should provide revisions for are in this feedback list:
         \(json ?? "none provided")
 
-        Here is the current version of the resume with all accepted changes applied:
+        Here is the CURRENT VERSION of the resume with all accepted changes applied:
         \(resumeText)
+
+        Remember: Your response should ONLY include nodes for the IDs listed above. Do not include any other nodes.
         """
         return prompt
     }

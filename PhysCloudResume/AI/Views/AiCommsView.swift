@@ -90,8 +90,50 @@ struct AiCommsView: View {
                 Text(errorMessage)
             }
             .onChange(of: chatProvider.lastRevNodeArray) { _, newValue in
+                print("\nReceived \(newValue.count) revision nodes from AI")
+
+                // Create a mutable copy of the array that we can filter
+                var processedRevisions = newValue
+
+                // For revision rounds, filter out any nodes that weren't in our feedback list
+                if aiResub && !fbnodes.isEmpty {
+                    let expectedNodeIds = Set(fbnodes.map { $0.id })
+                    let filteredRevNodes = processedRevisions.filter { revNode in
+                        let shouldInclude = expectedNodeIds.contains(revNode.id)
+                        if !shouldInclude {
+                            print("Removing unexpected node ID \(revNode.id) from AI response (not in feedback list)")
+                        }
+                        return shouldInclude
+                    }
+
+                    if filteredRevNodes.count < processedRevisions.count {
+                        print("Filtered out \(processedRevisions.count - filteredRevNodes.count) unexpected revision nodes")
+                        // Update our mutable copy
+                        processedRevisions = filteredRevNodes
+                    }
+                }
+
+                // Debug - check for potentially deleted nodes
+                if let myRes = myRes {
+                    let currentNodeIds = Set(myRes.nodes.map { $0.id })
+                    for revNode in processedRevisions {
+                        if !currentNodeIds.contains(revNode.id) {
+                            print("WARNING: Revision node with ID \(revNode.id) references a node that no longer exists in the resume!")
+                            print("  - Content: '\(revNode.oldValue)' -> '\(revNode.newValue)'")
+                            print("  - Tree path: \(revNode.treePath)")
+                        }
+                    }
+                }
+
+                // Validate and fix the revision nodes
+                var validatedRevisions = validateRevs(res: myRes, revs: processedRevisions) ?? []
+                print("After validation: \(validatedRevisions.count) revision nodes (from original \(processedRevisions.count))")
+
+                // Reset arrays - IMPORTANT: this prevents accumulation of nodes
+                fbnodes = []
+
                 sheetOn = true
-                revisions = validateRevs(res: myRes, revs: newValue) ?? [] // Updated this call
+                revisions = validatedRevisions
                 currentRevNode = revisions[0]
                 if currentRevNode != nil {
                     currentFeedbackNode = FeedbackNode(
@@ -191,6 +233,21 @@ struct AiCommsView: View {
         if let myRes = res {
             let updateNodes = myRes.getUpdatableNodes()
 
+            // Filter out revisions for nodes that no longer exist in the resume
+            let currentNodeIds = Set(myRes.nodes.map { $0.id })
+            let initialCount = validRevs.count
+            validRevs = validRevs.filter { revNode in
+                let exists = currentNodeIds.contains(revNode.id)
+                if !exists {
+                    print("Filtering out revision for non-existent node with ID: \(revNode.id)")
+                }
+                return exists
+            }
+            if validRevs.count < initialCount {
+                print("Removed \(initialCount - validRevs.count) revisions for non-existent nodes")
+            }
+
+            // First pass: validate and update existing revisions
             for (index, item) in validRevs.enumerated() {
                 // Check by ID first
                 if let matchedNode = updateNodes.first(where: { $0["id"] as? String == item.id }) {
@@ -248,6 +305,21 @@ struct AiCommsView: View {
                     }
                 }
             }
+
+            // DISABLING node splitting for now - this appears to be causing multiplication of nodes
+            // Second pass: split nodes with both name and value into two separate nodes
+            // var additionalNodes: [ProposedRevisionNode] = []
+            //
+            // for treeNode in myRes.nodes.filter({ $0.status == .aiToReplace }) {
+            //    if !treeNode.name.isEmpty && !treeNode.value.isEmpty {
+            //        // ... node splitting logic (removed for now)
+            //    }
+            // }
+            //
+            // // Add the additional nodes to the validation result
+            // validRevs.append(contentsOf: additionalNodes)
+
+            print("Final count after validation: \(validRevs.count) (started with \(revs.count))")
             return validRevs
         }
         return nil
@@ -266,6 +338,13 @@ struct AiCommsView: View {
             do {
                 // Prepare messages for API call using our abstraction layer
                 if !hasRevisions {
+                    // For a new resume generation, we want to reset the server-side context
+                    // by clearing the previousResponseId
+                    if let myRes = myRes {
+                        print("Starting new resume generation - clearing previousResponseId")
+                        myRes.previousResponseId = nil
+                    }
+
                     // Set up system and user messages for initial query
                     let userPromptContent = await q.wholeResumeQueryString() // Await the async prompt generation
                     chatProvider.genericMessages = [

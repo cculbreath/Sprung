@@ -1,9 +1,4 @@
-//
-//  CoverChatProvider.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/14/24.
-//
+// PhysCloudResume/AI/Models/CoverChatProvider.swift
 
 import Foundation
 import SwiftUI
@@ -57,7 +52,6 @@ final class CoverChatProvider {
             }
         }
         // Default fallback: Use the first part of the model name, capitalized.
-        // This handles cases like "gpt-4o-latest" -> "Gpt" or "gemini-pro" -> "Gemini"
         return modelName.split(separator: "-").first?.capitalized ?? modelName.capitalized
     }
 
@@ -98,87 +92,80 @@ final class CoverChatProvider {
         isNewConversation: Bool = true
     ) {
         guard let app = jobAppStore.selectedApp else { return }
+        guard let selectedCover = app.selectedCover else { return }
 
-        // Get the current cover letter
-        guard let letter = app.selectedCover else { return }
+        // If generating a new cover letter (using squiggle button) and the current letter is already generated,
+        // create a new cover letter by getting the CoverLetterStore from the JobAppStore
+        var letter = selectedCover
+        if isNewConversation, selectedCover.generated {
+            // Create a new cover letter for a fresh generation using the store passed in via JobAppStore
+            let newLetter = jobAppStore.coverLetterStore.createDuplicate(letter: selectedCover)
+            app.selectedCover = newLetter
+            letter = newLetter
+        }
 
         buttons.wrappedValue.runRequested = true
 
-        // If this is a new conversation from toolbar button, clear the response ID
         if isNewConversation {
             letter.previousResponseId = nil
         }
 
-        // Set up the system message
         let systemMessage = CoverLetterPrompts.systemMessage
-
-        // Add the system message
         genericMessages = [systemMessage]
 
-        // Get the userMessage based on the mode
+        // Get the user input depending on the mode
         let userMessage = CoverLetterPrompts.generate(
             coverLetter: letter,
-            resume: res!, // res is guaranteed to exist if we reach here due to app logic
-            mode: letter.currentMode ?? .none // Use .none as a fallback if currentMode is nil
+            resume: res!, // Already safely unwrapped above
+            mode: letter.currentMode ?? CoverAiMode.none
         )
 
-        // Add the user message to the history
+        // Update the letter's AI mode to match what we're actually doing
+        if letter.currentMode == nil || letter.currentMode == CoverAiMode.none {
+            letter.currentMode = .generate
+        }
         appendUserMessage(userMessage)
-
-        // Get the preferred model
         let modelString = OpenAIModelFetcher.getPreferredModelString()
 
-        // Send the completion request
         Task {
             do {
-                // Use the Responses API if available
                 if isResponsesAPIEnabled() {
-                    // Combine messages for the Responses API
                     let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
-
                     let response = try await openAIClient.sendResponseRequestAsync(
                         message: combinedMessage,
                         model: modelString,
-                        temperature: 1.0, // Standard temperature
-                        previousResponseId: letter.previousResponseId, // Pass previous ID for context
-                        schema: nil // No specific schema for cover letter generation
+                        temperature: 1.0,
+                        previousResponseId: letter.previousResponseId,
+                        schema: nil
                     )
-
-                    // Save the response ID for future continuations
                     letter.previousResponseId = response.id
-
-                    // Process the results on the main thread
                     await MainActor.run {
                         processResults(
                             newMessage: response.content,
                             coverLetter: letter,
                             buttons: buttons,
                             model: modelString,
-                            isRevision: !isNewConversation // It's a revision if not a new conversation
+                            isRevision: !isNewConversation // It's a revision if not a new conversation and name is already set
                         )
                     }
                 } else {
-                    // Fallback to the original ChatCompletion API
                     let response = try await openAIClient.sendChatCompletionAsync(
                         messages: genericMessages,
                         model: modelString,
-                        temperature: 1.0 // Standard temperature
+                        temperature: 1.0
                     )
-
-                    // Process the results on the main thread
                     await MainActor.run {
                         processResults(
                             newMessage: response.content,
                             coverLetter: letter,
                             buttons: buttons,
                             model: modelString,
-                            isRevision: !isNewConversation // It's a revision if not a new conversation
+                            isRevision: !isNewConversation && !letter.name.isEmpty
                         )
                     }
                 }
             } catch {
                 await MainActor.run {
-                    // Handle any errors
                     buttons.wrappedValue.runRequested = false
                     errorMessage = "Error: \(error.localizedDescription)"
                 }
@@ -186,59 +173,66 @@ final class CoverChatProvider {
         }
     }
 
-    /// Check if the Responses API should be used
-    /// - Returns: True if the Responses API should be used
     private func isResponsesAPIEnabled() -> Bool {
-        // We can add a feature flag here in the future
-        // For now, always return true to use the new API
         return true
     }
 
-    /// Process the results from the OpenAI API
-    /// - Parameters:
-    ///   - newMessage: The new message to process
-    ///   - coverLetter: The cover letter to update
-    ///   - buttons: The cover letter buttons
-    ///   - model: The model used for generation (optional)
-    ///   - isRevision: A boolean indicating if this is a revision operation
     private func processResults(
         newMessage: String,
         coverLetter: CoverLetter,
         buttons: Binding<CoverLetterButtons>,
         model: String? = nil,
-        isRevision: Bool
+        isRevision: Bool // True if this is a revision of an existing letter
     ) {
-        // Add the assistant message to the history
         appendAssistantMessage(newMessage)
-
-        // Update the cover letter with the results
         coverLetter.content = newMessage
-        coverLetter.generated = true // Mark as generated
-        coverLetter.moddedDate = Date() // Update modification date
+        coverLetter.generated = true
+        coverLetter.moddedDate = Date()
 
-        // Format the model name (simplified version without date)
         let formattedModel = formatModelName(model ?? "LLM")
 
-        // Update letter name based on whether it's a new generation or a revision
+        // Naming logic update:
         if isRevision {
-            // Append revision type to the existing name
-            let revisionType = coverLetter.editorPrompt.operation.rawValue // e.g., "Mimic", "Zissner"
-            if !coverLetter.name.contains(revisionType) { // Avoid duplicate revision tags
-                coverLetter.name = "\(coverLetter.name), \(revisionType)"
+            // For revisions, we should already have a new cover letter with
+            // the appropriate option letter assigned in createDuplicate,
+            // so we just need to append the revision type if it's not present
+            let revisionType = coverLetter.editorPrompt.operation.rawValue
+
+            // Extract the part after the colon (if it exists)
+            let nameBase = coverLetter.editableName
+
+            // Only append the revision type if it's not already there
+            if !nameBase.contains(revisionType) {
+                coverLetter.setEditableName(nameBase + ", " + revisionType)
             }
         } else {
-            // First generation - set the model name
-            // Append "Res Background" if includeResumeRefs is true
-            var baseName = formattedModel
-            if coverLetter.includeResumeRefs {
-                baseName += ", Res Background"
+            // This is a fresh generation of content (not a revision)
+            // Either the first generation for this letter or a regeneration
+            // with the Generate New button
+
+            // Get or create an appropriate option letter
+            let optionLetter: String
+            if coverLetter.optionLetter.isEmpty {
+                // No existing option letter, use the next available letter
+                // This ensures we never reuse a letter, even if others are deleted
+                optionLetter = coverLetter.getNextOptionLetter()
+            } else {
+                // Already has an option letter, preserve it
+                optionLetter = coverLetter.optionLetter
             }
-            coverLetter.name = baseName
+
+            // Create a descriptive suffix with model and resume background info
+            var nameSuffix = formattedModel
+            if coverLetter.includeResumeRefs {
+                nameSuffix += " with Res BG"
+            }
+            // No "without Res BG" suffix is added when the checkbox is unchecked
+
+            // Set the full name with the "Option X: description" format
+            coverLetter.name = "Option \(optionLetter): \(nameSuffix)"
         }
 
         buttons.wrappedValue.runRequested = false
-
-        // Save the message history for potential revisions later
         coverLetter.messageHistory = genericMessages.map {
             MessageParams(
                 content: $0.content,
@@ -247,9 +241,6 @@ final class CoverChatProvider {
         }
     }
 
-    /// Converts a ChatRole to a MessageRole
-    /// - Parameter chatRole: The ChatRole to convert
-    /// - Returns: The corresponding MessageRole
     private func messageRoleFromChatRole(_ chatRole: ChatMessage.ChatRole) -> MessageParams.MessageRole {
         switch chatRole {
         case .system:
@@ -261,45 +252,29 @@ final class CoverChatProvider {
         }
     }
 
-    /// Calls the OpenAI API to revise a cover letter
-    /// - Parameters:
-    ///   - res: The resume to use
-    ///   - jobAppStore: The job app store
-    ///   - chatProvider: The chat provider
-    ///   - buttons: The cover letter buttons
-    ///   - customFeedback: Custom feedback for revision
-    ///   - isNewConversation: Whether this is a new conversation (default false for revisions)
     @MainActor
     func coverChatRevise(
-        res _: Resume?, // res is optional as it might not always be needed for revisions
+        res _: Resume?,
         jobAppStore: JobAppStore,
-        chatProvider _: CoverChatProvider, // chatProvider is self
+        chatProvider _: CoverChatProvider,
         buttons: Binding<CoverLetterButtons>,
-        customFeedback: Binding<String>, // For custom feedback mode
-        isNewConversation: Bool = false // Revisions are typically not new conversations
+        customFeedback: Binding<String>,
+        isNewConversation: Bool = false
     ) {
         guard let app = jobAppStore.selectedApp else { return }
-
-        // Get the current cover letter
         guard let letter = app.selectedCover else { return }
 
         buttons.wrappedValue.runRequested = true
 
-        // If this is a new conversation, clear the response ID
-        if isNewConversation {
+        if isNewConversation { // Should generally be false for revisions
             letter.previousResponseId = nil
         }
 
-        // Set up the system message
         let systemMessage = CoverLetterPrompts.systemMessage
+        genericMessages = [systemMessage] // Start with system message for this interaction
 
-        // Add the system message
-        genericMessages = [systemMessage]
-
-        // Get the userMessage based on the mode
         let userMessage: String
         if letter.editorPrompt == .custom {
-            // Use the feedback provided by the user
             userMessage = """
             Upon reading your latest draft, \(Applicant().name) has provided the following feedback:
 
@@ -313,7 +288,6 @@ final class CoverChatProvider {
             \(letter.content)
             """
         } else {
-            // Use the prompt template from the editor prompts
             let promptTemplate = letter.editorPrompt
             userMessage = """
             My initial draft of a cover letter to accompany my application is included below.
@@ -323,33 +297,21 @@ final class CoverChatProvider {
             \(letter.content)
             """
         }
-
-        // For legacy API, add the user message to the message history
         appendUserMessage(userMessage)
-
-        // Get the preferred model
         let modelString = OpenAIModelFetcher.getPreferredModelString()
 
-        // Send the completion request
         Task {
             do {
-                // Use the Responses API if available
                 if isResponsesAPIEnabled() {
-                    // Combine messages for the Responses API
                     let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
-
                     let response = try await openAIClient.sendResponseRequestAsync(
                         message: combinedMessage,
                         model: modelString,
-                        temperature: 1.0, // Standard temperature
-                        previousResponseId: letter.previousResponseId, // Pass previous ID for context
-                        schema: nil // No specific schema for cover letter revision
+                        temperature: 1.0,
+                        previousResponseId: letter.previousResponseId,
+                        schema: nil
                     )
-
-                    // Save the response ID for future continuations
                     letter.previousResponseId = response.id
-
-                    // Process the results on the main thread
                     await MainActor.run {
                         processResults(
                             newMessage: response.content,
@@ -360,14 +322,11 @@ final class CoverChatProvider {
                         )
                     }
                 } else {
-                    // Fallback to the original ChatCompletion API
                     let response = try await openAIClient.sendChatCompletionAsync(
                         messages: genericMessages,
                         model: modelString,
-                        temperature: 1.0 // Standard temperature
+                        temperature: 1.0
                     )
-
-                    // Process the results on the main thread
                     await MainActor.run {
                         processResults(
                             newMessage: response.content,
@@ -380,7 +339,6 @@ final class CoverChatProvider {
                 }
             } catch {
                 await MainActor.run {
-                    // Handle any errors
                     buttons.wrappedValue.runRequested = false
                     errorMessage = "Error: \(error.localizedDescription)"
                 }

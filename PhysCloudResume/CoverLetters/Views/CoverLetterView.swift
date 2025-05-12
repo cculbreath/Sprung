@@ -146,11 +146,11 @@ struct CoverLetterContentView: View {
                     Text("Editing - Last modified \(cL.modDate)")
                         .font(.caption)
                         .padding(.horizontal)
-                    // Editable cover letter name
+                    // Editable cover letter name (only the part after the colon)
                     let nameBinding = Binding<String>(
-                        get: { cL.name },
-                        set: { newName in
-                            cL.name = newName
+                        get: { cL.editableName },
+                        set: { newNameContent in
+                            cL.setEditableName(newNameContent)
                             cL.moddedDate = Date()
                         }
                     )

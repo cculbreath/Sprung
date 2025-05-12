@@ -1,10 +1,3 @@
-//
-//  CoverLetter.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 9/12/24.
-//
-
 import Foundation
 import SwiftData
 
@@ -18,11 +11,12 @@ class CoverLetter: Identifiable, Hashable {
 
     var createdDate: Date = Date()
     var moddedDate: Date = Date()
-    // Editable name of the cover letter, shown in pickers and exports
+    // Editable name of the cover letter, shown in pickers and exports.
+    // This will now store the persistent "Option X: Model Name, Revision"
     var name: String = ""
     var content: String = ""
     var generated: Bool = false
-    var includeResumeRefs: Bool = false // This flag will be used for naming
+    var includeResumeRefs: Bool = false
     var encodedEnabledRefs: Data? // Store as Data
     var encodedMessageHistory: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none
@@ -52,8 +46,6 @@ class CoverLetter: Identifiable, Hashable {
             do {
                 return try JSONDecoder().decode([MessageParams].self, from: data)
             } catch {
-                // It's better to log the error or handle it gracefully
-                // For now, returning an empty array to prevent crashes.
                 print("Failed to decode messageHistory: \(error.localizedDescription)")
                 return []
             }
@@ -63,7 +55,6 @@ class CoverLetter: Identifiable, Hashable {
                 encodedMessageHistory = try JSONEncoder().encode(newValue)
 
             } catch {
-                // It's better to log the error or handle it gracefully
                 print("Failed to encode messageHistory: \(error.localizedDescription)")
             }
         }
@@ -88,16 +79,16 @@ class CoverLetter: Identifiable, Hashable {
     }
 
     /// 1-based index of this cover letter within its job application (ordered by creation date)
+    /// This remains dynamic and is used for assigning the *initial* "Option X" label.
     var sequenceNumber: Int {
         guard let app = jobApp else { return 0 }
-        // Sort by creation date to ensure consistent numbering
         let sortedLetters = app.coverLetters.sorted { $0.createdDate < $1.createdDate }
         guard let index = sortedLetters.firstIndex(where: { $0.id == self.id }) else { return 0 }
         return index + 1
     }
 
     /// Converts a positive integer into letters: 1->A, 2->B, ..., 27->AA, etc.
-    private static func letterLabel(for number: Int) -> String {
+    static func letterLabel(for number: Int) -> String {
         guard number > 0 else { return "" }
         var n = number
         var label = ""
@@ -111,17 +102,87 @@ class CoverLetter: Identifiable, Hashable {
         return label
     }
 
-    /// A friendly name prefixed with its alphabetic option and the custom name.
-    /// Includes revision history in the name.
+    /// A friendly name for display. If `name` is set (which it should be for generated letters),
+    /// it will be used directly. Otherwise, provides a fallback.
     var sequencedName: String {
-        let letter = Self.letterLabel(for: sequenceNumber)
-        if generated {
-            // Base name is "Option X: modelName"
-            // If includeResumeRefs is true for the *initial* generation, append "Res Background"
-            // Revisions will append their type (e.g., zissner, mimic)
-            return "Option \(letter)\(name.isEmpty ? "" : ": \(name)")"
+        if name.isEmpty {
+            if generated {
+                // Fallback for generated but somehow unnamed letter.
+                // Uses current dynamic sequence number for the "Option X" part.
+                return "Generated \(Self.letterLabel(for: sequenceNumber))"
+            } else {
+                // For a truly blank, ungenerated, unnamed letter.
+                // Uses current dynamic sequence number for the "Option X" part.
+                return "Ungenerated Draft \(Self.letterLabel(for: sequenceNumber))"
+            }
+        }
+        // If name is not empty, it's expected to contain the persistent "Option X: ..." label.
+        return name
+    }
+
+    /// Extract the option letter from the cover letter name
+    var optionLetter: String {
+        // Extract the part before the colon for option letter
+        let nameParts = name.split(separator: ":", maxSplits: 1)
+        if !nameParts.isEmpty {
+            if let optionWord = nameParts[0].split(separator: " ").first,
+               optionWord == "Option",
+               let letterPart = nameParts[0].split(separator: " ").last
+            {
+                return String(letterPart)
+            }
+        }
+        return ""
+    }
+
+    /// Get the next available option letter based on all letters in the job app
+    /// This ensures we never reuse an option letter, even when others are deleted
+    func getNextOptionLetter() -> String {
+        guard let jobApp = jobApp else { return "A" }
+
+        // Get all used option letters, including from deleted letters
+        let usedLetters = jobApp.coverLetters.compactMap { letter -> String in
+            return letter.optionLetter
+        }.filter { !$0.isEmpty }
+
+        // Start with 'A'
+        let alphabetStart = Character("A").asciiValue ?? 65
+        var letterValue: UInt8 = alphabetStart
+
+        // Find the first unused letter
+        while true {
+            let currentLetter = String(Character(UnicodeScalar(letterValue)))
+            if !usedLetters.contains(currentLetter) {
+                return currentLetter
+            }
+            letterValue += 1
+
+            // Extremely unlikely, but in case we run past Z, start with AA
+            if letterValue > Character("Z").asciiValue ?? 90 {
+                return "AA"
+            }
+        }
+    }
+
+    /// Get editable portion of the name (part after the colon)
+    var editableName: String {
+        let nameParts = name.split(separator: ":", maxSplits: 1)
+        if nameParts.count > 1 {
+            return String(nameParts[1]).trimmingCharacters(in: .whitespaces)
+        }
+        return name // If no colon, return the full name
+    }
+
+    /// Set editable portion of the name while preserving the Option prefix
+    func setEditableName(_ newContent: String) {
+        let nameParts = name.split(separator: ":", maxSplits: 1)
+        if nameParts.count > 1 {
+            // Preserve the "Option X:" prefix
+            let prefix = String(nameParts[0])
+            name = "\(prefix): \(newContent)"
         } else {
-            return "Ungenerated Draft"
+            // No prefix found, set the name directly
+            name = newContent
         }
     }
 }
@@ -160,12 +221,10 @@ class MessageParams: Identifiable, Codable {
         try container.encode(role, forKey: .role)
     }
 
-    // Make MessageRole conform to Codable
     enum MessageRole: String, Codable {
         case user
         case assistant
         case system
-        // Added none as a default case for safety, though it shouldn't be used.
         case none
     }
 }

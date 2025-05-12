@@ -27,13 +27,8 @@ struct CoverLetterPicker: View {
                 Text(noneLabel).tag(nil as CoverLetter?)
             }
             ForEach(coverLetters, id: \.id) { letter in
-                if letter.generated {
-                    Text(letter.sequencedName)
-                        .tag(letter as CoverLetter?)
-                } else {
-                    Text(selection == letter ? letter.sequencedName : "Ungenerated draft")
-                        .tag(letter as CoverLetter?)
-                }
+                Text(letter.generated ? letter.sequencedName : "Ungenerated draft")
+                    .tag(letter as CoverLetter?)
             }
         }
         .id(selection?.id) // Force refresh when selection changes

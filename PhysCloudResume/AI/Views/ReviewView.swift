@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ReviewView: View {
     @Environment(ResStore.self) private var resStore
+    @Environment(\.modelContext) private var modelContext
     @Binding var revisionArray: [ProposedRevisionNode]
     @Binding var feedbackArray: [FeedbackNode]
     @State private var feedbackIndex: Int = 0
@@ -303,13 +304,15 @@ struct ReviewView: View {
     }
 
     func nextNode() {
-        @Environment(\.modelContext) var context: ModelContext
-
+        // Move the environment outside function body - will be captured from View's environment
         if let currentFeedbackNode = currentFeedbackNode {
             feedbackArray.append(currentFeedbackNode)
             feedbackIndex += 1
+            print("Added node to feedbackArray. New index: \(feedbackIndex)/\(revisionArray.count)")
         }
+
         if feedbackIndex < revisionArray.count {
+            print("Moving to next node at index \(feedbackIndex)")
             withAnimation(.easeInOut(duration: 0.5)) {
                 currentRevNode = revisionArray[feedbackIndex]
                 if let currentRevNode = currentRevNode {
@@ -324,22 +327,63 @@ struct ReviewView: View {
                 }
             }
         } else {
+            print("Reached end of revisionArray. Applying changes...")
             applyChanges()
+
+            // Log stats about the feedback node categories
+            print("\n===== FEEDBACK NODE STATISTICS =====")
+            print("Total feedback nodes: \(feedbackArray.count)")
+
+            let acceptedCount = feedbackArray.filter { $0.actionRequested == .accepted }.count
+            let acceptedWithChangesCount = feedbackArray.filter { $0.actionRequested == .acceptedWithChanges }.count
+            let noChangeCount = feedbackArray.filter { $0.actionRequested == .noChange }.count
+            let restoredCount = feedbackArray.filter { $0.actionRequested == .restored }.count
+            let reviseCount = feedbackArray.filter { $0.actionRequested == .revise }.count
+            let rewriteNoCommentCount = feedbackArray.filter { $0.actionRequested == .rewriteNoComment }.count
+            let mandatedChangeCount = feedbackArray.filter { $0.actionRequested == .mandatedChange }.count
+            let mandatedChangeNoCommentCount = feedbackArray.filter { $0.actionRequested == .mandatedChangeNoComment }.count
+
+            print("Accepted: \(acceptedCount)")
+            print("Accepted with changes: \(acceptedWithChangesCount)")
+            print("No change needed: \(noChangeCount)")
+            print("Restored to original: \(restoredCount)")
+            print("Revise (with comments): \(reviseCount)")
+            print("Rewrite (no comments): \(rewriteNoCommentCount)")
+            print("Mandated change (with comments): \(mandatedChangeCount)")
+            print("Mandated change (no comments): \(mandatedChangeNoCommentCount)")
+            print("==================================\n")
+
             let aiActions: Set<PostReviewAction> = [
                 .revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment,
             ]
 
-            if feedbackArray.contains(where: { node in
+            // Filter feedbackArray to only include nodes that need AI intervention
+            let nodesToResubmit = feedbackArray.filter { node in
                 aiActions.contains(node.actionRequested)
-            }) {
-                for _ in feedbackArray {}
-                aiResubmit()
-            } else {
-                if let selRes = selRes {
-                    if let selRes = resStore.createDuplicate(originalResume: selRes, context: context) {
-                        selRes.debounceExport()
+            }
+
+            print("Found \(nodesToResubmit.count) nodes requiring resubmission out of \(feedbackArray.count) total")
+
+            if !nodesToResubmit.isEmpty {
+                print("Resubmitting \(nodesToResubmit.count) nodes to AI...")
+                // Only keep nodes that need AI intervention for the next round
+                feedbackArray = nodesToResubmit
+
+                // Log the exact nodes we're sending for revision
+                for (index, node) in feedbackArray.enumerated() {
+                    print("Node \(index + 1)/\(feedbackArray.count) for revision:")
+                    print("  - ID: \(node.id)")
+                    print("  - Action: \(node.actionRequested.rawValue)")
+                    print("  - Original: \(node.originalValue.prefix(30))\(node.originalValue.count > 30 ? "..." : "")")
+                    if !node.reviewerComments.isEmpty {
+                        print("  - Comments: \(node.reviewerComments.prefix(50))\(node.reviewerComments.count > 50 ? "..." : "")")
                     }
                 }
+
+                aiResubmit()
+            } else {
+                print("No nodes need resubmission. All changes are applied, dismissing sheet...")
+                // Simply dismiss the sheet - no need to create a duplicate
                 sheetOn = false
             }
         }
@@ -350,15 +394,21 @@ struct ReviewView: View {
             if node.actionRequested == .accepted || node.actionRequested == .acceptedWithChanges {
                 if let selRes = selRes {
                     if let treeNode = selRes.nodes.first(where: { $0.id == node.id }) {
-                        // Debug logging to help diagnose issues
-
+                        // Apply the change based on whether it's a title node or value node
                         if node.isTitleNode {
                             treeNode.name = node.proposedRevision
                         } else {
                             treeNode.value = node.proposedRevision
                         }
+
+                        // Ensure the isTitleNode property is set correctly for future rendering
+                        // If this is a title node update, make sure the TreeNode knows it's a title node
+                        if node.isTitleNode {
+                            treeNode.isTitleNode = true
+                        }
                     } else {
                         // Try to diagnose the issue by listing available node IDs
+                        print("Could not find TreeNode with ID: \(node.id) to apply changes")
                     }
                 }
             }
@@ -372,25 +422,68 @@ struct ReviewView: View {
         // Reset to original state before resubmitting to AI
         feedbackIndex = 0
 
-        // Set to true with an animation and slight delay to ensure UI updates properly
+        // First, immediately show the loading UI
         withAnimation {
             aiResub = true
+        }
+
+        // Apply any accepted changes to the resume
+        applyChanges()
+
+        // Print summary of what we're submitting for revision
+        print("\n===== SUBMITTING REVISION REQUEST =====")
+        print("Number of nodes to revise: \(feedbackArray.count)")
+
+        // Count by feedback type
+        let typeCount = feedbackArray.reduce(into: [PostReviewAction: Int]()) { counts, node in
+            counts[node.actionRequested, default: 0] += 1
+        }
+
+        for (action, count) in typeCount.sorted(by: { $0.value > $1.value }) {
+            print("  - \(action.rawValue): \(count) nodes")
+        }
+
+        // List node IDs being submitted
+        let nodeIds = feedbackArray.map { $0.id }.joined(separator: ", ")
+        print("Node IDs: \(nodeIds)")
+        print("========================================\n")
+
+        // Force PDF re-rendering to ensure up-to-date textRes
+        if let selRes = selRes {
+            print("Starting PDF re-rendering for AI resubmission...")
+            Task {
+                do {
+                    // Await the PDF rendering completion
+                    try await selRes.ensureFreshRenderedText()
+                    print("PDF rendering complete for AI resubmission")
+
+                    // After render completes, aiResub is already true, so the LLM call will happen automatically
+                    // The AiCommsView watches for changes to aiResub, which triggers its chatAction
+                } catch {
+                    print("Error rendering resume for AI resubmission: \(error)")
+                    await MainActor.run {
+                        aiResub = false
+                        // Show an error to the user?
+                    }
+                }
+            }
         }
 
         // Safety timeout - if aiResub remains true for too long, auto-dismiss the sheet
         // as this likely indicates a communication issue with the AI service
         DispatchQueue.main.asyncAfter(deadline: .now() + 120) { // 2 minute timeout
             if aiResub {
+                print("Timeout reached for AI resubmission. Auto-dismissing.")
                 aiResub = false
                 sheetOn = false
             }
         }
     }
 
-    func fetchModelByID(id: String, context: ModelContext) -> TreeNode? {
+    func fetchModelByID(id: String) -> TreeNode? {
         var descriptor = FetchDescriptor<TreeNode>()
         descriptor.predicate = #Predicate { $0.id == id }
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return try? modelContext.fetch(descriptor).first
     }
 }

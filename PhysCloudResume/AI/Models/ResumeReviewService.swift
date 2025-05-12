@@ -98,9 +98,6 @@ class ResumeReviewService: @unchecked Sendable {
         includeImage: Bool, // This flag now informs the prompt text
         customOptions: CustomReviewOptions? = nil
     ) -> String {
-        if resume.model != nil {
-            return "Error: No resume model available for review."
-        }
         guard let jobApp = resume.jobApp else {
             return "Error: No job application associated with this resume."
         }
