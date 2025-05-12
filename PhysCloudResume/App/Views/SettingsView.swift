@@ -4,7 +4,8 @@ import SwiftUI
 
 struct SettingsView: View {
     // State variable needed by APIKeysSettingsView callback
-    @State private var forceModelFetch = false
+    // This can be removed if OpenAIModelSettingsView is no longer a child and handles its own updates.
+    // @State private var forceModelFetch = false // Removed as OpenAIModelSettingsView is now in toolbar
 
     // AppStorage for the new Fix Overflow setting
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
@@ -17,13 +18,11 @@ struct SettingsView: View {
                 // API Keys Section
                 APIKeysSettingsView {
                     // This closure is called when the OpenAI key is saved in APIKeysSettingsView
-                    forceModelFetch.toggle() // Trigger state change to signal OpenAIModelSettingsView
+                    // If OpenAIModelSettingsView is in the toolbar, it might observe AppStorage directly
+                    // or we might need a different mechanism to trigger its refresh if it's not always visible.
+                    // For now, this callback might not be strictly necessary if the toolbar view handles its own updates.
+                    // forceModelFetch.toggle() // This line can be removed if not used
                 }
-
-                // OpenAI Model Selection Section
-                OpenAIModelSettingsView()
-                    // Observe the state change to trigger a model fetch
-                    .id(forceModelFetch) // Use .id to force recreation/update if needed
 
                 // Resume Styles Section
                 ResumeStylesSettingsView()
@@ -41,7 +40,7 @@ struct SettingsView: View {
         }
         // Set the frame for the settings window
         .frame(minWidth: 450, idealWidth: 600, maxWidth: .infinity,
-               minHeight: 550, idealHeight: 750, maxHeight: .infinity) // Adjusted ideal height
+               minHeight: 450, idealHeight: 650, maxHeight: .infinity) // Adjusted min and ideal height
         .background(Color(NSColor.controlBackgroundColor)) // Use standard control background
         // Allow the sheet to be resized
         .presentationDetents([.medium, .large])
@@ -49,7 +48,7 @@ struct SettingsView: View {
     }
 }
 
-// New subview for Fix Overflow settings
+// New subview for Fix Overflow settings (remains unchanged)
 struct FixOverflowSettingsView: View {
     @Binding var fixOverflowMaxIterations: Int
 
