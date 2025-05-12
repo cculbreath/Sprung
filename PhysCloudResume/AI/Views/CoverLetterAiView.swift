@@ -17,6 +17,9 @@ final class TTSProviderManager {
     static let shared = TTSProviderManager()
     private var instance: OpenAITTSProvider?
 
+    // Track whether TTS is currently needed
+    private var ttsInitialized: Bool = false
+
     private init() {}
 
     func getProvider(apiKey: String) -> OpenAITTSProvider {
@@ -28,9 +31,24 @@ final class TTSProviderManager {
             return newProvider
         }
     }
+
+    // New method to ensure TTS is only initialized when needed
+    func getProviderIfNeeded(apiKey: String, ttsEnabled: Bool) -> OpenAITTSProvider? {
+        if !ttsEnabled {
+            // If TTS is disabled, we return nil and avoid initialization
+            return nil
+        }
+
+        // Only initialize if TTS is enabled
+        if !ttsInitialized {
+            print("TTSProviderManager: Initializing TTS on first use")
+            ttsInitialized = true
+        }
+
+        return getProvider(apiKey: apiKey)
+    }
 }
 
-/// Wrapper view for Cover Letter AI content. Initializes dependencies.
 @MainActor
 struct CoverLetterAiView: View {
     // MARK: - App Storage
@@ -52,9 +70,9 @@ struct CoverLetterAiView: View {
         OpenAIClientFactory.createClient(apiKey: openAiApiKey)
     }
 
-    // Get shared TTS provider
-    private var ttsProvider: OpenAITTSProvider {
-        TTSProviderManager.shared.getProvider(apiKey: openAiApiKey)
+    // Get shared TTS provider only if TTS is enabled
+    private var ttsProvider: OpenAITTSProvider? {
+        TTSProviderManager.shared.getProviderIfNeeded(apiKey: openAiApiKey, ttsEnabled: ttsEnabled)
     }
 
     // MARK: - Initialization
@@ -68,16 +86,18 @@ struct CoverLetterAiView: View {
     // MARK: - Body
 
     var body: some View {
-        // Initialize our main manager with stable provider instances
+        // Initialize our main manager with optional TTS provider
         CoverLetterAiManager(
             openAIClient: openAIClient,
-            ttsProvider: ttsProvider,
+            ttsProvider: ttsProvider, // Now optional
             buttons: $buttons,
             refresh: $refresh,
             ttsEnabled: $ttsEnabled,
             ttsVoice: $ttsVoice,
             isNewConversation: isNewConversation
         )
-        .onAppear { print("AI Cover Letter View appeared") }
+        .onAppear {
+            print("AI Cover Letter View appeared (TTS enabled: \(ttsEnabled))")
+        }
     }
 }

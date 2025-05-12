@@ -76,8 +76,7 @@ final class CoverLetterStore: SwiftDataStore {
     }
 
     func createDuplicate(letter: CoverLetter) -> CoverLetter {
-        // Ensure the context has pending changes saved before duplicating,
-        // especially if the original letter might have unsaved modifications.
+        // Ensure the context has pending changes saved before duplicating
         saveContext() // From `SwiftDataStore` extension
 
         let newLetter = CoverLetter(
@@ -91,11 +90,14 @@ final class CoverLetterStore: SwiftDataStore {
         newLetter.encodedMessageHistory = letter.encodedMessageHistory // Copy message history for context
         newLetter.currentMode = letter.currentMode // Copy current mode
 
-        // Preserve the existing cover letter name for revision operations.
-        // The revision type (e.g., "zissner") will be appended by processResults.
-        newLetter.name = letter.name
+        // Get next available option letter for the new cover letter
+        let nextOptionLetter = newLetter.getNextOptionLetter()
 
-        // Copy other necessary properties here if any
+        // Extract the part after the colon from the existing name (if any)
+        let nameBase = letter.editableName
+
+        // Set the new name with the next option letter
+        newLetter.name = "Option \(nextOptionLetter): \(nameBase)"
 
         if let jobApp = letter.jobApp {
             addLetter(letter: newLetter, to: jobApp) // This also sets it as selectedCover on jobApp

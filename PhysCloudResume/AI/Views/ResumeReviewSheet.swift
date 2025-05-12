@@ -32,7 +32,7 @@ struct ResumeReviewSheet: View {
     // AppStorage for max iterations
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
 
-    // Computed property for the content view
+    // Computed property for the content view (remains the same)
     private var contentView: some View {
         Group {
             if isProcessingGeneral {
@@ -55,16 +55,13 @@ struct ResumeReviewSheet: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !reviewResponseText.isEmpty { // For general reviews
-                // Use MarkdownView for rich markdown rendering, including tables.
-                // Note: WKWebView inside MarkdownView handles its own scrolling, no need for ScrollView.
+            } else if !reviewResponseText.isEmpty {
                 MarkdownView(markdown: reviewResponseText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(12)
-                    .background(Color(NSColor.controlBackgroundColor)) // macOS appropriate background
+                    .background(Color(NSColor.controlBackgroundColor))
                     .cornerRadius(8)
-            } else if !fixOverflowStatusMessage.isEmpty { // For fix overflow completion/status
-                // This typically shows status messages, not markdown content, so standard Text is fine.
+            } else if !fixOverflowStatusMessage.isEmpty {
                 ScrollView {
                     Text(fixOverflowStatusMessage)
                         .textSelection(.enabled)
@@ -93,39 +90,49 @@ struct ResumeReviewSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) { // Use spacing 0 for the outer VStack to control padding precisely
             // Header
             Text("AI Resume Review")
                 .font(.title)
+                .padding([.horizontal, .top]) // Add padding to header
                 .padding(.bottom, 8)
 
-            // Review type selection
-            Picker("Review Type", selection: $selectedReviewType) {
-                ForEach(ResumeReviewType.allCases) { type in
-                    Text(type.rawValue).tag(type)
+            // Scrollable content area
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Review type selection
+                    Picker("Review Type", selection: $selectedReviewType) {
+                        ForEach(ResumeReviewType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .onChange(of: selectedReviewType) { _, _ in
+                        // Reset states when review type changes
+                        reviewResponseText = ""
+                        fixOverflowStatusMessage = ""
+                        isProcessingGeneral = false
+                        isProcessingFixOverflow = false
+                        generalError = nil
+                        fixOverflowError = nil
+                    }
+
+                    // Custom options if custom type is selected
+                    if selectedReviewType == .custom {
+                        CustomReviewOptionsView(customOptions: $customOptions)
+                    }
+
+                    // Content area (GroupBox with contentView)
+                    GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
+                        contentView // This already handles its internal scrolling for MarkdownView
+                            .frame(minHeight: 200, idealHeight: 300, maxHeight: .infinity) // Allow it to expand
+                    }
                 }
-            }
-            .pickerStyle(.menu)
-            .onChange(of: selectedReviewType) { _, _ in
-                // Reset states when review type changes
-                reviewResponseText = ""
-                fixOverflowStatusMessage = ""
-                isProcessingGeneral = false
-                isProcessingFixOverflow = false
-                generalError = nil
-                fixOverflowError = nil
-            }
+                .padding(.horizontal) // Padding for the scrollable content
+                .padding(.bottom) // Padding at the bottom of scrollable content
+            } // End ScrollView
 
-            // Custom options if custom type is selected
-            if selectedReviewType == .custom {
-                CustomReviewOptionsView(customOptions: $customOptions)
-            }
-
-            // Content area
-            contentView
-                .frame(minHeight: 200)
-
-            // Button row
+            // Button row - Pinned to the bottom
             HStack {
                 if isProcessingGeneral || isProcessingFixOverflow {
                     Button("Stop") {
@@ -147,16 +154,17 @@ struct ResumeReviewSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
+            .padding([.horizontal, .bottom]) // Padding for the button bar
+            .padding(.top, 8) // Add some space above the button bar
+            .background(Color(NSColor.windowBackgroundColor).opacity(0.8)) // Optional: background for button bar
         }
-        .padding()
-        .frame(width: 600, height: 500, alignment: .topLeading)
+        .frame(width: 600, height: 500, alignment: .topLeading) // Original fixed sheet size
         .onAppear {
-            // Initialize service if needed (though it's a let constant now)
             reviewService.initialize()
         }
     }
 
-    // View for custom options (extracted for clarity)
+    // View for custom options (extracted for clarity) - Unchanged
     struct CustomReviewOptionsView: View {
         @Binding var customOptions: CustomReviewOptions
 
@@ -179,20 +187,19 @@ struct ResumeReviewSheet: View {
                         RoundedRectangle(cornerRadius: 5)
                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                     )
-                    .frame(minHeight: 100)
+                    .frame(minHeight: 100) // This TextEditor can grow
             }
             .padding(.vertical, 8)
         }
     }
 
-    // Main submission handler
+    // Main submission handler - Unchanged
     func handleSubmit() {
         guard let resume = selectedResume else {
             generalError = "No resume selected."
             return
         }
 
-        // Reset states
         reviewResponseText = ""
         fixOverflowStatusMessage = ""
         generalError = nil
@@ -203,12 +210,10 @@ struct ResumeReviewSheet: View {
             fixOverflowStatusMessage = "Starting skills optimization..."
             Task {
                 await performFixOverflow(resume: resume)
-                // isProcessingFixOverflow will be set to false at the end of performFixOverflow
             }
         } else {
             isProcessingGeneral = true
             reviewResponseText = "Submitting request..."
-            // Call the existing general review request logic
             reviewService.sendReviewRequest(
                 reviewType: selectedReviewType,
                 resume: resume,
@@ -224,28 +229,14 @@ struct ResumeReviewSheet: View {
                         isProcessingGeneral = false
                         switch result {
                         case let .success(finalMessage):
-                            // If reviewResponseText is still the placeholder, it means no onProgress calls were made (non-streaming).
-                            // Or if onProgress was called but only with empty chunks, reviewResponseText might be empty.
                             if reviewResponseText == "Submitting request..." || reviewResponseText.isEmpty {
                                 reviewResponseText = finalMessage
-                            } else {
-                                // Streaming occurred and reviewResponseText has content.
-                                // Optionally, append finalMessage if it's meaningful and not just a status.
-                                // This handles cases where the stream ends and a concluding, distinct message is sent.
-                                if !finalMessage.isEmpty, finalMessage.lowercased() != "review complete", !reviewResponseText.contains(finalMessage) {
-                                    // reviewResponseText += "\n\n" + finalMessage // Decided against auto-appending for now to keep it simple.
-                                }
                             }
-
-                            // If reviewResponseText is genuinely empty after all attempts (e.g., finalMessage was also empty),
-                            // set a default message.
                             if reviewResponseText.isEmpty {
                                 reviewResponseText = "Review complete. No specific feedback provided."
                             }
-
                         case let .failure(error):
                             generalError = "Error: \(error.localizedDescription)"
-                            // Clear any partial optimistic text or placeholder
                             if reviewResponseText == "Submitting request..." || !reviewResponseText.isEmpty {
                                 reviewResponseText = ""
                             }
@@ -256,15 +247,13 @@ struct ResumeReviewSheet: View {
         }
     }
 
-    // MARK: - Fix Overflow Logic
+    // MARK: - Fix Overflow Logic (Unchanged)
 
     @MainActor
     func performFixOverflow(resume: Resume) async {
         var loopCount = 0
-        // previousResponseId is managed by the resume object itself via the service
         var operationSuccess = false
 
-        // Ensure resume.pdfData is current before starting
         if resume.pdfData == nil {
             fixOverflowStatusMessage = "Generating initial PDF for analysis..."
             do {
@@ -408,8 +397,7 @@ struct ResumeReviewSheet: View {
         if fixOverflowError != nil {
             // Error message is already set
         } else if operationSuccess {
-            // Success message already set if contentsFit was true
-            if !fixOverflowStatusMessage.lowercased().contains("fits") { // If not already set by fit
+            if !fixOverflowStatusMessage.lowercased().contains("fits") {
                 fixOverflowStatusMessage = "Skills section optimization complete."
             }
         } else if loopCount >= fixOverflowMaxIterations {
@@ -419,12 +407,11 @@ struct ResumeReviewSheet: View {
         }
 
         isProcessingFixOverflow = false
-        resume.debounceExport() // Ensure final state is saved and PDF view updates
+        resume.debounceExport()
     }
 
-    // Helper to find TreeNode by ID within the selected resume
+    // Helper to find TreeNode by ID - Unchanged
     func findTreeNode(byId id: String, in resume: Resume) -> TreeNode? {
-        // Use the computed `nodes` property which flattens the tree
         return resume.nodes.first { $0.id == id }
     }
 }

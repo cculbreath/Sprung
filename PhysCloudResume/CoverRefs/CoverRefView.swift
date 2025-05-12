@@ -140,6 +140,7 @@ struct CoverRefViewWrapped: View {
                     // If it's generated, create a *new* copy with updated value
                     let newCL = coverLetterStore.createDuplicate(letter: oldCL)
                     newCL.includeResumeRefs = newValue
+                    newCL.generated = false // Explicitly mark as not generated
                     coverLetterStore.cL = newCL
                 } else {
                     // Otherwise, just mutate the existing cL

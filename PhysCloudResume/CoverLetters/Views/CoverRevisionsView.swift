@@ -94,21 +94,18 @@ struct RevisionsViewContent: View {
             return
         }
 
-        // Check if there's an existing cover letter for the current resume with `generated = false`
-        if let existingLetter = jobAppStore.selectedApp?.coverLetters.first(where: { letter in
-            !letter.generated
-        }) {
-            // Load the existing letter
-            jobAppStore.selectedApp?.selectedCover = existingLetter
-        } else {
-            // No existing draft, create a new cover letter
-            let oldContent = selectedCover.content // Unwrapped safely
-            let newCL = coverLetterStore.createDuplicate(letter: selectedCover) // Unwrapped safely
-            jobAppStore.selectedApp?.selectedCover = newCL // Assign new instance
-            jobAppStore.selectedApp?.selectedCover?.currentMode = (tempMode == .custom) ? .revise : .rewrite
-            jobAppStore.selectedApp?.selectedCover?.content = oldContent
-            jobAppStore.selectedApp?.selectedCover?.editorPrompt = tempMode
-        }
+        // Always create a new cover letter for revisions to maintain history
+        let oldContent = selectedCover.content // Unwrapped safely
+        let newCL = coverLetterStore.createDuplicate(letter: selectedCover) // Creates with next available option letter
+
+        // Set up the new cover letter for revision
+        newCL.currentMode = (tempMode == .custom) ? .revise : .rewrite
+        newCL.content = oldContent
+        newCL.editorPrompt = tempMode
+        newCL.generated = false // Mark as ungenerated until we get the AI response
+
+        // Select the new cover letter
+        jobAppStore.selectedApp?.selectedCover = newCL
 
         // Perform the revision or rewrite operation
         chatProvider.coverChatRevise(

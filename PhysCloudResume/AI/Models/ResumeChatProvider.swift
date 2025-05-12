@@ -325,6 +325,8 @@ final class ResumeChatProvider {
         print("Starting \(isNewConversation ? "new" : "continuation") conversation with Responses API")
         if !isNewConversation {
             print("Using previous response ID: \(previousResponseId ?? "nil")")
+        } else {
+            print("Starting fresh conversation with no previous context")
         }
 
         do {

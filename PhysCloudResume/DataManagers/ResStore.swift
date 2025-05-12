@@ -95,6 +95,37 @@ final class ResStore: SwiftDataStore {
         } else { return nil }
     }
 
+    // Async version of createDuplicate that can be awaited
+    func createDuplicateAsync(originalResume: Resume, context: ModelContext) async -> Resume? {
+        // Step 1: Create a new Resume instance
+        if let jobAppo = originalResume.jobApp {
+            let newResume = Resume(jobApp: jobAppo, enabledSources: originalResume.enabledSources, model: originalResume.model!)
+            // Indexes of copied nodes will be assigned sequentially within their new parent.
+
+            // Step 2: Deep copy the root node and its children
+            if let rootNode = originalResume.rootNode {
+                let rootNodeCopy = copyTreeNode(node: rootNode, newResume: newResume)
+                newResume.rootNode = rootNodeCopy
+            }
+
+            // Step 3: Save the new resume to the context
+            context.insert(newResume)
+
+            do {
+                try context.save()
+                print("Successfully saved duplicate resume")
+            } catch {
+                print("Error saving duplicate resume: \(error)")
+                return nil
+            }
+
+            return newResume
+        } else {
+            print("No job app associated with resume")
+            return nil
+        }
+    }
+
     // Recursive function to copy a TreeNode and its children
     func copyTreeNode(node: TreeNode, newResume: Resume) -> TreeNode {
         // Step 1: Create a copy of the current node with the new resume reference
