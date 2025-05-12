@@ -10,7 +10,7 @@ import SwiftUI
 struct OpenAIModelSettingsView: View {
     // AppStorage properties specific to this view
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
-    @AppStorage("preferredOpenAIModel") private var preferredOpenAIModel: String = "gpt-4o-2024-08-06"
+    @AppStorage("preferredOpenAIModel") private var preferredOpenAIModel: String = AIModels.gpt4o // Default to gpt4o
 
     // State for managing model list and loading/error status
     @State private var availableModels: [String] = []
@@ -18,63 +18,50 @@ struct OpenAIModelSettingsView: View {
     @State private var modelError: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("OpenAI Model")
-                .font(.headline)
-
-            HStack {
-                // Model Selection Picker
-                Picker("Model", selection: $preferredOpenAIModel) {
-                    // Ensure there's always a default option, even if loading fails
-                    if availableModels.isEmpty && !isLoadingModels {
-                        Text(preferredOpenAIModel).tag(preferredOpenAIModel) // Show current if list empty
-                    }
-                    // List fetched models
-                    ForEach(availableModels, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
+        // HStack for compact toolbar display
+        HStack(spacing: 8) {
+            // Model Selection Picker
+            Picker("Model", selection: $preferredOpenAIModel) {
+                // Ensure there's always a default option, even if loading fails
+                if availableModels.isEmpty && !isLoadingModels {
+                    Text(preferredOpenAIModel).tag(preferredOpenAIModel) // Show current if list empty
                 }
-                .disabled(isLoadingModels || availableModels.isEmpty) // Disable while loading or if empty
-                .frame(maxWidth: .infinity) // Take available width
-
-                // Refresh Button
-                Button(action: fetchOpenAIModels) {
-                    if isLoadingModels {
-                        ProgressView().scaleEffect(0.8) // Show spinner while loading
-                    } else {
-                        Image(systemName: "arrow.clockwise") // Refresh icon
-                    }
+                // List fetched models
+                ForEach(availableModels, id: \.self) { model in
+                    Text(model).tag(model)
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                .disabled(openAiApiKey == "none" || isLoadingModels) // Disable if no key or loading
-                .help(openAiApiKey == "none" ? "Enter OpenAI API Key to load models" : "Refresh model list")
             }
+            .pickerStyle(.menu) // Menu style is good for toolbars
+            .disabled(isLoadingModels || availableModels.isEmpty || openAiApiKey == "none") // Disable if no key, loading, or empty
+            .frame(minWidth: 120, idealWidth: 180) // Adjust width for toolbar
 
-            // Display Error Message if any
-            if let error = modelError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(.red)
+            // Refresh Button
+            Button(action: fetchOpenAIModels) {
+                if isLoadingModels {
+                    ProgressView().scaleEffect(0.7) // Smaller ProgressView for toolbar
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
-
-            // Prompt user to load models if list is empty
-            if availableModels.isEmpty && !isLoadingModels && modelError == nil && openAiApiKey != "none" {
-                Text("Click refresh (↻) to load available models.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            .buttonStyle(PlainButtonStyle()) // Plain style for toolbar buttons
+            .disabled(openAiApiKey == "none" || isLoadingModels)
+            .help(openAiApiKey == "none" ? "Enter OpenAI API Key to load models" : "Refresh model list")
+        }
+        // Removed padding, background, and border for toolbar suitability
+        .onAppear {
+            // Fetch models on appear only if the key is present and models haven't been loaded
+            if openAiApiKey != "none" && availableModels.isEmpty && !isLoadingModels {
+                fetchOpenAIModels()
             }
         }
-        .padding(10)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.7), lineWidth: 1)
-        )
-        .onAppear {
-            // Fetch models on appear only if the key is present
-            if openAiApiKey != "none" && availableModels.isEmpty {
+        .onChange(of: openAiApiKey) { _, newKey in
+            // Fetch models if API key changes and is valid
+            if newKey != "none" {
                 fetchOpenAIModels()
+            } else {
+                // Clear models if API key is removed
+                availableModels = []
+                modelError = "API key is required."
             }
         }
     }
@@ -101,7 +88,7 @@ struct OpenAIModelSettingsView: View {
                     availableModels = models
                     // Ensure the selected model is still valid, otherwise default
                     if !models.contains(preferredOpenAIModel) {
-                        preferredOpenAIModel = models.first ?? "gpt-4o-2024-08-06" // Default fallback
+                        preferredOpenAIModel = models.first ?? AIModels.gpt4o // Default fallback
                     }
                 }
                 isLoadingModels = false
