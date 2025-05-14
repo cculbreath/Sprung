@@ -264,6 +264,30 @@ final class ResumeChatProvider {
         return true
     }
 
+    /// Helper method to save message content to debug file
+    private func saveMessageToDebugFile(_ content: String, fileName: String) {
+        // Check if debug prompt saving is enabled
+        let saveDebugPrompts = UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+        
+        // Only save if debug is enabled
+        if saveDebugPrompts {
+            let fileManager = FileManager.default
+            let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
+            let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
+            let fileURL = downloadsURL.appendingPathComponent(fileName)
+            
+            do {
+                try content.write(to: fileURL, atomically: true, encoding: .utf8)
+                Logger.debug("Debug message content saved to: \(fileURL.path)")
+            } catch {
+                Logger.debug("Error saving debug message: \(error.localizedDescription)")
+            }
+        } else {
+            // Log that we would have saved a debug file, but it's disabled
+            Logger.debug("Debug message NOT saved (saveDebugPrompts disabled)")
+        }
+    }
+    
     /// Sends a request to the OpenAI Responses API
     /// - Parameters:
     ///   - messages: The message history for context
@@ -298,7 +322,43 @@ final class ResumeChatProvider {
             // Do *not* wipe previousResponseId here; it is needed for
             // follow-up revision calls.
         }
-        for message in messages {
+        
+        // Check for empty messages array - this is a critical error
+        var workingMessages = messages // Create a mutable copy
+        if workingMessages.isEmpty {
+            Logger.debug("❌ CRITICAL ERROR: Empty messages array received in startChatWithResponsesAPI!")
+            
+            // If we have a resume, try to generate a fallback prompt
+            if resume != nil {
+                // Create a basic fallback prompt that just asks for improvement of the resume
+                let fallbackPrompt = """
+                Please help improve this resume for a job application. Propose changes that would make it more effective.
+                
+                Generate your response in the required JSON format with the RevNode array schema.
+                """
+                
+                // Add a generic system message and the fallback user prompt
+                workingMessages = [
+                    ChatMessage(role: .system, content: "You are a helpful assistant specializing in resume improvements."),
+                    ChatMessage(role: .user, content: fallbackPrompt)
+                ]
+                
+                // Update genericMessages for future reference
+                genericMessages = workingMessages
+                
+                Logger.debug("⚠️ Created emergency fallback prompt due to empty messages array")
+            } else {
+                throw NSError(domain: "ResumeChatProviderError", code: 1005, 
+                    userInfo: [NSLocalizedDescriptionKey: "Empty messages array and no resume to generate fallback"])
+            }
+        }
+        
+        // Debug log for messages being processed
+        Logger.debug("Processing \(workingMessages.count) messages for chat request")
+        for (index, message) in workingMessages.enumerated() {
+            Logger.debug("Message \(index): Role=\(message.role), Content length=\(message.content.count) chars")
+            
+            // Now process the message normally
             switch message.role {
             case .system:
                 if !systemMessage.isEmpty {
@@ -311,18 +371,77 @@ final class ResumeChatProvider {
                 }
                 userMessage += message.content
             default:
+                Logger.debug("Skipping message with role: \(message.role)")
                 break
             }
         }
+        
+        // Debug log the extracted content
+        Logger.debug("Final system message length: \(systemMessage.count) chars")
+        Logger.debug("Final user message length: \(userMessage.count) chars")
 
         // Combine for the final message
-        let combinedMessage = """
-        System context:
-        \(systemMessage)
-
-        User message:
-        \(userMessage)
-        """
+        var combinedMessage = ""
+        
+        // Only include system context if there is actual content
+        if !systemMessage.isEmpty {
+            combinedMessage += """
+            System context:
+            \(systemMessage)
+            
+            """
+        }
+        
+        // Only include user message if there is actual content
+        if !userMessage.isEmpty {
+            combinedMessage += """
+            User message:
+            \(userMessage)
+            """
+        } else {
+            // If there's no user message, add a placeholder to avoid empty requests
+            Logger.debug("⚠️ Warning: Empty user message in chat request")
+        }
+        
+        // Ensure we have at least some content
+        if combinedMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Logger.debug("⚠️ Error: Empty combined message in chat request")
+            
+            // Create a fallback prompt if both system and user messages are empty
+            if let resume = resume, let root = resume.rootNode {
+                // Extract some node values to include in the fallback
+                let nodes = TreeNode.traverseAndExportNodes(node: root)
+                let nodeStrings = nodes.prefix(5).compactMap { node -> String? in
+                    if let value = node["value"] as? String, !value.isEmpty {
+                        return value
+                    }
+                    return nil
+                }
+                
+                let nodeContent = nodeStrings.joined(separator: "\n- ")
+                
+                combinedMessage = """
+                Please help improve this resume. I need suggestions for the following sections:
+                
+                - \(nodeContent)
+                
+                Respond with a JSON array of revision nodes following the schema I provided.
+                """
+                
+                Logger.debug("✅ Created emergency fallback message from resume nodes")
+            } else {
+                // Use the raw messages as a last resort
+                combinedMessage = workingMessages.map { "[\($0.role)]: \($0.content)" }.joined(separator: "\n\n")
+                
+                if combinedMessage.isEmpty {
+                    // If even that's empty, use a completely generic message
+                    combinedMessage = "Please suggest improvements for this resume. Respond with a JSON array following the schema format."
+                }
+            }
+        }
+        
+        // Save the final combined message to a debug file for analysis
+        saveMessageToDebugFile(combinedMessage, fileName: "resume_chat_debug.txt")
 
         // Decide whether to continue a previous conversation
         let previousResponseId: String? = continueConversation ? resume?.previousResponseId : nil

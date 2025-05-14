@@ -133,11 +133,9 @@ class OpenAITTSProvider {
             self?.setBufferingState(isBuffering)
         }
 
-        Logger.debug("OpenAITTSProvider initialized with API key")
     }
 
     deinit {
-        Logger.debug("OpenAITTSProvider deinitializing")
         // Clean up all resources - must use Task to dispatch to the MainActor
         Task { @MainActor [weak self] in
             guard let self = self else { return }

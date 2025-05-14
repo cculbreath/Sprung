@@ -536,17 +536,19 @@ struct ResumeReviewSheet: View {
             return
         }
 
-        // Extract skills as JSON
-        guard let skillsJsonString = reviewService.extractSkillsForLLM(resume: resume) else {
+        // We don't need to extract skills here now since sendReorderSkillsRequest does it internally
+        // This ensures we use the simplified skill extraction specific to reordering
+        let skillsJson = TreeNodeExtractor.shared.extractSkillsForReordering(resume: resume)
+        guard let skillsJson = skillsJson else {
             fixOverflowError = "Error extracting skills from resume."
             Logger.debug("ReorderSkills: Failed to extract skills from resume")
             isProcessingFixOverflow = false
             return
         }
         
-        Logger.debug("ReorderSkills: Successfully extracted skills JSON: \(skillsJsonString.prefix(100))...")
+        Logger.debug("ReorderSkills: Successfully extracted skills JSON: \(skillsJson.prefix(100))...")
 
-        if skillsJsonString == "[]" {
+        if skillsJson == "[]" {
             fixOverflowStatusMessage = "No 'Skills and Expertise' items found to reorder or section is empty."
             Logger.debug("ReorderSkills: No skills items found to reorder")
             isProcessingFixOverflow = false
@@ -559,7 +561,7 @@ struct ResumeReviewSheet: View {
         let reorderResult: Result<ReorderSkillsResponseContainer, Error> = await withCheckedContinuation { continuation in
             reviewService.sendReorderSkillsRequest(
                 resume: resume,
-                skillsJsonString: skillsJsonString
+                skillsJsonString: skillsJson
             ) { result in
                 continuation.resume(returning: result)
             }
@@ -579,35 +581,67 @@ struct ResumeReviewSheet: View {
         // Apply the new ordering
         fixOverflowStatusMessage = "Applying new skill order..."
         
-        // Create a map of node IDs to their current positions for comparison
-        var currentPositions: [String: Int] = [:]
-        if let skillsSectionNode = resume.rootNode?.children?.first(where: { 
-            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise" 
-        }), let children = skillsSectionNode.children {
-            for child in children {
-                currentPositions[child.id] = child.myIndex
-                
-                // Also map subcategory children if they exist
-                if let subChildren = child.children {
-                    for subChild in subChildren {
-                        currentPositions[subChild.id] = subChild.myIndex
+        // Collect current order of skills and their data 
+        var currentNodes: [(id: String, name: String, position: Int)] = []
+        var skillsSectionNode: TreeNode?
+        
+        if let rootNode = resume.rootNode {
+            skillsSectionNode = rootNode.children?.first(where: { 
+                $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise" 
+            })
+            
+            if let skillsSection = skillsSectionNode, let children = skillsSection.children {
+                // Get all top-level skills nodes in their current order
+                for child in children.sorted(by: { $0.myIndex < $1.myIndex }) {
+
+                                currentNodes.append((id: child.id, name: child.name, position: child.myIndex))
+
+                    // Also add subcategory children if they exist
+                    if let subChildren = child.children?.sorted(by: { $0.myIndex < $1.myIndex }) {
+                        for subChild in subChildren {
+
+                                        currentNodes.append((id: subChild.id, name: subChild.name, position: subChild.myIndex))
+                        }
                     }
                 }
             }
         }
         
-        // Format the reordering information
-        var reasonsText = "Position changes:\n"
+        // Create a map of node IDs to their current positions for comparison
+        var currentPositions: [String: Int] = [:]
+        for node in currentNodes {
+            currentPositions[node.id] = node.position
+        }
         
         // Sort the nodes by their new position for display
         let sortedNodes = reorderResponse.reorderedSkillsAndExpertise.sorted { $0.newPosition < $1.newPosition }
         
-        // Store reorder details in the change message to persist throughout the process
+        // Create a simple before/after ordering display
+        var oldOrder = "Old Order:\n"
+        var newOrder = "New Order:\n"
+        
+        // Sort current nodes by their position (old order)
+        let sortedCurrentNodes = currentNodes.sorted { $0.position < $1.position }
+        
+        // Create old order listing - just node names by index
+        for (index, node) in sortedCurrentNodes.enumerated() {
+            oldOrder += "\(index+1): \(node.name)\n"
+        }
+        
+        // Create new order listing - just node names by index
+        for (index, node) in sortedNodes.enumerated() {
+            newOrder += "\(index+1): \(node.originalValue)\n"
+        }
+        
+        // Create status message with just the order summary
+        let reasonsText = "Skills have been reordered for maximum relevance.\n\n\(oldOrder)\n\(newOrder)"
+        
+        // Create detailed change message that persists
         var changeMessage = "Skills reordered by position:\n\n"
         
         // Show position changes
         for node in sortedNodes {
-            let nodeText = node.isTitleNode ? "**\(node.originalValue)**" : node.originalValue
+            let nodeText = node.originalValue
             let oldPosition = currentPositions[node.id] ?? -1
             
             // Skip nodes that didn't move or we couldn't find positions for
@@ -616,7 +650,7 @@ struct ResumeReviewSheet: View {
             }
             
             let changeIndicator = oldPosition < node.newPosition ? "↓" : "↑"
-            changeMessage += "• \(nodeText) moved from position \(oldPosition) to \(node.newPosition) \(changeIndicator)\n"
+            changeMessage += "• \(nodeText) moved from position \(oldPosition + 1) to \(node.newPosition + 1) \(changeIndicator)\n"
         }
         
         changeMessage += "\n\nReordered skills with reasons:\n\n"
@@ -627,7 +661,7 @@ struct ResumeReviewSheet: View {
         
         // Store in the change message so it persists
         fixOverflowChangeMessage = changeMessage
-        reasonsText = "Skills have been reordered for maximum relevance."
+        fixOverflowStatusMessage = reasonsText
         
         // Apply the reordering to the actual tree nodes
         let success = TreeNodeExtractor.shared.applyReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise)

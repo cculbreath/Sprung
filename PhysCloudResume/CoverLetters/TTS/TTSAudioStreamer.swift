@@ -113,11 +113,9 @@ final class TTSAudioStreamer {
     // MARK: - Initialization
 
     init() {
-        Logger.debug("TTSAudioStreamer: Initialized")
     }
 
     deinit {
-        Logger.debug("TTSAudioStreamer: Deinitializing and cleaning up resources")
         // Force cleanup on deinit - must dispatch to MainActor
         Task { @MainActor [weak self] in
             guard let self = self else { return }

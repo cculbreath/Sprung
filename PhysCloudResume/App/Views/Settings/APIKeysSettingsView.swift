@@ -69,7 +69,7 @@ struct APIKeysSettingsView: View {
                 // Gemini API Key Row
                 apiKeyRow(
                     label: "Gemini",
-                    icon: "ray.triangle.path", // Custom icon for Gemini
+                    icon: "sparkles.tv", // Custom icon for Gemini
                     value: $geminiApiKey,
                     isEditing: $isEditingGemini,
                     editedValue: $editedGeminiApiKey,

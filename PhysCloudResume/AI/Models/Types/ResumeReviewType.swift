@@ -9,8 +9,8 @@ import SwiftUI
 enum ResumeReviewType: String, CaseIterable, Identifiable {
     case suggestChanges = "Suggest Resume Fields to Change"
     case assessQuality = "Assess Overall Resume Quality"
-    case assessFit = "Assess Fit for Job Position"
-    case fixOverflow = "Fix Skills & Expertise Overflow"
+    case assessFit = "Assess Applicant Fit for Job Position"
+    case fixOverflow = "Fix Overflow 'Skills & Expertise'"
     case reorderSkills = "Reorder 'Skills & Experience'"
     case custom = "Custom"
 
