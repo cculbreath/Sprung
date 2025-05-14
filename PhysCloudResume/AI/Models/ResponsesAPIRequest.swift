@@ -54,9 +54,12 @@ struct ResponsesAPIResponseWrapper: Decodable {
 
     /// Converts the response wrapper to a ResponsesAPIResponse
     func toResponsesAPIResponse() -> ResponsesAPIResponse {
-        // Extract text content from the output messages
+        // Extract text content from the output messages, filtering for message type first
+        // This handles both standard models and reasoning models
         let textContent = output
-            .flatMap { $0.content }
+            .filter { $0.type == "message" } // First filter for message type only
+            .compactMap { $0.content } // Then get contents (reasoning objects won't have this)
+            .flatMap { $0 } // Flatten the array of content arrays
             .filter { $0.type == "output_text" }
             .compactMap { $0.text }
             .joined(separator: "\n")
@@ -73,18 +76,27 @@ struct ResponsesAPIResponseWrapper: Decodable {
 struct OutputMessage: Decodable {
     /// The ID of the message
     let id: String
-    /// The type of the message (usually "message")
+    /// The type of the message (usually "message" or "reasoning")
     let type: String
-    /// The content blocks of the message
-    let content: [MessageContent]
-    /// The role of the message sender
-    let role: String
+    /// The content blocks of the message (may be nil for reasoning blocks)
+    let content: [MessageContent]?
+    /// The role of the message sender (may be nil for reasoning blocks)
+    let role: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case type
         case content
         case role
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decode(String.self, forKey: .type)
+        content = try container.decodeIfPresent([MessageContent].self, forKey: .content)
+        role = try container.decodeIfPresent(String.self, forKey: .role)
     }
 }
 
