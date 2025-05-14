@@ -16,13 +16,10 @@ struct SettingsView: View {
             // Main VStack containing all setting sections
             VStack(alignment: .leading, spacing: 20) { // Increased spacing between sections
                 // API Keys Section
-                APIKeysSettingsView {
-                    // This closure is called when the OpenAI key is saved in APIKeysSettingsView
-                    // If OpenAIModelSettingsView is in the toolbar, it might observe AppStorage directly
-                    // or we might need a different mechanism to trigger its refresh if it's not always visible.
-                    // For now, this callback might not be strictly necessary if the toolbar view handles its own updates.
-                    // forceModelFetch.toggle() // This line can be removed if not used
-                }
+                APIKeysSettingsView {}
+
+                // LLM Provider Info Section
+                LLMProviderSettingsView()
 
                 // Resume Styles Section
                 ResumeStylesSettingsView()

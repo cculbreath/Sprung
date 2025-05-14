@@ -6,8 +6,10 @@
 //
 
 import Foundation
-import OpenAI
+import PDFKit
+import AppKit
 import SwiftUI
+import OpenAI
 
 /// Helper for handling resume chat functionality
 
@@ -23,6 +25,9 @@ final class ResumeChatProvider {
     var genericMessages: [ChatMessage] = []
     var errorMessage: String = ""
     var lastRevNodeArray: [ProposedRevisionNode] = []
+    
+    // Track the last model used to know when to switch clients
+    var lastModelUsed: String = ""
 
     // MARK: - Initializers
 

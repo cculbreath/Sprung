@@ -6,7 +6,10 @@
 //
 
 import Foundation
+import PDFKit
+import AppKit
 import SwiftUI
+import OpenAI
 
 /// Protocol defining the interface for OpenAI clients
 /// This abstraction allows us to switch between different OpenAI SDK implementations
@@ -69,7 +72,7 @@ protocol OpenAIClientProtocol {
     func sendResponseRequest(
         message: String,
         model: String,
-        temperature: Double,
+        temperature: Double?,
         previousResponseId: String?,
         schema: String?,
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
@@ -86,7 +89,7 @@ protocol OpenAIClientProtocol {
     func sendResponseRequestAsync(
         message: String,
         model: String,
-        temperature: Double,
+        temperature: Double?,
         previousResponseId: String?,
         schema: String?
     ) async throws -> ResponsesAPIResponse
@@ -139,66 +142,4 @@ protocol OpenAIClientProtocol {
     )
 }
 
-/// Represents a chat message in a conversation
-struct ChatMessage: Codable, Equatable {
-    /// The role of the message sender (system, user, assistant)
-    let role: ChatRole
-    /// The content of the message
-    let content: String
-
-    /// Creates a new chat message
-    /// - Parameters:
-    ///   - role: The role of the message sender
-    ///   - content: The content of the message
-    init(role: ChatRole, content: String) {
-        self.role = role
-        self.content = content
-    }
-
-    enum ChatRole: String, Codable {
-        case system
-        case user
-        case assistant
-    }
-}
-
-/// Response from an OpenAI chat completion request
-struct ChatCompletionResponse: Codable, Equatable {
-    /// The completion text
-    let content: String
-    /// The model used for the completion
-    let model: String
-    /// The response ID from OpenAI (used for the Responses API)
-    var id: String?
-
-    init(content: String, model: String, id: String? = nil) {
-        self.content = content
-        self.model = model
-        self.id = id
-    }
-}
-
-/// Response from an OpenAI Responses API request
-struct ResponsesAPIResponse: Codable, Equatable {
-    /// The unique ID of the response (used for continuation)
-    let id: String
-    /// The content of the response
-    let content: String
-    /// The model used for the response
-    let model: String
-
-    /// Converts to a ChatCompletionResponse for backward compatibility
-    func toChatCompletionResponse() -> ChatCompletionResponse {
-        return ChatCompletionResponse(content: content, model: model, id: id)
-    }
-}
-
-/// A chunk from a streaming Responses API request
-struct ResponsesAPIStreamChunk: Codable, Equatable {
-    /// The ID of the response (only present in the final chunk)
-    let id: String?
-    /// The content of the chunk
-    let content: String
-    /// The model used for the response
-    let model: String
-}
+// Response types are now defined in AI/Models/ResponseTypes/APIResponses.swift

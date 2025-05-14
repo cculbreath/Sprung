@@ -7,6 +7,9 @@
 
 import Foundation
 import PDFKit
+import AppKit
+import SwiftUI
+import PDFKit
 import SwiftUI
 
 /// Service responsible for sending application packet reviews (cover letter + resume)

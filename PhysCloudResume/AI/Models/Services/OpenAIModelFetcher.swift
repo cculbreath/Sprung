@@ -6,13 +6,16 @@
 //
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 
 /// Provides model fetching and conversion utilities for OpenAI models
 class OpenAIModelFetcher {
     /// Get the configured preferred model string from UserDefaults
     static func getPreferredModelString() -> String {
-        // Use gpt-4o-latest as the default model if no preference is set
-        let modelString = UserDefaults.standard.string(forKey: "preferredOpenAIModel") ?? AIModels.gpt4o_latest
+        // Get the preferred model directly
+        let modelString = UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o_latest
         return modelString
     }
 

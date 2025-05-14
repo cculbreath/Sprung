@@ -1,6 +1,9 @@
 // PhysCloudResume/AI/Models/CoverChatProvider.swift
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 import SwiftUI
 
 @Observable

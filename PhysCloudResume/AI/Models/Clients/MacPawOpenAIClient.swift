@@ -6,9 +6,10 @@
 //
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 import OpenAI
-
-// Import the AIModels struct from our extension file
 
 /// Custom URLSession delegate to log network activity
 class NetworkLoggingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDataDelegate {
@@ -392,7 +393,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     func sendResponseRequest(
         message: String,
         model: String,
-        temperature: Double,
+        temperature: Double?,
         previousResponseId: String?,
         schema: String? = nil,
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
@@ -401,8 +402,12 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         var requestDict: [String: Any] = [
             "model": model,
             "input": message, // We currently pass a single combined message string.
-            "temperature": temperature,
         ]
+        
+        // Only add temperature if it's provided (some models don't support it)
+        if let temp = temperature {
+            requestDict["temperature"] = temp
+        }
 
         if let previous = previousResponseId {
             requestDict["previous_response_id"] = previous
@@ -548,7 +553,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     func sendResponseRequestAsync(
         message: String,
         model: String,
-        temperature: Double,
+        temperature: Double?,
         previousResponseId: String?,
         schema: String? = nil
     ) async throws -> ResponsesAPIResponse {
@@ -556,8 +561,12 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         var requestDict: [String: Any] = [
             "model": model,
             "input": message,
-            "temperature": temperature,
         ]
+        
+        // Only add temperature if it's provided (some models don't support it)
+        if let temp = temperature {
+            requestDict["temperature"] = temp
+        }
 
         if let previous = previousResponseId {
             requestDict["previous_response_id"] = previous

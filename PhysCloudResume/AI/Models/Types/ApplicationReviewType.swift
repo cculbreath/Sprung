@@ -6,6 +6,9 @@
 //
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 
 /// Types of application-packet review operations
 enum ApplicationReviewType: String, CaseIterable, Identifiable {

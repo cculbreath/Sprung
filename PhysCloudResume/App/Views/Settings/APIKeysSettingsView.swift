@@ -11,6 +11,7 @@ struct APIKeysSettingsView: View {
     // AppStorage properties specific to this view
     @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
+    @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
     @AppStorage("brightDataApiKey") private var brightDataApiKey: String = "none"
     @AppStorage("proxycurlApiKey") private var proxycurlApiKey: String = "none"
 
@@ -18,11 +19,13 @@ struct APIKeysSettingsView: View {
     @State private var isEditingScrapingDog = false
     @State private var isEditingBrightData = false
     @State private var isEditingOpenAI = false
+    @State private var isEditingGemini = false
     @State private var isEditingProxycurl = false
 
     // State for holding the edited value temporarily
     @State private var editedScrapingDogApiKey = ""
     @State private var editedOpenAiApiKey = ""
+    @State private var editedGeminiApiKey = ""
     @State private var editedBrightDataApiKey = ""
     @State private var editedProxycurlApiKey = ""
 
@@ -61,6 +64,17 @@ struct APIKeysSettingsView: View {
                     isHoveringCheckmark: $isHoveringCheckmark,
                     isHoveringXmark: $isHoveringXmark,
                     onSave: onOpenAIKeyUpdate // Trigger model fetch on save
+                )
+                Divider()
+                // Gemini API Key Row
+                apiKeyRow(
+                    label: "Gemini",
+                    icon: "ray.triangle.path", // Custom icon for Gemini
+                    value: $geminiApiKey,
+                    isEditing: $isEditingGemini,
+                    editedValue: $editedGeminiApiKey,
+                    isHoveringCheckmark: $isHoveringCheckmark,
+                    isHoveringXmark: $isHoveringXmark
                 )
                 Divider()
                 // Bright Data API Key Row
