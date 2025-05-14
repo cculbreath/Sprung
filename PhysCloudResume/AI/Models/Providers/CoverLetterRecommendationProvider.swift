@@ -35,6 +35,9 @@ private func writeDebugToFile(_ content: String) {
 //
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 import OpenAI
 import SwiftUI
 

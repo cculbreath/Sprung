@@ -6,6 +6,9 @@
 //
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 import OpenAI
 
 /// A subclass of the MacPaw OpenAI client that handles null system_fingerprint fields

@@ -3,6 +3,7 @@
 import PDFKit // Required for PDFDocument access if not already imported
 import SwiftUI
 import WebKit // Required for WKWebView used in MarkdownView
+import Foundation
 
 // Make sure we're using the right MarkdownView component
 
@@ -236,7 +237,21 @@ struct ResumeReviewSheet: View {
                                 reviewResponseText = "Review complete. No specific feedback provided."
                             }
                         case let .failure(error):
-                            generalError = "Error: \(error.localizedDescription)"
+                            // Improved error display with more details
+                            if let nsError = error as NSError? {
+                                // Extract and display API errors
+                                if nsError.domain == "OpenAIAPI" {
+                                    generalError = "API Error: \(nsError.localizedDescription)"
+                                } else if let errorInfo = nsError.userInfo[NSLocalizedDescriptionKey] as? String {
+                                    // Specific handling for parameter errors
+                                    generalError = "Error: \(errorInfo)\nPlease try again or select a different model in Settings."
+                                } else {
+                                    generalError = "Error: \(error.localizedDescription)"
+                                }
+                            } else {
+                                generalError = "Error: \(error.localizedDescription)"
+                            }
+                            
                             if reviewResponseText == "Submitting request..." || !reviewResponseText.isEmpty {
                                 reviewResponseText = ""
                             }
@@ -275,7 +290,7 @@ struct ResumeReviewSheet: View {
             fixOverflowStatusMessage = "Iteration \(loopCount)/\(fixOverflowMaxIterations): Analyzing skills section..."
 
             guard let currentPdfData = resume.pdfData,
-                  let currentImageBase64 = reviewService.convertPDFToBase64Image(pdfData: currentPdfData)
+                  let currentImageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: currentPdfData)
             else {
                 fixOverflowError = "Error converting current resume to image (Iteration \(loopCount))."
                 break
@@ -352,7 +367,7 @@ struct ResumeReviewSheet: View {
             }
 
             guard let updatedPdfData = resume.pdfData,
-                  let updatedImageBase64 = reviewService.convertPDFToBase64Image(pdfData: updatedPdfData)
+                  let updatedImageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: updatedPdfData)
             else {
                 fixOverflowError = "Error converting updated resume to image (Iteration \(loopCount))."
                 break

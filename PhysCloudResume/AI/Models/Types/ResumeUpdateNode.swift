@@ -6,6 +6,9 @@
 //
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 import OpenAI
 import SwiftData
 

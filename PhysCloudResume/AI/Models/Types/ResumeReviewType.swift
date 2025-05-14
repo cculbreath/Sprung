@@ -1,6 +1,9 @@
 // PhysCloudResume/AI/Models/ResumeReviewType.swift
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 
 /// Types of resume review operations available
 enum ResumeReviewType: String, CaseIterable, Identifiable {

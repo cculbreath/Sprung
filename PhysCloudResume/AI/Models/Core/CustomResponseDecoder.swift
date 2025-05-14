@@ -6,6 +6,9 @@
 //
 
 import Foundation
+import PDFKit
+import AppKit
+import SwiftUI
 import OpenAI
 
 /// A custom decoder that can handle null system_fingerprint in OpenAI responses
