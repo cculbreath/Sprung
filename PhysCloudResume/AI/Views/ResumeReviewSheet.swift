@@ -23,6 +23,7 @@ struct ResumeReviewSheet: View {
 
     // State specific to Fix Overflow feature
     @State private var fixOverflowStatusMessage: String = ""
+    @State private var fixOverflowChangeMessage: String = ""
     @State private var isProcessingFixOverflow: Bool = false
     @State private var fixOverflowError: String? = nil
 
@@ -62,14 +63,36 @@ struct ResumeReviewSheet: View {
                     .padding(12)
                     .background(Color(NSColor.controlBackgroundColor))
                     .cornerRadius(8)
-            } else if !fixOverflowStatusMessage.isEmpty {
+            } else if !fixOverflowStatusMessage.isEmpty || !fixOverflowChangeMessage.isEmpty {
                 ScrollView {
-                    Text(fixOverflowStatusMessage)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Show status message if it exists
+                        if !fixOverflowStatusMessage.isEmpty {
+                            Text(fixOverflowStatusMessage)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        
+                        // Always show change message if it exists
+                        if !fixOverflowChangeMessage.isEmpty {
+                            if !fixOverflowStatusMessage.isEmpty {
+                                Divider()
+                                    .padding(.vertical, 4)
+                            }
+                            
+                            Text("Changes Made:")
+                                .font(.headline)
+                                .padding(.bottom, 4)
+                            
+                            Text(fixOverflowChangeMessage)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
                 }
             } else if let error = generalError ?? fixOverflowError {
                 Text(error)
@@ -148,7 +171,11 @@ struct ResumeReviewSheet: View {
                     }
                     .buttonStyle(.bordered)
                     Spacer()
-                    Button("Close") { dismiss() }
+                    Button("Close") { 
+                        // Reset change message when closing the sheet
+                        fixOverflowChangeMessage = ""
+                        dismiss() 
+                    }
                 } else {
                     Button(
                         selectedReviewType == .fixOverflow ? "Optimize Skills" :
@@ -159,7 +186,11 @@ struct ResumeReviewSheet: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(selectedResume == nil)
                     Spacer()
-                    Button("Close") { dismiss() }
+                    Button("Close") { 
+                        // Reset change message when closing the sheet
+                        fixOverflowChangeMessage = ""
+                        dismiss() 
+                    }
                 }
             }
             .padding([.horizontal, .bottom]) // Padding for the button bar
@@ -168,7 +199,9 @@ struct ResumeReviewSheet: View {
         }
         .frame(width: 600, height: 500, alignment: .topLeading) // Original fixed sheet size
         .onAppear {
+            // Initialize services and reset state
             reviewService.initialize()
+            fixOverflowChangeMessage = ""
         }
     }
 
@@ -210,6 +243,7 @@ struct ResumeReviewSheet: View {
 
         reviewResponseText = ""
         fixOverflowStatusMessage = ""
+        fixOverflowChangeMessage = ""
         generalError = nil
         fixOverflowError = nil
 
@@ -381,7 +415,7 @@ struct ResumeReviewSheet: View {
                 }
             }
             
-            // Update status message with changes
+            // Update change message with details of what changed
             if !changedNodes.isEmpty {
                 var changesSummary = "Iteration \(loopCount): \(changedNodes.count) node\(changedNodes.count > 1 ? "s" : "") updated:\n\n"
                 
@@ -393,7 +427,9 @@ struct ResumeReviewSheet: View {
                     changesSummary += "\(index + 1). \"\(oldValueDisplay)\" → \"\(newValueDisplay)\"\n\n"
                 }
                 
-                fixOverflowStatusMessage = changesSummary
+                // Store in the change message, not the status message
+                fixOverflowChangeMessage = changesSummary
+                fixOverflowStatusMessage = "Iteration \(loopCount): Applied \(changedNodes.count) changes"
             }
 
             if !changesMadeInThisIteration && loopCount > 1 {
@@ -402,19 +438,14 @@ struct ResumeReviewSheet: View {
                 break
             }
 
-            // Store the changes summary to preserve it
-            let changesSummary = fixOverflowStatusMessage
-            
-            // Update status while rendering but don't lose our changes summary
-            fixOverflowStatusMessage = changesSummary + "\n\nRe-rendering resume with changes..."
+            // Update status while rendering
+            fixOverflowStatusMessage = "Re-rendering resume with changes..."
             do {
                 try await resume.ensureFreshRenderedText()
                 guard resume.pdfData != nil else {
                     fixOverflowError = "Failed to re-render PDF after applying changes (Iteration \(loopCount))."
                     break
                 }
-                // Restore our changes summary after successful render
-                fixOverflowStatusMessage = changesSummary
             } catch {
                 fixOverflowError = "Error re-rendering PDF (Iteration \(loopCount)): \(error.localizedDescription)"
                 break
@@ -565,14 +596,16 @@ struct ResumeReviewSheet: View {
             }
         }
         
-        // Format the reordering information for the status message
-        var reasonsText = "Skills have been reordered for maximum relevance:\n\n"
+        // Format the reordering information
+        var reasonsText = "Position changes:\n"
         
         // Sort the nodes by their new position for display
         let sortedNodes = reorderResponse.reorderedSkillsAndExpertise.sorted { $0.newPosition < $1.newPosition }
         
+        // Store reorder details in the change message to persist throughout the process
+        var changeMessage = "Skills reordered by position:\n\n"
+        
         // Show position changes
-        reasonsText += "Position changes:\n"
         for node in sortedNodes {
             let nodeText = node.isTitleNode ? "**\(node.originalValue)**" : node.originalValue
             let oldPosition = currentPositions[node.id] ?? -1
@@ -583,25 +616,28 @@ struct ResumeReviewSheet: View {
             }
             
             let changeIndicator = oldPosition < node.newPosition ? "↓" : "↑"
-            reasonsText += "• \(nodeText) moved from position \(oldPosition) to \(node.newPosition) \(changeIndicator)\n"
+            changeMessage += "• \(nodeText) moved from position \(oldPosition) to \(node.newPosition) \(changeIndicator)\n"
         }
         
-        reasonsText += "\n\nReordered skills with reasons:\n\n"
+        changeMessage += "\n\nReordered skills with reasons:\n\n"
         for node in sortedNodes {
             let nodeText = node.isTitleNode ? "**\(node.originalValue)**" : node.originalValue
-            reasonsText += "- \(nodeText)\n  _\(node.reasonForReordering)_\n\n"
+            changeMessage += "- \(nodeText)\n  _\(node.reasonForReordering)_\n\n"
         }
+        
+        // Store in the change message so it persists
+        fixOverflowChangeMessage = changeMessage
+        reasonsText = "Skills have been reordered for maximum relevance."
         
         // Apply the reordering to the actual tree nodes
         let success = TreeNodeExtractor.shared.applyReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise)
         
         if success {
             // Re-render the resume with the new order
-            // Temporarily append the rendering status to the reasons text
-            fixOverflowStatusMessage = reasonsText + "\n\nRe-rendering resume with new skill order..."
+            fixOverflowStatusMessage = "Re-rendering resume with new skill order..."
             do {
                 try await resume.ensureFreshRenderedText()
-                // Set back to just the reasons text after rendering completes
+                // Update with success message
                 fixOverflowStatusMessage = reasonsText
                 
                 // Make sure changes are saved
