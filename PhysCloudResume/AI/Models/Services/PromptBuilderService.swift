@@ -86,7 +86,21 @@ class PromptBuilderService {
     /// - Returns: A formatted prompt string
     func buildFixFitsPrompt(skillsJsonString: String) -> String {
         return """
-        You are an expert resume editor. The 'Skills and Expertise' section in the attached resume image is overflowing. Please revise the content of this section to fit the available space without sacrificing its impact. Prioritize shortening entries that are only slightly too long (e.g., a few words on the last line). Ensure revised entries remain strong and relevant to the job application. Do not shorten entries more than necessary to resolve the overflow and avoid overlapping with elements below. The current skills and expertise content is provided as a JSON array of nodes:
+        You are an expert resume editor. The 'Skills and Expertise' section in the attached resume image is overflowing. Please revise the content of this section to fit the available space without sacrificing its impact. Prioritize shortening entries that are only slightly too long (e.g., a few words on the last line). Ensure revised entries remain strong and relevant to the job application.
+
+        IMPORTANT CONSTRAINTS:
+        1. DO NOT use non-standard abbreviations or acronyms that aren't widely recognized in the industry.
+        2. DO NOT truncate words to make them non-words (e.g., don't change "development" to "devt" or "devlpmnt").
+        3. DO NOT create new terminology that isn't standard in the field.
+        4. Only use standard, professionally accepted abbreviations (e.g., "MS" for Microsoft, "UI/UX" for User Interface/User Experience).
+        5. Focus on rewording and condensing phrases to be more concise rather than abbreviating individual words.
+        6. Maintain consistent grammar and professional language throughout.
+        7. Avoid exaggerating or misrepresenting the applicant's actual experience level.
+        8. When significant reductions are needed, balance edits across multiple entries rather than drastically shortening just one or two entries while leaving others at full length.
+        9. Apply a consistent editing approach across similar types of entries.
+        10. Do not shorten entries more than necessary to resolve the overflow.
+
+        The current skills and expertise content is provided as a JSON array of nodes:
 
         \(skillsJsonString)
 
