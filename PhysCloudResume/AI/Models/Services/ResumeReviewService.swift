@@ -131,7 +131,26 @@ class ResumeReviewService: @unchecked Sendable {
                 resume.previousResponseId = responseWrapper.id
                 
                 do {
+                    // Log raw response info for debugging
+                    if let output = responseWrapper.output, !output.isEmpty {
+                        for (index, message) in output.enumerated() {
+                            Logger.debug("Output[\(index)] type: \(message.type), id: \(message.id ?? "none"), status: \(message.status ?? "none"), role: \(message.role ?? "none")")
+                            if let content = message.content {
+                                for (cIndex, item) in content.enumerated() {
+                                    let textLength = item.text?.count ?? 0
+                                    Logger.debug("  Content[\(cIndex)] type: \(item.type), text length: \(textLength)")
+                                }
+                            } else {
+                                Logger.debug("  No content items")
+                            }
+                        }
+                    } else {
+                        Logger.debug("No output array in response")
+                    }
+                    
                     let content = responseWrapper.content
+                    Logger.debug("Content from wrapper: \(content.prefix(100))...")
+                    
                     guard let responseData = content.data(using: .utf8) else {
                         throw NSError(domain: "ResumeReviewService", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data."])
                     }
@@ -231,7 +250,26 @@ class ResumeReviewService: @unchecked Sendable {
                 resume.previousResponseId = responseWrapper.id
                 
                 do {
+                    // Log raw response info for debugging
+                    if let output = responseWrapper.output, !output.isEmpty {
+                        for (index, message) in output.enumerated() {
+                            Logger.debug("ContentsFit Output[\(index)] type: \(message.type), id: \(message.id ?? "none"), status: \(message.status ?? "none"), role: \(message.role ?? "none")")
+                            if let content = message.content {
+                                for (cIndex, item) in content.enumerated() {
+                                    let textLength = item.text?.count ?? 0
+                                    Logger.debug("  ContentsFit Content[\(cIndex)] type: \(item.type), text length: \(textLength)")
+                                }
+                            } else {
+                                Logger.debug("  ContentsFit No content items")
+                            }
+                        }
+                    } else {
+                        Logger.debug("ContentsFit No output array in response")
+                    }
+                    
                     let content = responseWrapper.content
+                    Logger.debug("ContentsFit Content from wrapper: \(content.prefix(100))...")
+                    
                     guard let responseData = content.data(using: .utf8) else {
                         throw NSError(domain: "ResumeReviewService", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data for contentsFit."])
                     }
