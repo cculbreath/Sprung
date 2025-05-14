@@ -357,22 +357,43 @@ struct ResumeReviewSheet: View {
 
             fixOverflowStatusMessage = "Iteration \(loopCount): Applying suggested revisions..."
             var changesMadeInThisIteration = false
+            var changedNodes: [(oldValue: String, newValue: String)] = []
+            
             for revisedNode in fixFitsResponse.revisedSkillsAndExpertise {
                 if let treeNode = findTreeNode(byId: revisedNode.id, in: resume) {
                     if revisedNode.isTitleNode {
                         if treeNode.name != revisedNode.newValue {
+                            let oldValue = treeNode.name
                             treeNode.name = revisedNode.newValue
                             changesMadeInThisIteration = true
+                            changedNodes.append((oldValue: oldValue, newValue: revisedNode.newValue))
                         }
                     } else {
                         if treeNode.value != revisedNode.newValue {
+                            let oldValue = treeNode.value
                             treeNode.value = revisedNode.newValue
                             changesMadeInThisIteration = true
+                            changedNodes.append((oldValue: oldValue, newValue: revisedNode.newValue))
                         }
                     }
                 } else {
                     Logger.debug("Warning: TreeNode with ID \(revisedNode.id) not found for applying revision.")
                 }
+            }
+            
+            // Update status message with changes
+            if !changedNodes.isEmpty {
+                var changesSummary = "Iteration \(loopCount): \(changedNodes.count) node\(changedNodes.count > 1 ? "s" : "") updated:\n\n"
+                
+                for (index, change) in changedNodes.enumerated() {
+                    // Truncate values if they're too long for display
+                    let oldValueDisplay = change.oldValue.count > 50 ? change.oldValue.prefix(47) + "..." : change.oldValue
+                    let newValueDisplay = change.newValue.count > 50 ? change.newValue.prefix(47) + "..." : change.newValue
+                    
+                    changesSummary += "\(index + 1). \"\(oldValueDisplay)\" → \"\(newValueDisplay)\"\n\n"
+                }
+                
+                fixOverflowStatusMessage = changesSummary
             }
 
             if !changesMadeInThisIteration && loopCount > 1 {
@@ -381,13 +402,19 @@ struct ResumeReviewSheet: View {
                 break
             }
 
-            fixOverflowStatusMessage = "Iteration \(loopCount): Re-rendering resume with changes..."
+            // Store the changes summary to preserve it
+            let changesSummary = fixOverflowStatusMessage
+            
+            // Update status while rendering but don't lose our changes summary
+            fixOverflowStatusMessage = changesSummary + "\n\nRe-rendering resume with changes..."
             do {
                 try await resume.ensureFreshRenderedText()
                 guard resume.pdfData != nil else {
                     fixOverflowError = "Failed to re-render PDF after applying changes (Iteration \(loopCount))."
                     break
                 }
+                // Restore our changes summary after successful render
+                fixOverflowStatusMessage = changesSummary
             } catch {
                 fixOverflowError = "Error re-rendering PDF (Iteration \(loopCount)): \(error.localizedDescription)"
                 break
@@ -521,12 +548,45 @@ struct ResumeReviewSheet: View {
         // Apply the new ordering
         fixOverflowStatusMessage = "Applying new skill order..."
         
+        // Create a map of node IDs to their current positions for comparison
+        var currentPositions: [String: Int] = [:]
+        if let skillsSectionNode = resume.rootNode?.children?.first(where: { 
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise" 
+        }), let children = skillsSectionNode.children {
+            for child in children {
+                currentPositions[child.id] = child.myIndex
+                
+                // Also map subcategory children if they exist
+                if let subChildren = child.children {
+                    for subChild in subChildren {
+                        currentPositions[subChild.id] = subChild.myIndex
+                    }
+                }
+            }
+        }
+        
         // Format the reordering information for the status message
         var reasonsText = "Skills have been reordered for maximum relevance:\n\n"
         
         // Sort the nodes by their new position for display
         let sortedNodes = reorderResponse.reorderedSkillsAndExpertise.sorted { $0.newPosition < $1.newPosition }
         
+        // Show position changes
+        reasonsText += "Position changes:\n"
+        for node in sortedNodes {
+            let nodeText = node.isTitleNode ? "**\(node.originalValue)**" : node.originalValue
+            let oldPosition = currentPositions[node.id] ?? -1
+            
+            // Skip nodes that didn't move or we couldn't find positions for
+            if oldPosition == -1 || oldPosition == node.newPosition {
+                continue
+            }
+            
+            let changeIndicator = oldPosition < node.newPosition ? "↓" : "↑"
+            reasonsText += "• \(nodeText) moved from position \(oldPosition) to \(node.newPosition) \(changeIndicator)\n"
+        }
+        
+        reasonsText += "\n\nReordered skills with reasons:\n\n"
         for node in sortedNodes {
             let nodeText = node.isTitleNode ? "**\(node.originalValue)**" : node.originalValue
             reasonsText += "- \(nodeText)\n  _\(node.reasonForReordering)_\n\n"
@@ -537,9 +597,11 @@ struct ResumeReviewSheet: View {
         
         if success {
             // Re-render the resume with the new order
-            fixOverflowStatusMessage = "Re-rendering resume with new skill order..."
+            // Temporarily append the rendering status to the reasons text
+            fixOverflowStatusMessage = reasonsText + "\n\nRe-rendering resume with new skill order..."
             do {
                 try await resume.ensureFreshRenderedText()
+                // Set back to just the reasons text after rendering completes
                 fixOverflowStatusMessage = reasonsText
                 
                 // Make sure changes are saved
