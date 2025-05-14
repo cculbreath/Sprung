@@ -39,16 +39,55 @@ struct ResponsesAPIStreamChunk: Codable, Equatable {
 struct ResponsesAPIResponseWrapper: Codable {
     var id: String
     var model: String
-    var content: String
+    
+    // Support for both direct content and the newer nested output format
+    private var _content: String?
+    var output: [OutputMessage]?
+    
+    // Computed property that safely provides content from either source
+    var content: String {
+        if let directContent = _content {
+            return directContent
+        } else if let outputMessages = output, 
+                  let firstMessage = outputMessages.first,
+                  let messageContent = firstMessage.content, 
+                  let firstContent = messageContent.first,
+                  firstContent.type == "output_text" {
+            return firstContent.text
+        }
+        return "" // Empty fallback
+    }
     
     enum CodingKeys: String, CodingKey {
         case id
         case model
-        case content
+        case _content = "content"
+        case output
+    }
+    
+    struct OutputMessage: Codable {
+        var type: String
+        var content: [ContentItem]?
+        
+        enum CodingKeys: String, CodingKey {
+            case type
+            case content
+        }
+    }
+    
+    struct ContentItem: Codable {
+        var type: String
+        var text: String
+        
+        enum CodingKeys: String, CodingKey {
+            case type
+            case text
+        }
     }
     
     /// Converts to a standard ResponsesAPIResponse
     func toResponsesAPIResponse() -> ResponsesAPIResponse {
+        // Use the computed content property that handles both formats
         return ResponsesAPIResponse(id: id, content: content, model: model)
     }
 }

@@ -171,7 +171,8 @@ struct OpenAIModelSettingsView: View {
         return [
             AIModels.gpt4o,
             AIModels.gpt4o_mini,
-            AIModels.gpt4_5
+            AIModels.gpt4_5,
+            AIModels.gpt4o_2024_08_06
         ]
     }
     
