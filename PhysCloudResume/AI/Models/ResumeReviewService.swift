@@ -153,7 +153,7 @@ class ResumeReviewService: @unchecked Sendable {
     func extractSkillsForLLM(resume: Resume) -> String? {
         // First, ensure the resume has a rootNode.
         guard let actualRootNode = resume.rootNode else {
-            print("Error: Resume has no rootNode.")
+            Logger.debug("Error: Resume has no rootNode.")
             return nil
         }
 
@@ -169,7 +169,7 @@ class ResumeReviewService: @unchecked Sendable {
 
         // If still not found after both attempts, print an error and return nil.
         guard let finalSkillsSectionNode = skillsSectionNode else {
-            print("Error: 'Skills and Expertise' section node not found in the resume under rootNode.")
+            Logger.debug("Error: 'Skills and Expertise' section node not found in the resume under rootNode.")
             return nil
         }
 
@@ -221,7 +221,7 @@ class ResumeReviewService: @unchecked Sendable {
         }
 
         guard !exportableNodes.isEmpty else {
-            print("Warning: No exportable skill/expertise nodes found under the identified section.")
+            Logger.debug("Warning: No exportable skill/expertise nodes found under the identified section.")
             return "[]"
         }
 
@@ -229,7 +229,7 @@ class ResumeReviewService: @unchecked Sendable {
             let jsonData = try JSONSerialization.data(withJSONObject: exportableNodes, options: [.prettyPrinted])
             return String(data: jsonData, encoding: .utf8)
         } catch {
-            print("Error serializing skills nodes to JSON: \(error)")
+            Logger.debug("Error serializing skills nodes to JSON: \(error)")
             return nil
         }
     }
@@ -495,7 +495,7 @@ class ResumeReviewService: @unchecked Sendable {
             if let jsonData = try? JSONSerialization.data(withJSONObject: sanitizedRequestBodyDict, options: .prettyPrinted),
                let jsonString = String(data: jsonData, encoding: .utf8)
             {
-                print("OpenAI Request Body for \(schema?.name ?? "General Review") (Image Omitted):\n\(jsonString)")
+                Logger.debug("OpenAI Request Body for \(schema?.name ?? "General Review") (Image Omitted):\n\(jsonString)")
             }
 
             guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBodyDict) else {
@@ -511,7 +511,7 @@ class ResumeReviewService: @unchecked Sendable {
                 // Ensure the callback is on the main thread
                 DispatchQueue.main.async {
                     guard self.currentRequestID == requestID else {
-                        print("Request \(requestID) was cancelled or superseded.")
+                        Logger.debug("Request \(requestID) was cancelled or superseded.")
                         return
                     }
 
@@ -530,7 +530,7 @@ class ResumeReviewService: @unchecked Sendable {
                     }
 
                     if let responseString = String(data: responseData, encoding: .utf8) {
-                        print("OpenAI Raw Response for \(schema?.name ?? "General Review") (Status: \(httpResponse.statusCode)):\n\(responseString)")
+                        Logger.debug("OpenAI Raw Response for \(schema?.name ?? "General Review") (Status: \(httpResponse.statusCode)):\n\(responseString)")
                     }
 
                     if !(200 ... 299).contains(httpResponse.statusCode) {
@@ -546,7 +546,7 @@ class ResumeReviewService: @unchecked Sendable {
                         let decodedWrapper = try JSONDecoder().decode(ResponsesAPIResponseWrapper.self, from: responseData)
                         onComplete(.success(decodedWrapper.toResponsesAPIResponse()))
                     } catch let decodingError {
-                        print("Error decoding OpenAI Response: \(decodingError)")
+                        Logger.debug("Error decoding OpenAI Response: \(decodingError)")
                         onComplete(.failure(decodingError))
                     }
                 }

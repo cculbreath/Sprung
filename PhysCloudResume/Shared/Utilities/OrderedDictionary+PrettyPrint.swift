@@ -8,7 +8,7 @@
 import OrderedCollections
 
 extension OrderedDictionary {
-    func prettyPrint() -> String {
+    func prettyprint() -> String {
         var result = "OrderedDictionary Contents:\n"
         for (index, (key, value)) in enumerated() {
             let valueType = type(of: value)

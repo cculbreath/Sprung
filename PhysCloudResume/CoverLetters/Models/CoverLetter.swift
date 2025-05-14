@@ -46,7 +46,7 @@ class CoverLetter: Identifiable, Hashable {
             do {
                 return try JSONDecoder().decode([MessageParams].self, from: data)
             } catch {
-                print("Failed to decode messageHistory: \(error.localizedDescription)")
+                Logger.debug("Failed to decode messageHistory: \(error.localizedDescription)")
                 return []
             }
         }
@@ -55,7 +55,7 @@ class CoverLetter: Identifiable, Hashable {
                 encodedMessageHistory = try JSONEncoder().encode(newValue)
 
             } catch {
-                print("Failed to encode messageHistory: \(error.localizedDescription)")
+                Logger.debug("Failed to encode messageHistory: \(error.localizedDescription)")
             }
         }
     }

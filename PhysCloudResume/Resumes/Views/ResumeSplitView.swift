@@ -33,7 +33,7 @@ struct ResumeSplitView: View {
                         maxHeight: .infinity
                     )
                     .id(selRes.id) // Force view recreation when selected resume changes
-                    .onAppear { print("RootNode") }
+                    .onAppear { Logger.debug("RootNode") }
                     .layoutPriority(1) // Ensures this view gets priority in layout
 
                     ResumePDFView(resume: selRes)

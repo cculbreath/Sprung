@@ -1,3 +1,5 @@
+// swift-format-disable: UseExplicitSelf
+
 //
 //  TTSViewModel.swift
 //  PhysCloudResume
@@ -8,12 +10,16 @@
 import Combine
 import Foundation
 import Observation
+import os.log
 
 /// Handles text-to-speech state and operations, separating this logic from the view
 @Observable
 @MainActor // Add MainActor to entire class since it interacts with OpenAITTSProvider
 class TTSViewModel {
     // MARK: - Properties
+
+    /// Logger for debugging TTS memory issues
+    private static let logger = Logger()
 
     /// Whether audio is currently playing
     var isSpeaking: Bool = false
@@ -26,6 +32,9 @@ class TTSViewModel {
 
     /// Most recent TTS error message, if any
     var ttsError: String?
+
+    /// Timeout timer to prevent stuck states
+    private var stateTimeoutTimer: Timer?
 
     // MARK: - Private Properties
 
@@ -41,74 +50,158 @@ class TTSViewModel {
     /// - Parameter ttsProvider: The TTS provider to use for speech synthesis
     init(ttsProvider: OpenAITTSProvider) {
         self.ttsProvider = ttsProvider
-        print("[TTSViewModel] Initialized with provider.")
+        Logger.debug("[TTSViewModel] Initialized with provider")
         setupCallbacks()
+    }
+
+    deinit {
+        Logger.debug("[TTSViewModel] Deinitializing")
+        // Cancel any pending timeout timer and clear resources
+        // using Task to ensure MainActor execution
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+
+            // Cancel any pending timeout timer
+            self.stateTimeoutTimer?.invalidate()
+            self.stateTimeoutTimer = nil
+
+            // Ensure playback is stopped
+            self.stop()
+
+            // Clear callback references to break potential cycles
+            self.clearCallbacks()
+        }
     }
 
     // MARK: - Setup
 
     /// Configures callbacks from the TTS provider to update view model state
     private func setupCallbacks() {
-        print("[TTSViewModel] Setting up callbacks.")
+        Logger.debug("[TTSViewModel] Setting up callbacks")
         // Update buffering state when it changes in the provider
         ttsProvider.onBufferingStateChanged = { [weak self] buffering in
             guard let self = self else { return }
-            print("[TTSViewModel] Provider onBufferingStateChanged: \(buffering). Current isInitialSetup: \(self.isInitialSetup)")
+            Logger.debug("[TTSViewModel] Provider onBufferingStateChanged: \(buffering). Current isInitialSetup: \(self.isInitialSetup)")
 
             if !self.isInitialSetup || buffering {
                 let oldValue = self.isBuffering
                 self.isBuffering = buffering
-                print("[TTSViewModel] Buffering state changed: \(oldValue) -> \(buffering)")
+                Logger.debug("[TTSViewModel] Buffering state changed: \(oldValue) -> \(buffering)")
                 self.logCurrentState("after provider buffering update")
+
+                // Set timeout for buffering state if it's turned on
+                if buffering {
+                    self.setStateTimeout(for: "buffering", duration: 15.0)
+                } else {
+                    self.clearStateTimeout()
+                }
             } else {
-                print("[TTSViewModel] Ignored provider buffering state change during initial setup.")
+                Logger.debug("[TTSViewModel] Ignored provider buffering state change during initial setup")
             }
         }
 
         // Handle playback ready state (buffering complete, playback starting)
         ttsProvider.onReady = { [weak self] in
             guard let self = self else { return }
-            print("[TTSViewModel] Provider onReady callback.")
+            Logger.debug("[TTSViewModel] Provider onReady callback")
             self.isInitialSetup = false // Clear initial setup flag
             self.isBuffering = false
             self.isSpeaking = true
             self.isPaused = false
-            print("[TTSViewModel] Playback ready (from provider onReady).")
+            self.clearStateTimeout() // Clear any timeout since we're now playing
+            Logger.debug("[TTSViewModel] Playback ready (from provider onReady)")
             self.logCurrentState("after provider onReady")
         }
 
         // Handle playback completion
         ttsProvider.onFinish = { [weak self] in
             guard let self = self else { return }
-            print("[TTSViewModel] Provider onFinish callback. Current isInitialSetup: \(self.isInitialSetup)")
+            Logger.debug("[TTSViewModel] Provider onFinish callback. Current isInitialSetup: \(self.isInitialSetup)")
             if self.isInitialSetup {
-                print("[TTSViewModel] Ignoring provider finish event during initial setup.")
+                Logger.debug("[TTSViewModel] Ignoring provider finish event during initial setup")
                 return
             }
             self.isSpeaking = false
             self.isPaused = false
             self.isBuffering = false
-            print("[TTSViewModel] Playback finished (from provider onFinish).")
+            self.clearStateTimeout() // Clear any timeout since we're done
+            Logger.debug("[TTSViewModel] Playback finished (from provider onFinish)")
             self.logCurrentState("after provider onFinish")
         }
 
         // Handle playback errors
         ttsProvider.onError = { [weak self] error in
             guard let self = self else { return }
-            print("[TTSViewModel] Provider onError callback: \(error.localizedDescription)")
+            Logger.debug("[TTSViewModel] Provider onError callback: \(error.localizedDescription)")
             self.isInitialSetup = false // Clear initial setup on error
             self.ttsError = error.localizedDescription
             self.isBuffering = false
             self.isSpeaking = false
             self.isPaused = false
-            print("[TTSViewModel] Error from provider: \(error.localizedDescription)")
+            self.clearStateTimeout() // Clear any timeout since we're done
+            Logger.debug("[TTSViewModel] Error from provider: \(error.localizedDescription)")
             self.logCurrentState("after provider onError")
+        }
+    }
+
+    /// Clear all callbacks to break potential reference cycles
+    private func clearCallbacks() {
+        Logger.debug("[TTSViewModel] Clearing all callbacks")
+        ttsProvider.onBufferingStateChanged = nil
+        ttsProvider.onReady = nil
+        ttsProvider.onFinish = nil
+        ttsProvider.onError = nil
+    }
+
+    /// Set a timeout to reset stuck states
+    private func setStateTimeout(for state: String, duration: TimeInterval) {
+        // Cancel any existing timeout
+        clearStateTimeout()
+
+        // Create new timeout
+        stateTimeoutTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            Logger.warning("[TTSViewModel] State timeout triggered for '\(state)' after \(duration) seconds")
+
+            // If we're still in the timed out state, force reset
+            // Execute on MainActor
+            Task { @MainActor in
+                guard !Task.isCancelled else { return }
+
+                if (state == "buffering" && self.isBuffering) ||
+                    (state == "speaking" && self.isSpeaking)
+                {
+                    self.isInitialSetup = false
+                    self.isBuffering = false
+                    self.isSpeaking = false
+                    self.isPaused = false
+                    self.ttsError = "Playback timed out"
+
+                    // Ensure provider also resets
+                    self.ttsProvider.stopSpeaking()
+
+                    Logger.debug("[TTSViewModel] Forced state reset due to timeout")
+                    self.logCurrentState("after timeout reset")
+                }
+            }
+        }
+    }
+
+    /// Clear any active state timeout timer
+    private func clearStateTimeout() {
+        if stateTimeoutTimer != nil {
+            Logger.debug("[TTSViewModel] Clearing state timeout timer")
+            stateTimeoutTimer?.invalidate()
+            stateTimeoutTimer = nil
         }
     }
 
     /// Log current state for debugging
     private func logCurrentState(_ context: String) {
-        print("TTS VM STATE [\(context)]: speaking=\(isSpeaking), paused=\(isPaused), buffering=\(isBuffering), isInitialSetup=\(isInitialSetup)")
+        Logger
+            .debug(
+                "TTS VM STATE [\(context)]: speaking=\(self.isSpeaking), paused=\(self.isPaused), buffering=\(self.isBuffering), isInitialSetup=\(self.isInitialSetup)"
+            )
     }
 
     // MARK: - Public Methods
@@ -119,12 +212,12 @@ class TTSViewModel {
     ///   - voice: The voice to use for speech
     ///   - instructions: Optional voice tuning instructions
     func speakContent(_ content: String, voice: OpenAITTSProvider.Voice, instructions: String?) {
-        print("[TTSViewModel] speakContent called. Content empty: \(content.isEmpty)")
+        Logger.debug("[TTSViewModel] speakContent called. Content empty: \(content.isEmpty)")
         logCurrentState("at start of speakContent")
 
         guard !content.isEmpty else {
             ttsError = "No content to speak"
-            print("[TTSViewModel] Error: No content to speak.")
+            Logger.warning("[TTSViewModel] Error: No content to speak")
             logCurrentState("after no content error")
             return
         }
@@ -132,36 +225,47 @@ class TTSViewModel {
         stop() // Reset any ongoing playback and state FIRST
 
         isInitialSetup = true // Set initial setup flag
-        print("[TTSViewModel] isInitialSetup set to true.")
+        Logger.debug("[TTSViewModel] isInitialSetup set to true")
 
         // Perform state updates on the main actor
         Task { @MainActor in
             self.isSpeaking = false
             self.isPaused = false
             self.isBuffering = true // Immediately go to buffering
-            print("[TTSViewModel] Set directly to buffering state (isSpeaking=false, isPaused=false, isBuffering=true).")
+            Logger.debug("[TTSViewModel] Set directly to buffering state (isSpeaking=false, isPaused=false, isBuffering=true)")
             self.logCurrentState("after setting buffering state in speakContent")
+
+            // Set timeout for the entire speak operation (30 seconds max)
+            self.setStateTimeout(for: "speaking", duration: 30.0)
         }
 
         let cleanContent = content
             .replacingOccurrences(of: "#", with: "")
             .replacingOccurrences(of: "**", with: "")
             .replacingOccurrences(of: "*", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines) // Trim extra whitespace
 
-        print("[TTSViewModel] Starting ttsProvider.streamAndPlayText (isInitialSetup is true).")
+        Logger.debug("[TTSViewModel] Starting ttsProvider.streamAndPlayText (isInitialSetup is true)")
 
         // No artificial delay needed here if state updates are correctly managed.
         // The provider's callbacks will handle transitions out of buffering.
+        // Implemented with weak self to prevent retain cycles
         ttsProvider.streamAndPlayText(
             cleanContent,
             voice: voice,
             instructions: instructions,
-            onStart: { // This is onReady from the provider
-                print("[TTSViewModel] ttsProvider.streamAndPlayText onStart callback received.")
+            onStart: { [weak self] in // This is onReady from the provider
+                guard let _ = self else { return }
+                Logger.debug("[TTSViewModel] ttsProvider.streamAndPlayText onStart callback received")
                 // State changes are handled by the provider's onReady callback.
             },
-            onComplete: { error in // This is onFinish/onError from the provider
-                print("[TTSViewModel] ttsProvider.streamAndPlayText onComplete callback received. Error: \(error?.localizedDescription ?? "none")")
+            onComplete: { [weak self] error in // This is onFinish/onError from the provider
+                guard let _ = self else { return }
+                if let error = error {
+                    Logger.error("[TTSViewModel] ttsProvider.streamAndPlayText onComplete received error: \(error.localizedDescription)")
+                } else {
+                    Logger.debug("[TTSViewModel] ttsProvider.streamAndPlayText onComplete received with no error")
+                }
                 // State changes are handled by the provider's onFinish/onError callbacks.
             }
         )
@@ -169,35 +273,44 @@ class TTSViewModel {
 
     /// Pauses current playback if playing
     func pause() {
-        print("[TTSViewModel] pause called.")
+        Logger.debug("[TTSViewModel] pause called")
         if ttsProvider.pause() { // ttsProvider.pause() returns true if it successfully paused
             isSpeaking = false
             isPaused = true
             isBuffering = false
-            print("[TTSViewModel] Playback paused.")
+            // Clear any timeout since we're paused
+            clearStateTimeout()
+            Logger.debug("[TTSViewModel] Playback paused")
             logCurrentState("after pause")
         } else {
-            print("[TTSViewModel] Pause command ignored or failed.")
+            Logger.debug("[TTSViewModel] Pause command ignored or failed")
         }
     }
 
     /// Resumes playback if paused
     func resume() {
-        print("[TTSViewModel] resume called.")
+        Logger.debug("[TTSViewModel] resume called")
         if ttsProvider.resume() { // ttsProvider.resume() returns true if it successfully resumed
             isSpeaking = true
             isPaused = false
             isBuffering = false
-            print("[TTSViewModel] Playback resumed.")
+            // Set new timeout for the resumed playing state
+            setStateTimeout(for: "speaking", duration: 30.0)
+            Logger.debug("[TTSViewModel] Playback resumed")
             logCurrentState("after resume")
         } else {
-            print("[TTSViewModel] Resume command ignored or failed.")
+            Logger.debug("[TTSViewModel] Resume command ignored or failed")
         }
     }
 
     /// Stops playback completely, resetting all state
     func stop() {
-        print("[TTSViewModel] stop called.")
+        Logger.debug("[TTSViewModel] stop called")
+
+        // Clear any timeout timer first
+        clearStateTimeout()
+
+        // Stop provider playback
         ttsProvider.stopSpeaking() // This should trigger onFinish or onError in the provider
 
         // Manually reset state here to ensure UI consistency immediately,
@@ -207,8 +320,10 @@ class TTSViewModel {
             self.isSpeaking = false
             self.isPaused = false
             self.isBuffering = false
-            print("[TTSViewModel] Playback stopped, state reset.")
+            Logger.debug("[TTSViewModel] Playback stopped, state reset")
             self.logCurrentState("after stop")
         }
     }
 }
+
+// swift-format-enable: all

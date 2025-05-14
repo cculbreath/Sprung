@@ -37,7 +37,7 @@ struct CoverLetterViewSetup: View {
                 }) {
                     Label("Toggle Inspector", systemImage: "sidebar.right")
                 }
-                // .onAppear { print("Toolbar Cover Letter") } // This was on the button in CoverLetterToolbar
+                // .onAppear { Logger.debug("Toolbar Cover Letter") } // This was on the button in CoverLetterToolbar
             }
         }
         .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in

@@ -41,7 +41,7 @@ final class TTSProviderManager {
 
         // Only initialize if TTS is enabled
         if !ttsInitialized {
-            print("TTSProviderManager: Initializing TTS on first use")
+            Logger.debug("TTSProviderManager: Initializing TTS on first use")
             ttsInitialized = true
         }
 
@@ -97,7 +97,7 @@ struct CoverLetterAiView: View {
             isNewConversation: isNewConversation
         )
         .onAppear {
-            print("AI Cover Letter View appeared (TTS enabled: \(ttsEnabled))")
+            Logger.debug("AI Cover Letter View appeared (TTS enabled: \(ttsEnabled))")
         }
     }
 }

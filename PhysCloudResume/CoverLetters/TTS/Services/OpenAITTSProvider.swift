@@ -1,3 +1,5 @@
+// swift-format-disable: UseExplicitSelf
+
 //
 //  OpenAITTSProvider.swift
 //  PhysCloudResume
@@ -7,6 +9,7 @@
 
 import AVFoundation
 import Foundation
+import os.log
 
 /// Provides Text-to-Speech functionality using the OpenAI API
 @MainActor
@@ -46,12 +49,20 @@ class OpenAITTSProvider {
     /// The OpenAI client to use for TTS
     ///
     private let client: OpenAIClientProtocol
+    /// Logger for debugging TTS memory issues
+    private static let logger = Logger()
+
     /// Token that identifies the currently active streaming request.
     private var currentStreamID: UUID?
     /// Marks the active request as cancelled so late chunks are ignored.
     private var streamCancelled = false
     /// The audio player for playing audio
     private var audioPlayer: AVAudioPlayer?
+
+    /// Timeout timer to prevent stuck requests
+    private var streamTimeoutTimer: Timer?
+    /// Timeout duration for streaming requests (seconds)
+    private let streamTimeout: TimeInterval = 30.0
     /// Strong reference so the delegate isn't deallocated immediately
     private var audioPlayerDelegate: AudioPlayerDelegate?
     /// Tracks if the current streaming has been cancelled to ignore further chunks
@@ -90,15 +101,22 @@ class OpenAITTSProvider {
         // 1. We're explicitly calling this from the main playback start
         // 2. We're calling it from a user-triggered stop (like option-click)
         if !buffering, isInStreamSetup {
-            print("OpenAITTSProvider: BLOCKED attempt to clear buffering during setup phase")
+            Logger.debug("BLOCKED attempt to clear buffering during setup phase")
             return
         }
 
         if isBufferingFlag != buffering {
             isBufferingFlag = buffering
             Task { @MainActor in
-                print("OpenAITTSProvider: Buffering state changed to \(buffering)")
+                Logger.debug("Buffering state changed to \(buffering)")
                 self.onBufferingStateChanged?(buffering)
+
+                // If entering buffering, start timeout
+                if buffering {
+                    startTimeoutTimer()
+                } else {
+                    cancelTimeoutTimer()
+                }
             }
         }
     }
@@ -114,6 +132,19 @@ class OpenAITTSProvider {
         streamer.onBufferingStateChanged = { [weak self] isBuffering in
             self?.setBufferingState(isBuffering)
         }
+
+        Logger.debug("OpenAITTSProvider initialized with API key")
+    }
+
+    deinit {
+        Logger.debug("OpenAITTSProvider deinitializing")
+        // Clean up all resources - must use Task to dispatch to the MainActor
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            self.cancelTimeoutTimer()
+            self.clearCallbacks()
+            self.stopSpeaking()
+        }
     }
 
     /// Initializes a new TTS provider with a pre-configured client
@@ -124,6 +155,52 @@ class OpenAITTSProvider {
         // Connect streamer buffering state to our provider
         streamer.onBufferingStateChanged = { [weak self] isBuffering in
             self?.setBufferingState(isBuffering)
+        }
+
+        Logger.debug("OpenAITTSProvider initialized with custom client")
+    }
+
+    /// Clear all callback references to break reference cycles
+    private func clearCallbacks() {
+        Logger.debug("Clearing all callbacks")
+        onReady = nil
+        onFinish = nil
+        onError = nil
+        onBufferingStateChanged = nil
+    }
+
+    /// Create and start a timeout timer for streaming operations
+    private func startTimeoutTimer() {
+        // First cancel any existing timer
+        cancelTimeoutTimer()
+
+        // Create a new timer
+        streamTimeoutTimer = Timer.scheduledTimer(withTimeInterval: streamTimeout, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            Logger.warning("Streaming request timed out after \(self.streamTimeout) seconds")
+
+            // Force cleanup on timeout - must dispatch to MainActor
+            Task { @MainActor in
+                // Check if self is still alive
+                guard !Task.isCancelled else { return }
+                self.isInStreamSetup = false // Allow proper cleanup
+                self.stopSpeaking()
+
+                let timeoutError = NSError(domain: "OpenAITTSProvider", code: 3001,
+                                           userInfo: [NSLocalizedDescriptionKey: "Streaming request timed out"])
+                self.onError?(timeoutError)
+            }
+        }
+
+        Logger.debug("Started timeout timer: \(streamTimeout) seconds")
+    }
+
+    /// Cancel the timeout timer if running
+    private func cancelTimeoutTimer() {
+        if streamTimeoutTimer != nil {
+            Logger.debug("Cancelling timeout timer")
+            streamTimeoutTimer?.invalidate()
+            streamTimeoutTimer = nil
         }
     }
 
@@ -173,7 +250,7 @@ class OpenAITTSProvider {
                         onChunk(audioData)
                     }
                 case .failure:
-                    if !self.cancelRequested { print("failure") }
+                    if !self.cancelRequested { Logger.debug("failure") }
                 }
             },
             onComplete: onComplete
@@ -182,22 +259,30 @@ class OpenAITTSProvider {
 
     /// Stops the currently playing speech and cancels any ongoing streaming
     func stopSpeaking() {
+        // Cancel timeout timer first
+        cancelTimeoutTimer()
+
         // mark any existing stream as cancelled
         streamCancelled = true
         currentStreamID = nil
 
-        audioPlayer?.stop()
-        audioPlayer = nil
+        // Cleanup audio player
+        if let player = audioPlayer {
+            player.stop()
+            audioPlayer = nil
+            audioPlayerDelegate = nil // Important: release the delegate to prevent leaks
+        }
 
+        // Stop streamer
         streamer.stop()
 
         // Important: Only clear buffering if this is a user-triggered stop
         if !isInStreamSetup {
-            print("stopSpeaking: Normal stop, clearing buffering")
+            Logger.debug("Normal stop, clearing buffering")
             setBufferingState(false)
             onFinish?()
         } else {
-            print("stopSpeaking: In stream setup, preserving buffering state")
+            Logger.debug("In stream setup, preserving buffering state")
             // Don't call onFinish
         }
     }
@@ -281,7 +366,7 @@ class OpenAITTSProvider {
     ) {
         // Mark that we're in the BUFFERING/SETUP phase
         isInStreamSetup = true
-        print("streamAndPlayText: Entering BUFFERING/SETUP phase")
+        Logger.debug("Entering BUFFERING/SETUP phase")
 
         // Stop any existing playback - without clearing buffering
         stopSpeaking() // stopSpeaking checks isInStreamSetup
@@ -293,11 +378,37 @@ class OpenAITTSProvider {
 
         // Set initial buffering state to true (forced)
         isBufferingFlag = true
-        print("streamAndPlayText: Setting buffering state to TRUE")
+        Logger.debug("Setting buffering state to TRUE")
 
         // Notify listeners of buffering state
         Task { @MainActor in
             self.onBufferingStateChanged?(true)
+        }
+
+        // Start timeout timer
+        startTimeoutTimer()
+
+        // Add a safety timeout that forces exit from setup state after 15 seconds
+        // even if callbacks are missed
+        Task {
+            try? await Task.sleep(nanoseconds: 15_000_000_000) // 15 seconds
+            // Move the actor-isolated work to the MainActor
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                if self.isInStreamSetup {
+                    Logger.warning("Forcing exit from setup state after timeout")
+                    self.isInStreamSetup = false
+
+                    // If we're also still buffering, report an error
+                    if self.isBufferingFlag {
+                        let timeoutError = NSError(domain: "OpenAITTSProvider", code: 3002,
+                                                   userInfo: [NSLocalizedDescriptionKey: "Buffering timed out"])
+                        self.setBufferingState(false)
+                        self.onError?(timeoutError)
+                        onComplete(timeoutError)
+                    }
+                }
+            }
         }
 
         // Wire up callbacks to drive UI state.
@@ -308,7 +419,10 @@ class OpenAITTSProvider {
                 // This means audio is actually ready to play!
                 // Exit setup phase and ALLOW exit from buffering
                 self.isInStreamSetup = false
-                print("streamAndPlayText: AUDIO READY - exiting setup phase")
+                Logger.debug("AUDIO READY - exiting setup phase")
+
+                // Cancel timeout timer since audio is ready
+                self.cancelTimeoutTimer()
 
                 // Now it's safe to exit buffering state
                 self.setBufferingState(false)
@@ -323,11 +437,12 @@ class OpenAITTSProvider {
                 // If we're in setup, DON'T clear buffering - we want
                 // to maintain orange state until audio starts
                 if self.isInStreamSetup {
-                    print("streamAndPlayText: Ignoring finish during buffering setup")
+                    Logger.debug("Ignoring finish during buffering setup")
                     return
                 }
 
-                print("streamAndPlayText: Stream finished normally")
+                Logger.debug("Stream finished normally")
+                self.cancelTimeoutTimer() // Ensure timer is cancelled
                 self.setBufferingState(false)
                 self.onFinish?()
                 onComplete(nil)
@@ -339,7 +454,8 @@ class OpenAITTSProvider {
 
                 // Always process errors
                 self.isInStreamSetup = false
-                print("streamAndPlayText: Stream error: \(error.localizedDescription)")
+                Logger.error("Stream error: \(error.localizedDescription)")
+                self.cancelTimeoutTimer() // Ensure timer is cancelled
                 self.setBufferingState(false)
                 self.onError?(error)
                 onComplete(error)
@@ -358,17 +474,18 @@ class OpenAITTSProvider {
 
                 switch result {
                 case let .success(data):
-                    print("streamAndPlayText: Received chunk of size \(data.count)")
+                    Logger.debug("Received chunk of size \(data.count)")
                     self.streamer.append(data)
                 case let .failure(error):
-                    print("streamAndPlayText: Chunk error: \(error.localizedDescription)")
+                    Logger.error("Chunk error: \(error.localizedDescription)")
                     self.streamer.onError?(error)
                 }
             },
             onComplete: { [weak self] error in
                 guard let self, self.currentStreamID == streamID else { return }
                 if let error = error {
-                    print("streamAndPlayText: Streaming request error: \(error.localizedDescription)")
+                    Logger.error("Streaming request error: \(error.localizedDescription)")
+                    self.cancelTimeoutTimer()
                     self.setBufferingState(false)
                     self.streamer.onError?(error)
                 }
@@ -406,7 +523,10 @@ class OpenAITTSProvider {
     func stop() {
         // Clear the setup flag as this is a user-explicit stop
         isInStreamSetup = false
+        Logger.debug("Explicit stop called")
         stopSpeaking()
         onFinish?()
     }
 }
+
+// swift-format-enable: all

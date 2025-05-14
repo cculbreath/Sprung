@@ -79,7 +79,7 @@ struct ContentView: View {
                 .first?
                 .appendingPathComponent("Model.sqlite")
             {
-                print("Store URL: \(storeURL.path)")
+                Logger.debug("Store URL: \(storeURL.path)")
             }
         }
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch

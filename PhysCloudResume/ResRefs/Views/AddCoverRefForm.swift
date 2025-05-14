@@ -27,7 +27,9 @@ struct AddCoverRefForm: View {
                 .focusable(true) // (1) Mark it focusable on macOS
                 .focused($isFocused)
                 .onTapGesture { isFocused = true }
-                .onChange(of: isFocused) { print("isFocused changed to:", isFocused) }
+                .onChange(of: isFocused) {
+                    Logger.debug("isFocused changed to:")
+                    Logger.debug(isFocused ? "true" : "false") }
                 .frame(maxWidth: .infinity, minHeight: 200)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
@@ -59,7 +61,8 @@ struct AddCoverRefForm: View {
         .frame(minWidth: 400, maxWidth: 600)
         .navigationTitle("Add \(type == .backgroundFact ? "Background Fact" : "Writing Sample")")
         .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in handleOnDrop(providers: providers) }
-        .onChange(of: isTargeted) { print("isTargeted:", isTargeted) }
+        .onChange(of: isTargeted) { Logger.debug("isTargeted:")
+            Logger.debug( isTargeted ? "true" : "false") }
     }
 
     private func saveForm() {

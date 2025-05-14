@@ -58,7 +58,7 @@ final class ResStore: SwiftDataStore {
             return nil
         }
         resume.rootNode = builder.buildTree()
-//                print(builder.json)
+//                Logger.debug(builder.json)
 
         // Persist new resume (and trigger observers)
         jobApp.addResume(resume)
@@ -113,15 +113,15 @@ final class ResStore: SwiftDataStore {
 
             do {
                 try context.save()
-                print("Successfully saved duplicate resume")
+                Logger.debug("Successfully saved duplicate resume")
             } catch {
-                print("Error saving duplicate resume: \(error)")
+                Logger.debug("Error saving duplicate resume: \(error)")
                 return nil
             }
 
             return newResume
         } else {
-            print("No job app associated with resume")
+            Logger.debug("No job app associated with resume")
             return nil
         }
     }

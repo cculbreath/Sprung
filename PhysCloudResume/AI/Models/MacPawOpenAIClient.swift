@@ -23,26 +23,26 @@ class NetworkLoggingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelega
         let statusCode = response.statusCode
         let headers = response.allHeaderFields
 
-        print("🌐 Request completed for URL: \(url)")
-        print("📊 HTTP Status: \(statusCode)")
-        print("⏱️ Request timing:")
+        Logger.debug("🌐 Request completed for URL: \(url)")
+        Logger.debug("📊 HTTP Status: \(statusCode)")
+        Logger.debug("⏱️ Request timing:")
 
         for metric in metrics.transactionMetrics {
             if let fetchStartDate = metric.fetchStartDate,
                let responseEndDate = metric.responseEndDate
             {
                 let duration = responseEndDate.timeIntervalSince(fetchStartDate)
-                print("   - Duration: \(duration) seconds")
+                Logger.debug("   - Duration: \(duration) seconds")
             }
         }
 
-        print("📝 Response Headers:")
+        Logger.debug("📝 Response Headers:")
         for (key, value) in headers {
-            print("   \(key): \(value)")
+            Logger.debug("   \(key): \(value)")
         }
 
         if statusCode >= 400 {
-            print("❌ Error response with status code: \(statusCode)")
+            Logger.debug("❌ Error response with status code: \(statusCode)")
         }
     }
 
@@ -51,7 +51,7 @@ class NetworkLoggingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelega
             let statusCode = response.statusCode
             if statusCode >= 400 {
                 let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode response"
-                print("❌ Error response body: \(responseString)")
+                Logger.debug("❌ Error response body: \(responseString)")
             }
         }
     }
@@ -65,6 +65,13 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     /// The API key used for requests
     var apiKey: String {
         apiKeyValue
+    }
+
+    /// Initializes a new client with the given configuration
+    /// - Parameter configuration: The configuration to use for requests
+    init(configuration: OpenAI.Configuration) {
+        apiKeyValue = configuration.token ?? "none" // Unwrap optional token value
+        client = OpenAI(configuration: configuration)
     }
 
     /// Initializes a new client with the given API key
@@ -86,12 +93,12 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         )
         client = OpenAI(configuration: configuration)
     }
-
+    
     /// Exposes the internal OpenAI client instance for direct access
     var openAIClient: OpenAI {
         return client
     }
-
+    
     /// Converts our ChatMessage to MacPaw's ChatQuery.ChatCompletionMessageParam
     /// - Parameter message: The message to convert
     /// - Returns: The converted message
@@ -445,7 +452,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Log the request for debugging.
         if let bodyString = String(data: httpBody, encoding: .utf8) {
-            print("🌐 Sending request to OpenAI Responses API with payload:\n\(bodyString)")
+            Logger.debug("🌐 Sending request to OpenAI Responses API with payload:\n\(bodyString)")
         }
 
         // Send the request
@@ -467,7 +474,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             }
 
             // Log the response for debugging
-            print("📊 HTTP Status: \(httpResponse.statusCode)")
+            Logger.debug("📊 HTTP Status: \(httpResponse.statusCode)")
 
             // Check for error status codes
             guard (200 ... 299).contains(httpResponse.statusCode) else {
@@ -510,7 +517,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             do {
                 // Log the response data for debugging
                 if let responseString = String(data: data, encoding: .utf8) {
-                    print("📝 Response data: \(responseString)")
+                    Logger.debug("📝 Response data: \(responseString)")
                 }
 
                 // Decode the response
@@ -522,9 +529,9 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
                 // Return the response
                 onComplete(.success(apiResponse))
             } catch {
-                print("❌ Error decoding response: \(error.localizedDescription)")
+                Logger.debug("❌ Error decoding response: \(error.localizedDescription)")
                 if let responseString = String(data: data, encoding: .utf8) {
-                    print("📝 Failed to decode: \(responseString)")
+                    Logger.debug("📝 Failed to decode: \(responseString)")
                 }
                 onComplete(.failure(error))
             }
@@ -592,7 +599,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Log payload for debugging.
         if let bodyString = String(data: httpBody, encoding: .utf8) {
-            print("🌐 Sending request to OpenAI Responses API with payload:\n\(bodyString)")
+            Logger.debug("🌐 Sending request to OpenAI Responses API with payload:\n\(bodyString)")
         }
 
         // Perform request.
@@ -608,7 +615,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         }
 
         // Log the response for debugging
-        print("📊 HTTP Status: \(httpResponse.statusCode)")
+        Logger.debug("📊 HTTP Status: \(httpResponse.statusCode)")
 
         // Check for error status codes
         guard (200 ... 299).contains(httpResponse.statusCode) else {
@@ -631,7 +638,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Log the response data for debugging
         if let responseString = String(data: data, encoding: .utf8) {
-            print("📝 Response data: \(responseString)")
+            Logger.debug("📝 Response data: \(responseString)")
         }
 
         // Decode the response
@@ -659,7 +666,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     ) {
         // For now, use the non-streaming version since streaming requires more complex handling
         // This is a temporary fallback solution
-        print("⚠️ Warning: Streaming for Responses API not fully implemented")
+        Logger.debug("⚠️ Warning: Streaming for Responses API not fully implemented")
 
         Task {
             do {

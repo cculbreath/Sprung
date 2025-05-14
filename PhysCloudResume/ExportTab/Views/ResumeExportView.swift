@@ -297,7 +297,7 @@ struct ResumeExportView: View {
         }
 
         if combinedPDF.pageCount != expectedPages {
-            print("Warning: Expected \(expectedPages) pages but got \(combinedPDF.pageCount)")
+            Logger.debug("Warning: Expected \(expectedPages) pages but got \(combinedPDF.pageCount)")
         }
 
         // Return the combined document as data

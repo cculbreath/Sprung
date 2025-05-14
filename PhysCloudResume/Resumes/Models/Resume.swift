@@ -126,7 +126,7 @@ class Resume: Identifiable, Hashable {
                 let data = try Data(contentsOf: fileURL)
                 DispatchQueue.main.async { self?.pdfData = data }
             } catch {
-                print("Error loading PDF from \(fileURL): \(error)")
+                Logger.debug("Error loading PDF from \(fileURL): \(error)")
                 DispatchQueue.main.async {}
             }
         }
@@ -149,13 +149,13 @@ class Resume: Identifiable, Hashable {
                         // This now calls the async version of export which updates pdfData and textRes
                         try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
                     } catch {
-                        print("Error during debounced export: \(error)")
+                        Logger.debug("Error during debounced export: \(error)")
                     }
                     self.isExporting = false
                     onFinish?()
                 }
             } else {
-                print("Failed to save JSON to file for debounced export.")
+                Logger.debug("Failed to save JSON to file for debounced export.")
                 Task { @MainActor in // Ensure UI updates are on MainActor
                     self.isExporting = false
                     onFinish?()
@@ -186,10 +186,10 @@ class Resume: Identifiable, Hashable {
         // and should update self.pdfData and self.textRes upon completion.
         do {
             try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
-            print("ensureFreshRenderedText: Successfully exported and updated resume data.")
-            print(textRes)
+            Logger.debug("ensureFreshRenderedText: Successfully exported and updated resume data.")
+            Logger.debug(textRes)
         } catch {
-            print("ensureFreshRenderedText: Failed to export resume - \(error.localizedDescription)")
+            Logger.debug("ensureFreshRenderedText: Failed to export resume - \(error.localizedDescription)")
             throw error // Re-throw the error to be caught by the caller
         }
     }

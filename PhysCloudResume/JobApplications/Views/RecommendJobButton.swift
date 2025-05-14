@@ -7,6 +7,9 @@
 
 import SwiftUI
 
+// Import Logger
+import Foundation
+
 struct ErrorMessageWrapper: Identifiable {
     let id = UUID()
     let message: String
@@ -73,8 +76,7 @@ struct RecommendJobButton: View {
             do {
                 let provider = JobRecommendationProvider(
                     jobApps: jobAppStore.jobApps,
-                    resume: selectedResume,
-                    savePromptToFile: true
+                    resume: selectedResume
                 )
 
                 let (jobId, reason) = try await provider.fetchRecommendation()
@@ -99,7 +101,24 @@ struct RecommendJobButton: View {
                 }
             } catch {
                 await MainActor.run {
-                    setErrorMessage("Error: \(error.localizedDescription)")
+                    // Enhanced error logging using Logger
+                    Logger.error("JobRecommendation Error: \(error)")
+                    Logger.error("Error description: \(error.localizedDescription)")
+                    
+                    // Show more detailed error message to user
+                    if let nsError = error as NSError? {
+                        Logger.error("Error domain: \(nsError.domain), code: \(nsError.code)")
+                        if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+                            Logger.error("Underlying error: \(underlyingError)")
+                        }
+                        
+                        // Include underlying error info in the alert if available
+                        let detailedMessage = "Error: \(error.localizedDescription)\n\nDetails: Domain=\(nsError.domain), Code=\(nsError.code)"
+                        setErrorMessage(detailedMessage)
+                    } else {
+                        setErrorMessage("Error: \(error.localizedDescription)")
+                    }
+                    
                     isLoading = false
                     appState.isLoadingRecommendation = false
                 }

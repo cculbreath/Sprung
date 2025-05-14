@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 //                if let files = try? fm.contentsOfDirectory(at: appSupport, includingPropertiesForKeys: nil) {
 //                    for url in files where url.pathExtension == "sqlite" || url.pathExtension == "sqlite-shm" || url.pathExtension == "sqlite-wal" {
 //                        try? fm.removeItem(at: url)
-//                        print("[DEBUG] Removed SwiftData store file at \(url.path)")
+//                        Logger.debug("[DEBUG] Removed SwiftData store file at \(url.path)")
 //                    }
 //                }
 //            }

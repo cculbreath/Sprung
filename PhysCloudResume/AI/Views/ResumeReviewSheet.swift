@@ -329,7 +329,7 @@ struct ResumeReviewSheet: View {
                         }
                     }
                 } else {
-                    print("Warning: TreeNode with ID \(revisedNode.id) not found for applying revision.")
+                    Logger.debug("Warning: TreeNode with ID \(revisedNode.id) not found for applying revision.")
                 }
             }
 

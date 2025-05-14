@@ -12,8 +12,10 @@ import SwiftUI
 @Observable class JobRecommendationProvider {
     // MARK: - Properties
 
-    /// Set this to `true` if you want to save a debug file containing the prompt text.
-    var saveDebugPrompt: Bool = false
+    /// Use the global debug setting from UserDefaults instead of local property
+    var saveDebugPrompt: Bool {
+        UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+    }
 
     // The system message in generic format for abstraction layer
     let genericSystemMessage = ChatMessage(
@@ -28,7 +30,9 @@ import SwiftUI
     // The new abstraction layer client
     private let openAIClient: OpenAIClientProtocol
 
-    var savePromptToFile: Bool
+    var savePromptToFile: Bool {
+        UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+    }
     var jobApps: [JobApp] = []
     var resume: Resume?
 
@@ -52,11 +56,9 @@ import SwiftUI
     ///   - jobApps: List of job applications
     ///   - resume: The resume to use
     ///   - client: Custom OpenAI client to use
-    ///   - savePromptToFile: Whether to save debug files
-    init(jobApps: [JobApp], resume: Resume?, client: OpenAIClientProtocol, savePromptToFile: Bool = false) {
+    init(jobApps: [JobApp], resume: Resume?, client: OpenAIClientProtocol) {
         self.jobApps = jobApps
         self.resume = resume
-        self.savePromptToFile = savePromptToFile
         openAIClient = client
     }
 
@@ -64,17 +66,20 @@ import SwiftUI
     /// - Parameters:
     ///   - jobApps: List of job applications
     ///   - resume: The resume to use
-    ///   - savePromptToFile: Whether to save debug files
-    init(jobApps: [JobApp], resume: Resume?, savePromptToFile: Bool = false) {
+    init(jobApps: [JobApp], resume: Resume?) {
         self.jobApps = jobApps
         self.resume = resume
-        self.savePromptToFile = savePromptToFile
 
         // Get API key from UserDefaults directly to avoid conflict with @Observable
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-
-        // Create client using our factory
-        openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
+        
+        // Create configuration with relaxed parsing to handle null system_fingerprint
+        let configuration = OpenAI.Configuration(token: apiKey, parsingOptions: .fillRequiredFieldIfKeyNotFound)
+        
+        // Create client using our factory with relaxed configuration
+        openAIClient = OpenAIClientFactory.createClient(configuration: configuration)
+        
+        Logger.debug("JobRecommendationProvider initialized")
     }
 
     // MARK: - API Call Functions
@@ -105,73 +110,94 @@ import SwiftUI
 
         // Get the model string
         let modelString = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Always log the model being used
+        Logger.info("Using model: \(modelString) for job recommendation")
 
         do {
-            // Check if we're using the MacPaw client
-            if let macPawClient = openAIClient as? MacPawOpenAIClient {
-                // Convert our messages to MacPaw's format
-                let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
-
-                // Create the query with structured output format
-                let query = ChatQuery(
-                    messages: chatMessages,
+            // Check if we're using our custom SystemFingerprintFixClient
+            if let fingerprintFixClient = openAIClient as? SystemFingerprintFixClient {
+                Logger.debug("Using SystemFingerprintFixClient for job recommendation")
+                
+                // Send the request directly through our custom client
+                let response = try await fingerprintFixClient.sendChatCompletionAsync(
+                    messages: messages,
                     model: modelString,
-                    responseFormat: .jsonSchema(name: "job-recommendation", type: JobRecommendation.self),
                     temperature: 1.0
                 )
-
-                // Make the API call with structured output
-                let result = try await macPawClient.openAIClient.chats(query: query)
-
-                // Extract structured output response
-                // For MacPaw/OpenAI structured outputs, we need to check the content string
-                // since there's no structured output property directly accessible
-                guard let content = result.choices.first?.message.content,
-                      let data = content.data(using: .utf8)
-                else {
-                    throw NSError(
-                        domain: "JobRecommendationProvider",
-                        code: 1002,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output content"]
-                    )
+                
+                // Process the response directly
+                Logger.debug("Received response from SystemFingerprintFixClient: \(response.content)")
+                
+                let content = response.content
+                
+                // Log the content for debugging
+                Logger.error("FULL LLM RESPONSE CONTENT:\n\(content)")
+                
+                // Always save the raw response to a file for debugging
+                savePromptToDownloads(content: content, fileName: "jobRecommendationRawResponse_\(modelString).txt")
+                
+                // Try to parse the JSON response
+                guard let data = content.data(using: .utf8) else {
+                    Logger.error("Failed to convert response content to data")
+                    throw NSError(domain: "JobRecommendationProvider", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to convert response content to data"])
                 }
-
-                do {
-                    let structuredOutput = try JSONDecoder().decode(JobRecommendation.self, from: data)
-                    // Process the structured output
-                    guard let uuid = UUID(uuidString: structuredOutput.recommendedJobId) else {
-                        throw NSError(
-                            domain: "JobRecommendationProvider",
-                            code: 5,
-                            userInfo: [
-                                NSLocalizedDescriptionKey: "Invalid UUID format in response: \(structuredOutput.recommendedJobId)",
-                            ]
-                        )
+                
+                // Try to parse it as a dictionary first to extract the fields manually
+                if let jsonObj = try? JSONSerialization.jsonObject(with: data),
+                   let jsonDict = jsonObj as? [String: Any] {
+                    
+                    // Extract the recommendedJobId field
+                    guard let recommendedJobId = jsonDict["recommendedJobId"] as? String else {
+                        Logger.error("Missing recommendedJobId in response: \(jsonDict)")
+                        throw NSError(domain: "JobRecommendationProvider", code: 1006, userInfo: [NSLocalizedDescriptionKey: "Missing recommendedJobId in response"])
                     }
-
+                    
+                    // Extract the reason field, with a default value if it's missing
+                    let reason = jsonDict["reason"] as? String ?? "No reason provided"
+                    
+                    // Check if UUID is valid
+                    guard let uuid = UUID(uuidString: recommendedJobId) else {
+                        Logger.error("Invalid UUID format in response: \(recommendedJobId)")
+                        throw NSError(domain: "JobRecommendationProvider", code: 5, userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format in response: \(recommendedJobId)"])
+                    }
+                    
                     // Look for the job with this UUID
                     if let _ = jobApps.first(where: { $0.id == uuid }) {
-                        return (uuid, structuredOutput.reason)
+                        Logger.info("Successfully found matching job with UUID: \(uuid)")
+                        return (uuid, reason)
                     } else {
                         // Log all job IDs for debugging
-
-                        throw NSError(
-                            domain: "JobRecommendationProvider",
-                            code: 6,
-                            userInfo: [
-                                NSLocalizedDescriptionKey: "Job with ID \(uuid.uuidString) not found in job applications",
-                            ]
-                        )
+                        let availableIds = jobApps.map { $0.id.uuidString }.joined(separator: ", ")
+                        Logger.error("Job with ID \(uuid.uuidString) not found. Available job IDs: \(availableIds)")
+                        throw NSError(domain: "JobRecommendationProvider", code: 6, userInfo: [NSLocalizedDescriptionKey: "Job with ID \(uuid.uuidString) not found in job applications"])
                     }
-                } catch {
-                    throw NSError(
-                        domain: "JobRecommendationProvider",
-                        code: 1003,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to decode structured output: \(error.localizedDescription)"]
-                    )
+                } else {
+                    // If manual parsing fails, try with the decoder as a fallback
+                    do {
+                        let recommendation = try JSONDecoder().decode(JobRecommendation.self, from: data)
+                        
+                        // Process the structured output
+                        guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
+                            Logger.error("Invalid UUID format in response: \(recommendation.recommendedJobId)")
+                            throw NSError(domain: "JobRecommendationProvider", code: 5, userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format in response: \(recommendation.recommendedJobId)"])
+                        }
+                        
+                        // Look for the job with this UUID
+                        if let _ = jobApps.first(where: { $0.id == uuid }) {
+                            Logger.info("Successfully found matching job with UUID: \(uuid)")
+                            return (uuid, recommendation.reason)
+                        } else {
+                            throw NSError(domain: "JobRecommendationProvider", code: 6, userInfo: [NSLocalizedDescriptionKey: "Job with ID \(uuid.uuidString) not found in job applications"])
+                        }
+                    } catch {
+                        Logger.error("Failed to parse response as JSON: \(error)")
+                        throw NSError(domain: "JobRecommendationProvider", code: 1007, userInfo: [NSLocalizedDescriptionKey: "Failed to parse response as JSON"])
+                    }
                 }
             } else {
-                // Fallback to the old method for non-MacPaw clients
+                // Fallback to the old method for non-custom clients
+                Logger.info("Using standard non-custom client for job recommendation")
                 let response = try await openAIClient.sendChatCompletionAsync(
                     messages: messages,
                     model: modelString,
@@ -183,6 +209,28 @@ import SwiftUI
                 return decodedResponse
             }
         } catch {
+            // Log detailed error information at the top level
+            Logger.error("Job recommendation API call failed: \(error.localizedDescription)")
+            
+            // Convert to NSError to access more details
+            let nsError = error as NSError
+            
+            // Log all error details
+            let fullErrorDetails = "FULL API ERROR DETAILS:\nDomain: \(nsError.domain)\nCode: \(nsError.code)\nDescription: \(nsError.localizedDescription)\nUserInfo: \(nsError.userInfo)"
+            Logger.error(fullErrorDetails)
+            
+            // Check if this is the specific system_fingerprint error
+            if nsError.domain == "NSCocoaErrorDomain" && nsError.code == 4865,
+               let _ = nsError.userInfo["NSCodingPath"] as? [Any],
+               let debugDesc = nsError.userInfo["NSDebugDescription"] as? String,
+               debugDesc.contains("null value") {
+                
+                Logger.error("This appears to be the system_fingerprint null value error - which means the API call worked but there's a JSON parsing issue")
+            }
+            
+            // Save all error details for debugging
+            savePromptToDownloads(content: fullErrorDetails, fileName: "api_error_details.txt")
+            
             throw error
         }
     }
@@ -255,10 +303,52 @@ import SwiftUI
         if savePromptToFile {
             savePromptToDownloads(content: responseText, fileName: "jobRecommendationResponse.txt")
         }
+        
+        // Always save the raw response for debugging this specific issue
+        // This will happen even if debug file saving is turned off
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        savePromptToDownloads(content: responseText, fileName: "jobRecommendationResponse_\(modelString)_auto.txt")
+        
+        // Always log the response for debugging the missing data error
+        Logger.debug("API Response to decode: \(responseText)")
+        if responseText.isEmpty {
+            Logger.warning("Empty response text received from API")
+            throw NSError(
+                domain: "JobRecommendationProvider",
+                code: 4001,
+                userInfo: [NSLocalizedDescriptionKey: "Empty response received from API"]
+            )
+        }
 
         // Try to parse the JSON response
         guard let data = responseText.data(using: .utf8) else {
+            Logger.error("Could not convert API response to data")
             throw NSError(domain: "JobRecommendationProvider", code: 4, userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
+        }
+        
+        // Log the data length for debugging
+        Logger.debug("API Response data length: \(data.count) bytes")
+        if data.count == 0 {
+            Logger.warning("Zero-length data from API response")
+            throw NSError(
+                domain: "JobRecommendationProvider",
+                code: 4002,
+                userInfo: [NSLocalizedDescriptionKey: "Zero-length data from API response"]
+            )
+        }
+        
+        // Try to validate if the response is valid JSON
+        do {
+            let _ = try JSONSerialization.jsonObject(with: data, options: [])
+            Logger.debug("Response is valid JSON structure")
+        } catch {
+            Logger.error("Response is not valid JSON: \(error.localizedDescription)")
+            savePromptToDownloads(content: "Invalid JSON:\n\(responseText)", fileName: "invalid_json_response.txt")
+            throw NSError(
+                domain: "JobRecommendationProvider",
+                code: 4003,
+                userInfo: [NSLocalizedDescriptionKey: "Response is not valid JSON: \(error.localizedDescription)"]
+            )
         }
 
         // Decode the recommendation
@@ -266,15 +356,35 @@ import SwiftUI
         do {
             recommendation = try JSONDecoder().decode(JobRecommendation.self, from: data)
         } catch {
-            if savePromptToFile {
-                savePromptToDownloads(content: "JSON decode error: \(error)\nJSON: \(responseText)", fileName: "jsonError.txt")
+            // Log detailed error information
+            Logger.debug("🚨 JSON decode error: \(error)")
+            
+            // Try to decode error response instead
+            do {
+                let errorResponse = try JSONDecoder().decode([String: String].self, from: data)
+                Logger.debug("📝 Error response: \(errorResponse)")
+            } catch {
+                Logger.debug("🚨 Could not decode as error response either")
             }
+            
+            // Always save error details for debugging
+            let errorDetails = "JSON decode error: \(error)\nError type: \(type(of: error))\n\nResponse data:\n\(responseText)"
+            Logger.debug(errorDetails)
+            savePromptToDownloads(content: errorDetails, fileName: "jsonError.txt")
+            
+            // Include the response text in the error for debugging
+            var userInfo: [String: Any] = [
+                NSLocalizedDescriptionKey: "Failed to decode JSON response: \(error.localizedDescription)"
+            ]
+            
+            // Add the original error
+            userInfo[NSUnderlyingErrorKey] = error
+            
+            // Create a detailed error with the raw response text
             throw NSError(
                 domain: "JobRecommendationProvider",
                 code: 4,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Failed to decode JSON response",
-                ]
+                userInfo: userInfo
             )
         }
 
@@ -303,15 +413,8 @@ import SwiftUI
         )
     }
 
-    /// Saves the provided prompt text to the user's `Downloads` folder for debugging purposes.
     private func savePromptToDownloads(content: String, fileName: String) {
-        let fileManager = FileManager.default
-        let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
-        let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
-        let fileURL = downloadsURL.appendingPathComponent(fileName)
-
-        do {
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {}
+        // Use our logger instead of direct file operations
+        Logger.saveDebugToFile(content: content, fileName: fileName)
     }
 }

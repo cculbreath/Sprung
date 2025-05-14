@@ -13,19 +13,19 @@ private func writeDebugToFile(_ content: String) {
         let filename = "ai-prompt-cover-letter-recommendation-\(timestamp).md"
         let fileURL = downloadsURL.appendingPathComponent(filename)
 
-        print("[DEBUG] Writing debug info to: \(fileURL.path)")
+        Logger.debug("[DEBUG] Writing debug info to: \(fileURL.path)")
 
         // Make sure the Downloads directory exists
         if !fileManager.fileExists(atPath: downloadsURL.path) {
-            print("[DEBUG] Warning: Downloads directory doesn't exist at: \(downloadsURL.path)")
+            Logger.debug("[DEBUG] Warning: Downloads directory doesn't exist at: \(downloadsURL.path)")
             return
         }
 
         // Write to file
         try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        print("[DEBUG] Successfully wrote debug info to file: \(fileURL.path)")
+        Logger.debug("[DEBUG] Successfully wrote debug info to file: \(fileURL.path)")
     } catch {
-        print("[DEBUG] Error writing debug info to file: \(error.localizedDescription)")
+        Logger.debug("[DEBUG] Error writing debug info to file: \(error.localizedDescription)")
     }
 } //
 //  CoverLetterRecommendationProvider.swift
@@ -101,32 +101,13 @@ final class CoverLetterRecommendationProvider {
     /// Writes debug information to a file in the Downloads folder
     /// - Parameter content: The content to write
     private func writeDebugToFile(_ content: String) {
-        do {
-            // Get the home directory and downloads path
-            let fileManager = FileManager.default
-            let downloadsURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
-
-            // Create a unique filename with timestamp
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-            let timestamp = dateFormatter.string(from: Date())
-            let filename = "cover-letter-prompt-debug-\(timestamp).txt"
-            let fileURL = downloadsURL.appendingPathComponent(filename)
-
-            print("[DEBUG] Writing debug info to: \(fileURL.path)")
-
-            // Make sure the Downloads directory exists
-            if !fileManager.fileExists(atPath: downloadsURL.path) {
-                print("[DEBUG] Warning: Downloads directory doesn't exist at: \(downloadsURL.path)")
-                return
-            }
-
-            // Write to file
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("[DEBUG] Successfully wrote debug info to file: \(fileURL.path)")
-        } catch {
-            print("[DEBUG] Error writing debug info to file: \(error.localizedDescription)")
-        }
+        // Use the Logger utility to save debug files based on global settings
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        let timestamp = dateFormatter.string(from: Date())
+        let filename = "cover-letter-prompt-debug-\(timestamp).txt"
+        
+        Logger.saveDebugToFile(content: content, fileName: filename)
     }
 
     /// Response schema for best cover letter selection
@@ -169,8 +150,8 @@ final class CoverLetterRecommendationProvider {
         for letter in letters {
             letterBundle += "id: \(letter.id.uuidString), name: \(letter.sequencedName), content:\n\(letter.content)\n\n"
         }
-        print("================ letter bundle!!")
-        print(letterBundle)
+        Logger.debug("================ letter bundle!!")
+        Logger.debug(letterBundle)
         prompt += letterBundle
         prompt += "\n\n==================================================\n\n"
         prompt += "**For reference here are some of \(applicant.name)'s previous cover letters that he's particularly satisfied with:\n**"
@@ -185,7 +166,7 @@ final class CoverLetterRecommendationProvider {
         prompt += "}\n"
 
         // DEBUG: Write the full prompt to a file in Downloads
-        print("[DEBUG] Writing cover letter recommendation prompt to Downloads folder")
+        Logger.debug("[DEBUG] Writing cover letter recommendation prompt to Downloads folder")
         let fullPromptDebug = "SYSTEM PROMPT:\n\n\(genericSystemMessage.content)\n\nUSER PROMPT:\n\n\(prompt)\n\nJOB DESCRIPTION:\n\n\(jobApp.jobDescription)"
         writeDebugToFile(fullPromptDebug)
 

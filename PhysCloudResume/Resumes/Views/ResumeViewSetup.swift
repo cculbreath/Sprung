@@ -39,15 +39,15 @@ struct ResumeViewSetup: View {
 //                if selectedApp?.resumes.count == 0 {
 //                    $refresh.wrappedValue = false
 //                }
-//              print(
+//              Logger.debug(
 //                "count tog \(selectedApp?.resumes.count)"
 //              ) // Force update when resumes change
 //            }
 //            .onChange(of: selectedApp.selectedRes) {
-//                print("change tog") // Force update when selected resume changes
+//                Logger.debug("change tog") // Force update when selected resume changes
 //            }
 //            .onChange(of: selectedApp) {
-//                print("change detected")
+//                Logger.debug("change detected")
 //            }
     }
 }

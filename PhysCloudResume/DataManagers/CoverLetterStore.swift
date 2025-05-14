@@ -165,7 +165,7 @@ final class CoverLetterStore: SwiftDataStore {
             }
 
             if updatedCount > 0 {
-                print("Migration: Set generated=true for \(updatedCount) cover letters with content")
+                Logger.debug("Migration: Set generated=true for \(updatedCount) cover letters with content")
                 saveContext()
             }
 
@@ -173,7 +173,7 @@ final class CoverLetterStore: SwiftDataStore {
             defaults.set(true, forKey: migrationKey)
 
         } catch {
-            print("Failed to perform cover letter migration: \(error.localizedDescription)")
+            Logger.debug("Failed to perform cover letter migration: \(error.localizedDescription)")
         }
     }
 }
