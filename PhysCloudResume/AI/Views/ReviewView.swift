@@ -9,6 +9,8 @@ import SwiftData
 import SwiftUI
 
 struct ReviewView: View {
+    @State private var showExitConfirmation = false
+    @State private var eventMonitor: Any? = nil
     @Environment(ResStore.self) private var resStore
     @Environment(\.modelContext) private var modelContext
     @Binding var revisionArray: [ProposedRevisionNode]
@@ -267,6 +269,37 @@ struct ReviewView: View {
                     if updateNodes.isEmpty {
                         updateNodes = selRes.getUpdatableNodes()
                     }
+                    
+                    // Add keyboard shortcut for escape key to show confirmation dialog
+                    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                        if event.keyCode == 53 { // Escape key
+                            self.showExitConfirmation = true
+                            return nil // Consume the event
+                        }
+                        return event
+                    }
+                }
+                .onDisappear {
+                    // Remove event monitor when view disappears to prevent memory leaks
+                    if let monitor = eventMonitor {
+                        NSEvent.removeMonitor(monitor)
+                        eventMonitor = nil
+                    }
+                }
+                .alert("Close Review?", isPresented: $showExitConfirmation) {
+                    Button("Cancel", role: .cancel) {
+                        // Do nothing, just dismiss the alert
+                    }
+                    Button("Apply & Close", role: .destructive) {
+                        // Apply accepted changes
+                        applyChanges()
+                        // Clear arrays and close sheet
+                        revisionArray = []
+                        feedbackArray = []
+                        sheetOn = false
+                    }
+                } message: {
+                    Text("Closing will apply any accepted changes and discard pending revisions.")
                 }
             }
         } else { Text("No valid Res") }
