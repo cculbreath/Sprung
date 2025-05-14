@@ -105,15 +105,22 @@ class Resume: Identifiable, Hashable {
     }
 
     func generateQuery() -> ResumeApiQuery {
-        let emptyProfile = ApplicantProfile(
-            name: "", address: "", city: "", state: "", zip: "",
-            websites: "", email: "", phone: ""
+        // Instead of using an empty profile and updating it later asynchronously,
+        // create a complete profile with default values so that the query has valid data
+        // This avoids the race condition where the query is used before the Task updates it
+        let profile = ApplicantProfile() // Uses default values from ApplicantProfile init
+        let applicant = Applicant(
+            name: profile.name,
+            address: profile.address,
+            city: profile.city,
+            state: profile.state,
+            zip: profile.zip,
+            websites: profile.websites,
+            email: profile.email,
+            phone: profile.phone
         )
-        let query = ResumeApiQuery(resume: self, applicantProfile: emptyProfile)
-        Task { @MainActor in
-            let realApplicant = Applicant()
-            query.updateApplicant(realApplicant)
-        }
+        let query = ResumeApiQuery(resume: self, applicantProfile: profile)
+        query.updateApplicant(applicant)
         return query
     }
 

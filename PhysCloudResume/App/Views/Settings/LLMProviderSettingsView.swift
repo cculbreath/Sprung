@@ -40,7 +40,7 @@ struct LLMProviderSettingsView: View {
                 }
                 
                 HStack {
-                    Image(systemName: "ray.triangle.path")
+                    Image(systemName: "sparkles.tv")
                         .foregroundColor(.secondary)
                     Text("Google Gemini")
                     Spacer()

@@ -104,7 +104,7 @@ class PromptBuilderService {
 
         \(skillsJsonString)
 
-        Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter. Each node in your response must include the original 'id', 'originalValue', 'isTitleNode', and 'treePath' fields exactly as they were provided in the input. Provide your suggested change in the 'newValue' field. Set 'valueChanged' to true if you made a change, false otherwise.
+        Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. Each node in your response must include the original 'id', 'originalValue', 'isTitleNode', and 'treePath' fields exactly as they were provided in the input. Provide your suggested change in the 'newValue' field.
         """
     }
     
@@ -123,12 +123,12 @@ class PromptBuilderService {
         
         A properly fitting section has all text fully contained within its boundaries and has a visible margin to the section below it.
         
-        IMPORTANT: Respond ONLY with the following JSON structure and NOTHING ELSE:
+        IMPORTANT: Respond ONLY with the JSON structure specified in the API request's 'response_format.schema' parameter and NOTHING ELSE:
         
         {"contentsFit": true}  - if everything fits properly
         {"contentsFit": false} - if there is any overflow or text cuts off
         
-        DO NOT include any explanation, analysis, or additional text. Your ENTIRE response must be ONLY the JSON object. This is critical for automated processing.
+        DO NOT include any explanation, analysis, or additional text. Your ENTIRE response must be ONLY the JSON object. This is critical for automated processing and will be validated on the server side against the schema.
         """
     }
     
@@ -144,20 +144,18 @@ class PromptBuilderService {
         Job Description:
         \(jobDescription)
 
-        Current Skills and Expertise (in JSON format - each node contains its current position in the myIndex field):
+        Current Skills and Expertise (in JSON format - contains just name, id, and current order):
         \(skillsJsonString)
 
-        Task: Analyze both the skills listed and the job description, then recommend an optimal ordering for these skills. Place the most relevant and impressive skills related to the job position at the top. Do not add or remove any skills, only reorder them.
+        Task: Analyze both the skills listed and the job description, then recommend an optimal ordering of these skills. Place the most relevant and impressive skills related to the job position at the top. Do not add or remove any skills, only reorder them.
 
-        For each skill, provide:
-        1. Its ID (unchanged)
-        2. Original value (unchanged) 
-        3. Recommended new position (0-based index)
-        4. Brief reason for its new position
-        5. Keep original isTitleNode value (unchanged)
-        6. Keep original treePath value (unchanged)
+        For each skill, include these fields exactly:
+        - "id": String - The unchanged node ID
+        - "originalValue": String - The original node name from the input
+        - "newPosition": Integer - The suggested new position (0-based index)
+        - "reasonForReordering": String - Brief explanation of why this position is appropriate
 
-        Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter.
+        Respond with a JSON object containing an array of skill objects under the 'reordered_skills_and_expertise' key, adhering to the schema provided in the API request's format parameter. The response will be validated on the server side against this schema.
         """
     }
 }

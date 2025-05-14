@@ -353,6 +353,21 @@ struct AiCommsView: View {
 
                     // Set up system and user messages for initial query
                     let userPromptContent = await q.wholeResumeQueryString() // Await the async prompt generation
+                    
+                    // Validate the query content
+                    if userPromptContent.isEmpty {
+                        Logger.debug("⚠️ WARNING: wholeResumeQueryString returned empty content!")
+                    } else {
+                        Logger.debug("✅ wholeResumeQueryString returned content of length: \(userPromptContent.count) chars")
+                    }
+                    
+                    // Ensure we have a valid system message
+                    if q.genericSystemMessage.content.isEmpty {
+                        Logger.debug("⚠️ WARNING: genericSystemMessage has empty content!")
+                    } else {
+                        Logger.debug("✅ genericSystemMessage has content of length: \(q.genericSystemMessage.content.count) chars")
+                    }
+                    
                     let updatedProvider = chatProvider
                     updatedProvider.genericMessages = [
                         q.genericSystemMessage,
@@ -378,18 +393,54 @@ struct AiCommsView: View {
                 let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
                 let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
                 
+                // Important check: Verify that we actually have messages to send
+                if chatProvider.genericMessages.isEmpty {
+                    Logger.debug("❌ CRITICAL ERROR: No messages to send to LLM! Attempting to recover...")
+                    
+                    // Try to reconstruct the messages
+                    let systemMessage = q.genericSystemMessage
+                    let userContent = !hasRevisions ? await q.wholeResumeQueryString() : await q.revisionPrompt(fbnodes)
+                    
+                    if userContent.isEmpty {
+                        Logger.debug("❌ Failed to recover: User content is empty")
+                        throw NSError(domain: "AiCommsError", code: 1001, 
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to generate prompt content"])
+                    } else {
+                        Logger.debug("✅ Successfully recovered prompt content: \(userContent.count) chars")
+                        let updatedProvider = chatProvider
+                        updatedProvider.genericMessages = [
+                            systemMessage,
+                            ChatMessage(role: .user, content: userContent)
+                        ]
+                        chatProvider = updatedProvider
+                    }
+                } else {
+                    Logger.debug("✅ Message queue contains \(chatProvider.genericMessages.count) messages")
+                    for (i, msg) in chatProvider.genericMessages.enumerated() {
+                        Logger.debug("   Message[\(i)]: Role=\(msg.role), Content length=\(msg.content.count) chars")
+                    }
+                }
+                
                 // If the model selection has changed, we need to update our client
                 if modelString.starts(with: "gemini-") && modelString != chatProvider.lastModelUsed {
                     Logger.debug("Switching to Gemini client for model: \(modelString)")
                     // Create a new client for Gemini
                     let geminiClient = OpenAIClientFactory.createGeminiClient(apiKey: geminiKey)
+                    
+                    // Important: preserve the message queue when switching clients
+                    let messages = chatProvider.genericMessages
                     chatProvider = ResumeChatProvider(client: geminiClient)
+                    chatProvider.genericMessages = messages
                     chatProvider.lastModelUsed = modelString
                 } else if !modelString.starts(with: "gemini-") && modelString != chatProvider.lastModelUsed {
                     Logger.debug("Switching to OpenAI client for model: \(modelString)")
                     // Create a new client for OpenAI
                     let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiKey)
+                    
+                    // Important: preserve the message queue when switching clients
+                    let messages = chatProvider.genericMessages
                     chatProvider = ResumeChatProvider(client: openAIClient)
+                    chatProvider.genericMessages = messages
                     chatProvider.lastModelUsed = modelString
                 }
                 

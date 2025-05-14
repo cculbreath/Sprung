@@ -17,6 +17,81 @@ class TreeNodeExtractor {
     
     private init() {}
     
+    /// Extracts minimal "Skills and Expertise" nodes data (just id, name, and order) for reordering operations
+    /// - Parameter resume: The resume to extract skills from.
+    /// - Returns: A JSON string representing the skills with minimal data, or nil if an error occurs.
+    func extractSkillsForReordering(resume: Resume) -> String? {
+        // First, ensure the resume has a rootNode.
+        guard let actualRootNode = resume.rootNode else {
+            Logger.debug("Error: Resume has no rootNode.")
+            return nil
+        }
+
+        // Attempt to find the "Skills and Expertise" section node.
+        var skillsSectionNode: TreeNode? = actualRootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        })
+
+        // If not found with primary names, try the fallback key.
+        if skillsSectionNode == nil {
+            skillsSectionNode = actualRootNode.children?.first(where: { $0.name == "skills-and-expertise" })
+        }
+
+        // If still not found after both attempts, print an error and return nil.
+        guard let finalSkillsSectionNode = skillsSectionNode else {
+            Logger.debug("Error: 'Skills and Expertise' section node not found in the resume under rootNode.")
+            return nil
+        }
+        
+        // Same node collection logic as extractTreeNodesForLLM but simplified extraction
+        var nodesToProcess: [TreeNode] = []
+
+        // We only want to process the direct children of the "Skills and Expertise" section node,
+        // as these are the individual skills or skill categories.
+        finalSkillsSectionNode.children?.forEach { childNode in
+            // If a child node itself has children (e.g. a category with bullet points),
+            // we add the category node (title) and then its children (values).
+            if childNode.hasChildren {
+                if childNode.includeInEditor || !childNode.name.isEmpty { // Add the category title node
+                    nodesToProcess.append(childNode)
+                }
+                childNode.children?.forEach { subChildNode in // Add its children (skill details)
+                    if subChildNode.includeInEditor || !subChildNode.name.isEmpty {
+                        nodesToProcess.append(subChildNode)
+                    }
+                }
+            } else { // It's a direct skill item
+                if childNode.includeInEditor || !childNode.name.isEmpty {
+                    nodesToProcess.append(childNode)
+                }
+            }
+        }
+        
+        // Create simplified JSON with just id, name and order (myIndex)
+        let exportableNodes: [[String: Any]] = nodesToProcess.compactMap { node in
+            guard !node.name.isEmpty else { return nil }
+            
+            return [
+                "id": node.id,
+                "name": node.name,
+                "order": node.myIndex
+            ]
+        }
+
+        guard !exportableNodes.isEmpty else {
+            Logger.debug("Warning: No exportable skill/expertise nodes found under the identified section.")
+            return "[]"
+        }
+
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: exportableNodes, options: [.prettyPrinted])
+            return String(data: jsonData, encoding: .utf8)
+        } catch {
+            Logger.debug("Error serializing skills nodes to JSON: \(error)")
+            return nil
+        }
+    }
+    
     /// Extracts "Skills and Expertise" nodes into a JSON string format for the LLM.
     /// - Parameter resume: The resume to extract skills from.
     /// - Returns: A JSON string representing the skills and expertise, or nil if an error occurs.
@@ -144,18 +219,40 @@ class TreeNodeExtractor {
             return false
         }
 
-        // Create a dictionary mapping node id to its new position
+        // Create a dictionary mapping node id to its new position - log what we're getting
+        Logger.debug("Applying reordering for \(reorderedNodes.count) nodes")
+        for node in reorderedNodes {
+            Logger.debug("Node ID: \(node.id), Position: \(node.newPosition), Original Value: \(node.originalValue)")
+        }
+        
         let positionMap = Dictionary(uniqueKeysWithValues: reorderedNodes.map { ($0.id, $0.newPosition) })
         
         // Create a list of nodes to reorder with their new positions
         var nodesToReorder: [(node: TreeNode, newPosition: Int)] = []
+        
+        // Let's log the top-level skills nodes we have available
+        if let directChildren = finalSkillsSectionNode.children {
+            Logger.debug("Available Skills section children (\(directChildren.count) nodes):")
+            for (index, child) in directChildren.enumerated() {
+                Logger.debug("\(index): ID=\(child.id), Name=\(child.name), Value=\(child.value)")
+                if let subChildren = child.children {
+                    Logger.debug("  - Has \(subChildren.count) sub-children")
+                    for (subIndex, subChild) in subChildren.enumerated() {
+                        Logger.debug("    - \(subIndex): ID=\(subChild.id), Name=\(subChild.name), Value=\(subChild.value)")
+                    }
+                }
+            }
+        }
         
         // We need to handle different levels separately
         // First, get all direct children of the skills section
         if let directChildren = finalSkillsSectionNode.children {
             for child in directChildren {
                 if let newPosition = positionMap[child.id] {
+                    Logger.debug("✅ Found node to reorder: \(child.id), current myIndex=\(child.myIndex), newPosition=\(newPosition)")
                     nodesToReorder.append((child, newPosition))
+                } else {
+                    Logger.debug("⚠️ No position found for node: \(child.id)")
                 }
                 
                 // If this child has its own children (like a skill category with bullet points)
@@ -164,28 +261,43 @@ class TreeNodeExtractor {
                     var subNodesToReorder: [(node: TreeNode, newPosition: Int)] = []
                     for subChild in subChildren {
                         if let newPosition = positionMap[subChild.id] {
+                            Logger.debug("✅ Found subchild to reorder: \(subChild.id), current myIndex=\(subChild.myIndex), newPosition=\(newPosition)")
                             subNodesToReorder.append((subChild, newPosition))
+                        } else {
+                            Logger.debug("⚠️ No position found for subchild: \(subChild.id)")
                         }
                     }
-                    
                     // Only apply reordering if we found nodes to reorder at this level
                     if !subNodesToReorder.isEmpty {
+                        Logger.debug("Reordering \(subNodesToReorder.count) subcategory nodes")
+                        
                         // Sort by new position
                         let sortedSubNodes = subNodesToReorder.sorted { $0.newPosition < $1.newPosition }
                         
+                        // Display the order change
+                        Logger.debug("Sub-level reordering:")
+                        for nodeInfo in subNodesToReorder {
+                            Logger.debug("Node \(nodeInfo.node.id) moving from \(nodeInfo.node.myIndex) to \(nodeInfo.newPosition)")
+                        }
+                        
                         // Update myIndex values
                         for (index, nodeInfo) in sortedSubNodes.enumerated() {
+                            let oldIndex = nodeInfo.node.myIndex
                             nodeInfo.node.myIndex = index
+                            Logger.debug("Updated subnode \(nodeInfo.node.id) myIndex from \(oldIndex) to \(index)")
                         }
                         
                         // Ensure changes are saved
                         if let modelContext = child.resume.modelContext {
                             do {
                                 try modelContext.save()
+                                Logger.debug("✅ Successfully saved subcategory reordering")
                             } catch {
-                                Logger.debug("Error saving model context after reordering sub-nodes: \(error)")
+                                Logger.debug("❌ Error saving model context after reordering sub-nodes: \(error)")
                                 return false
                             }
+                        } else {
+                            Logger.debug("⚠️ No model context available for subcategory")
                         }
                     }
                 }

@@ -219,14 +219,21 @@ class LLMRequestService: @unchecked Sendable {
            let schemaData = schemaInfo.jsonString.data(using: .utf8),
            let schemaJson = try? JSONSerialization.jsonObject(with: schemaData, options: []) as? [String: Any]
         {
+            // Set the text.format parameter to enforce JSON schema validation server-side
+            // Note: 'response_format' has moved to 'text.format' in the Responses API
             requestBodyDict["text"] = [
                 "format": [
                     "type": "json_schema",
                     "name": schemaInfo.name,
                     "schema": schemaJson,
-                    "strict": true,
-                ],
+                    "strict": true
+                ]
             ]
+            
+            // Log that we're using schema validation
+            Logger.debug("OpenAI request includes text.format schema validation for \(schemaInfo.name)")
+            Logger.debug("Schema strict mode is enabled to enforce server-side validation")
+            Logger.debug("Using updated Responses API format (text.format instead of response_format)")
         }
 
         // Debug: Print the request body (with image data omitted or truncated)
@@ -395,12 +402,20 @@ class LLMRequestService: @unchecked Sendable {
         
         // Add schema information if available (Gemini has a different format for schemas)
         if let schemaInfo = schema {
-            // Add the schema to the generation config
+            // Add the schema to the generation config and ensure it's explicitly set to force JSON validation
             if var genConfig = requestBodyDict["generationConfig"] as? [String: Any] {
                 if let schemaData = schemaInfo.jsonString.data(using: .utf8),
                    let schemaJson = try? JSONSerialization.jsonObject(with: schemaData, options: []) as? [String: Any] {
+                    // This is the Gemini equivalent of OpenAI's response_format
                     genConfig["responseSchema"] = schemaJson
+                    
+                    // Add a flag to enforce strict schema adherence (if available in Gemini API)
+                    genConfig["enforceResponseSchema"] = true
+                    
                     requestBodyDict["generationConfig"] = genConfig
+                    
+                    // Log that we're using schema validation
+                    Logger.debug("Gemini request includes responseSchema validation for \(schemaInfo.name)")
                 }
             }
         }
