@@ -16,7 +16,7 @@ class GeminiModelFetcher {
     static func fetchAvailableModels(apiKey: String) async -> [String] {
         let url = URL(string: "https://generativelanguage.googleapis.com/v1/models?key=\(apiKey)")!
         var request = URLRequest(url: url)
-        request.timeoutInterval = 300 // default is 30 seconds
+        request.timeoutInterval = 900.0 // 15 minutes (increased from 5 minutes for reasoning models)
         request.httpMethod = "GET"
 
         do {

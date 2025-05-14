@@ -9,8 +9,6 @@ import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-import PDFKit
-import SwiftUI
 
 /// Service responsible for sending application packet reviews (cover letter + resume)
 class ApplicationReviewService: @unchecked Sendable {
@@ -26,29 +24,7 @@ class ApplicationReviewService: @unchecked Sendable {
         openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
     }
 
-    // MARK: - PDF → Base-64 image (reuse from ResumeReviewService)
-
-    func convertPDFToBase64Image(pdfData: Data) -> String? {
-        guard let pdfDocument = PDFDocument(data: pdfData),
-              let pdfPage = pdfDocument.page(at: 0)
-        else { return nil }
-
-        let pageRect = pdfPage.bounds(for: .mediaBox)
-        let renderer = NSImage(size: pageRect.size)
-        renderer.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-        NSColor.white.set()
-        NSRect(origin: .zero, size: pageRect.size).fill()
-        pdfPage.draw(with: .mediaBox, to: NSGraphicsContext.current!.cgContext)
-        renderer.unlockFocus()
-
-        guard let tiff = renderer.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:])
-        else { return nil }
-
-        return png.base64EncodedString()
-    }
+    // MARK: - Using ImageConversionService for image conversion
 
     // MARK: - Prompt building
 
@@ -148,7 +124,7 @@ class ApplicationReviewService: @unchecked Sendable {
            reviewType != .custom || (customOptions?.includeResumeImage ?? false),
            let pdfData = resume.pdfData
         {
-            imageBase64 = convertPDFToBase64Image(pdfData: pdfData)
+            imageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: pdfData)
         }
 
         let includeImage = imageBase64 != nil

@@ -22,6 +22,7 @@ struct AIModels {
     static let gpt4_5_preview = "gpt-4.5-preview"
     static let gpt4o_latest = "gpt-4o-2024-05-13"  // Latest version
     static let gpt_4o_mini_tts = "gpt-4o-mini-tts" // TTS model
+    static let gpt4o_2024_08_06 = "gpt-4o-2024-08-06" // August 2024 update
     
     // Gemini models
     static let gemini_1_0_pro = "gemini-1.0-pro"

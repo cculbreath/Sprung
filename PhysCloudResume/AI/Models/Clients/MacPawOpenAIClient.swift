@@ -82,15 +82,15 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Create custom URLSession that logs network activity
         let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest = 300.0 // 5 minutes
-
+        sessionConfig.timeoutIntervalForRequest = 900.0 // 15 minutes (increased from 5 minutes for reasoning models)
+        
         // Create a logging session (unused directly, but kept for reference)
         _ = URLSession(configuration: sessionConfig, delegate: NetworkLoggingDelegate(), delegateQueue: nil)
 
         let configuration = OpenAI.Configuration(
             token: apiKey,
             organizationIdentifier: nil,
-            timeoutInterval: 300.0 // Increased timeout to 5 minutes
+            timeoutInterval: 900.0 // 15 minutes (increased from 5 minutes for reasoning models)
         )
         client = OpenAI(configuration: configuration)
     }

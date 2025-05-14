@@ -131,13 +131,65 @@ class ResumeReviewService: @unchecked Sendable {
                 resume.previousResponseId = responseWrapper.id
                 
                 do {
-                    guard let responseData = responseWrapper.content.data(using: .utf8) else {
+                    let content = responseWrapper.content
+                    guard let responseData = content.data(using: .utf8) else {
                         throw NSError(domain: "ResumeReviewService", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data."])
                     }
                     
-                    let decodedResponse = try JSONDecoder().decode(FixFitsResponseContainer.self, from: responseData)
-                    onComplete(.success(decodedResponse))
+                    // Log the JSON for debugging
+                    Logger.debug("FixFits response JSON: \(content)")
+                    
+                    // First try the standard JSON decoder
+                    do {
+                        let decodedResponse = try JSONDecoder().decode(FixFitsResponseContainer.self, from: responseData)
+                        onComplete(.success(decodedResponse))
+                    } catch let decodingError {
+                        Logger.debug("Standard JSON decoding failed: \(decodingError.localizedDescription)")
+                        
+                        // If standard decoding fails, try a more lenient approach using JSONSerialization
+                        do {
+                            if let jsonObject = try JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+                               let skillsArray = jsonObject["revised_skills_and_expertise"] as? [[String: Any]] {
+                                
+                                // Convert to our model manually
+                                var revisedNodes: [RevisedSkillNode] = []
+                                
+                                for item in skillsArray {
+                                    if let id = item["id"] as? String,
+                                       let newValue = item["newValue"] as? String,
+                                       let originalValue = item["originalValue"] as? String,
+                                       let treePath = item["treePath"] as? String,
+                                       let isTitleNode = item["isTitleNode"] as? Bool {
+                                        
+                                        let node = RevisedSkillNode(
+                                            id: id,
+                                            newValue: newValue,
+                                            originalValue: originalValue,
+                                            treePath: treePath,
+                                            isTitleNode: isTitleNode
+                                        )
+                                        revisedNodes.append(node)
+                                    }
+                                }
+                                
+                                if !revisedNodes.isEmpty {
+                                    // If we parsed something, return it
+                                    onComplete(.success(FixFitsResponseContainer(revisedSkillsAndExpertise: revisedNodes)))
+                                    return
+                                }
+                            }
+                            
+                            // Couldn't handle it with manual parsing either
+                            throw decodingError
+                        } catch {
+                            // All parsing failed, log full error details
+                            Logger.debug("Error decoding FixFitsResponseContainer: \(error.localizedDescription)")
+                            Logger.debug("Raw JSON: \(content)")
+                            onComplete(.failure(error))
+                        }
+                    }
                 } catch {
+                    Logger.debug("Error decoding FixFitsResponseContainer: \(error.localizedDescription)")
                     onComplete(.failure(error))
                 }
                 
@@ -179,14 +231,73 @@ class ResumeReviewService: @unchecked Sendable {
                 resume.previousResponseId = responseWrapper.id
                 
                 do {
-                    guard let responseData = responseWrapper.content.data(using: .utf8) else {
+                    let content = responseWrapper.content
+                    guard let responseData = content.data(using: .utf8) else {
                         throw NSError(domain: "ResumeReviewService", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data for contentsFit."])
                     }
                     
-                    let decodedResponse = try JSONDecoder().decode(ContentsFitResponse.self, from: responseData)
-                    onComplete(.success(decodedResponse))
+                    // Log the JSON for debugging
+                    Logger.debug("ContentsFit response JSON: \(content)")
+                    
+                    // First try the standard JSON decoder
+                    do {
+                        let decodedResponse = try JSONDecoder().decode(ContentsFitResponse.self, from: responseData)
+                        onComplete(.success(decodedResponse))
+                    } catch let decodingError {
+                        Logger.debug("Standard ContentsFit JSON decoding failed: \(decodingError.localizedDescription)")
+                        
+                        // Try string-based extraction first (fastest)
+                        if content.contains("\"contentsFit\":true") || 
+                           content.contains("\"contentsFit\": true") {
+                            Logger.debug("Found contentsFit:true via string search")
+                            onComplete(.success(ContentsFitResponse(contentsFit: true)))
+                            return
+                        } else if content.contains("\"contentsFit\":false") || 
+                                  content.contains("\"contentsFit\": false") {
+                            Logger.debug("Found contentsFit:false via string search")
+                            onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                            return
+                        }
+                        
+                        // If that fails, try JSONSerialization
+                        do {
+                            if let jsonObject = try JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+                               let contentsFit = jsonObject["contentsFit"] as? Bool {
+                                Logger.debug("Found contentsFit:\(contentsFit) via JSONSerialization")
+                                onComplete(.success(ContentsFitResponse(contentsFit: contentsFit)))
+                                return
+                            }
+                            
+                            // One last attempt - look for true/false in nested JSON structures
+                            // This handles cases where the value is deeply nested
+                            let jsonString = String(data: responseData, encoding: .utf8) ?? ""
+                            if jsonString.contains("true") && !jsonString.contains("false") {
+                                // If only "true" appears, assume it's a contentsFit:true
+                                Logger.debug("Assuming contentsFit:true based on JSON values")
+                                onComplete(.success(ContentsFitResponse(contentsFit: true)))
+                                return
+                            } else if jsonString.contains("false") && !jsonString.contains("true") {
+                                // If only "false" appears, assume it's a contentsFit:false
+                                Logger.debug("Assuming contentsFit:false based on JSON values")
+                                onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                                return
+                            }
+                            
+                            // If all parsing fails, default to not fitting to force another iteration
+                            Logger.debug("Could not parse contentsFit value, defaulting to false")
+                            onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                        } catch {
+                            // All parsing failed, log details and default to false to continue
+                            Logger.debug("All ContentsFit parsing failed: \(error.localizedDescription)")
+                            Logger.debug("Raw JSON: \(content)")
+                            Logger.debug("Defaulting to contentsFit:false to continue iterations")
+                            onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                        }
+                    }
                 } catch {
-                    onComplete(.failure(error))
+                    Logger.debug("Error in initial ContentsFitResponse handling: \(error.localizedDescription)")
+                    // Default to false to force another attempt
+                    onComplete(.success(ContentsFitResponse(contentsFit: false)))
                 }
                 
             case let .failure(error):

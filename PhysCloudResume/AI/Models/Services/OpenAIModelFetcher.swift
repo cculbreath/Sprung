@@ -23,7 +23,7 @@ class OpenAIModelFetcher {
     static func fetchAvailableModels(apiKey: String) async -> [String] {
         let url = URL(string: "https://api.openai.com/v1/models")!
         var request = URLRequest(url: url)
-        request.timeoutInterval = 300 // default is 30 seconds
+        request.timeoutInterval = 900.0 // 15 minutes (increased from 5 minutes for reasoning models)
         request.httpMethod = "GET"
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
@@ -45,11 +45,12 @@ class OpenAIModelFetcher {
             let chatModels = modelResponse.data
                 .map { $0.id }
                 .filter {
-                    $0.contains("gpt") ||
                         $0.contains("o1") ||
                         $0.contains("o3") ||
+                        $0.contains("o4") ||
                         $0.contains("4.5") ||
-                        $0.contains("4o")
+                        $0.contains("4o") ||
+                        $0.contains("mini")
                 }
                 .sorted()
 

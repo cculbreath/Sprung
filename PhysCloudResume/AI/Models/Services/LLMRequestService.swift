@@ -188,6 +188,7 @@ class LLMRequestService: @unchecked Sendable {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 900.0 // 15 minutes for reasoning models
         request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -338,6 +339,7 @@ class LLMRequestService: @unchecked Sendable {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 900.0 // 15 minutes for reasoning models
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
         // Build the Gemini content parts
@@ -384,8 +386,8 @@ class LLMRequestService: @unchecked Sendable {
         var sanitizedRequestBodyDict = requestBodyDict
         if let contentArray = sanitizedRequestBodyDict["contents"] as? [[String: Any]],
            let firstContent = contentArray.first,
-           var mutableFirstContent = firstContent as? [String: Any],
-           let parts = mutableFirstContent["parts"] as? [[String: Any]] {
+           let parts = firstContent["parts"] as? [[String: Any]] {
+            var mutableFirstContent = firstContent
 
             var sanitizedParts = parts
             for (i, part) in parts.enumerated() {
