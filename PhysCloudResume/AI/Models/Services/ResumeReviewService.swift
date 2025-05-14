@@ -131,22 +131,9 @@ class ResumeReviewService: @unchecked Sendable {
                 resume.previousResponseId = responseWrapper.id
                 
                 do {
-                    // Log raw response info for debugging
-                    if let output = responseWrapper.output, !output.isEmpty {
-                        for (index, message) in output.enumerated() {
-                            Logger.debug("Output[\(index)] type: \(message.type), id: \(message.id ?? "none"), status: \(message.status ?? "none"), role: \(message.role ?? "none")")
-                            if let content = message.content {
-                                for (cIndex, item) in content.enumerated() {
-                                    let textLength = item.text?.count ?? 0
-                                    Logger.debug("  Content[\(cIndex)] type: \(item.type), text length: \(textLength)")
-                                }
-                            } else {
-                                Logger.debug("  No content items")
-                            }
-                        }
-                    } else {
-                        Logger.debug("No output array in response")
-                    }
+                    // Get detailed information about the response for debugging
+                    Logger.debug("Response ID: \(responseWrapper.id)")
+                    Logger.debug("Response Model: \(responseWrapper.model)")
                     
                     let content = responseWrapper.content
                     Logger.debug("Content from wrapper: \(content.prefix(100))...")
@@ -229,13 +216,18 @@ class ResumeReviewService: @unchecked Sendable {
         base64Image: String,
         onComplete: @escaping (Result<ContentsFitResponse, Error>) -> Void
     ) {
+        Logger.debug("ResumeReviewService: sendContentsFitRequest called")
         let prompt = PromptBuilderService.shared.buildContentsFitPrompt()
         let schemaName = "check_content_fit_schema"
         let schema = OverflowSchemas.contentsFitSchemaString
         
+        Logger.debug("ResumeReviewService: ContentsFit prompt:\n\(prompt)")
+        Logger.debug("ResumeReviewService: ContentsFit schema:\n\(schema)")
+        
         let requestID = UUID()
         currentRequestID = requestID
         
+        Logger.debug("ResumeReviewService: About to send mixed request for ContentsFit check")
         LLMRequestService.shared.sendMixedRequest(
             promptText: prompt,
             base64Image: base64Image,
@@ -243,32 +235,23 @@ class ResumeReviewService: @unchecked Sendable {
             schema: (name: schemaName, jsonString: schema),
             requestID: requestID
         ) { result in
-            guard self.currentRequestID == requestID else { return }
+            Logger.debug("ResumeReviewService: Received response for ContentsFit check")
+            guard self.currentRequestID == requestID else { 
+                Logger.debug("ResumeReviewService: Request ID mismatch, ignoring result")
+                return 
+            }
             
             switch result {
             case let .success(responseWrapper):
                 resume.previousResponseId = responseWrapper.id
                 
                 do {
-                    // Log raw response info for debugging
-                    if let output = responseWrapper.output, !output.isEmpty {
-                        for (index, message) in output.enumerated() {
-                            Logger.debug("ContentsFit Output[\(index)] type: \(message.type), id: \(message.id ?? "none"), status: \(message.status ?? "none"), role: \(message.role ?? "none")")
-                            if let content = message.content {
-                                for (cIndex, item) in content.enumerated() {
-                                    let textLength = item.text?.count ?? 0
-                                    Logger.debug("  ContentsFit Content[\(cIndex)] type: \(item.type), text length: \(textLength)")
-                                }
-                            } else {
-                                Logger.debug("  ContentsFit No content items")
-                            }
-                        }
-                    } else {
-                        Logger.debug("ContentsFit No output array in response")
-                    }
+                    // Get detailed information about the response for debugging
+                    Logger.debug("ContentsFit Response ID: \(responseWrapper.id)")
+                    Logger.debug("ContentsFit Response Model: \(responseWrapper.model)")
                     
                     let content = responseWrapper.content
-                    Logger.debug("ContentsFit Content from wrapper: \(content.prefix(100))...")
+                    Logger.debug("ContentsFit Content from wrapper: \(content)")
                     
                     guard let responseData = content.data(using: .utf8) else {
                         throw NSError(domain: "ResumeReviewService", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data for contentsFit."])
@@ -279,7 +262,9 @@ class ResumeReviewService: @unchecked Sendable {
                     
                     // First try the standard JSON decoder
                     do {
+                        Logger.debug("ContentsFit: Attempting to decode response as JSON: \(responseData)")
                         let decodedResponse = try JSONDecoder().decode(ContentsFitResponse.self, from: responseData)
+                        Logger.debug("ContentsFit: Successfully decoded with standard JSONDecoder. Result: contentsFit=\(decodedResponse.contentsFit)")
                         onComplete(.success(decodedResponse))
                     } catch let decodingError {
                         Logger.debug("Standard ContentsFit JSON decoding failed: \(decodingError.localizedDescription)")
@@ -296,6 +281,9 @@ class ResumeReviewService: @unchecked Sendable {
                             onComplete(.success(ContentsFitResponse(contentsFit: false)))
                             return
                         }
+                        
+                        // Log the content for debugging
+                        Logger.debug("ContentsFit: Raw content for manual inspection: \(content)")
                         
                         // If that fails, try JSONSerialization
                         do {
