@@ -303,6 +303,29 @@ class LLMRequestService: @unchecked Sendable {
 
                 do {
                     let decodedWrapper = try JSONDecoder().decode(ResponsesAPIResponseWrapper.self, from: responseData)
+                    
+                    // Add detailed logging about the structure of the response
+                    if let outputMessages = decodedWrapper.output {
+                        Logger.debug("Response contains \(outputMessages.count) messages")
+                        for (index, message) in outputMessages.enumerated() {
+                            Logger.debug("Message \(index + 1): type=\(message.type), role=\(message.role ?? "none")")
+                            if let content = message.content {
+                                Logger.debug("  - Message \(index + 1) has \(content.count) content items")
+                                for (contentIndex, item) in content.enumerated() {
+                                    Logger.debug("    - Content \(contentIndex + 1): type=\(item.type), has text=\(item.text != nil), text length=\(item.text?.count ?? 0)")
+                                }
+                            } else {
+                                Logger.debug("  - Message \(index + 1) has no content items")
+                            }
+                        }
+                    } else if !decodedWrapper.content.isEmpty {
+                        Logger.debug("Response contains direct content (length: \(decodedWrapper.content.count))")
+                    }
+                    
+                    // Extract content and log its length
+                    let extractedContent = decodedWrapper.content
+                    Logger.debug("Extracted content length: \(extractedContent.count)")
+                    
                     onComplete(.success(decodedWrapper.toResponsesAPIResponse()))
                 } catch let decodingError {
                     Logger.debug("Error decoding OpenAI Response: \(decodingError)")

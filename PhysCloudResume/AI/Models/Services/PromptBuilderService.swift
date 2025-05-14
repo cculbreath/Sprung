@@ -109,12 +109,12 @@ class PromptBuilderService {
         
         A properly fitting section has all text fully contained within its boundaries and has a visible margin to the section below it.
         
-        Respond with a simple JSON containing a single boolean field called "contentsFit":
+        IMPORTANT: Respond ONLY with the following JSON structure and NOTHING ELSE:
         
-        If everything fits properly with no overflow: {"contentsFit": true}
-        If there is any overflow or overlap: {"contentsFit": false}
+        {"contentsFit": true}  - if everything fits properly
+        {"contentsFit": false} - if there is any overflow or text cuts off
         
-        Ensure your response is ONLY this JSON object - no extra text or explanation.
+        DO NOT include any explanation, analysis, or additional text. Your ENTIRE response must be ONLY the JSON object. This is critical for automated processing.
         """
     }
 }

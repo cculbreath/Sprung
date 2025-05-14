@@ -268,41 +268,55 @@ struct ResumeReviewSheet: View {
     func performFixOverflow(resume: Resume) async {
         var loopCount = 0
         var operationSuccess = false
+        
+        Logger.debug("FixOverflow: Starting performFixOverflow with max iterations: \(fixOverflowMaxIterations)")
 
         if resume.pdfData == nil {
             fixOverflowStatusMessage = "Generating initial PDF for analysis..."
+            Logger.debug("FixOverflow: No PDF data, generating...")
             do {
                 try await resume.ensureFreshRenderedText()
                 guard resume.pdfData != nil else {
                     fixOverflowError = "Failed to generate initial PDF for Fix Overflow."
+                    Logger.debug("FixOverflow: Failed to generate initial PDF")
                     isProcessingFixOverflow = false
                     return
                 }
+                Logger.debug("FixOverflow: Successfully generated initial PDF")
             } catch {
                 fixOverflowError = "Error generating initial PDF: \(error.localizedDescription)"
+                Logger.debug("FixOverflow: Error generating initial PDF: \(error.localizedDescription)")
                 isProcessingFixOverflow = false
                 return
             }
+        } else {
+            Logger.debug("FixOverflow: Using existing PDF data")
         }
 
         repeat {
             loopCount += 1
+            Logger.debug("FixOverflow: Starting iteration \(loopCount) of \(fixOverflowMaxIterations)")
             fixOverflowStatusMessage = "Iteration \(loopCount)/\(fixOverflowMaxIterations): Analyzing skills section..."
 
             guard let currentPdfData = resume.pdfData,
                   let currentImageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: currentPdfData)
             else {
                 fixOverflowError = "Error converting current resume to image (Iteration \(loopCount))."
+                Logger.debug("FixOverflow: Failed to convert PDF to image in iteration \(loopCount)")
                 break
             }
+            Logger.debug("FixOverflow: Successfully converted PDF to image")
 
             guard let skillsJsonString = reviewService.extractSkillsForLLM(resume: resume) else {
                 fixOverflowError = "Error extracting skills from resume (Iteration \(loopCount))."
+                Logger.debug("FixOverflow: Failed to extract skills from resume in iteration \(loopCount)")
                 break
             }
+            Logger.debug("FixOverflow: Successfully extracted skills JSON: \(skillsJsonString.prefix(100))...")
 
             if skillsJsonString == "[]" {
                 fixOverflowStatusMessage = "No 'Skills and Expertise' items found to optimize or section is empty."
+                Logger.debug("FixOverflow: No skills items found to optimize")
                 operationSuccess = true
                 break
             }
@@ -374,14 +388,18 @@ struct ResumeReviewSheet: View {
             }
 
             fixOverflowStatusMessage = "Iteration \(loopCount): Asking AI to check if content fits..."
+            Logger.debug("FixOverflow: About to send contentsFit request in iteration \(loopCount)")
             let contentsFitResult: Result<ContentsFitResponse, Error> = await withCheckedContinuation { continuation in
+                Logger.debug("FixOverflow: Inside continuation for contentsFit request")
                 reviewService.sendContentsFitRequest(
                     resume: resume,
                     base64Image: updatedImageBase64
                 ) { result in
+                    Logger.debug("FixOverflow: Received contentsFit response: \(result)")
                     continuation.resume(returning: result)
                 }
             }
+            Logger.debug("FixOverflow: After contentsFit request in iteration \(loopCount)")
 
             guard case let .success(contentsFitResponse) = contentsFitResult else {
                 if case let .failure(error) = contentsFitResult {
@@ -392,10 +410,14 @@ struct ResumeReviewSheet: View {
                 break
             }
 
+            Logger.debug("FixOverflow: contentsFitResponse.contentsFit = \(contentsFitResponse.contentsFit)")
             if contentsFitResponse.contentsFit {
                 fixOverflowStatusMessage = "AI confirms content fits after \(loopCount) iteration(s)."
                 operationSuccess = true
+                Logger.debug("FixOverflow: Content fits! Breaking loop.")
                 break
+            } else {
+                Logger.debug("FixOverflow: Content does NOT fit. Will continue iterations if possible.")
             }
 
             if loopCount >= fixOverflowMaxIterations {

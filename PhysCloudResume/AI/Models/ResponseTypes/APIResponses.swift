@@ -52,32 +52,58 @@ struct ResponsesAPIResponseWrapper: Codable {
         }
         
         // Then try to extract from output array (newer format)
-        if let outputMessages = output, 
-           let firstMessage = outputMessages.first {
-            
-            // For the new response format
-            if let messageContent = firstMessage.content, 
-               let firstContent = messageContent.first,
-               firstContent.type == "output_text",
-               let text = firstContent.text,
-               !text.isEmpty {
-                return text
+        if let outputMessages = output {
+            // Step 1: First try to find a specific message with type "message" 
+            // For JSON schema requests, this is typically the message that contains the actual JSON response
+            for message in outputMessages {
+                if message.type == "message", 
+                   let messageContent = message.content,
+                   !messageContent.isEmpty {
+                    
+                    // Look for output_text in message content
+                    for item in messageContent {
+                        if item.type == "output_text", 
+                           let text = item.text,
+                           !text.isEmpty {
+                            Logger.debug("ResponsesAPIResponseWrapper: Found content in message of type '\(message.type)'")
+                            
+                            // Try to parse this as JSON to ensure it's a valid response
+                            if let firstChar = text.first, firstChar == "{" {
+                                return text
+                            } else {
+                                // If it doesn't look like JSON, keep searching but remember this text for fallback
+                                Logger.debug("ResponsesAPIResponseWrapper: Text doesn't appear to be valid JSON, continuing search")
+                            }
+                        }
+                    }
+                }
             }
             
-            // Log the structure to help with debugging
-            let messageType = firstMessage.type
-            let hasContent = firstMessage.content != nil
-            let contentCount = firstMessage.content?.count ?? 0
+            // Step 2: Next, try to specifically extract JSON content from any message
+            Logger.debug("ResponsesAPIResponseWrapper: Searching specifically for JSON content in any message")
+            for message in outputMessages {
+                if let messageContent = message.content {
+                    for item in messageContent {
+                        if let text = item.text,
+                           !text.isEmpty,
+                           let trimmedText = text.components(separatedBy: .newlines).first(where: { $0.contains("{") }),
+                           trimmedText.contains("{") && trimmedText.contains("}") {
+                            Logger.debug("ResponsesAPIResponseWrapper: Found JSON-like content in message type: \(message.type)")
+                            return text
+                        }
+                    }
+                }
+            }
             
-            Logger.debug("ResponsesAPIResponseWrapper: Processing output. Type: \(messageType), Has content: \(hasContent), Content items: \(contentCount)")
-            
-            // Additional fallback for reasoning format
-            if messageType == "message", 
-               let messageContent = firstMessage.content, 
-               messageContent.count > 0 {
-                for item in messageContent {
-                    if item.type == "output_text", let text = item.text, !text.isEmpty {
-                        return text
+            // Step 3: Fallback to any message content that's not empty
+            Logger.debug("ResponsesAPIResponseWrapper: Fallback to any non-empty message content")
+            for message in outputMessages {
+                if let messageContent = message.content {
+                    for item in messageContent {
+                        if let text = item.text, !text.isEmpty {
+                            Logger.debug("ResponsesAPIResponseWrapper: Found fallback content in message type: \(message.type)")
+                            return text
+                        }
                     }
                 }
             }
