@@ -10,7 +10,8 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
     case suggestChanges = "Suggest Resume Fields to Change"
     case assessQuality = "Assess Overall Resume Quality"
     case assessFit = "Assess Fit for Job Position"
-    case fixOverflow = "Fix Skills & Expertise Overflow" // New case
+    case fixOverflow = "Fix Skills & Expertise Overflow"
+    case reorderSkills = "Reorder 'Skills & Experience'"
     case custom = "Custom"
 
     var id: String { rawValue }
@@ -137,6 +138,43 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
             // as it involves image data and iterative calls.
             // A base instruction could be:
             return "The 'Skills and Expertise' section of the resume is overflowing. Please adjust the content to fit."
+            
+        case .reorderSkills:
+            return """
+            Context:
+            ────────────────────────────────────────────
+            • Applicant is applying for **{jobPosition}** at **{companyName}**.
+            • Full job description is included below.
+            • A draft of the applicant's resume follows the job description.
+            {includeImage}
+
+            Job Description
+            ----------------
+            {jobDescription}
+
+            Resume Draft
+            -------------
+            {resumeText}
+
+            Task:
+            You are an expert resume consultant specializing in strategic skills presentation.
+            1. Review the 'Skills & Experience' section of the resume.
+            2. Analyze the job description to identify the most valuable and relevant skills.
+            3. Recommend a reordering of the skills to prioritize those most relevant to the job.
+            4. List the skills in the recommended order (most relevant first).
+            
+            Output format (markdown):
+            ### Skills Reordering Recommendation
+            
+            **Current Skills Order**
+            <List the current skills in their existing order>
+            
+            **Recommended Skills Order**
+            <List the skills in recommended order with the most relevant first>
+            
+            **Rationale**
+            <Brief explanation of the recommended changes and how they align with the job requirements>
+            """
 
         case .custom:
             // Custom prompt will be built dynamically; return empty string here.

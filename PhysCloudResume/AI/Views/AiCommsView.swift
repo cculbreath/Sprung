@@ -133,8 +133,10 @@ struct AiCommsView: View {
 
                 sheetOn = true
                 revisions = validatedRevisions
-                currentRevNode = revisions[0]
-                if currentRevNode != nil {
+                
+                // Check if revisions array is not empty before accessing the first element
+                if !revisions.isEmpty {
+                    currentRevNode = revisions[0]
                     currentFeedbackNode = FeedbackNode(
                         id: currentRevNode!.id,
                         originalValue: currentRevNode!.oldValue,
@@ -143,6 +145,11 @@ struct AiCommsView: View {
                         reviewerComments: "",
                         isTitleNode: currentRevNode!.isTitleNode
                     )
+                } else {
+                    // Handle the case when no revisions are available
+                    currentRevNode = nil
+                    currentFeedbackNode = nil
+                    Logger.debug("No valid revision nodes available")
                 }
                 aiResub = false
                 fbnodes = []

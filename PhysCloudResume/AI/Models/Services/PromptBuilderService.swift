@@ -117,4 +117,33 @@ class PromptBuilderService {
         DO NOT include any explanation, analysis, or additional text. Your ENTIRE response must be ONLY the JSON object. This is critical for automated processing.
         """
     }
+    
+    /// Builds a specialized prompt for the 'reorderSkills' feature
+    /// - Parameters:
+    ///   - skillsJsonString: JSON string representation of skills nodes
+    ///   - jobDescription: The job description to optimize skills ordering for
+    /// - Returns: A formatted prompt string
+    func buildReorderSkillsPrompt(skillsJsonString: String, jobDescription: String) -> String {
+        return """
+        You are an expert resume editor specializing in optimizing skills presentation for specific job applications. I need you to analyze the Skills and Expertise section of a resume and recommend an optimal ordering of these skills to maximize impact for a specific job application.
+
+        Job Description:
+        \(jobDescription)
+
+        Current Skills and Expertise (in JSON format - each node contains its current position in the myIndex field):
+        \(skillsJsonString)
+
+        Task: Analyze both the skills listed and the job description, then recommend an optimal ordering for these skills. Place the most relevant and impressive skills related to the job position at the top. Do not add or remove any skills, only reorder them.
+
+        For each skill, provide:
+        1. Its ID (unchanged)
+        2. Original value (unchanged) 
+        3. Recommended new position (0-based index)
+        4. Brief reason for its new position
+        5. Keep original isTitleNode value (unchanged)
+        6. Keep original treePath value (unchanged)
+
+        Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter.
+        """
+    }
 }

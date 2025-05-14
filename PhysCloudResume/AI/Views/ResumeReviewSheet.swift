@@ -82,6 +82,10 @@ struct ResumeReviewSheet: View {
                 Text("Ready to optimize the 'Skills & Expertise' section to prevent text overflow.")
                     .foregroundColor(.secondary)
                     .padding()
+            } else if selectedReviewType == .reorderSkills {
+                Text("Ready to reorder the 'Skills & Expertise' section for maximum relevance to the job position.")
+                    .foregroundColor(.secondary)
+                    .padding()
             } else {
                 Text("Select a review type and submit your request.")
                     .foregroundColor(.secondary)
@@ -146,7 +150,10 @@ struct ResumeReviewSheet: View {
                     Spacer()
                     Button("Close") { dismiss() }
                 } else {
-                    Button(selectedReviewType == .fixOverflow ? "Optimize Skills" : "Submit Request") {
+                    Button(
+                        selectedReviewType == .fixOverflow ? "Optimize Skills" :
+                        selectedReviewType == .reorderSkills ? "Reorder Skills" : "Submit Request"
+                    ) {
                         handleSubmit()
                     }
                     .buttonStyle(.borderedProminent)
@@ -211,6 +218,12 @@ struct ResumeReviewSheet: View {
             fixOverflowStatusMessage = "Starting skills optimization..."
             Task {
                 await performFixOverflow(resume: resume)
+            }
+        } else if selectedReviewType == .reorderSkills {
+            isProcessingFixOverflow = true
+            fixOverflowStatusMessage = "Starting skills reordering..."
+            Task {
+                await performReorderSkills(resume: resume)
             }
         } else {
             isProcessingGeneral = true
@@ -450,5 +463,94 @@ struct ResumeReviewSheet: View {
     // Helper to find TreeNode by ID - Unchanged
     func findTreeNode(byId id: String, in resume: Resume) -> TreeNode? {
         return resume.nodes.first { $0.id == id }
+    }
+    
+    // MARK: - Reorder Skills Logic
+    
+    @MainActor
+    func performReorderSkills(resume: Resume) async {
+        Logger.debug("ReorderSkills: Starting performReorderSkills")
+        fixOverflowStatusMessage = "Analyzing skills section..."
+        
+        if resume.jobApp == nil {
+            fixOverflowError = "No job application associated with this resume. Add a job application first."
+            isProcessingFixOverflow = false
+            return
+        }
+
+        // Extract skills as JSON
+        guard let skillsJsonString = reviewService.extractSkillsForLLM(resume: resume) else {
+            fixOverflowError = "Error extracting skills from resume."
+            Logger.debug("ReorderSkills: Failed to extract skills from resume")
+            isProcessingFixOverflow = false
+            return
+        }
+        
+        Logger.debug("ReorderSkills: Successfully extracted skills JSON: \(skillsJsonString.prefix(100))...")
+
+        if skillsJsonString == "[]" {
+            fixOverflowStatusMessage = "No 'Skills and Expertise' items found to reorder or section is empty."
+            Logger.debug("ReorderSkills: No skills items found to reorder")
+            isProcessingFixOverflow = false
+            return
+        }
+
+        fixOverflowStatusMessage = "Asking AI to analyze and reorder skills for the target job position..."
+
+        // Send request to LLM to reorder skills
+        let reorderResult: Result<ReorderSkillsResponseContainer, Error> = await withCheckedContinuation { continuation in
+            reviewService.sendReorderSkillsRequest(
+                resume: resume,
+                skillsJsonString: skillsJsonString
+            ) { result in
+                continuation.resume(returning: result)
+            }
+        }
+
+        // Handle LLM response
+        guard case let .success(reorderResponse) = reorderResult else {
+            if case let .failure(error) = reorderResult {
+                fixOverflowError = "Error reordering skills: \(error.localizedDescription)"
+            } else {
+                fixOverflowError = "Unknown error while reordering skills."
+            }
+            isProcessingFixOverflow = false
+            return
+        }
+
+        // Apply the new ordering
+        fixOverflowStatusMessage = "Applying new skill order..."
+        
+        // Format the reordering information for the status message
+        var reasonsText = "Skills have been reordered for maximum relevance:\n\n"
+        
+        // Sort the nodes by their new position for display
+        let sortedNodes = reorderResponse.reorderedSkillsAndExpertise.sorted { $0.newPosition < $1.newPosition }
+        
+        for node in sortedNodes {
+            let nodeText = node.isTitleNode ? "**\(node.originalValue)**" : node.originalValue
+            reasonsText += "- \(nodeText)\n  _\(node.reasonForReordering)_\n\n"
+        }
+        
+        // Apply the reordering to the actual tree nodes
+        let success = TreeNodeExtractor.shared.applyReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise)
+        
+        if success {
+            // Re-render the resume with the new order
+            fixOverflowStatusMessage = "Re-rendering resume with new skill order..."
+            do {
+                try await resume.ensureFreshRenderedText()
+                fixOverflowStatusMessage = reasonsText
+                
+                // Make sure changes are saved
+                resume.debounceExport()
+            } catch {
+                fixOverflowError = "Error re-rendering resume: \(error.localizedDescription)"
+            }
+        } else {
+            fixOverflowError = "Error applying new skill order to resume."
+        }
+        
+        isProcessingFixOverflow = false
     }
 }

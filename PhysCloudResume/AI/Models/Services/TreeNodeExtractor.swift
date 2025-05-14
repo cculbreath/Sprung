@@ -115,4 +115,104 @@ class TreeNodeExtractor {
     func findTreeNode(byId id: String, in resume: Resume) -> TreeNode? {
         return resume.nodes.first { $0.id == id }
     }
+    
+    /// Applies the reordering of skills from the LLM response
+    /// - Parameters:
+    ///   - resume: The resume to update
+    ///   - reorderedNodes: The reordered skill nodes from the LLM
+    /// - Returns: True if reordering was successful, false otherwise
+    func applyReordering(resume: Resume, reorderedNodes: [ReorderedSkillNode]) -> Bool {
+        // First, ensure the resume has a rootNode
+        guard let actualRootNode = resume.rootNode else {
+            Logger.debug("Error: Resume has no rootNode.")
+            return false
+        }
+
+        // Find the "Skills and Expertise" section node
+        var skillsSectionNode: TreeNode? = actualRootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        })
+
+        // If not found with primary names, try the fallback key
+        if skillsSectionNode == nil {
+            skillsSectionNode = actualRootNode.children?.first(where: { $0.name == "skills-and-expertise" })
+        }
+
+        // If still not found, return false
+        guard let finalSkillsSectionNode = skillsSectionNode else {
+            Logger.debug("Error: 'Skills and Expertise' section node not found in the resume.")
+            return false
+        }
+
+        // Create a dictionary mapping node id to its new position
+        let positionMap = Dictionary(uniqueKeysWithValues: reorderedNodes.map { ($0.id, $0.newPosition) })
+        
+        // Create a list of nodes to reorder with their new positions
+        var nodesToReorder: [(node: TreeNode, newPosition: Int)] = []
+        
+        // We need to handle different levels separately
+        // First, get all direct children of the skills section
+        if let directChildren = finalSkillsSectionNode.children {
+            for child in directChildren {
+                if let newPosition = positionMap[child.id] {
+                    nodesToReorder.append((child, newPosition))
+                }
+                
+                // If this child has its own children (like a skill category with bullet points)
+                // We need to handle those too, but separately since they're at a different level
+                if let subChildren = child.children {
+                    var subNodesToReorder: [(node: TreeNode, newPosition: Int)] = []
+                    for subChild in subChildren {
+                        if let newPosition = positionMap[subChild.id] {
+                            subNodesToReorder.append((subChild, newPosition))
+                        }
+                    }
+                    
+                    // Only apply reordering if we found nodes to reorder at this level
+                    if !subNodesToReorder.isEmpty {
+                        // Sort by new position
+                        let sortedSubNodes = subNodesToReorder.sorted { $0.newPosition < $1.newPosition }
+                        
+                        // Update myIndex values
+                        for (index, nodeInfo) in sortedSubNodes.enumerated() {
+                            nodeInfo.node.myIndex = index
+                        }
+                        
+                        // Ensure changes are saved
+                        if let modelContext = child.resume.modelContext {
+                            do {
+                                try modelContext.save()
+                            } catch {
+                                Logger.debug("Error saving model context after reordering sub-nodes: \(error)")
+                                return false
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Only apply top-level reordering if we found nodes to reorder
+        if !nodesToReorder.isEmpty {
+            // Sort by new position
+            let sortedNodes = nodesToReorder.sorted { $0.newPosition < $1.newPosition }
+            
+            // Update myIndex values
+            for (index, nodeInfo) in sortedNodes.enumerated() {
+                nodeInfo.node.myIndex = index
+            }
+            
+            // Ensure changes are saved
+            if let modelContext = finalSkillsSectionNode.resume.modelContext {
+                do {
+                    try modelContext.save()
+                } catch {
+                    Logger.debug("Error saving model context after reordering: \(error)")
+                    return false
+                }
+            }
+        }
+        
+        return !nodesToReorder.isEmpty
+    }
 }

@@ -339,6 +339,125 @@ class ResumeReviewService: @unchecked Sendable {
         return TreeNodeExtractor.shared.extractSkillsForLLM(resume: resume)
     }
     
+    /// Sends a request to reorder skills based on job relevance
+    /// - Parameters:
+    ///   - resume: The resume containing the skills
+    ///   - skillsJsonString: JSON string representation of skills
+    ///   - onComplete: Completion callback with result
+    @MainActor
+    func sendReorderSkillsRequest(
+        resume: Resume,
+        skillsJsonString: String,
+        onComplete: @escaping (Result<ReorderSkillsResponseContainer, Error>) -> Void
+    ) {
+        guard let jobApp = resume.jobApp else {
+            onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1010, userInfo: [NSLocalizedDescriptionKey: "No job application associated with this resume."])))
+            return
+        }
+        
+        Logger.debug("ResumeReviewService: sendReorderSkillsRequest called")
+        let prompt = PromptBuilderService.shared.buildReorderSkillsPrompt(
+            skillsJsonString: skillsJsonString,
+            jobDescription: jobApp.jobDescription
+        )
+        let schemaName = "reorder_skills_schema"
+        let schema = OverflowSchemas.reorderSkillsSchemaString
+        
+        Logger.debug("ResumeReviewService: ReorderSkills prompt:\n\(prompt)")
+        Logger.debug("ResumeReviewService: ReorderSkills schema:\n\(schema)")
+        
+        let requestID = UUID()
+        currentRequestID = requestID
+        
+        LLMRequestService.shared.sendTextRequest(
+            promptText: prompt,
+            model: OpenAIModelFetcher.getPreferredModelString(),
+            previousResponseId: resume.previousResponseId,
+            onProgress: { _ in }, // No progress updates needed
+            onComplete: { result in
+                guard self.currentRequestID == requestID else { return }
+                
+                switch result {
+                case let .success(responseWrapper):
+                    resume.previousResponseId = responseWrapper.id
+                    
+                    do {
+                        Logger.debug("Response ID: \(responseWrapper.id)")
+                        Logger.debug("Response Model: \(responseWrapper.model)")
+                        
+                        let content = responseWrapper.content
+                        Logger.debug("Content from wrapper: \(content.prefix(100))...")
+                        
+                        guard let responseData = content.data(using: .utf8) else {
+                            throw NSError(domain: "ResumeReviewService", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data."])
+                        }
+                        
+                        // Log the JSON for debugging
+                        Logger.debug("ReorderSkills response JSON: \(content)")
+                        
+                        // First try the standard JSON decoder
+                        do {
+                            let decodedResponse = try JSONDecoder().decode(ReorderSkillsResponseContainer.self, from: responseData)
+                            onComplete(.success(decodedResponse))
+                        } catch let decodingError {
+                            Logger.debug("Standard JSON decoding failed: \(decodingError.localizedDescription)")
+                            
+                            // If standard decoding fails, try a more lenient approach using JSONSerialization
+                            do {
+                                if let jsonObject = try JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+                                   let skillsArray = jsonObject["reordered_skills_and_expertise"] as? [[String: Any]] {
+                                    
+                                    // Convert to our model manually
+                                    var reorderedNodes: [ReorderedSkillNode] = []
+                                    
+                                    for item in skillsArray {
+                                        if let id = item["id"] as? String,
+                                           let originalValue = item["originalValue"] as? String,
+                                           let newPosition = item["newPosition"] as? Int,
+                                           let reasonForReordering = item["reasonForReordering"] as? String,
+                                           let treePath = item["treePath"] as? String,
+                                           let isTitleNode = item["isTitleNode"] as? Bool {
+                                            
+                                            let node = ReorderedSkillNode(
+                                                id: id,
+                                                originalValue: originalValue,
+                                                newPosition: newPosition,
+                                                reasonForReordering: reasonForReordering,
+                                                isTitleNode: isTitleNode,
+                                                treePath: treePath
+                                            )
+                                            reorderedNodes.append(node)
+                                        }
+                                    }
+                                    
+                                    if !reorderedNodes.isEmpty {
+                                        // If we parsed something, return it
+                                        onComplete(.success(ReorderSkillsResponseContainer(reorderedSkillsAndExpertise: reorderedNodes)))
+                                        return
+                                    }
+                                }
+                                
+                                // Couldn't handle it with manual parsing either
+                                throw decodingError
+                            } catch {
+                                // All parsing failed, log full error details
+                                Logger.debug("Error decoding ReorderSkillsResponseContainer: \(error.localizedDescription)")
+                                Logger.debug("Raw JSON: \(content)")
+                                onComplete(.failure(error))
+                            }
+                        }
+                    } catch {
+                        Logger.debug("Error decoding ReorderSkillsResponseContainer: \(error.localizedDescription)")
+                        onComplete(.failure(error))
+                    }
+                    
+                case let .failure(error):
+                    onComplete(.failure(error))
+                }
+            }
+        )
+    }
+    
     /// Cancels the current review request
     func cancelRequest() {
         currentRequestID = nil
