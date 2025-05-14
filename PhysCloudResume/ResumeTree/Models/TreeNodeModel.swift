@@ -128,7 +128,7 @@ enum LeafStatus: String, Codable, Hashable {
         guard let jsonArray = try JSONSerialization.jsonObject(
             with: jsonData, options: []
         ) as? [[String: String]] else {
-            print("Failed to parse JSON or JSON is not an array of dictionaries.")
+            Logger.debug("Failed to parse JSON or JSON is not an array of dictionaries.")
             return
         }
 
@@ -146,10 +146,10 @@ enum LeafStatus: String, Codable, Hashable {
                         node.value = newValue
                     }
                 } else {
-                    print("TreeNode with ID \(id) not found.")
+                    Logger.debug("TreeNode with ID \(id) not found.")
                 }
             } else {
-                print("Skipping invalid JSON object: \(jsonObject)")
+                Logger.debug("Skipping invalid JSON object: \(jsonObject)")
             }
         }
         try context.save()
@@ -166,7 +166,7 @@ enum LeafStatus: String, Codable, Hashable {
         do {
             try context.save()
         } catch {
-            print("Failed to save context after deleting TreeNode: \(error)")
+            Logger.debug("Failed to save context after deleting TreeNode: \(error)")
         }
     }
 

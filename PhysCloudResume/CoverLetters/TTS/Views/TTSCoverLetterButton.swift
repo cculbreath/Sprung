@@ -39,14 +39,14 @@ struct TTSCoverLetterButton: View {
 
     var body: some View {
         // Debug: Print the conditions for showing the button
-        let _ = print("[TTSCoverLetterButton] Evaluating conditions: ttsEnabled=\(ttsEnabled), cL.generated=\(cL.generated), !cL.content.isEmpty=\(!cL.content.isEmpty)")
+        let _ = Logger.debug("[TTSCoverLetterButton] Evaluating conditions: ttsEnabled=\(ttsEnabled), cL.generated=\(cL.generated), !cL.content.isEmpty=\(!cL.content.isEmpty)")
         // Debug: Print current playback state when the button view is built
-        let _ = print("[TTSCoverLetterButton] Current playback state: isSpeaking=\(isSpeaking), isPaused=\(isPaused), isBuffering=\(isBuffering)")
+        let _ = Logger.debug("[TTSCoverLetterButton] Current playback state: isSpeaking=\(isSpeaking), isPaused=\(isPaused), isBuffering=\(isBuffering)")
 
         if ttsEnabled && cL.generated && !cL.content.isEmpty {
             Button(action: {
                 // Debug: Print when the action is triggered
-                print("[TTSCoverLetterButton] SpeakAction TRIGGERED. Current state: isSpeaking=\(isSpeaking), isPaused=\(isPaused), isBuffering=\(isBuffering)")
+                Logger.debug("[TTSCoverLetterButton] SpeakAction TRIGGERED. Current state: isSpeaking=\(isSpeaking), isPaused=\(isPaused), isBuffering=\(isBuffering)")
                 speakAction()
             }) {
                 // Use different icon depending on playback state
@@ -79,17 +79,17 @@ struct TTSCoverLetterButton: View {
             .help(helpText)
             .disabled(buttons.runRequested || buttons.chooseBestRequested)
             .onChange(of: isBuffering) { _, newValue in
-                print("[TTSCoverLetterButton] Buffering state changed to \(newValue)")
+                Logger.debug("[TTSCoverLetterButton] Buffering state changed to \(newValue)")
             }
             .onChange(of: isSpeaking) { _, newValue in
-                print("[TTSCoverLetterButton] Speaking state changed to \(newValue)")
+                Logger.debug("[TTSCoverLetterButton] Speaking state changed to \(newValue)")
             }
             .onChange(of: isPaused) { _, newValue in
-                print("[TTSCoverLetterButton] Paused state changed to \(newValue)")
+                Logger.debug("[TTSCoverLetterButton] Paused state changed to \(newValue)")
             }
         } else {
             // Debug: Print why the button is not shown
-            let _ = print("[TTSCoverLetterButton] Button NOT shown. Reasons: ttsEnabled=\(ttsEnabled), cL.generated=\(cL.generated), cL.content.isEmpty=\(cL.content.isEmpty)")
+            let _ = Logger.debug("[TTSCoverLetterButton] Button NOT shown. Reasons: ttsEnabled=\(ttsEnabled), cL.generated=\(cL.generated), cL.content.isEmpty=\(cL.content.isEmpty)")
             // Return an EmptyView or a disabled button if you want a placeholder
             // For now, it will simply not render if conditions aren't met.
         }

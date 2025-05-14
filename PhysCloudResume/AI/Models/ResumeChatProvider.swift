@@ -287,7 +287,8 @@ final class ResumeChatProvider {
             if let data = try? JSONSerialization.data(withJSONObject: fieldsArr, options: .prettyPrinted),
                let jsonString = String(data: data, encoding: .utf8)
             {
-                print("▶️ JSON sent to LLM (updatableFields):\n", jsonString)
+                Logger.debug("▶️ JSON sent to LLM (updatableFields):")
+                Logger.debug(jsonString)
             }
             // Do *not* wipe previousResponseId here; it is needed for
             // follow-up revision calls.
@@ -322,11 +323,11 @@ final class ResumeChatProvider {
         let previousResponseId: String? = continueConversation ? resume?.previousResponseId : nil
         let isNewConversation = previousResponseId == nil
 
-        print("Starting \(isNewConversation ? "new" : "continuation") conversation with Responses API")
+        Logger.debug("Starting \(isNewConversation ? "new" : "continuation") conversation with Responses API")
         if !isNewConversation {
-            print("Using previous response ID: \(previousResponseId ?? "nil")")
+            Logger.debug("Using previous response ID: \(previousResponseId ?? "nil")")
         } else {
-            print("Starting fresh conversation with no previous context")
+            Logger.debug("Starting fresh conversation with no previous context")
         }
 
         do {
@@ -342,10 +343,11 @@ final class ResumeChatProvider {
                 schema: schema
             )
 
-            print("✅ Received response from OpenAI Responses API with ID: \(response.id)")
+            Logger.debug("✅ Received response from OpenAI Responses API with ID: \(response.id)")
 
             // Debug: print the raw JSON returned from the LLM for troubleshooting
-            print("🛬 JSON returned from LLM:\n", response.content)
+            Logger.debug("🛬 JSON returned from LLM:")
+            Logger.debug(response.content)
 
             // Store the response ID in the resume if provided
             if let resume = resume {
@@ -358,11 +360,11 @@ final class ResumeChatProvider {
             // Parse the JSON content to extract the RevNode array
             if let responseData = content.data(using: .utf8) {
                 do {
-                    print("Parsing JSON content to RevNode array...")
+                    Logger.debug("Parsing JSON content to RevNode array...")
 
                     // Try as a container with revArray property (legacy format)
                     let container = try JSONDecoder().decode(RevisionsContainer.self, from: responseData)
-                    print("Successfully decoded JSON with container format: \(container.revArray.count) revision nodes")
+                    Logger.debug("Successfully decoded JSON with container format: \(container.revArray.count) revision nodes")
 
                     // Format for storage
                     let encoder = JSONEncoder()
@@ -376,8 +378,8 @@ final class ResumeChatProvider {
                     genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
 
                 } catch {
-                    print("JSON parsing error: \(error.localizedDescription)")
-                    print("Raw content: \(content)")
+                    Logger.debug("JSON parsing error: \(error.localizedDescription)")
+                    Logger.debug("Raw content: \(content)")
                     throw error
                 }
             } else {

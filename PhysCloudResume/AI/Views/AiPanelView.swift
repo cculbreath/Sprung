@@ -26,7 +26,7 @@
 //    GroupBox {
 //      VStack {
 //        HStack {
-//          Button( action: {print("nope")}) {
+//          Button( action: {Logger.debug("nope")}) {
 //            Image(
 //              isButHover
 //                ? "ai-squiggle.bubble.left.fill"

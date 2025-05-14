@@ -89,7 +89,7 @@ import Foundation
 
     var resumeText: String {
         if res.textRes == "" {
-            print("⚠️BLANK TEXT RES⚠️")
+            Logger.debug("⚠️BLANK TEXT RES⚠️")
             return res.model!.renderedResumeText
         } else { return res.textRes }
     }
@@ -127,7 +127,9 @@ import Foundation
         self.saveDebugPrompt = saveDebugPrompt
 
         // Debug: print JSON block that will be supplied to the LLM so we can verify content
-        print("▶️ updatableFieldsString JSON sent to LLM:\n", updatableFieldsString)
+    var loggerString = "▶️ updatableFieldsString JSON sent to LLM:\n"
+        loggerString += updatableFieldsString
+        Logger.debug(loggerString)
     }
 
     // Secondary initializer that creates a non-MainActor placeholder applicant

@@ -1,3 +1,5 @@
+// swift-format-disable: UseExplicitSelf
+
 //
 //  TTSAudioStreamer.swift
 //  PhysCloudResume
@@ -8,14 +10,30 @@
 import AudioToolbox // for AudioFileTypeID
 import ChunkedAudioPlayer
 import Foundation
+import os.log // For system logging
 
 /// Drop-in replacement for StreamingTTSPlayer that handles buffered audio playback
 @MainActor
 final class TTSAudioStreamer {
     // MARK: - Properties
 
+    /// Logger for debugging TTS memory issues
+    private static let logger = Logger()
+
     /// Audio file type hint (e.g. MP3)
     private let fileType: AudioFileTypeID = kAudioFileMP3Type
+
+    /// Tracks total buffered data size to prevent excessive memory usage
+    private var totalBufferedSize: Int = 0
+
+    /// Maximum buffer size allowed (10MB)
+    private let maxBufferSize: Int = 10 * 1024 * 1024
+
+    /// Count of received chunks for monitoring
+    private var chunkCount: Int = 0
+
+    /// Maximum number of chunks to allow before forcing cleanup
+    private let maxChunkCount: Int = 100
 
     /// Continuation for feeding audio data stream
     private var continuation: AsyncThrowingStream<Data, Error>.Continuation?
@@ -40,22 +58,32 @@ final class TTSAudioStreamer {
         didStartPlaying: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                print("TTSAudioStreamer: didStartPlaying callback")
+                Logger.debug("TTSAudioStreamer: didStartPlaying callback")
                 self.isPausedFlag = false
                 self.setBufferingState(false) // Exit buffering state when playback starts
-                self.onReady?()
+                if let readyHandler = self.onReady {
+                    readyHandler()
+                }
             }
         },
         didFinishPlaying: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                print("TTSAudioStreamer: didFinishPlaying callback")
+                Logger.debug("TTSAudioStreamer: didFinishPlaying callback")
                 self.isPausedFlag = false
                 self.setBufferingState(false)
                 if let error = self.player.currentError {
-                    Task { @MainActor in self.onError?(error) }
+                    Task { @MainActor in 
+                        if let errorHandler = self.onError {
+                            errorHandler(error)
+                        }
+                    }
                 } else {
-                    Task { @MainActor in self.onFinish?() }
+                    Task { @MainActor in 
+                        if let finishHandler = self.onFinish {
+                            finishHandler()
+                        }
+                    }
                 }
             }
         }
@@ -85,7 +113,21 @@ final class TTSAudioStreamer {
     // MARK: - Initialization
 
     init() {
-        print("TTSAudioStreamer: Initialized")
+        Logger.debug("TTSAudioStreamer: Initialized")
+    }
+
+    deinit {
+        Logger.debug("TTSAudioStreamer: Deinitializing and cleaning up resources")
+        // Force cleanup on deinit - must dispatch to MainActor
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            self.stop()
+            // Reset all callbacks to break potential reference cycles
+            self.onReady = nil
+            self.onFinish = nil
+            self.onError = nil
+            self.onBufferingStateChanged = nil
+        }
     }
 
     // MARK: - Private Methods
@@ -95,10 +137,20 @@ final class TTSAudioStreamer {
         if isBufferingFlag != buffering {
             isBufferingFlag = buffering
             Task { @MainActor in
-                self.onBufferingStateChanged?(buffering)
-                print("TTSAudioStreamer: Buffering state changed to \(buffering)")
+            if let bufferingHandler = self.onBufferingStateChanged {
+                bufferingHandler(buffering)
             }
+            Logger.debug("TTSAudioStreamer: Buffering state changed to \(buffering)")
         }
+        }
+    }
+
+    /// Reset all buffer tracking metrics
+    private func resetBufferMetrics() {
+        totalBufferedSize = 0
+        chunkCount = 0
+        // This helps in monitoring if resource cleanup is happening correctly
+        Logger.debug("TTSAudioStreamer: Buffer metrics reset")
     }
 
     // MARK: - Public Methods
@@ -106,6 +158,48 @@ final class TTSAudioStreamer {
     /// Append a new chunk of audio data for playback.
     /// On the first chunk, buffer it before starting the player to ensure initial data is available.
     func append(_ data: Data) {
+        // Check buffer limits before processing new data
+        totalBufferedSize += data.count
+        chunkCount += 1
+
+        // Check if we've exceeded memory limits
+        if totalBufferedSize > maxBufferSize {
+            Logger.error("TTSAudioStreamer: Buffer size exceeded limit (\(totalBufferedSize)/\(maxBufferSize) bytes). Stopping playback.")
+            let error = NSError(
+                domain: "TTSAudioStreamer",
+                code: 1001,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Buffer size limit exceeded",
+                ]
+            )
+
+            // Must dispatch to MainActor for stop() call
+            Task { @MainActor in
+                self.stop()
+                self.onError?(error)
+            }
+            return
+        }
+
+        // Check if we've received too many chunks
+        if chunkCount > maxChunkCount {
+            Logger.error("TTSAudioStreamer: Too many chunks accumulated (\(chunkCount)/\(maxChunkCount)). Stopping playback.")
+            let error = NSError(
+                domain: "TTSAudioStreamer",
+                code: 1002,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Too many chunks accumulated",
+                ]
+            )
+
+            // Must dispatch to MainActor for stop() call
+            Task { @MainActor in
+                self.stop()
+                self.onError?(error)
+            }
+            return
+        }
+
         // New streaming session: buffer initial chunks up to threshold
         if continuation == nil {
             // First chunk: create stream and start buffering
@@ -113,36 +207,42 @@ final class TTSAudioStreamer {
 
             // Signal that we're buffering
             setBufferingState(true)
-            print("TTSAudioStreamer: Starting to buffer first chunk")
+            // Log initial chunk receipt
+            let dataSize = data.count
+            Logger.debug("TTSAudioStreamer: Starting to buffer first chunk, size: \(dataSize)")
 
             // Create the async stream and capture its continuation
             let stream = AsyncThrowingStream<Data, Error> { cont in
                 self.continuation = cont
-                cont.onTermination = { @Sendable _ in
+                cont.onTermination = { @Sendable [weak self] _ in
                     Task { @MainActor [weak self] in
-                        print("TTSAudioStreamer: Stream terminated")
-                        self?.continuation = nil
-                        self?.currentStream = nil
-                        self?.initialChunks = nil
-                        self?.setBufferingState(false)
+                        guard let self = self else { return }
+                        Logger.debug("TTSAudioStreamer: Stream terminated, cleaning up resources")
+                        self.continuation = nil
+                        self.currentStream = nil
+                        self.initialChunks = nil
+                        self.setBufferingState(false)
+                        self.resetBufferMetrics()
                     }
                 }
             }
             currentStream = stream
         }
         // If still buffering initial chunks, accumulate until threshold reached
-        else if let _ = initialChunks {
+        else if initialChunks != nil {
             initialChunks!.append(data)
-            print("TTSAudioStreamer: Added chunk to buffer, now have \(initialChunks!.count)/\(initialBufferChunkCount)")
+            Logger.debug("TTSAudioStreamer: Added chunk to buffer, now have \(initialChunks!.count)/\(initialBufferChunkCount), total size: \(totalBufferedSize)")
 
             if initialChunks!.count >= initialBufferChunkCount {
                 // Ready to start playback with buffered data
-                guard let cont = continuation, let stream = currentStream else { return }
+                guard let cont = continuation, let stream = currentStream else {
+                    return
+                }
                 let buffered = initialChunks!
                 initialChunks = nil
 
                 // Signal that we're done buffering
-                print("TTSAudioStreamer: Buffer threshold reached, starting playback")
+                Logger.debug("TTSAudioStreamer: Buffer threshold reached, starting playback")
 
                 Task { @MainActor in
                     // Yield buffered chunks first
@@ -161,6 +261,7 @@ final class TTSAudioStreamer {
         // Already started, yield chunks immediately
         else {
             guard let cont = continuation else { return }
+            Logger.debug("TTSAudioStreamer: Yielding chunk directly to player, size: \(data.count), total: \(totalBufferedSize)")
             Task { @MainActor in
                 cont.yield(data)
             }
@@ -170,21 +271,32 @@ final class TTSAudioStreamer {
     /// Stop playback and clear buffered data
     func stop() {
         Task { @MainActor in
-            print("TTSAudioStreamer: Stopping playback")
-            continuation?.finish()
-            continuation = nil
+            Logger.debug("TTSAudioStreamer: Stopping playback, cleaning up resources")
+
+            // Immediately finish and clear continuation
+            if let cont = continuation {
+                cont.finish()
+                continuation = nil
+            }
+
+            // Clear all buffers and reset state
             currentStream = nil
             initialChunks = nil
             isPausedFlag = false
+            resetBufferMetrics()
 
             // Make absolutely sure buffering state is cleared
             if isBufferingFlag {
-                print("TTSAudioStreamer: Forcing buffering state to false on stop")
+                Logger.debug("TTSAudioStreamer: Forcing buffering state to false on stop")
                 setBufferingState(false)
             }
 
             player.stop()
-            Task { @MainActor in self.onFinish?() }
+            Task { @MainActor in 
+                if let finishHandler = self.onFinish {
+                    finishHandler()
+                }
+            }
         }
     }
 
@@ -195,13 +307,13 @@ final class TTSAudioStreamer {
     @discardableResult
     func pause() -> Bool {
         guard isPausedFlag == false else { return false }
-        print("TTSAudioStreamer: Pausing playback")
+        Logger.debug("TTSAudioStreamer: Pausing playback")
         player.pause() // AudioPlayer supports pause()
         isPausedFlag = true
 
         // Make sure buffering is off during pause
         if isBufferingFlag {
-            print("TTSAudioStreamer: Forcing buffering state to false on pause")
+            Logger.debug("TTSAudioStreamer: Forcing buffering state to false on pause")
             setBufferingState(false)
         }
         return true
@@ -212,13 +324,13 @@ final class TTSAudioStreamer {
     @discardableResult
     func resume() -> Bool {
         guard isPausedFlag else { return false }
-        print("TTSAudioStreamer: Resuming playback")
+        Logger.debug("TTSAudioStreamer: Resuming playback")
         player.resume() // resumes from pause
         isPausedFlag = false
 
         // Make sure buffering is off during resume
         if isBufferingFlag {
-            print("TTSAudioStreamer: Forcing buffering state to false on resume")
+            Logger.debug("TTSAudioStreamer: Forcing buffering state to false on resume")
             setBufferingState(false)
         }
         return true
@@ -239,3 +351,5 @@ final class TTSAudioStreamer {
         }
     }
 }
+
+// swift-format-enable: all

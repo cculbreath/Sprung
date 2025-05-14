@@ -90,7 +90,7 @@ struct AiCommsView: View {
                 Text(errorMessage)
             }
             .onChange(of: chatProvider.lastRevNodeArray) { _, newValue in
-                print("\nReceived \(newValue.count) revision nodes from AI")
+                Logger.debug("\nReceived \(newValue.count) revision nodes from AI")
 
                 // Create a mutable copy of the array that we can filter
                 var processedRevisions = newValue
@@ -101,13 +101,13 @@ struct AiCommsView: View {
                     let filteredRevNodes = processedRevisions.filter { revNode in
                         let shouldInclude = expectedNodeIds.contains(revNode.id)
                         if !shouldInclude {
-                            print("Removing unexpected node ID \(revNode.id) from AI response (not in feedback list)")
+                            Logger.debug("Removing unexpected node ID \(revNode.id) from AI response (not in feedback list)")
                         }
                         return shouldInclude
                     }
 
                     if filteredRevNodes.count < processedRevisions.count {
-                        print("Filtered out \(processedRevisions.count - filteredRevNodes.count) unexpected revision nodes")
+                        Logger.debug("Filtered out \(processedRevisions.count - filteredRevNodes.count) unexpected revision nodes")
                         // Update our mutable copy
                         processedRevisions = filteredRevNodes
                     }
@@ -118,16 +118,16 @@ struct AiCommsView: View {
                     let currentNodeIds = Set(myRes.nodes.map { $0.id })
                     for revNode in processedRevisions {
                         if !currentNodeIds.contains(revNode.id) {
-                            print("WARNING: Revision node with ID \(revNode.id) references a node that no longer exists in the resume!")
-                            print("  - Content: '\(revNode.oldValue)' -> '\(revNode.newValue)'")
-                            print("  - Tree path: \(revNode.treePath)")
+                            Logger.debug("WARNING: Revision node with ID \(revNode.id) references a node that no longer exists in the resume!")
+                            Logger.debug("  - Content: '\(revNode.oldValue)' -> '\(revNode.newValue)'")
+                            Logger.debug("  - Tree path: \(revNode.treePath)")
                         }
                     }
                 }
 
                 // Validate and fix the revision nodes
-                var validatedRevisions = validateRevs(res: myRes, revs: processedRevisions) ?? []
-                print("After validation: \(validatedRevisions.count) revision nodes (from original \(processedRevisions.count))")
+                let validatedRevisions = validateRevs(res: myRes, revs: processedRevisions) ?? []
+                Logger.debug("After validation: \(validatedRevisions.count) revision nodes (from original \(processedRevisions.count))")
 
                 // Reset arrays - IMPORTANT: this prevents accumulation of nodes
                 fbnodes = []
@@ -239,12 +239,12 @@ struct AiCommsView: View {
             validRevs = validRevs.filter { revNode in
                 let exists = currentNodeIds.contains(revNode.id)
                 if !exists {
-                    print("Filtering out revision for non-existent node with ID: \(revNode.id)")
+                    Logger.debug("Filtering out revision for non-existent node with ID: \(revNode.id)")
                 }
                 return exists
             }
             if validRevs.count < initialCount {
-                print("Removed \(initialCount - validRevs.count) revisions for non-existent nodes")
+                Logger.debug("Removed \(initialCount - validRevs.count) revisions for non-existent nodes")
             }
 
             // First pass: validate and update existing revisions
@@ -319,7 +319,7 @@ struct AiCommsView: View {
             // // Add the additional nodes to the validation result
             // validRevs.append(contentsOf: additionalNodes)
 
-            print("Final count after validation: \(validRevs.count) (started with \(revs.count))")
+            Logger.debug("Final count after validation: \(validRevs.count) (started with \(revs.count))")
             return validRevs
         }
         return nil
@@ -341,7 +341,7 @@ struct AiCommsView: View {
                     // For a new resume generation, we want to reset the server-side context
                     // by clearing the previousResponseId
                     if let myRes = myRes {
-                        print("Starting new resume generation - clearing previousResponseId")
+                        Logger.debug("Starting new resume generation - clearing previousResponseId")
                         myRes.previousResponseId = nil
                     }
 
@@ -371,11 +371,11 @@ struct AiCommsView: View {
                 }
 
                 // Execute the API call with our new Responses API method
-                print("Starting API call with model: \(modelString)")
+                Logger.debug("Starting API call with model: \(modelString)")
                 try await chatProvider.startChat(messages: chatProvider.genericMessages,
                                                  resume: myRes,
                                                  continueConversation: hasRevisions)
-                print("API call completed successfully")
+                Logger.debug("API call completed successfully")
 
                 // Cancel the timeout task since we completed successfully
                 timeoutTask.cancel()

@@ -35,6 +35,9 @@ struct SettingsView: View {
 
                 // Fix Overflow Iterations Setting
                 FixOverflowSettingsView(fixOverflowMaxIterations: $fixOverflowMaxIterations)
+                
+                // Debug Settings Section
+                DebugSettingsView()
             }
             .padding() // Add padding around the entire content VStack
         }

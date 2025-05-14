@@ -78,8 +78,7 @@ struct SidebarRecommendButton: View {
             do {
                 let provider = JobRecommendationProvider(
                     jobApps: jobAppStore.jobApps,
-                    resume: resumeToUse,
-                    savePromptToFile: true
+                    resume: resumeToUse
                 )
 
                 let (jobId, reason) = try await provider.fetchRecommendation()

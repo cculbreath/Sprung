@@ -33,7 +33,7 @@ class TreeToJson {
             let result = stringifySection(sectionName: sectionKey, stringFn: stringFunc)
             if !result.isEmpty {
                 jsonComponents.append(result)
-            } else { print("empty \(sectionKey)") }
+            } else { Logger.debug("empty \(sectionKey)") }
         }
 
         return "{\n\(jsonComponents.joined(separator: ",\n"))\n}"

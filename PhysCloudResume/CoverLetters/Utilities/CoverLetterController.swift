@@ -117,7 +117,7 @@ struct CoverLetterController: View {
             }
         }
         .onAppear {
-            print("Cover Letter Controller appeared")
+            Logger.debug("Cover Letter Controller appeared")
         }
         // Alert for recommendation results
         .alert(item: $errorWrapper) { wrapper in

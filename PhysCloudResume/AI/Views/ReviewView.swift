@@ -298,7 +298,7 @@ struct ReviewView: View {
             case .noChange:
                 nextNode()
             default:
-                print("Default, you should not be here!!")
+                Logger.debug("Default, you should not be here!!")
             }
         }
     }
@@ -308,11 +308,11 @@ struct ReviewView: View {
         if let currentFeedbackNode = currentFeedbackNode {
             feedbackArray.append(currentFeedbackNode)
             feedbackIndex += 1
-            print("Added node to feedbackArray. New index: \(feedbackIndex)/\(revisionArray.count)")
+            Logger.debug("Added node to feedbackArray. New index: \(feedbackIndex)/\(revisionArray.count)")
         }
 
         if feedbackIndex < revisionArray.count {
-            print("Moving to next node at index \(feedbackIndex)")
+            Logger.debug("Moving to next node at index \(feedbackIndex)")
             withAnimation(.easeInOut(duration: 0.5)) {
                 currentRevNode = revisionArray[feedbackIndex]
                 if let currentRevNode = currentRevNode {
@@ -327,12 +327,12 @@ struct ReviewView: View {
                 }
             }
         } else {
-            print("Reached end of revisionArray. Applying changes...")
+            Logger.debug("Reached end of revisionArray. Applying changes...")
             applyChanges()
 
             // Log stats about the feedback node categories
-            print("\n===== FEEDBACK NODE STATISTICS =====")
-            print("Total feedback nodes: \(feedbackArray.count)")
+            Logger.debug("\n===== FEEDBACK NODE STATISTICS =====")
+            Logger.debug("Total feedback nodes: \(feedbackArray.count)")
 
             let acceptedCount = feedbackArray.filter { $0.actionRequested == .accepted }.count
             let acceptedWithChangesCount = feedbackArray.filter { $0.actionRequested == .acceptedWithChanges }.count
@@ -343,15 +343,15 @@ struct ReviewView: View {
             let mandatedChangeCount = feedbackArray.filter { $0.actionRequested == .mandatedChange }.count
             let mandatedChangeNoCommentCount = feedbackArray.filter { $0.actionRequested == .mandatedChangeNoComment }.count
 
-            print("Accepted: \(acceptedCount)")
-            print("Accepted with changes: \(acceptedWithChangesCount)")
-            print("No change needed: \(noChangeCount)")
-            print("Restored to original: \(restoredCount)")
-            print("Revise (with comments): \(reviseCount)")
-            print("Rewrite (no comments): \(rewriteNoCommentCount)")
-            print("Mandated change (with comments): \(mandatedChangeCount)")
-            print("Mandated change (no comments): \(mandatedChangeNoCommentCount)")
-            print("==================================\n")
+            Logger.debug("Accepted: \(acceptedCount)")
+            Logger.debug("Accepted with changes: \(acceptedWithChangesCount)")
+            Logger.debug("No change needed: \(noChangeCount)")
+            Logger.debug("Restored to original: \(restoredCount)")
+            Logger.debug("Revise (with comments): \(reviseCount)")
+            Logger.debug("Rewrite (no comments): \(rewriteNoCommentCount)")
+            Logger.debug("Mandated change (with comments): \(mandatedChangeCount)")
+            Logger.debug("Mandated change (no comments): \(mandatedChangeNoCommentCount)")
+            Logger.debug("==================================\n")
 
             let aiActions: Set<PostReviewAction> = [
                 .revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment,
@@ -362,27 +362,27 @@ struct ReviewView: View {
                 aiActions.contains(node.actionRequested)
             }
 
-            print("Found \(nodesToResubmit.count) nodes requiring resubmission out of \(feedbackArray.count) total")
+            Logger.debug("Found \(nodesToResubmit.count) nodes requiring resubmission out of \(feedbackArray.count) total")
 
             if !nodesToResubmit.isEmpty {
-                print("Resubmitting \(nodesToResubmit.count) nodes to AI...")
+                Logger.debug("Resubmitting \(nodesToResubmit.count) nodes to AI...")
                 // Only keep nodes that need AI intervention for the next round
                 feedbackArray = nodesToResubmit
 
                 // Log the exact nodes we're sending for revision
                 for (index, node) in feedbackArray.enumerated() {
-                    print("Node \(index + 1)/\(feedbackArray.count) for revision:")
-                    print("  - ID: \(node.id)")
-                    print("  - Action: \(node.actionRequested.rawValue)")
-                    print("  - Original: \(node.originalValue.prefix(30))\(node.originalValue.count > 30 ? "..." : "")")
+                    Logger.debug("Node \(index + 1)/\(feedbackArray.count) for revision:")
+                    Logger.debug("  - ID: \(node.id)")
+                    Logger.debug("  - Action: \(node.actionRequested.rawValue)")
+                    Logger.debug("  - Original: \(node.originalValue.prefix(30))\(node.originalValue.count > 30 ? "..." : "")")
                     if !node.reviewerComments.isEmpty {
-                        print("  - Comments: \(node.reviewerComments.prefix(50))\(node.reviewerComments.count > 50 ? "..." : "")")
+                        Logger.debug("  - Comments: \(node.reviewerComments.prefix(50))\(node.reviewerComments.count > 50 ? "..." : "")")
                     }
                 }
 
                 aiResubmit()
             } else {
-                print("No nodes need resubmission. All changes are applied, dismissing sheet...")
+                Logger.debug("No nodes need resubmission. All changes are applied, dismissing sheet...")
                 // Simply dismiss the sheet - no need to create a duplicate
                 sheetOn = false
             }
@@ -408,7 +408,7 @@ struct ReviewView: View {
                         }
                     } else {
                         // Try to diagnose the issue by listing available node IDs
-                        print("Could not find TreeNode with ID: \(node.id) to apply changes")
+                        Logger.debug("Could not find TreeNode with ID: \(node.id) to apply changes")
                     }
                 }
             }
@@ -431,8 +431,8 @@ struct ReviewView: View {
         applyChanges()
 
         // Print summary of what we're submitting for revision
-        print("\n===== SUBMITTING REVISION REQUEST =====")
-        print("Number of nodes to revise: \(feedbackArray.count)")
+        Logger.debug("\n===== SUBMITTING REVISION REQUEST =====")
+        Logger.debug("Number of nodes to revise: \(feedbackArray.count)")
 
         // Count by feedback type
         let typeCount = feedbackArray.reduce(into: [PostReviewAction: Int]()) { counts, node in
@@ -440,27 +440,27 @@ struct ReviewView: View {
         }
 
         for (action, count) in typeCount.sorted(by: { $0.value > $1.value }) {
-            print("  - \(action.rawValue): \(count) nodes")
+            Logger.debug("  - \(action.rawValue): \(count) nodes")
         }
 
         // List node IDs being submitted
         let nodeIds = feedbackArray.map { $0.id }.joined(separator: ", ")
-        print("Node IDs: \(nodeIds)")
-        print("========================================\n")
+        Logger.debug("Node IDs: \(nodeIds)")
+        Logger.debug("========================================\n")
 
         // Force PDF re-rendering to ensure up-to-date textRes
         if let selRes = selRes {
-            print("Starting PDF re-rendering for AI resubmission...")
+            Logger.debug("Starting PDF re-rendering for AI resubmission...")
             Task {
                 do {
                     // Await the PDF rendering completion
                     try await selRes.ensureFreshRenderedText()
-                    print("PDF rendering complete for AI resubmission")
+                    Logger.debug("PDF rendering complete for AI resubmission")
 
                     // After render completes, aiResub is already true, so the LLM call will happen automatically
                     // The AiCommsView watches for changes to aiResub, which triggers its chatAction
                 } catch {
-                    print("Error rendering resume for AI resubmission: \(error)")
+                    Logger.debug("Error rendering resume for AI resubmission: \(error)")
                     await MainActor.run {
                         aiResub = false
                         // Show an error to the user?
@@ -473,7 +473,7 @@ struct ReviewView: View {
         // as this likely indicates a communication issue with the AI service
         DispatchQueue.main.asyncAfter(deadline: .now() + 120) { // 2 minute timeout
             if aiResub {
-                print("Timeout reached for AI resubmission. Auto-dismissing.")
+                Logger.debug("Timeout reached for AI resubmission. Auto-dismissing.")
                 aiResub = false
                 sheetOn = false
             }

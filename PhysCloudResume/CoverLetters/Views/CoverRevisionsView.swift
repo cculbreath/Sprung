@@ -19,7 +19,7 @@ struct CoverRevisionsView: View {
             openAIClient: openAIClient,
             buttons: $buttons
         )
-        .onAppear { print("Ai Cover Letterv2") }
+        .onAppear { Logger.debug("Ai Cover Letterv2") }
     }
 }
 
