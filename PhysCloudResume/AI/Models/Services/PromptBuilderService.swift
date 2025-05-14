@@ -98,7 +98,23 @@ class PromptBuilderService {
     /// - Returns: A formatted prompt string
     func buildContentsFitPrompt() -> String {
         return """
-        You are an expert document layout analyzer. Examine the attached resume image, specifically the 'Skills and Experience' box. Does the content within this box fit neatly without overflowing its boundaries or overlapping with any content below it? When there is no overflow, there should be a small, blank, text free region between the lower border of the Skills and Experience box and the top border of the Education box. Be sure that these boxes are not overlapping. Respond *only* with a JSON object adhering to the schema provided in the API request's 'text.format.schema' parameter.
+        You are an expert document layout analyzer. Examine the attached resume image, specifically the 'Skills and Expertise' section (labeled with that header).
+        
+        Your task is to determine if this section fits properly without overflowing or overlapping with other content.
+        
+        Key things to check:
+        1. Is there any text that extends beyond the section's boundaries?
+        2. Is there any overlap between the Skills section and the Education section below it?
+        3. Is there a small, clean margin between the bottom of the Skills section and whatever comes after it?
+        
+        A properly fitting section has all text fully contained within its boundaries and has a visible margin to the section below it.
+        
+        Respond with a simple JSON containing a single boolean field called "contentsFit":
+        
+        If everything fits properly with no overflow: {"contentsFit": true}
+        If there is any overflow or overlap: {"contentsFit": false}
+        
+        Ensure your response is ONLY this JSON object - no extra text or explanation.
         """
     }
 }

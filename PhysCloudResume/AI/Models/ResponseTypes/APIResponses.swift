@@ -46,15 +46,45 @@ struct ResponsesAPIResponseWrapper: Codable {
     
     // Computed property that safely provides content from either source
     var content: String {
-        if let directContent = _content {
+        // First try direct content (older format)
+        if let directContent = _content, !directContent.isEmpty {
             return directContent
-        } else if let outputMessages = output, 
-                  let firstMessage = outputMessages.first,
-                  let messageContent = firstMessage.content, 
-                  let firstContent = messageContent.first,
-                  firstContent.type == "output_text" {
-            return firstContent.text
         }
+        
+        // Then try to extract from output array (newer format)
+        if let outputMessages = output, 
+           let firstMessage = outputMessages.first {
+            
+            // For the new response format
+            if let messageContent = firstMessage.content, 
+               let firstContent = messageContent.first,
+               firstContent.type == "output_text",
+               let text = firstContent.text,
+               !text.isEmpty {
+                return text
+            }
+            
+            // Log the structure to help with debugging
+            let messageType = firstMessage.type
+            let hasContent = firstMessage.content != nil
+            let contentCount = firstMessage.content?.count ?? 0
+            
+            Logger.debug("ResponsesAPIResponseWrapper: Processing output. Type: \(messageType), Has content: \(hasContent), Content items: \(contentCount)")
+            
+            // Additional fallback for reasoning format
+            if messageType == "message", 
+               let messageContent = firstMessage.content, 
+               messageContent.count > 0 {
+                for item in messageContent {
+                    if item.type == "output_text", let text = item.text, !text.isEmpty {
+                        return text
+                    }
+                }
+            }
+        }
+        
+        // If we get here, we couldn't extract the content
+        Logger.debug("ResponsesAPIResponseWrapper: Failed to extract content from response")
         return "" // Empty fallback
     }
     
@@ -66,22 +96,30 @@ struct ResponsesAPIResponseWrapper: Codable {
     }
     
     struct OutputMessage: Codable {
+        var id: String?
         var type: String
         var content: [ContentItem]?
+        var status: String?
+        var role: String?
         
         enum CodingKeys: String, CodingKey {
+            case id
             case type
             case content
+            case status
+            case role
         }
     }
     
     struct ContentItem: Codable {
         var type: String
-        var text: String
+        var text: String?
+        var annotations: [String]?
         
         enum CodingKeys: String, CodingKey {
             case type
             case text
+            case annotations
         }
     }
     
