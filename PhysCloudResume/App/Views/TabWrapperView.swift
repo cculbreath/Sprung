@@ -9,10 +9,6 @@ import SwiftUI
 
 struct TabWrapperView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(ResStore.self) private var resStore: ResStore
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-    @Environment(ResModelStore.self) private var resModelStore: ResModelStore
-    @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
 
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
@@ -41,7 +37,12 @@ struct TabWrapperView: View {
                         }
                         .tag(TabList.listing)
 
-                    ResumeViewSetup(resumeButtons: $resumeButtons, refresh: $tabRefresh, currentTab: selectedTab)
+                    ResumeSplitView(
+                        isWide: .constant(true), // You may want to make this configurable
+                        tab: $selectedTab,
+                        resumeButtons: $resumeButtons,
+                        refresh: $tabRefresh
+                    )
                         .tabItem {
                             Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
                         }

@@ -15,11 +15,6 @@ import SwiftUI
 @Observable class JobRecommendationProvider {
     // MARK: - Properties
 
-    /// Use the global debug setting from UserDefaults instead of local property
-    var saveDebugPrompt: Bool {
-        UserDefaults.standard.bool(forKey: "saveDebugPrompts")
-    }
-
     // The system message in generic format for abstraction layer
     let genericSystemMessage = ChatMessage(
         role: .system,
@@ -33,9 +28,6 @@ import SwiftUI
     // The new abstraction layer client
     private let openAIClient: OpenAIClientProtocol
 
-    var savePromptToFile: Bool {
-        UserDefaults.standard.bool(forKey: "saveDebugPrompts")
-    }
     var jobApps: [JobApp] = []
     var resume: Resume?
 
@@ -54,16 +46,7 @@ import SwiftUI
 
     // MARK: - Initialization
 
-    /// Initialize with specific OpenAI client
-    /// - Parameters:
-    ///   - jobApps: List of job applications
-    ///   - resume: The resume to use
-    ///   - client: Custom OpenAI client to use
-    init(jobApps: [JobApp], resume: Resume?, client: OpenAIClientProtocol) {
-        self.jobApps = jobApps
-        self.resume = resume
-        openAIClient = client
-    }
+
 
     /// Default initializer - uses factory to create client
     /// - Parameters:
@@ -101,7 +84,7 @@ import SwiftUI
 
         let prompt = buildPrompt(newJobApps: newJobApps, resume: resume)
 
-        if savePromptToFile {
+        if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
             savePromptToDownloads(content: prompt, fileName: "jobRecommendationPrompt.txt")
         }
 
@@ -303,7 +286,7 @@ import SwiftUI
 
     private func decodeRecommendation(from responseText: String) throws -> (UUID, String) {
         // Save complete response for debugging
-        if savePromptToFile {
+        if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
             savePromptToDownloads(content: responseText, fileName: "jobRecommendationResponse.txt")
         }
         
@@ -417,7 +400,21 @@ import SwiftUI
     }
 
     private func savePromptToDownloads(content: String, fileName: String) {
-        // Use our logger instead of direct file operations
-        Logger.saveDebugToFile(content: content, fileName: fileName)
+        // Only save if debug file saving is enabled in UserDefaults
+        guard UserDefaults.standard.bool(forKey: "saveDebugPrompts") else {
+            return
+        }
+        
+        let fileManager = FileManager.default
+        let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
+        let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
+        let fileURL = downloadsURL.appendingPathComponent(fileName)
+        
+        do {
+            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            Logger.debug("Saved debug file: \(fileName)")
+        } catch {
+            Logger.warning("Failed to save debug file \(fileName): \(error.localizedDescription)")
+        }
     }
 }

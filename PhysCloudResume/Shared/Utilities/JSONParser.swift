@@ -209,10 +209,6 @@ extension JSONParser {
 
         private(set) var readerIndex: Int = 0
 
-        private var readableBytes: Int {
-            array.endIndex - readerIndex
-        }
-
         var isEOF: Bool {
             readerIndex >= array.endIndex
         }
@@ -644,13 +640,9 @@ extension UInt8 {
 }
 
 extension Array where Element == UInt8 {
-    static let _true = [UInt8(ascii: "t"), UInt8(ascii: "r"), UInt8(ascii: "u"), UInt8(ascii: "e")]
-    static let _false = [UInt8(ascii: "f"), UInt8(ascii: "a"), UInt8(ascii: "l"), UInt8(ascii: "s"), UInt8(ascii: "e")]
-    static let _null = [UInt8(ascii: "n"), UInt8(ascii: "u"), UInt8(ascii: "l"), UInt8(ascii: "l")]
 }
 
 enum JSONError: Swift.Error, Equatable {
-    case cannotConvertInputDataToUTF8
     case unexpectedCharacter(ascii: UInt8, characterIndex: Int)
     case unexpectedEndOfFile
     case tooManyNestedArraysOrDictionaries(characterIndex: Int)
@@ -661,7 +653,6 @@ enum JSONError: Swift.Error, Equatable {
     case couldNotCreateUnicodeScalarFromUInt32(in: String, index: Int, unicodeScalarValue: UInt32)
     case numberWithLeadingZero(index: Int)
     case numberIsNotRepresentableInSwift(parsed: String)
-    case singleFragmentFoundButNotAllowed
     case invalidUTF8Sequence(Data, characterIndex: Int)
 }
 

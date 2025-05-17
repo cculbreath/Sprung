@@ -20,15 +20,4 @@ final class ResumePDFViewModel {
     init(resume: Resume) {
         self.resume = resume
     }
-
-    /// Public intent called by the view to trigger a PDF refresh.
-    func refreshPDF() {
-        // Forward to the model’s debounce implementation but keep the state
-        // locally.
-        resume.debounceExport(onStart: { [weak self] in
-            self?.isUpdating = true
-        }, onFinish: { [weak self] in
-            self?.isUpdating = false
-        })
-    }
 }

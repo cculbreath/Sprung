@@ -10,7 +10,6 @@ import SwiftUI
 
 struct NewAppSheetView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(\.dismiss) private var dismiss
 
     @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
     @AppStorage("brightDataApiKey") var brightDataApiKey: String = "none"

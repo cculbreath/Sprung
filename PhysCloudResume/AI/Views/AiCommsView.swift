@@ -29,19 +29,6 @@ struct AiCommsView: View {
     // TTS related state
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
-    @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
-    @State private var ttsError: String? = nil
-    @State private var showTTSError: Bool = false
-
-    // Read‑aloud playback state
-    private enum ReadAloudState {
-        case idle
-        case buffering
-        case playing
-        case paused
-    }
-
-    @State private var readAloudState: ReadAloudState = .idle
 
     // Store references to clients for AI operations
     private let openAIClient: OpenAIClientProtocol

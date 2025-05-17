@@ -19,19 +19,7 @@ protocol OpenAIClientProtocol {
 
     // MARK: - Chat Completion API (Legacy)
 
-    /// Sends a chat completion request
-    /// - Parameters:
-    ///   - messages: The conversation history
-    ///   - model: The model to use for completion
-    ///   - temperature: Controls randomness (0-1)
-    ///   - onComplete: Callback with completion response
-    /// - Returns: A completion with the model's response
-    func sendChatCompletion(
-        messages: [ChatMessage],
-        model: String,
-        temperature: Double,
-        onComplete: @escaping (Result<ChatCompletionResponse, Error>) -> Void
-    )
+
 
     /// Sends a chat completion request using async/await
     /// - Parameters:
@@ -62,21 +50,7 @@ protocol OpenAIClientProtocol {
 
     // MARK: - Responses API (New)
 
-    /// Sends a request to the OpenAI Responses API
-    /// - Parameters:
-    ///   - message: The current message content
-    ///   - model: The model to use
-    ///   - temperature: Controls randomness (0-1)
-    ///   - previousResponseId: Optional ID from a previous response for conversation state
-    ///   - onComplete: Callback with the response
-    func sendResponseRequest(
-        message: String,
-        model: String,
-        temperature: Double?,
-        previousResponseId: String?,
-        schema: String?,
-        onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
-    )
+
 
     /// Sends a request to the OpenAI Responses API using async/await
     /// - Parameters:
@@ -94,22 +68,7 @@ protocol OpenAIClientProtocol {
         schema: String?
     ) async throws -> ResponsesAPIResponse
 
-    /// Sends a streaming request to the OpenAI Responses API
-    /// - Parameters:
-    ///   - message: The current message content
-    ///   - model: The model to use
-    ///   - temperature: Controls randomness (0-1)
-    ///   - previousResponseId: Optional ID from a previous response for conversation state
-    ///   - onChunk: Callback for each chunk of the streaming response
-    ///   - onComplete: Callback when streaming is complete
-    func sendResponseRequestStreaming(
-        message: String,
-        model: String,
-        temperature: Double,
-        previousResponseId: String?,
-        onChunk: @escaping (Result<ResponsesAPIStreamChunk, Error>) -> Void,
-        onComplete: @escaping (Error?) -> Void
-    )
+
 
     // MARK: - Text-to-Speech API
 

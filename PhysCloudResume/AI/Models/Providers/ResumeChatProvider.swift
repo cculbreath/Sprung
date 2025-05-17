@@ -55,15 +55,7 @@ final class ResumeChatProvider {
 
     // MARK: - Public Methods
 
-    func unloadResponse() -> [ProposedRevisionNode]? {
-        if let nodes = convertJsonToNodes(messages[0]) {
-            messages.removeFirst()
-            lastRevNodeArray = nodes
-            return nodes
-        } else {
-            return nil
-        }
-    }
+
 
     // Actor to safely coordinate continuations and prevent multiple resumes
     private actor ContinuationCoordinator {
@@ -519,19 +511,7 @@ final class ResumeChatProvider {
         }
     }
 
-    /// Send a streaming chat completion request
-    /// - Parameter messages: The message history to use for context
-    func startStreamingChat(messages: [ChatMessage]) async throws {
-        // Clear any previous error message
-        errorMessage = ""
 
-        // Fall back to non-streaming version with our abstraction layer
-        try await startChat(messages: messages)
-    }
-
-    func cancelStream() {
-        streamTask?.cancel()
-    }
 }
 
 /// Helper that allows to display the JSON Schema.

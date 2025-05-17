@@ -1,33 +1,4 @@
-/// Writes debug information to a file in the Downloads folder
-/// - Parameter content: The content to write
-private func writeDebugToFile(_ content: String) {
-    do {
-        // Get the home directory and downloads path
-        let fileManager = FileManager.default
-        let downloadsURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
-
-        // Create a unique filename with timestamp
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-        let timestamp = dateFormatter.string(from: Date())
-        let filename = "ai-prompt-cover-letter-recommendation-\(timestamp).md"
-        let fileURL = downloadsURL.appendingPathComponent(filename)
-
-        Logger.debug("[DEBUG] Writing debug info to: \(fileURL.path)")
-
-        // Make sure the Downloads directory exists
-        if !fileManager.fileExists(atPath: downloadsURL.path) {
-            Logger.debug("[DEBUG] Warning: Downloads directory doesn't exist at: \(downloadsURL.path)")
-            return
-        }
-
-        // Write to file
-        try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        Logger.debug("[DEBUG] Successfully wrote debug info to file: \(fileURL.path)")
-    } catch {
-        Logger.debug("[DEBUG] Error writing debug info to file: \(error.localizedDescription)")
-    }
-} //
+ //
 //  CoverLetterRecommendationProvider.swift
 //  PhysCloudResume
 //
@@ -104,13 +75,27 @@ final class CoverLetterRecommendationProvider {
     /// Writes debug information to a file in the Downloads folder
     /// - Parameter content: The content to write
     private func writeDebugToFile(_ content: String) {
-        // Use the Logger utility to save debug files based on global settings
+        // Only save if debug file saving is enabled in UserDefaults
+        guard UserDefaults.standard.bool(forKey: "saveDebugPrompts") else {
+            return
+        }
+        
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
         let timestamp = dateFormatter.string(from: Date())
         let filename = "cover-letter-prompt-debug-\(timestamp).txt"
         
-        Logger.saveDebugToFile(content: content, fileName: filename)
+        let fileManager = FileManager.default
+        let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
+        let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
+        let fileURL = downloadsURL.appendingPathComponent(filename)
+        
+        do {
+            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            Logger.debug("Saved debug file: \(filename)")
+        } catch {
+            Logger.warning("Failed to save debug file \(filename): \(error.localizedDescription)")
+        }
     }
 
     /// Response schema for best cover letter selection

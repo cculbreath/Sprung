@@ -10,8 +10,6 @@ import SwiftUI
 struct NodeChildrenListView: View {
     let children: [TreeNode]
 
-    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
-
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(children, id: \.id) { child in

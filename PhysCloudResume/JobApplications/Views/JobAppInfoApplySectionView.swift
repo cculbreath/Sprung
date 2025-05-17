@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct ApplySection: View {
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Binding var buttons: SaveButtons
 
     var body: some View {

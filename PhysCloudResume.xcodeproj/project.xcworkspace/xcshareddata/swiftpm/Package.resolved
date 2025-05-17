@@ -1,5 +1,5 @@
 {
-  "originHash" : "64952c21fe86132fc04c9fcba74567cf3d25e3b7aa61db2bb75a49b53e5e095e",
+  "originHash" : "befcb398331fae84f7c0df662491ea56c49343ec3cc626b26f7f9c736ed173bb",
   "pins" : [
     {
       "identity" : "openai",
@@ -16,7 +16,7 @@
       "location" : "https://github.com/cculbreath/swift-chunked-audio-player",
       "state" : {
         "branch" : "main",
-        "revision" : "590e0a12178765113f22fe1e002ba0e16dacf197"
+        "revision" : "3cb56508bddb5bc75805be3d127370646b58e997"
       }
     },
     {

@@ -342,12 +342,10 @@ class ResumeReviewService: @unchecked Sendable {
     /// Sends a request to reorder skills based on job relevance
     /// - Parameters:
     ///   - resume: The resume containing the skills
-    ///   - skillsJsonString: JSON string representation of skills
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendReorderSkillsRequest(
         resume: Resume,
-        skillsJsonString: String,
         onComplete: @escaping (Result<ReorderSkillsResponseContainer, Error>) -> Void
     ) {
         guard let jobApp = resume.jobApp else {

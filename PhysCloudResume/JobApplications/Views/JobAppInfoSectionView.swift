@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct JobAppInformationSection: View {
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @State private var isHovered: Bool = false
     @Binding var buttons: SaveButtons
 
     var body: some View {

@@ -11,20 +11,7 @@ import Foundation
 //  Extracted network export logic out of the Resume model so that the core
 //  data objects are no longer coupled to URLSession.
 
-// MARK: - Protocol
-
-/// Abstraction for turning a locally generated FRESH JSON file into a final
-/// PDF (and plain‑text) resume representation.
-protocol ResumeExportService: Sendable {
-    /// Takes the path to the JSON file that represents the resume and writes
-    /// the resulting PDF into `resume.pdfData` as well as plain text into
-    /// `resume.textRes`.
-    func export(jsonURL: URL, for resume: Resume) async throws
-}
-
-// MARK: - Default network implementation
-
-struct ApiResumeExportService: ResumeExportService {
+struct ApiResumeExportService {
     private let endpoint = URL(string: "https://resume.physicscloud.net/build-resume-file")!
     private let apiKey = "b0b307e1-6eb4-41d9-8c1f-278c254351d3" // TODO: move to secure storage
 

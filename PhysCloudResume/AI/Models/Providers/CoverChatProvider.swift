@@ -65,12 +65,7 @@ final class CoverChatProvider {
         genericMessages.append(message)
     }
 
-    /// Add a system message to the chat history
-    /// - Parameter text: The message text
-    func appendSystemMessage(_ text: String) {
-        let message = ChatMessage(role: .system, content: text)
-        genericMessages.append(message)
-    }
+
 
     /// Add an assistant message to the chat history
     /// - Parameter text: The message text

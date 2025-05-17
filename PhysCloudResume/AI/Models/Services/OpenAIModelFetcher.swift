@@ -60,8 +60,5 @@ class OpenAIModelFetcher {
         }
     }
 
-    /// Returns the model ID string for use with the OpenAI API
-    static func getModelString(_ modelId: String) -> String {
-        return modelId
-    }
+
 }

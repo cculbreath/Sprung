@@ -223,19 +223,4 @@ enum Statuses: String, Codable, CaseIterable {
         status = try container.decodeIfPresent(Statuses.self, forKey: .status) ?? .new
         resumes = []
     }
-
-    public func assignPropsFromForm(_ sourceJobAppForm: JobAppForm) {
-        jobPosition = sourceJobAppForm.jobPosition
-        jobLocation = sourceJobAppForm.jobLocation
-        companyName = sourceJobAppForm.companyName
-        companyLinkedinId = sourceJobAppForm.companyLinkedinId
-        jobPostingTime = sourceJobAppForm.jobPostingTime
-        jobDescription = sourceJobAppForm.jobDescription
-        seniorityLevel = sourceJobAppForm.seniorityLevel
-        employmentType = sourceJobAppForm.employmentType
-        jobFunction = sourceJobAppForm.jobFunction
-        industries = sourceJobAppForm.industries
-        jobApplyLink = sourceJobAppForm.jobApplyLink
-        postingURL = sourceJobAppForm.postingURL
-    }
 }

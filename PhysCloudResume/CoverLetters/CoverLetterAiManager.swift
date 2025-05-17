@@ -32,7 +32,6 @@ struct CoverLetterAiManager: View {
 
     // MARK: - State
 
-    @State var aiMode: CoverAiMode = .none
     @Binding var buttons: CoverLetterButtons
     @Binding var refresh: Bool
 

@@ -20,8 +20,6 @@ final class ResModelStore: SwiftDataStore {
 
     var resStore: ResStore
 
-    var isThereAnyJson: Bool { !resModels.isEmpty }
-
     init(context: ModelContext, resStore: ResStore) {
         modelContext = context
         self.resStore = resStore
@@ -51,15 +49,6 @@ final class ResModelStore: SwiftDataStore {
     }
 
     /// Enforces uniqueness when a `ResRef` is assigned a `modelRef`
-
-    /// Persists changes to the database
-    // `saveContext()` now in `SwiftDataStore`. Keeping throwing variant for
-    // callers that still need it.
-    private func saveContextThrows() throws {
-        if !saveContext() {
-            throw NSError(domain: "SwiftDataStore", code: 0, userInfo: nil)
-        }
-    }
 
     // `saveContext()` now in `SwiftDataStore`.
 }

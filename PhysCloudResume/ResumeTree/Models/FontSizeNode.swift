@@ -41,19 +41,4 @@ import SwiftData
         let trimmed = fontString.trimmingCharacters(in: .whitespacesAndNewlines)
         return Float(trimmed.replacingOccurrences(of: "pt", with: "").trimmingCharacters(in: .whitespaces)) ?? 10
     }
-
-    var keyToTitle: String {
-        let lowercaseWords: Set<String> = ["and", "of", "or", "the", "a", "an", "in", "on", "at", "to", "for", "but", "nor", "so", "yet", "with", "by", "as", "from", "about", "into", "over", "after", "before", "between", "under", "without", "against", "during", "upon"]
-
-        let words = key
-            .replacingOccurrences(of: "-", with: " ")
-            .split(separator: " ")
-            .enumerated()
-            .map { index, word in
-                let lowercaseWord = word.lowercased()
-                return (index == 0 || !lowercaseWords.contains(lowercaseWord)) ? lowercaseWord.capitalized : lowercaseWord
-            }
-
-        return words.joined(separator: " ")
-    }
 }

@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 574223A92DD9392200EF672C /* ChunkedAudioPlayer */; };
 		57DC4F1A2DBA3233000F1A48 /* OpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F192DBA3233000F1A48 /* OpenAI */; };
 		57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1C2DBA323F000F1A48 /* SwiftyJSON */; };
 		57DC4F202DBA324B000F1A48 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1F2DBA324B000F1A48 /* SwiftSoup */; };
 		57DC509F2DBA3B68000F1A48 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC509E2DBA3B68000F1A48 /* OrderedCollections */; };
-		57DC51F32DBA3BA7000F1A48 /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC51F22DBA3BA7000F1A48 /* ChunkedAudioPlayer */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,7 +53,7 @@
 				57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */,
 				57DC4F202DBA324B000F1A48 /* SwiftSoup in Frameworks */,
 				57DC4F1A2DBA3233000F1A48 /* OpenAI in Frameworks */,
-				57DC51F32DBA3BA7000F1A48 /* ChunkedAudioPlayer in Frameworks */,
+				574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -135,7 +135,7 @@
 				57DC4F1B2DBA323F000F1A48 /* XCRemoteSwiftPackageReference "SwiftyJSON" */,
 				57DC4F1E2DBA324B000F1A48 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				57DC509D2DBA3B68000F1A48 /* XCRemoteSwiftPackageReference "swift-collections" */,
-				57DC51F12DBA3BA7000F1A48 /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */,
+				574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
@@ -385,6 +385,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/cculbreath/swift-chunked-audio-player";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		57DC4F182DBA3233000F1A48 /* XCRemoteSwiftPackageReference "OpenAI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/MacPaw/OpenAI.git";
@@ -417,17 +425,14 @@
 				minimumVersion = 1.1.4;
 			};
 		};
-		57DC51F12DBA3BA7000F1A48 /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/cculbreath/swift-chunked-audio-player";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		574223A92DD9392200EF672C /* ChunkedAudioPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */;
+			productName = ChunkedAudioPlayer;
+		};
 		57DC4F192DBA3233000F1A48 /* OpenAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 57DC4F182DBA3233000F1A48 /* XCRemoteSwiftPackageReference "OpenAI" */;
@@ -447,11 +452,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 57DC509D2DBA3B68000F1A48 /* XCRemoteSwiftPackageReference "swift-collections" */;
 			productName = OrderedCollections;
-		};
-		57DC51F22DBA3BA7000F1A48 /* ChunkedAudioPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 57DC51F12DBA3BA7000F1A48 /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */;
-			productName = ChunkedAudioPlayer;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
