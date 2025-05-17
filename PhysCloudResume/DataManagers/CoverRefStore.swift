@@ -26,14 +26,6 @@ final class CoverRefStore: SwiftDataStore {
         // No JSON import – SwiftData is the single source of truth.
     }
 
-    var backgroundFacts: [CoverRef] {
-        return storedCoverRefs.filter { $0.type == .backgroundFact }
-    }
-
-    var writingSamples: [CoverRef] {
-        return storedCoverRefs.filter { $0.type == .writingSample }
-    }
-
     @discardableResult
     func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
         modelContext.insert(coverRef)

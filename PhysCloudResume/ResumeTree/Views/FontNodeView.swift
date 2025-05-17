@@ -15,8 +15,6 @@ struct FontNodeView: View {
 
     // State variables for editing and hover actions.
     @State private var isEditing: Bool = false
-    @State private var tempValue: String = ""
-    @State private var tempName: String = ""
 
     var body: some View {
         Stepper {

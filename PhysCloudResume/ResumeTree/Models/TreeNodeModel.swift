@@ -78,8 +78,6 @@ enum LeafStatus: String, Codable, Hashable {
         return child
     }
 
-    var growDepth: Bool { depth > 2 }
-
     static func traverseAndExportNodes(node: TreeNode, currentPath _: String = "")
         -> [[String: Any]]
     {
@@ -123,38 +121,6 @@ enum LeafStatus: String, Codable, Hashable {
         return result
     }
 
-    static func updateValues(from jsonFileURL: URL, using context: ModelContext) throws {
-        let jsonData = try Data(contentsOf: jsonFileURL)
-        guard let jsonArray = try JSONSerialization.jsonObject(
-            with: jsonData, options: []
-        ) as? [[String: String]] else {
-            Logger.debug("Failed to parse JSON or JSON is not an array of dictionaries.")
-            return
-        }
-
-        for jsonObject in jsonArray {
-            if let id = jsonObject["id"], let newValue = jsonObject["value"], let isTitleNodeString = jsonObject["isTitleNode"],
-               let isTitleNode = Bool(isTitleNodeString)
-            {
-                let fetchRequest = FetchDescriptor<TreeNode>(
-                    predicate: #Predicate { $0.id == id }
-                )
-                if let node = try context.fetch(fetchRequest).first {
-                    if isTitleNode {
-                        node.name = newValue
-                    } else {
-                        node.value = newValue
-                    }
-                } else {
-                    Logger.debug("TreeNode with ID \(id) not found.")
-                }
-            } else {
-                Logger.debug("Skipping invalid JSON object: \(jsonObject)")
-            }
-        }
-        try context.save()
-    }
-
     static func deleteTreeNode(node: TreeNode, context: ModelContext) {
         for child in node.children ?? [] {
             deleteTreeNode(node: child, context: context)
@@ -168,27 +134,6 @@ enum LeafStatus: String, Codable, Hashable {
         } catch {
             Logger.debug("Failed to save context after deleting TreeNode: \(error)")
         }
-    }
-
-    func deepCopy(newResume: Resume) -> TreeNode {
-        let copyNode = TreeNode(
-            name: name,
-            value: value,
-            parent: nil,
-            inEditor: includeInEditor,
-            status: status,
-            resume: newResume,
-            isTitleNode: isTitleNode // Copy isTitleNode
-        )
-        copyNode.myIndex = myIndex
-
-        if let children = children {
-            for child in children {
-                let childCopy = child.deepCopy(newResume: newResume)
-                copyNode.addChild(childCopy)
-            }
-        }
-        return copyNode
     }
 
     /// Builds the hierarchical path string for this node.

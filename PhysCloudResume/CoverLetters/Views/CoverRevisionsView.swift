@@ -27,7 +27,6 @@ struct RevisionsViewContent: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @State var tempMode: CoverLetterPrompts.EditorPrompts = .zissner
-    @State var aiMode: CoverAiMode = .none
     @State private var customFeedback: String = ""
     @Binding var buttons: CoverLetterButtons
     let openAIClient: OpenAIClientProtocol

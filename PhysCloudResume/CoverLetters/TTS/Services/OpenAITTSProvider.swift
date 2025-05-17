@@ -49,8 +49,6 @@ class OpenAITTSProvider {
     /// The OpenAI client to use for TTS
     ///
     private let client: OpenAIClientProtocol
-    /// Logger for debugging TTS memory issues
-    private static let logger = Logger()
 
     /// Token that identifies the currently active streaming request.
     private var currentStreamID: UUID?
@@ -65,13 +63,8 @@ class OpenAITTSProvider {
     private let streamTimeout: TimeInterval = 30.0
     /// Strong reference so the delegate isn't deallocated immediately
     private var audioPlayerDelegate: AudioPlayerDelegate?
-    /// Tracks if the current streaming has been cancelled to ignore further chunks
-    private var cancelRequested: Bool = false
-    /// Unique identifier for the active streaming session
-    private var streamToken: UUID?
     /// Tracks if we're currently buffering audio
     private var isBufferingFlag: Bool = false
-
     /// Tracks if we're in streaming setup phase to prevent premature callbacks
     private var isInStreamSetup: Bool = false
 
@@ -89,11 +82,6 @@ class OpenAITTSProvider {
 
     // Adapter-based streaming player using ChunkedAudioPlayer
     private let streamer = TTSAudioStreamer()
-
-    /// Returns the current buffering state
-    var isBuffering: Bool {
-        return isBufferingFlag
-    }
 
     /// Set the buffering state and notify listeners
     private func setBufferingState(_ buffering: Bool) {
@@ -145,18 +133,7 @@ class OpenAITTSProvider {
         }
     }
 
-    /// Initializes a new TTS provider with a pre-configured client
-    /// - Parameter client: The OpenAI client to use
-    init(client: OpenAIClientProtocol) {
-        self.client = client
 
-        // Connect streamer buffering state to our provider
-        streamer.onBufferingStateChanged = { [weak self] isBuffering in
-            self?.setBufferingState(isBuffering)
-        }
-
-        Logger.debug("OpenAITTSProvider initialized with custom client")
-    }
 
     /// Clear all callback references to break reference cycles
     private func clearCallbacks() {
@@ -225,35 +202,7 @@ class OpenAITTSProvider {
         )
     }
 
-    /// Converts text to speech with streaming
-    /// - Parameters:
-    ///   - text: The text to convert to speech
-    ///   - voice: The voice to use
-    ///   - instructions: Custom voice instructions (optional)
-    ///   - onChunk: Called for each received audio chunk
-    ///   - onComplete: Called when streaming is complete
-    func streamText(_ text: String, voice: Voice = .nova, instructions: String? = nil, onChunk: @escaping (Data) -> Void, onComplete: @escaping (Error?) -> Void) {
-        // Reset cancellation for this new streaming session
-        cancelRequested = false
-        // Call the client with the voice and instructions
-        client.sendTTSStreamingRequest(
-            text: text,
-            voice: voice.rawValue,
-            instructions: instructions,
-            onChunk: { result in
-                switch result {
-                case let .success(audioData):
-                    // Only forward chunks if not cancelled
-                    if !self.cancelRequested {
-                        onChunk(audioData)
-                    }
-                case .failure:
-                    if !self.cancelRequested { Logger.debug("failure") }
-                }
-            },
-            onComplete: onComplete
-        )
-    }
+
 
     /// Stops the currently playing speech and cancels any ongoing streaming
     func stopSpeaking() {
@@ -338,13 +287,7 @@ class OpenAITTSProvider {
         }
     }
 
-    /// Plays raw audio data (e.g., after streaming)
-    /// - Parameters:
-    ///   - audioData: The full audio data to play
-    ///   - onComplete: Called when playback is complete or fails
-    func playAudioData(_ audioData: Data, onComplete: @escaping (Error?) -> Void) {
-        playAudio(audioData, onComplete: onComplete)
-    }
+
 
     // MARK: – Streaming playback (incremental)
 
@@ -517,14 +460,7 @@ class OpenAITTSProvider {
         return false
     }
 
-    /// Stop completely (alias for previous `stopSpeaking()`).
-    func stop() {
-        // Clear the setup flag as this is a user-explicit stop
-        isInStreamSetup = false
-        Logger.debug("Explicit stop called")
-        stopSpeaking()
-        onFinish?()
-    }
+
 }
 
 // swift-format-enable: all

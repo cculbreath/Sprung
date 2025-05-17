@@ -23,8 +23,6 @@ struct AlignedTextRow: View {
     let trailingText: String?
     let nodeStatus: LeafStatus
 
-    @State private var isHovering: Bool = false
-
     var body: some View {
         let indent: CGFloat = 100.0
         HStack {

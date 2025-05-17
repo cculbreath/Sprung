@@ -9,7 +9,6 @@ import SwiftUI
 
 struct CoverLetterView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
 
     @Binding var buttons: CoverLetterButtons
@@ -70,7 +69,6 @@ enum InspectorTab {
 }
 
 struct CoverLetterContentView: View {
-    @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Bindable var jobApp: JobApp

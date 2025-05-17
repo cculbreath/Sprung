@@ -11,8 +11,6 @@ import SwiftUI
 struct ReviewView: View {
     @State private var showExitConfirmation = false
     @State private var eventMonitor: Any? = nil
-    @Environment(ResStore.self) private var resStore
-    @Environment(\.modelContext) private var modelContext
     @Binding var revisionArray: [ProposedRevisionNode]
     @Binding var feedbackArray: [FeedbackNode]
     @State private var feedbackIndex: Int = 0
@@ -513,10 +511,5 @@ struct ReviewView: View {
         }
     }
 
-    func fetchModelByID(id: String) -> TreeNode? {
-        var descriptor = FetchDescriptor<TreeNode>()
-        descriptor.predicate = #Predicate { $0.id == id }
-        descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
-    }
+
 }

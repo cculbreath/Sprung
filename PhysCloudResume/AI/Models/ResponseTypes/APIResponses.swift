@@ -18,22 +18,9 @@ struct ResponsesAPIResponse: Codable, Equatable {
     let content: String
     /// The model used for the response
     let model: String
-
-    /// Converts to a ChatCompletionResponse for backward compatibility
-    func toChatCompletionResponse() -> ChatCompletionResponse {
-        return ChatCompletionResponse(content: content, model: model, id: id)
-    }
 }
 
-/// A chunk from a streaming Responses API request
-struct ResponsesAPIStreamChunk: Codable, Equatable {
-    /// The ID of the response (only present in the final chunk)
-    let id: String?
-    /// The content of the chunk
-    let content: String
-    /// The model used for the response
-    let model: String
-}
+
 
 /// Wrapper for decoding responses from the OpenAI API
 struct ResponsesAPIResponseWrapper: Codable {

@@ -160,6 +160,5 @@ extension OverflowSchemas {
     }
     """
     
-    // Original schema for container object (keeping for backward compatibility)
-    static let reorderSkillsSchemaString = reorderSkillsArraySchemaString
+
 }

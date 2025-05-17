@@ -24,16 +24,7 @@ struct ProposedRevisionNode: Codable, Equatable {
     // `value` has been removed. `treePath` is retained so the model can
     // provide a hierarchical hint when an ID match is ambiguous.
 
-    // Custom initializer for creating nodes programmatically
-    init(id: String = "", oldValue: String = "", newValue: String = "", valueChanged: Bool = false, isTitleNode: Bool = false, why: String = "", treePath: String = "") {
-        self.id = id
-        self.oldValue = oldValue
-        self.newValue = newValue
-        self.valueChanged = valueChanged
-        self.isTitleNode = isTitleNode
-        self.why = why
-        self.treePath = treePath
-    }
+
 
     enum CodingKeys: String, CodingKey {
         case id

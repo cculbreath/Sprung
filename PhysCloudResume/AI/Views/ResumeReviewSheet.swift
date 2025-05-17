@@ -9,7 +9,6 @@ import Foundation
 
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext // For finding TreeNodes
 
     @Binding var selectedResume: Resume?
     // Use the existing reviewService, it now has the new methods
@@ -561,10 +560,10 @@ struct ResumeReviewSheet: View {
         let reorderResult: Result<ReorderSkillsResponseContainer, Error> = await withCheckedContinuation { continuation in
             reviewService.sendReorderSkillsRequest(
                 resume: resume,
-                skillsJsonString: skillsJson
-            ) { result in
-                continuation.resume(returning: result)
-            }
+                onComplete: { result in
+                    continuation.resume(returning: result)
+                }
+            )
         }
 
         // Handle LLM response

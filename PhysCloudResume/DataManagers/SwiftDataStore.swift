@@ -36,14 +36,4 @@ extension SwiftDataStore {
             return false
         }
     }
-
-    /// Inserts the entity into the context *and* persists immediately.  The
-    /// helper keeps call‑sites short and frees them from having to remember to
-    /// call `saveContext()` manually.
-    @discardableResult
-    func persist<T: PersistentModel>(_ entity: T) -> T {
-        modelContext.insert(entity)
-        _ = saveContext()
-        return entity
-    }
 }

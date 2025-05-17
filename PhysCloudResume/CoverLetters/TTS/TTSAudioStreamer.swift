@@ -17,9 +17,6 @@ import os.log // For system logging
 final class TTSAudioStreamer {
     // MARK: - Properties
 
-    /// Logger for debugging TTS memory issues
-    private static let logger = Logger()
-
     /// Audio file type hint (e.g. MP3)
     private let fileType: AudioFileTypeID = kAudioFileMP3Type
 
@@ -104,11 +101,6 @@ final class TTSAudioStreamer {
     var onBufferingStateChanged: ((Bool) -> Void)?
 
     // MARK: - Computed Properties
-
-    /// Returns the current buffering state
-    var isBuffering: Bool {
-        return isBufferingFlag
-    }
 
     // MARK: - Initialization
 
@@ -336,18 +328,6 @@ final class TTSAudioStreamer {
 
     // MARK: - Debug
 
-    /// Returns the current state as a string for debugging
-    func currentStateDescription() -> String {
-        if isBufferingFlag {
-            return "Buffering"
-        } else if isPausedFlag {
-            return "Paused"
-        } else if continuation != nil {
-            return "Playing"
-        } else {
-            return "Idle"
-        }
-    }
 }
 
 // swift-format-enable: all

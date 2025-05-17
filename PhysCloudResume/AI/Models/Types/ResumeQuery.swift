@@ -76,7 +76,6 @@ import SwiftUI
     // Make this var instead of let so it can be updated
     var applicant: Applicant
     var queryString: String = ""
-    let attentionGrab: Int = 2
     let res: Resume
 
     // MARK: - Derived Properties
@@ -122,36 +121,31 @@ import SwiftUI
 
     // MARK: - Initialization
 
-    @MainActor
     init(resume: Resume, saveDebugPrompt: Bool = true) {
         // Optionally let users pass in the debug flag during initialization
         res = resume
-        applicant = Applicant() // Uses the custom applicant profile
+        
+        // Create a complete applicant profile with default values to avoid @MainActor issues
+        let profile = ApplicantProfile() // Uses default values from ApplicantProfile init
+        applicant = Applicant(
+            name: profile.name,
+            address: profile.address,
+            city: profile.city,
+            state: profile.state,
+            zip: profile.zip,
+            websites: profile.websites,
+            email: profile.email,
+            phone: profile.phone
+        )
         self.saveDebugPrompt = saveDebugPrompt
 
         // Debug: print JSON block that will be supplied to the LLM so we can verify content
-    var loggerString = "▶️ updatableFieldsString JSON sent to LLM:\n"
+        var loggerString = "▶️ updatableFieldsString JSON sent to LLM:\n"
         loggerString += updatableFieldsString
         Logger.debug(loggerString)
     }
 
-    // Secondary initializer that creates a non-MainActor placeholder applicant
-    init(resume: Resume, applicantProfile: ApplicantProfile, saveDebugPrompt: Bool = false) {
-        res = resume
-        // Create a basic applicant without using the MainActor-isolated initializer
-        // This is safe because we're just creating a data container with the provided values
-        applicant = Applicant(
-            name: applicantProfile.name,
-            address: applicantProfile.address,
-            city: applicantProfile.city,
-            state: applicantProfile.state,
-            zip: applicantProfile.zip,
-            websites: applicantProfile.websites,
-            email: applicantProfile.email,
-            phone: applicantProfile.phone
-        )
-        self.saveDebugPrompt = saveDebugPrompt
-    }
+
 
     // Method to update the applicant data later
     func updateApplicant(_ newApplicant: Applicant) {

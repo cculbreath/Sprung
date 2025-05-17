@@ -99,11 +99,6 @@ class Resume: Identifiable, Hashable {
         self.enabledSources = enabledSources
     }
 
-    @MainActor
-    func generateQuery() async -> ResumeApiQuery {
-        return ResumeApiQuery(resume: self)
-    }
-
     func generateQuery() -> ResumeApiQuery {
         // Instead of using an empty profile and updating it later asynchronously,
         // create a complete profile with default values so that the query has valid data
@@ -119,7 +114,7 @@ class Resume: Identifiable, Hashable {
             email: profile.email,
             phone: profile.phone
         )
-        let query = ResumeApiQuery(resume: self, applicantProfile: profile)
+        let query = ResumeApiQuery(resume: self)
         query.updateApplicant(applicant)
         return query
     }

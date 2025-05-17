@@ -40,33 +40,4 @@ class CoverLetterRecommendationService {
         // Fetch the recommendation from the provider
         return try await provider.fetchBestCoverLetter()
     }
-
-    /// Returns an analysis of a single cover letter's strengths and weaknesses
-    /// - Parameters:
-    ///   - coverLetter: The cover letter to analyze
-    ///   - jobApp: The associated job application for context
-    /// - Returns: A detailed analysis of the cover letter
-    func analyzeCoverLetter(coverLetter _: CoverLetter, jobApp _: JobApp) async throws -> CoverLetterAnalysis {
-        // This is a placeholder for potential future expansion
-        // You would implement a similar pattern to the chooseBestCoverLetter method
-
-        // For now we'll throw a not implemented error
-        throw NSError(
-            domain: "CoverLetterRecommendationService",
-            code: 501,
-            userInfo: [NSLocalizedDescriptionKey: "Cover letter analysis not yet implemented"]
-        )
-    }
-}
-
-/// Represents an analysis of a cover letter's strengths and weaknesses
-struct CoverLetterAnalysis {
-    /// Overall rating of the cover letter (1-10)
-    let rating: Int
-    /// Description of the cover letter's strengths
-    let strengths: String
-    /// Description of the cover letter's weaknesses
-    let weaknesses: String
-    /// Suggestions for improvement
-    let suggestions: String
 }

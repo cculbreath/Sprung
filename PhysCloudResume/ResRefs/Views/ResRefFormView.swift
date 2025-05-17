@@ -16,8 +16,6 @@ struct ResRefFormView: View {
 
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
 
-    @FocusState private var isFocused: Bool
-
     var existingResRef: ResRef? = nil
 
     init(isSheetPresented: Binding<Bool>, existingResRef: ResRef? = nil) {

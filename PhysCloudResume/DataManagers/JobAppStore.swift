@@ -108,7 +108,19 @@ final class JobAppStore: SwiftDataStore {
         guard let jobAppToSave = jobAppToSave else {
             fatalError("No job application available to save.")
         }
-        jobAppToSave.assignPropsFromForm(form)
+        // Directly assign properties from form
+        jobAppToSave.jobPosition = form.jobPosition
+        jobAppToSave.jobLocation = form.jobLocation
+        jobAppToSave.companyName = form.companyName
+        jobAppToSave.companyLinkedinId = form.companyLinkedinId
+        jobAppToSave.jobPostingTime = form.jobPostingTime
+        jobAppToSave.jobDescription = form.jobDescription
+        jobAppToSave.seniorityLevel = form.seniorityLevel
+        jobAppToSave.employmentType = form.employmentType
+        jobAppToSave.jobFunction = form.jobFunction
+        jobAppToSave.industries = form.industries
+        jobAppToSave.jobApplyLink = form.jobApplyLink
+        jobAppToSave.postingURL = form.postingURL
 //    saveContext()
     }
 

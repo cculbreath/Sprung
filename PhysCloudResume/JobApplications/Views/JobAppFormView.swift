@@ -19,7 +19,6 @@ import SwiftUI
 // }
 
 struct JobAppPostingDetailsSection: View {
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore // Explicit type
     @Binding var buttons: SaveButtons
 
     var body: some View {

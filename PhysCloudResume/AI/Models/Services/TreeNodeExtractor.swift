@@ -182,15 +182,6 @@ class TreeNodeExtractor {
         }
     }
     
-    /// Finds a tree node by its ID
-    /// - Parameters:
-    ///   - id: The ID of the node to find
-    ///   - resume: The resume containing the nodes
-    /// - Returns: The TreeNode if found, nil otherwise
-    func findTreeNode(byId id: String, in resume: Resume) -> TreeNode? {
-        return resume.nodes.first { $0.id == id }
-    }
-    
     /// Applies the reordering of skills from the LLM response
     /// - Parameters:
     ///   - resume: The resume to update

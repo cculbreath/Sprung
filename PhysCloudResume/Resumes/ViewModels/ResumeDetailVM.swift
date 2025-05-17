@@ -75,14 +75,6 @@ final class ResumeDetailVM {
         parent.addChild(newNode)
     }
 
-    /// Persists the current tree structure back to the database and triggers
-    /// a PDF refresh.
-    func saveTree() {
-        if let root = resume.rootNode {
-            resStore.updateResumeTree(resume: resume, rootNode: root)
-        }
-    }
-
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
     func refreshPDF() { resume.debounceExport() }
 

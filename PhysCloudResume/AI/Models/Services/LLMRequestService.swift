@@ -204,7 +204,7 @@ class LLMRequestService: @unchecked Sendable {
         }
 
         var requestBodyDict: [String: Any] = [
-            "model": OpenAIModelFetcher.getPreferredModelString(),
+            "model": modelString,
             "input": [
                 ["role": "system", "content": "You are an expert AI assistant."],
                 ["role": "user", "content": userInputContent],

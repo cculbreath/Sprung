@@ -24,15 +24,6 @@ class FileHandler {
         return appSupportDirectory
     }()
 
-    static func readJsonUrl(filename: String = "resume-data.json") -> URL? {
-        let path = appSupportDirectory.appendingPathComponent(filename)
-        if FileManager.default.fileExists(atPath: path.path) {
-            return path
-        } else {
-            return nil
-        }
-    }
-
     static func jsonUrl(filename: String = "resume-data.json") -> URL {
         return appSupportDirectory.appendingPathComponent(filename)
     }

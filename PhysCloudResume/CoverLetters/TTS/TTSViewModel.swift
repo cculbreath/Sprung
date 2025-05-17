@@ -18,9 +18,6 @@ import os.log
 class TTSViewModel {
     // MARK: - Properties
 
-    /// Logger for debugging TTS memory issues
-    private static let logger = Logger()
-
     /// Whether audio is currently playing
     var isSpeaking: Bool = false
 

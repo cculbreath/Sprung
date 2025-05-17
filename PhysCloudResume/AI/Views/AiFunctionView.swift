@@ -9,9 +9,6 @@ import SwiftUI
 
 struct AiFunctionView: View {
     @Binding var res: Resume?
-    @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
-    @AppStorage("geminiApiKey") var geminiApiKey: String = "none"
-    @AppStorage("preferredLLMModel") var preferredLLMModel: String = AIModels.gpt4o
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
     

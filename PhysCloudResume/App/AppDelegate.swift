@@ -33,36 +33,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // We no longer add a separate Profile main menu to avoid duplication
     }
 
-    private func addProfileMainMenu() {
-        // Add a top-level Profile menu
-        guard let mainMenu = NSApp.mainMenu else {
-            return
-        }
-
-        // Create new Profile menu
-        let profileMenu = NSMenu(title: "Profile")
-        let profileMenuItem = NSMenuItem(title: "Profile", action: nil, keyEquivalent: "")
-        profileMenuItem.submenu = profileMenu
-
-        // Add items to the menu
-        let applicantMenuItem = NSMenuItem(
-            title: "Applicant Profile...",
-            action: #selector(showApplicantProfileWindow),
-            keyEquivalent: "P"
-        )
-        applicantMenuItem.keyEquivalentModifierMask = [.command, .shift]
-        applicantMenuItem.target = self
-        profileMenu.addItem(applicantMenuItem)
-
-        // Insert between Edit and View menus
-        let insertPosition = 2 // Typically after Edit menu
-        if mainMenu.numberOfItems > insertPosition {
-            mainMenu.insertItem(profileMenuItem, at: insertPosition)
-        } else {
-            mainMenu.addItem(profileMenuItem)
-        }
-    }
-
     private func setupAppMenu() {
         guard let mainMenu = NSApp.mainMenu else {
             return

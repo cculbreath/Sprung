@@ -13,7 +13,7 @@ class JsonToTree {
     var json: OrderedDictionary<String, Any>
     private var treeKeys: [String] = []
     /// Supplies monotonically increasing indexes during this tree build.
-    private let indexProvider = IndexProvider()
+    private var indexCounter: Int = 0
 
     init?(resume: Resume, rawJson: String) {
         res = resume
@@ -105,7 +105,8 @@ class JsonToTree {
         var nodes: [FontSizeNode] = []
         for (myKey, myValue) in fontArray {
             let fontString = myValue as? String ?? ""
-            let idx = indexProvider.make()
+            let idx = indexCounter
+            indexCounter += 1
             let node = FontSizeNode(key: myKey, index: idx, fontString: fontString)
             nodes.append(node)
         }
