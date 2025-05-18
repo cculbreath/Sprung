@@ -100,7 +100,8 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         let configuration = OpenAI.Configuration(
             token: apiKey,
             organizationIdentifier: nil,
-            timeoutInterval: 900.0 // 15 minutes (increased from 5 minutes for reasoning models)
+            timeoutInterval: 900.0, // 15 minutes (increased from 5 minutes for reasoning models)
+            customHeaders: [:]
         )
         client = OpenAI(configuration: configuration)
     }
@@ -109,24 +110,15 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     /// - Parameter customConfig: Our custom configuration
     /// - Returns: OpenAI.Configuration that can be used with the MacPaw SDK
     private static func convertToOpenAIConfiguration(_ customConfig: OpenAIConfiguration) -> OpenAI.Configuration {
-        // Convert parsing options
-        var openAIParsingOptions: OpenAI.Configuration.ParsingOptions = []
-        switch customConfig.parsingOptions {
-        case .fillRequiredFieldIfKeyNotFound:
-            openAIParsingOptions = .fillRequiredFieldIfKeyNotFound
-        case .standard:
-            openAIParsingOptions = []
-        }
-        
-        // Create OpenAI.Configuration with converted values
+        // Create a basic OpenAI configuration without parsing options
+        // Note: Parsing options may not be available in all versions of the OpenAI SDK
         return OpenAI.Configuration(
             token: customConfig.token,
             organizationIdentifier: customConfig.organizationIdentifier,
             host: customConfig.host,
             basePath: customConfig.basePath,
-            customHeaders: customConfig.customHeaders,
             timeoutInterval: customConfig.timeoutInterval,
-            parsingOptions: openAIParsingOptions
+            customHeaders: customConfig.customHeaders
         )
     }
     
@@ -617,8 +609,8 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
     }
 
     /// Wrapper for schema dictionary to make it Sendable
-    struct StructuredSchemaDict: Codable, Sendable {
-        let dict: [String: Any]
+    struct StructuredSchemaDict: Codable {
+        nonisolated(unsafe) let dict: [String: Any]
         
         enum CodingKeys: String, CodingKey {
             case dict

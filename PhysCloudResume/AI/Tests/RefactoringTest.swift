@@ -51,6 +51,18 @@ class RefactoringTest {
 class MockOpenAIClient: OpenAIClientProtocol {
     var apiKey: String = "test-key"
     
+    /// Initialize with custom configuration
+    /// - Parameter configuration: The configuration to use
+    required init(configuration: OpenAIConfiguration) {
+        apiKey = configuration.token ?? "test-key"
+    }
+    
+    /// Initialize with API key (convenience initializer)
+    /// - Parameter apiKey: The API key to use
+    required init(apiKey: String) {
+        self.apiKey = apiKey
+    }
+    
     func sendChatCompletionAsync(
         messages: [ChatMessage],
         model: String,

@@ -9,8 +9,6 @@ import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-import OpenAI
-import SwiftUI
 
 @Observable class JobRecommendationProvider {
     // MARK: - Properties
@@ -60,7 +58,7 @@ import SwiftUI
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
         
         // Create configuration with relaxed parsing to handle null system_fingerprint
-        let configuration = OpenAI.Configuration(token: apiKey, parsingOptions: .fillRequiredFieldIfKeyNotFound)
+        let configuration = OpenAIConfiguration.relaxedParsing(token: apiKey)
         
         // Create client using our factory with relaxed configuration
         openAIClient = OpenAIClientFactory.createClient(configuration: configuration)
