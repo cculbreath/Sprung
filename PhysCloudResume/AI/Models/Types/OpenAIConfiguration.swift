@@ -15,17 +15,6 @@ public enum OpenAIParsingOptions {
     /// Standard parsing without fallbacks
     case standard
     
-    /// Internal method to convert to OpenAI SDK parsing options
-    /// This should only be used by client implementations that wrap the OpenAI SDK
-    internal var openAIParsingOptions: Any {
-        // This will be used by MacPawOpenAIClient to convert to actual OpenAI parsing options
-        switch self {
-        case .fillRequiredFieldIfKeyNotFound:
-            return "fillRequiredFieldIfKeyNotFound" // String identifier that the client will map
-        case .standard:
-            return "standard"
-        }
-    }
 }
 
 /// Custom configuration for OpenAI clients

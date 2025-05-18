@@ -78,12 +78,6 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         client = OpenAI(configuration: openAIConfig)
     }
 
-    /// Initializes a new client with the given OpenAI SDK configuration (legacy support)
-    /// - Parameter configuration: The OpenAI SDK configuration to use for requests
-    init(openAIConfiguration: OpenAI.Configuration) {
-        apiKeyValue = openAIConfiguration.token ?? "none"
-        client = OpenAI(configuration: openAIConfiguration)
-    }
 
     /// Initializes a new client with the given API key
     /// - Parameter apiKey: The API key to use for requests
@@ -122,10 +116,6 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         )
     }
     
-    /// Exposes the internal OpenAI client instance for direct access
-    var openAIClient: OpenAI {
-        return client
-    }
     
     /// Sends a chat completion request with structured output using async/await
     /// - Parameters:
@@ -193,6 +183,7 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
 
 
+    
     /// Sends a chat completion request using async/await
     /// - Parameters:
     ///   - messages: The conversation history
@@ -208,7 +199,6 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         let chatMessages = messages.compactMap { convertMessage($0) }
 
         // Create the query with the converted messages
-        // We can directly use the model string since the ChatQuery init accepts any string value
         let query = ChatQuery(
             messages: chatMessages,
             model: model,
@@ -236,52 +226,6 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         } catch {
             // Rethrow any errors from the API call
             throw error
-        }
-    }
-
-    /// Sends a chat completion request with streaming
-    /// - Parameters:
-    ///   - messages: The conversation history
-    ///   - model: The model to use for completion
-    ///   - temperature: Controls randomness (0-1)
-    ///   - onChunk: Callback for each chunk of the streaming response
-    ///   - onComplete: Callback when streaming is complete
-    func sendChatCompletionStreaming(
-        messages: [ChatMessage],
-        model: String,
-        temperature: Double,
-        onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
-        onComplete: @escaping (Error?) -> Void
-    ) {
-        // Convert our messages to MacPaw's format
-        let chatMessages = messages.compactMap { convertMessage($0) }
-
-        // Create streamable query with the converted messages
-        // We can directly use the model string since the ChatQuery init accepts any string value
-        var query = ChatQuery(
-            messages: chatMessages,
-            model: model,
-            temperature: temperature
-        )
-        query.stream = true
-
-        // Start the streaming request
-        _ = client.chatsStream(query: query) { chunkResult in
-            switch chunkResult {
-            case let .success(streamResult):
-                // Map the stream chunk to our response format
-                if let choice = streamResult.choices.first, let content = choice.delta.content {
-                    let response = ChatCompletionResponse(
-                        content: content,
-                        model: model
-                    )
-                    onChunk(.success(response))
-                }
-            case let .failure(error):
-                onChunk(.failure(error))
-            }
-        } completion: { error in
-            onComplete(error)
         }
     }
 

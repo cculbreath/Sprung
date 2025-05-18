@@ -144,29 +144,37 @@ class ApplicationReviewService: @unchecked Sendable {
             return
         }
 
-        // Build messages and stream via client
+        // Build messages and send via client (async/await)
         let requestID = UUID(); currentRequestID = requestID
         let messages: [ChatMessage] = [
             ChatMessage(role: .system, content: "You are an expert recruiter reviewing job application packets."),
             ChatMessage(role: .user, content: prompt),
         ]
 
-        client.sendChatCompletionStreaming(
-            messages: messages,
-            model: AIModels.gpt4o,
-            temperature: 0.7,
-            onChunk: { [weak self] result in
-                guard let self = self, self.currentRequestID == requestID else { return }
-                switch result {
-                case let .success(resp): onProgress(resp.content)
-                case let .failure(err): onComplete(.failure(err))
-                }
-            },
-            onComplete: { [weak self] error in
-                guard let self = self, self.currentRequestID == requestID else { return }
-                if let e = error { onComplete(.failure(e)) } else { onComplete(.success("Done")) }
+        Task {
+            do {
+                // Check if request is still current before proceeding
+                guard self.currentRequestID == requestID else { return }
+                
+                let response = try await client.sendChatCompletionAsync(
+                    messages: messages,
+                    model: AIModels.gpt4o,
+                    temperature: 0.7
+                )
+                
+                // Check again if request is still current before calling callbacks
+                guard self.currentRequestID == requestID else { return }
+                
+                // Send the complete response as progress (simulates streaming effect)
+                onProgress(response.content)
+                onComplete(.success("Done"))
+                
+            } catch {
+                // Check if request is still current before reporting error
+                guard self.currentRequestID == requestID else { return }
+                onComplete(.failure(error))
             }
-        )
+        }
     }
 
     // Raw image-request (non-streaming)

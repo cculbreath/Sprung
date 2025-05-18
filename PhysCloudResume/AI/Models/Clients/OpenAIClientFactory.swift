@@ -20,12 +20,6 @@ class OpenAIClientFactory {
         return SystemFingerprintFixClient(configuration: configuration)
     }
 
-    /// Creates an OpenAI client with the given OpenAI SDK configuration (legacy support)
-    /// - Parameter configuration: The OpenAI SDK configuration to use for client setup
-    /// - Returns: An instance conforming to OpenAIClientProtocol
-    static func createClient(openAIConfiguration: OpenAI.Configuration) -> OpenAIClientProtocol {
-        return SystemFingerprintFixClient(openAIConfiguration: openAIConfiguration)
-    }
 
     /// Creates an OpenAI client with the given API key
     /// - Parameter apiKey: The API key to use for requests

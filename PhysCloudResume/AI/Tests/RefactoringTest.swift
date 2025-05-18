@@ -29,9 +29,8 @@ class RefactoringTest {
         // Create a RevisionsContainer - this should not require OpenAI import
         let container = RevisionsContainer(revArray: [])
         
-        // Verify it conforms to StructuredOutput
-        let example = RevisionsContainer.example
-        assert(example.revArray.isEmpty)
+        // Verify basic functionality
+        assert(container.revArray.isEmpty)
         
         // Test encoding/decoding
         do {
@@ -63,24 +62,17 @@ class MockOpenAIClient: OpenAIClientProtocol {
         self.apiKey = apiKey
     }
     
+    /// Convenience initializer for testing
+    convenience init() {
+        self.init(apiKey: "test-key")
+    }
+    
     func sendChatCompletionAsync(
         messages: [ChatMessage],
         model: String,
         temperature: Double
     ) async throws -> ChatCompletionResponse {
         return ChatCompletionResponse(content: "Mock response", model: model)
-    }
-    
-    func sendChatCompletionStreaming(
-        messages: [ChatMessage],
-        model: String,
-        temperature: Double,
-        onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
-        onComplete: @escaping (Error?) -> Void
-    ) {
-        // Mock implementation
-        onChunk(.success(ChatCompletionResponse(content: "Mock chunk", model: model)))
-        onComplete(nil)
     }
     
     func sendChatCompletionWithStructuredOutput<T: StructuredOutput>(
