@@ -15,6 +15,16 @@ import SwiftUI
 protocol OpenAIClientProtocol {
     /// The API key to use for requests
     var apiKey: String { get }
+    
+    // MARK: - Initializers
+    
+    /// Initialize with custom configuration
+    /// - Parameter configuration: The configuration to use
+    init(configuration: OpenAIConfiguration)
+    
+    /// Initialize with API key (convenience initializer)
+    /// - Parameter apiKey: The API key to use
+    init(apiKey: String)
 
     // MARK: - Chat Completion API (Legacy)
 
