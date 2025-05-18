@@ -9,7 +9,6 @@ import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-import OpenAI
 import SwiftData
 
 struct ProposedRevisionNode: Codable, Equatable {

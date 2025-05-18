@@ -100,25 +100,68 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         return client
     }
     
-    /// Converts our ChatMessage to MacPaw's ChatQuery.ChatCompletionMessageParam
-    /// - Parameter message: The message to convert
-    /// - Returns: The converted message
-    func convertMessage(_ message: ChatMessage) -> ChatQuery.ChatCompletionMessageParam? {
-        let role: ChatQuery.ChatCompletionMessageParam.Role
+    /// Sends a chat completion request with structured output using async/await
+    /// - Parameters:
+    ///   - messages: The conversation history
+    ///   - model: The model to use for completion
+    ///   - temperature: Controls randomness (0-1)
+    ///   - structuredOutputType: The type to use for structured output
+    /// - Returns: A completion with the structured output
+    func sendChatCompletionWithStructuredOutput<T: StructuredOutput>(
+        messages: [ChatMessage],
+        model: String,
+        temperature: Double,
+        structuredOutputType: T.Type
+    ) async throws -> T {
+        // Convert our messages to MacPaw's format
+        let chatMessages = messages.compactMap { convertMessage($0) }
 
-        switch message.role {
-        case .system:
-            role = .system
-        case .user:
-            role = .user
-        case .assistant:
-            role = .assistant
-        }
-
-        return ChatQuery.ChatCompletionMessageParam(
-            role: role,
-            content: message.content
+        // Generate schema for the structured output
+        let schemaWrapper = generateSchema(for: structuredOutputType)
+        let dynamicSchema = ChatQuery.DynamicJSONSchema(
+            name: "structured-output",
+            schema: schemaWrapper,
+            strict: true
         )
+
+        // Create the query with structured output format
+        let query = ChatQuery(
+            messages: chatMessages,
+            model: model,
+            responseFormat: .dynamicJsonSchema(dynamicSchema),
+            temperature: temperature
+        )
+
+        do {
+            // Make the API call with structured output
+            let result = try await client.chats(query: query)
+
+            // Extract structured output response
+            guard let content = result.choices.first?.message.content,
+                  let data = content.data(using: .utf8)
+            else {
+                throw NSError(
+                    domain: "MacPawOpenAIClient",
+                    code: 1002,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output content"]
+                )
+            }
+
+            // Decode the JSON content into the specified structured output type
+            do {
+                let structuredOutput = try JSONDecoder().decode(T.self, from: data)
+                return structuredOutput
+            } catch {
+                throw NSError(
+                    domain: "MacPawOpenAIClient",
+                    code: 1003,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to decode structured output: \(error.localizedDescription)"]
+                )
+            }
+        } catch {
+            // Rethrow any errors from the API call
+            throw error
+        }
     }
 
 
@@ -339,8 +382,6 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
     // MARK: - Responses API Methods
 
-
-
     /// Sends a request to the OpenAI Responses API using async/await
     /// - Parameters:
     ///   - message: The current message content
@@ -453,6 +494,164 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
 
         // Convert to our ResponsesAPIResponse format
         return responseWrapper.toResponsesAPIResponse()
+    }
+
+    // MARK: - Helper Methods
+
+    /// Converts our ChatMessage to MacPaw's ChatQuery.ChatCompletionMessageParam
+    /// - Parameter message: The message to convert
+    /// - Returns: The converted message
+    func convertMessage(_ message: ChatMessage) -> ChatQuery.ChatCompletionMessageParam? {
+        let role: ChatQuery.ChatCompletionMessageParam.Role
+
+        switch message.role {
+        case .system:
+            role = .system
+        case .user:
+            role = .user
+        case .assistant:
+            role = .assistant
+        }
+
+        return ChatQuery.ChatCompletionMessageParam(
+            role: role,
+            content: message.content
+        )
+    }
+
+    /// Generates a structured output schema for a given type
+    /// - Parameter type: The structured output type
+    /// - Returns: The schema as a wrapper
+    func generateSchema<T: StructuredOutput>(for type: T.Type) -> StructuredSchemaDict {
+        // Handle BestCoverLetterResponse
+        if T.self == BestCoverLetterResponse.self {
+            return StructuredSchemaDict(dict: [
+                "type": "object",
+                "properties": [
+                    "strengthAndVoiceAnalysis": [
+                        "type": "string",
+                        "description": "Brief summary ranking/assessment of each letter's strength and voice"
+                    ],
+                    "bestLetterUuid": [
+                        "type": "string",
+                        "description": "UUID of the selected best cover letter"
+                    ],
+                    "verdict": [
+                        "type": "string", 
+                        "description": "Reason for the ultimate choice"
+                    ]
+                ],
+                "required": ["strengthAndVoiceAnalysis", "bestLetterUuid", "verdict"],
+                "additionalProperties": false
+            ])
+        }
+        
+        // Handle RevisionsContainer 
+        if T.self == RevisionsContainer.self {
+            return StructuredSchemaDict(dict: [
+                "type": "object",
+                "properties": [
+                    "revArray": [
+                        "type": "array",
+                        "items": [
+                            "type": "object",
+                            "properties": [
+                                "id": ["type": "string"],
+                                "oldValue": ["type": "string"],
+                                "newValue": ["type": "string"],
+                                "valueChanged": ["type": "boolean"],
+                                "why": ["type": "string"],
+                                "isTitleNode": ["type": "boolean"],
+                                "treePath": ["type": "string"]
+                            ],
+                            "required": ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"],
+                            "additionalProperties": false
+                        ]
+                    ]
+                ],
+                "required": ["revArray"],
+                "additionalProperties": false
+            ])
+        }
+        
+        // Fallback: basic object schema
+        return StructuredSchemaDict(dict: [
+            "type": "object",
+            "additionalProperties": true
+        ])
+    }
+
+    /// Wrapper for schema dictionary to make it Sendable
+    struct StructuredSchemaDict: Codable, Sendable {
+        let dict: [String: Any]
+        
+        enum CodingKeys: String, CodingKey {
+            case dict
+        }
+        
+        init(dict: [String: Any]) {
+            self.dict = dict
+        }
+        
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(AnyCodable(dict))
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(AnyCodable.self)
+            self.dict = value.value as? [String: Any] ?? [:]
+        }
+    }
+    
+    /// Helper to encode Any values
+    private struct AnyCodable: Codable {
+        let value: Any
+        
+        init(_ value: Any) {
+            self.value = value
+        }
+        
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            
+            if let dict = value as? [String: Any] {
+                try container.encode(dict.mapValues(AnyCodable.init))
+            } else if let array = value as? [Any] {
+                try container.encode(array.map(AnyCodable.init))
+            } else if let string = value as? String {
+                try container.encode(string)
+            } else if let bool = value as? Bool {
+                try container.encode(bool)
+            } else if let int = value as? Int {
+                try container.encode(int)
+            } else if let double = value as? Double {
+                try container.encode(double)
+            } else {
+                try container.encodeNil()
+            }
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            
+            if let dict = try? container.decode([String: AnyCodable].self) {
+                value = dict.mapValues { $0.value }
+            } else if let array = try? container.decode([AnyCodable].self) {
+                value = array.map { $0.value }
+            } else if let string = try? container.decode(String.self) {
+                value = string
+            } else if let bool = try? container.decode(Bool.self) {
+                value = bool
+            } else if let int = try? container.decode(Int.self) {
+                value = int
+            } else if let double = try? container.decode(Double.self) {
+                value = double
+            } else {
+                value = NSNull()
+            }
+        }
     }
 
 

@@ -10,16 +10,15 @@ import SwiftUI
 struct OpenAIModelSettingsView: View {
     // AppStorage properties specific to this view
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
-    @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
+
     @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o // Default to gpt4o
 
     // State for managing model list and loading/error status
     @State private var availableOpenAIModels: [String] = []
     @State private var availableGeminiModels: [String] = []
     @State private var isLoadingOpenAIModels: Bool = false
-    @State private var isLoadingGeminiModels: Bool = false
     @State private var modelError: String? = nil
-    
+
     // Combined list of all models
     private var allModels: [String] {
         var models: [String] = []
@@ -28,28 +27,17 @@ struct OpenAIModelSettingsView: View {
         if openAiApiKey != "none" {
             models.append(contentsOf: availableOpenAIModels.isEmpty ? defaultOpenAIModels() : availableOpenAIModels)
         }
-        
-        // Add Gemini models if API key is configured
-        if geminiApiKey != "none" {
-            models.append(contentsOf: availableGeminiModels.isEmpty ? defaultGeminiModels() : availableGeminiModels)
-        }
-        
+
+
         return models
     }
     
     // Display name for models (adds provider prefix)
     private func displayName(for model: String) -> String {
-        if isGeminiModel(model) {
-            return "Gemini: \(model)"
-        } else {
-            return "OpenAI: \(model)"
-        }
+        return model
     }
     
-    // Check if a model is from Gemini
-    private func isGeminiModel(_ model: String) -> Bool {
-        return model.starts(with: "gemini-")
-    }
+
 
     var body: some View {
         // HStack for compact toolbar display
@@ -72,16 +60,16 @@ struct OpenAIModelSettingsView: View {
 
             // Refresh Button
             Button(action: fetchAllModels) {
-                if isLoadingOpenAIModels || isLoadingGeminiModels {
+                if isLoadingOpenAIModels  {
                     ProgressView().scaleEffect(0.7) // Smaller ProgressView for toolbar
                 } else {
                     Image(systemName: "arrow.clockwise")
                 }
             }
             .buttonStyle(PlainButtonStyle()) // Plain style for toolbar buttons
-            .disabled((openAiApiKey == "none" && geminiApiKey == "none") || 
-                      (isLoadingOpenAIModels || isLoadingGeminiModels))
-            .help(openAiApiKey == "none" && geminiApiKey == "none" ? 
+            .disabled((openAiApiKey == "none")  ||
+                      (isLoadingOpenAIModels))
+            .help(openAiApiKey == "none" ?
                  "Enter API Keys in Settings to load models" : "Refresh model list")
         }
         // Removed padding, background, and border for toolbar suitability
@@ -93,17 +81,14 @@ struct OpenAIModelSettingsView: View {
             // Fetch OpenAI models if API key changes
             fetchOpenAIModels()
         }
-        .onChange(of: geminiApiKey) { _, _ in
-            // Fetch Gemini models if API key changes
-            fetchGeminiModels()
-        }
+
     }
 
     // Function to fetch both OpenAI and Gemini models
     private func fetchAllModels() {
         fetchOpenAIModels()
-        fetchGeminiModels()
-        
+
+
         // Ensure the selected model is still valid
         validateSelectedModel()
     }
@@ -131,26 +116,7 @@ struct OpenAIModelSettingsView: View {
     }
     
     // Function to fetch available Gemini models
-    private func fetchGeminiModels() {
-        guard geminiApiKey != "none" else {
-            // Clear models if key is missing
-            availableGeminiModels = []
-            return
-        }
 
-        isLoadingGeminiModels = true
-        modelError = nil // Clear previous errors
-
-        Task {
-            let models = await GeminiModelFetcher.fetchAvailableModels(apiKey: geminiApiKey)
-
-            await MainActor.run {
-                availableGeminiModels = models.isEmpty ? defaultGeminiModels() : models
-                isLoadingGeminiModels = false
-                validateSelectedModel()
-            }
-        }
-    }
     
     // Validate that the selected model is in the available models list
     private func validateSelectedModel() {
@@ -159,9 +125,6 @@ struct OpenAIModelSettingsView: View {
             if openAiApiKey != "none" && !availableOpenAIModels.isEmpty {
                 // Prefer OpenAI models if available
                 preferredLLMModel = availableOpenAIModels.first ?? AIModels.gpt4o
-            } else if geminiApiKey != "none" && !availableGeminiModels.isEmpty {
-                // Fall back to Gemini models
-                preferredLLMModel = availableGeminiModels.first ?? AIModels.gemini_1_5_pro
             }
         }
     }
@@ -176,12 +139,5 @@ struct OpenAIModelSettingsView: View {
         ]
     }
     
-    // Default Gemini models when API is not available
-    private func defaultGeminiModels() -> [String] {
-        return [
-            AIModels.gemini_1_5_pro,
-            AIModels.gemini_1_5_flash,
-            AIModels.gemini_1_0_pro
-        ]
-    }
+
 }

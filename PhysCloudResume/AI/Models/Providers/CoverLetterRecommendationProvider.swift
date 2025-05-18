@@ -9,8 +9,6 @@ import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-import OpenAI
-import SwiftUI
 
 /// Provider for selecting the best cover letter among existing ones using OpenAI JSON schema responses
 final class CoverLetterRecommendationProvider {
@@ -99,18 +97,8 @@ final class CoverLetterRecommendationProvider {
     }
 
     /// Response schema for best cover letter selection
-    struct BestCoverLetterResponse: Codable, StructuredOutput {
-        let strengthAndVoiceAnalysis: String
-        let bestLetterUuid: String
-        let verdict: String
-
-        // Example instance for schema generation
-        static let example: Self = .init(
-            strengthAndVoiceAnalysis: "Letter A has strong technical details but formal tone. Letter B has a more conversational style with good examples.",
-            bestLetterUuid: "00000000-0000-0000-0000-000000000000",
-            verdict: "Letter B has the best balance of professional content and personal voice."
-        )
-    }
+    /// Note: This is now defined in APIResponses.swift for reusability
+    typealias BestCoverLetterResponse = PhysCloudResume.BestCoverLetterResponse
 
     /// Initialize with our abstraction layer client
     /// - Parameters:
@@ -163,78 +151,24 @@ final class CoverLetterRecommendationProvider {
             genericSystemMessage,
             ChatMessage(role: .user, content: prompt),
         ]
-        // Debug: show prompt and messages to be sent
 
         // Get model as string
         let modelString = OpenAIModelFetcher.getPreferredModelString()
 
         do {
-            // Check if we're using the MacPaw client
-            if let macPawClient = openAIClient as? MacPawOpenAIClient {
-                // Convert our messages to MacPaw's format
-                let chatMessages = messages.compactMap { macPawClient.convertMessage($0) }
+            // Use the abstraction layer with structured output
+            let structuredOutput = try await openAIClient.sendChatCompletionWithStructuredOutput(
+                messages: messages,
+                model: modelString,
+                temperature: 1.0,
+                structuredOutputType: BestCoverLetterResponse.self
+            )
 
-                // Create the query with structured output format
-                let query = ChatQuery(
-                    messages: chatMessages,
-                    model: modelString,
-                    responseFormat: .jsonSchema(name: "cover-letter-recommendation", type: BestCoverLetterResponse.self),
-                    temperature: 1.0
-                )
-                // Debug: print converted chat messages
-
-                // Make the API call with structured output
-                // Debug: print query details
-                // Call API with structured output
-                let result = try await macPawClient.openAIClient.chats(query: query)
-                // Debug: print raw API result object
-
-                // DEBUG: Append response to our debug file
-                var responseDebug = "\n\nAPI RESPONSE:\n\n"
-                responseDebug += "Raw response:\n\(result)"
-
-                // Extract structured output response
-                // For MacPaw/OpenAI structured outputs, we need to check the content string
-                // since there's no structured output property directly accessible
-
-                if let content = result.choices.first?.message.content,
-                   let data = content.data(using: .utf8)
-                {
-                    // Debug: print raw content and JSON payload
-                    responseDebug += "\n\nContent String:\n\(content)"
-                    writeDebugToFile(fullPromptDebug + responseDebug)
-
-                    do {
-                        let structuredOutput = try JSONDecoder().decode(BestCoverLetterResponse.self, from: data)
-                        // Debug: print decoded structured output
-                        let finalDebug = "\n\nPARSED STRUCTURED OUTPUT:\n\(structuredOutput)"
-                        writeDebugToFile(fullPromptDebug + responseDebug + finalDebug)
-                        return structuredOutput
-                    } catch {
-                        // Debug: decoding failure
-                        let errorDebug = "\n\nDECODING ERROR:\n\(error.localizedDescription)"
-                        writeDebugToFile(fullPromptDebug + responseDebug + errorDebug)
-                        throw NSError(
-                            domain: "CoverLetterRecommendationProvider",
-                            code: 1003,
-                            userInfo: [NSLocalizedDescriptionKey: "Failed to decode structured output: \(error.localizedDescription)"]
-                        )
-                    }
-                } else {
-                    let noContentDebug = "\n\nERROR: No content in API response"
-                    writeDebugToFile(fullPromptDebug + responseDebug + noContentDebug)
-                    throw NSError(
-                        domain: "CoverLetterRecommendationProvider",
-                        code: 1002,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to get structured output content"]
-                    )
-                }
-            } else {
-                let unsupportedClientDebug = "\n\nERROR: Unsupported client type - not MacPawOpenAIClient"
-                writeDebugToFile(fullPromptDebug + unsupportedClientDebug)
-                throw NSError(domain: "CoverLetterRecommendationProvider", code: 3,
-                              userInfo: [NSLocalizedDescriptionKey: "Could not convert response to data"])
-            }
+            // DEBUG: Append response to our debug file
+            let responseDebug = "\n\nAPI RESPONSE:\n\nPARSED STRUCTURED OUTPUT:\n\(structuredOutput)"
+            writeDebugToFile(fullPromptDebug + responseDebug)
+            
+            return structuredOutput
 
         } catch {
             let generalErrorDebug = "\n\nGENERAL API ERROR:\n\(error.localizedDescription)"

@@ -29,7 +29,7 @@ class CoverLetterRecommendationService {
     ///   - jobApp: The job application containing the cover letters to analyze
     ///   - writingSamples: Optional writing samples to inform the recommendation
     /// - Returns: The recommendation result with analysis and selected cover letter
-    func chooseBestCoverLetter(jobApp: JobApp, writingSamples: String) async throws -> CoverLetterRecommendationProvider.BestCoverLetterResponse {
+    func chooseBestCoverLetter(jobApp: JobApp, writingSamples: String) async throws -> BestCoverLetterResponse {
         // Create the recommendation provider with necessary context
         let provider = CoverLetterRecommendationProvider(
             client: client,

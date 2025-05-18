@@ -10,6 +10,15 @@ import PDFKit
 import AppKit
 import SwiftUI
 
+// MARK: - Local Protocol Definitions
+// These protocols replace OpenAI dependencies for our abstraction layer
+
+/// Protocol for structured output types that can be used with AI models
+/// This replaces the OpenAI StructuredOutput protocol
+public protocol StructuredOutput: Codable {
+    static var example: Self { get }
+}
+
 /// Response from an OpenAI Responses API request
 struct ResponsesAPIResponse: Codable, Equatable {
     /// The unique ID of the response (used for continuation)
@@ -18,6 +27,20 @@ struct ResponsesAPIResponse: Codable, Equatable {
     let content: String
     /// The model used for the response
     let model: String
+}
+
+/// Response schema for best cover letter selection
+struct BestCoverLetterResponse: Codable, StructuredOutput {
+    let strengthAndVoiceAnalysis: String
+    let bestLetterUuid: String
+    let verdict: String
+
+    // Example instance for schema generation
+    static let example: Self = .init(
+        strengthAndVoiceAnalysis: "Letter A has strong technical details but formal tone. Letter B has a more conversational style with good examples.",
+        bestLetterUuid: "00000000-0000-0000-0000-000000000000",
+        verdict: "Letter B has the best balance of professional content and personal voice."
+    )
 }
 
 
