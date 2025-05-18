@@ -15,7 +15,6 @@ struct OpenAIModelSettingsView: View {
 
     // State for managing model list and loading/error status
     @State private var availableOpenAIModels: [String] = []
-    @State private var availableGeminiModels: [String] = []
     @State private var isLoadingOpenAIModels: Bool = false
     @State private var modelError: String? = nil
 

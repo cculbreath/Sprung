@@ -18,7 +18,13 @@ protocol OpenAIClientProtocol {
     
     // MARK: - Initializers
     
+    /// Initializes a new client with the given custom configuration
+    /// - Parameter configuration: The custom configuration to use for requests
+    init(configuration: OpenAIConfiguration)
     
+    /// Initializes a new client with the given API key
+    /// - Parameter apiKey: The API key to use for requests
+    init(apiKey: String)
 
     // MARK: - Chat Completion API
 

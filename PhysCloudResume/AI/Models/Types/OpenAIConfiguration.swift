@@ -10,11 +10,8 @@ import Foundation
 /// Custom parsing options for OpenAI API responses
 /// This replaces OpenAI.Configuration.ParsingOptions to remove the OpenAI dependency
 public enum OpenAIParsingOptions {
-    /// Fill required fields if the key is not found in the response
-    case fillRequiredFieldIfKeyNotFound
     /// Standard parsing without fallbacks
     case standard
-    
 }
 
 /// Custom configuration for OpenAI clients
@@ -67,39 +64,12 @@ public struct OpenAIConfiguration {
         self.timeoutInterval = timeoutInterval
         self.parsingOptions = parsingOptions
     }
-    
-    /// Convenience initializer for basic usage with just an API key
-    /// - Parameter apiKey: The OpenAI API key
-    public init(apiKey: String) {
-        self.init(token: apiKey)
-    }
-    
-    /// Convenience initializer with parsing options
-    /// - Parameters:
-    ///   - token: The API token
-    ///   - parsingOptions: How to handle parsing responses
-    public init(token: String, parsingOptions: OpenAIParsingOptions) {
-        self.init(
-            token: token,
-            organizationIdentifier: nil,
-            host: "api.openai.com",
-            basePath: "/v1",
-            customHeaders: [:],
-            timeoutInterval: 900.0,
-            parsingOptions: parsingOptions
-        )
-    }
+
 }
 
 /// Extension to provide default configurations for common use cases
 public extension OpenAIConfiguration {
-    /// Default configuration with relaxed parsing for handling null fields
-    /// - Parameter token: The API token
-    /// - Returns: Configuration with relaxed parsing options
-    static func relaxedParsing(token: String) -> OpenAIConfiguration {
-        return OpenAIConfiguration(token: token, parsingOptions: .fillRequiredFieldIfKeyNotFound)
-    }
-    
+
     /// Configuration for Gemini API
     /// - Parameter apiKey: The Gemini API key
     /// - Returns: Configuration set up for Gemini API endpoints

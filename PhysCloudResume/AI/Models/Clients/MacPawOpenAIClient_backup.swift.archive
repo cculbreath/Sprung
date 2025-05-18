@@ -9,6 +9,7 @@ import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
+import SwiftOpenAI
 import OpenAI
 
 /// Custom URLSession delegate to log network activity
