@@ -2,6 +2,7 @@
 weasy-dist/
 weasy/
 .build/
+scripts/
 test_*
 # Ignore root-level generated files
 PhysCloudResume.zip
