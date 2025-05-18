@@ -14,6 +14,24 @@ import OpenAI
 /// A subclass of the MacPaw OpenAI client that handles null system_fingerprint fields
 class SystemFingerprintFixClient: MacPawOpenAIClient {
     
+    /// Initialize with custom configuration
+    /// - Parameter configuration: The custom configuration to use
+    required init(configuration: OpenAIConfiguration) {
+        super.init(configuration: configuration)
+    }
+    
+    /// Initialize with OpenAI SDK configuration (legacy support)
+    /// - Parameter configuration: The OpenAI SDK configuration to use
+    init(openAIConfiguration: OpenAI.Configuration) {
+        super.init(openAIConfiguration: openAIConfiguration)
+    }
+    
+    /// Initialize with API key
+    /// - Parameter apiKey: The API key to use
+    required init(apiKey: String) {
+        super.init(apiKey: apiKey)
+    }
+    
     /// A custom implementation of the chats method that handles null system_fingerprint
     /// This override intercepts the chat completion request to handle system_fingerprint errors
     override func sendChatCompletionAsync(

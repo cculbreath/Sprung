@@ -68,16 +68,26 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
         apiKeyValue
     }
 
-    /// Initializes a new client with the given configuration
-    /// - Parameter configuration: The configuration to use for requests
-    init(configuration: OpenAI.Configuration) {
-        apiKeyValue = configuration.token ?? "none" // Unwrap optional token value
-        client = OpenAI(configuration: configuration)
+    /// Initializes a new client with the given custom configuration
+    /// - Parameter configuration: The custom configuration to use for requests
+    required init(configuration: OpenAIConfiguration) {
+        apiKeyValue = configuration.token ?? "none"
+        
+        // Convert our custom configuration to OpenAI.Configuration
+        let openAIConfig = Self.convertToOpenAIConfiguration(configuration)
+        client = OpenAI(configuration: openAIConfig)
+    }
+
+    /// Initializes a new client with the given OpenAI SDK configuration (legacy support)
+    /// - Parameter configuration: The OpenAI SDK configuration to use for requests
+    init(openAIConfiguration: OpenAI.Configuration) {
+        apiKeyValue = openAIConfiguration.token ?? "none"
+        client = OpenAI(configuration: openAIConfiguration)
     }
 
     /// Initializes a new client with the given API key
     /// - Parameter apiKey: The API key to use for requests
-    init(apiKey: String) {
+    required init(apiKey: String) {
         apiKeyValue = apiKey
 
         // Create custom URLSession that logs network activity
@@ -93,6 +103,31 @@ class MacPawOpenAIClient: OpenAIClientProtocol {
             timeoutInterval: 900.0 // 15 minutes (increased from 5 minutes for reasoning models)
         )
         client = OpenAI(configuration: configuration)
+    }
+    
+    /// Converts our custom configuration to OpenAI.Configuration
+    /// - Parameter customConfig: Our custom configuration
+    /// - Returns: OpenAI.Configuration that can be used with the MacPaw SDK
+    private static func convertToOpenAIConfiguration(_ customConfig: OpenAIConfiguration) -> OpenAI.Configuration {
+        // Convert parsing options
+        var openAIParsingOptions: OpenAI.Configuration.ParsingOptions = []
+        switch customConfig.parsingOptions {
+        case .fillRequiredFieldIfKeyNotFound:
+            openAIParsingOptions = .fillRequiredFieldIfKeyNotFound
+        case .standard:
+            openAIParsingOptions = []
+        }
+        
+        // Create OpenAI.Configuration with converted values
+        return OpenAI.Configuration(
+            token: customConfig.token,
+            organizationIdentifier: customConfig.organizationIdentifier,
+            host: customConfig.host,
+            basePath: customConfig.basePath,
+            customHeaders: customConfig.customHeaders,
+            timeoutInterval: customConfig.timeoutInterval,
+            parsingOptions: openAIParsingOptions
+        )
     }
     
     /// Exposes the internal OpenAI client instance for direct access

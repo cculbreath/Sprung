@@ -13,19 +13,26 @@ import OpenAI
 
 /// Factory for creating OpenAI clients
 class OpenAIClientFactory {
-    /// Creates an OpenAI client with the given configuration
-    /// - Parameter configuration: The configuration to use for client setup
+    /// Creates an OpenAI client with the given custom configuration
+    /// - Parameter configuration: The custom configuration to use for client setup
     /// - Returns: An instance conforming to OpenAIClientProtocol
-    static func createClient(configuration: OpenAI.Configuration) -> OpenAIClientProtocol {
+    static func createClient(configuration: OpenAIConfiguration) -> OpenAIClientProtocol {
         return SystemFingerprintFixClient(configuration: configuration)
+    }
+
+    /// Creates an OpenAI client with the given OpenAI SDK configuration (legacy support)
+    /// - Parameter configuration: The OpenAI SDK configuration to use for client setup
+    /// - Returns: An instance conforming to OpenAIClientProtocol
+    static func createClient(openAIConfiguration: OpenAI.Configuration) -> OpenAIClientProtocol {
+        return SystemFingerprintFixClient(openAIConfiguration: openAIConfiguration)
     }
 
     /// Creates an OpenAI client with the given API key
     /// - Parameter apiKey: The API key to use for requests
     /// - Returns: An instance conforming to OpenAIClientProtocol
     static func createClient(apiKey: String) -> OpenAIClientProtocol {
-        // Create configuration with default options
-        let configuration = OpenAI.Configuration(token: apiKey)
+        // Create custom configuration and use the new method
+        let configuration = OpenAIConfiguration(apiKey: apiKey)
         return SystemFingerprintFixClient(configuration: configuration)
     }
     
@@ -42,15 +49,8 @@ class OpenAIClientFactory {
     /// - Parameter apiKey: The Gemini API key to use for requests
     /// - Returns: An instance conforming to OpenAIClientProtocol configured for Gemini API
     static func createGeminiClient(apiKey: String) -> OpenAIClientProtocol {
-        // Configure for Gemini API
-        // Gemini API requires different host and path settings
-        let configuration = OpenAI.Configuration(
-            token: apiKey,
-            host: "generativelanguage.googleapis.com",  // Gemini API host
-            basePath: "/v1/models",                   // Gemini API path with models prefix
-            customHeaders: ["x-goog-api-key": apiKey]  // Gemini uses API key in header instead of Bearer token
-        )
-        
+        // Use our custom Gemini configuration
+        let configuration = OpenAIConfiguration.gemini(apiKey: apiKey)
         return SystemFingerprintFixClient(configuration: configuration)
     }
     
