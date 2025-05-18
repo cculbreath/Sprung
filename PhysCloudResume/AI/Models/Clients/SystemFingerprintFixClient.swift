@@ -22,7 +22,7 @@ class SystemFingerprintFixClient: MacPawOpenAIClient {
     
     /// Initialize with OpenAI SDK configuration (legacy support)
     /// - Parameter configuration: The OpenAI SDK configuration to use
-    init(openAIConfiguration: OpenAI.Configuration) {
+    override init(openAIConfiguration: OpenAI.Configuration) {
         super.init(openAIConfiguration: openAIConfiguration)
     }
     
