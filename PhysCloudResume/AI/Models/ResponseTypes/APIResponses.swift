@@ -174,17 +174,6 @@ struct ChatCompletionResponse: Codable, Equatable {
     }
 }
 
-/// Error response from the OpenAI API
-struct ResponsesAPIErrorResponse: Codable {
-    struct ErrorDetails: Codable {
-        let message: String
-        let type: String?
-        let param: String?
-        let code: String?
-    }
-    
-    let error: ErrorDetails
-}
 
 // MARK: - Chat Message Types
 

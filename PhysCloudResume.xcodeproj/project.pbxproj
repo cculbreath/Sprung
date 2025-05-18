@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 574223A92DD9392200EF672C /* ChunkedAudioPlayer */; };
+		57C800BF2DDA420F00818D86 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57C800BE2DDA420F00818D86 /* SwiftOpenAI */; };
 		57DC4F1A2DBA3233000F1A48 /* OpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F192DBA3233000F1A48 /* OpenAI */; };
 		57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1C2DBA323F000F1A48 /* SwiftyJSON */; };
 		57DC4F202DBA324B000F1A48 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1F2DBA324B000F1A48 /* SwiftSoup */; };
@@ -53,6 +54,7 @@
 				57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */,
 				57DC4F202DBA324B000F1A48 /* SwiftSoup in Frameworks */,
 				57DC4F1A2DBA3233000F1A48 /* OpenAI in Frameworks */,
+				57C800BF2DDA420F00818D86 /* SwiftOpenAI in Frameworks */,
 				574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -136,6 +138,7 @@
 				57DC4F1E2DBA324B000F1A48 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				57DC509D2DBA3B68000F1A48 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */,
+				57C800BD2DDA420F00818D86 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
@@ -393,6 +396,14 @@
 				kind = branch;
 			};
 		};
+		57C800BD2DDA420F00818D86 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jamesrochabrun/SwiftOpenAI.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.1.1;
+			};
+		};
 		57DC4F182DBA3233000F1A48 /* XCRemoteSwiftPackageReference "OpenAI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/MacPaw/OpenAI.git";
@@ -432,6 +443,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */;
 			productName = ChunkedAudioPlayer;
+		};
+		57C800BE2DDA420F00818D86 /* SwiftOpenAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57C800BD2DDA420F00818D86 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
+			productName = SwiftOpenAI;
 		};
 		57DC4F192DBA3233000F1A48 /* OpenAI */ = {
 			isa = XCSwiftPackageProductDependency;
