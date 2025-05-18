@@ -18,15 +18,9 @@ protocol OpenAIClientProtocol {
     
     // MARK: - Initializers
     
-    /// Initialize with custom configuration
-    /// - Parameter configuration: The configuration to use
-    init(configuration: OpenAIConfiguration)
     
-    /// Initialize with API key (convenience initializer)
-    /// - Parameter apiKey: The API key to use
-    init(apiKey: String)
 
-    // MARK: - Chat Completion API (Legacy)
+    // MARK: - Chat Completion API
 
     /// Sends a chat completion request using async/await
     /// - Parameters:
@@ -39,21 +33,6 @@ protocol OpenAIClientProtocol {
         model: String,
         temperature: Double
     ) async throws -> ChatCompletionResponse
-
-    /// Sends a chat completion request with streaming
-    /// - Parameters:
-    ///   - messages: The conversation history
-    ///   - model: The model to use for completion
-    ///   - temperature: Controls randomness (0-1)
-    ///   - onChunk: Callback for each chunk of the streaming response
-    ///   - onComplete: Callback when streaming is complete
-    func sendChatCompletionStreaming(
-        messages: [ChatMessage],
-        model: String,
-        temperature: Double,
-        onChunk: @escaping (Result<ChatCompletionResponse, Error>) -> Void,
-        onComplete: @escaping (Error?) -> Void
-    )
 
     // MARK: - Chat Completion with Structured Output
 

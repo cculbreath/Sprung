@@ -275,11 +275,6 @@ import SwiftUI
     struct JobRecommendation: Codable, StructuredOutput {
         let recommendedJobId: String
         let reason: String
-
-        static let example: Self = .init(
-            recommendedJobId: "00000000-0000-0000-0000-000000000000",
-            reason: "This job aligns with the candidate's experience in software development and interests in AI"
-        )
     }
 
     private func decodeRecommendation(from responseText: String) throws -> (UUID, String) {

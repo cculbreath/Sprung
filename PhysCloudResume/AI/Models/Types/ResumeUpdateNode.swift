@@ -55,7 +55,6 @@ struct ProposedRevisionNode: Codable, Equatable {
 struct RevisionsContainer: Codable, StructuredOutput {
     var revArray: [ProposedRevisionNode]
 
-    static let example: Self = .init(revArray: [])
 }
 
 enum PostReviewAction: String, Codable {
