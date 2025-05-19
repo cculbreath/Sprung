@@ -15,38 +15,19 @@ class LLMRequestService: @unchecked Sendable {
     // Private initializer for singleton pattern
     private init() {}
     
-    /// Initializes the LLM client based on the selected model
+    /// Initializes the LLM client for OpenAI
     @MainActor
     func initialize() {
-        // Get the preferred model name to determine which API key to use
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
-        if modelString.lowercased().contains("gemini") || 
-           modelString.lowercased().starts(with: "google.") || 
-           modelString.lowercased().contains("gemma") {
-            // Use Gemini API key for Gemini models
-            let apiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-            guard apiKey != "none" else { return }
-            // Create a Gemini client
-            openAIClient = OpenAIClientFactory.createGeminiClient(apiKey: apiKey)
-        } else {
-            // Use OpenAI API key for OpenAI models
-            let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-            guard apiKey != "none" else { return }
-            // Create a standard OpenAI client
-            openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
-        }
+        // Use OpenAI API key for all models
+        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        guard apiKey != "none" else { return }
+        // Create a standard OpenAI client
+        openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
     }
     
     /// Checks if the currently selected model supports images
     func checkIfModelSupportsImages() -> Bool {
         let model = OpenAIModelFetcher.getPreferredModelString().lowercased()
-        
-        // Check if it's a Gemini model first
-        if model.contains("gemini") || model.starts(with: "google.") || model.contains("gemma") {
-            // All Gemini Pro Vision models support images
-            return model.contains("vision") || model.contains("pro-vision") || model.contains("pro-1.5-vision")
-        }
         
         // For OpenAI models
         let openAIVisionModelsSubstrings = ["gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "gpt-image", "o4", "cua"]
@@ -134,31 +115,16 @@ class LLMRequestService: @unchecked Sendable {
         currentRequestID = requestID
         
         apiQueue.async { // Perform network request on a background queue
-            // Get the preferred model to determine which API to use
-            let modelString = OpenAIModelFetcher.getPreferredModelString()
-            
-            if modelString.lowercased().contains("gemini") || 
-               modelString.lowercased().starts(with: "google.") || 
-               modelString.lowercased().contains("gemma") {
-                self.sendGeminiRequest(
-                    promptText: promptText,
-                    base64Image: base64Image,
-                    modelString: modelString,
-                    schema: schema,
-                    requestID: requestID,
-                    onComplete: onComplete
-                )
-            } else {
-                self.sendOpenAIRequest(
-                    promptText: promptText,
-                    base64Image: base64Image,
-                    previousResponseId: previousResponseId,
-                    modelString: modelString,
-                    schema: schema,
-                    requestID: requestID,
-                    onComplete: onComplete
-                )
-            }
+            // Send request to OpenAI's /v1/responses endpoint
+            self.sendOpenAIRequest(
+                promptText: promptText,
+                base64Image: base64Image,
+                previousResponseId: previousResponseId,
+                modelString: OpenAIModelFetcher.getPreferredModelString(),
+                schema: schema,
+                requestID: requestID,
+                onComplete: onComplete
+            )
         }
     }
     
@@ -272,7 +238,7 @@ class LLMRequestService: @unchecked Sendable {
         }
         request.httpBody = httpBody
 
-        // Rest of the function remains the same...
+        // Send the request to OpenAI
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             // Ensure the callback is on the main thread
             DispatchQueue.main.async {
@@ -336,197 +302,6 @@ class LLMRequestService: @unchecked Sendable {
                     onComplete(.success(decodedWrapper.toResponsesAPIResponse()))
                 } catch let decodingError {
                     Logger.debug("Error decoding OpenAI Response: \(decodingError)")
-                    onComplete(.failure(decodingError))
-                }
-            }
-        }
-        task.resume()
-    }
-
-    /// Sends request to Gemini's API
-    private func sendGeminiRequest(
-        promptText: String,
-        base64Image: String?,
-        modelString: String,
-        schema: (name: String, jsonString: String)?,
-        requestID: UUID,
-        onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
-    ) {
-        guard let apiKey = UserDefaults.standard.string(forKey: "geminiApiKey"), apiKey != "none" else {
-            DispatchQueue.main.async {
-                onComplete(.failure(NSError(domain: "LLMRequestService", code: 1001, userInfo: [NSLocalizedDescriptionKey: "Gemini API key not set."])))
-            }
-            return
-        }
-        
-        // Gemini API uses a different URL format with the model name in the path
-        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1/models/\(modelString):generateContent?key=\(apiKey)") else {
-            DispatchQueue.main.async {
-                onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "Invalid Gemini API URL."])))
-            }
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 900.0 // 15 minutes for reasoning models
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Build the Gemini content parts
-        var contentParts: [[String: Any]] = []
-        
-        // Add text part
-        contentParts.append(["text": promptText])
-        
-        // Add image part if available
-        if let img = base64Image {
-            contentParts.append([
-                "inlineData": [
-                    "mimeType": "image/png",
-                    "data": img
-                ]
-            ])
-        }
-        
-        // Create the request body
-        var requestBodyDict: [String: Any] = [
-            "contents": [[
-                "role": "user",
-                "parts": contentParts
-            ]],
-            "generationConfig": [
-                "topP": 0.8,
-                "topK": 40
-            ]
-        ]
-        
-        // Add schema information if available (Gemini has a different format for schemas)
-        if let schemaInfo = schema {
-            // Add the schema to the generation config and ensure it's explicitly set to force JSON validation
-            if var genConfig = requestBodyDict["generationConfig"] as? [String: Any] {
-                if let schemaData = schemaInfo.jsonString.data(using: .utf8),
-                   let schemaJson = try? JSONSerialization.jsonObject(with: schemaData, options: []) as? [String: Any] {
-                    // This is the Gemini equivalent of OpenAI's response_format
-                    genConfig["responseSchema"] = schemaJson
-                    
-                    // Add a flag to enforce strict schema adherence (if available in Gemini API)
-                    genConfig["enforceResponseSchema"] = true
-                    
-                    requestBodyDict["generationConfig"] = genConfig
-                    
-                    // Log that we're using schema validation
-                    Logger.debug("Gemini request includes responseSchema validation for \(schemaInfo.name)")
-                }
-            }
-        }
-        
-        // Debug: Print the request body (with image data omitted or truncated)
-        var sanitizedRequestBodyDict = requestBodyDict
-        if let contentArray = sanitizedRequestBodyDict["contents"] as? [[String: Any]],
-           let firstContent = contentArray.first,
-           let parts = firstContent["parts"] as? [[String: Any]] {
-            var mutableFirstContent = firstContent
-
-            var sanitizedParts = parts
-            for (i, part) in parts.enumerated() {
-                if part["inlineData"] != nil {
-                    var mutablePart = part
-                    mutablePart["inlineData"] = "<base64_image_data_omitted>"
-                    sanitizedParts[i] = mutablePart
-                }
-            }
-            
-            mutableFirstContent["parts"] = sanitizedParts
-            var mutableContentArray = contentArray
-            mutableContentArray[0] = mutableFirstContent
-            sanitizedRequestBodyDict["contents"] = mutableContentArray
-        }
-        
-        if let jsonData = try? JSONSerialization.data(withJSONObject: sanitizedRequestBodyDict, options: .prettyPrinted),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            Logger.debug("Gemini Request Body for \(schema?.name ?? "General Review") (Image Omitted):\n\(jsonString)")
-        }
-        
-        // Prepare the request body
-        guard let httpBody = try? JSONSerialization.data(withJSONObject: requestBodyDict) else {
-            DispatchQueue.main.async {
-                onComplete(.failure(NSError(domain: "LLMRequestService", code: 1002, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize request body."])))
-            }
-            return
-        }
-        request.httpBody = httpBody
-        
-        // Send the request
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            // Ensure the callback is on the main thread
-            DispatchQueue.main.async {
-                guard requestID == self.currentRequestID else {
-                    Logger.debug("Request \(requestID) was cancelled or superseded.")
-                    return
-                }
-                
-                if let error = error {
-                    onComplete(.failure(error))
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    onComplete(.failure(NSError(domain: "LLMRequestService", code: 1003, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response."])))
-                    return
-                }
-                
-                guard let responseData = data else {
-                    onComplete(.failure(NSError(domain: "LLMRequestService", code: 1006, userInfo: [NSLocalizedDescriptionKey: "No data in API response."])))
-                    return
-                }
-                
-                if let responseString = String(data: responseData, encoding: .utf8) {
-                    Logger.debug("Gemini Raw Response for \(schema?.name ?? "General Review") (Status: \(httpResponse.statusCode)):\n\(responseString)")
-                }
-                
-                if !(200 ... 299).contains(httpResponse.statusCode) {
-                    var errorMessage = "API Error: \(httpResponse.statusCode)."
-                    if let errorData = data, let errorDetails = String(data: errorData, encoding: .utf8) {
-                        errorMessage += " Details: \(errorDetails)"
-                    }
-                    onComplete(.failure(NSError(domain: "LLMRequestService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
-                    return
-                }
-                
-                // Parse the Gemini response format
-                do {
-                    // Gemini format is different, extract the text content
-                    let geminiResponse = try JSONSerialization.jsonObject(with: responseData, options: []) as? [String: Any]
-                    
-                    guard let geminiResponse = geminiResponse else {
-                        throw NSError(domain: "LLMRequestService", code: 1007, userInfo: [NSLocalizedDescriptionKey: "Failed to parse Gemini response."])
-                    }
-                    
-                    // Extract text content from Gemini response
-                    var textContent = ""
-                    
-                    if let candidates = geminiResponse["candidates"] as? [[String: Any]],
-                       let firstCandidate = candidates.first,
-                       let content = firstCandidate["content"] as? [String: Any],
-                       let parts = content["parts"] as? [[String: Any]] {
-                        
-                        for part in parts {
-                            if let text = part["text"] as? String {
-                                textContent += text
-                            }
-                        }
-                    }
-                    
-                    // Create a ResponsesAPIResponse compatible with our existing code
-                    let apiResponse = ResponsesAPIResponse(
-                        id: geminiResponse["name"] as? String ?? UUID().uuidString,
-                        content: textContent,
-                        model: modelString
-                    )
-                    
-                    onComplete(.success(apiResponse))
-                } catch let decodingError {
-                    Logger.debug("Error decoding Gemini Response: \(decodingError)")
                     onComplete(.failure(decodingError))
                 }
             }

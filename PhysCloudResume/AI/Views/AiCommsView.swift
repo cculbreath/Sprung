@@ -376,9 +376,8 @@ struct AiCommsView: View {
                 // Get the model string
                 let modelString = OpenAIModelFetcher.getPreferredModelString()
                 
-                // Check if we need to switch the client based on the model
+                // Get API key
                 let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-                let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
                 
                 // Important check: Verify that we actually have messages to send
                 if chatProvider.genericMessages.isEmpty {
@@ -409,17 +408,7 @@ struct AiCommsView: View {
                 }
                 
                 // If the model selection has changed, we need to update our client
-                if modelString.starts(with: "gemini-") && modelString != chatProvider.lastModelUsed {
-                    Logger.debug("Switching to Gemini client for model: \(modelString)")
-                    // Create a new client for Gemini
-                    let geminiClient = OpenAIClientFactory.createGeminiClient(apiKey: geminiKey)
-                    
-                    // Important: preserve the message queue when switching clients
-                    let messages = chatProvider.genericMessages
-                    chatProvider = ResumeChatProvider(client: geminiClient)
-                    chatProvider.genericMessages = messages
-                    chatProvider.lastModelUsed = modelString
-                } else if !modelString.starts(with: "gemini-") && modelString != chatProvider.lastModelUsed {
+                if modelString != chatProvider.lastModelUsed {
                     Logger.debug("Switching to OpenAI client for model: \(modelString)")
                     // Create a new client for OpenAI
                     let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiKey)
@@ -431,43 +420,12 @@ struct AiCommsView: View {
                     chatProvider.lastModelUsed = modelString
                 }
                 
-                // Check if the model is a Gemini model
-                let isGeminiModel = modelString.isGeminiModel()
-                
-                // Modify the request format based on the model type
-                if isGeminiModel {
-                    // For Gemini models, we need to format the request differently
-                    // Use the generateContent endpoint format for Gemini
-                    Logger.debug("Using Gemini format for model: \(modelString)")
-                    
-                    // Format the system and user messages for Gemini
-                    let systemContent = chatProvider.genericMessages.first(where: { $0.role == .system })?.content ?? ""
-                    let userContent = chatProvider.genericMessages.first(where: { $0.role == .user })?.content ?? ""
-                    
-                    // Combine system and user messages for Gemini
-                    let combinedContent = "\(systemContent)\n\n\(userContent)"
-                    
-                    // Replace the generic messages with Gemini format
-                    chatProvider.genericMessages = [
-                        ChatMessage(role: .user, content: combinedContent)
-                    ]
-                }
-
-                // Set up a timeout task that will run if the main task takes too long
-                let timeoutTask = Task {
-                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds - just for checking if progress is made
-                    if isLoading && !Task.isCancelled {}
-                }
-
                 // Execute the API call with our new Responses API method
                 Logger.debug("Starting API call with model: \(modelString)")
                 try await chatProvider.startChat(messages: chatProvider.genericMessages,
                                                  resume: myRes,
                                                  continueConversation: hasRevisions)
                 Logger.debug("API call completed successfully")
-
-                // Cancel the timeout task since we completed successfully
-                timeoutTask.cancel()
 
                 // Check for error messages from the chat provider
                 if !chatProvider.errorMessage.isEmpty {

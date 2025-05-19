@@ -36,15 +36,9 @@ struct AiFunctionView: View {
 
         // Get API keys from UserDefaults
         let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-        let modelName = UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o
         
-        // Create the appropriate client based on the selected model
-        llmClient = OpenAIClientFactory.createClientForModel(
-            openAiApiKey: openAiKey, 
-            geminiApiKey: geminiKey, 
-            modelName: modelName
-        )
+        // Create the appropriate client
+        llmClient = OpenAIClientFactory.createClient(apiKey: openAiKey)
         
         // TTS is still using OpenAI
         ttsProvider = OpenAITTSProvider(apiKey: openAiKey)

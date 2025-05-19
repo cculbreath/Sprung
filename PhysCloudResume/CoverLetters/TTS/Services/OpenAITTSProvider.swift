@@ -69,6 +69,19 @@ class OpenAITTSProvider {
     private var isInStreamSetup: Bool = false
 
     // MARK: - Playback state callbacks (wired to UI)
+    
+    /// Get the complete cached audio data from the underlying streamer
+    /// - Returns: The complete audio data that has been cached, or nil if unavailable
+    func getCachedAudio() -> Data? {
+        return streamer.getCachedAudio()
+    }
+    
+    /// Save the complete audio data to a file
+    /// - Parameter url: The URL to save the file to
+    /// - Returns: True if saving was successful
+    func saveAudioToFile(url: URL) -> Bool {
+        return streamer.saveAudioToFile(url: url)
+    }
 
     /// Fires when the first audio buffer starts playing (leaves buffering state).
     var apiKey: String?
@@ -398,8 +411,17 @@ class OpenAITTSProvider {
                 Logger.error("Stream error: \(error.localizedDescription)")
                 self.cancelTimeoutTimer() // Ensure timer is cancelled
                 self.setBufferingState(false)
-                self.onError?(error)
-                onComplete(error)
+                
+                // If it's a chunk overflow error, handle it gracefully by completing normally
+                if let nsError = error as? NSError,
+                   nsError.domain == "TTSAudioStreamer" && nsError.code == 1002 {
+                    Logger.debug("Handling chunk overflow gracefully - completing stream")
+                    self.onFinish?()
+                    onComplete(nil)
+                } else {
+                    self.onError?(error)
+                    onComplete(error)
+                }
             }
         }
 

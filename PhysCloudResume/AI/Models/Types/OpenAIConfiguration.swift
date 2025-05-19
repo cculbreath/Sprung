@@ -69,19 +69,4 @@ public struct OpenAIConfiguration {
 
 /// Extension to provide default configurations for common use cases
 public extension OpenAIConfiguration {
-
-    /// Configuration for Gemini API
-    /// - Parameter apiKey: The Gemini API key
-    /// - Returns: Configuration set up for Gemini API endpoints
-    static func gemini(apiKey: String) -> OpenAIConfiguration {
-        return OpenAIConfiguration(
-            token: apiKey,
-            organizationIdentifier: nil,
-            host: "generativelanguage.googleapis.com",
-            basePath: "/v1/models",
-            customHeaders: ["x-goog-api-key": apiKey],
-            timeoutInterval: 900.0,
-            parsingOptions: .standard
-        )
-    }
 }

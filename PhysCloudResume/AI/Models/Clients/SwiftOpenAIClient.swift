@@ -10,13 +10,10 @@ import PDFKit
 import AppKit
 import SwiftUI
 import SwiftOpenAI
-import OpenAI
 
 /// Implementation of OpenAIClientProtocol using SwiftOpenAI library
-/// Uses hybrid approach: SwiftOpenAI for most features, MacPaw for TTS streaming
 class SwiftOpenAIClient: OpenAIClientProtocol {
     private let swiftService: OpenAIService
-    private let macpawClient: OpenAI  // Keep MacPaw only for TTS streaming
     private let apiKeyValue: String
     
     /// The API key used for requests
@@ -52,17 +49,6 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
                 configuration: urlConfig
             )
         }
-        
-        // Configure MacPaw client for TTS streaming - inline to avoid method call before init
-        let macpawConfig = OpenAI.Configuration(
-            token: configuration.token,
-            organizationIdentifier: configuration.organizationIdentifier,
-            host: configuration.host,
-            basePath: configuration.basePath,
-            timeoutInterval: configuration.timeoutInterval,
-            customHeaders: configuration.customHeaders
-        )
-        macpawClient = OpenAI(configuration: macpawConfig)
     }
     
     /// Initializes a new client with the given API key
@@ -78,15 +64,6 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             apiKey: apiKey,
             configuration: urlConfig
         )
-        
-        // Create MacPaw client for TTS streaming
-        let macpawConfig = OpenAI.Configuration(
-            token: apiKey,
-            organizationIdentifier: nil,
-            timeoutInterval: 900.0,
-            customHeaders: [:]
-        )
-        macpawClient = OpenAI(configuration: macpawConfig)
     }
     
     // MARK: - Helper Methods
@@ -127,26 +104,6 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         case "ash": return .ash
         case "coral": return .coral
         case "sage": return .sage
-        default: return .alloy
-        }
-    }
-    
-    /// Maps voice string to MacPaw's AudioSpeechQuery.AudioSpeechVoice
-    /// - Parameter voice: The voice string
-    /// - Returns: The mapped voice enum
-    private func mapVoiceToMacPaw(_ voice: String) -> AudioSpeechQuery.AudioSpeechVoice {
-        switch voice.lowercased() {
-        case "alloy": return .alloy
-        case "echo": return .echo
-        case "fable": return .fable
-        case "onyx": return .onyx
-        case "nova": return .nova
-        case "shimmer": return .shimmer
-        // New voices - fallback to similar voices if not available
-        case "ash": return .alloy // Neutral fallback
-        case "ballad", "verse": return .fable // British fallbacks
-        case "coral": return .nova // Female fallback
-        case "sage": return .alloy // Neutral fallback
         default: return .alloy
         }
     }
@@ -340,7 +297,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         }
     }
     
-    // MARK: - TTS Methods (Hybrid Implementation)
+    // MARK: - TTS Methods
     
     /// Sends a TTS (Text-to-Speech) request using SwiftOpenAI
     /// - Parameters:
@@ -374,8 +331,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         }
     }
     
-    /// Sends a streaming TTS (Text-to-Speech) request using MacPaw (fallback)
-    /// Note: SwiftOpenAI doesn't currently support TTS streaming, so we use MacPaw
+    /// Sends a streaming TTS (Text-to-Speech) request using SwiftOpenAI
     /// - Parameters:
     ///   - text: The text to convert to speech
     ///   - voice: The voice to use
@@ -389,35 +345,44 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
-        Logger.debug("🎵 MacPaw: Starting TTS streaming request with voice \(voice) (fallback)")
+        Logger.debug("🎵 SwiftOpenAI: Starting TTS streaming request with voice \(voice) (native streaming)")
         
-        // Map voice to MacPaw format
-        let mappedVoice = mapVoiceToMacPaw(voice)
-        
-        // Create the query for MacPaw
-        let query = AudioSpeechQuery(
-            model: AIModels.gpt_4o_mini_tts,
-            input: text,
-            voice: mappedVoice,
-            instructions: instructions ?? "",
-            responseFormat: .mp3
-        )
-        
-        // Send the streaming TTS request using MacPaw
-        _ = macpawClient.audioCreateSpeechStream(query: query) { partialResult in
-            switch partialResult {
-            case let .success(chunk):
-                onChunk(.success(chunk.audio))
-            case let .failure(error):
-                onChunk(.failure(error))
+        Task {
+            do {
+                let parameters = AudioSpeechParameters(
+                    model: .tts1,
+                    input: text,
+                    voice: mapVoiceToSwiftOpenAI(voice),
+                    responseFormat: nil,
+                    speed: nil,
+                    stream: true
+                )
+                
+                let stream = try await swiftService.createStreamingSpeech(parameters: parameters)
+                
+                var hasCompletedNormally = false
+                
+                for try await chunk in stream {
+                    if chunk.isLastChunk {
+                        hasCompletedNormally = true
+                        onComplete(nil)
+                        break
+                    } else {
+                        onChunk(.success(chunk.chunk))
+                    }
+                }
+                
+                // If we exit the stream without seeing the last chunk, still complete normally
+                if !hasCompletedNormally {
+                    Logger.debug("🎵 SwiftOpenAI: TTS stream completed without explicit last chunk")
+                    onComplete(nil)
+                }
+                
+            } catch {
+                Logger.debug("❌ SwiftOpenAI: TTS streaming failed: \(error.localizedDescription)")
+                let mappedError = mapSwiftOpenAIError(error)
+                onComplete(mappedError)
             }
-        } completion: { error in
-            if let error = error {
-                Logger.debug("❌ MacPaw: TTS streaming failed: \(error.localizedDescription)")
-            } else {
-                Logger.debug("✅ MacPaw: TTS streaming completed successfully")
-            }
-            onComplete(error)
         }
     }
     

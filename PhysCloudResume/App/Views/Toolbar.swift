@@ -34,7 +34,6 @@ struct BuildToolbar: ToolbarContent {
 
     // AppStorage for API keys to enable/disable model fetching
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
-    @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
 
     private var selectedResumeBinding: Binding<Resume?> {
         Binding<Resume?>(
@@ -56,7 +55,7 @@ struct BuildToolbar: ToolbarContent {
 
             // Add OpenAI Model Picker here, visible for relevant tabs
             // This will be the first item on the right due to order of definition for .primaryAction
-            if selectedTab != .listing && (openAiApiKey != "none" || geminiApiKey != "none") {
+            if selectedTab != .listing && openAiApiKey != "none" {
                 ToolbarItemGroup(placement: .primaryAction) { // Changed to .primaryAction
                     OpenAIModelSettingsView() // Directly embed the view
                         .frame(minWidth: 150, maxWidth: 250) // Adjust frame for toolbar
