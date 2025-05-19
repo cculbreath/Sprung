@@ -10,7 +10,6 @@ import SwiftUI
 struct LLMProviderSettingsView: View {
     // AppStorage for API keys to check if they're available
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
-    @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -38,29 +37,10 @@ struct LLMProviderSettingsView: View {
                         }
                     }
                 }
-                
-                HStack {
-                    Image(systemName: "sparkles.tv")
-                        .foregroundColor(.secondary)
-                    Text("Google Gemini")
-                    Spacer()
-                    if geminiApiKey == "none" {
-                        Text("Not configured")
-                            .foregroundColor(.red)
-                    } else {
-                        HStack {
-                            Circle()
-                                .fill(Color.green)
-                                .frame(width: 8, height: 8)
-                            Text("Configured")
-                                .foregroundColor(.green)
-                        }
-                    }
-                }
             }
             .padding(.horizontal, 10)
             
-            Text("Configure API keys in the Settings dialog. Both OpenAI and Gemini models will appear in the model picker when their API keys are configured.")
+            Text("Configure API keys in the Settings dialog. OpenAI models will appear in the model picker when their API key is configured.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 10)

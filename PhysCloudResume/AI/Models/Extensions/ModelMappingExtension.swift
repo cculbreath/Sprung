@@ -57,10 +57,6 @@ extension SwiftOpenAI.Model {
         case "gpt-3.5-turbo-1106":
             return .gpt35Turbo1106
             
-        // Gemini models (treated as custom)
-        case let model where model.hasPrefix("gemini-"):
-            return .custom(model)
-            
         // Default: treat as custom model
         default:
             Logger.debug("⚠️ Using custom model mapping for: \(modelString)")

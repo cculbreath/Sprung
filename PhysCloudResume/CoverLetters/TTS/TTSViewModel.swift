@@ -118,6 +118,14 @@ class TTSViewModel {
                 Logger.debug("[TTSViewModel] Ignoring provider finish event during initial setup")
                 return
             }
+            
+            // Special case: If we're still speaking or paused when onFinish is called, this is likely
+            // from the chunk overflow handler, and we should NOT stop playback
+            if (self.isSpeaking || self.isPaused) && !self.isBuffering {
+                Logger.debug("[TTSViewModel] Received onFinish while speaking/paused - likely from chunk overflow handler, maintaining playback state")
+                return
+            }
+            
             self.isSpeaking = false
             self.isPaused = false
             self.isBuffering = false
@@ -202,6 +210,36 @@ class TTSViewModel {
     }
 
     // MARK: - Public Methods
+    
+    /// Save the current TTS audio to a file
+    /// - Parameter filename: Optional filename (defaults to a timestamp-based name)
+    /// - Returns: URL where the file was saved, or nil if saving failed
+    func saveAudioToFile(filename: String? = nil) -> URL? {
+        // Get document directory URL
+        guard let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            Logger.error("[TTSViewModel] Could not access document directory")
+            return nil
+        }
+        
+        // Create filename with timestamp if not provided
+        let actualFilename = filename ?? "tts_audio_\(Int(Date().timeIntervalSince1970)).mp3"
+        let fileURL = documentDirectory.appendingPathComponent(actualFilename)
+        
+        // Get the audio data from the provider's streamer
+        guard let cachedAudioData = ttsProvider.getCachedAudio(), !cachedAudioData.isEmpty else {
+            Logger.error("[TTSViewModel] No audio data available to save")
+            return nil
+        }
+        
+        do {
+            try cachedAudioData.write(to: fileURL)
+            Logger.debug("[TTSViewModel] Successfully saved audio to \(fileURL.path)")
+            return fileURL
+        } catch {
+            Logger.error("[TTSViewModel] Failed to save audio: \(error.localizedDescription)")
+            return nil
+        }
+    }
 
     /// Starts playback of the provided content
     /// - Parameters:

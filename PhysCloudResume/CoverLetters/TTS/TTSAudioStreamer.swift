@@ -23,14 +23,17 @@ final class TTSAudioStreamer {
     /// Tracks total buffered data size to prevent excessive memory usage
     private var totalBufferedSize: Int = 0
 
-    /// Maximum buffer size allowed (10MB)
-    private let maxBufferSize: Int = 10 * 1024 * 1024
+    /// Maximum buffer size allowed (50MB) - increased for better caching
+    private let maxBufferSize: Int = 50 * 1024 * 1024
+    
+    /// Cache of all received audio data for persistent playback
+    private var completeAudioCache: Data = Data()
 
     /// Count of received chunks for monitoring
     private var chunkCount: Int = 0
 
     /// Maximum number of chunks to allow before forcing cleanup
-    private let maxChunkCount: Int = 100
+    private let maxChunkCount: Int = 300
 
     /// Continuation for feeding audio data stream
     private var continuation: AsyncThrowingStream<Data, Error>.Continuation?
@@ -93,6 +96,9 @@ final class TTSAudioStreamer {
 
     /// Called when playback has finished
     var onFinish: (() -> Void)?
+    
+    /// Called when playback actually completes (not from overflow but true end of audio)
+    var onTruePlaybackEnd: (() -> Void)?
 
     /// Called on playback or decoding error
     var onError: ((Error) -> Void)?
@@ -141,13 +147,37 @@ final class TTSAudioStreamer {
         chunkCount = 0
         // This helps in monitoring if resource cleanup is happening correctly
         Logger.debug("TTSAudioStreamer: Buffer metrics reset")
+        // Note: We intentionally don't clear completeAudioCache to maintain entire audio history
     }
 
     // MARK: - Public Methods
+    
+    /// Get the complete cached audio data
+    /// - Returns: The complete audio data that has been cached
+    func getCachedAudio() -> Data {
+        return completeAudioCache
+    }
+    
+    /// Save the complete audio data to a file
+    /// - Parameter url: The URL to save the file to
+    /// - Returns: True if saving was successful
+    func saveAudioToFile(url: URL) -> Bool {
+        do {
+            try completeAudioCache.write(to: url)
+            Logger.debug("TTSAudioStreamer: Successfully saved audio to \(url.path)")
+            return true
+        } catch {
+            Logger.error("TTSAudioStreamer: Failed to save audio to \(url.path): \(error.localizedDescription)")
+            return false
+        }
+    }
 
     /// Append a new chunk of audio data for playback.
     /// On the first chunk, buffer it before starting the player to ensure initial data is available.
     func append(_ data: Data) {
+        // First, add to our complete audio cache for persistent playback
+        completeAudioCache.append(data)
+        
         // Check buffer limits before processing new data
         totalBufferedSize += data.count
         chunkCount += 1
@@ -171,21 +201,26 @@ final class TTSAudioStreamer {
             return
         }
 
-        // Check if we've received too many chunks
+        // Check if we've received too many chunks - but allow audio to continue playing
         if chunkCount > maxChunkCount {
-            Logger.error("TTSAudioStreamer: Too many chunks accumulated (\(chunkCount)/\(maxChunkCount)). Stopping playback.")
-            let error = NSError(
+            Logger.warning("TTSAudioStreamer: Many chunks accumulated (\(chunkCount)/\(maxChunkCount)). Forcing stream completion to prevent overflow.")
+            
+            // Report overflow condition but CONTINUE playback of existing audio
+            // Create a specific overflow error that can be handled specially
+            let overflowError = NSError(
                 domain: "TTSAudioStreamer",
                 code: 1002,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Too many chunks accumulated",
+                    NSLocalizedDescriptionKey: "Chunk limit exceeded, but continuing playback",
                 ]
             )
-
-            // Must dispatch to MainActor for stop() call
+            
             Task { @MainActor in
-                self.stop()
-                self.onError?(error)
+                // Call onError with the special error code that won't stop playback
+                self.onError?(overflowError)
+                
+                // Reset buffer metrics but DON'T stop the stream
+                self.resetBufferMetrics()
             }
             return
         }
@@ -219,11 +254,11 @@ final class TTSAudioStreamer {
             currentStream = stream
         }
         // If still buffering initial chunks, accumulate until threshold reached
-        else if initialChunks != nil {
+        else if let currentInitialChunks = initialChunks {
             initialChunks!.append(data)
-            Logger.debug("TTSAudioStreamer: Added chunk to buffer, now have \(initialChunks!.count)/\(initialBufferChunkCount), total size: \(totalBufferedSize)")
+            Logger.debug("TTSAudioStreamer: Added chunk to buffer, now have \(currentInitialChunks.count + 1)/\(initialBufferChunkCount), total size: \(totalBufferedSize)")
 
-            if initialChunks!.count >= initialBufferChunkCount {
+            if currentInitialChunks.count + 1 >= initialBufferChunkCount {
                 // Ready to start playback with buffered data
                 guard let cont = continuation, let stream = currentStream else {
                     return
@@ -250,7 +285,10 @@ final class TTSAudioStreamer {
         }
         // Already started, yield chunks immediately
         else {
-            guard let cont = continuation else { return }
+            guard let cont = continuation else { 
+                Logger.warning("TTSAudioStreamer: Tried to append chunk but no continuation available")
+                return 
+            }
             Logger.debug("TTSAudioStreamer: Yielding chunk directly to player, size: \(data.count), total: \(totalBufferedSize)")
             Task { @MainActor in
                 cont.yield(data)
@@ -269,11 +307,11 @@ final class TTSAudioStreamer {
                 continuation = nil
             }
 
-            // Clear all buffers and reset state
+            // Clear active streaming buffers but preserve complete audio cache
             currentStream = nil
             initialChunks = nil
             isPausedFlag = false
-            resetBufferMetrics()
+            resetBufferMetrics() // This will reset counters but not clear completeAudioCache
 
             // Make absolutely sure buffering state is cleared
             if isBufferingFlag {

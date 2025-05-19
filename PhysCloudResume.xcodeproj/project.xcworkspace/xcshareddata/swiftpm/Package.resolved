@@ -1,15 +1,6 @@
 {
-  "originHash" : "1c69132a76f4c6eadecbaa3d1b880c23ab8fb62b09863c79903b2ccf9e2122f2",
+  "originHash" : "24e49e4e21ce5769bda95b349ee90256d2ada89112505f8ed9e00fc3d7bc1567",
   "pins" : [
-    {
-      "identity" : "openai",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MacPaw/OpenAI.git",
-      "state" : {
-        "revision" : "7eef412b26b0b2af6add548bb60f25f306b41ee2",
-        "version" : "0.4.1"
-      }
-    },
     {
       "identity" : "swift-chunked-audio-player",
       "kind" : "remoteSourceControl",
@@ -31,10 +22,10 @@
     {
       "identity" : "swiftopenai",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/jamesrochabrun/SwiftOpenAI.git",
+      "location" : "https://github.com/cculbreath/SwiftOpenAI.git",
       "state" : {
-        "revision" : "854539935150cf4efa69a32ae761ee2aa64aa84a",
-        "version" : "4.1.1"
+        "branch" : "main",
+        "revision" : "10dedf642b4b314b9f2b3c870118f52053097e0b"
       }
     },
     {

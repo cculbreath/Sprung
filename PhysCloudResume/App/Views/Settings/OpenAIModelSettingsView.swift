@@ -27,7 +27,6 @@ struct OpenAIModelSettingsView: View {
             models.append(contentsOf: availableOpenAIModels.isEmpty ? defaultOpenAIModels() : availableOpenAIModels)
         }
 
-
         return models
     }
     
@@ -43,9 +42,9 @@ struct OpenAIModelSettingsView: View {
         HStack(spacing: 8) {
             // Model Selection Picker
             Picker("Model", selection: $preferredLLMModel) {
-                // Ensure there's always a default option, even if loading fails
-                if allModels.isEmpty {
-                    Text(preferredLLMModel).tag(preferredLLMModel) // Show current if list empty
+                // Always provide the current selection as an option to prevent invalid state
+                if !allModels.contains(preferredLLMModel) {
+                    Text(preferredLLMModel).tag(preferredLLMModel)
                 }
                 
                 // List all available models
@@ -56,6 +55,10 @@ struct OpenAIModelSettingsView: View {
             .pickerStyle(.menu) // Menu style is good for toolbars
             .disabled(allModels.isEmpty) // Disable if no models available
             .frame(minWidth: 180, idealWidth: 220) // Adjust width for toolbar
+            .onChange(of: preferredLLMModel) { _, newValue in
+                // Validate whenever the selection changes
+                validateModelSelection(newValue)
+            }
 
             // Refresh Button
             Button(action: fetchAllModels) {
@@ -66,13 +69,15 @@ struct OpenAIModelSettingsView: View {
                 }
             }
             .buttonStyle(PlainButtonStyle()) // Plain style for toolbar buttons
-            .disabled((openAiApiKey == "none")  ||
+            .disabled((openAiApiKey == "none") ||
                       (isLoadingOpenAIModels))
             .help(openAiApiKey == "none" ?
                  "Enter API Keys in Settings to load models" : "Refresh model list")
         }
         // Removed padding, background, and border for toolbar suitability
         .onAppear {
+            // Fix any corrupted model names first
+            fixCorruptedModelName()
             // Fetch models on appear only if API keys are present and models haven't been loaded
             fetchAllModels()
         }
@@ -83,10 +88,9 @@ struct OpenAIModelSettingsView: View {
 
     }
 
-    // Function to fetch both OpenAI and Gemini models
+    // Function to fetch both OpenAI models
     private func fetchAllModels() {
         fetchOpenAIModels()
-
 
         // Ensure the selected model is still valid
         validateSelectedModel()
@@ -119,12 +123,59 @@ struct OpenAIModelSettingsView: View {
     
     // Validate that the selected model is in the available models list
     private func validateSelectedModel() {
+        // First, fix common corrupted model names
+        fixCorruptedModelName()
+        
         if !allModels.isEmpty && !allModels.contains(preferredLLMModel) {
             // If the currently selected model is not available, select a default
             if openAiApiKey != "none" && !availableOpenAIModels.isEmpty {
                 // Prefer OpenAI models if available
                 preferredLLMModel = availableOpenAIModels.first ?? AIModels.gpt4o
             }
+        }
+    }
+    
+    // Fix common corrupted model names that might be stored in UserDefaults
+    private func fixCorruptedModelName() {
+        let sanitized = OpenAIModelFetcher.sanitizeModelName(preferredLLMModel)
+        if sanitized != preferredLLMModel {
+            Logger.debug("🔧 Correcting corrupted model name: '\(preferredLLMModel)' → '\(sanitized)'")
+            preferredLLMModel = sanitized
+        }
+    }
+    
+    // Validate model selection in real-time
+    private func validateModelSelection(_ newValue: String) {
+        // Check if the new value is valid
+        if !allModels.contains(newValue) && !newValue.isEmpty {
+            Logger.warning("⚠️ Invalid model selection: '\(newValue)'. Available models: \(allModels)")
+            
+            // Try to find a close match or fallback to default
+            if let closestMatch = findClosestModelMatch(for: newValue) {
+                preferredLLMModel = closestMatch
+                Logger.debug("🔧 Corrected to closest match: '\(closestMatch)'")
+            } else {
+                // Fallback to default
+                preferredLLMModel = AIModels.gpt4o
+                Logger.debug("🔧 Fallback to default model: '\(AIModels.gpt4o)'")
+            }
+        }
+    }
+    
+    // Find the closest matching model name
+    private func findClosestModelMatch(for invalidModel: String) -> String? {
+        // Check if it's a known corrupted variant
+        switch invalidModel {
+        case let model where model.contains("o4") && model.contains("mini"):
+            return AIModels.gpt4o_mini
+        case let model where model.contains("o4") && !model.contains("mini"):
+            return AIModels.gpt4o
+        case let model where model.contains("3.5") || model.contains("35"):
+            return allModels.first { $0.contains("3.5-turbo") }
+        case let model where model.contains("4-turbo") || model.contains("4turbo"):
+            return allModels.first { $0.contains("4-turbo") }
+        default:
+            return nil
         }
     }
     
