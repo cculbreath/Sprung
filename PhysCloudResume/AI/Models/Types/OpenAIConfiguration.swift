@@ -120,9 +120,7 @@ public extension OpenAIConfiguration {
             token: apiKey,
             host: "generativelanguage.googleapis.com",
             basePath: "/v1beta/openai", // Use the official OpenAI-compatible endpoint
-            customHeaders: [
-                "Authorization": "Bearer \(apiKey)" // Authorization header with Bearer token
-            ],
+            customHeaders: [:],
             timeoutInterval: 900.0
         )
     }

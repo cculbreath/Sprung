@@ -113,14 +113,15 @@ class OpenAIModelFetcher {
             let chatModels = modelResponse.data
                 .map { $0.id }
                 .filter { modelId in
-                    // More comprehensive filtering for chat models
                     let id = modelId.lowercased()
-                    return id.contains("gpt-4o") ||     // GPT-4o variants
-                           id.contains("gpt-4") ||      // GPT-4 variants
-                           id.contains("gpt-3.5") ||    // GPT-3.5 variants
-                           id.contains("o1-") ||        // Reasoning models
-                           id.contains("o3-") ||        // Future o3 models
-                           id.contains("mini")          // Mini variants
+                    if id.hasPrefix("gpt-") {
+                        return true
+                    }
+                    if id.hasPrefix("o"), id.count > 1,
+                       id[id.index(id.startIndex, offsetBy: 1)].isNumber {
+                        return true
+                    }
+                    return false
                 }
                 .sorted()
 

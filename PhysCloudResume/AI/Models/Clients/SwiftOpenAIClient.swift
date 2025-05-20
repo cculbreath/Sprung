@@ -83,16 +83,16 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
                 extraHeaders: configuration.customHeaders
             )
         } else if configuration.host == "generativelanguage.googleapis.com" {
-            // Special handling for Gemini API (uses API key in URL)
+            // Special handling for Gemini API using OpenAI-compatible endpoint
             Logger.debug("🌟 Creating Gemini-specific API client")
-            
-            // Gemini client needs special handling
+            let versionPath = configuration.basePath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            // Pass the API key as bearer token; no x-api-key needed
             swiftService = OpenAIServiceFactory.service(
-                apiKey: "", // Empty here as key is provided in headers and URL
+                apiKey: configuration.token ?? "",
                 overrideBaseURL: "https://\(configuration.host)",
                 configuration: urlConfig,
                 proxyPath: nil,
-                overrideVersion: "v1beta", // Gemini uses v1beta
+                overrideVersion: versionPath,
                 extraHeaders: configuration.customHeaders
             )
         } else if configuration.host != "api.openai.com" {
@@ -377,12 +377,20 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         let swiftMessages = messages.map { convertToSwiftOpenAIMessage($0) }
         let swiftResponseFormat = convertToSwiftOpenAIResponseFormat(responseFormat)
         
-        let parameters = ChatCompletionParameters(
+        // Build chat completion parameters
+        var parameters = ChatCompletionParameters(
             messages: swiftMessages,
             model: SwiftOpenAI.Model.from(model),
             responseFormat: swiftResponseFormat,
             temperature: temperature
         )
+        // For reasoning models (o-series, Grok mini, and Gemini v2+ variants), constrain reasoning effort to medium
+        let idLower = model.lowercased()
+        if idLower.starts(with: "o")
+            || (idLower.contains("grok") && idLower.contains("mini"))
+            || idLower.starts(with: "gemini-2") {
+            parameters.reasoningEffort = "medium"
+        }
         
         do {
             let result = try await swiftService.startChat(parameters: parameters)
@@ -487,7 +495,9 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         // Set headers - crucial for Claude API
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        // Use both x-api-key and Authorization headers for compatibility
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         
         // Log the request for debugging
         Logger.debug("📡 Claude API request to \(url.absoluteString) with model \(model)")

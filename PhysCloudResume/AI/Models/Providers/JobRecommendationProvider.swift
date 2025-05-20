@@ -20,6 +20,8 @@ import SwiftUI
         You are an expert career advisor specializing in job application prioritization. Your task is to analyze a list of job applications and recommend the one that best matches the candidate's qualifications and career goals. You will be provided with job descriptions, the candidate's resume, and additional background information. Choose the job that offers the best match in terms of skills, experience, and potential career growth.
 
         IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The recommendedJobId field must contain the exact UUID string from the id field of the chosen job in the job listings JSON array. Do not modify the UUID format in any way.
+        
+        IMPORTANT: Output ONLY the JSON object with the fields "recommendedJobId" and "reason". Do not include any additional commentary, explanation, or text outside the JSON.
         """
     )
 
@@ -129,18 +131,10 @@ import SwiftUI
                 guard let geminiApiKey = UserDefaults.standard.string(forKey: "geminiApiKey"),
                       !geminiApiKey.isEmpty, geminiApiKey != "none" else {
                     throw NSError(domain: "JobRecommendationProvider", code: 1000, 
-                                 userInfo: [NSLocalizedDescriptionKey: "No Gemini API key available"])
+                                  userInfo: [NSLocalizedDescriptionKey: "No Gemini API key available"])
                 }
                 
-                // Test the Gemini API connection
-                let connectionSuccessful = await testGeminiConnection(apiKey: geminiApiKey)
-                
-                if !connectionSuccessful {
-                    Logger.error("❌ Gemini API connection test failed. Falling back to OpenAI.")
-                    // Fall back to OpenAI model if Gemini API connection fails
-                    throw NSError(domain: "JobRecommendationProvider", code: 1001,
-                                 userInfo: [NSLocalizedDescriptionKey: "Gemini API connection test failed"])
-                }
+            
             }
             
             // For Claude models, fall back to direct API call if SwiftOpenAI client fails
@@ -209,6 +203,13 @@ import SwiftUI
         // Get the provider for the model
         let provider = AIModels.providerForModel(model)
         
+        // Determine effective messages (drop system for non-GPT chat models like reasoning models)
+        var effectiveMessages = messages
+        let modelLower = model.lowercased()
+        if provider == AIModels.Provider.openai, !modelLower.starts(with: "gpt") {
+            effectiveMessages = messages.filter { $0.role != .system }
+            Logger.debug("Stripped system messages for non-GPT chat model: \(model)")
+        }
         // Use the standard library's jsonObject response format
         // This uses our AIResponseFormat
         let responseFormat: AIResponseFormat = .jsonObject
@@ -225,7 +226,7 @@ import SwiftUI
         
         // Use sendChatCompletionAsync with responseFormat parameter
         let response = try await openAIClient.sendChatCompletionAsync(
-            messages: messages,
+            messages: effectiveMessages,
             model: model,
             responseFormat: responseFormat,
             temperature: nil
@@ -368,6 +369,10 @@ import SwiftUI
         // Remove closing markdown code block markers
         if let closingBlockRange = processedContent.range(of: "\\s*```", options: .regularExpression) {
             processedContent.removeSubrange(closingBlockRange)
+        }
+        // Extract JSON substring if surrounded by explanatory text
+        if let firstBrace = processedContent.firstIndex(of: "{"), let lastBrace = processedContent.lastIndex(of: "}") {
+            processedContent = String(processedContent[firstBrace...lastBrace])
         }
         
         // Try to parse the JSON response
