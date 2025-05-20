@@ -35,8 +35,7 @@ struct ResumeReviewSheet: View {
     // Persisted preferred LLM model across the app
     @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
     // Persisted preferred model across the app
-    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
-
+   
     // Computed property for the content view (remains the same)
     private var contentView: some View {
         Group {
