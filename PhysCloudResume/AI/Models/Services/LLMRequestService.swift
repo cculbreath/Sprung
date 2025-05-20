@@ -1,4 +1,9 @@
-// PhysCloudResume/AI/Models/Services/LLMRequestService.swift
+//
+//  LLMRequestService.swift
+//  PhysCloudResume
+//
+//  Created by Christopher Culbreath on 5/20/25.
+//
 
 import Foundation
 import SwiftUI
@@ -9,7 +14,7 @@ class LLMRequestService: @unchecked Sendable {
     /// Shared instance of the service
     static let shared = LLMRequestService()
     
-    private var openAIClient: OpenAIClientProtocol?
+    private var appLLMClient: AppLLMClientProtocol?
     private var currentRequestID: UUID?
     private let apiQueue = DispatchQueue(label: "com.physcloudresume.apirequest", qos: .userInitiated)
     
@@ -26,43 +31,20 @@ class LLMRequestService: @unchecked Sendable {
     /// Updates the client for the current model - call this whenever the preferred model changes
     @MainActor
     func updateClientForCurrentModel() {
-        // Get all API keys
-        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
-        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
-        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-        
-        // Validate API keys
-        let validatedOpenAIKey = ModelFilters.validateAPIKey(openAIKey, for: AIModels.Provider.openai)
-        let validatedClaudeKey = ModelFilters.validateAPIKey(claudeKey, for: AIModels.Provider.claude)
-        let validatedGrokKey = ModelFilters.validateAPIKey(grokKey, for: AIModels.Provider.grok)
-        let validatedGeminiKey = ModelFilters.validateAPIKey(geminiKey, for: AIModels.Provider.gemini)
-        
-        // Create a dictionary of validated API keys by provider
-        let apiKeys = [
-            AIModels.Provider.openai: validatedOpenAIKey ?? "none",
-            AIModels.Provider.claude: validatedClaudeKey ?? "none",
-            AIModels.Provider.grok: validatedGrokKey ?? "none",
-            AIModels.Provider.gemini: validatedGeminiKey ?? "none"
-        ]
-        
-        // Get current model string
+        // Create client for the preferred model
         let currentModel = OpenAIModelFetcher.getPreferredModelString()
-        
         let provider = AIModels.providerForModel(currentModel)
+        
         Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
         
-        // Create client for the current model
-        if let client = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
-            openAIClient = client
+        // Create client with app state
+        let appState = AppState()
+        appLLMClient = AppLLMClientFactory.createClient(for: provider, appState: appState)
+        
+        if appLLMClient != nil {
             Logger.debug("✅ Initialized client for model: \(currentModel)")
-        } else if let validOpenAIKey = validatedOpenAIKey, let client = OpenAIClientFactory.createClient(apiKey: validOpenAIKey) {
-            // Fallback to standard OpenAI client if we couldn't create one for the current model
-            openAIClient = client
-            Logger.debug("⚠️ Falling back to standard OpenAI client")
         } else {
-            Logger.error("❌ Failed to initialize LLM client: No valid API keys available")
-            openAIClient = nil
+            Logger.error("❌ Failed to initialize LLM client")
         }
     }
     
@@ -73,7 +55,7 @@ class LLMRequestService: @unchecked Sendable {
         let provider = AIModels.providerForModel(model)
 
         // For OpenAI models – all of the filtered models support images
-        let openAIVisionModelsSubstrings = ["gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "gpt-image", "o4", "cua"]
+        let openAIVisionModelsSubstrings = ["gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "gpt-4.5", "gpt-image", "o4", "cua"]
 
         // Claude 3 family supports vision natively
         let claudeVisionSubstrings = ["claude-3", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5"]
@@ -99,8 +81,7 @@ class LLMRequestService: @unchecked Sendable {
     }
 
     /// Chooses the correct model for an image request.  If the selected model cannot accept image
-    /// input we transparently substitute a compatible model from the same provider.  This is
-    /// currently only required for Grok where the dedicated vision model must be used.
+    /// input we transparently substitute a compatible model from the same provider.
     /// - Parameters:
     ///   - model: The user-selected model string.
     ///   - wantsImage: Boolean indicating whether the request includes an image.
@@ -120,7 +101,7 @@ class LLMRequestService: @unchecked Sendable {
         return model
     }
 
-    /// Sends a standard LLM request with text-only content (migrated to ChatCompletions)
+    /// Sends a standard LLM request with text-only content
     @MainActor
     func sendTextRequest(
         promptText: String,
@@ -128,56 +109,60 @@ class LLMRequestService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     ) {
-        // Use provided model or fall back to preferred model
-        let modelToUse = model ?? OpenAIModelFetcher.getPreferredModelString()
+        // Initialize client if needed
+        if appLLMClient == nil {
+            initialize()
+        }
         
-        // Get all API keys
-        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
-        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
-        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-        
-        // Create a dictionary of API keys by provider
-        let apiKeys = [
-            AIModels.Provider.openai: openAIKey,
-            AIModels.Provider.claude: claudeKey,
-            AIModels.Provider.grok: grokKey,
-            AIModels.Provider.gemini: geminiKey
-        ]
-        
-        // Create or update client for the specific model
-        let client = OpenAIClientFactory.createClientForModel(model: modelToUse, apiKeys: apiKeys) ?? openAIClient
-        
-        guard let client = client else {
-            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "No LLM client available for model: \(modelToUse)"])))
+        guard let appLLMClient = appLLMClient else {
+            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000,
+                                      userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
             return
         }
         
-        let requestID = UUID(); currentRequestID = requestID
+        // Use provided model or fall back to preferred model
+        let modelToUse = model ?? OpenAIModelFetcher.getPreferredModelString()
+        
+        let requestID = UUID()
+        currentRequestID = requestID
         
         Task {
             do {
-                // Convert single text prompt to ChatCompletions format
-                let messages = [ChatMessage(role: .user, content: promptText)]
+                // Convert single text prompt to AppLLMMessage format
+                let messages = [AppLLMMessage(role: .user, text: promptText)]
                 
-                let response = try await client.sendChatCompletionAsync(
+                // Create query
+                let query = AppLLMQuery(
                     messages: messages,
-                    model: modelToUse,
-                    responseFormat: nil,
-                    temperature: nil
+                    modelIdentifier: modelToUse,
+                    temperature: 0.7
                 )
+                
+                // Execute query
+                let response = try await appLLMClient.executeQuery(query)
                 
                 // Ensure request is still current
                 guard self.currentRequestID == requestID else { return }
                 
-                onProgress(response.content)
+                // Extract response content
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
+                }
                 
-                // Convert ChatCompletion response to ResponsesAPI format for backward compatibility
+                // Provide progress update
+                onProgress(responseText)
+                
+                // Convert to legacy ResponsesAPIResponse format for backward compatibility
                 let compatResponse = ResponsesAPIResponse(
-                    id: response.id ?? UUID().uuidString,
-                    content: response.content,
-                    model: response.model
+                    id: UUID().uuidString,
+                    content: responseText,
+                    model: modelToUse
                 )
+                
                 onComplete(.success(compatResponse))
             } catch {
                 Logger.debug("Error in sendTextRequest: \(error.localizedDescription)")
@@ -185,23 +170,27 @@ class LLMRequestService: @unchecked Sendable {
                 // Create user-friendly error message
                 var userErrorMessage = "Error processing your request. "
                 
-                if let nsError = error as NSError? {
-                    Logger.debug("Error domain: \(nsError.domain), code: \(nsError.code), userInfo: \(nsError.userInfo)")
-                    
-                    if nsError.domain == "OpenAIAPI" {
-                        userErrorMessage += "API issue: \(nsError.localizedDescription)"
-                    } else if nsError.domain.contains("URLError") && nsError.code == -1001 {
+                if let appError = error as? AppLLMError {
+                    switch appError {
+                    case .clientError(let message):
+                        userErrorMessage += message
+                    case .decodingFailed:
+                        userErrorMessage += "Failed to process the model's response."
+                    case .unexpectedResponseFormat:
+                        userErrorMessage += "The model returned an unexpected response format."
+                    }
+                } else {
+                    let nsError = error as NSError
+                    if nsError.domain.contains("URLError") && nsError.code == -1001 {
                         userErrorMessage += "Request timed out. Please check your network connection and try again."
-                    } else if let errorInfo = nsError.userInfo[NSLocalizedDescriptionKey] as? String {
-                        if errorInfo.contains("temperature") || errorInfo.contains("parameter") {
-                            userErrorMessage = "Model compatibility issue: \(errorInfo). Please try a different model in Settings."
-                        } else {
-                            userErrorMessage += errorInfo
-                        }
+                    } else {
+                        userErrorMessage += error.localizedDescription
                     }
                 }
                 
+                // Ensure request is still current
                 guard self.currentRequestID == requestID else { return }
+                
                 onComplete(.failure(NSError(
                     domain: "LLMRequestService",
                     code: 1100,
@@ -211,7 +200,7 @@ class LLMRequestService: @unchecked Sendable {
         }
     }
     
-    /// Sends a request that can include an image and/or JSON schema (migrated to ChatCompletions)
+    /// Sends a request that can include an image and/or JSON schema
     func sendMixedRequest(
         promptText: String,
         base64Image: String?,
@@ -223,137 +212,82 @@ class LLMRequestService: @unchecked Sendable {
         
         Task {
             do {
-                // Get all API keys
-                let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-                let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
-                let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
-                let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-                
-                // Validate API keys before using them
-                let validatedOpenAIKey = ModelFilters.validateAPIKey(openAIKey, for: AIModels.Provider.openai)
-                let validatedClaudeKey = ModelFilters.validateAPIKey(claudeKey, for: AIModels.Provider.claude)
-                let validatedGrokKey = ModelFilters.validateAPIKey(grokKey, for: AIModels.Provider.grok)
-                let validatedGeminiKey = ModelFilters.validateAPIKey(geminiKey, for: AIModels.Provider.gemini)
-                
-                // Create a dictionary of validated API keys by provider
-                let apiKeys = [
-                    AIModels.Provider.openai: validatedOpenAIKey ?? "none",
-                    AIModels.Provider.claude: validatedClaudeKey ?? "none",
-                    AIModels.Provider.grok: validatedGrokKey ?? "none",
-                    AIModels.Provider.gemini: validatedGeminiKey ?? "none"
-                ]
-                
-                // Log available keys (without revealing the entire keys)
-                Logger.debug("🔑 Available API keys:")
-                if let key = validatedOpenAIKey {
-                    Logger.debug("✅ OpenAI: \(key.prefix(4))... (\(key.count) chars)")
-                } else {
-                    Logger.debug("❌ OpenAI: No valid key")
-                }
-                if let key = validatedClaudeKey {
-                    Logger.debug("✅ Claude: \(key.prefix(4))... (\(key.count) chars)")
-                } else {
-                    Logger.debug("❌ Claude: No valid key")
-                }
-                if let key = validatedGeminiKey {
-                    Logger.debug("✅ Gemini: \(key.prefix(4))... (\(key.count) chars)")
-                } else {
-                    Logger.debug("❌ Gemini: No valid key")
-                }
-                
-                // Determine which model we will actually use for the request – we may need to
-                // substitute a vision-capable variant if the selected model does not support
-                // images.
-                let selectedModel = OpenAIModelFetcher.getPreferredModelString()
-                let currentModel = LLMRequestService.modelForImageRequest(selectedModel: selectedModel,
-                                                                          wantsImage: base64Image != nil)
-                
-                // Create or update client for the selected model
-                let client: OpenAIClientProtocol?
-                if let modelClient = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
-                    client = modelClient
-                } else if let existingClient = openAIClient {
-                    client = existingClient
-                } else {
-                    // Initialize on MainActor and then get the client
+                // Initialize client if needed
+                if appLLMClient == nil {
                     await MainActor.run {
                         initialize()
                     }
-                    // Now get the client after initialization (no mutation in concurrent code)
-                    client = await MainActor.run { 
-                        return self.openAIClient
-                    }
                 }
                 
-                guard let client = client else {
-                    await MainActor.run {
-                        onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
-                    }
-                    return
+                // Get client after initialization
+                guard let client = await MainActor.run { self.appLLMClient } else {
+                    throw AppLLMError.clientError("LLM client not initialized")
                 }
                 
-                // Build messages array for ChatCompletions
-                var messages: [ChatMessage] = []
+                // Determine which model to use
+                let selectedModel = OpenAIModelFetcher.getPreferredModelString()
+                let currentModel = LLMRequestService.modelForImageRequest(
+                    selectedModel: selectedModel,
+                    wantsImage: base64Image != nil
+                )
                 
-                // For image requests, we need to properly include the image in the message
+                // Build message content
+                var contentParts: [AppLLMMessageContentPart] = []
+                
+                // Add text part
+                contentParts.append(.text(promptText))
+                
+                // Add image part if provided
                 if let image = base64Image {
-                    // Add user message with both text and image
-                    let userMessage = ChatMessage(role: .user, content: promptText, imageData: image)
-                    messages.append(userMessage)
-                } else {
-                    // Text-only request
-                    messages.append(ChatMessage(role: .user, content: promptText))
+                    contentParts.append(.imageUrl(base64Data: image, mimeType: "image/png"))
                 }
                 
-                // Use structured output if schema provided
-                if schema != nil {
-                    // For structured output with ChatCompletions, we need to parse the schema
-                    // and use sendChatCompletionWithStructuredOutput if the type is known
-                    
-                    // For now, we'll use regular chat completion and let the client handle JSON parsing
-                    // This maintains backward compatibility while using ChatCompletions
-                    Logger.debug("Schema provided but using regular chat completion for backward compatibility")
-                    let response = try await client.sendChatCompletionAsync(
-                        messages: messages,
-                        model: currentModel,
-                        responseFormat: nil,
-                        temperature: nil
+                // Create message
+                let message = AppLLMMessage(role: .user, contentParts: contentParts)
+                
+                // Create query
+                let query: AppLLMQuery
+                
+                // Handle structured output if schema provided
+                if let schema = schema {
+                    // Basic implementation - for more advanced usage, parse the schema and use responseType
+                    query = AppLLMQuery(
+                        messages: [message],
+                        modelIdentifier: currentModel,
+                        temperature: 0.7,
+                        responseType: Dictionary<String, Any>.self,
+                        jsonSchema: schema.jsonString
                     )
-                    
-                    // Note: For full structured output support, we would need to:
-                    // 1. Determine the structured output type from the schema name
-                    // 2. Call sendChatCompletionWithStructuredOutput with the proper type
-                    // 3. Convert the structured response back to ResponsesAPIResponse format
-                    
-                    // Convert response for backward compatibility
-                    let compatResponse = ResponsesAPIResponse(
-                        id: response.id ?? UUID().uuidString,
-                        content: response.content,
-                        model: response.model
-                    )
-                    
-                    await MainActor.run {
-                        onComplete(.success(compatResponse))
-                    }
                 } else {
-                    // Regular chat completion
-                    let response = try await client.sendChatCompletionAsync(
-                        messages: messages,
-                        model: currentModel,
-                        responseFormat: nil,
-                        temperature: nil
+                    // Simple text query
+                    query = AppLLMQuery(
+                        messages: [message],
+                        modelIdentifier: currentModel,
+                        temperature: 0.7
                     )
-                    
-                    // Convert response for backward compatibility
-                    let compatResponse = ResponsesAPIResponse(
-                        id: response.id ?? UUID().uuidString,
-                        content: response.content,
-                        model: response.model
-                    )
-                    
-                    await MainActor.run {
-                        onComplete(.success(compatResponse))
-                    }
+                }
+                
+                // Execute query
+                let response = try await client.executeQuery(query)
+                
+                // Extract response content
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
+                }
+                
+                // Convert to legacy ResponsesAPIResponse format
+                let compatResponse = ResponsesAPIResponse(
+                    id: UUID().uuidString,
+                    content: responseText,
+                    model: currentModel
+                )
+                
+                await MainActor.run {
+                    onComplete(.success(compatResponse))
                 }
             } catch {
                 await MainActor.run {
@@ -377,36 +311,19 @@ class LLMRequestService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        // Get all API keys
-        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
-        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
-        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-        
-        // Create a dictionary of API keys by provider
-        let apiKeys = [
-            AIModels.Provider.openai: openAIKey,
-            AIModels.Provider.claude: claudeKey,
-            AIModels.Provider.grok: grokKey,
-            AIModels.Provider.gemini: geminiKey
-        ]
-        
-        // Get current model string
-        let currentModel = OpenAIModelFetcher.getPreferredModelString()
-        
-        // Create or update client for the selected model
-        if let client = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
-            // Use the model-specific client
-            openAIClient = client
-        } else if openAIClient == nil {
-            // Fallback to initializing standard OpenAI client
+        // Initialize client if needed
+        if appLLMClient == nil {
             initialize()
         }
         
-        guard let client = openAIClient else {
-            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
+        guard let client = appLLMClient else {
+            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, 
+                                      userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
             return
         }
+        
+        // Get current model
+        let currentModel = OpenAIModelFetcher.getPreferredModelString()
         
         // Clear context if starting new conversation
         if isNewConversation {
@@ -416,48 +333,77 @@ class LLMRequestService: @unchecked Sendable {
         // Get or create context
         let context = ConversationContextManager.shared.getOrCreateContext(for: resume.id, type: .resume)
         
-        // Build messages array
-        var messages = ConversationContextManager.shared.getMessages(for: context)
+        // Get existing messages and convert to AppLLMMessage format
+        let existingMessages = ConversationContextManager.shared.getMessages(for: context)
+        var appMessages = Array<AppLLMMessage>.fromChatMessages(existingMessages)
         
         // Add system prompt if this is first message or no system message exists
-        if messages.isEmpty || messages.first?.role != .system {
+        if appMessages.isEmpty || appMessages.first?.role != .system {
             if let systemPrompt = systemPrompt {
-                let systemMessage = ChatMessage(role: .system, content: systemPrompt)
-                ConversationContextManager.shared.addMessage(systemMessage, to: context)
-                messages.insert(systemMessage, at: 0)
+                let systemMessage = AppLLMMessage(role: .system, text: systemPrompt)
+                // Add to context
+                ConversationContextManager.shared.addMessage(systemMessage.toChatMessage(), to: context)
+                // Add to app messages
+                appMessages.insert(systemMessage, at: 0)
             }
         }
         
-        // Add user message with optional image
-        let userChatMessage = LLMRequestService.createMessage(
-            role: .user, 
-            text: userMessage, 
-            base64Image: base64Image
-        )
-        ConversationContextManager.shared.addMessage(userChatMessage, to: context)
-        messages.append(userChatMessage)
+        // Create user message with optional image
+        let userMessageContent: [AppLLMMessageContentPart]
+        if let image = base64Image {
+            userMessageContent = [
+                .text(userMessage),
+                .imageUrl(base64Data: image, mimeType: "image/png")
+            ]
+        } else {
+            userMessageContent = [.text(userMessage)]
+        }
         
-        let requestID = UUID(); currentRequestID = requestID
+        // Create user message
+        let userAppMessage = AppLLMMessage(role: .user, contentParts: userMessageContent)
+        
+        // Add to context
+        ConversationContextManager.shared.addMessage(userAppMessage.toChatMessage(), to: context)
+        
+        // Add to app messages
+        appMessages.append(userAppMessage)
+        
+        // Create query
+        let query = AppLLMQuery(
+            messages: appMessages,
+            modelIdentifier: currentModel,
+            temperature: 0.7
+        )
+        
+        let requestID = UUID()
+        currentRequestID = requestID
         
         Task {
             do {
-                let response = try await client.sendChatCompletionAsync(
-                    messages: messages,
-                    model: currentModel,
-                    responseFormat: nil,
-                    temperature: nil
-                )
+                // Execute query
+                let response = try await client.executeQuery(query)
                 
                 guard self.currentRequestID == requestID else { return }
                 
-                // Save assistant response to context
-                let assistantMessage = ChatMessage(role: .assistant, content: response.content)
-                await MainActor.run {
-                    ConversationContextManager.shared.addMessage(assistantMessage, to: context)
+                // Extract response content
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
                 }
                 
-                onProgress(response.content)
-                onComplete(.success(response.content))
+                // Create assistant message
+                let assistantMessage = AppLLMMessage(role: .assistant, text: responseText)
+                
+                // Save assistant response to context
+                await MainActor.run {
+                    ConversationContextManager.shared.addMessage(assistantMessage.toChatMessage(), to: context)
+                }
+                
+                onProgress(responseText)
+                onComplete(.success(responseText))
             } catch {
                 guard self.currentRequestID == requestID else { return }
                 Logger.debug("Error in sendResumeConversationRequest: \(error.localizedDescription)")
@@ -477,36 +423,19 @@ class LLMRequestService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        // Get all API keys
-        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
-        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
-        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-        
-        // Create a dictionary of API keys by provider
-        let apiKeys = [
-            AIModels.Provider.openai: openAIKey,
-            AIModels.Provider.claude: claudeKey,
-            AIModels.Provider.grok: grokKey,
-            AIModels.Provider.gemini: geminiKey
-        ]
-        
-        // Get current model string
-        let currentModel = OpenAIModelFetcher.getPreferredModelString()
-        
-        // Create or update client for the selected model
-        if let client = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
-            // Use the model-specific client
-            openAIClient = client
-        } else if openAIClient == nil {
-            // Fallback to initializing standard OpenAI client
+        // Initialize client if needed
+        if appLLMClient == nil {
             initialize()
         }
         
-        guard let client = openAIClient else {
-            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
+        guard let client = appLLMClient else {
+            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, 
+                                      userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
             return
         }
+        
+        // Get current model
+        let currentModel = OpenAIModelFetcher.getPreferredModelString()
         
         // Clear context if starting new conversation
         if isNewConversation {
@@ -516,48 +445,77 @@ class LLMRequestService: @unchecked Sendable {
         // Get or create context
         let context = ConversationContextManager.shared.getOrCreateContext(for: coverLetter.id, type: .coverLetter)
         
-        // Build messages array
-        var messages = ConversationContextManager.shared.getMessages(for: context)
+        // Get existing messages and convert to AppLLMMessage format
+        let existingMessages = ConversationContextManager.shared.getMessages(for: context)
+        var appMessages = Array<AppLLMMessage>.fromChatMessages(existingMessages)
         
         // Add system prompt if needed
-        if messages.isEmpty || messages.first?.role != .system {
+        if appMessages.isEmpty || appMessages.first?.role != .system {
             if let systemPrompt = systemPrompt {
-                let systemMessage = ChatMessage(role: .system, content: systemPrompt)
-                ConversationContextManager.shared.addMessage(systemMessage, to: context)
-                messages.insert(systemMessage, at: 0)
+                let systemMessage = AppLLMMessage(role: .system, text: systemPrompt)
+                // Add to context
+                ConversationContextManager.shared.addMessage(systemMessage.toChatMessage(), to: context)
+                // Add to app messages
+                appMessages.insert(systemMessage, at: 0)
             }
         }
         
-        // Add user message with optional image
-        let userChatMessage = LLMRequestService.createMessage(
-            role: .user, 
-            text: userMessage, 
-            base64Image: base64Image
-        )
-        ConversationContextManager.shared.addMessage(userChatMessage, to: context)
-        messages.append(userChatMessage)
+        // Create user message with optional image
+        let userMessageContent: [AppLLMMessageContentPart]
+        if let image = base64Image {
+            userMessageContent = [
+                .text(userMessage),
+                .imageUrl(base64Data: image, mimeType: "image/png")
+            ]
+        } else {
+            userMessageContent = [.text(userMessage)]
+        }
         
-        let requestID = UUID(); currentRequestID = requestID
+        // Create user message
+        let userAppMessage = AppLLMMessage(role: .user, contentParts: userMessageContent)
+        
+        // Add to context
+        ConversationContextManager.shared.addMessage(userAppMessage.toChatMessage(), to: context)
+        
+        // Add to app messages
+        appMessages.append(userAppMessage)
+        
+        // Create query
+        let query = AppLLMQuery(
+            messages: appMessages,
+            modelIdentifier: currentModel,
+            temperature: 0.7
+        )
+        
+        let requestID = UUID()
+        currentRequestID = requestID
         
         Task {
             do {
-                let response = try await client.sendChatCompletionAsync(
-                    messages: messages,
-                    model: currentModel,
-                    responseFormat: nil,
-                    temperature: nil
-                )
+                // Execute query
+                let response = try await client.executeQuery(query)
                 
                 guard self.currentRequestID == requestID else { return }
                 
-                // Save assistant response to context
-                let assistantMessage = ChatMessage(role: .assistant, content: response.content)
-                await MainActor.run {
-                    ConversationContextManager.shared.addMessage(assistantMessage, to: context)
+                // Extract response content
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
                 }
                 
-                onProgress(response.content)
-                onComplete(.success(response.content))
+                // Create assistant message
+                let assistantMessage = AppLLMMessage(role: .assistant, text: responseText)
+                
+                // Save assistant response to context
+                await MainActor.run {
+                    ConversationContextManager.shared.addMessage(assistantMessage.toChatMessage(), to: context)
+                }
+                
+                onProgress(responseText)
+                onComplete(.success(responseText))
             } catch {
                 guard self.currentRequestID == requestID else { return }
                 Logger.debug("Error in sendCoverLetterConversationRequest: \(error.localizedDescription)")
@@ -568,17 +526,20 @@ class LLMRequestService: @unchecked Sendable {
     
     // MARK: - Image Support Helpers
     
-    /// Creates a ChatMessage with image support
+    /// Creates an AppLLMMessage with image support
     /// - Parameters:
     ///   - role: The message role
     ///   - text: The text content
     ///   - base64Image: Optional base64-encoded image
-    /// - Returns: ChatMessage with image support
-    static func createMessage(role: ChatMessage.ChatRole, text: String, base64Image: String? = nil) -> ChatMessage {
+    /// - Returns: AppLLMMessage with image support
+    static func createMessage(role: AppLLMMessage.Role, text: String, base64Image: String? = nil) -> AppLLMMessage {
         if let imageData = base64Image {
-            return ChatMessage(role: role, content: text, imageData: imageData)
+            return AppLLMMessage(role: role, contentParts: [
+                .text(text),
+                .imageUrl(base64Data: imageData, mimeType: "image/png")
+            ])
         } else {
-            return ChatMessage(role: role, content: text)
+            return AppLLMMessage(role: role, text: text)
         }
     }
     
