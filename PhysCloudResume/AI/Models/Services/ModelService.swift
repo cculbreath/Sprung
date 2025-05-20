@@ -674,18 +674,17 @@ class ModelService: ObservableObject, @unchecked Sendable {
                 
                 // Filter models based on provider
                 if provider == AIModels.Provider.grok {
-                    return modelIds.filter { $0.contains("grok") }
+                    // For Grok return only Grok specific models
+                    return modelIds.filter { $0.lowercased().contains("grok") }
                 } else {
-                    // Filter OpenAI chat models
-                    return modelIds.filter { id in
-                        let id = id.lowercased()
-                        return id.contains("gpt-4o") ||
-                               id.contains("gpt-4") ||
-                               id.contains("gpt-3.5") ||
-                               id.contains("-preview") ||
-                               id.contains("o1-") ||
-                               id.contains("o3-")
-                    }
+                    // For OpenAI we now return the full list of model identifiers and let
+                    // `ModelFilters.filterOpenAIModels(_:)` handle the heavy-lifting of
+                    // selecting the representative chat models that should be surfaced in
+                    // the UI.  This keeps the logic in a single place and ensures that new
+                    // OpenAI base models (e.g. `o3`, `o3-mini`, `o4-mini`, future
+                    // `gpt-5`, etc.) are not accidentally discarded by an overly strict
+                    // pre-filter here.
+                    return modelIds
                 }
             }
         } catch {
