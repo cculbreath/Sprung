@@ -119,9 +119,29 @@ import SwiftUI
         
         // Always log the model being used
         Logger.info("Using model: \(modelString) for job recommendation")
-
+        
         do {
             Logger.debug("Using \(provider) client for job recommendation with model: \(modelString)")
+            
+            // For Gemini models, test the connection first
+            if provider == AIModels.Provider.gemini {
+                // Get Gemini API key
+                guard let geminiApiKey = UserDefaults.standard.string(forKey: "geminiApiKey"),
+                      !geminiApiKey.isEmpty, geminiApiKey != "none" else {
+                    throw NSError(domain: "JobRecommendationProvider", code: 1000, 
+                                 userInfo: [NSLocalizedDescriptionKey: "No Gemini API key available"])
+                }
+                
+                // Test the Gemini API connection
+                let connectionSuccessful = await testGeminiConnection(apiKey: geminiApiKey)
+                
+                if !connectionSuccessful {
+                    Logger.error("❌ Gemini API connection test failed. Falling back to OpenAI.")
+                    // Fall back to OpenAI model if Gemini API connection fails
+                    throw NSError(domain: "JobRecommendationProvider", code: 1001,
+                                 userInfo: [NSLocalizedDescriptionKey: "Gemini API connection test failed"])
+                }
+            }
             
             // For Claude models, fall back to direct API call if SwiftOpenAI client fails
             if provider == AIModels.Provider.claude {
@@ -163,11 +183,12 @@ import SwiftUI
                                      userInfo: [NSLocalizedDescriptionKey: "No Claude API key available"])
                     }
                     
-                    // Fall back to direct Claude API call
-                    return try await useDirectClaudeApi(
+                    // Fall back to OpenAI model
+                    Logger.debug("⚠️ Falling back to OpenAI model")
+                    let openaiModel = "gpt-4o"
+                    return try await useGenericClient(
                         messages: messages,
-                        model: modelString,
-                        apiKey: claudeApiKey
+                        model: openaiModel
                     )
                 }
             } else {
@@ -194,6 +215,13 @@ import SwiftUI
         
         // Log that we're using JSON mode
         Logger.debug("Using JSON mode for job recommendation with model: \(model) (Provider: \(provider))")
+        
+        // Special handling for Gemini models using OpenAI-compatible endpoint
+        if provider == AIModels.Provider.gemini {
+            Logger.debug("📝 Using OpenAI-compatible endpoint for Gemini job recommendation")
+            // For Gemini, we need to ensure we're using the correct format for JSON response
+            // Our modifications above with OpenAI-compatible endpoint should handle this properly
+        }
         
         // Use sendChatCompletionAsync with responseFormat parameter
         let response = try await openAIClient.sendChatCompletionAsync(

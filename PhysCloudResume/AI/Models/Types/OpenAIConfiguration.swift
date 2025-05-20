@@ -112,15 +112,17 @@ public extension OpenAIConfiguration {
         }
     }
     
-    /// Creates configuration for Gemini API
+    /// Creates configuration for Gemini API using OpenAI-compatible endpoint
     /// - Parameter apiKey: The API key for Gemini
     /// - Returns: Configuration for Gemini API
     static func forGemini(apiKey: String) -> OpenAIConfiguration {
         return OpenAIConfiguration(
             token: apiKey,
             host: "generativelanguage.googleapis.com",
-            basePath: "/v1beta", // Use v1beta instead of v1
-            customHeaders: ["x-goog-api-key": apiKey],
+            basePath: "/v1beta/openai", // Use the official OpenAI-compatible endpoint
+            customHeaders: [
+                "Authorization": "Bearer \(apiKey)" // Authorization header with Bearer token
+            ],
             timeoutInterval: 900.0
         )
     }
