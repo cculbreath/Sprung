@@ -56,24 +56,6 @@ protocol OpenAIClientProtocol {
         structuredOutputType: T.Type
     ) async throws -> T
 
-    // MARK: - Responses API (New)
-
-    /// Sends a request to the OpenAI Responses API using async/await
-    /// - Parameters:
-    ///   - message: The current message content
-    ///   - model: The model to use
-    ///   - temperature: Controls randomness (0-1)
-    ///   - previousResponseId: Optional ID from a previous response for conversation state
-    ///   - schema: Optional JSON schema for structured output
-    /// - Returns: The response from the Responses API
-    func sendResponseRequestAsync(
-        message: String,
-        model: String,
-        temperature: Double?,
-        previousResponseId: String?,
-        schema: String?
-    ) async throws -> ResponsesAPIResponse
-
     // MARK: - Text-to-Speech API
 
     /// Sends a TTS (Text-to-Speech) request

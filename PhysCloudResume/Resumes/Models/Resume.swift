@@ -8,7 +8,19 @@ class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
 
     /// Stores the OpenAI response ID for server-side conversation state
-    var previousResponseId: String? = nil
+    // MARK: - Conversation Management (ChatCompletions API)
+    
+    /// Clears the conversation context for this resume
+    @MainActor
+    func clearConversationContext() {
+        ConversationContextManager.shared.clearContext(for: self.id, type: .resume)
+    }
+    
+    /// Checks if this resume has an active conversation context
+    @MainActor
+    var hasConversationContext: Bool {
+        return ConversationContextManager.shared.getContext(for: self.id, type: .resume) != nil
+    }
 
     var needToTree: Bool = true
     var needToFont: Bool = true

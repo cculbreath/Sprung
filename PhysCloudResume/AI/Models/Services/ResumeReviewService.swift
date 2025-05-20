@@ -66,12 +66,10 @@ class ResumeReviewService: @unchecked Sendable {
             LLMRequestService.shared.sendMixedRequest(
                 promptText: promptText,
                 base64Image: img,
-                previousResponseId: resume.previousResponseId,
                 schema: nil,
                 requestID: requestID
             ) { result in
                 if case let .success(responseWrapper) = result {
-                    resume.previousResponseId = responseWrapper.id
                     onComplete(.success(responseWrapper.content))
                 } else if case let .failure(error) = result {
                     onComplete(.failure(error))
@@ -82,12 +80,10 @@ class ResumeReviewService: @unchecked Sendable {
             LLMRequestService.shared.sendTextRequest(
                 promptText: promptText,
                 model: OpenAIModelFetcher.getPreferredModelString(),
-                previousResponseId: resume.previousResponseId,
                 onProgress: onProgress,
                 onComplete: { result in
                     switch result {
                     case .success(let response):
-                        resume.previousResponseId = response.id
                         onComplete(.success("Review complete"))
                     case .failure(let error):
                         onComplete(.failure(error))
@@ -120,7 +116,6 @@ class ResumeReviewService: @unchecked Sendable {
         LLMRequestService.shared.sendMixedRequest(
             promptText: prompt,
             base64Image: base64Image,
-            previousResponseId: resume.previousResponseId,
             schema: (name: schemaName, jsonString: schema),
             requestID: requestID
         ) { result in
@@ -128,7 +123,6 @@ class ResumeReviewService: @unchecked Sendable {
             
             switch result {
             case let .success(responseWrapper):
-                resume.previousResponseId = responseWrapper.id
                 
                 do {
                     // Get detailed information about the response for debugging
@@ -231,7 +225,6 @@ class ResumeReviewService: @unchecked Sendable {
         LLMRequestService.shared.sendMixedRequest(
             promptText: prompt,
             base64Image: base64Image,
-            previousResponseId: resume.previousResponseId,
             schema: (name: schemaName, jsonString: schema),
             requestID: requestID
         ) { result in
@@ -243,7 +236,6 @@ class ResumeReviewService: @unchecked Sendable {
             
             switch result {
             case let .success(responseWrapper):
-                resume.previousResponseId = responseWrapper.id
                 
                 do {
                     // Get detailed information about the response for debugging
@@ -375,7 +367,6 @@ class ResumeReviewService: @unchecked Sendable {
         LLMRequestService.shared.sendMixedRequest(
             promptText: prompt,
             base64Image: nil, // No image needed for this request
-            previousResponseId: resume.previousResponseId,
             schema: (name: schemaName, jsonString: schema),
             requestID: requestID
         ) { result in
@@ -383,7 +374,6 @@ class ResumeReviewService: @unchecked Sendable {
             
             switch result {
             case let .success(responseWrapper):
-                resume.previousResponseId = responseWrapper.id
                 
                 do {
                     Logger.debug("Response ID: \(responseWrapper.id)")

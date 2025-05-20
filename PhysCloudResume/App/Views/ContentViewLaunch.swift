@@ -1,6 +1,7 @@
 // PhysCloudResume/App/Views/ContentViewLaunch.swift
 
 import SwiftUI
+import SwiftData
 
 struct ContentViewLaunch: View {
     @Environment(\.modelContext) private var modelContext
@@ -26,6 +27,10 @@ struct ContentViewLaunch: View {
             .environment(coverRefStore)
             .environment(coverLetterStore)
             .environment(dragInfo) // Inject DragInfo here
+            .onAppear {
+                // Initialize ConversationContextManager with ModelContext
+                ConversationContextManager.shared.setModelContext(modelContext)
+            }
         // Note: AppState is already injected via .environment(appState) in PhysicsCloudResumeApp
     }
 }

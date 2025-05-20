@@ -29,9 +29,12 @@ struct AiFunctionView: View {
 
     init(res: Binding<Resume?>, isNewConversation _: Bool = false) {
         _res = res
-        isNewConversation = false // resume convo shouldn't be resumed. Prompts don't expect context
+        isNewConversation = false // resume analysis doesn't use conversation context
         if let resume = res.wrappedValue {
-            resume.previousResponseId = nil // resume convo shouldn't be resumed. Prompts don't expect context
+            // Clear any existing conversation context for new analysis
+            Task { @MainActor in
+                resume.clearConversationContext()
+            }
         }
 
         // Get API keys from UserDefaults

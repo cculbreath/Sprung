@@ -7,7 +7,19 @@ class CoverLetter: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID() // Explicit id field
 
     /// Stores the OpenAI response ID for server-side conversation state
-    var previousResponseId: String? = nil
+    // MARK: - Conversation Management (ChatCompletions API)
+    
+    /// Clears the conversation context for this cover letter
+    @MainActor
+    func clearConversationContext() {
+        ConversationContextManager.shared.clearContext(for: self.id, type: .coverLetter)
+    }
+    
+    /// Checks if this cover letter has an active conversation context
+    @MainActor
+    var hasConversationContext: Bool {
+        return ConversationContextManager.shared.getContext(for: self.id, type: .coverLetter) != nil
+    }
 
     var createdDate: Date = Date()
     var moddedDate: Date = Date()
