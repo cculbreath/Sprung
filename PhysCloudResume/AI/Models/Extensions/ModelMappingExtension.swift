@@ -20,6 +20,13 @@ extension SwiftOpenAI.Model {
         // For non-OpenAI models, always use custom model directly to avoid compatibility issues
         if provider != AIModels.Provider.openai {
             Logger.debug("🔄 Using direct custom model mapping for \(provider) model: \(modelString)")
+            
+            // For Gemini models, ensure the modelString is passed directly without modification
+            // This is critical as Google's OpenAI-compatible endpoint expects exact model names
+            if provider == AIModels.Provider.gemini {
+                Logger.debug("📝 Using exact model name for Gemini OpenAI compatibility: \(modelString)")
+            }
+            
             return .custom(modelString)
         }
         
