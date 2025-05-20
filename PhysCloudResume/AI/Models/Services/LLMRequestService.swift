@@ -70,18 +70,54 @@ class LLMRequestService: @unchecked Sendable {
     func checkIfModelSupportsImages() -> Bool {
         let model = OpenAIModelFetcher.getPreferredModelString().lowercased()
         
-        // For OpenAI models
+        let provider = AIModels.providerForModel(model)
+
+        // For OpenAI models – all of the filtered models support images
         let openAIVisionModelsSubstrings = ["gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "gpt-image", "o4", "cua"]
-        
-        // For Claude models (Claude 3 family supports vision)
+
+        // Claude 3 family supports vision natively
         let claudeVisionSubstrings = ["claude-3", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5"]
-        
-        // For Gemini models
+
+        // Gemini models exposed by the picker all support vision
         let geminiVisionSubstrings = ["gemini-pro-vision", "gemini-1.5"]
-        
-        return openAIVisionModelsSubstrings.contains { model.contains($0) } ||
-               claudeVisionSubstrings.contains { model.contains($0) } ||
-               geminiVisionSubstrings.contains { model.contains($0) }
+
+        // Grok – currently *only* the dedicated vision model supports image input
+        let grokVisionSubstrings = ["grok-2-vision"]
+
+        switch provider {
+        case AIModels.Provider.openai:
+            return openAIVisionModelsSubstrings.contains { model.contains($0) }
+        case AIModels.Provider.claude:
+            return claudeVisionSubstrings.contains { model.contains($0) }
+        case AIModels.Provider.grok:
+            return grokVisionSubstrings.contains { model.contains($0) } || model.contains("-vision")
+        case AIModels.Provider.gemini:
+            return geminiVisionSubstrings.contains { model.contains($0) }
+        default:
+            return false
+        }
+    }
+
+    /// Chooses the correct model for an image request.  If the selected model cannot accept image
+    /// input we transparently substitute a compatible model from the same provider.  This is
+    /// currently only required for Grok where the dedicated vision model must be used.
+    /// - Parameters:
+    ///   - model: The user-selected model string.
+    ///   - wantsImage: Boolean indicating whether the request includes an image.
+    /// - Returns: A model string that is safe for the request.
+    private static func modelForImageRequest(selectedModel model: String, wantsImage: Bool) -> String {
+        guard wantsImage else { return model }
+
+        let provider = AIModels.providerForModel(model)
+
+        if provider == AIModels.Provider.grok {
+            // If the chosen Grok model is not the vision capable one, switch to it.
+            if !model.lowercased().contains("-vision") {
+                return "grok-2-vision-1212"
+            }
+        }
+
+        return model
     }
 
     /// Sends a standard LLM request with text-only content (migrated to ChatCompletions)
@@ -225,8 +261,12 @@ class LLMRequestService: @unchecked Sendable {
                     Logger.debug("❌ Gemini: No valid key")
                 }
                 
-                // Get current model string
-                let currentModel = OpenAIModelFetcher.getPreferredModelString()
+                // Determine which model we will actually use for the request – we may need to
+                // substitute a vision-capable variant if the selected model does not support
+                // images.
+                let selectedModel = OpenAIModelFetcher.getPreferredModelString()
+                let currentModel = LLMRequestService.modelForImageRequest(selectedModel: selectedModel,
+                                                                          wantsImage: base64Image != nil)
                 
                 // Create or update client for the selected model
                 let client: OpenAIClientProtocol?

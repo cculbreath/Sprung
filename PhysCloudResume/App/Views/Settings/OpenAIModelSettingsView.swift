@@ -13,7 +13,7 @@ struct OpenAIModelSettingsView: View {
     @AppStorage("claudeApiKey") private var claudeApiKey: String = "none"
     @AppStorage("grokApiKey") private var grokApiKey: String = "none"
     @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
-    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o // Default to gpt4o
+    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest // Default to latest GPT-4o
 
     // Access the model service
     @EnvironmentObject private var modelService: ModelService
