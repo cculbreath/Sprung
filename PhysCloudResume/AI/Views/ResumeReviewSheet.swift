@@ -32,6 +32,10 @@ struct ResumeReviewSheet: View {
 
     // AppStorage for max iterations
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
+    // Persisted preferred LLM model across the app
+    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
+    // Persisted preferred model across the app
+    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
 
     // Computed property for the content view (remains the same)
     private var contentView: some View {
@@ -152,10 +156,7 @@ struct ResumeReviewSheet: View {
                     // AI Model Selection
                     GroupBox(label: Text("AI Model").fontWeight(.medium)) {
                         ModelPickerView(
-                            selectedModel: Binding(
-                                get: { UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o },
-                                set: { UserDefaults.standard.set($0, forKey: "preferredLLMModel") }
-                            ),
+                            selectedModel: $preferredLLMModel,
                             title: nil
                         )
                         .padding(.vertical, 4)

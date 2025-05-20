@@ -115,10 +115,7 @@ struct ApplicationReviewSheet: View {
             // AI Model Selection
             GroupBox(label: Text("AI Model").fontWeight(.medium)) {
                 ModelPickerView(
-                    selectedModel: Binding(
-                        get: { UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o },
-                        set: { UserDefaults.standard.set($0, forKey: "preferredLLMModel") }
-                    ),
+                    selectedModel: $preferredLLMModel,
                     title: nil
                 )
                 .padding(.vertical, 4)
@@ -147,6 +144,9 @@ struct ApplicationReviewSheet: View {
         .padding()
         .frame(width: 700, height: 600, alignment: .topLeading)
     }
+
+    // Persisted preferred model across the app
+    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
 
     // MARK: - Custom Options View
 
