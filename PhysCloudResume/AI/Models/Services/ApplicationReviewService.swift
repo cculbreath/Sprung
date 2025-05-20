@@ -20,8 +20,12 @@ class ApplicationReviewService: @unchecked Sendable {
     @MainActor
     func initialize() {
         let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        guard apiKey != "none" else { return }
-        openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
+        guard let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) else {
+            Logger.warning("⚠️ Could not initialize ApplicationReviewService: Invalid API key format")
+            return
+        }
+        
+        openAIClient = OpenAIClientFactory.createClient(apiKey: validKey)
     }
 
     // MARK: - Using ImageConversionService for image conversion
@@ -158,8 +162,9 @@ class ApplicationReviewService: @unchecked Sendable {
                 
                 let response = try await client.sendChatCompletionAsync(
                     messages: messages,
-                    model: AIModels.gpt4o,
-                    temperature: 0.7
+                    model: OpenAIModelFetcher.getPreferredModelString(),
+                    responseFormat: nil,
+                    temperature: nil
                 )
                 
                 // Check again if request is still current before calling callbacks
@@ -194,14 +199,14 @@ class ApplicationReviewService: @unchecked Sendable {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let imgURL = "data:image/png;base64,\(base64Image)"
+        let currentModel = OpenAIModelFetcher.getPreferredModelString()
         let body: [String: Any] = [
-            "model": AIModels.gpt4o,
+            "model": currentModel,
             "messages": [
                 ["role": "system", "content": "You are an expert recruiter reviewing job application packets."],
                 ["role": "user", "content": [["type": "text", "text": promptText], ["type": "image_url", "image_url": ["url": imgURL]]]],
             ],
-            "stream": false,
-            "temperature": 0.7,
+            "stream": false
         ]
 
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -228,6 +233,24 @@ class ApplicationReviewService: @unchecked Sendable {
 
     private func checkIfModelSupportsImages() -> Bool {
         let model = OpenAIModelFetcher.getPreferredModelString().lowercased()
-        return ["gpt-4o", "gpt-4.1", "gpt-image", "o4", "cua"].contains { model.contains($0) }
+        
+        // Check provider and model for vision support
+        let provider = AIModels.providerForModel(model)
+        
+        // Only OpenAI and Gemini currently support vision
+        if provider == AIModels.Provider.openai {
+            // OpenAI vision-supporting models
+            return [
+                "gpt-4o", "gpt-4.1", "gpt-4-vision", "gpt-4-1106-vision"
+            ].contains { model.contains($0) }
+        } else if provider == AIModels.Provider.gemini {
+            // Gemini vision-supporting models
+            return [
+                "gemini-1.5", "gemini-pro-vision"
+            ].contains { model.contains($0) }
+        }
+        
+        // All other models don't support vision
+        return false
     }
 }

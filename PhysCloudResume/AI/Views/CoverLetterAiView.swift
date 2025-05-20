@@ -65,10 +65,8 @@ struct CoverLetterAiView: View {
     // Flag to determine if this is a new conversation or not
     private let isNewConversation: Bool
 
-    // Keep client instance as a computed property to avoid body mutations
-    private var openAIClient: OpenAIClientProtocol {
-        OpenAIClientFactory.createClient(apiKey: openAiApiKey)
-    }
+    // Keep client instance as a state property
+    @State private var client: OpenAIClientProtocol? = nil
 
     // Get shared TTS provider only if TTS is enabled
     private var ttsProvider: OpenAITTSProvider? {
@@ -87,17 +85,37 @@ struct CoverLetterAiView: View {
 
     var body: some View {
         // Initialize our main manager with optional TTS provider
-        CoverLetterAiManager(
-            openAIClient: openAIClient,
-            ttsProvider: ttsProvider, // Now optional
-            buttons: $buttons,
-            refresh: $refresh,
-            ttsEnabled: $ttsEnabled,
-            ttsVoice: $ttsVoice,
-            isNewConversation: isNewConversation
-        )
+        Group {
+            if let openAIClient = client {
+                CoverLetterAiManager(
+                    openAIClient: openAIClient,
+                    ttsProvider: ttsProvider, // Now optional
+                    buttons: $buttons,
+                    refresh: $refresh,
+                    ttsEnabled: $ttsEnabled,
+                    ttsVoice: $ttsVoice,
+                    isNewConversation: isNewConversation
+                )
+            } else {
+                // Show a loading view or placeholder while client initializes
+                ProgressView("Initializing...")
+            }
+        }
         .onAppear {
             Logger.debug("AI Cover Letter View appeared (TTS enabled: \(ttsEnabled))")
+            
+            // Initialize the client if it's not already set
+            if client == nil && openAiApiKey != "none" {
+                client = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
+            }
+        }
+        .onChange(of: openAiApiKey) { _, newApiKey in
+            // Update client when API key changes
+            if newApiKey != "none" {
+                client = OpenAIClientFactory.createClient(apiKey: newApiKey)
+            } else {
+                client = nil // Clear client if API key is invalid
+            }
         }
     }
 }

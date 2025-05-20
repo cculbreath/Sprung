@@ -83,7 +83,7 @@ class ResumeReviewService: @unchecked Sendable {
                 onProgress: onProgress,
                 onComplete: { result in
                     switch result {
-                    case .success(let response):
+                    case .success(_):
                         onComplete(.success("Review complete"))
                     case .failure(let error):
                         onComplete(.failure(error))

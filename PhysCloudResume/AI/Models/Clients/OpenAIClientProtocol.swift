@@ -10,6 +10,8 @@ import PDFKit
 import AppKit
 import SwiftUI
 
+
+
 /// Protocol defining the interface for OpenAI clients
 /// This abstraction allows us to switch between different OpenAI SDK implementations
 protocol OpenAIClientProtocol {
@@ -32,12 +34,14 @@ protocol OpenAIClientProtocol {
     /// - Parameters:
     ///   - messages: The conversation history
     ///   - model: The model to use for completion
+    ///   - responseFormat: Optional response format (e.g., JSON mode)
     ///   - temperature: Controls randomness (0-1)
     /// - Returns: A completion with the model's response
     func sendChatCompletionAsync(
         messages: [ChatMessage],
         model: String,
-        temperature: Double
+        responseFormat: AIResponseFormat?,
+        temperature: Double?
     ) async throws -> ChatCompletionResponse
 
     // MARK: - Chat Completion with Structured Output
@@ -52,7 +56,7 @@ protocol OpenAIClientProtocol {
     func sendChatCompletionWithStructuredOutput<T: StructuredOutput>(
         messages: [ChatMessage],
         model: String,
-        temperature: Double,
+        temperature: Double?,
         structuredOutputType: T.Type
     ) async throws -> T
 

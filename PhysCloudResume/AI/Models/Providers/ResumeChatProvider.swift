@@ -93,7 +93,7 @@ final class ResumeChatProvider {
                         let result = try await openAIClient.sendChatCompletionWithStructuredOutput(
                             messages: messages,
                             model: modelString,
-                            temperature: 1.0,
+                            temperature: nil,
                             structuredOutputType: RevisionsContainer.self
                         )
                         await coordinator.resumeWithValue(result, continuation: continuation)

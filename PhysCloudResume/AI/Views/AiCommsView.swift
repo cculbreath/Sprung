@@ -410,14 +410,19 @@ struct AiCommsView: View {
                 if modelString != chatProvider.lastModelUsed {
                     Logger.debug("Switching to OpenAI client for model: \(modelString)")
                     // Create a new client for OpenAI
-                    let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiKey)
-                    
-                    // Important: preserve the message queue when switching clients
-                    let messages = chatProvider.genericMessages
-                    chatProvider = ResumeChatProvider(client: openAIClient)
-                    chatProvider.genericMessages = messages
-                    chatProvider.lastModelUsed = modelString
-                }
+                    if let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiKey) {
+                        // Important: preserve the message queue when switching clients
+                        let messages = chatProvider.genericMessages
+                        chatProvider = ResumeChatProvider(client: openAIClient)
+                        chatProvider.genericMessages = messages
+                        chatProvider.lastModelUsed = modelString
+                    } else {
+                        Logger.debug("❌ Failed to create OpenAI client with provided API key")
+                        throw NSError(domain: "OpenAIError", 
+                                     code: 1002, 
+                                     userInfo: [NSLocalizedDescriptionKey: "Failed to create OpenAI client. Please check your API key."])
+                    }
+                    }
                 
                 // Execute the API call with our new Responses API method
                 Logger.debug("Starting API call with model: \(modelString)")

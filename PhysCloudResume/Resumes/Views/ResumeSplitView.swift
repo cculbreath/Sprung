@@ -10,13 +10,20 @@ import SwiftUI
 struct ResumeSplitView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResStore.self) private var resStore: ResStore
+    @Environment(ResModelStore.self) private var resModelStore: ResModelStore
+    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+    
     @Binding var isWide: Bool
     @Binding var tab: TabList
     @Binding var resumeButtons: ResumeButtons
     @Binding var refresh: Bool
+    
+    @State private var showCreateResumeSheet = false
+    
     var body: some View {
         if let selApp = jobAppStore.selectedApp {
             if let selRes = selApp.selectedRes {
+                // Show the resume view if there's a selected resume
                 @Bindable var selApp = selApp
 
                 HSplitView {
@@ -45,7 +52,47 @@ struct ResumeSplitView: View {
                 }.inspector(isPresented: $resumeButtons.showResumeInspector) {
                     ResumeInspectorView(refresh: $refresh)
                 }
+            } else {
+                // If no resume is selected, show a create resume view
+                VStack(spacing: 20) {
+                    Text("No Resume Available")
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text("Create a resume to customize it for this job application.")
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Button("Create Resume") {
+                        showCreateResumeSheet = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .sheet(isPresented: $showCreateResumeSheet) {
+                    // Basic resume creation sheet
+                    CreateResumeView(
+                        jobApp: selApp,
+                        onCreateResume: { model, sources in
+                            if resStore.create(
+                                jobApp: selApp,
+                                sources: sources,
+                                model: model
+                            ) != nil {
+                                // Force refresh of the view
+                                refresh.toggle()
+                            }
+                        }
+                    )
+                    .padding()
+                }
             }
+        } else {
+            // If no job app is selected, show a placeholder
+            Text("Select a job application to customize a resume")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

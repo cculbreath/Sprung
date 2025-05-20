@@ -126,14 +126,106 @@ class OpenAITTSProvider {
     /// - Parameter apiKey: The OpenAI API key to use
     init(apiKey: String) {
         self.apiKey = apiKey
-        // Always use MacPaw client as SwiftOpenAI doesn't support TTS
-        client = OpenAIClientFactory.createTTSClient(apiKey: apiKey)
+        
+        // Check if API key is valid or empty
+        let cleanKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanKey.isEmpty || cleanKey == "none" {
+            // Create a placeholder client that will handle errors gracefully
+            Logger.warning("🚨 Creating TTS provider with empty API key - TTS will be disabled")
+            // Use a placeholder client that will return errors instead of crashing
+            client = PlaceholderTTSClient(apiKey: "invalid")
+        } else {
+            // Attempt to create the real client
+            if let ttsClient = OpenAIClientFactory.createTTSClient(apiKey: apiKey) {
+                client = ttsClient
+                Logger.debug("✅ TTS client created successfully")
+            } else {
+                // If client creation fails, use a placeholder that will fail gracefully
+                Logger.warning("⚠️ Failed to create TTS client - using placeholder that will display errors")
+                client = PlaceholderTTSClient(apiKey: "invalid")
+            }
+        }
 
         // Connect streamer buffering state to our provider
         streamer.onBufferingStateChanged = { [weak self] isBuffering in
             self?.setBufferingState(isBuffering)
         }
-
+    }
+    
+    /// A placeholder client that will return errors for TTS requests instead of crashing
+    private class PlaceholderTTSClient: OpenAIClientProtocol {
+        // MARK: - Properties
+        var apiKey: String {
+            return "invalid"
+        }
+        
+        // MARK: - Required initializers
+        required init(configuration: OpenAIConfiguration) {
+            // Placeholder implementation
+        }
+        
+        required init(apiKey: String) {
+            // Placeholder implementation
+        }
+        
+        // MARK: - Chat completion methods
+        func sendChatCompletionAsync(
+            messages: [ChatMessage], 
+            model: String, 
+            responseFormat: AIResponseFormat?,
+            temperature: Double?
+        ) async throws -> ChatCompletionResponse {
+            throw NSError(
+                domain: "OpenAITTSProvider", 
+                code: 4001, 
+                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
+            )
+        }
+        
+        func sendChatCompletionWithStructuredOutput<T>(
+            messages: [ChatMessage], 
+            model: String, 
+            temperature: Double?, 
+            structuredOutputType: T.Type
+        ) async throws -> T where T : StructuredOutput {
+            throw NSError(
+                domain: "OpenAITTSProvider", 
+                code: 4001, 
+                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
+            )
+        }
+        
+        // MARK: - TTS methods
+        func sendTTSRequest(
+            text: String, 
+            voice: String, 
+            instructions: String?, 
+            onComplete: @escaping (Result<Data, Error>) -> Void
+        ) {
+            // Return error instead of crashing
+            let error = NSError(
+                domain: "OpenAITTSProvider", 
+                code: 4001, 
+                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
+            )
+            onComplete(.failure(error))
+        }
+        
+        func sendTTSStreamingRequest(
+            text: String, 
+            voice: String, 
+            instructions: String?, 
+            onChunk: @escaping (Result<Data, Error>) -> Void, 
+            onComplete: @escaping (Error?) -> Void
+        ) {
+            // Return error instead of crashing
+            let error = NSError(
+                domain: "OpenAITTSProvider", 
+                code: 4001, 
+                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
+            )
+            onComplete(error)
+        }
     }
 
     deinit {
@@ -413,8 +505,8 @@ class OpenAITTSProvider {
                 self.setBufferingState(false)
                 
                 // If it's a chunk overflow error, handle it gracefully by completing normally
-                if let nsError = error as? NSError,
-                   nsError.domain == "TTSAudioStreamer" && nsError.code == 1002 {
+                let nsError = error as NSError
+                if nsError.domain == "TTSAudioStreamer" && nsError.code == 1002 {
                     Logger.debug("Handling chunk overflow gracefully - completing stream")
                     self.onFinish?()
                     onComplete(nil)

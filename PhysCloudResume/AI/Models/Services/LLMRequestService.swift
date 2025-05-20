@@ -16,14 +16,54 @@ class LLMRequestService: @unchecked Sendable {
     // Private initializer for singleton pattern
     private init() {}
     
-    /// Initializes the LLM client for OpenAI
+    /// Initializes the LLM client with the appropriate provider for the current model
     @MainActor
     func initialize() {
-        // Use OpenAI API key for all models
-        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        guard apiKey != "none" else { return }
-        // Create a standard OpenAI client
-        openAIClient = OpenAIClientFactory.createClient(apiKey: apiKey)
+        // Simply call our updateClientForCurrentModel method
+        updateClientForCurrentModel()
+    }
+    
+    /// Updates the client for the current model - call this whenever the preferred model changes
+    @MainActor
+    func updateClientForCurrentModel() {
+        // Get all API keys
+        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
+        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
+        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
+        
+        // Validate API keys
+        let validatedOpenAIKey = ModelFilters.validateAPIKey(openAIKey, for: AIModels.Provider.openai)
+        let validatedClaudeKey = ModelFilters.validateAPIKey(claudeKey, for: AIModels.Provider.claude)
+        let validatedGrokKey = ModelFilters.validateAPIKey(grokKey, for: AIModels.Provider.grok)
+        let validatedGeminiKey = ModelFilters.validateAPIKey(geminiKey, for: AIModels.Provider.gemini)
+        
+        // Create a dictionary of validated API keys by provider
+        let apiKeys = [
+            AIModels.Provider.openai: validatedOpenAIKey ?? "none",
+            AIModels.Provider.claude: validatedClaudeKey ?? "none",
+            AIModels.Provider.grok: validatedGrokKey ?? "none",
+            AIModels.Provider.gemini: validatedGeminiKey ?? "none"
+        ]
+        
+        // Get current model string
+        let currentModel = OpenAIModelFetcher.getPreferredModelString()
+        
+        let provider = AIModels.providerForModel(currentModel)
+        Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
+        
+        // Create client for the current model
+        if let client = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
+            openAIClient = client
+            Logger.debug("✅ Initialized client for model: \(currentModel)")
+        } else if let validOpenAIKey = validatedOpenAIKey, let client = OpenAIClientFactory.createClient(apiKey: validOpenAIKey) {
+            // Fallback to standard OpenAI client if we couldn't create one for the current model
+            openAIClient = client
+            Logger.debug("⚠️ Falling back to standard OpenAI client")
+        } else {
+            Logger.error("❌ Failed to initialize LLM client: No valid API keys available")
+            openAIClient = nil
+        }
     }
     
     /// Checks if the currently selected model supports images
@@ -32,20 +72,48 @@ class LLMRequestService: @unchecked Sendable {
         
         // For OpenAI models
         let openAIVisionModelsSubstrings = ["gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "gpt-image", "o4", "cua"]
-        return openAIVisionModelsSubstrings.contains { model.contains($0) }
+        
+        // For Claude models (Claude 3 family supports vision)
+        let claudeVisionSubstrings = ["claude-3", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5"]
+        
+        // For Gemini models
+        let geminiVisionSubstrings = ["gemini-pro-vision", "gemini-1.5"]
+        
+        return openAIVisionModelsSubstrings.contains { model.contains($0) } ||
+               claudeVisionSubstrings.contains { model.contains($0) } ||
+               geminiVisionSubstrings.contains { model.contains($0) }
     }
 
     /// Sends a standard LLM request with text-only content (migrated to ChatCompletions)
     @MainActor
     func sendTextRequest(
         promptText: String,
-        model: String,
+        model: String? = nil, // Make model parameter optional so we can use the default
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     ) {
-        if openAIClient == nil { initialize() }
-        guard let client = openAIClient else {
-            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
+        // Use provided model or fall back to preferred model
+        let modelToUse = model ?? OpenAIModelFetcher.getPreferredModelString()
+        
+        // Get all API keys
+        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
+        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
+        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
+        
+        // Create a dictionary of API keys by provider
+        let apiKeys = [
+            AIModels.Provider.openai: openAIKey,
+            AIModels.Provider.claude: claudeKey,
+            AIModels.Provider.grok: grokKey,
+            AIModels.Provider.gemini: geminiKey
+        ]
+        
+        // Create or update client for the specific model
+        let client = OpenAIClientFactory.createClientForModel(model: modelToUse, apiKeys: apiKeys) ?? openAIClient
+        
+        guard let client = client else {
+            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "No LLM client available for model: \(modelToUse)"])))
             return
         }
         
@@ -58,8 +126,9 @@ class LLMRequestService: @unchecked Sendable {
                 
                 let response = try await client.sendChatCompletionAsync(
                     messages: messages,
-                    model: model,
-                    temperature: 1.0
+                    model: modelToUse,
+                    responseFormat: nil,
+                    temperature: nil
                 )
                 
                 // Ensure request is still current
@@ -118,10 +187,65 @@ class LLMRequestService: @unchecked Sendable {
         
         Task {
             do {
-                if openAIClient == nil {
-                    await initialize()
+                // Get all API keys
+                let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+                let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
+                let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
+                let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
+                
+                // Validate API keys before using them
+                let validatedOpenAIKey = ModelFilters.validateAPIKey(openAIKey, for: AIModels.Provider.openai)
+                let validatedClaudeKey = ModelFilters.validateAPIKey(claudeKey, for: AIModels.Provider.claude)
+                let validatedGrokKey = ModelFilters.validateAPIKey(grokKey, for: AIModels.Provider.grok)
+                let validatedGeminiKey = ModelFilters.validateAPIKey(geminiKey, for: AIModels.Provider.gemini)
+                
+                // Create a dictionary of validated API keys by provider
+                let apiKeys = [
+                    AIModels.Provider.openai: validatedOpenAIKey ?? "none",
+                    AIModels.Provider.claude: validatedClaudeKey ?? "none",
+                    AIModels.Provider.grok: validatedGrokKey ?? "none",
+                    AIModels.Provider.gemini: validatedGeminiKey ?? "none"
+                ]
+                
+                // Log available keys (without revealing the entire keys)
+                Logger.debug("🔑 Available API keys:")
+                if let key = validatedOpenAIKey {
+                    Logger.debug("✅ OpenAI: \(key.prefix(4))... (\(key.count) chars)")
+                } else {
+                    Logger.debug("❌ OpenAI: No valid key")
                 }
-                guard let client = openAIClient else {
+                if let key = validatedClaudeKey {
+                    Logger.debug("✅ Claude: \(key.prefix(4))... (\(key.count) chars)")
+                } else {
+                    Logger.debug("❌ Claude: No valid key")
+                }
+                if let key = validatedGeminiKey {
+                    Logger.debug("✅ Gemini: \(key.prefix(4))... (\(key.count) chars)")
+                } else {
+                    Logger.debug("❌ Gemini: No valid key")
+                }
+                
+                // Get current model string
+                let currentModel = OpenAIModelFetcher.getPreferredModelString()
+                
+                // Create or update client for the selected model
+                let client: OpenAIClientProtocol?
+                if let modelClient = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
+                    client = modelClient
+                } else if let existingClient = openAIClient {
+                    client = existingClient
+                } else {
+                    // Initialize on MainActor and then get the client
+                    await MainActor.run {
+                        initialize()
+                    }
+                    // Now get the client after initialization (no mutation in concurrent code)
+                    client = await MainActor.run { 
+                        return self.openAIClient
+                    }
+                }
+                
+                guard let client = client else {
                     await MainActor.run {
                         onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
                     }
@@ -141,8 +265,6 @@ class LLMRequestService: @unchecked Sendable {
                     messages.append(ChatMessage(role: .user, content: promptText))
                 }
                 
-                let modelString = OpenAIModelFetcher.getPreferredModelString()
-                
                 // Use structured output if schema provided
                 if schema != nil {
                     // For structured output with ChatCompletions, we need to parse the schema
@@ -153,8 +275,9 @@ class LLMRequestService: @unchecked Sendable {
                     Logger.debug("Schema provided but using regular chat completion for backward compatibility")
                     let response = try await client.sendChatCompletionAsync(
                         messages: messages,
-                        model: modelString,
-                        temperature: 1.0
+                        model: currentModel,
+                        responseFormat: nil,
+                        temperature: nil
                     )
                     
                     // Note: For full structured output support, we would need to:
@@ -176,8 +299,9 @@ class LLMRequestService: @unchecked Sendable {
                     // Regular chat completion
                     let response = try await client.sendChatCompletionAsync(
                         messages: messages,
-                        model: modelString,
-                        temperature: 1.0
+                        model: currentModel,
+                        responseFormat: nil,
+                        temperature: nil
                     )
                     
                     // Convert response for backward compatibility
@@ -213,7 +337,32 @@ class LLMRequestService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        if openAIClient == nil { initialize() }
+        // Get all API keys
+        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
+        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
+        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
+        
+        // Create a dictionary of API keys by provider
+        let apiKeys = [
+            AIModels.Provider.openai: openAIKey,
+            AIModels.Provider.claude: claudeKey,
+            AIModels.Provider.grok: grokKey,
+            AIModels.Provider.gemini: geminiKey
+        ]
+        
+        // Get current model string
+        let currentModel = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Create or update client for the selected model
+        if let client = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
+            // Use the model-specific client
+            openAIClient = client
+        } else if openAIClient == nil {
+            // Fallback to initializing standard OpenAI client
+            initialize()
+        }
+        
         guard let client = openAIClient else {
             onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
             return
@@ -254,8 +403,9 @@ class LLMRequestService: @unchecked Sendable {
             do {
                 let response = try await client.sendChatCompletionAsync(
                     messages: messages,
-                    model: OpenAIModelFetcher.getPreferredModelString(),
-                    temperature: 1.0
+                    model: currentModel,
+                    responseFormat: nil,
+                    temperature: nil
                 )
                 
                 guard self.currentRequestID == requestID else { return }
@@ -287,7 +437,32 @@ class LLMRequestService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        if openAIClient == nil { initialize() }
+        // Get all API keys
+        let openAIKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        let claudeKey = UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none"
+        let grokKey = UserDefaults.standard.string(forKey: "grokApiKey") ?? "none"
+        let geminiKey = UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
+        
+        // Create a dictionary of API keys by provider
+        let apiKeys = [
+            AIModels.Provider.openai: openAIKey,
+            AIModels.Provider.claude: claudeKey,
+            AIModels.Provider.grok: grokKey,
+            AIModels.Provider.gemini: geminiKey
+        ]
+        
+        // Get current model string
+        let currentModel = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Create or update client for the selected model
+        if let client = OpenAIClientFactory.createClientForModel(model: currentModel, apiKeys: apiKeys) {
+            // Use the model-specific client
+            openAIClient = client
+        } else if openAIClient == nil {
+            // Fallback to initializing standard OpenAI client
+            initialize()
+        }
+        
         guard let client = openAIClient else {
             onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
             return
@@ -328,8 +503,9 @@ class LLMRequestService: @unchecked Sendable {
             do {
                 let response = try await client.sendChatCompletionAsync(
                     messages: messages,
-                    model: OpenAIModelFetcher.getPreferredModelString(),
-                    temperature: 1.0
+                    model: currentModel,
+                    responseFormat: nil,
+                    temperature: nil
                 )
                 
                 guard self.currentRequestID == requestID else { return }
