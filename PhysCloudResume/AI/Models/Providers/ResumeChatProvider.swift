@@ -8,6 +8,7 @@
 import Foundation
 import PDFKit
 import AppKit
+import SwiftData
 import SwiftUI
 
 /// Helper for handling resume chat functionality
@@ -36,11 +37,7 @@ final class ResumeChatProvider {
         openAIClient = client
     }
 
-
-
     // MARK: - Public Methods
-
-
 
     // Actor to safely coordinate continuations and prevent multiple resumes
     private actor ContinuationCoordinator {
@@ -67,13 +64,7 @@ final class ResumeChatProvider {
                    resume: Resume? = nil,
                    continueConversation: Bool = false) async throws
     {
-        // Check if we should use the new Responses API implementation
-        if isResponsesAPIEnabled() {
-            try await startChatWithResponsesAPI(messages: messages,
-                                                resume: resume,
-                                                continueConversation: continueConversation)
-            return
-        }
+        // Always use ChatCompletions API now
         // Clear previous error message before starting
         errorMessage = ""
 
@@ -150,12 +141,63 @@ final class ResumeChatProvider {
         }
     }
 
-    /// Check if the Responses API should be used
-    /// - Returns: True if the Responses API should be used
-    private func isResponsesAPIEnabled() -> Bool {
-        // We can add a feature flag here in the future
-        // For now, always return true to use the new API
-        return true
+    // MARK: - Conversational Methods (ChatCompletions API)
+    
+    /// Starts a new conversation for resume analysis with ChatCompletions API
+    /// - Parameters:
+    ///   - resume: The resume to analyze
+    ///   - customInstructions: Optional custom instructions for the analysis
+    ///   - onProgress: Progress callback for streaming responses
+    ///   - onComplete: Completion callback with result
+    @MainActor
+    func startNewResumeConversation(
+        resume: Resume,
+        customInstructions: String = "",
+        onProgress: @escaping (String) -> Void = { _ in },
+        onComplete: @escaping (Result<String, Error>) -> Void = { _ in }
+    ) {
+        // Create a query to get the system prompt and context
+        let query = ResumeApiQuery(resume: resume)
+        
+        // Build system prompt from the query
+        var systemPrompt = query.genericSystemMessage.content
+        if !customInstructions.isEmpty {
+            systemPrompt += "\n\nAdditional Instructions: \(customInstructions)"
+        }
+        
+        let userMessage = "Please analyze this resume and provide detailed feedback for improvement."
+        
+        LLMRequestService.shared.sendResumeConversationRequest(
+            resume: resume,
+            userMessage: userMessage,
+            systemPrompt: systemPrompt,
+            isNewConversation: true,
+            onProgress: onProgress,
+            onComplete: onComplete
+        )
+    }
+    
+    /// Continues an existing conversation for the resume
+    /// - Parameters:
+    ///   - resume: The resume being discussed
+    ///   - userMessage: The user's message to continue the conversation
+    ///   - onProgress: Progress callback for streaming responses
+    ///   - onComplete: Completion callback with result
+    @MainActor
+    func continueResumeConversation(
+        resume: Resume,
+        userMessage: String,
+        onProgress: @escaping (String) -> Void = { _ in },
+        onComplete: @escaping (Result<String, Error>) -> Void = { _ in }
+    ) {
+        LLMRequestService.shared.sendResumeConversationRequest(
+            resume: resume,
+            userMessage: userMessage,
+            systemPrompt: nil, // System prompt already in context
+            isNewConversation: false,
+            onProgress: onProgress,
+            onComplete: onComplete
+        )
     }
 
     /// Helper method to save message content to debug file
@@ -181,239 +223,4 @@ final class ResumeChatProvider {
             Logger.debug("Debug message NOT saved (saveDebugPrompts disabled)")
         }
     }
-    
-    /// Sends a request to the OpenAI Responses API
-    /// - Parameters:
-    ///   - messages: The message history for context
-    ///   - resume: The resume to update with the response ID
-    /// - Returns: void - results are stored in properties
-    func startChatWithResponsesAPI(messages: [ChatMessage],
-                                   resume: Resume?,
-                                   continueConversation: Bool) async throws
-    {
-        // Clear previous error message before starting
-        errorMessage = ""
-
-        // Store for reference
-        genericMessages = messages
-
-        // Get model as string
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
-
-        // Extract the system and user messages
-        var systemMessage = ""
-        var userMessage = ""
-
-        // For debug: capture updatableFields JSON from the resume if provided
-        if let resume = resume, let root = resume.rootNode {
-            let fieldsArr = TreeNode.traverseAndExportNodes(node: root)
-            if let data = try? JSONSerialization.data(withJSONObject: fieldsArr, options: .prettyPrinted),
-               let jsonString = String(data: data, encoding: .utf8)
-            {
-                Logger.debug("▶️ JSON sent to LLM (updatableFields):")
-                Logger.debug(jsonString)
-            }
-            // Do *not* wipe previousResponseId here; it is needed for
-            // follow-up revision calls.
-        }
-        
-        // Check for empty messages array - this is a critical error
-        var workingMessages = messages // Create a mutable copy
-        if workingMessages.isEmpty {
-            Logger.debug("❌ CRITICAL ERROR: Empty messages array received in startChatWithResponsesAPI!")
-            
-            // If we have a resume, try to generate a fallback prompt
-            if resume != nil {
-                // Create a basic fallback prompt that just asks for improvement of the resume
-                let fallbackPrompt = """
-                Please help improve this resume for a job application. Propose changes that would make it more effective.
-                
-                Generate your response in the required JSON format with the RevNode array schema.
-                """
-                
-                // Add a generic system message and the fallback user prompt
-                workingMessages = [
-                    ChatMessage(role: .system, content: "You are a helpful assistant specializing in resume improvements."),
-                    ChatMessage(role: .user, content: fallbackPrompt)
-                ]
-                
-                // Update genericMessages for future reference
-                genericMessages = workingMessages
-                
-                Logger.debug("⚠️ Created emergency fallback prompt due to empty messages array")
-            } else {
-                throw NSError(domain: "ResumeChatProviderError", code: 1005, 
-                    userInfo: [NSLocalizedDescriptionKey: "Empty messages array and no resume to generate fallback"])
-            }
-        }
-        
-        // Debug log for messages being processed
-        Logger.debug("Processing \(workingMessages.count) messages for chat request")
-        for (index, message) in workingMessages.enumerated() {
-            Logger.debug("Message \(index): Role=\(message.role), Content length=\(message.content.count) chars")
-            
-            // Now process the message normally
-            switch message.role {
-            case .system:
-                if !systemMessage.isEmpty {
-                    systemMessage += "\n\n"
-                }
-                systemMessage += message.content
-            case .user:
-                if !userMessage.isEmpty {
-                    userMessage += "\n\n"
-                }
-                userMessage += message.content
-            default:
-                Logger.debug("Skipping message with role: \(message.role)")
-                break
-            }
-        }
-        
-        // Debug log the extracted content
-        Logger.debug("Final system message length: \(systemMessage.count) chars")
-        Logger.debug("Final user message length: \(userMessage.count) chars")
-
-        // Combine for the final message
-        var combinedMessage = ""
-        
-        // Only include system context if there is actual content
-        if !systemMessage.isEmpty {
-            combinedMessage += """
-            System context:
-            \(systemMessage)
-            
-            """
-        }
-        
-        // Only include user message if there is actual content
-        if !userMessage.isEmpty {
-            combinedMessage += """
-            User message:
-            \(userMessage)
-            """
-        } else {
-            // If there's no user message, add a placeholder to avoid empty requests
-            Logger.debug("⚠️ Warning: Empty user message in chat request")
-        }
-        
-        // Ensure we have at least some content
-        if combinedMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Logger.debug("⚠️ Error: Empty combined message in chat request")
-            
-            // Create a fallback prompt if both system and user messages are empty
-            if let resume = resume, let root = resume.rootNode {
-                // Extract some node values to include in the fallback
-                let nodes = TreeNode.traverseAndExportNodes(node: root)
-                let nodeStrings = nodes.prefix(5).compactMap { node -> String? in
-                    if let value = node["value"] as? String, !value.isEmpty {
-                        return value
-                    }
-                    return nil
-                }
-                
-                let nodeContent = nodeStrings.joined(separator: "\n- ")
-                
-                combinedMessage = """
-                Please help improve this resume. I need suggestions for the following sections:
-                
-                - \(nodeContent)
-                
-                Respond with a JSON array of revision nodes following the schema I provided.
-                """
-                
-                Logger.debug("✅ Created emergency fallback message from resume nodes")
-            } else {
-                // Use the raw messages as a last resort
-                combinedMessage = workingMessages.map { "[\($0.role)]: \($0.content)" }.joined(separator: "\n\n")
-                
-                if combinedMessage.isEmpty {
-                    // If even that's empty, use a completely generic message
-                    combinedMessage = "Please suggest improvements for this resume. Respond with a JSON array following the schema format."
-                }
-            }
-        }
-        
-        // Save the final combined message to a debug file for analysis
-        saveMessageToDebugFile(combinedMessage, fileName: "resume_chat_debug.txt")
-
-        // Decide whether to continue a previous conversation
-        let previousResponseId: String? = continueConversation ? resume?.previousResponseId : nil
-        let isNewConversation = previousResponseId == nil
-
-        Logger.debug("Starting \(isNewConversation ? "new" : "continuation") conversation with Responses API")
-        if !isNewConversation {
-            Logger.debug("Using previous response ID: \(previousResponseId ?? "nil")")
-        } else {
-            Logger.debug("Starting fresh conversation with no previous context")
-        }
-
-        do {
-            // Get the JSON schema for revisions
-            let schema = ResumeApiQuery.revNodeArraySchemaString
-
-            // Call the Responses API with structured output schema
-            let response = try await openAIClient.sendResponseRequestAsync(
-                message: combinedMessage,
-                model: modelString,
-                temperature: 1.0,
-                previousResponseId: previousResponseId,
-                schema: schema
-            )
-
-            Logger.debug("✅ Received response from OpenAI Responses API with ID: \(response.id)")
-
-            // Debug: print the raw JSON returned from the LLM for troubleshooting
-            Logger.debug("🛬 JSON returned from LLM:")
-            Logger.debug(response.content)
-
-            // Store the response ID in the resume if provided
-            if let resume = resume {
-                resume.previousResponseId = response.id
-            }
-
-            // Process the response content
-            let content = response.content
-
-            // Parse the JSON content to extract the RevNode array
-            if let responseData = content.data(using: .utf8) {
-                do {
-                    Logger.debug("Parsing JSON content to RevNode array...")
-
-                    // Try as a container with revArray property (legacy format)
-                    let container = try JSONDecoder().decode(RevisionsContainer.self, from: responseData)
-                    Logger.debug("Successfully decoded JSON with container format: \(container.revArray.count) revision nodes")
-
-                    // Format for storage
-                    let encoder = JSONEncoder()
-                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                    let jsonData = try encoder.encode(container)
-                    let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
-
-                    // Store results
-                    self.messages = [jsonString]
-                    lastRevNodeArray = container.revArray
-                    genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
-
-                } catch {
-                    Logger.debug("JSON parsing error: \(error.localizedDescription)")
-                    Logger.debug("Raw content: \(content)")
-                    throw error
-                }
-            } else {
-                throw NSError(
-                    domain: "ResumeChatProviderError",
-                    code: 1003,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to convert content to data"]
-                )
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
-        }
-    }
-
-
 }
-
-

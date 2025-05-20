@@ -4,7 +4,7 @@ import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-import SwiftUI
+import SwiftData
 
 @Observable
 final class CoverChatProvider {
@@ -105,7 +105,10 @@ final class CoverChatProvider {
         buttons.wrappedValue.runRequested = true
 
         if isNewConversation {
-            letter.previousResponseId = nil
+            // Clear conversation context instead of using deprecated previousResponseId
+            Task { @MainActor in
+                letter.clearConversationContext()
+            }
         }
 
         let systemMessage = CoverLetterPrompts.systemMessage
@@ -126,53 +129,163 @@ final class CoverChatProvider {
         let modelString = OpenAIModelFetcher.getPreferredModelString()
 
         Task {
-            do {
-                if isResponsesAPIEnabled() {
-                    let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
-                    let response = try await openAIClient.sendResponseRequestAsync(
-                        message: combinedMessage,
-                        model: modelString,
-                        temperature: 1.0,
-                        previousResponseId: letter.previousResponseId,
-                        schema: nil
+            // Always use ChatCompletions API with conversation management
+                let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
+                
+                // Use the new conversation management methods
+                if isNewConversation {
+                    // Start new conversation using the correct method name
+                    LLMRequestService.shared.sendCoverLetterConversationRequest(
+                        coverLetter: letter,
+                        userMessage: combinedMessage,
+                        systemPrompt: systemMessage.content,
+                        isNewConversation: true,
+                        onProgress: { progress in
+                            // Handle progress updates if needed
+                        },
+                        onComplete: { result in
+                            Task { @MainActor in
+                                switch result {
+                                case .success(let content):
+                                    self.processResults(
+                                        newMessage: content,
+                                        coverLetter: letter,
+                                        buttons: buttons,
+                                        model: modelString,
+                                        isRevision: false // New conversation is not a revision
+                                    )
+                                case .failure(let error):
+                                    buttons.wrappedValue.runRequested = false
+                                    self.errorMessage = "Error: \(error.localizedDescription)"
+                                }
+                            }
+                        }
                     )
-                    letter.previousResponseId = response.id
-                    await MainActor.run {
-                        processResults(
-                            newMessage: response.content,
-                            coverLetter: letter,
-                            buttons: buttons,
-                            model: modelString,
-                            isRevision: !isNewConversation // It's a revision if not a new conversation and name is already set
-                        )
-                    }
                 } else {
-                    let response = try await openAIClient.sendChatCompletionAsync(
-                        messages: genericMessages,
-                        model: modelString,
-                        temperature: 1.0
+                    // Continue existing conversation
+                    LLMRequestService.shared.sendCoverLetterConversationRequest(
+                        coverLetter: letter,
+                        userMessage: userMessage,
+                        systemPrompt: nil, // System prompt already in context
+                        isNewConversation: false,
+                        onProgress: { progress in
+                            // Handle progress updates if needed
+                        },
+                        onComplete: { result in
+                            Task { @MainActor in
+                                switch result {
+                                case .success(let content):
+                                    self.processResults(
+                                        newMessage: content,
+                                        coverLetter: letter,
+                                        buttons: buttons,
+                                        model: modelString,
+                                        isRevision: true // Continuation is always a revision
+                                    )
+                                case .failure(let error):
+                                    buttons.wrappedValue.runRequested = false
+                                    self.errorMessage = "Error: \(error.localizedDescription)"
+                                }
+                            }
+                        }
                     )
-                    await MainActor.run {
-                        processResults(
-                            newMessage: response.content,
-                            coverLetter: letter,
-                            buttons: buttons,
-                            model: modelString,
-                            isRevision: !isNewConversation && !letter.name.isEmpty
-                        )
-                    }
                 }
-            } catch {
-                await MainActor.run {
-                    buttons.wrappedValue.runRequested = false
-                    errorMessage = "Error: \(error.localizedDescription)"
-                }
-            }
+
         }
     }
 
     private func isResponsesAPIEnabled() -> Bool {
-        return true
+        // Migration to ChatCompletions API - always return false
+        return false
+    }
+    
+    // MARK: - New Conversational Methods (ChatCompletions API)
+    
+    /// Starts a new conversation for cover letter generation/revision
+    /// - Parameters:
+    ///   - coverLetter: The cover letter to work with
+    ///   - userMessage: The initial user message
+    ///   - onProgress: Progress callback for streaming responses
+    ///   - onComplete: Completion callback with result
+    @MainActor
+    func startNewCoverLetterConversation(
+        coverLetter: CoverLetter,
+        userMessage: String,
+        onProgress: @escaping (String) -> Void = { _ in },
+        onComplete: @escaping (Result<String, Error>) -> Void = { _ in }
+    ) {
+        // Build system prompt for cover letters
+        let systemPrompt = buildCoverLetterSystemPrompt(for: coverLetter)
+        
+        LLMRequestService.shared.sendCoverLetterConversationRequest(
+            coverLetter: coverLetter,
+            userMessage: userMessage,
+            systemPrompt: systemPrompt,
+            isNewConversation: true,
+            onProgress: onProgress,
+            onComplete: onComplete
+        )
+    }
+    
+    /// Continues an existing conversation for the cover letter
+    /// - Parameters:
+    ///   - coverLetter: The cover letter being discussed
+    ///   - userMessage: The user's message to continue the conversation
+    ///   - onProgress: Progress callback for streaming responses
+    ///   - onComplete: Completion callback with result
+    @MainActor
+    func continueCoverLetterConversation(
+        coverLetter: CoverLetter,
+        userMessage: String,
+        onProgress: @escaping (String) -> Void = { _ in },
+        onComplete: @escaping (Result<String, Error>) -> Void = { _ in }
+    ) {
+        LLMRequestService.shared.sendCoverLetterConversationRequest(
+            coverLetter: coverLetter,
+            userMessage: userMessage,
+            systemPrompt: nil, // System prompt already in context
+            isNewConversation: false,
+            onProgress: onProgress,
+            onComplete: onComplete
+        )
+    }
+    
+    /// Clears the conversation context for a cover letter
+    /// - Parameter coverLetter: The cover letter whose conversation should be cleared
+    @MainActor
+    func clearCoverLetterConversation(coverLetter: CoverLetter) {
+        ConversationContextManager.shared.clearContext(for: coverLetter.id, type: .coverLetter)
+    }
+    
+    /// Builds a system prompt for cover letter conversations
+    /// - Parameter coverLetter: The cover letter to build the prompt for
+    /// - Returns: A system prompt string
+    private func buildCoverLetterSystemPrompt(for coverLetter: CoverLetter) -> String {
+        // Build a comprehensive system prompt for cover letter assistance
+        var systemPrompt = """
+        You are an expert cover letter writing assistant. Your role is to help create, revise, and improve cover letters that are personalized, compelling, and professional.
+        
+        Current cover letter content:
+        \(coverLetter.content)
+        """
+        
+        // Add job application context if available
+        if let jobApp = coverLetter.jobApp {
+            systemPrompt += """
+            
+            Job Application Context:
+            - Position: \(jobApp.jobPosition)
+            - Company: \(jobApp.companyName)
+            - Job Description: \(jobApp.jobDescription)
+            """
+        }
+        
+        systemPrompt += """
+        
+        Please provide helpful suggestions, improvements, and revisions to make this cover letter more effective for the target position.
+        """
+        
+        return systemPrompt
     }
 
     private func processResults(
@@ -265,7 +378,10 @@ final class CoverChatProvider {
         buttons.wrappedValue.runRequested = true
 
         if isNewConversation { // Should generally be false for revisions
-            letter.previousResponseId = nil
+            // Clear conversation context instead of using deprecated previousResponseId
+            Task { @MainActor in
+                letter.clearConversationContext()
+            }
         }
 
         let systemMessage = CoverLetterPrompts.systemMessage
@@ -299,48 +415,37 @@ final class CoverChatProvider {
         let modelString = OpenAIModelFetcher.getPreferredModelString()
 
         Task {
-            do {
-                if isResponsesAPIEnabled() {
-                    let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
-                    let response = try await openAIClient.sendResponseRequestAsync(
-                        message: combinedMessage,
-                        model: modelString,
-                        temperature: 1.0,
-                        previousResponseId: letter.previousResponseId,
-                        schema: nil
-                    )
-                    letter.previousResponseId = response.id
-                    await MainActor.run {
-                        processResults(
-                            newMessage: response.content,
-                            coverLetter: letter,
-                            buttons: buttons,
-                            model: modelString,
-                            isRevision: true // Revisions are always true here
-                        )
+            // Always use ChatCompletions API with conversation management
+                let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
+                
+                // This is always a continuation since we're revising an existing letter
+                LLMRequestService.shared.sendCoverLetterConversationRequest(
+                    coverLetter: letter,
+                    userMessage: combinedMessage,
+                    systemPrompt: systemMessage.content,
+                    isNewConversation: isNewConversation,
+                    onProgress: { progress in
+                        // Handle progress updates if needed
+                    },
+                    onComplete: { result in
+                        Task { @MainActor in
+                            switch result {
+                            case .success(let content):
+                                self.processResults(
+                                    newMessage: content,
+                                    coverLetter: letter,
+                                    buttons: buttons,
+                                    model: modelString,
+                                    isRevision: true // Revisions are always true here
+                                )
+                            case .failure(let error):
+                                buttons.wrappedValue.runRequested = false
+                                self.errorMessage = "Error: \(error.localizedDescription)"
+                            }
+                        }
                     }
-                } else {
-                    let response = try await openAIClient.sendChatCompletionAsync(
-                        messages: genericMessages,
-                        model: modelString,
-                        temperature: 1.0
-                    )
-                    await MainActor.run {
-                        processResults(
-                            newMessage: response.content,
-                            coverLetter: letter,
-                            buttons: buttons,
-                            model: modelString,
-                            isRevision: true // Revisions are always true here
-                        )
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    buttons.wrappedValue.runRequested = false
-                    errorMessage = "Error: \(error.localizedDescription)"
-                }
-            }
+                )
+
         }
     }
 }

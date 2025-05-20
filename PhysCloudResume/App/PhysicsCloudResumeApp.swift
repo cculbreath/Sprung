@@ -30,6 +30,9 @@ struct PhysicsCloudResumeApp: App {
             CoverRef.self,
             ApplicantProfile.self,
             ResModel.self,
+            // Add conversation models for ChatCompletions API
+            ConversationContext.self,
+            ConversationMessage.self,
         ])
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
         .commands {

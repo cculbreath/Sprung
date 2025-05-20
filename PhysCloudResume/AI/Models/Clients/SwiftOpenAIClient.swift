@@ -68,8 +68,6 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
     
     // MARK: - Helper Methods
     
-
-    
     /// Converts our ChatMessage to SwiftOpenAI's ChatCompletionParameters.Message
     /// - Parameter message: The message to convert
     /// - Returns: The converted message
@@ -84,10 +82,39 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             role = .assistant
         }
         
-        return ChatCompletionParameters.Message(
-            role: role,
-            content: .text(message.content)
-        )
+        // Handle text-only messages
+        if message.imageData == nil {
+            return ChatCompletionParameters.Message(
+                role: role,
+                content: .text(message.content)
+            )
+        }
+        
+        // Handle messages with images (vision models)
+        else {
+            let textContent = ChatCompletionParameters.Message.ContentType.MessageContent.text(message.content)
+            let imageUrlString = "data:image/png;base64,\(message.imageData!)"
+            
+            // Create image URL
+            guard let imageURL = URL(string: imageUrlString) else {
+                // Fallback to text-only if URL creation fails
+                return ChatCompletionParameters.Message(
+                    role: role,
+                    content: .text(message.content)
+                )
+            }
+            
+            let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(
+                url: imageURL,
+                detail: "high"
+            )
+            let imageContent = ChatCompletionParameters.Message.ContentType.MessageContent.imageUrl(imageDetail)
+            
+            return ChatCompletionParameters.Message(
+                role: role,
+                content: .contentArray([textContent, imageContent])
+            )
+        }
     }
     
     /// Maps voice string to SwiftOpenAI's AudioSpeechParameters.Voice
@@ -231,68 +258,6 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             )
         } catch {
             Logger.debug("❌ SwiftOpenAI: Structured completion failed: \(error.localizedDescription)")
-            throw mapSwiftOpenAIError(error)
-        }
-    }
-    
-    // MARK: - Responses API Methods
-    
-    /// Sends a request to the OpenAI Responses API using async/await
-    /// - Parameters:
-    ///   - message: The current message content
-    ///   - model: The model to use
-    ///   - temperature: Controls randomness (0-1)
-    ///   - previousResponseId: Optional ID from a previous response for conversation state
-    ///   - schema: Optional JSON schema for structured output
-    /// - Returns: The response from the Responses API
-    func sendResponseRequestAsync(
-        message: String,
-        model: String,
-        temperature: Double?,
-        previousResponseId: String?,
-        schema: String? = nil
-    ) async throws -> ResponsesAPIResponse {
-        Logger.debug("🤖 SwiftOpenAI: Starting Responses API request for model \(model)")
-        
-        // Configure text response format if schema is provided
-        var textConfig: TextConfiguration? = nil
-        if let schemaString = schema {
-            Logger.debug("🤖 SwiftOpenAI: Converting schema for structured output")
-            do {
-                let jsonSchema = try convertSchemaStringToJSONSchema(schemaString)
-                textConfig = TextConfiguration(format: .jsonSchema(jsonSchema))
-            } catch {
-                Logger.debug("❌ SwiftOpenAI: Failed to convert schema: \(error)")
-                throw NSError(
-                    domain: "SwiftOpenAIClient",
-                    code: 1005,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to convert schema: \(error.localizedDescription)"]
-                )
-            }
-        }
-        
-        let parameters = ModelResponseParameter(
-            input: .string(message),
-            model: SwiftOpenAI.Model.from(model),
-            previousResponseId: previousResponseId,
-            temperature: temperature,
-            text: textConfig
-        )
-        
-        do {
-            let result = try await swiftService.responseCreate(parameters)
-            
-            // Use the convenience property to get aggregated text output
-            let content = result.outputText ?? ""
-            
-            Logger.debug("✅ SwiftOpenAI: Responses API request successful")
-            return ResponsesAPIResponse(
-                id: result.id,
-                content: content,
-                model: result.model
-            )
-        } catch {
-            Logger.debug("❌ SwiftOpenAI: Responses API request failed: \(error.localizedDescription)")
             throw mapSwiftOpenAIError(error)
         }
     }

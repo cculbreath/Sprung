@@ -331,11 +331,10 @@ struct AiCommsView: View {
             do {
                 // Prepare messages for API call using our abstraction layer
                 if !hasRevisions {
-                    // For a new resume generation, we want to reset the server-side context
-                    // by clearing the previousResponseId
+                    // For a new resume generation, we want to clear conversation context
                     if let myRes = myRes {
-                        Logger.debug("Starting new resume generation - clearing previousResponseId")
-                        myRes.previousResponseId = nil
+                        Logger.debug("Starting new resume generation - clearing conversation context")
+                        myRes.clearConversationContext()
                     }
 
                     // Set up system and user messages for initial query
@@ -362,8 +361,8 @@ struct AiCommsView: View {
                     ]
                     chatProvider = updatedProvider
                 } else {
-                    // Start a new message list for the revision round – the
-                    // server will recover full context from `previousResponseId`.
+                    // Start a new message list for the revision round.
+                    // With ChatCompletions API, context is managed locally.
                     let revisionUserPromptContent = await q.revisionPrompt(fbnodes) // Await the async prompt generation
                     let updatedProvider = chatProvider
                     updatedProvider.genericMessages = [

@@ -183,14 +183,28 @@ struct ChatMessage: Codable, Equatable {
     let role: ChatRole
     /// The content of the message
     let content: String
+    /// Optional base64-encoded image data for vision models
+    let imageData: String?
 
-    /// Creates a new chat message
+    /// Creates a new chat message with text only
     /// - Parameters:
     ///   - role: The role of the message sender
     ///   - content: The content of the message
     init(role: ChatRole, content: String) {
         self.role = role
         self.content = content
+        self.imageData = nil
+    }
+    
+    /// Creates a new chat message with text and image
+    /// - Parameters:
+    ///   - role: The role of the message sender
+    ///   - content: The content of the message
+    ///   - imageData: Base64-encoded image data
+    init(role: ChatRole, content: String, imageData: String) {
+        self.role = role
+        self.content = content
+        self.imageData = imageData
     }
 
     enum ChatRole: String, Codable {

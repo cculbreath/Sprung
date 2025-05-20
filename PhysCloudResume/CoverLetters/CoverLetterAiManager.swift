@@ -258,9 +258,9 @@ struct CoverLetterAiManager: View {
             if let jobApp = jobAppStore.selectedApp,
                let letter = jobApp.selectedCover
             {
-                // Clear previousResponseId to start a new conversation
-                Logger.debug("[CoverLetterAiManager] Starting new conversation, clearing previousResponseId for letter ID: \(letter.id)")
-                letter.previousResponseId = nil
+                // Clear conversation context to start a new conversation
+                Logger.debug("[CoverLetterAiManager] Starting new conversation, clearing context for letter ID: \(letter.id)")
+                letter.clearConversationContext()
                 // Reset flag
                 handleNewConversation = false
             }
