@@ -148,6 +148,18 @@ struct ResumeReviewSheet: View {
                     if selectedReviewType == .custom {
                         CustomReviewOptionsView(customOptions: $customOptions)
                     }
+                    
+                    // AI Model Selection
+                    GroupBox(label: Text("AI Model").fontWeight(.medium)) {
+                        ModelPickerView(
+                            selectedModel: Binding(
+                                get: { UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o },
+                                set: { UserDefaults.standard.set($0, forKey: "preferredLLMModel") }
+                            ),
+                            title: nil
+                        )
+                        .padding(.vertical, 4)
+                    }
 
                     // Content area (GroupBox with contentView)
                     GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {

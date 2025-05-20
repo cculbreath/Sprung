@@ -18,4 +18,7 @@ class AppState {
     // AI job recommendation properties
     var recommendedJobId: UUID?
     var isLoadingRecommendation: Bool = false
+    
+    // AI model service
+    let modelService = ModelService()
 }

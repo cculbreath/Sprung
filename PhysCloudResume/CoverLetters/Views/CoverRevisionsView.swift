@@ -13,13 +13,26 @@ struct CoverRevisionsView: View {
 
     var body: some View {
         // Create client using our abstraction layer
-        let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
-
-        RevisionsViewContent(
-            openAIClient: openAIClient,
-            buttons: $buttons
-        )
-        .onAppear { Logger.debug("Ai Cover Letterv2") }
+        if let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey) {
+            RevisionsViewContent(
+                openAIClient: openAIClient,
+                buttons: $buttons
+            )
+            .onAppear { Logger.debug("Ai Cover Letterv2") }
+        } else {
+            // Fallback view when API key is invalid or missing
+            VStack(spacing: 16) {
+                Text("API Key Error")
+                    .font(.headline)
+                Text("Please check your OpenAI API key in Settings")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .onAppear {
+                Logger.error("Failed to create OpenAI client for CoverRevisionsView")
+            }
+        }
     }
 }
 

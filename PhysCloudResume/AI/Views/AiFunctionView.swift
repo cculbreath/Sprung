@@ -40,8 +40,13 @@ struct AiFunctionView: View {
         // Get API keys from UserDefaults
         let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
         
-        // Create the appropriate client
-        llmClient = OpenAIClientFactory.createClient(apiKey: openAiKey)
+        // Create the appropriate client with safety check
+        if let client = OpenAIClientFactory.createClient(apiKey: openAiKey) {
+            llmClient = client
+        } else {
+            // If client creation fails, throw a runtime error since we can't function without it
+            fatalError("Failed to initialize AiFunctionView: Invalid or missing API key")
+        }
         
         // TTS is still using OpenAI
         ttsProvider = OpenAITTSProvider(apiKey: openAiKey)

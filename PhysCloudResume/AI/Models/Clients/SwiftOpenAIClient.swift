@@ -10,6 +10,7 @@ import PDFKit
 import AppKit
 import SwiftUI
 import SwiftOpenAI
+// Also import our type definitions
 
 /// Implementation of OpenAIClientProtocol using SwiftOpenAI library
 class SwiftOpenAIClient: OpenAIClientProtocol {
@@ -30,9 +31,49 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         let urlConfig = URLSessionConfiguration.default
         urlConfig.timeoutIntervalForRequest = configuration.timeoutInterval
         
-        // Create SwiftOpenAI service
-        if configuration.host != "api.openai.com" {
-            // Custom URL configuration (e.g., for Gemini)
+        // Create SwiftOpenAI service based on host
+        if configuration.host == "api.anthropic.com" {
+            // Special handling for Claude API
+            Logger.debug("👤 Creating Claude-specific API client")
+            
+            // Setup the URL session configuration with the required headers
+            var configHeaders = urlConfig.httpAdditionalHeaders as? [String: String] ?? [:]
+            configHeaders["anthropic-version"] = "2023-06-01"
+            configHeaders["x-api-key"] = configuration.token ?? ""
+            configHeaders["Content-Type"] = "application/json"
+            
+            // Remove any Authorization header to prevent conflicts
+            configHeaders.removeValue(forKey: "Authorization")
+            
+            // Set the headers back on the config
+            urlConfig.httpAdditionalHeaders = configHeaders
+            
+            // Setup the extra headers for the service creation
+            var anthropicHeaders = [
+                "anthropic-version": "2023-06-01",
+                "x-api-key": configuration.token ?? ""
+            ]
+            
+            // Add any custom headers from configuration
+            for (key, value) in configuration.customHeaders {
+                anthropicHeaders[key] = value
+            }
+            
+            Logger.debug("🔧 Creating Claude client with multiple authentication methods")
+            Logger.debug("🔑 Using x-api-key: \(String((configuration.token ?? "").prefix(4)))...")
+            
+            // Create the service with empty API key and proper headers
+            swiftService = OpenAIServiceFactory.service(
+                apiKey: "", // Claude doesn't use standard Bearer token
+                overrideBaseURL: "https://\(configuration.host)",
+                configuration: urlConfig,
+                proxyPath: nil,
+                overrideVersion: "v1",
+                extraHeaders: anthropicHeaders
+            )
+        } else if configuration.host == "api.groq.com" || configuration.host == "api.x.ai" {
+            // Special handling for Grok API
+            Logger.debug("⚡ Creating Grok-specific API client")
             swiftService = OpenAIServiceFactory.service(
                 apiKey: configuration.token ?? "",
                 overrideBaseURL: "https://\(configuration.host)",
@@ -41,8 +82,33 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
                 overrideVersion: "v1",
                 extraHeaders: configuration.customHeaders
             )
+        } else if configuration.host == "generativelanguage.googleapis.com" {
+            // Special handling for Gemini API (uses API key in URL)
+            Logger.debug("🌟 Creating Gemini-specific API client")
+            
+            // Gemini client needs special handling
+            swiftService = OpenAIServiceFactory.service(
+                apiKey: "", // Empty here as key is provided in headers and URL
+                overrideBaseURL: "https://\(configuration.host)",
+                configuration: urlConfig,
+                proxyPath: nil,
+                overrideVersion: "v1beta", // Gemini uses v1beta
+                extraHeaders: configuration.customHeaders
+            )
+        } else if configuration.host != "api.openai.com" {
+            // Other custom URL configuration
+            Logger.debug("🔄 Creating custom API client for host: \(configuration.host)")
+            swiftService = OpenAIServiceFactory.service(
+                apiKey: configuration.token ?? "",
+                overrideBaseURL: "https://\(configuration.host)",
+                configuration: urlConfig,
+                proxyPath: nil,
+                overrideVersion: configuration.basePath.replacingOccurrences(of: "/", with: ""),
+                extraHeaders: configuration.customHeaders
+            )
         } else {
             // Standard OpenAI configuration
+            Logger.debug("🤖 Creating standard OpenAI API client")
             swiftService = OpenAIServiceFactory.service(
                 apiKey: configuration.token ?? "",
                 organizationID: configuration.organizationIdentifier,
@@ -66,7 +132,130 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         )
     }
     
+    /// Initializes a client for a specific model with appropriate configuration
+    /// - Parameters:
+    ///   - model: The model to use
+    ///   - apiKeys: Dictionary of API keys by provider
+    /// - Returns: A client configured for the specified model, or nil if no API key is available
+    static func clientForModel(model: String, apiKeys: [String: String]) -> OpenAIClientProtocol? {
+        let provider = AIModels.providerForModel(model)
+        
+        switch provider {
+        case AIModels.Provider.claude:
+            if let apiKey = apiKeys[AIModels.Provider.claude],
+               let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.claude) {
+                let config = OpenAIConfiguration.forClaude(apiKey: validKey)
+                return SwiftOpenAIClient(configuration: config)
+            }
+        case AIModels.Provider.grok:
+            if let apiKey = apiKeys[AIModels.Provider.grok],
+               let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.grok) {
+                let config = OpenAIConfiguration.forGrok(apiKey: validKey)
+                return SwiftOpenAIClient(configuration: config)
+            }
+        case AIModels.Provider.gemini:
+            if let apiKey = apiKeys[AIModels.Provider.gemini],
+               let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.gemini) {
+                let config = OpenAIConfiguration.forGemini(apiKey: validKey)
+                return SwiftOpenAIClient(configuration: config)
+            }
+        case AIModels.Provider.openai:
+            if let apiKey = apiKeys[AIModels.Provider.openai],
+               let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) {
+                return SwiftOpenAIClient(apiKey: validKey)
+            }
+        default:
+            // Default to OpenAI if provider isn't recognized
+            if let apiKey = apiKeys[AIModels.Provider.openai],
+               let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) {
+                return SwiftOpenAIClient(apiKey: validKey)
+            }
+        }
+        
+        return nil
+    }
+    
     // MARK: - Helper Methods
+    
+    /// Converts our ResponseFormat to SwiftOpenAI's ChatCompletionParameters.ResponseFormat
+    /// - Parameter format: Our ResponseFormat to convert
+    /// - Returns: The converted SwiftOpenAI format
+    private func convertToSwiftOpenAIResponseFormat(_ format: AIResponseFormat?) -> SwiftOpenAI.ResponseFormat? {
+        guard let format = format else { return nil }
+        
+        switch format {
+        case .text:
+            return nil // Plain text is the default
+        case .jsonObject:
+            return .jsonObject
+        case .jsonSchema(let jsonSchema):
+            let swiftSchema = SwiftOpenAI.JSONSchema(
+                type: .object,
+                properties: convertPropertiesToSwiftOpenAI(jsonSchema.schema),
+                required: [],
+                additionalProperties: true
+            )
+            
+            return .jsonSchema(SwiftOpenAI.JSONSchemaResponseFormat(
+                name: jsonSchema.name,
+                strict: jsonSchema.strict,
+                schema: swiftSchema
+            ))
+        }
+    }
+    
+    /// Converts dictionary properties to SwiftOpenAI format
+    /// - Parameter properties: The schema properties
+    /// - Returns: Converted properties
+    private func convertPropertiesToSwiftOpenAI(_ schemaDict: [String: Any]) -> [String: SwiftOpenAI.JSONSchema] {
+        var result: [String: SwiftOpenAI.JSONSchema] = [:]
+        
+        for (key, value) in schemaDict {
+            if let dictValue = value as? [String: Any] {
+                // Convert the property value based on what we have
+                if let typeString = dictValue["type"] as? String {
+                    let type: SwiftOpenAI.JSONSchemaType? = {
+                        switch typeString {
+                        case "string": return .string
+                        case "object": return .object
+                        case "array": return .array
+                        case "boolean": return .boolean
+                        case "integer": return .integer
+                        case "number": return .number
+                        case "null": return .null
+                        default: return nil
+                        }
+                    }()
+                    
+                    // Extract description if available
+                    let description = dictValue["description"] as? String
+                    
+                    // Convert nested properties if this is an object
+                    var properties: [String: SwiftOpenAI.JSONSchema]? = nil
+                    if typeString == "object", let propsDict = dictValue["properties"] as? [String: Any] {
+                        properties = convertPropertiesToSwiftOpenAI(propsDict)
+                    }
+                    
+                    // Extract required fields if available
+                    let required = dictValue["required"] as? [String]
+                    
+                    // Extract additional properties flag
+                    let additionalProps = dictValue["additionalProperties"] as? Bool ?? false
+                    
+                    // Create the JSON schema
+                    result[key] = SwiftOpenAI.JSONSchema(
+                        type: type,
+                        description: description,
+                        properties: properties,
+                        required: required,
+                        additionalProperties: additionalProps
+                    )
+                }
+            }
+        }
+        
+        return result
+    }
     
     /// Converts our ChatMessage to SwiftOpenAI's ChatCompletionParameters.Message
     /// - Parameter message: The message to convert
@@ -131,7 +320,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         case "ash": return .ash
         case "coral": return .coral
         case "sage": return .sage
-        default: return .alloy
+        default: return .alloy // Default fallback voice
         }
     }
     
@@ -164,19 +353,34 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
     /// - Parameters:
     ///   - messages: The conversation history
     ///   - model: The model to use for completion
+    ///   - responseFormat: Optional response format (e.g., JSON mode)
     ///   - temperature: Controls randomness (0-1)
     /// - Returns: A completion with the model's response
     func sendChatCompletionAsync(
         messages: [ChatMessage],
         model: String,
-        temperature: Double
+        responseFormat: AIResponseFormat?,
+        temperature: Double?
     ) async throws -> ChatCompletionResponse {
         Logger.debug("🤖 SwiftOpenAI: Starting chat completion for model \(model)")
         
+        // Get the provider for the model
+        let provider = AIModels.providerForModel(model)
+        
+        // For Claude models, use a direct implementation that works with their API
+        if provider == AIModels.Provider.claude {
+            Logger.debug("📡 Using direct Claude API implementation for model: \(model)")
+            return try await sendClaudeCompletionAsync(messages: messages, model: model, temperature: temperature)
+        }
+        
+        // Otherwise use the standard SwiftOpenAI approach
         let swiftMessages = messages.map { convertToSwiftOpenAIMessage($0) }
+        let swiftResponseFormat = convertToSwiftOpenAIResponseFormat(responseFormat)
+        
         let parameters = ChatCompletionParameters(
             messages: swiftMessages,
             model: SwiftOpenAI.Model.from(model),
+            responseFormat: swiftResponseFormat,
             temperature: temperature
         )
         
@@ -200,6 +404,137 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         }
     }
     
+    /// Direct implementation for Claude models that bypasses SwiftOpenAI's compatibility issues
+    private func sendClaudeCompletionAsync(
+        messages: [ChatMessage],
+        model: String,
+        temperature: Double?
+    ) async throws -> ChatCompletionResponse {
+        Logger.debug("🤖 Claude API: Starting direct completion for model \(model)")
+        
+        // Build Claude-specific request format - they use a different structure than OpenAI
+        var systemPrompt: String? = nil
+        var userMessages: [String] = []
+        var assistantMessages: [String] = []
+        
+        // Extract system message (if present) and collect user/assistant messages
+        for message in messages {
+            switch message.role {
+            case .system:
+                systemPrompt = message.content
+            case .user:
+                userMessages.append(message.content)
+            case .assistant:
+                assistantMessages.append(message.content)
+            }
+        }
+        
+        // Build the Claude conversation array format - only user and assistant messages
+        var claudeMessages: [[String: Any]] = []
+        
+        // Now interleave user and assistant messages
+        let maxIndex = max(userMessages.count, assistantMessages.count)
+        for i in 0..<maxIndex {
+            if i < userMessages.count {
+                claudeMessages.append([
+                    "role": "user",
+                    "content": userMessages[i]
+                ])
+            }
+            if i < assistantMessages.count {
+                claudeMessages.append([
+                    "role": "assistant",
+                    "content": assistantMessages[i]
+                ])
+            }
+        }
+        
+        // Ensure the last message is from the user (Claude requires this)
+        if let lastMessage = claudeMessages.last, lastMessage["role"] as? String != "user" {
+            Logger.debug("⚠️ Claude API: Last message must be from user, adding empty user message")
+            claudeMessages.append([
+                "role": "user",
+                "content": "Please continue."
+            ])
+        }
+        
+        // Prepare the request payload
+        var requestBody: [String: Any] = [
+            "model": model,
+            "messages": claudeMessages,
+            "temperature": temperature ?? 0.7,
+            "max_tokens": 4096
+        ]
+        
+        // Add system message as a top-level parameter (Claude API requirement)
+        if let systemPrompt = systemPrompt {
+            requestBody["system"] = systemPrompt
+            Logger.debug("📝 Claude API: Adding system message as top-level parameter")
+        }
+        
+        // Convert to JSON data
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: requestBody) else {
+            throw NSError(domain: "SwiftOpenAIClient", code: 1001, 
+                         userInfo: [NSLocalizedDescriptionKey: "Failed to encode Claude request"])
+        }
+        
+        // Create URL request
+        let url = URL(string: "https://api.anthropic.com/v1/messages")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = jsonData
+        
+        // Set headers - crucial for Claude API
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        
+        // Log the request for debugging
+        Logger.debug("📡 Claude API request to \(url.absoluteString) with model \(model)")
+        
+        // Send request
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            // Check response status
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "SwiftOpenAIClient", code: 1003,
+                             userInfo: [NSLocalizedDescriptionKey: "Invalid response type"])
+            }
+            
+            // Check for success
+            guard httpResponse.statusCode == 200 else {
+                // Try to extract error details
+                var errorMessage = "Status code \(httpResponse.statusCode)"
+                if let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let error = errorResponse["error"] as? [String: Any],
+                   let message = error["message"] as? String {
+                    errorMessage += ": \(message)"
+                }
+                
+                Logger.debug("❌ Claude API error: \(errorMessage)")
+                throw NSError(domain: "ClaudeAPI", code: httpResponse.statusCode,
+                             userInfo: [NSLocalizedDescriptionKey: errorMessage])
+            }
+            
+            // Parse the successful response
+            guard let responseDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let content = responseDict["content"] as? [[String: Any]],
+                  let firstContentBlock = content.first,
+                  let text = firstContentBlock["text"] as? String,
+                  let id = responseDict["id"] as? String else {
+                throw NSError(domain: "SwiftOpenAIClient", code: 1004,
+                             userInfo: [NSLocalizedDescriptionKey: "Failed to parse Claude response"])
+            }
+            
+            Logger.debug("✅ Claude API completion successful")
+            return ChatCompletionResponse(content: text, model: model, id: id)
+        } catch {
+            Logger.debug("❌ Claude API completion failed: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
     /// Sends a chat completion request with structured output using async/await
     /// - Parameters:
     ///   - messages: The conversation history
@@ -210,7 +545,7 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
     func sendChatCompletionWithStructuredOutput<T: StructuredOutput>(
         messages: [ChatMessage],
         model: String,
-        temperature: Double,
+        temperature: Double?,
         structuredOutputType: T.Type
     ) async throws -> T {
         Logger.debug("🤖 SwiftOpenAI: Starting structured chat completion for model \(model)")
@@ -413,6 +748,22 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         return SwiftOpenAI.JSONSchema(type: .object, additionalProperties: false)
     }
     
+    /// Helper to convert a JSONSchemaType to its string representation
+    /// - Parameter type: The JSONSchemaType
+    /// - Returns: String representation of the type
+    private func typeToString(_ type: SwiftOpenAI.JSONSchemaType) -> String {
+        switch type {
+        case .string: return "string"
+        case .object: return "object"
+        case .array: return "array"
+        case .boolean: return "boolean"
+        case .integer: return "integer"
+        case .number: return "number"
+        case .null: return "null"
+        case .union: return "object" // Fallback for nested unions
+        }
+    }
+    
     /// Converts a schema string to JSONSchema
     /// - Parameter schemaString: The schema as a JSON string
     /// - Returns: The converted JSONSchema
@@ -429,6 +780,56 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         }
         
         return try createJSONSchemaFromDict(dict)
+    }
+    
+    /// Converts SwiftOpenAI's JSONSchema to a dictionary
+    /// - Parameter schema: The SwiftOpenAI JSONSchema
+    /// - Returns: A dictionary representation of the schema
+    private func createDictionaryFromJSONSchema(_ schema: SwiftOpenAI.JSONSchema) -> [String: Any] {
+        var result: [String: Any] = [:]
+        
+        if let type = schema.type {
+            switch type {
+            case .string: result["type"] = "string"
+            case .object: result["type"] = "object"
+            case .array: result["type"] = "array"
+            case .boolean: result["type"] = "boolean"
+            case .integer: result["type"] = "integer"
+            case .number: result["type"] = "number"
+            case .null: result["type"] = "null"
+            case .union(let types):
+                // For union types, create a type array
+                result["type"] = types.map { typeToString($0) }
+            }
+        }
+        
+        if let description = schema.description {
+            result["description"] = description
+        }
+        
+        if let properties = schema.properties {
+            var propsDict: [String: [String: Any]] = [:]
+            for (key, value) in properties {
+                propsDict[key] = createDictionaryFromJSONSchema(value)
+            }
+            result["properties"] = propsDict
+        }
+        
+        if let items = schema.items {
+            result["items"] = createDictionaryFromJSONSchema(items)
+        }
+        
+        if let required = schema.required {
+            result["required"] = required
+        }
+        
+        result["additionalProperties"] = schema.additionalProperties
+        
+        if let enumValues = schema.enum {
+            result["enum"] = enumValues
+        }
+        
+        return result
     }
     
     /// Creates a JSONSchema from a dictionary

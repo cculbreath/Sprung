@@ -69,4 +69,91 @@ public struct OpenAIConfiguration {
 
 /// Extension to provide default configurations for common use cases
 public extension OpenAIConfiguration {
+    /// Creates configuration for Claude API
+    /// - Parameter apiKey: The API key for Claude
+    /// - Returns: Configuration for Claude API
+    static func forClaude(apiKey: String) -> OpenAIConfiguration {
+        // The SwiftOpenAI client will utilize the token parameter to create an Authorization header
+        // For Claude API, we need to use the proper anthropic-version header and x-api-key format
+        // But the underlying library might also be using the token field
+        return OpenAIConfiguration(
+            token: apiKey, // Pass token normally for library compatibility
+            host: "api.anthropic.com",
+            basePath: "/v1",
+            customHeaders: [
+                "anthropic-version": "2023-06-01",
+                "x-api-key": apiKey, // Claude uses x-api-key header
+                "Authorization": "Bearer \(apiKey)" // Also include Authorization header format
+            ],
+            timeoutInterval: 900.0
+        )
+    }
+    
+    /// Creates configuration for Grok API
+    /// - Parameter apiKey: The API key for Grok
+    /// - Returns: Configuration for Grok API
+    static func forGrok(apiKey: String) -> OpenAIConfiguration {
+        // Check if this is an X.AI Grok key (starts with xai-)
+        if apiKey.hasPrefix("xai-") {
+            return OpenAIConfiguration(
+                token: apiKey,
+                host: "api.x.ai",
+                basePath: "/v1",
+                timeoutInterval: 900.0
+            )
+        } else {
+            // Legacy Groq API
+            return OpenAIConfiguration(
+                token: apiKey,
+                host: "api.groq.com",
+                basePath: "/v1",
+                timeoutInterval: 900.0
+            )
+        }
+    }
+    
+    /// Creates configuration for Gemini API
+    /// - Parameter apiKey: The API key for Gemini
+    /// - Returns: Configuration for Gemini API
+    static func forGemini(apiKey: String) -> OpenAIConfiguration {
+        return OpenAIConfiguration(
+            token: apiKey,
+            host: "generativelanguage.googleapis.com",
+            basePath: "/v1beta", // Use v1beta instead of v1
+            customHeaders: ["x-goog-api-key": apiKey],
+            timeoutInterval: 900.0
+        )
+    }
+    
+    /// Creates configuration for a specific provider based on the model name
+    /// - Parameters:
+    ///   - model: The model name (used to determine provider)
+    ///   - apiKeys: Dictionary of API keys by provider
+    /// - Returns: The appropriate configuration or nil if no matching API key
+    static func forModel(model: String, apiKeys: [String: String]) -> OpenAIConfiguration? {
+        let provider = AIModels.providerForModel(model)
+        
+        switch provider {
+        case AIModels.Provider.claude:
+            if let apiKey = apiKeys[AIModels.Provider.claude], apiKey != "none" {
+                return .forClaude(apiKey: apiKey)
+            }
+        case AIModels.Provider.grok:
+            if let apiKey = apiKeys[AIModels.Provider.grok], apiKey != "none" {
+                return .forGrok(apiKey: apiKey)
+            }
+        case AIModels.Provider.gemini:
+            if let apiKey = apiKeys[AIModels.Provider.gemini], apiKey != "none" {
+                return .forGemini(apiKey: apiKey)
+            }
+        case AIModels.Provider.openai:
+            if let apiKey = apiKeys[AIModels.Provider.openai], apiKey != "none" {
+                return OpenAIConfiguration(token: apiKey, timeoutInterval: 900.0)
+            }
+        default:
+            break
+        }
+        
+        return nil
+    }
 }

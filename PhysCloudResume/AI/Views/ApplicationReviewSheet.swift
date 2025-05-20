@@ -111,6 +111,18 @@ struct ApplicationReviewSheet: View {
             if selectedType == .custom {
                 customOptionsView
             }
+            
+            // AI Model Selection
+            GroupBox(label: Text("AI Model").fontWeight(.medium)) {
+                ModelPickerView(
+                    selectedModel: Binding(
+                        get: { UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o },
+                        set: { UserDefaults.standard.set($0, forKey: "preferredLLMModel") }
+                    ),
+                    title: nil
+                )
+                .padding(.vertical, 4)
+            }
 
             // Response area
             GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {

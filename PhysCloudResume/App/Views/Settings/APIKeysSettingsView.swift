@@ -13,25 +13,56 @@ struct APIKeysSettingsView: View {
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
     @AppStorage("brightDataApiKey") private var brightDataApiKey: String = "none"
     @AppStorage("proxycurlApiKey") private var proxycurlApiKey: String = "none"
+    @AppStorage("claudeApiKey") private var claudeApiKey: String = "none"
+    @AppStorage("grokApiKey") private var grokApiKey: String = "none"
+    @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
 
     // State for managing editing mode for each key
     @State private var isEditingScrapingDog = false
     @State private var isEditingBrightData = false
     @State private var isEditingOpenAI = false
     @State private var isEditingProxycurl = false
+    @State private var isEditingClaude = false
+    @State private var isEditingGrok = false
+    @State private var isEditingGemini = false
 
     // State for holding the edited value temporarily
     @State private var editedScrapingDogApiKey = ""
     @State private var editedOpenAiApiKey = ""
     @State private var editedBrightDataApiKey = ""
     @State private var editedProxycurlApiKey = ""
+    @State private var editedClaudeApiKey = ""
+    @State private var editedGrokApiKey = ""
+    @State private var editedGeminiApiKey = ""
 
     // State for hover effects on save/cancel buttons
     @State private var isHoveringCheckmark = false
     @State private var isHoveringXmark = false
 
-    // Action to trigger OpenAI model fetch when key changes
+    // Action to trigger model fetch when keys change
     var onOpenAIKeyUpdate: () -> Void = {} // Callback
+    
+    // Shared model service for API validation
+    private let modelService = ModelService()
+    
+    // Initialize LLMRequestService to update client when keys change
+    private func updateLLMClient() {
+        Task { @MainActor in
+            // This will initialize the appropriate client based on current model and available API keys
+            LLMRequestService.shared.updateClientForCurrentModel()
+            
+            // Also validate the API key that changed
+            if isEditingOpenAI {
+                modelService.fetchModelsForProvider(provider: AIModels.Provider.openai, apiKey: openAiApiKey)
+            } else if isEditingClaude {
+                modelService.fetchModelsForProvider(provider: AIModels.Provider.claude, apiKey: claudeApiKey)
+            } else if isEditingGrok {
+                modelService.fetchModelsForProvider(provider: AIModels.Provider.grok, apiKey: grokApiKey)
+            } else if isEditingGemini {
+                modelService.fetchModelsForProvider(provider: AIModels.Provider.gemini, apiKey: geminiApiKey)
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -58,6 +89,42 @@ struct APIKeysSettingsView: View {
                     value: $openAiApiKey,
                     isEditing: $isEditingOpenAI,
                     editedValue: $editedOpenAiApiKey,
+                    isHoveringCheckmark: $isHoveringCheckmark,
+                    isHoveringXmark: $isHoveringXmark,
+                    onSave: onOpenAIKeyUpdate // Trigger model fetch on save
+                )
+                Divider()
+                // Claude API Key Row
+                apiKeyRow(
+                    label: "Claude",
+                    icon: "brain", // Icon for Anthropic Claude
+                    value: $claudeApiKey,
+                    isEditing: $isEditingClaude,
+                    editedValue: $editedClaudeApiKey,
+                    isHoveringCheckmark: $isHoveringCheckmark,
+                    isHoveringXmark: $isHoveringXmark,
+                    onSave: onOpenAIKeyUpdate // Trigger model fetch on save
+                )
+                Divider()
+                // Grok API Key Row
+                apiKeyRow(
+                    label: "Grok",
+                    icon: "bolt.fill", // Icon for xAI Grok
+                    value: $grokApiKey,
+                    isEditing: $isEditingGrok,
+                    editedValue: $editedGrokApiKey,
+                    isHoveringCheckmark: $isHoveringCheckmark,
+                    isHoveringXmark: $isHoveringXmark,
+                    onSave: onOpenAIKeyUpdate // Trigger model fetch on save
+                )
+                Divider()
+                // Gemini API Key Row
+                apiKeyRow(
+                    label: "Gemini",
+                    icon: "star.fill", // Icon for Google Gemini
+                    value: $geminiApiKey,
+                    isEditing: $isEditingGemini,
+                    editedValue: $editedGeminiApiKey,
                     isHoveringCheckmark: $isHoveringCheckmark,
                     isHoveringXmark: $isHoveringXmark,
                     onSave: onOpenAIKeyUpdate // Trigger model fetch on save
@@ -132,9 +199,20 @@ struct APIKeysSettingsView: View {
 
                     // Save Button
                     Button {
-                        value.wrappedValue = editedValue.wrappedValue.isEmpty ? "none" : editedValue.wrappedValue
+                        // Trim the key to remove any whitespace
+                        let cleanKey = editedValue.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        value.wrappedValue = cleanKey.isEmpty ? "none" : cleanKey
                         isEditing.wrappedValue = false
+                        
+                        // Log key update (without revealing the entire key)
+                        if cleanKey != "none" && !cleanKey.isEmpty {
+                            let firstChars = String(cleanKey.prefix(4))
+                            let length = cleanKey.count
+                            Logger.debug("🔑 Updated API key for \(label): First chars: \(firstChars), Length: \(length)")
+                        }
+                        
                         onSave?() // Call the save callback if provided
+                        updateLLMClient() // Update the LLM client when any API key changes
                     } label: {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(isHoveringCheckmark.wrappedValue ? .green : .gray)

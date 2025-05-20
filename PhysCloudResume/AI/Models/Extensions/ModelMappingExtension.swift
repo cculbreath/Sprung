@@ -14,6 +14,16 @@ extension SwiftOpenAI.Model {
     /// - Parameter modelString: The model identifier string
     /// - Returns: The corresponding SwiftOpenAI Model
     static func from(_ modelString: String) -> SwiftOpenAI.Model {
+        // Determine provider to apply appropriate mapping rules
+        let provider = AIModels.providerForModel(modelString)
+        
+        // For non-OpenAI models, always use custom model directly to avoid compatibility issues
+        if provider != AIModels.Provider.openai {
+            Logger.debug("🔄 Using direct custom model mapping for \(provider) model: \(modelString)")
+            return .custom(modelString)
+        }
+        
+        // OpenAI-specific mappings
         switch modelString {
         // GPT-4o variants
         case AIModels.gpt4o, "gpt-4o":
@@ -57,13 +67,12 @@ extension SwiftOpenAI.Model {
         case "gpt-3.5-turbo-1106":
             return .gpt35Turbo1106
             
-        // Default: treat as custom model
+        // Default OpenAI models: treat as custom model
         default:
-            Logger.debug("⚠️ Using custom model mapping for: \(modelString)")
+            Logger.debug("⚠️ Using custom model mapping for OpenAI model: \(modelString)")
             return .custom(modelString)
         }
     }
-
 }
 
 

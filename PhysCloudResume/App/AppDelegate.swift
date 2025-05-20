@@ -25,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 //                }
 //            }
 //        #endif
+        
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.setupAppMenu()

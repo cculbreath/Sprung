@@ -160,7 +160,7 @@ final class CoverLetterRecommendationProvider {
             let structuredOutput = try await openAIClient.sendChatCompletionWithStructuredOutput(
                 messages: messages,
                 model: modelString,
-                temperature: 1.0,
+                temperature: nil,
                 structuredOutputType: BestCoverLetterResponse.self
             )
 

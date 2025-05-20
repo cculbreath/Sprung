@@ -48,24 +48,23 @@ struct TabWrapperView: View {
                         }
                         .tag(TabList.resume)
 
-                    if jobAppStore.selectedApp?.hasAnyRes ?? false {
-                        CoverLetterView(buttons: $coverLetterButtons)
-                            .tabItem {
-                                Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
-                            }
-                            .tag(TabList.coverLetter)
-                            .disabled(
-                                jobAppStore.selectedApp?.hasAnyRes == nil
-                            ) // Disable tab if no selected job app
-                        ResumeExportView()
-                            .tabItem {
-                                Label(TabList.submitApp.rawValue, systemImage: "paperplane")
-                            }
-                            .tag(TabList.submitApp)
-                            .disabled(
-                                jobAppStore.selectedApp?.selectedRes == nil
-                            ) // Disable tab if no selected job app
-                    }
+                    CoverLetterView(buttons: $coverLetterButtons)
+                        .tabItem {
+                            Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
+                        }
+                        .tag(TabList.coverLetter)
+                        .disabled(
+                            !jobAppStore.selectedApp!.hasAnyRes
+                        ) // Disable tab if no resumes available
+                        
+                    ResumeExportView()
+                        .tabItem {
+                            Label(TabList.submitApp.rawValue, systemImage: "paperplane")
+                        }
+                        .tag(TabList.submitApp)
+                        .disabled(
+                            jobAppStore.selectedApp?.selectedRes == nil
+                        ) // Disable tab if no selected resume
                 }
                 .padding(.all)
 

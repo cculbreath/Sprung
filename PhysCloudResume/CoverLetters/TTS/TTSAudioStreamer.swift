@@ -123,6 +123,7 @@ final class TTSAudioStreamer {
             self.onFinish = nil
             self.onError = nil
             self.onBufferingStateChanged = nil
+            self.onTruePlaybackEnd = nil
         }
     }
 
