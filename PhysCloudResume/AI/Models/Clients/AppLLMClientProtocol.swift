@@ -98,61 +98,16 @@ protocol AppLLMClientProtocol {
 }
 
 // Extension to support conversion between legacy ChatMessage and AppLLMMessage
+// These extensions are thin wrappers around the MessageConverter for backward compatibility
 extension AppLLMMessage {
     // Convert from legacy ChatMessage to AppLLMMessage
     static func from(chatMessage: ChatMessage) -> AppLLMMessage {
-        let role: Role
-        switch chatMessage.role {
-        case .system: role = .system
-        case .user: role = .user
-        case .assistant: role = .assistant
-        }
-        
-        // Handle text-only case
-        if chatMessage.imageData == nil {
-            return AppLLMMessage(role: role, text: chatMessage.content)
-        } 
-        // Handle text + image case
-        else if let imageData = chatMessage.imageData {
-            let textPart = AppLLMMessageContentPart.text(chatMessage.content)
-            let imagePart = AppLLMMessageContentPart.imageUrl(base64Data: imageData, mimeType: "image/png")
-            return AppLLMMessage(role: role, contentParts: [textPart, imagePart])
-        }
-        // Fallback to text-only if imageData is somehow nil despite the check
-        else {
-            return AppLLMMessage(role: role, text: chatMessage.content)
-        }
+        return MessageConverter.appLLMMessageFrom(chatMessage: chatMessage)
     }
     
     // Convert to legacy ChatMessage
     func toChatMessage() -> ChatMessage {
-        let role: ChatMessage.ChatRole
-        switch self.role {
-        case .system: role = .system
-        case .user: role = .user
-        case .assistant: role = .assistant
-        }
-        
-        // Extract text content from first text part or use empty string
-        let textContent = contentParts.first(where: { 
-            if case .text = $0 { return true } else { return false }
-        }).flatMap { 
-            if case let .text(content) = $0 { return content } else { return nil }
-        } ?? ""
-        
-        // Extract optional image data from first image part
-        let imageData = contentParts.first(where: { 
-            if case .imageUrl = $0 { return true } else { return false }
-        }).flatMap { 
-            if case let .imageUrl(base64Data, _) = $0 { return base64Data } else { return nil }
-        }
-        
-        // Create ChatMessage with or without image data
-        if let imageData = imageData {
-            return ChatMessage(role: role, content: textContent, imageData: imageData)
-        } else {
-            return ChatMessage(role: role, content: textContent)
-        }
+        return MessageConverter.chatMessageFrom(appMessage: self)
     }
 }
 
@@ -160,11 +115,11 @@ extension AppLLMMessage {
 extension Array where Element == AppLLMMessage {
     // Convert from legacy [ChatMessage] to [AppLLMMessage]
     static func fromChatMessages(_ chatMessages: [ChatMessage]) -> [AppLLMMessage] {
-        return chatMessages.map { AppLLMMessage.from(chatMessage: $0) }
+        return MessageConverter.appLLMMessagesFrom(chatMessages: chatMessages)
     }
     
     // Convert to legacy [ChatMessage]
     func toChatMessages() -> [ChatMessage] {
-        return self.map { $0.toChatMessage() }
+        return MessageConverter.chatMessagesFrom(appMessages: self)
     }
 }

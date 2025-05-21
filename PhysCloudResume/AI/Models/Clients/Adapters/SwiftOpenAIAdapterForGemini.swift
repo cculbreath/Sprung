@@ -33,7 +33,7 @@ class SwiftOpenAIAdapterForGemini: BaseSwiftOpenAIAdapter {
     /// - Returns: The response from the Gemini API
     override func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
         // Convert AppLLMMessages to SwiftOpenAI Messages
-        let swiftMessages = query.messages.map { convertToSwiftOpenAIMessage($0) }
+        let swiftMessages = MessageConverter.swiftOpenAIMessagesFrom(appMessages: query.messages)
         
         // Important: For Gemini, we need to ensure the model string is correctly formatted
         // Gemini's OpenAI-compatible API expects model names prefixed with "models/"

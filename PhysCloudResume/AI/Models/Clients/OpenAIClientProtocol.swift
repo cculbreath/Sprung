@@ -10,10 +10,9 @@ import PDFKit
 import AppKit
 import SwiftUI
 
-
-
 /// Protocol defining the interface for OpenAI clients
 /// This abstraction allows us to switch between different OpenAI SDK implementations
+/// @available(*, deprecated, message: "Use AppLLMClientProtocol instead")
 protocol OpenAIClientProtocol {
     /// The API key to use for requests
     var apiKey: String { get }
@@ -22,10 +21,12 @@ protocol OpenAIClientProtocol {
     
     /// Initializes a new client with the given custom configuration
     /// - Parameter configuration: The custom configuration to use for requests
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol instead")
     init(configuration: OpenAIConfiguration)
     
     /// Initializes a new client with the given API key
     /// - Parameter apiKey: The API key to use for requests
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol instead")
     init(apiKey: String)
 
     // MARK: - Chat Completion API
@@ -37,6 +38,7 @@ protocol OpenAIClientProtocol {
     ///   - responseFormat: Optional response format (e.g., JSON mode)
     ///   - temperature: Controls randomness (0-1)
     /// - Returns: A completion with the model's response
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol.executeQuery() instead")
     func sendChatCompletionAsync(
         messages: [ChatMessage],
         model: String,
@@ -53,6 +55,7 @@ protocol OpenAIClientProtocol {
     ///   - temperature: Controls randomness (0-1)
     ///   - structuredOutputType: The type to use for structured output
     /// - Returns: A completion with the model's response
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol.executeQuery() with responseType instead")
     func sendChatCompletionWithStructuredOutput<T: StructuredOutput>(
         messages: [ChatMessage],
         model: String,
@@ -68,6 +71,7 @@ protocol OpenAIClientProtocol {
     ///   - voice: The voice to use
     ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onComplete: Callback with audio data
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol with TTSProvider instead")
     func sendTTSRequest(
         text: String,
         voice: String,
@@ -82,6 +86,7 @@ protocol OpenAIClientProtocol {
     ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onChunk: Callback for each chunk of audio data
     ///   - onComplete: Callback when streaming is complete
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol with TTSProvider instead")
     func sendTTSStreamingRequest(
         text: String,
         voice: String,

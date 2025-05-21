@@ -26,43 +26,8 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter {
     /// - Parameter query: The query to execute
     /// - Returns: The response from the OpenAI API
     override func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
-        // Convert AppLLMMessages to SwiftOpenAI Messages
-        let swiftMessages = query.messages.map { convertToSwiftOpenAIMessage($0) }
-        
-        // Create model from identifier
-        let model = SwiftOpenAI.Model.from(query.modelIdentifier)
-        
-        // Handle structured JSON output if desired
-        var swiftResponseFormat: SwiftOpenAI.ResponseFormat?
-        if let responseType = query.desiredResponseType {
-            // If a specific JSON schema was provided
-            if let jsonSchema = query.jsonSchema, let schema = parseJSONSchemaString(jsonSchema) {
-                swiftResponseFormat = .jsonSchema(
-                    SwiftOpenAI.JSONSchemaResponseFormat(
-                        name: String(describing: responseType),
-                        strict: true,
-                        schema: schema
-                    )
-                )
-            }
-            // Otherwise use the simpler JSON object format or create schema from type
-            else {
-                swiftResponseFormat = .jsonObject
-            }
-        }
-        
-        // Build chat completion parameters without a temperature parameter (use server default)
-        var parameters = ChatCompletionParameters(
-            messages: swiftMessages,
-            model: model,
-            responseFormat: swiftResponseFormat
-        )
-
-        // For reasoning models (o-series models), constrain reasoning effort to medium
-        let idLower = query.modelIdentifier.lowercased()
-        if idLower.contains("gpt-4o") || idLower.contains("gpt-4-turbo") {
-            parameters.reasoningEffort = "medium"
-        }
+        // Prepare parameters using base class helper
+        let parameters = prepareChatParameters(for: query)
         
         do {
             // Execute the chat request
@@ -84,18 +49,9 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter {
                 // Return text response
                 return .text(content)
             }
-        } catch let apiError as SwiftOpenAI.APIError {
-            switch apiError {
-            case .responseUnsuccessful(let description, let statusCode):
-                Logger.error("OpenAI API error (status code \(statusCode)): \(description)")
-                throw AppLLMError.clientError("OpenAI API error (status code \(statusCode)): \(description)")
-            default:
-                Logger.error("OpenAI API error: \(apiError.localizedDescription)")
-                throw AppLLMError.clientError("OpenAI API error: \(apiError.localizedDescription)")
-            }
         } catch {
-            Logger.error("OpenAI API error: \(error.localizedDescription)")
-            throw AppLLMError.clientError("OpenAI API error: \(error.localizedDescription)")
+            // Process API error using base class helper
+            throw processAPIError(error)
         }
     }
 }

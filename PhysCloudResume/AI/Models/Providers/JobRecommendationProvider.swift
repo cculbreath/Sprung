@@ -61,17 +61,30 @@ import SwiftUI
     ///   - client: An OpenAI client conforming to OpenAIClientProtocol
     ///   - jobApps: List of job applications
     ///   - resume: The resume to use
-    init(client: OpenAIClientProtocol, jobApps: [JobApp], resume: Resume?) {
-        // Create appropriate adapter through the factory if possible
-        if let appState = (NSApplication.shared.delegate as? AppDelegate)?.appState {
-            self.appLLMClient = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
-        } else {
-            // Create a direct adapter with default settings
-            let config = LLMProviderConfig.forOpenAI(apiKey: client.apiKey)
-            self.appLLMClient = SwiftOpenAIAdapterForOpenAI(config: config, appState: AppState())
+    convenience init(client: OpenAIClientProtocol, jobApps: [JobApp], resume: Resume?) {
+        // Create an app state and delegate to the designated initializer
+        let appState = AppState()
+        self.init(appState: appState, jobApps: jobApps, resume: resume)
+    }
+
+    /// Writes debug content to a file in the Downloads folder if enabled
+    /// - Parameters:
+    ///   - content: The content to write
+    ///   - fileName: The name of the file to write
+    private func saveMessageToDebugFile(content: String, fileName: String) {
+        guard UserDefaults.standard.bool(forKey: "saveDebugPrompts") else {
+            return
         }
-        self.jobApps = jobApps
-        self.resume = resume
+        let fileManager = FileManager.default
+        let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
+        let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
+        let fileURL = downloadsURL.appendingPathComponent(fileName)
+        do {
+            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            Logger.debug("Saved debug file: \(fileName)")
+        } catch {
+            Logger.warning("Failed to save debug file \(fileName): \(error.localizedDescription)")
+        }
     }
 
     // MARK: - API Call
@@ -92,7 +105,7 @@ import SwiftUI
 
         let prompt = buildPrompt(newJobApps: newJobApps, resume: resume)
         if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
-            savePromptToDownloads(content: prompt, fileName: "jobRecommendationPrompt.txt")
+            saveMessageToDebugFile(content: prompt, fileName: "jobRecommendationPrompt.txt")
         }
 
         let messages: [AppLLMMessage] = [
@@ -187,24 +200,5 @@ import SwiftUI
     struct JobRecommendation: Codable, StructuredOutput {
         let recommendedJobId: String
         let reason: String
-    }
-
-    private func savePromptToDownloads(content: String, fileName: String) {
-        // Only save if debug file saving is enabled in UserDefaults
-        guard UserDefaults.standard.bool(forKey: "saveDebugPrompts") else {
-            return
-        }
-
-        let fileManager = FileManager.default
-        let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
-        let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
-        let fileURL = downloadsURL.appendingPathComponent(fileName)
-
-        do {
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            Logger.debug("Saved debug file: (fileName)")
-        } catch {
-            Logger.warning("Failed to save debug file (fileName): (error.localizedDescription)")
-        }
     }
 }

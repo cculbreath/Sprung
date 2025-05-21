@@ -232,7 +232,7 @@ class LLMRequestService: @unchecked Sendable {
                     wantsImage: base64Image != nil
                 )
                 
-                // Build message content
+                // Build message content using MessageConverter helper methods
                 var contentParts: [AppLLMMessageContentPart] = []
                 
                 // Add text part
@@ -251,7 +251,7 @@ class LLMRequestService: @unchecked Sendable {
                 
                 // Handle structured output if schema provided
                 if let schema = schema {
-                    // Basic implementation - for more advanced usage, parse the schema and use responseType
+                    // Use schema builder utility
                     query = AppLLMQuery(
                         messages: [message],
                         modelIdentifier: currentModel,

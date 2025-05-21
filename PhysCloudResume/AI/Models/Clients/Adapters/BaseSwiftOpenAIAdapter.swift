@@ -93,177 +93,55 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
     
     // MARK: - Helper methods for subclasses
     
-    /// Converts an AppLLMMessage to SwiftOpenAI's ChatCompletionParameters.Message
-    /// - Parameter message: The message to convert
-    /// - Returns: The converted message
-    func convertToSwiftOpenAIMessage(_ message: AppLLMMessage) -> ChatCompletionParameters.Message {
-        let role: ChatCompletionParameters.Message.Role
-        switch message.role {
-        case .system: role = .system
-        case .user: role = .user
-        case .assistant: role = .assistant
+    /// Prepare chat parameters for SwiftOpenAI request
+    /// - Parameter query: The AppLLMQuery to convert
+    /// - Returns: ChatCompletionParameters for SwiftOpenAI
+    func prepareChatParameters(for query: AppLLMQuery) -> ChatCompletionParameters {
+        // Convert messages using the centralized MessageConverter
+        let swiftMessages = MessageConverter.swiftOpenAIMessagesFrom(appMessages: query.messages)
+        
+        // Create model from identifier
+        let model = SwiftOpenAI.Model.from(query.modelIdentifier)
+        
+        // Get response format using the schema builder
+        let swiftResponseFormat = LLMSchemaBuilder.createResponseFormat(
+            for: query.desiredResponseType,
+            jsonSchema: query.jsonSchema
+        )
+        
+        // Build chat completion parameters
+        var parameters = ChatCompletionParameters(
+            messages: swiftMessages,
+            model: model,
+            responseFormat: swiftResponseFormat,
+            temperature: query.temperature
+        )
+        
+        // For reasoning models (o-series models), constrain reasoning effort to medium
+        let idLower = query.modelIdentifier.lowercased()
+        if idLower.contains("gpt-4o") || idLower.contains("gpt-4-turbo") {
+            parameters.reasoningEffort = "medium"
         }
         
-        // Handle simple text-only message
-        if message.contentParts.count == 1, case let .text(content) = message.contentParts[0] {
-            return ChatCompletionParameters.Message(
-                role: role,
-                content: .text(content)
-            )
-        }
-        
-        // Handle multimodal message (text + images)
-        else {
-            var contents: [ChatCompletionParameters.Message.ContentType.MessageContent] = []
-            
-            // Convert each content part
-            for part in message.contentParts {
-                switch part {
-                case let .text(content):
-                    contents.append(.text(content))
-                case let .imageUrl(base64Data, mimeType):
-                    let imageUrlString = "data:\(mimeType);base64,\(base64Data)"
-                    if let imageURL = URL(string: imageUrlString) {
-                        let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(
-                            url: imageURL,
-                            detail: "high"
-                        )
-                        contents.append(.imageUrl(imageDetail))
-                    } else {
-                        Logger.error("Failed to create URL from image data")
-                    }
-                }
-            }
-            
-            // Create message with content array
-            return ChatCompletionParameters.Message(
-                role: role,
-                content: .contentArray(contents)
-            )
-        }
+        return parameters
     }
     
-    /// Creates a JSONSchema for a Decodable type (simplified version)
-    /// - Parameter type: The Decodable type
-    /// - Returns: A JSONSchema object
-    func createJSONSchema(for type: Decodable.Type) -> SwiftOpenAI.JSONSchema {
-        // This is a simplified implementation - for production code, you would want
-        // to use runtime reflection or code generation to build the schema dynamically
-        
-        if type == RevisionsContainer.self {
-            return SwiftOpenAI.JSONSchema(
-                type: .object,
-                properties: [
-                    "revArray": SwiftOpenAI.JSONSchema(
-                        type: .array,
-                        items: SwiftOpenAI.JSONSchema(
-                            type: .object,
-                            properties: [
-                                "id": SwiftOpenAI.JSONSchema(type: .string),
-                                "oldValue": SwiftOpenAI.JSONSchema(type: .string),
-                                "newValue": SwiftOpenAI.JSONSchema(type: .string),
-                                "valueChanged": SwiftOpenAI.JSONSchema(type: .boolean),
-                                "why": SwiftOpenAI.JSONSchema(type: .string),
-                                "isTitleNode": SwiftOpenAI.JSONSchema(type: .boolean),
-                                "treePath": SwiftOpenAI.JSONSchema(type: .string)
-                            ],
-                            required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"]
-                        )
-                    )
-                ],
-                required: ["revArray"]
-            )
-        }
-        
-        if type == BestCoverLetterResponse.self {
-            return SwiftOpenAI.JSONSchema(
-                type: .object,
-                properties: [
-                    "strengthAndVoiceAnalysis": SwiftOpenAI.JSONSchema(
-                        type: .string,
-                        description: "Brief summary ranking/assessment of each letter's strength and voice"
-                    ),
-                    "bestLetterUuid": SwiftOpenAI.JSONSchema(
-                        type: .string,
-                        description: "UUID of the selected best cover letter"
-                    ),
-                    "verdict": SwiftOpenAI.JSONSchema(
-                        type: .string,
-                        description: "Reason for the ultimate choice"
-                    )
-                ],
-                required: ["strengthAndVoiceAnalysis", "bestLetterUuid", "verdict"]
-            )
-        }
-        
-        // Add more types as needed...
-        
-        // Fallback - empty schema
-        return SwiftOpenAI.JSONSchema(type: .object)
-    }
-    
-    /// Parses a JSONSchema string into a SwiftOpenAI.JSONSchema object
-    /// - Parameter jsonString: The schema as a JSON string
-    /// - Returns: The parsed JSONSchema
-    func parseJSONSchemaString(_ jsonString: String) -> SwiftOpenAI.JSONSchema? {
-        guard let data = jsonString.data(using: .utf8) else {
-            return nil
-        }
-        
-        do {
-            // Parse JSON into dictionary
-            let jsonDict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            guard let dict = jsonDict else { return nil }
-            
-            // Extract type
-            let typeString = dict["type"] as? String
-            let type: SwiftOpenAI.JSONSchemaType?
-            switch typeString {
-            case "string": type = .string
-            case "object": type = .object
-            case "array": type = .array
-            case "boolean": type = .boolean
-            case "integer": type = .integer
-            case "number": type = .number
-            case "null": type = .null
-            default: type = nil
+    /// Process the API error and convert to AppLLMError
+    /// - Parameter error: The API error
+    /// - Returns: An AppLLMError
+    func processAPIError(_ error: Error) -> AppLLMError {
+        if let apiError = error as? SwiftOpenAI.APIError {
+            switch apiError {
+            case .responseUnsuccessful(let description, let statusCode):
+                Logger.error("API error (status code \(statusCode)): \(description)")
+                return AppLLMError.clientError("API error (status code \(statusCode)): \(description)")
+            default:
+                Logger.error("API error: \(apiError.localizedDescription)")
+                return AppLLMError.clientError("API error: \(apiError.localizedDescription)")
             }
-            
-            // Extract properties if this is an object
-            var properties: [String: SwiftOpenAI.JSONSchema]?
-            if typeString == "object", let props = dict["properties"] as? [String: [String: Any]] {
-                properties = [:]
-                for (key, propDict) in props {
-                    if let propType = propDict["type"] as? String {
-                        let propSchemaType: SwiftOpenAI.JSONSchemaType?
-                        switch propType {
-                        case "string": propSchemaType = .string
-                        case "object": propSchemaType = .object
-                        case "array": propSchemaType = .array
-                        case "boolean": propSchemaType = .boolean
-                        case "integer": propSchemaType = .integer
-                        case "number": propSchemaType = .number
-                        default: propSchemaType = nil
-                        }
-                        
-                        properties?[key] = SwiftOpenAI.JSONSchema(
-                            type: propSchemaType,
-                            description: propDict["description"] as? String
-                        )
-                    }
-                }
-            }
-            
-            return SwiftOpenAI.JSONSchema(
-                type: type,
-                description: dict["description"] as? String,
-                properties: properties,
-                required: dict["required"] as? [String],
-                additionalProperties: dict["additionalProperties"] as? Bool ?? false
-            )
-        } catch {
-            Logger.error("Error parsing JSON schema: \(error.localizedDescription)")
-            return nil
+        } else {
+            Logger.error("API error: \(error.localizedDescription)")
+            return AppLLMError.clientError("API error: \(error.localizedDescription)")
         }
     }
 }
