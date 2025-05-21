@@ -14,10 +14,12 @@ import SwiftOpenAI
 
 /// Factory for creating OpenAI clients
 /// This is maintained for backward compatibility
+/// @available(*, deprecated, message: "Use AppLLMClientFactory instead")
 class OpenAIClientFactory {
     /// Creates an OpenAI client with the given API key
     /// - Parameter apiKey: The API key to use for requests
     /// - Returns: An instance conforming to OpenAIClientProtocol
+    /// @available(*, deprecated, message: "Use AppLLMClientFactory.createClient instead")
     static func createClient(apiKey: String) -> OpenAIClientProtocol? {
         // Validate the API key first
         guard let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) else {
@@ -32,6 +34,7 @@ class OpenAIClientFactory {
     /// Creates a TTS-capable client
     /// - Parameter apiKey: The API key to use for requests
     /// - Returns: An OpenAIClientProtocol that supports TTS
+    /// @available(*, deprecated, message: "Use AppLLMClientFactory.createClient with TTSProvider instead")
     static func createTTSClient(apiKey: String) -> OpenAIClientProtocol? {
         // TTS is still supported directly through SwiftOpenAIClient
         // Validate the API key first
@@ -49,6 +52,7 @@ class OpenAIClientFactory {
     ///   - model: The model to use (determines which service to connect to)
     ///   - apiKeys: Dictionary of API keys for different providers
     /// - Returns: A client configured for the specified model, or nil if no API key is available
+    /// @available(*, deprecated, message: "Use AppLLMClientFactory.createClient instead")
     static func createClientForModel(model: String, apiKeys: [String: String]) -> OpenAIClientProtocol? {
         // First determine the provider for this model
         let provider = AIModels.providerForModel(model)
@@ -101,6 +105,7 @@ class OpenAIClientFactory {
     /// Helper to create an OpenAIConfiguration from an LLMProviderConfig
     /// - Parameter config: The LLM provider configuration
     /// - Returns: An OpenAIConfiguration
+    /// @available(*, deprecated, message: "Use AppLLMClientFactory instead")
     private static func createOpenAIConfiguration(from config: LLMProviderConfig) -> OpenAIConfiguration {
         var customHeaders: [String: String] = config.extraHeaders ?? [:]
         

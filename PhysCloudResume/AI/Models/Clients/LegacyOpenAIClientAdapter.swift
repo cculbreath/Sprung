@@ -10,6 +10,7 @@ import SwiftOpenAI
 
 /// Adapter that wraps AppLLMClientProtocol to provide OpenAIClientProtocol compatibility
 /// This allows gradual migration of existing code to the new unified interface
+/// @available(*, deprecated, message: "Use AppLLMClientProtocol directly instead")
 class LegacyOpenAIClientAdapter: OpenAIClientProtocol {
     /// The underlying app LLM client
     private let appLLMClient: AppLLMClientProtocol
@@ -21,6 +22,7 @@ class LegacyOpenAIClientAdapter: OpenAIClientProtocol {
     
     /// Initializes a new client with the given custom configuration
     /// - Parameter configuration: The custom configuration to use for requests
+    /// @available(*, deprecated, message: "Use AppLLMClientFactory.createClient instead")
     required init(configuration: OpenAIConfiguration) {
         self.apiKey = configuration.token ?? ""
         
@@ -48,29 +50,36 @@ class LegacyOpenAIClientAdapter: OpenAIClientProtocol {
         
         // Create appropriate adapter
         let appState = AppState()
-        switch providerType {
-        case AIModels.Provider.claude:
-            self.appLLMClient = SwiftOpenAIAdapterForAnthropic(config: providerConfig, appState: appState)
-        case AIModels.Provider.gemini:
-            self.appLLMClient = SwiftOpenAIAdapterForGemini(config: providerConfig, appState: appState)
-        case AIModels.Provider.grok:
-            self.appLLMClient = SwiftOpenAIAdapterForOpenAI(config: providerConfig, appState: appState)
-        default:
-            self.appLLMClient = SwiftOpenAIAdapterForOpenAI(config: providerConfig, appState: appState)
-        }
+        self.appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
     }
     
     /// Initializes a new client with the given API key
     /// - Parameter apiKey: The API key to use for requests
+    /// @available(*, deprecated, message: "Use AppLLMClientFactory.createClient instead")
     required init(apiKey: String) {
         self.apiKey = apiKey
         
-        // Create provider config for OpenAI
-        let providerConfig = LLMProviderConfig.forOpenAI(apiKey: apiKey)
-        
-        // Create OpenAI adapter with a new AppState
+        // Create client for OpenAI
         let appState = AppState()
-        self.appLLMClient = SwiftOpenAIAdapterForOpenAI(config: providerConfig, appState: appState)
+        self.appLLMClient = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
+    }
+    
+    /// Initializes with an existing AppLLMClientProtocol for direct wrapping
+    /// - Parameter client: The AppLLMClientProtocol to wrap
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol directly instead")
+    init(client: AppLLMClientProtocol) {
+        self.appLLMClient = client
+        self.apiKey = "unknown" // API key is stored in the client already
+    }
+    
+    /// Initializes with an existing AppLLMClientProtocol and known API key
+    /// - Parameters:
+    ///   - client: The AppLLMClientProtocol to wrap
+    ///   - apiKey: The API key for protocol compatibility
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol directly instead")
+    init(client: AppLLMClientProtocol, apiKey: String) {
+        self.appLLMClient = client
+        self.apiKey = apiKey
     }
     
     // MARK: - Chat Completion API
@@ -82,14 +91,15 @@ class LegacyOpenAIClientAdapter: OpenAIClientProtocol {
     ///   - responseFormat: Optional response format (e.g., JSON mode)
     ///   - temperature: Controls randomness (0-1)
     /// - Returns: A completion with the model's response
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol.executeQuery() instead")
     func sendChatCompletionAsync(
         messages: [ChatMessage],
         model: String,
         responseFormat: AIResponseFormat?,
         temperature: Double?
     ) async throws -> ChatCompletionResponse {
-        // Convert legacy messages to AppLLMMessages
-        let appMessages = Array<AppLLMMessage>.fromChatMessages(messages)
+        // Convert legacy messages to AppLLMMessages using MessageConverter
+        let appMessages = MessageConverter.appLLMMessagesFrom(chatMessages: messages)
         
         // Create query
         let query = AppLLMQuery(
@@ -127,14 +137,15 @@ class LegacyOpenAIClientAdapter: OpenAIClientProtocol {
     ///   - temperature: Controls randomness (0-1)
     ///   - structuredOutputType: The type to use for structured output
     /// - Returns: A completion with the model's response
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol.executeQuery() with responseType instead")
     func sendChatCompletionWithStructuredOutput<T: StructuredOutput>(
         messages: [ChatMessage],
         model: String,
         temperature: Double?,
         structuredOutputType: T.Type
     ) async throws -> T {
-        // Convert legacy messages to AppLLMMessages
-        let appMessages = Array<AppLLMMessage>.fromChatMessages(messages)
+        // Convert legacy messages to AppLLMMessages using MessageConverter
+        let appMessages = MessageConverter.appLLMMessagesFrom(chatMessages: messages)
         
         // Create query for structured output
         let query = AppLLMQuery(
@@ -180,6 +191,7 @@ class LegacyOpenAIClientAdapter: OpenAIClientProtocol {
     ///   - voice: The voice to use
     ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onComplete: Callback with audio data
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol with TTSProvider instead")
     func sendTTSRequest(
         text: String,
         voice: String,
@@ -206,6 +218,7 @@ class LegacyOpenAIClientAdapter: OpenAIClientProtocol {
     ///   - instructions: Voice instructions for TTS generation (optional)
     ///   - onChunk: Callback for each chunk of audio data
     ///   - onComplete: Callback when streaming is complete
+    /// @available(*, deprecated, message: "Use AppLLMClientProtocol with TTSProvider instead")
     func sendTTSStreamingRequest(
         text: String,
         voice: String,

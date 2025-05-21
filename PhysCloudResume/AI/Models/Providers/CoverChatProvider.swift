@@ -7,31 +7,49 @@ import SwiftUI
 import SwiftData
 
 @Observable
-final class CoverChatProvider {
-    // The OpenAI client that will be used for API calls
-    private let openAIClient: OpenAIClientProtocol
-
-    var message: String = ""
-    var messages: [String] = []
-    // Stores generic chat messages for the abstraction layer
+final class CoverChatProvider: BaseLLMProvider {
+    // Stores generic chat messages for the abstraction layer (legacy)
     var genericMessages: [ChatMessage] = []
-    var errorMessage: String = ""
     var resultsAvailable: Bool = false
     var lastResponse: String = ""
+    
+    // Legacy client reference for backward compatibility during transition
+    private var openAIClient: OpenAIClientProtocol?
 
     // MARK: - Initializers
 
-    /// Initialize with the new abstraction layer client
+    /// Initialize with the app state
+    /// - Parameter appState: The application state
+    override init(appState: AppState) {
+        super.init(appState: appState)
+    }
+    
+    /// Initialize with AppLLM client
+    /// - Parameter client: AppLLM client conforming to AppLLMClientProtocol
+    override init(client: AppLLMClientProtocol) {
+        super.init(client: client)
+    }
+    
+    /// Initialize with legacy OpenAI client (for backward compatibility)
     /// - Parameter client: An OpenAI client conforming to OpenAIClientProtocol
-    init(client: OpenAIClientProtocol) {
-        openAIClient = client
+    convenience init(client: OpenAIClientProtocol) {
+        // Initialize with an AppState
+        let appState = AppState()
+        self.init(appState: appState)
+        
+        // No adapter needed - we're just using the standard implementation
     }
 
     /// Formats the model name to a simplified version
     /// - Parameter modelName: The full model name from the API
     /// - Returns: A simplified model name without snapshot dates
     private func formatModelName(_ modelName: String) -> String {
-        // Remove any date/snapshot information
+        // Use AIModels helper if available, otherwise use our local implementation
+        if let formattedName = AIModels.friendlyModelName(for: modelName) {
+            return formattedName
+        }
+        
+        // Fallback logic if AIModels doesn't have this model
         let components = modelName.split(separator: "-")
 
         // Handle different model naming patterns
@@ -60,21 +78,19 @@ final class CoverChatProvider {
 
     /// Add a user message to the chat history
     /// - Parameter text: The message text
-    func appendUserMessage(_ text: String) {
-        let message = ChatMessage(role: .user, content: text)
-        genericMessages.append(message)
+    override func addUserMessage(_ text: String) -> [AppLLMMessage] {
+        // Use the base class implementation
+        return super.addUserMessage(text)
     }
-
-
 
     /// Add an assistant message to the chat history
     /// - Parameter text: The message text
-    func appendAssistantMessage(_ text: String) {
-        let message = ChatMessage(role: .assistant, content: text)
-        genericMessages.append(message)
+    override func addAssistantMessage(_ text: String) -> [AppLLMMessage] {
+        // Use the base class implementation
+        return super.addAssistantMessage(text)
     }
 
-    /// Calls the OpenAI API to generate a cover letter
+    /// Calls the LLM API to generate a cover letter
     /// - Parameters:
     ///   - res: The resume to use
     ///   - jobAppStore: The job app store
@@ -96,7 +112,7 @@ final class CoverChatProvider {
         // create a new cover letter by getting the CoverLetterStore from the JobAppStore
         var letter = selectedCover
         if isNewConversation, selectedCover.generated {
-            // Create a new cover letter for a fresh generation using the store passed in via JobAppStore
+            // Create a new cover letter for a fresh generation
             let newLetter = jobAppStore.coverLetterStore.createDuplicate(letter: selectedCover)
             app.selectedCover = newLetter
             letter = newLetter
@@ -105,15 +121,15 @@ final class CoverChatProvider {
         buttons.wrappedValue.runRequested = true
 
         if isNewConversation {
-            // Clear conversation context instead of using deprecated previousResponseId
+            // Clear conversation context and reset our history
             Task { @MainActor in
                 letter.clearConversationContext()
+                conversationHistory = []
             }
         }
 
-        let systemMessage = CoverLetterPrompts.systemMessage
-        genericMessages = [systemMessage]
-
+        let systemMessage = CoverLetterPrompts.systemMessage.content
+        
         // Get the user input depending on the mode
         let userMessage = CoverLetterPrompts.generate(
             coverLetter: letter,
@@ -125,81 +141,59 @@ final class CoverChatProvider {
         if letter.currentMode == nil || letter.currentMode == CoverAiMode.none {
             letter.currentMode = .generate
         }
-        appendUserMessage(userMessage)
+        
+        // Initialize or continue conversation using BaseLLMProvider methods
+        if isNewConversation {
+            _ = initializeConversation(systemPrompt: systemMessage, userPrompt: userMessage)
+        } else {
+            _ = addUserMessage(userMessage)
+        }
+        
         let modelString = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Check if we need to update the client for this model
+        updateClientIfNeeded(appState: AppState())
 
         Task {
-            // Always use ChatCompletions API with conversation management
-                let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
+            do {
+                // Create query using our conversation history
+                let query = AppLLMQuery(
+                    messages: conversationHistory,
+                    modelIdentifier: modelString,
+                    temperature: 1.0
+                )
                 
-                // Use the new conversation management methods
-                if isNewConversation {
-                    // Start new conversation using the correct method name
-                    LLMRequestService.shared.sendCoverLetterConversationRequest(
-                        coverLetter: letter,
-                        userMessage: combinedMessage,
-                        systemPrompt: systemMessage.content,
-                        isNewConversation: true,
-                        onProgress: { progress in
-                            // Handle progress updates if needed
-                        },
-                        onComplete: { result in
-                            Task { @MainActor in
-                                switch result {
-                                case .success(let content):
-                                    self.processResults(
-                                        newMessage: content,
-                                        coverLetter: letter,
-                                        buttons: buttons,
-                                        model: modelString,
-                                        isRevision: false // New conversation is not a revision
-                                    )
-                                case .failure(let error):
-                                    buttons.wrappedValue.runRequested = false
-                                    self.errorMessage = "Error: \(error.localizedDescription)"
-                                }
-                            }
-                        }
-                    )
-                } else {
-                    // Continue existing conversation
-                    LLMRequestService.shared.sendCoverLetterConversationRequest(
-                        coverLetter: letter,
-                        userMessage: userMessage,
-                        systemPrompt: nil, // System prompt already in context
-                        isNewConversation: false,
-                        onProgress: { progress in
-                            // Handle progress updates if needed
-                        },
-                        onComplete: { result in
-                            Task { @MainActor in
-                                switch result {
-                                case .success(let content):
-                                    self.processResults(
-                                        newMessage: content,
-                                        coverLetter: letter,
-                                        buttons: buttons,
-                                        model: modelString,
-                                        isRevision: true // Continuation is always a revision
-                                    )
-                                case .failure(let error):
-                                    buttons.wrappedValue.runRequested = false
-                                    self.errorMessage = "Error: \(error.localizedDescription)"
-                                }
-                            }
-                        }
-                    )
+                // Execute query directly using our BaseLLMProvider client
+                let response = try await executeQuery(query)
+                
+                // Extract response content
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
                 }
-
+                
+                // Add response to conversation history
+                _ = addAssistantMessage(responseText)
+                
+                // Process results to update the cover letter
+                processResults(
+                    newMessage: responseText,
+                    coverLetter: letter,
+                    buttons: buttons,
+                    model: modelString,
+                    isRevision: !isNewConversation // Revision if continuing conversation
+                )
+            } catch {
+                buttons.wrappedValue.runRequested = false
+                self.errorMessage = "Error: \(error.localizedDescription)"
+            }
         }
     }
 
-    private func isResponsesAPIEnabled() -> Bool {
-        // Migration to ChatCompletions API - always return false
-        return false
-    }
-    
-    // MARK: - New Conversational Methods (ChatCompletions API)
+    // MARK: - Conversational Methods
     
     /// Starts a new conversation for cover letter generation/revision
     /// - Parameters:
@@ -217,14 +211,46 @@ final class CoverChatProvider {
         // Build system prompt for cover letters
         let systemPrompt = buildCoverLetterSystemPrompt(for: coverLetter)
         
-        LLMRequestService.shared.sendCoverLetterConversationRequest(
-            coverLetter: coverLetter,
-            userMessage: userMessage,
-            systemPrompt: systemPrompt,
-            isNewConversation: true,
-            onProgress: onProgress,
-            onComplete: onComplete
-        )
+        // Clear conversation history
+        conversationHistory = []
+        
+        // Initialize conversation
+        _ = initializeConversation(systemPrompt: systemPrompt, userPrompt: userMessage)
+        
+        // Execute query
+        Task {
+            do {
+                let modelString = OpenAIModelFetcher.getPreferredModelString()
+                
+                // Create query
+                let query = AppLLMQuery(
+                    messages: conversationHistory,
+                    modelIdentifier: modelString,
+                    temperature: 1.0
+                )
+                
+                // Get response
+                let response = try await executeQuery(query)
+                
+                // Extract response text
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                    onProgress(text)
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
+                    onProgress(responseText)
+                }
+                
+                // Add response to conversation
+                _ = addAssistantMessage(responseText)
+                
+                onComplete(.success(responseText))
+            } catch {
+                onComplete(.failure(error))
+            }
+        }
     }
     
     /// Continues an existing conversation for the cover letter
@@ -240,21 +266,43 @@ final class CoverChatProvider {
         onProgress: @escaping (String) -> Void = { _ in },
         onComplete: @escaping (Result<String, Error>) -> Void = { _ in }
     ) {
-        LLMRequestService.shared.sendCoverLetterConversationRequest(
-            coverLetter: coverLetter,
-            userMessage: userMessage,
-            systemPrompt: nil, // System prompt already in context
-            isNewConversation: false,
-            onProgress: onProgress,
-            onComplete: onComplete
-        )
-    }
-    
-    /// Clears the conversation context for a cover letter
-    /// - Parameter coverLetter: The cover letter whose conversation should be cleared
-    @MainActor
-    func clearCoverLetterConversation(coverLetter: CoverLetter) {
-        ConversationContextManager.shared.clearContext(for: coverLetter.id, type: .coverLetter)
+        // Add user message to conversation
+        _ = addUserMessage(userMessage)
+        
+        // Execute query
+        Task {
+            do {
+                let modelString = OpenAIModelFetcher.getPreferredModelString()
+                
+                // Create query
+                let query = AppLLMQuery(
+                    messages: conversationHistory,
+                    modelIdentifier: modelString,
+                    temperature: 1.0
+                )
+                
+                // Get response
+                let response = try await executeQuery(query)
+                
+                // Extract response text
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                    onProgress(text)
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
+                    onProgress(responseText)
+                }
+                
+                // Add response to conversation
+                _ = addAssistantMessage(responseText)
+                
+                onComplete(.success(responseText))
+            } catch {
+                onComplete(.failure(error))
+            }
+        }
     }
     
     /// Builds a system prompt for cover letter conversations
@@ -295,7 +343,7 @@ final class CoverChatProvider {
         model: String? = nil,
         isRevision: Bool // True if this is a revision of an existing letter
     ) {
-        appendAssistantMessage(newMessage)
+        // Update the cover letter with the response
         coverLetter.content = newMessage
         coverLetter.generated = true
         coverLetter.moddedDate = Date()
@@ -343,23 +391,29 @@ final class CoverChatProvider {
             coverLetter.name = "Option \(optionLetter): \(nameSuffix)"
         }
 
+        // Update UI state
         buttons.wrappedValue.runRequested = false
-        coverLetter.messageHistory = genericMessages.map {
+        
+        // Convert conversation history to MessageParams for storage
+        coverLetter.messageHistory = conversationHistory.map { appMessage in
             MessageParams(
-                content: $0.content,
-                role: messageRoleFromChatRole($0.role)
+                content: appMessage.contentParts.compactMap { 
+                    if case let .text(content) = $0 { return content } 
+                    return nil 
+                }.joined(), 
+                role: mapRole(appMessage.role)
             )
         }
     }
-
-    private func messageRoleFromChatRole(_ chatRole: ChatMessage.ChatRole) -> MessageParams.MessageRole {
-        switch chatRole {
-        case .system:
-            return .system
-        case .user:
-            return .user
-        case .assistant:
-            return .assistant
+    
+    /// Maps AppLLMMessage.Role to MessageParams.MessageRole
+    /// - Parameter role: The AppLLMMessage.Role to map
+    /// - Returns: The equivalent MessageParams.MessageRole
+    private func mapRole(_ role: AppLLMMessage.Role) -> MessageParams.MessageRole {
+        switch role {
+        case .system: return .system
+        case .user: return .user
+        case .assistant: return .assistant
         }
     }
 
@@ -378,15 +432,16 @@ final class CoverChatProvider {
         buttons.wrappedValue.runRequested = true
 
         if isNewConversation { // Should generally be false for revisions
-            // Clear conversation context instead of using deprecated previousResponseId
+            // Clear conversation context
             Task { @MainActor in
                 letter.clearConversationContext()
+                conversationHistory = []
             }
         }
 
-        let systemMessage = CoverLetterPrompts.systemMessage
-        genericMessages = [systemMessage] // Start with system message for this interaction
+        let systemPrompt = CoverLetterPrompts.systemMessage.content
 
+        // Build user message based on editor prompt
         let userMessage: String
         if letter.editorPrompt == .custom {
             userMessage = """
@@ -411,41 +466,55 @@ final class CoverChatProvider {
             \(letter.content)
             """
         }
-        appendUserMessage(userMessage)
+        
+        // Initialize or continue conversation
+        if isNewConversation {
+            _ = initializeConversation(systemPrompt: systemPrompt, userPrompt: userMessage)
+        } else {
+            _ = addUserMessage(userMessage)
+        }
+        
         let modelString = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Check if we need to update the client for this model
+        updateClientIfNeeded(appState: AppState())
 
         Task {
-            // Always use ChatCompletions API with conversation management
-                let combinedMessage = "System context:\n\(systemMessage.content)\n\nUser message:\n\(userMessage)"
-                
-                // This is always a continuation since we're revising an existing letter
-                LLMRequestService.shared.sendCoverLetterConversationRequest(
-                    coverLetter: letter,
-                    userMessage: combinedMessage,
-                    systemPrompt: systemMessage.content,
-                    isNewConversation: isNewConversation,
-                    onProgress: { progress in
-                        // Handle progress updates if needed
-                    },
-                    onComplete: { result in
-                        Task { @MainActor in
-                            switch result {
-                            case .success(let content):
-                                self.processResults(
-                                    newMessage: content,
-                                    coverLetter: letter,
-                                    buttons: buttons,
-                                    model: modelString,
-                                    isRevision: true // Revisions are always true here
-                                )
-                            case .failure(let error):
-                                buttons.wrappedValue.runRequested = false
-                                self.errorMessage = "Error: \(error.localizedDescription)"
-                            }
-                        }
-                    }
+            do {
+                // Create query
+                let query = AppLLMQuery(
+                    messages: conversationHistory,
+                    modelIdentifier: modelString,
+                    temperature: 1.0
                 )
-
+                
+                // Execute query
+                let response = try await executeQuery(query)
+                
+                // Extract response content
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
+                }
+                
+                // Add response to conversation history
+                _ = addAssistantMessage(responseText)
+                
+                // Process results to update the cover letter
+                processResults(
+                    newMessage: responseText,
+                    coverLetter: letter,
+                    buttons: buttons,
+                    model: modelString,
+                    isRevision: true // Revisions are always true here
+                )
+            } catch {
+                buttons.wrappedValue.runRequested = false
+                self.errorMessage = "Error: \(error.localizedDescription)"
+            }
         }
     }
 }

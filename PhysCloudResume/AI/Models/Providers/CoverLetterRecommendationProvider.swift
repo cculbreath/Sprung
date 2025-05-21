@@ -12,7 +12,8 @@ import AppKit
 import SwiftUI
 
 /// Provider for selecting the best cover letter among existing ones
-final class CoverLetterRecommendationProvider {
+@Observable
+final class CoverLetterRecommendationProvider: BaseLLMProvider {
     /// System prompt for cover letter evaluation
     let systemPrompt = """
     You are an expert career advisor and professional writer specializing in evaluating cover letters. Your task is to analyze a list of cover letters for a specific job application and select the one which you believe has the best chance of securing the applicant an interview for this job opening. You will be provided with job details, several cover letter drafts, and writing samples that represent the candidate's preferred style.
@@ -62,9 +63,6 @@ final class CoverLetterRecommendationProvider {
     - If multiple letters meet the criteria equally, select the one with the most precise alignment to job requirements.
     """
 
-    // The unified AppLLMClient
-    private let appLLMClient: AppLLMClientProtocol
-
     private let jobApp: JobApp
     private let writingSamples: String
 
@@ -100,32 +98,31 @@ final class CoverLetterRecommendationProvider {
     ///   - jobApp: The job application containing cover letters
     ///   - writingSamples: Writing samples for style reference
     init(appState: AppState, jobApp: JobApp, writingSamples: String) {
-        // Get the preferred model identifier
-        let modelId = OpenAIModelFetcher.getPreferredModelString()
-        // Determine provider from model
-        let providerType = AIModels.providerForModel(modelId)
-        self.appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
         self.jobApp = jobApp
         self.writingSamples = writingSamples
+        super.init(appState: appState)
     }
-    
+
+    /// Initialize with a specific LLM client
+    /// - Parameters:
+    ///   - client: An LLM client conforming to AppLLMClientProtocol
+    ///   - jobApp: The job application containing cover letters
+    ///   - writingSamples: Writing samples for style reference
+    init(client: AppLLMClientProtocol, jobApp: JobApp, writingSamples: String) {
+        self.jobApp = jobApp
+        self.writingSamples = writingSamples
+        super.init(client: client)
+    }
+
     /// Direct initializer with OpenAI client
     /// - Parameters:
     ///   - client: An OpenAI client conforming to OpenAIClientProtocol
     ///   - jobApp: The job application containing cover letters
     ///   - writingSamples: Writing samples for style reference
-    init(client: OpenAIClientProtocol, jobApp: JobApp, writingSamples: String) {
-        // Create appropriate adapter through the factory if possible
-        if let appState = (NSApplication.shared.delegate as? AppDelegate)?.appState {
-            self.appLLMClient = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
-        } else {
-            // Create a direct adapter with default settings
-            let config = LLMProviderConfig.forOpenAI(apiKey: client.apiKey)
-            self.appLLMClient = SwiftOpenAIAdapterForOpenAI(config: config, appState: AppState())
-        }
-        
-        self.jobApp = jobApp
-        self.writingSamples = writingSamples
+    convenience init(client: OpenAIClientProtocol, jobApp: JobApp, writingSamples: String) {
+        let config = LLMProviderConfig.forOpenAI(apiKey: client.apiKey)
+        let adapter = SwiftOpenAIAdapterForOpenAI(config: config, appState: AppState())
+        self.init(client: adapter, jobApp: jobApp, writingSamples: writingSamples)
     }
 
     /// Fetch the best cover letter
@@ -163,102 +160,33 @@ final class CoverLetterRecommendationProvider {
         let fullPromptDebug = "SYSTEM PROMPT:\n\n\(systemPrompt)\n\nUSER PROMPT:\n\n\(prompt)\n\nJOB DESCRIPTION:\n\n\(jobApp.jobDescription)"
         writeDebugToFile(fullPromptDebug)
 
-        // Create messages for the query
-        let messages = [
-            AppLLMMessage(role: .system, text: systemPrompt),
-            AppLLMMessage(role: .user, text: prompt)
-        ]
+        // Initialize a conversation with the system prompt and user prompt
+        initializeConversation(systemPrompt: systemPrompt, userPrompt: prompt)
 
         // Get model identifier
         let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Update client if needed for this model
+        updateClientIfNeeded(appState: AppState())
 
         do {
             // Create query for structured output
             let query = AppLLMQuery(
-                messages: messages,
+                messages: conversationHistory,
                 modelIdentifier: modelIdentifier,
                 responseType: BestCoverLetterResponse.self
             )
             
-            // Execute query
-            let response = try await appLLMClient.executeQuery(query)
+            // Execute query using BaseLLMProvider's method
+            let response = try await executeQuery(query)
             
-            // Create decoder
-            let decoder = JSONDecoder()
-            
-            // Process response
-            switch response {
-            case .structured(let data):
-                // Decode structured response
-                do {
-                    let bestCoverLetterResponse = try decoder.decode(BestCoverLetterResponse.self, from: data)
-                    
-                    // DEBUG: Append response to our debug file
-                    let responseDebug = "\n\nAPI RESPONSE:\n\nPARSED STRUCTURED OUTPUT:\n\(bestCoverLetterResponse)"
-                    writeDebugToFile(fullPromptDebug + responseDebug)
-                    
-                    return bestCoverLetterResponse
-                } catch {
-                    Logger.error("Decoding error: \(error.localizedDescription)")
-                    // Try to log the raw data for debugging
-                    if let jsonString = String(data: data, encoding: .utf8) {
-                        Logger.error("Raw JSON: \(jsonString)")
-                        writeDebugToFile(fullPromptDebug + "\n\nDECODING ERROR: \(error)\n\nRAW JSON: \(jsonString)")
-                    }
-                    throw error
-                }
-                
-            case .text(let text):
-                // Try to decode text as JSON
-                if let data = text.data(using: .utf8) {
-                    do {
-                        let bestCoverLetterResponse = try decoder.decode(BestCoverLetterResponse.self, from: data)
-                        
-                        // DEBUG: Append response to our debug file
-                        let responseDebug = "\n\nAPI RESPONSE (TEXT MODE):\n\nPARSED JSON:\n\(bestCoverLetterResponse)"
-                        writeDebugToFile(fullPromptDebug + responseDebug)
-                        
-                        return bestCoverLetterResponse
-                    } catch {
-                        Logger.error("Text decoding error: \(error.localizedDescription)")
-                        // Try to log the raw text for debugging
-                        Logger.error("Raw text: \(text)")
-                        writeDebugToFile(fullPromptDebug + "\n\nTEXT DECODING ERROR: \(error)\n\nRAW TEXT: \(text)")
-                        
-                        // Attempt to manually extract and construct the response
-                        do {
-                            // Try to extract the JSON portion from the text
-                            if let jsonStartIndex = text.range(of: "{")?.lowerBound,
-                               let jsonEndIndex = text.range(of: "}", options: .backwards)?.upperBound {
-                                let jsonSubstring = text[jsonStartIndex..<jsonEndIndex]
-                                let jsonString = String(jsonSubstring)
-                                
-                                Logger.debug("Extracted JSON: \(jsonString)")
-                                
-                                if let jsonData = jsonString.data(using: .utf8) {
-                                    let extractedResponse = try decoder.decode(BestCoverLetterResponse.self, from: jsonData)
-                                    
-                                    // DEBUG: Append extracted response to our debug file
-                                    let extractedDebug = "\n\nEXTRACTED JSON RESPONSE:\n\(extractedResponse)"
-                                    writeDebugToFile(fullPromptDebug + extractedDebug)
-                                    
-                                    return extractedResponse
-                                }
-                            }
-                        } catch {
-                            Logger.error("Manual extraction also failed: \(error.localizedDescription)")
-                            writeDebugToFile(fullPromptDebug + "\n\nMANUAL EXTRACTION FAILED: \(error)")
-                        }
-                        
-                        throw AppLLMError.unexpectedResponseFormat
-                    }
-                } else {
-                    throw AppLLMError.unexpectedResponseFormat
-                }
-            }
+            // Process structured response using BaseLLMProvider's method
+            return try processStructuredResponse(response, as: BestCoverLetterResponse.self)
         } catch {
+            // Log error and rethrow
             let generalErrorDebug = "\n\nGENERAL API ERROR:\n\(error.localizedDescription)"
             writeDebugToFile(fullPromptDebug + generalErrorDebug)
+            errorMessage = error.localizedDescription
             throw error
         }
     }
