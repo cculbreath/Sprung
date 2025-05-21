@@ -42,7 +42,7 @@ final class ResumeChatProvider {
     /// Initialize with an app state to create the appropriate LLM client
     /// - Parameter appState: The application state
     init(appState: AppState) {
-        let providerType = AIModels.Provider.openai // Default to OpenAI initially
+        let providerType = appState.settings.preferredLLMProvider
         self.appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
     }
     
@@ -52,12 +52,174 @@ final class ResumeChatProvider {
         self.appLLMClient = client
     }
     
-    /// Legacy initializer with OpenAI client (for backward compatibility)
+    /// Direct initializer with OpenAI client (adapted to the AppLLMClientProtocol interface)
     /// - Parameter client: An OpenAI client conforming to OpenAIClientProtocol
     init(client: OpenAIClientProtocol) {
-        // Create an adapter that wraps the legacy client
-        let adapter = LegacyOpenAIAdapterWrapper(client: client)
-        self.appLLMClient = adapter
+        // Create a direct adapter that implements the AppLLMClientProtocol interface
+        self.appLLMClient = DirectOpenAIAdapter(client: client)
+    }
+    
+    /// Direct adapter for OpenAIClientProtocol that implements AppLLMClientProtocol
+    /// This eliminates the need for the LegacyOpenAIAdapterWrapper
+    private class DirectOpenAIAdapter: AppLLMClientProtocol {
+        private let openAIClient: OpenAIClientProtocol
+        
+        init(client: OpenAIClientProtocol) {
+            self.openAIClient = client
+        }
+        
+        func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
+            // Convert AppLLMMessages to ChatMessages
+            let chatMessages = query.messages.toChatMessages()
+            
+            // Check if we need to handle structured output
+            if let responseType = query.desiredResponseType {
+                if responseType == RevisionsContainer.self {
+                    do {
+                        // First try with structured output - this might fail with newer models
+                        Logger.debug("🔄 Attempting structured output with \(query.modelIdentifier)")
+                        
+                        let response = try await openAIClient.sendChatCompletionWithStructuredOutput(
+                            messages: chatMessages,
+                            model: query.modelIdentifier,
+                            temperature: query.temperature,
+                            structuredOutputType: RevisionsContainer.self
+                        )
+                        
+                        // Convert to JSON data
+                        let encoder = JSONEncoder()
+                        let data = try encoder.encode(response)
+                        Logger.debug("✅ Structured output successful")
+                        return .structured(data)
+                    } catch {
+                        // If structured output fails, try regular completion with JSON mode
+                        Logger.error("❌ Structured output failed: \(error.localizedDescription). Falling back to regular completion with JSON mode.")
+                        
+                        // Add a specific instruction about the expected format to help the model
+                        var messagesWithInstruction = chatMessages
+                        let lastUserMessageIndex = messagesWithInstruction.lastIndex { $0.role == .user }
+                        
+                        if let lastIndex = lastUserMessageIndex {
+                            // Append instructions to the user message
+                            let originalContent = messagesWithInstruction[lastIndex].content
+                            let enhancedContent = """
+                            \(originalContent)
+                            
+                            IMPORTANT: Return a JSON object with this exact structure:
+                            {
+                              "revArray": [
+                                {
+                                  "id": "string",
+                                  "oldValue": "string",
+                                  "newValue": "string",
+                                  "valueChanged": boolean,
+                                  "why": "string",
+                                  "isTitleNode": boolean,
+                                  "treePath": "string"
+                                }
+                              ]
+                            }
+                            """
+                            messagesWithInstruction[lastIndex] = ChatMessage(role: .user, content: enhancedContent)
+                        }
+                        
+                        // Try with explicit JSON response format
+                        Logger.debug("🔄 Attempting with explicit JSON format")
+                        let response = try await openAIClient.sendChatCompletionAsync(
+                            messages: messagesWithInstruction,
+                            model: query.modelIdentifier,
+                            responseFormat: .jsonObject,
+                            temperature: query.temperature
+                        )
+                        
+                        Logger.debug("📊 Received JSON response: \(response.content.prefix(100))...")
+                        
+                        // Try to extract JSON from the response content
+                        let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        // Check if content starts with a JSON object
+                        if content.starts(with: "{") && content.contains("revArray") {
+                            if let data = content.data(using: .utf8) {
+                                // Attempt to decode it directly
+                                do {
+                                    Logger.debug("🔄 Attempting to directly decode JSON response")
+                                    // Try parsing as RevisionsContainer first
+                                    let decoder = JSONDecoder()
+                                    let _ = try decoder.decode(RevisionsContainer.self, from: data)
+                                    
+                                    Logger.debug("✅ Successfully decoded JSON response")
+                                    return .structured(data)
+                                } catch {
+                                    Logger.error("⚠️ Decoding error: \(error.localizedDescription)")
+                                    // Return raw JSON data (structuring will be attempted again in processResumeInteraction)
+                                    return .structured(data)
+                                }
+                            } else {
+                                Logger.error("⚠️ Failed to convert response to data")
+                                return .text(content)
+                            }
+                        } else {
+                            Logger.error("⚠️ Response not in expected JSON format")
+                            return .text(content)
+                        }
+                    }
+                } else if responseType == BestCoverLetterResponse.self {
+                    // Handle BestCoverLetterResponse in a similar way
+                    do {
+                        let response = try await openAIClient.sendChatCompletionWithStructuredOutput(
+                            messages: chatMessages,
+                            model: query.modelIdentifier,
+                            temperature: query.temperature,
+                            structuredOutputType: BestCoverLetterResponse.self
+                        )
+                        
+                        let encoder = JSONEncoder()
+                        let data = try encoder.encode(response)
+                        return .structured(data)
+                    } catch {
+                        // Fallback to regular completion
+                        Logger.error("❌ Structured output failed for BestCoverLetterResponse: \(error.localizedDescription)")
+                        
+                        let response = try await openAIClient.sendChatCompletionAsync(
+                            messages: chatMessages,
+                            model: query.modelIdentifier,
+                            responseFormat: .jsonObject,
+                            temperature: query.temperature
+                        )
+                        
+                        if let data = response.content.data(using: .utf8) {
+                            return .structured(data)
+                        } else {
+                            return .text(response.content)
+                        }
+                    }
+                } else {
+                    // For other types, use regular completion with JSON mode
+                    let response = try await openAIClient.sendChatCompletionAsync(
+                        messages: chatMessages,
+                        model: query.modelIdentifier,
+                        responseFormat: .jsonObject,
+                        temperature: query.temperature
+                    )
+                    
+                    if let data = response.content.data(using: .utf8) {
+                        return .structured(data)
+                    } else {
+                        return .text(response.content)
+                    }
+                }
+            } else {
+                // For regular text output, use standard completion
+                let response = try await openAIClient.sendChatCompletionAsync(
+                    messages: chatMessages,
+                    model: query.modelIdentifier,
+                    responseFormat: nil,
+                    temperature: query.temperature
+                )
+                
+                return .text(response.content)
+            }
+        }
     }
 
     // MARK: - Public Methods
@@ -112,7 +274,6 @@ final class ResumeChatProvider {
         let query = AppLLMQuery(
             messages: conversationHistory,
             modelIdentifier: modelIdentifier,
-            temperature: 0.5,
             responseType: RevisionsContainer.self
         )
         
@@ -137,22 +298,124 @@ final class ResumeChatProvider {
                         switch result {
                         case .structured(let data):
                             do {
-                                let decodedObject = try JSONDecoder().decode(RevisionsContainer.self, from: data)
+                                Logger.debug("🔄 Attempting to decode structured data of length: \(data.count)")
+                                if let debugString = String(data: data, encoding: .utf8) {
+                                    Logger.debug("📝 JSON content preview: \(String(debugString.prefix(200)))...")
+                                }
+                                
+                                // Save debug JSON for investigation if enabled
+                                if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
+                                    saveMessageToDebugFile(String(data: data, encoding: .utf8) ?? "", fileName: "structured_response_debug.json")
+                                }
+                                
+                                let decoder = JSONDecoder()
+                                
+                                // First try to parse directly as RevisionsContainer
+                                let decodedObject: RevisionsContainer
+                                do {
+                                    decodedObject = try decoder.decode(RevisionsContainer.self, from: data)
+                                    Logger.debug("✅ Successfully decoded RevisionsContainer with \(decodedObject.revArray.count) revision nodes")
+                                } catch let containerError {
+                                    Logger.debug("⚠️ Failed to decode as RevisionsContainer: \(containerError.localizedDescription)")
+                                    
+                                    // Try to extract revArray from a wrapper object in case API wrapped the response
+                                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                                        // Log available keys for debugging
+                                        Logger.debug("🔍 JSON keys found: \(json.keys.joined(separator: ", "))")
+                                        
+                                        // Check if there's a choices array with content (OpenAI format)
+                                        if let choices = json["choices"] as? [[String: Any]], 
+                                           let firstChoice = choices.first,
+                                           let message = firstChoice["message"] as? [String: Any],
+                                           let content = message["content"] as? String,
+                                           let contentData = content.data(using: .utf8) {
+                                            
+                                            Logger.debug("🔄 Found 'choices' array with content, attempting to parse")
+                                            // Try to parse the content as JSON
+                                            if let contentJson = try? JSONSerialization.jsonObject(with: contentData) as? [String: Any],
+                                               let revArray = contentJson["revArray"] as? [[String: Any]] {
+                                                
+                                                // We found revArray in the content, convert to data and decode
+                                                let revArrayData = try JSONSerialization.data(withJSONObject: ["revArray": revArray])
+                                                decodedObject = try decoder.decode(RevisionsContainer.self, from: revArrayData)
+                                                Logger.debug("✅ Successfully extracted and decoded revArray from choices content")
+                                            } else {
+                                                // Try to decode the entire content string as RevisionsContainer
+                                                decodedObject = try decoder.decode(RevisionsContainer.self, from: contentData)
+                                                Logger.debug("✅ Successfully decoded content string as RevisionsContainer")
+                                            }
+                                        } else {
+                                            // Try to check for a top-level revArray directly
+                                            if let revArray = json["revArray"] as? [[String: Any]] {
+                                                let recreatedData = try JSONSerialization.data(withJSONObject: ["revArray": revArray])
+                                                decodedObject = try decoder.decode(RevisionsContainer.self, from: recreatedData)
+                                                Logger.debug("✅ Successfully extracted revArray from top level")
+                                            } else {
+                                                throw containerError // Original error if nothing worked
+                                            }
+                                        }
+                                    } else {
+                                        throw containerError // Rethrow if we couldn't parse as JSON
+                                    }
+                                }
+                                
                                 await coordinator.resumeWithValue(decodedObject, continuation: continuation)
                             } catch {
+                                Logger.error("❌ Final decoding error: \(error.localizedDescription)")
                                 await coordinator.resumeWithError(AppLLMError.decodingFailed(error), continuation: continuation)
                             }
                         case .text(let text):
                             // Try to decode the text as JSON
+                            Logger.debug("🔄 Attempting to decode text response: \(String(text.prefix(100)))...")
+                            
+                            // Save debug text for investigation if enabled
+                            if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
+                                saveMessageToDebugFile(text, fileName: "text_response_debug.txt")
+                            }
+                            
                             if let data = text.data(using: .utf8) {
                                 do {
+                                    // First try to parse as is
                                     let decodedObject = try JSONDecoder().decode(RevisionsContainer.self, from: data)
+                                    Logger.debug("✅ Successfully decoded text as RevisionsContainer")
                                     await coordinator.resumeWithValue(decodedObject, continuation: continuation)
                                 } catch {
-                                    await coordinator.resumeWithError(AppLLMError.decodingFailed(error), continuation: continuation)
+                                    Logger.debug("⚠️ Failed direct text decoding: \(error.localizedDescription)")
+                                    
+                                    // Try to extract JSON from the text with a more lenient approach
+                                    let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    if let jsonStart = trimmedText.range(of: "{"),
+                                       let jsonEnd = trimmedText.range(of: "}", options: .backwards) {
+                                        let jsonRange = jsonStart.lowerBound..<jsonEnd.upperBound
+                                        let jsonString = String(trimmedText[jsonRange])
+                                        
+                                        if let jsonData = jsonString.data(using: .utf8) {
+                                            do {
+                                                // Try to parse extracted JSON
+                                                let decodedObject = try JSONDecoder().decode(RevisionsContainer.self, from: jsonData)
+                                                Logger.debug("✅ Successfully decoded extracted JSON")
+                                                await coordinator.resumeWithValue(decodedObject, continuation: continuation)
+                                            } catch {
+                                                // If that fails, create an empty response to prevent app crash
+                                                Logger.debug("⚠️ Creating empty fallback response")
+                                                let fallbackContainer = RevisionsContainer(revArray: [])
+                                                await coordinator.resumeWithValue(fallbackContainer, continuation: continuation)
+                                            }
+                                        } else {
+                                            Logger.debug("⚠️ Creating empty fallback response after JSON extraction failed")
+                                            let fallbackContainer = RevisionsContainer(revArray: [])
+                                            await coordinator.resumeWithValue(fallbackContainer, continuation: continuation)
+                                        }
+                                    } else {
+                                        Logger.debug("⚠️ Creating empty fallback response after JSON extraction failed")
+                                        let fallbackContainer = RevisionsContainer(revArray: [])
+                                        await coordinator.resumeWithValue(fallbackContainer, continuation: continuation)
+                                    }
                                 }
                             } else {
-                                await coordinator.resumeWithError(AppLLMError.unexpectedResponseFormat, continuation: continuation)
+                                Logger.debug("⚠️ Creating empty fallback response after text->data conversion failed")
+                                let fallbackContainer = RevisionsContainer(revArray: [])
+                                await coordinator.resumeWithValue(fallbackContainer, continuation: continuation) 
                             }
                         }
                     } catch {

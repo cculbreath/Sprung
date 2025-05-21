@@ -135,9 +135,9 @@ class LLMRequestService: @unchecked Sendable {
                 let query = AppLLMQuery(
                     messages: messages,
                     modelIdentifier: modelToUse,
-                    temperature: 0.7
+                    temperature: 1.0
                 )
-                
+
                 // Execute query
                 let response = try await appLLMClient.executeQuery(query)
                 
@@ -255,7 +255,7 @@ class LLMRequestService: @unchecked Sendable {
                     query = AppLLMQuery(
                         messages: [message],
                         modelIdentifier: currentModel,
-                        temperature: 0.7,
+                        temperature: 1.0,
                         responseType: Data.self,
                         jsonSchema: schema.jsonString
                     )
@@ -264,7 +264,7 @@ class LLMRequestService: @unchecked Sendable {
                     query = AppLLMQuery(
                         messages: [message],
                         modelIdentifier: currentModel,
-                        temperature: 0.7
+                        temperature: 1.0
                     )
                 }
                 
@@ -373,7 +373,7 @@ class LLMRequestService: @unchecked Sendable {
         let query = AppLLMQuery(
             messages: appMessages,
             modelIdentifier: currentModel,
-            temperature: 0.7
+            temperature: 1.0
         )
         
         let requestID = UUID()
@@ -485,7 +485,7 @@ class LLMRequestService: @unchecked Sendable {
         let query = AppLLMQuery(
             messages: appMessages,
             modelIdentifier: currentModel,
-            temperature: 0.7
+            temperature: 1.0
         )
         
         let requestID = UUID()

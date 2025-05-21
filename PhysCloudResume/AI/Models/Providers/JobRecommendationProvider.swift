@@ -56,14 +56,20 @@ import SwiftUI
         self.resume = resume
     }
 
-    /// Legacy initializer for backward compatibility
+    /// Direct initializer with OpenAI client
     /// - Parameters:
     ///   - client: An OpenAI client conforming to OpenAIClientProtocol
     ///   - jobApps: List of job applications
     ///   - resume: The resume to use
     init(client: OpenAIClientProtocol, jobApps: [JobApp], resume: Resume?) {
-        let adapter = LegacyOpenAIAdapterWrapper(client: client)
-        self.appLLMClient = adapter
+        // Create appropriate adapter through the factory if possible
+        if let appState = (NSApplication.shared.delegate as? AppDelegate)?.appState {
+            self.appLLMClient = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
+        } else {
+            // Create a direct adapter with default settings
+            let config = LLMProviderConfig.forOpenAI(apiKey: client.apiKey)
+            self.appLLMClient = SwiftOpenAIAdapterForOpenAI(config: config, appState: AppState())
+        }
         self.jobApps = jobApps
         self.resume = resume
     }
@@ -100,7 +106,6 @@ import SwiftUI
         let query = AppLLMQuery(
             messages: messages,
             modelIdentifier: modelIdentifier,
-            temperature: 0.7,
             responseType: JobRecommendation.self
         )
 

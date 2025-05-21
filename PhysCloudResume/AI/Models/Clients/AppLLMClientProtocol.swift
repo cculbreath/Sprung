@@ -46,7 +46,7 @@ struct AppLLMQuery {
     let jsonSchema: String? // Optional: A JSON schema string if type inference isn't enough or for complex cases
 
     // Initializer for simple text query (can be single-shot or part of a conversation)
-    init(messages: [AppLLMMessage], modelIdentifier: String, temperature: Double? = 0.7) {
+    init(messages: [AppLLMMessage], modelIdentifier: String, temperature: Double? = 1.0) {
         self.messages = messages
         self.modelIdentifier = modelIdentifier
         self.temperature = temperature
@@ -55,7 +55,7 @@ struct AppLLMQuery {
     }
 
     // Initializer for structured JSON query (typically single-shot, but messages can provide context)
-    init<T: Decodable>(messages: [AppLLMMessage], modelIdentifier: String, temperature: Double? = 0.7, responseType: T.Type, jsonSchema: String? = nil) {
+    init<T: Decodable>(messages: [AppLLMMessage], modelIdentifier: String, temperature: Double? = 1.0, responseType: T.Type, jsonSchema: String? = nil) {
         self.messages = messages
         self.modelIdentifier = modelIdentifier
         self.temperature = temperature

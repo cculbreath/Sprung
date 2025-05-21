@@ -11,6 +11,7 @@ import SwiftUI
 
 struct AiCommsView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(\.appState) private var appState: AppState
     @State private var q: ResumeApiQuery
     @State private var chatProvider: ResumeChatProvider
     @State private var revisions: [ProposedRevisionNode] = []
@@ -406,23 +407,16 @@ struct AiCommsView: View {
                     }
                 }
                 
-                // If the model selection has changed, we need to update our client
+                // If the model selection has changed, create a new client for the correct provider
                 if modelString != chatProvider.lastModelUsed {
-                    Logger.debug("Switching to OpenAI client for model: \(modelString)")
-                    // Create a new client for OpenAI
-                    if let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiKey) {
-                        // Important: preserve the message queue when switching clients
-                        let messages = chatProvider.genericMessages
-                        chatProvider = ResumeChatProvider(client: openAIClient)
-                        chatProvider.genericMessages = messages
-                        chatProvider.lastModelUsed = modelString
-                    } else {
-                        Logger.debug("❌ Failed to create OpenAI client with provided API key")
-                        throw NSError(domain: "OpenAIError", 
-                                     code: 1002, 
-                                     userInfo: [NSLocalizedDescriptionKey: "Failed to create OpenAI client. Please check your API key."])
-                    }
-                    }
+                    let providerType = AIModels.providerForModel(modelString)
+                    Logger.debug("Switching to \(providerType) client for model: \(modelString)")
+                    let newClient = AppLLMClientFactory.createClientForModel(model: modelString, appState: appState)
+                    let messages = chatProvider.genericMessages
+                    chatProvider = ResumeChatProvider(client: newClient)
+                    chatProvider.genericMessages = messages
+                    chatProvider.lastModelUsed = modelString
+                }
                 
                 // Execute the API call with our new Responses API method
                 Logger.debug("Starting API call with model: \(modelString)")
