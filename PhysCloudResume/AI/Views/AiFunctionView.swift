@@ -12,16 +12,17 @@ struct AiFunctionView: View {
     @Binding var res: Resume?
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
+    @AppStorage("openAiApiKey") var openAiKey: String = "none"
     
     // Add state for the query to handle asynchronous loading
     @State private var query: ResumeApiQuery?
     @State private var isLoadingQuery: Bool = false
 
-    // Use our abstraction layer for LLM clients as a State property
-    @State private var llmClient: OpenAIClientProtocol
+    // Use our unified LLM client as a State property
+    @State private var llmClient: AppLLMClientProtocol
     
-    // For TTS functionality
-    private let ttsProvider: OpenAITTSProvider
+    // For TTS functionality - using lazy initialization
+    @State private var ttsProvider: OpenAITTSProvider?
 
     // Flag to determine if this is a new conversation or not
     private let isNewConversation: Bool
@@ -40,16 +41,13 @@ struct AiFunctionView: View {
             }
         }
 
-        // Get API keys from UserDefaults
-        let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+        // Initialize LLM client for chat
+        _llmClient = State(initialValue: AppLLMClientFactory.createClient(
+            for: AIModels.Provider.openai,
+            appState: AppState()
+        ))
         
-        // Initialize with a direct SwiftOpenAIClient for now
-        // We'll properly initialize with AppState in onAppear
-        // Use _llmClient for initialization since it's a State property
-        _llmClient = State(initialValue: SwiftOpenAIClient(apiKey: openAiKey))
-        
-        // TTS is still using OpenAI directly
-        ttsProvider = OpenAITTSProvider(apiKey: openAiKey)
+        // TTS will be initialized in onAppear
     }
     
     // Load the query when the resume changes
@@ -67,7 +65,7 @@ struct AiFunctionView: View {
             if res != nil {
                 if let currentQuery = query {
                     AiCommsView(
-                        openAIClient: llmClient,
+                        client: llmClient,
                         query: currentQuery,
                         res: $res,
                         ttsEnabled: $ttsEnabled,
@@ -89,11 +87,11 @@ struct AiFunctionView: View {
         }
         .onAppear {
             // Properly initialize the client with AppState
-            let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-            if let client = OpenAIClientFactory.createClient(apiKey: openAiKey) {
-                llmClient = client
-            }
-            
+            llmClient = AppLLMClientFactory.createClient(
+                for: AIModels.Provider.openai,
+                appState: appState
+            )
+
             if let myRes = res {
                 // Always export the resume when appearing
                 myRes.debounceExport()

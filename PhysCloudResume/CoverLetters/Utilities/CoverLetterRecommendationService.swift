@@ -11,14 +11,14 @@ import Foundation
 class CoverLetterRecommendationService {
     // MARK: - Properties
 
-    /// The OpenAI client used for API calls
-    private let client: OpenAIClientProtocol
+    /// The LLM client used for API calls
+    private let client: AppLLMClientProtocol
 
     // MARK: - Initialization
 
     /// Initializes a new recommendation service
-    /// - Parameter client: The OpenAI client to use for API calls
-    init(client: OpenAIClientProtocol) {
+    /// - Parameter client: The LLM client to use for API calls
+    init(client: AppLLMClientProtocol) {
         self.client = client
     }
 

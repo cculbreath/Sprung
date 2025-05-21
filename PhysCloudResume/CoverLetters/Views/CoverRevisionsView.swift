@@ -8,31 +8,15 @@
 import SwiftUI
 
 struct CoverRevisionsView: View {
-    @AppStorage("openAiApiKey") var openAiApiKey: String = "none"
     @Binding var buttons: CoverLetterButtons
 
     var body: some View {
-        // Create client using our abstraction layer
-        if let openAIClient = OpenAIClientFactory.createClient(apiKey: openAiApiKey) {
-            RevisionsViewContent(
-                openAIClient: openAIClient,
-                buttons: $buttons
-            )
+        let client: AppLLMClientProtocol = AppLLMClientFactory.createClient(
+            for: AIModels.Provider.openai,
+            appState: AppState()
+        )
+        RevisionsViewContent(client: client, buttons: $buttons)
             .onAppear { Logger.debug("Ai Cover Letterv2") }
-        } else {
-            // Fallback view when API key is invalid or missing
-            VStack(spacing: 16) {
-                Text("API Key Error")
-                    .font(.headline)
-                Text("Please check your OpenAI API key in Settings")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .onAppear {
-                Logger.error("Failed to create OpenAI client for CoverRevisionsView")
-            }
-        }
     }
 }
 
@@ -42,18 +26,18 @@ struct RevisionsViewContent: View {
     @State var tempMode: CoverLetterPrompts.EditorPrompts = .zissner
     @State private var customFeedback: String = ""
     @Binding var buttons: CoverLetterButtons
-    let openAIClient: OpenAIClientProtocol
+    let client: AppLLMClientProtocol
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
 
     init(
-        openAIClient: OpenAIClientProtocol,
+        client: AppLLMClientProtocol,
         buttons: Binding<CoverLetterButtons>
     ) {
-        self.openAIClient = openAIClient
+        self.client = client
         _buttons = buttons
-        chatProvider = CoverChatProvider(client: openAIClient)
+        chatProvider = CoverChatProvider(client: client)
     }
 
     var body: some View {

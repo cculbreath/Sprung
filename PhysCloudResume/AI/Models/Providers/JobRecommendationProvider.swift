@@ -56,12 +56,12 @@ import SwiftUI
         self.resume = resume
     }
 
-    /// Direct initializer with OpenAI client
+    /// Direct initializer with LLM client
     /// - Parameters:
-    ///   - client: An OpenAI client conforming to OpenAIClientProtocol
+    ///   - client: An LLM client conforming to AppLLMClientProtocol
     ///   - jobApps: List of job applications
     ///   - resume: The resume to use
-    convenience init(client: OpenAIClientProtocol, jobApps: [JobApp], resume: Resume?) {
+    convenience init(client: AppLLMClientProtocol, jobApps: [JobApp], resume: Resume?) {
         // Create an app state and delegate to the designated initializer
         let appState = AppState()
         self.init(appState: appState, jobApps: jobApps, resume: resume)

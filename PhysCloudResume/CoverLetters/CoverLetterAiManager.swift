@@ -57,14 +57,14 @@ struct CoverLetterAiManager: View {
 
     // MARK: - Dependencies
 
-    private let openAIClient: OpenAIClientProtocol
+    private let client: AppLLMClientProtocol
     private let chatProvider: CoverChatProvider
     private let ttsProvider: OpenAITTSProvider?
 
     // MARK: - Initialization
 
     init(
-        openAIClient: OpenAIClientProtocol,
+        client: AppLLMClientProtocol,
         ttsProvider: OpenAITTSProvider?,
         buttons: Binding<CoverLetterButtons>,
         refresh: Binding<Bool>,
@@ -72,10 +72,10 @@ struct CoverLetterAiManager: View {
         ttsVoice: Binding<String> = .constant("nova"),
         isNewConversation: Bool = true
     ) {
-        self.openAIClient = openAIClient
+        self.client = client
         self.ttsProvider = ttsProvider // Store the passed provider
-        chatProvider = CoverChatProvider(client: openAIClient)
-        recommendationService = CoverLetterRecommendationService(client: openAIClient)
+        chatProvider = CoverChatProvider(client: client)
+        recommendationService = CoverLetterRecommendationService(client: client)
 
         _buttons = buttons
         _refresh = refresh

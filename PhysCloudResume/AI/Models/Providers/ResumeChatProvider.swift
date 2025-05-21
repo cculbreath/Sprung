@@ -15,25 +15,15 @@ import SwiftUI
 /// Helper for handling resume chat functionality
 @Observable
 final class ResumeChatProvider: BaseLLMProvider {
-    // Legacy conversation tracking (for compatibility)
-    var genericMessages: [ChatMessage] = []
     
     // Resume-specific state
     var lastRevNodeArray: [ProposedRevisionNode] = []
+    
+    // Stores generic chat messages for the abstraction layer (legacy)
+    var genericMessages: [ChatMessage] = []
 
     // MARK: - Initializers
 
-    /// Override initializer to include compatibility with older code
-    /// - Parameter client: An OpenAI client conforming to OpenAIClientProtocol
-    convenience init(client: OpenAIClientProtocol) {
-        // Create an AppState for initialization
-        let appState = AppState()
-        
-        // Initialize with the AppState - this will create the appropriate client
-        self.init(appState: appState)
-        
-        // No explicit adapter needed - just keep self.appLLMClient as is
-    }
 
     // MARK: - Resume-specific Methods
 

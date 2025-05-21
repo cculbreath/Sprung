@@ -9,7 +9,7 @@ import Foundation
 import SwiftOpenAI
 
 /// OpenAI-specific adapter for SwiftOpenAI
-class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter {
+class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
     /// The app state that contains user settings and preferences
     private weak var appState: AppState?
     
@@ -52,6 +52,65 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter {
         } catch {
             // Process API error using base class helper
             throw processAPIError(error)
+        }
+    }
+    
+    // MARK: - TTSCapable Implementation
+    
+    func sendTTSRequest(
+        text: String,
+        voice: String,
+        instructions: String?,
+        onComplete: @escaping (Result<Data, Error>) -> Void
+    ) {
+        Task {
+            do {
+                let parameters = AudioSpeechParameters(
+                    model: .tts1,
+                    input: text,
+                    voice: AudioSpeechParameters.Voice(rawValue: voice) ?? .alloy,
+                    responseFormat: .mp3,
+                    speed: 1.0,
+                    stream: false
+                )
+                let response = try await swiftService.createSpeech(parameters: parameters)
+                onComplete(.success(response.output))
+            } catch {
+                onComplete(.failure(error))
+            }
+        }
+    }
+    
+    func sendTTSStreamingRequest(
+        text: String,
+        voice: String,
+        instructions: String?,
+        onChunk: @escaping (Result<Data, Error>) -> Void,
+        onComplete: @escaping (Error?) -> Void
+    ) {
+        Task {
+            do {
+                let parameters = AudioSpeechParameters(
+                    model: .tts1,
+                    input: text,
+                    voice: AudioSpeechParameters.Voice(rawValue: voice) ?? .alloy,
+                    responseFormat: .mp3,
+                    speed: 1.0,
+                    stream: true
+                )
+                let stream = try await swiftService.createStreamingSpeech(parameters: parameters)
+                for try await chunk in stream {
+                    if chunk.isLastChunk {
+                        onComplete(nil)
+                        return
+                    } else {
+                        onChunk(.success(chunk.chunk))
+                    }
+                }
+                onComplete(nil)
+            } catch {
+                onComplete(error)
+            }
         }
     }
 }
