@@ -1,0 +1,168 @@
+import Foundation
+
+/// Adapter class that wraps the legacy OpenAIClientProtocol in the new AppLLMClientProtocol
+class LegacyOpenAIAdapterWrapper: AppLLMClientProtocol {
+    private let legacyClient: OpenAIClientProtocol
+
+    init(client: OpenAIClientProtocol) {
+        self.legacyClient = client
+    }
+
+    func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
+        // Convert AppLLMMessages to legacy ChatMessages
+        let legacyMessages = query.messages.toChatMessages()
+
+        // Check if we need to handle structured output
+        if let responseType = query.desiredResponseType {
+            if responseType == RevisionsContainer.self {
+                do {
+                    // First try with structured output - this might fail with newer models
+                    Logger.debug("🔄 Attempting structured output with \(query.modelIdentifier)")
+                    
+                    let response = try await legacyClient.sendChatCompletionWithStructuredOutput(
+                        messages: legacyMessages,
+                        model: query.modelIdentifier,
+                        temperature: query.temperature,
+                        structuredOutputType: RevisionsContainer.self
+                    )
+
+                    // Convert to JSON data
+                    let encoder = JSONEncoder()
+                    let data = try encoder.encode(response)
+                    Logger.debug("✅ Structured output successful")
+                    return .structured(data)
+                } catch {
+                    // If structured output fails, try regular completion with JSON mode
+                    Logger.error("❌ Structured output failed: \(error.localizedDescription). Falling back to regular completion with JSON mode.")
+
+                    // Add a specific instruction about the expected format to help the model
+                    var messagesWithInstruction = legacyMessages
+                    let lastUserMessageIndex = messagesWithInstruction.lastIndex { $0.role == .user }
+                    
+                    if let lastIndex = lastUserMessageIndex {
+                        // Append instructions to the user message
+                        let originalContent = messagesWithInstruction[lastIndex].content
+                        let enhancedContent = """
+                        \(originalContent)
+                        
+                        IMPORTANT: Return a JSON object with this exact structure:
+                        {
+                          "revArray": [
+                            {
+                              "id": "string",
+                              "oldValue": "string",
+                              "newValue": "string",
+                              "valueChanged": boolean,
+                              "why": "string",
+                              "isTitleNode": boolean,
+                              "treePath": "string"
+                            }
+                          ]
+                        }
+                        """
+                        messagesWithInstruction[lastIndex] = ChatMessage(role: .user, content: enhancedContent)
+                    }
+                    
+                    // Try with explicit JSON response format
+                    Logger.debug("🔄 Attempting with explicit JSON format")
+                    let response = try await legacyClient.sendChatCompletionAsync(
+                        messages: messagesWithInstruction,
+                        model: query.modelIdentifier,
+                        responseFormat: .jsonObject,
+                        temperature: query.temperature
+                    )
+
+                    Logger.debug("📊 Received JSON response: \(response.content.prefix(100))...")
+                    
+                    // Try to extract JSON from the response content
+                    let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    // Check if content starts with a JSON object
+                    if content.starts(with: "{") && content.contains("revArray") {
+                        if let data = content.data(using: .utf8) {
+                            // Attempt to decode it directly
+                            do {
+                                Logger.debug("🔄 Attempting to directly decode JSON response")
+                                // Try parsing as RevisionsContainer first
+                                let decoder = JSONDecoder()
+                                let container = try decoder.decode(RevisionsContainer.self, from: data)
+                                
+                                // If successful, encode again to ensure correct format
+                                let encoder = JSONEncoder()
+                                let encodedData = try encoder.encode(container)
+                                Logger.debug("✅ Successfully decoded and re-encoded JSON response")
+                                return .structured(encodedData)
+                            } catch {
+                                Logger.error("⚠️ Decoding error: \(error.localizedDescription)")
+                                // Return raw JSON data (structuring will be attempted again in processResumeInteraction)
+                                return .structured(data)
+                            }
+                        } else {
+                            Logger.error("⚠️ Failed to convert response to data")
+                            return .text(content)
+                        }
+                    } else {
+                        Logger.error("⚠️ Response not in expected JSON format")
+                        return .text(content)
+                    }
+                }
+            } else if responseType == BestCoverLetterResponse.self {
+                do {
+                    let response = try await legacyClient.sendChatCompletionWithStructuredOutput(
+                        messages: legacyMessages,
+                        model: query.modelIdentifier,
+                        temperature: query.temperature,
+                        structuredOutputType: BestCoverLetterResponse.self
+                    )
+
+                    // Convert to JSON data
+                    let encoder = JSONEncoder()
+                    let data = try encoder.encode(response)
+                    return .structured(data)
+                } catch {
+                    // If structured output fails, try regular completion
+                    Logger.error("❌ Structured output failed: \(error.localizedDescription). Falling back to regular completion.")
+
+                    let response = try await legacyClient.sendChatCompletionAsync(
+                        messages: legacyMessages,
+                        model: query.modelIdentifier,
+                        responseFormat: .jsonObject,
+                        temperature: query.temperature
+                    )
+
+                    if let data = response.content.data(using: .utf8) {
+                        return .structured(data)
+                    } else {
+                        return .text(response.content)
+                    }
+                }
+            } else {
+                // For other structured output types, use regular completion
+                // and convert the result to structured data
+                let response = try await legacyClient.sendChatCompletionAsync(
+                    messages: legacyMessages,
+                    model: query.modelIdentifier,
+                    responseFormat: .jsonObject,
+                    temperature: query.temperature
+                )
+
+                let content = response.content
+                if let data = content.data(using: .utf8) {
+                    return .structured(data)
+                } else {
+                    throw AppLLMError.unexpectedResponseFormat
+                }
+            }
+        } else {
+            // For regular text output, use regular completion
+            let response = try await legacyClient.sendChatCompletionAsync(
+                messages: legacyMessages,
+                model: query.modelIdentifier,
+                responseFormat: nil,
+                temperature: query.temperature
+            )
+
+            return .text(response.content)
+        }
+    }
+}

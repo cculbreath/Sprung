@@ -560,25 +560,48 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
     ) async throws -> T {
         Logger.debug("🤖 SwiftOpenAI: Starting structured chat completion for model \(model)")
         
+        // Get the provider for the model
+        let provider = AIModels.providerForModel(model)
+        
+        // Convert messages to SwiftOpenAI format
         let swiftMessages = messages.map { convertToSwiftOpenAIMessage($0) }
+        
+        // Generate JSON schema
         let schema = generateJSONSchema(for: structuredOutputType)
         
+        // Create the appropriate response format
         let responseFormat = SwiftOpenAI.ResponseFormat.jsonSchema(SwiftOpenAI.JSONSchemaResponseFormat(
             name: String(describing: T.self),
             strict: true,
             schema: schema
         ))
         
-        let parameters = ChatCompletionParameters(
+        // Create parameters
+        var parameters = ChatCompletionParameters(
             messages: swiftMessages,
             model: SwiftOpenAI.Model.from(model),
             responseFormat: responseFormat,
             temperature: temperature
         )
         
+        // For OpenAI models starting with gpt-4.1 or containing "turbo", add instructions about JSON response
+        // This is a workaround for inconsistent structured output handling in these models
+        if (model.starts(with: "gpt-4.1") || model.contains("turbo")) && provider == AIModels.Provider.openai {
+            Logger.debug("⚠️ Using JSON instruction workaround for model: \(model)")
+            
+            // Add a system instruction about the expected JSON format
+            let jsonFormatExplanation = createJSONExampleMessage(for: structuredOutputType)
+            parameters.messages.append(ChatCompletionParameters.Message(
+                role: .system,
+                content: .text(jsonFormatExplanation)
+            ))
+        }
+        
         do {
+            // Start the chat with the specified parameters
             let result = try await swiftService.startChat(parameters: parameters)
             
+            // Check if we received a valid content
             guard let content = result.choices?.first?.message?.content,
                   let data = content.data(using: String.Encoding.utf8) else {
                 Logger.debug("❌ SwiftOpenAI: No content in structured completion response")
@@ -590,10 +613,45 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
             }
             
             Logger.debug("✅ SwiftOpenAI: Structured completion successful, parsing JSON...")
-            let decoder = JSONDecoder()
-            let structuredOutput = try decoder.decode(T.self, from: data)
-            Logger.debug("✅ SwiftOpenAI: Structured output parsed successfully")
-            return structuredOutput
+            
+            // If debug enabled, log response content
+            if UserDefaults.standard.bool(forKey: "saveDebugLogs") {
+                Logger.debug("📝 Response content: \(content)")
+            }
+            
+            // First try to decode directly
+            do {
+                let decoder = JSONDecoder()
+                let structuredOutput = try decoder.decode(T.self, from: data)
+                Logger.debug("✅ SwiftOpenAI: Structured output parsed successfully")
+                return structuredOutput
+            } catch let directDecodeError {
+                Logger.debug("⚠️ Failed to decode structured output directly: \(directDecodeError)")
+                
+                // Check if response might be wrapped in a text block or has additional formatting
+                if content.contains("{") && content.contains("}") {
+                    // Try to extract JSON object
+                    if let jsonStart = content.range(of: "{"),
+                       let jsonEnd = content.range(of: "}", options: .backwards) {
+                        let jsonRange = jsonStart.lowerBound..<jsonEnd.upperBound
+                        let jsonString = String(content[jsonRange])
+                        
+                        if let jsonData = jsonString.data(using: .utf8) {
+                            do {
+                                let structuredOutput = try JSONDecoder().decode(T.self, from: jsonData)
+                                Logger.debug("✅ SwiftOpenAI: Successfully parsed JSON after extraction")
+                                return structuredOutput
+                            } catch {
+                                Logger.debug("⚠️ Failed to decode extracted JSON: \(error)")
+                                throw directDecodeError // Rethrow original error
+                            }
+                        }
+                    }
+                }
+                
+                // If all attempts fail, rethrow the original error
+                throw directDecodeError
+            }
         } catch let error as DecodingError {
             Logger.debug("❌ SwiftOpenAI: Failed to decode structured output: \(error)")
             throw NSError(
@@ -604,6 +662,47 @@ class SwiftOpenAIClient: OpenAIClientProtocol {
         } catch {
             Logger.debug("❌ SwiftOpenAI: Structured completion failed: \(error.localizedDescription)")
             throw mapSwiftOpenAIError(error)
+        }
+    }
+    
+    /// Creates a JSON example message for the specified structured output type
+    /// - Parameter type: The type of structured output
+    /// - Returns: A message explaining the required JSON format
+    private func createJSONExampleMessage<T: StructuredOutput>(for type: T.Type) -> String {
+        if type == RevisionsContainer.self {
+            return """
+            You MUST return a valid JSON object in EXACTLY this format:
+            {
+              "revArray": [
+                {
+                  "id": "string",
+                  "oldValue": "string",
+                  "newValue": "string",
+                  "valueChanged": true,
+                  "why": "string",
+                  "isTitleNode": false,
+                  "treePath": "string"
+                }
+              ]
+            }
+            
+            Do not include any other text, explanation, or formatting before or after the JSON.
+            The response must be parseable as a valid JSON object containing exactly these fields.
+            """
+        } else if type == BestCoverLetterResponse.self {
+            return """
+            You MUST return a valid JSON object in EXACTLY this format:
+            {
+              "strengthAndVoiceAnalysis": "string",
+              "bestLetterUuid": "string",
+              "verdict": "string"
+            }
+            
+            Do not include any other text, explanation, or formatting before or after the JSON.
+            The response must be parseable as a valid JSON object containing exactly these fields.
+            """
+        } else {
+            return "Return a valid JSON object matching the schema provided in the request."
         }
     }
     

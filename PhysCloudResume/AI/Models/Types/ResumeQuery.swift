@@ -113,7 +113,10 @@ import SwiftUI
             let updatableJsonData = try JSONSerialization.data(
                 withJSONObject: exportDict, options: .prettyPrinted
             )
-            return String(data: updatableJsonData, encoding: .utf8) ?? ""
+            let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
+            print("🫥🫥🫥🫥🫥🫥 UPDATABLE NODES 🫥🫥🫥🫥🫥🫥")
+            print(returnString)
+            return returnString
         } catch {
             return ""
         }
@@ -260,7 +263,7 @@ import SwiftUI
         - For each original EditableNode, include exactly one RevNode in the RevArray. The array indices should match the order of EditableNodes in the updatableFieldsString.
         - If no change is required for a given node, set “newValue” to "" and “valueChanged” to false.
         - The “why” field can be an empty string if the reason is self-explanatory.
-        - Do **not** modify the "treePath" value. Always return the exact same string you received for a given node.
+        - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node.
 
         SUMMARY:
         Make the resume as compelling and accurate as possible for the target job. Keep it honest, relevant, and ensure that any additions or modifications support \(applicant.name)’s candidacy for the role. Use strategic language to highlight achievements, mirror core keywords from the job posting, and present a polished, stand-out resume.

@@ -109,16 +109,21 @@ final class CoverLetterRecommendationProvider {
         self.writingSamples = writingSamples
     }
     
-    /// Legacy initializer for backward compatibility
+    /// Direct initializer with OpenAI client
     /// - Parameters:
     ///   - client: An OpenAI client conforming to OpenAIClientProtocol
     ///   - jobApp: The job application containing cover letters
     ///   - writingSamples: Writing samples for style reference
     init(client: OpenAIClientProtocol, jobApp: JobApp, writingSamples: String) {
-        // Create a legacy adapter that wraps the provided client
-        let adapter = LegacyOpenAIAdapterWrapper(client: client)
+        // Create appropriate adapter through the factory if possible
+        if let appState = (NSApplication.shared.delegate as? AppDelegate)?.appState {
+            self.appLLMClient = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
+        } else {
+            // Create a direct adapter with default settings
+            let config = LLMProviderConfig.forOpenAI(apiKey: client.apiKey)
+            self.appLLMClient = SwiftOpenAIAdapterForOpenAI(config: config, appState: AppState())
+        }
         
-        self.appLLMClient = adapter
         self.jobApp = jobApp
         self.writingSamples = writingSamples
     }
@@ -172,7 +177,6 @@ final class CoverLetterRecommendationProvider {
             let query = AppLLMQuery(
                 messages: messages,
                 modelIdentifier: modelIdentifier,
-                temperature: 0.7,
                 responseType: BestCoverLetterResponse.self
             )
             
