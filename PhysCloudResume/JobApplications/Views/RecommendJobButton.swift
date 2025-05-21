@@ -75,6 +75,7 @@ struct RecommendJobButton: View {
         Task {
             do {
                 let provider = JobRecommendationProvider(
+                    appState: appState,
                     jobApps: jobAppStore.jobApps,
                     resume: selectedResume
                 )

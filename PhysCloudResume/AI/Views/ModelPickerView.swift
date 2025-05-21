@@ -76,8 +76,9 @@ struct ModelPickerView: View {
                     if let models = allModels[provider], !models.isEmpty {
                         Section(header: Text(provider)) {
                             ForEach(models, id: \.self) { model in
-                                Text(formatModelName(model))
-                                    .tag(model)
+                                let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
+                                Text(formatModelName(sanitizedModel))
+                                    .tag(sanitizedModel)
                             }
                         }
                     }

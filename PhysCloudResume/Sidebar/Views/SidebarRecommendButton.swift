@@ -77,6 +77,7 @@ struct SidebarRecommendButton: View {
         Task {
             do {
                 let provider = JobRecommendationProvider(
+                    appState: appState,
                     jobApps: jobAppStore.jobApps,
                     resume: resumeToUse
                 )

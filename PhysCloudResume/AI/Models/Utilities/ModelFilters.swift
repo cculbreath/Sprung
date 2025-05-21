@@ -157,6 +157,10 @@ class ModelFilters {
         if let dateRegex = try? NSRegularExpression(pattern: "-(?:20\\d{2}-\\d{2}-\\d{2}|\\d{6}|\\d{4})$") {
             name = dateRegex.stringByReplacingMatches(in: name, options: [], range: NSRange(name.startIndex..., in: name), withTemplate: "")
         }
+        // Normalize OpenAI reasoning mini model naming variants to 'o4-mini'
+        if name == "o4-mini" || name == "4o-mini" || name == "gpt4o-mini" || name == "gpt-4o-mini" {
+            return "o4-mini"
+        }
         if name.starts(with: "chatgpt-") && name.hasSuffix("-latest") {
             name = name.replacingOccurrences(of: "chatgpt-", with: "gpt-")
             name = String(name.dropLast("-latest".count))

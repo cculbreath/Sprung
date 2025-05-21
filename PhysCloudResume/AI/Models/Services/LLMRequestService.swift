@@ -220,7 +220,8 @@ class LLMRequestService: @unchecked Sendable {
                 }
                 
                 // Get client after initialization
-                guard let client = await MainActor.run { self.appLLMClient } else {
+                let clientOptional = await MainActor.run { self.appLLMClient }
+                guard let client = clientOptional else {
                     throw AppLLMError.clientError("LLM client not initialized")
                 }
                 
@@ -255,7 +256,7 @@ class LLMRequestService: @unchecked Sendable {
                         messages: [message],
                         modelIdentifier: currentModel,
                         temperature: 0.7,
-                        responseType: Dictionary<String, Any>.self,
+                        responseType: Data.self,
                         jsonSchema: schema.jsonString
                     )
                 } else {
