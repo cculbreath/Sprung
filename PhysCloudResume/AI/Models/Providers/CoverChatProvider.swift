@@ -13,8 +13,6 @@ final class CoverChatProvider: BaseLLMProvider {
     var resultsAvailable: Bool = false
     var lastResponse: String = ""
     
-    // Legacy client reference for backward compatibility during transition
-    private var openAIClient: OpenAIClientProtocol?
 
     // MARK: - Initializers
 
@@ -30,15 +28,6 @@ final class CoverChatProvider: BaseLLMProvider {
         super.init(client: client)
     }
     
-    /// Initialize with legacy OpenAI client (for backward compatibility)
-    /// - Parameter client: An OpenAI client conforming to OpenAIClientProtocol
-    convenience init(client: OpenAIClientProtocol) {
-        // Initialize with an AppState
-        let appState = AppState()
-        self.init(appState: appState)
-        
-        // No adapter needed - we're just using the standard implementation
-    }
 
     /// Formats the model name to a simplified version
     /// - Parameter modelName: The full model name from the API

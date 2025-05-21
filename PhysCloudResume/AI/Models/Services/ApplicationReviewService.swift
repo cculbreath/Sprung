@@ -12,20 +12,23 @@ import SwiftUI
 
 /// Service responsible for sending application packet reviews (cover letter + resume)
 class ApplicationReviewService: @unchecked Sendable {
-    private var openAIClient: OpenAIClientProtocol?
+    private var client: AppLLMClientProtocol?
     private var currentRequestID: UUID?
 
     // MARK: - Init
 
     @MainActor
     func initialize() {
-        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
-        guard let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) else {
-            Logger.warning("⚠️ Could not initialize ApplicationReviewService: Invalid API key format")
+        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? ""
+        guard ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) != nil else {
+            Logger.warning("⚠️ Invalid API key format for ApplicationReviewService")
             return
         }
-        
-        openAIClient = OpenAIClientFactory.createClient(apiKey: validKey)
+
+        client = AppLLMClientFactory.createClient(
+            for: AIModels.Provider.openai,
+            appState: AppState()
+        )
     }
 
     // MARK: - Using ImageConversionService for image conversion
@@ -115,8 +118,8 @@ class ApplicationReviewService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        if openAIClient == nil { initialize() }
-        guard let client = openAIClient else {
+        if client == nil { initialize() }
+        guard let client = client else {
             onComplete(.failure(NSError(domain: "AppReview", code: 900, userInfo: [NSLocalizedDescriptionKey: "Client not initialised"])))
             return
         }
@@ -160,19 +163,24 @@ class ApplicationReviewService: @unchecked Sendable {
                 // Check if request is still current before proceeding
                 guard self.currentRequestID == requestID else { return }
                 
-                let response = try await client.sendChatCompletionAsync(
-                    messages: messages,
-                    model: OpenAIModelFetcher.getPreferredModelString(),
-                    responseFormat: nil,
+                // Execute the query via unified LLM client
+                let appMessages = messages.map { AppLLMMessage.from(chatMessage: $0) }
+                let query = AppLLMQuery(
+                    messages: appMessages,
+                    modelIdentifier: OpenAIModelFetcher.getPreferredModelString(),
                     temperature: nil
                 )
-                
+                let response = try await client.executeQuery(query)
                 // Check again if request is still current before calling callbacks
                 guard self.currentRequestID == requestID else { return }
-                
-                // Send the complete response as progress (simulates streaming effect)
-                onProgress(response.content)
-                onComplete(.success("Done"))
+
+                switch response {
+                case .text(let content):
+                    onProgress(content)
+                    onComplete(.success("Done"))
+                case .structured:
+                    onComplete(.failure(AppLLMError.unexpectedResponseFormat))
+                }
                 
             } catch {
                 // Check if request is still current before reporting error
@@ -190,12 +198,13 @@ class ApplicationReviewService: @unchecked Sendable {
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
         let requestID = UUID(); currentRequestID = requestID
-        guard let client = openAIClient else { return }
+        guard client != nil else { return }
         guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else { return }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.addValue("Bearer \(client.apiKey)", forHTTPHeaderField: "Authorization")
+        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? ""
+        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let imgURL = "data:image/png;base64,\(base64Image)"

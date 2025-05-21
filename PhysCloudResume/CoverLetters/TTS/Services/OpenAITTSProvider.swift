@@ -10,6 +10,8 @@
 import AVFoundation
 import Foundation
 import os.log
+import SwiftUI
+import SwiftOpenAI // For the TTS functionality from your SwiftOpenAI fork
 
 /// Provides Text-to-Speech functionality using the OpenAI API
 @MainActor
@@ -46,9 +48,8 @@ class OpenAITTSProvider {
         }
     }
 
-    /// The OpenAI client to use for TTS
-    ///
-    private let client: OpenAIClientProtocol
+    /// The TTS client to use for speech synthesis
+    private let ttsClient: TTSCapable
 
     /// Token that identifies the currently active streaming request.
     private var currentStreamID: UUID?
@@ -133,16 +134,21 @@ class OpenAITTSProvider {
             // Create a placeholder client that will handle errors gracefully
             Logger.warning("🚨 Creating TTS provider with empty API key - TTS will be disabled")
             // Use a placeholder client that will return errors instead of crashing
-            client = PlaceholderTTSClient(apiKey: "invalid")
+            ttsClient = PlaceholderTTSClient(errorMessage: "TTS service unavailable - invalid OpenAI API key")
         } else {
-            // Attempt to create the real client
-            if let ttsClient = OpenAIClientFactory.createTTSClient(apiKey: apiKey) {
-                client = ttsClient
+            // Create a client through the factory
+            let config = LLMProviderConfig.forOpenAI(apiKey: apiKey)
+            let appState = AppState() // Create a new AppState instance
+            let client = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
+            
+            // Check if the client supports TTS
+            if let ttsCapableClient = client as? TTSCapable {
+                ttsClient = ttsCapableClient
                 Logger.debug("✅ TTS client created successfully")
             } else {
-                // If client creation fails, use a placeholder that will fail gracefully
-                Logger.warning("⚠️ Failed to create TTS client - using placeholder that will display errors")
-                client = PlaceholderTTSClient(apiKey: "invalid")
+                // Fall back to placeholder if TTS not supported by this client
+                Logger.warning("⚠️ Client does not support TTS - using placeholder")
+                ttsClient = PlaceholderTTSClient(errorMessage: "TTS not supported by this provider")
             }
         }
 
@@ -152,81 +158,7 @@ class OpenAITTSProvider {
         }
     }
     
-    /// A placeholder client that will return errors for TTS requests instead of crashing
-    private class PlaceholderTTSClient: OpenAIClientProtocol {
-        // MARK: - Properties
-        var apiKey: String {
-            return "invalid"
-        }
-        
-        // MARK: - Required initializers
-        required init(configuration: OpenAIConfiguration) {
-            // Placeholder implementation
-        }
-        
-        required init(apiKey: String) {
-            // Placeholder implementation
-        }
-        
-        // MARK: - Chat completion methods
-        func sendChatCompletionAsync(
-            messages: [ChatMessage], 
-            model: String, 
-            responseFormat: AIResponseFormat?,
-            temperature: Double?
-        ) async throws -> ChatCompletionResponse {
-            throw NSError(
-                domain: "OpenAITTSProvider", 
-                code: 4001, 
-                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
-            )
-        }
-        
-        func sendChatCompletionWithStructuredOutput<T>(
-            messages: [ChatMessage], 
-            model: String, 
-            temperature: Double?, 
-            structuredOutputType: T.Type
-        ) async throws -> T where T : StructuredOutput {
-            throw NSError(
-                domain: "OpenAITTSProvider", 
-                code: 4001, 
-                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
-            )
-        }
-        
-        // MARK: - TTS methods
-        func sendTTSRequest(
-            text: String, 
-            voice: String, 
-            instructions: String?, 
-            onComplete: @escaping (Result<Data, Error>) -> Void
-        ) {
-            // Return error instead of crashing
-            let error = NSError(
-                domain: "OpenAITTSProvider", 
-                code: 4001, 
-                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
-            )
-            onComplete(.failure(error))
-        }
-        
-        func sendTTSStreamingRequest(
-            text: String, 
-            voice: String, 
-            instructions: String?, 
-            onChunk: @escaping (Result<Data, Error>) -> Void, 
-            onComplete: @escaping (Error?) -> Void
-        ) {
-            // Return error instead of crashing
-            let error = NSError(
-                domain: "OpenAITTSProvider", 
-                code: 4001, 
-                userInfo: [NSLocalizedDescriptionKey: "TTS service unavailable - invalid OpenAI API key"]
-            )
-            onComplete(error)
-        }
-    }
+    // Placeholder TTSClient now defined in TTSTypes.swift
 
     deinit {
         // Clean up all resources - must use Task to dispatch to the MainActor
@@ -291,8 +223,8 @@ class OpenAITTSProvider {
     ///   - instructions: Custom voice instructions (optional)
     ///   - onComplete: Called when audio playback is complete or fails
     func speakText(_ text: String, voice: Voice = .nova, instructions: String? = nil, onComplete: @escaping (Error?) -> Void) {
-        // Call the client with the voice and instructions
-        client.sendTTSRequest(
+        // Call the TTS-capable client with the voice and instructions
+        ttsClient.sendTTSRequest(
             text: text,
             voice: voice.rawValue,
             instructions: instructions,
@@ -518,7 +450,7 @@ class OpenAITTSProvider {
         }
 
         // Send streaming request and feed chunks to the adapter.
-        client.sendTTSStreamingRequest(
+        ttsClient.sendTTSStreamingRequest(
             text: text,
             voice: voice.rawValue,
             instructions: instructions,

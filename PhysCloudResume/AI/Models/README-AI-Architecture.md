@@ -182,17 +182,3 @@ class MyCustomProvider: BaseLLMProvider {
 4. **Handle return values**: Remember to capture or discard return values from methods like `addUserMessage` and `initializeConversation`.
 5. **Error handling**: Use the error handling mechanisms provided by BaseLLMProvider.
 
-## Legacy Support
-
-For backward compatibility during migration, use LegacyOpenAIClientAdapter:
-
-```swift
-// Create a new adapter from a legacy client
-let legacyClient: OpenAIClientProtocol = /* ... */
-let adapter = LegacyOpenAIClientAdapter(client: legacyClient) as AppLLMClientProtocol
-
-// Use the adapter with the new interfaces
-let provider = BaseLLMProvider(client: adapter)
-```
-
-The migration should be complete when all references to OpenAIClientProtocol have been replaced with AppLLMClientProtocol.

@@ -57,6 +57,8 @@ struct CoverLetterAiView: View {
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
 
+    @Environment(\.appState) private var appState
+
     // MARK: - Bindings
 
     @Binding var buttons: CoverLetterButtons
@@ -66,7 +68,7 @@ struct CoverLetterAiView: View {
     private let isNewConversation: Bool
 
     // Keep client instance as a state property
-    @State private var client: OpenAIClientProtocol? = nil
+    @State private var client: AppLLMClientProtocol
 
     // Get shared TTS provider only if TTS is enabled
     private var ttsProvider: OpenAITTSProvider? {
@@ -79,43 +81,36 @@ struct CoverLetterAiView: View {
         _buttons = buttons
         _refresh = refresh
         self.isNewConversation = isNewConversation
+        _client = State(initialValue: AppLLMClientFactory.createClient(
+            for: AIModels.Provider.openai,
+            appState: AppState()
+        ))
     }
 
     // MARK: - Body
 
     var body: some View {
-        // Initialize our main manager with optional TTS provider
-        Group {
-            if let openAIClient = client {
-                CoverLetterAiManager(
-                    openAIClient: openAIClient,
-                    ttsProvider: ttsProvider, // Now optional
-                    buttons: $buttons,
-                    refresh: $refresh,
-                    ttsEnabled: $ttsEnabled,
-                    ttsVoice: $ttsVoice,
-                    isNewConversation: isNewConversation
-                )
-            } else {
-                // Show a loading view or placeholder while client initializes
-                ProgressView("Initializing...")
-            }
-        }
+        CoverLetterAiManager(
+            client: client,
+            ttsProvider: ttsProvider,
+            buttons: $buttons,
+            refresh: $refresh,
+            ttsEnabled: $ttsEnabled,
+            ttsVoice: $ttsVoice,
+            isNewConversation: isNewConversation
+        )
         .onAppear {
             Logger.debug("AI Cover Letter View appeared (TTS enabled: \(ttsEnabled))")
-            
-            // Initialize the client if it's not already set
-            if client == nil && openAiApiKey != "none" {
-                client = OpenAIClientFactory.createClient(apiKey: openAiApiKey)
-            }
+            client = AppLLMClientFactory.createClient(
+                for: AIModels.Provider.openai,
+                appState: appState
+            )
         }
-        .onChange(of: openAiApiKey) { _, newApiKey in
-            // Update client when API key changes
-            if newApiKey != "none" {
-                client = OpenAIClientFactory.createClient(apiKey: newApiKey)
-            } else {
-                client = nil // Clear client if API key is invalid
-            }
+        .onChange(of: openAiApiKey) { _, _ in
+            client = AppLLMClientFactory.createClient(
+                for: AIModels.Provider.openai,
+                appState: appState
+            )
         }
     }
 }

@@ -31,19 +31,19 @@ struct AiCommsView: View {
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
 
-    // Store references to clients for AI operations
-    private let openAIClient: OpenAIClientProtocol
+    // Store reference to unified LLM client for AI operations
+    private let client: AppLLMClientProtocol
 
     init(
-        openAIClient: OpenAIClientProtocol,
+        client: AppLLMClientProtocol,
         query: ResumeApiQuery,
         res: Binding<Resume?>,
         ttsEnabled: Binding<Bool> = .constant(false),
         ttsVoice: Binding<String> = .constant("nova")
     ) {
-        // Initialize with abstraction layer client
-        _chatProvider = State(initialValue: ResumeChatProvider(client: openAIClient))
-        self.openAIClient = openAIClient
+        // Initialize with unified LLM client
+        _chatProvider = State(initialValue: ResumeChatProvider(client: client))
+        self.client = client
         _q = State(initialValue: query)
         _myRes = res
         _ttsEnabled = ttsEnabled

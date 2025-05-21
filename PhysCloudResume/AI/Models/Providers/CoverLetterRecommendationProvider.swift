@@ -114,16 +114,6 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
         super.init(client: client)
     }
 
-    /// Direct initializer with OpenAI client
-    /// - Parameters:
-    ///   - client: An OpenAI client conforming to OpenAIClientProtocol
-    ///   - jobApp: The job application containing cover letters
-    ///   - writingSamples: Writing samples for style reference
-    convenience init(client: OpenAIClientProtocol, jobApp: JobApp, writingSamples: String) {
-        let config = LLMProviderConfig.forOpenAI(apiKey: client.apiKey)
-        let adapter = SwiftOpenAIAdapterForOpenAI(config: config, appState: AppState())
-        self.init(client: adapter, jobApp: jobApp, writingSamples: writingSamples)
-    }
 
     /// Fetch the best cover letter
     /// - Returns: The response containing the best cover letter UUID and reasoning
