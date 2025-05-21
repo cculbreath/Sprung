@@ -14,6 +14,7 @@ import SwiftUI
 struct AIModels {
     // OpenAI models (only keeping the ones that are used)
     static let gpt4o = "gpt-4o"
+    static let o4_mini = "o4-mini"
     static let gpt4o_mini = "gpt-4o-mini"
     static let gpt4_5 = "gpt-4.5-turbo"
     static let gpt4o_latest = "gpt-4o-2024-05-13"  // Latest version

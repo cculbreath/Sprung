@@ -3,6 +3,7 @@
 //  PhysCloudResume
 //
 //  Created by Christopher Culbreath on 9/1/24.
+//  Updated by Christopher Culbreath on 5/20/25.
 //
 
 import Foundation
@@ -15,14 +16,21 @@ import SwiftUI
 
 @Observable
 final class ResumeChatProvider {
-    // The OpenAI client that will be used for API calls
-    private let openAIClient: OpenAIClientProtocol
-
+    // The LLM client that will be used for API calls
+    private let appLLMClient: AppLLMClientProtocol
+    
+    // Message tracking properties
     private var streamTask: Task<Void, Never>?
     var message: String = ""
     var messages: [String] = []
-    // Generic message format for the abstraction layer
+    
+    // Conversation history
+    var conversationHistory: [AppLLMMessage] = []
+    
+    // Legacy conversation tracking (for compatibility)
     var genericMessages: [ChatMessage] = []
+    
+    // Error handling and state
     var errorMessage: String = ""
     var lastRevNodeArray: [ProposedRevisionNode] = []
     
@@ -31,10 +39,25 @@ final class ResumeChatProvider {
 
     // MARK: - Initializers
 
-    /// Initialize with the new abstraction layer client
+    /// Initialize with an app state to create the appropriate LLM client
+    /// - Parameter appState: The application state
+    init(appState: AppState) {
+        let providerType = AIModels.Provider.openai // Default to OpenAI initially
+        self.appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
+    }
+    
+    /// Initialize with a specific app LLM client
+    /// - Parameter client: A client conforming to AppLLMClientProtocol
+    init(client: AppLLMClientProtocol) {
+        self.appLLMClient = client
+    }
+    
+    /// Legacy initializer with OpenAI client (for backward compatibility)
     /// - Parameter client: An OpenAI client conforming to OpenAIClientProtocol
     init(client: OpenAIClientProtocol) {
-        openAIClient = client
+        // Create an adapter that wraps the legacy client
+        let adapter = LegacyOpenAIAdapterWrapper(client: client)
+        self.appLLMClient = adapter
     }
 
     // MARK: - Public Methods
@@ -56,52 +79,87 @@ final class ResumeChatProvider {
         }
     }
 
-    /// Send a chat completion request to the OpenAI API
-    /// - Parameter messages: The message history to use for context
-    /// - Parameter resume: Optional resume to update with response ID for server-side conversation state
-    /// - Returns: void - results are stored in the message property
-    func startChat(messages: [ChatMessage],
-                   resume: Resume? = nil,
-                   continueConversation: Bool = false) async throws
-    {
-        // Always use ChatCompletions API now
+    /// Process a resume interaction using the unified AppLLMClientProtocol
+    /// - Parameters:
+    ///   - newUserInput: Optional new user input (if not an initial query)
+    ///   - isInitialQuery: Whether this is the first query in a conversation
+    ///   - resumeDataForPrompt: The resume data for the prompt (required for initial query)
+    /// - Returns: The revisions container with suggested changes
+    func processResumeInteraction(
+        newUserInput: String?,
+        isInitialQuery: Bool,
+        resumeDataForPrompt: String
+    ) async throws -> RevisionsContainer {
         // Clear previous error message before starting
         errorMessage = ""
-
-        // Store for reference
-        genericMessages = messages
-
-        // Get model as string
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
-
-        // Use our abstraction layer with a timeout
+        
+        // Initialize or update conversation history
+        if isInitialQuery {
+            // Start a new conversation with system and user messages
+            conversationHistory = [
+                AppLLMMessage(role: .system, text: "You are a helpful resume assistant..."),
+                AppLLMMessage(role: .user, text: resumeDataForPrompt)
+            ]
+        } else if let userInput = newUserInput {
+            // Add new user message to existing conversation
+            conversationHistory.append(AppLLMMessage(role: .user, text: userInput))
+        }
+        
+        // Get model identifier
+        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Create query for structured output
+        let query = AppLLMQuery(
+            messages: conversationHistory,
+            modelIdentifier: modelIdentifier,
+            temperature: 0.5,
+            responseType: RevisionsContainer.self
+        )
+        
+        // Create coordinator for safe continuation resumption
+        let coordinator = ContinuationCoordinator()
+        
+        // Timeout error for long-running requests
         let timeoutError = NSError(
             domain: "ResumeChatProviderError",
             code: -1001,
             userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
         )
-
-        // Create a coordinator for safe continuation resumption
-        let coordinator = ContinuationCoordinator()
-
+        
         do {
-            // Use the new structured output method from the abstraction layer
+            // Execute the LLM query using our unified interface
             let response = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RevisionsContainer, Error>) in
                 let apiTask = Task {
                     do {
-                        // Use the abstraction layer's structured output method
-                        let result = try await openAIClient.sendChatCompletionWithStructuredOutput(
-                            messages: messages,
-                            model: modelString,
-                            temperature: nil,
-                            structuredOutputType: RevisionsContainer.self
-                        )
-                        await coordinator.resumeWithValue(result, continuation: continuation)
+                        let result = try await appLLMClient.executeQuery(query)
+                        
+                        // Handle the structured output
+                        switch result {
+                        case .structured(let data):
+                            do {
+                                let decodedObject = try JSONDecoder().decode(RevisionsContainer.self, from: data)
+                                await coordinator.resumeWithValue(decodedObject, continuation: continuation)
+                            } catch {
+                                await coordinator.resumeWithError(AppLLMError.decodingFailed(error), continuation: continuation)
+                            }
+                        case .text(let text):
+                            // Try to decode the text as JSON
+                            if let data = text.data(using: .utf8) {
+                                do {
+                                    let decodedObject = try JSONDecoder().decode(RevisionsContainer.self, from: data)
+                                    await coordinator.resumeWithValue(decodedObject, continuation: continuation)
+                                } catch {
+                                    await coordinator.resumeWithError(AppLLMError.decodingFailed(error), continuation: continuation)
+                                }
+                            } else {
+                                await coordinator.resumeWithError(AppLLMError.unexpectedResponseFormat, continuation: continuation)
+                            }
+                        }
                     } catch {
                         await coordinator.resumeWithError(error, continuation: continuation)
                     }
                 }
-
+                
                 // Set up a timeout task
                 Task {
                     try? await Task.sleep(nanoseconds: 500_000_000_000) // 500s timeout
@@ -111,16 +169,16 @@ final class ResumeChatProvider {
                     }
                 }
             }
-
+            
             // Convert structured response to JSON for compatibility with existing code
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let jsonData = try encoder.encode(response)
             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{\"revArray\": []}"
-
+            
             // Store the JSON string in messages array
             self.messages = [jsonString]
-
+            
             if self.messages.isEmpty {
                 throw NSError(
                     domain: "ResumeChatProviderError",
@@ -128,17 +186,47 @@ final class ResumeChatProvider {
                     userInfo: [NSLocalizedDescriptionKey: "No response content received from AI service."]
                 )
             }
-
+            
             // Get the revision nodes directly from the structured response
             lastRevNodeArray = response.revArray
-
-            // Update generic messages for history
-            genericMessages.append(ChatMessage(role: .assistant, content: jsonString))
-
+            
+            // Update conversation history with assistant response
+            conversationHistory.append(AppLLMMessage(role: .assistant, text: jsonString))
+            
+            // Update legacy genericMessages for backward compatibility
+            genericMessages = conversationHistory.toChatMessages()
+            
+            return response
+            
         } catch {
             errorMessage = error.localizedDescription
             throw error
         }
+    }
+    
+    /// Legacy method for backwards compatibility
+    /// Redirects to the new processResumeInteraction method
+    func startChat(
+        messages: [ChatMessage],
+        resume: Resume? = nil,
+        continueConversation: Bool = false
+    ) async throws {
+        // Convert legacy ChatMessages to AppLLMMessages
+        conversationHistory = Array<AppLLMMessage>.fromChatMessages(messages)
+        
+        // Extract resume data from user message if this is an initial query
+        let isInitialQuery = !continueConversation && conversationHistory.count <= 2
+        let resumeData = isInitialQuery ? 
+            conversationHistory.first(where: { $0.role == .user })?.contentParts.first.flatMap { 
+                if case let .text(content) = $0 { return content } else { return nil }
+            } ?? "" : ""
+        
+        // Process the interaction using our new method
+        _ = try await processResumeInteraction(
+            newUserInput: nil,
+            isInitialQuery: isInitialQuery,
+            resumeDataForPrompt: resumeData
+        )
     }
 
     // MARK: - Conversational Methods (ChatCompletions API)
@@ -224,3 +312,4 @@ final class ResumeChatProvider {
         }
     }
 }
+

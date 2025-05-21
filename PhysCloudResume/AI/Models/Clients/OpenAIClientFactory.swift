@@ -3,6 +3,7 @@
 //  PhysCloudResume
 //
 //  Created by Christopher Culbreath on 4/22/25.
+//  Updated by Christopher Culbreath on 5/20/25.
 //
 
 import Foundation
@@ -12,6 +13,7 @@ import SwiftUI
 import SwiftOpenAI
 
 /// Factory for creating OpenAI clients
+/// This is maintained for backward compatibility
 class OpenAIClientFactory {
     /// Creates an OpenAI client with the given API key
     /// - Parameter apiKey: The API key to use for requests
@@ -23,19 +25,22 @@ class OpenAIClientFactory {
             return nil
         }
         
-        return SwiftOpenAIClient(apiKey: validKey)
+        // Wrap it in a legacy adapter
+        return LegacyOpenAIClientAdapter(apiKey: validKey)
     }
     
     /// Creates a TTS-capable client
     /// - Parameter apiKey: The API key to use for requests
     /// - Returns: An OpenAIClientProtocol that supports TTS
     static func createTTSClient(apiKey: String) -> OpenAIClientProtocol? {
+        // TTS is still supported directly through SwiftOpenAIClient
         // Validate the API key first
         guard let validKey = ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) else {
             Logger.warning("⚠️ Invalid OpenAI API key format provided to createTTSClient")
             return nil
         }
         
+        // For now, use the original SwiftOpenAIClient for TTS since our adapters don't handle TTS
         return SwiftOpenAIClient(apiKey: validKey)
     }
     
@@ -47,7 +52,7 @@ class OpenAIClientFactory {
     static func createClientForModel(model: String, apiKeys: [String: String]) -> OpenAIClientProtocol? {
         // First determine the provider for this model
         let provider = AIModels.providerForModel(model)
-        Logger.debug("🔄 Creating client for model: \(model) (Provider: \(provider))")
+        Logger.debug("🔄 Creating legacy client for model: \(model) (Provider: \(provider))")
         
         // Get and validate the API key for this provider
         if let apiKey = apiKeys[provider], apiKey != "none" {
@@ -57,29 +62,31 @@ class OpenAIClientFactory {
                 // Log success without revealing the entire key
                 Logger.debug("✅ Using validated \(provider) API key: \(validKey.prefix(4))...")
                 
-                // Create provider-specific client configurations
+                // Create a config for the appropriate provider
+                let config: LLMProviderConfig
+                
                 switch provider {
                 case AIModels.Provider.claude:
-                    let config = OpenAIConfiguration.forClaude(apiKey: validKey)
-                    return SwiftOpenAIClient(configuration: config)
+                    config = LLMProviderConfig.forClaude(apiKey: validKey)
                     
                 case AIModels.Provider.grok:
-                    let config = OpenAIConfiguration.forGrok(apiKey: validKey)
-                    return SwiftOpenAIClient(configuration: config)
+                    config = LLMProviderConfig.forGrok(apiKey: validKey)
                     
                 case AIModels.Provider.gemini:
-                    let config = OpenAIConfiguration.forGemini(apiKey: validKey)
-                    return SwiftOpenAIClient(configuration: config)
+                    config = LLMProviderConfig.forGemini(apiKey: validKey)
                     
                 case AIModels.Provider.openai:
-                    // For OpenAI, use the standard client
-                    return SwiftOpenAIClient(apiKey: validKey)
+                    config = LLMProviderConfig.forOpenAI(apiKey: validKey)
                     
                 default:
-                    // For unknown providers, default to OpenAI client
-                    Logger.warning("⚠️ Unknown provider: \(provider), defaulting to OpenAI client")
-                    return SwiftOpenAIClient(apiKey: validKey)
+                    config = LLMProviderConfig.forOpenAI(apiKey: validKey)
                 }
+                
+                // Create an OpenAIConfiguration from the LLMProviderConfig
+                let openAIConfig = createOpenAIConfiguration(from: config)
+                
+                // Use the legacy adapter to wrap the new client
+                return LegacyOpenAIClientAdapter(configuration: openAIConfig)
             } else {
                 Logger.error("❌ Invalid API key format for provider: \(provider)")
             }
@@ -88,6 +95,31 @@ class OpenAIClientFactory {
         }
         
         // If we reach here, fall back to the old client creation method
-        return SwiftOpenAIClient.clientForModel(model: model, apiKeys: apiKeys)
+        return nil
+    }
+    
+    /// Helper to create an OpenAIConfiguration from an LLMProviderConfig
+    /// - Parameter config: The LLM provider configuration
+    /// - Returns: An OpenAIConfiguration
+    private static func createOpenAIConfiguration(from config: LLMProviderConfig) -> OpenAIConfiguration {
+        var customHeaders: [String: String] = config.extraHeaders ?? [:]
+        
+        // Set the host and path
+        let host = config.baseURL?.replacingOccurrences(of: "https://", with: "") ?? "api.openai.com"
+        let basePath = "/\(config.apiVersion ?? "v1")"
+        
+        // For Claude, add the anthropic headers
+        if config.providerType == AIModels.Provider.claude {
+            customHeaders["anthropic-version"] = "2023-06-01"
+            customHeaders["x-api-key"] = config.apiKey
+        }
+        
+        return OpenAIConfiguration(
+            token: config.apiKey,
+            host: host,
+            basePath: basePath,
+            customHeaders: customHeaders,
+            timeoutInterval: 900.0
+        )
     }
 }

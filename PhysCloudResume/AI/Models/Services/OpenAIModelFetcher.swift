@@ -46,9 +46,9 @@ class OpenAIModelFetcher {
     static func sanitizeModelName(_ modelName: String) -> String {
         // Handle common corrupted model names
         switch modelName {
-        // OpenAI corruptions
-        case "o4-mini", "4o-mini", "gpt4o-mini":
-            return AIModels.gpt4o_mini // "gpt-4o-mini"
+        // OpenAI corruptions and new reasoning mini model naming
+        case "o4-mini", "4o-mini", "gpt4o-mini", "gpt-4o-mini":
+            return AIModels.o4_mini // "o4-mini"
         case "o4", "4o", "gpt4o":
             return AIModels.gpt4o // "gpt-4o"
         case "o4-latest", "4o-latest", "gpt4o-latest":

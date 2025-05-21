@@ -3,6 +3,7 @@
 //  PhysCloudResume
 //
 //  Created by Christopher Culbreath on 9/9/24.
+//  Updated by Christopher Culbreath on 5/20/25.
 //
 
 import SwiftUI
@@ -16,20 +17,22 @@ struct AiFunctionView: View {
     @State private var query: ResumeApiQuery?
     @State private var isLoadingQuery: Bool = false
 
-    // Use our abstraction layer for LLM clients. Fetch the keys directly from
-    // UserDefaults instead of relying on the `@AppStorage` property wrapper in
-    // order to avoid the mutating‑getter compile error.
-    private let llmClient: OpenAIClientProtocol
-
+    // Use our abstraction layer for LLM clients as a State property
+    @State private var llmClient: OpenAIClientProtocol
+    
     // For TTS functionality
     private let ttsProvider: OpenAITTSProvider
 
     // Flag to determine if this is a new conversation or not
     private let isNewConversation: Bool
+    
+    // Access to AppState using Swift 6 conventions
+    @Environment(\.appState) private var appState
 
-    init(res: Binding<Resume?>, isNewConversation _: Bool = false) {
+    init(res: Binding<Resume?>, isNewConversation: Bool = false) {
         _res = res
-        isNewConversation = false // resume analysis doesn't use conversation context
+        self.isNewConversation = isNewConversation
+        
         if let resume = res.wrappedValue {
             // Clear any existing conversation context for new analysis
             Task { @MainActor in
@@ -40,15 +43,12 @@ struct AiFunctionView: View {
         // Get API keys from UserDefaults
         let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
         
-        // Create the appropriate client with safety check
-        if let client = OpenAIClientFactory.createClient(apiKey: openAiKey) {
-            llmClient = client
-        } else {
-            // If client creation fails, throw a runtime error since we can't function without it
-            fatalError("Failed to initialize AiFunctionView: Invalid or missing API key")
-        }
+        // Initialize with a direct SwiftOpenAIClient for now
+        // We'll properly initialize with AppState in onAppear
+        // Use _llmClient for initialization since it's a State property
+        _llmClient = State(initialValue: SwiftOpenAIClient(apiKey: openAiKey))
         
-        // TTS is still using OpenAI
+        // TTS is still using OpenAI directly
         ttsProvider = OpenAITTSProvider(apiKey: openAiKey)
     }
     
@@ -82,16 +82,18 @@ struct AiFunctionView: View {
                         Label("Reload", systemImage: "arrow.clockwise")
                     }
                 }
-                
-                // Add actions for when view appears
-                // Using onChange instead of onAppear to ensure the query is refreshed when res changes
-                // We can't use Task inside the view because it would cause a state update during view update
             }
             else {
                 Text("No Resume Available")
             }
         }
         .onAppear {
+            // Properly initialize the client with AppState
+            let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+            if let client = OpenAIClientFactory.createClient(apiKey: openAiKey) {
+                llmClient = client
+            }
+            
             if let myRes = res {
                 // Always export the resume when appearing
                 myRes.debounceExport()
