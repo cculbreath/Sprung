@@ -9,7 +9,7 @@ import Foundation
 import SwiftData
 
 enum Statuses: String, Codable, CaseIterable {
-    case new = "New"
+    case new = "new"
     case inProgress = "In Progress"
     case unsubmitted = "Unsubmitted"
     case submitted = "Submitted"

@@ -74,6 +74,8 @@ enum AppLLMError: Error {
     case decodingFailed(Error)
     case unexpectedResponseFormat
     case clientError(String)
+    case decodingError(String)
+    case timeout(String)
     // Add other specific errors as needed
 }
 
@@ -86,6 +88,10 @@ extension AppLLMError: LocalizedError {
         case .unexpectedResponseFormat:
             return "Unexpected response format from provider"
         case .clientError(let message):
+            return message
+        case .decodingError(let message):
+            return message
+        case .timeout(let message):
             return message
         }
     }

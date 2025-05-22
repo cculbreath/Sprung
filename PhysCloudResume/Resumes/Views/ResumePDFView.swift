@@ -15,27 +15,21 @@ import SwiftUI
 /// Displays the generated PDF for a given resume along with a small progress
 /// indicator while an export job is running.
 struct ResumePDFView: View {
-    @State private var vm: ResumePDFViewModel
-
-    init(resume: Resume) {
-        _vm = State(wrappedValue: ResumePDFViewModel(resume: resume))
-    }
+    @Bindable var resume: Resume
 
     var body: some View {
-        @Bindable var vm = vm // enables change tracking for Observation
-
         VStack {
-            if let pdfData = vm.resume.pdfData {
-                PDFKitWrapper(pdfView: pdfViewer(pdfData: pdfData))
+            if let pdfData = resume.pdfData {
+                PDFKitWrapper(pdfData: pdfData)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .topTrailing) {
-                        if vm.resume.isExporting || vm.isUpdating {
+                        if resume.isExporting {
                             ProgressView().scaleEffect(0.5)
                                 .padding([.top, .trailing], 2)
                         }
                     }
             } else {
-                if vm.resume.isExporting || vm.isUpdating {
+                if resume.isExporting {
                     ProgressView()
                 } else {
                     Text("No PDF available")
@@ -44,30 +38,31 @@ struct ResumePDFView: View {
         }
         .onAppear {
             // Lazy‑load a cached PDF if present on disk.
-            if vm.resume.pdfData == nil,
+            if resume.pdfData == nil,
                let fileURL = FileHandler.readPdfUrl()
             {
-                vm.resume.loadPDF(from: fileURL)
+                resume.loadPDF(from: fileURL)
             }
         }
+        .id(resume.id) // Force view recreation when resume changes
     }
 }
 
 // MARK: - PDF helpers -------------------------------------------------------
 
-private func pdfViewer(pdfData: Data?) -> PDFView {
-    let pdfView = PDFView()
-    if let pdfData {
-        pdfView.document = PDFDocument(data: pdfData)
-    }
-    pdfView.autoScales = true
-    return pdfView
-}
-
 private struct PDFKitWrapper: NSViewRepresentable {
-    let pdfView: PDFView
+    let pdfData: Data
 
-    func makeNSView(context _: Context) -> PDFView { pdfView }
-    func updateNSView(_ nsView: PDFView, context _: Context) { nsView.document = pdfView.document }
+    func makeNSView(context _: Context) -> PDFView { 
+        let pdfView = PDFView()
+        pdfView.autoScales = true
+        return pdfView
+    }
+    
+    func updateNSView(_ nsView: PDFView, context _: Context) { 
+        // Update the PDF document when the data changes
+        nsView.document = PDFDocument(data: pdfData)
+    }
+    
     typealias NSViewType = PDFView
 }

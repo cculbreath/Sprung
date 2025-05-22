@@ -26,7 +26,13 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
     /// - Parameter query: The query to execute
     /// - Returns: The response from the OpenAI API
     override func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
-        // Prepare parameters using base class helper
+        // Determine if this is a request for structured output
+        let isStructuredOutput = query.desiredResponseType != nil
+        
+        // Log the model and whether this is a structured output request
+        Logger.debug("Executing \(isStructuredOutput ? "structured" : "text") query with OpenAI model: \(query.modelIdentifier)")
+        
+        // Prepare parameters for the model
         let parameters = prepareChatParameters(for: query)
         
         do {
@@ -39,12 +45,26 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
             }
             
             // Check if we're expecting a structured response
-            if query.desiredResponseType != nil {
-                // Convert the content string to Data for structured decoding
-                guard let contentData = content.data(using: .utf8) else {
-                    throw AppLLMError.unexpectedResponseFormat
+            if isStructuredOutput {
+                // Try to extract clean JSON if the response isn't already well-formed
+                if let jsonContent = extractJSONFromContent(content) {
+                    Logger.debug("Using extracted JSON: \(String(describing: jsonContent.prefix(100)))...")
+                    return .structured(jsonContent.data(using: .utf8) ?? Data())
+                } else {
+                    // Convert the content string to Data for structured decoding
+                    guard let contentData = content.data(using: .utf8) else {
+                        throw AppLLMError.unexpectedResponseFormat
+                    }
+                    
+                    // Try to validate that it's valid JSON
+                    do {
+                        _ = try JSONSerialization.jsonObject(with: contentData)
+                        return .structured(contentData)
+                    } catch {
+                        Logger.error("Invalid JSON returned from OpenAI: \(error.localizedDescription)")
+                        throw AppLLMError.clientError("OpenAI returned invalid JSON: \(error.localizedDescription)")
+                    }
                 }
-                return .structured(contentData)
             } else {
                 // Return text response
                 return .text(content)
@@ -53,6 +73,30 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
             // Process API error using base class helper
             throw processAPIError(error)
         }
+    }
+    
+    /// Extracts valid JSON from the content string
+    /// - Parameter content: The raw content string that may contain JSON
+    /// - Returns: Cleaned JSON string or nil if extraction fails
+    private func extractJSONFromContent(_ content: String) -> String? {
+        // Look for the first { and the last } to extract the JSON object
+        guard let startIndex = content.firstIndex(of: "{"),
+              let endIndex = content.lastIndex(of: "}"),
+              startIndex < endIndex else {
+            return nil
+        }
+        
+        // Extract the JSON substring
+        let jsonSubstring = content[startIndex...endIndex]
+        let jsonString = String(jsonSubstring)
+        
+        // Validate that it's valid JSON
+        guard let data = jsonString.data(using: .utf8),
+              let _ = try? JSONSerialization.jsonObject(with: data) else {
+            return nil
+        }
+        
+        return jsonString
     }
     
     // MARK: - TTSCapable Implementation

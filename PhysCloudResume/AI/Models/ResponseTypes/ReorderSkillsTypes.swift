@@ -117,6 +117,30 @@ struct ReorderSkillsResponseContainer: Codable, Equatable {
     }
 }
 
+/// Simplified response structure for the unified AppLLM system
+/// This follows the same pattern as JobRecommendation in JobRecommendationProvider
+struct ReorderSkillsResponse: Codable, StructuredOutput {
+    let reorderedSkillsAndExpertise: [SimpleReorderedSkill]
+    
+    enum CodingKeys: String, CodingKey {
+        case reorderedSkillsAndExpertise = "reordered_skills_and_expertise"
+    }
+    
+    func validate() -> Bool {
+        // Basic validation - ensure we have skills and all have valid UUIDs
+        return !reorderedSkillsAndExpertise.isEmpty && 
+               reorderedSkillsAndExpertise.allSatisfy { UUID(uuidString: $0.id) != nil }
+    }
+}
+
+/// Simplified skill node structure for the unified system
+struct SimpleReorderedSkill: Codable {
+    let id: String
+    let originalValue: String
+    let newPosition: Int
+    let reasonForReordering: String
+}
+
 /// JSON schema for the reordering skills LLM request
 extension OverflowSchemas {
     // Define two alternate schemas - one that expects a container object and one that expects a direct array
@@ -159,6 +183,4 @@ extension OverflowSchemas {
       "additionalProperties": false
     }
     """
-    
-
 }

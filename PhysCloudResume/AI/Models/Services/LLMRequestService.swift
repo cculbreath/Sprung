@@ -178,6 +178,10 @@ class LLMRequestService: @unchecked Sendable {
                         userErrorMessage += "Failed to process the model's response."
                     case .unexpectedResponseFormat:
                         userErrorMessage += "The model returned an unexpected response format."
+                    case .decodingError(let message):
+                        userErrorMessage += message
+                    case .timeout(let message):
+                        userErrorMessage += message
                     }
                 } else {
                     let nsError = error as NSError
@@ -201,10 +205,11 @@ class LLMRequestService: @unchecked Sendable {
     }
     
     /// Sends a request that can include an image and/or JSON schema
-    func sendMixedRequest(
+    func sendMixedRequest<T: Decodable>(
         promptText: String,
         base64Image: String?,
         schema: (name: String, jsonString: String)?,
+        responseType: T.Type? = nil,
         requestID: UUID = UUID(),
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     ) {
@@ -251,12 +256,15 @@ class LLMRequestService: @unchecked Sendable {
                 
                 // Handle structured output if schema provided
                 if let schema = schema {
+                    // Use the provided response type or fallback to Data
+                    let actualResponseType = responseType ?? Data.self
+                    
                     // Use schema builder utility
                     query = AppLLMQuery(
                         messages: [message],
                         modelIdentifier: currentModel,
                         temperature: 1.0,
-                        responseType: Data.self,
+                        responseType: actualResponseType,
                         jsonSchema: schema.jsonString
                     )
                 } else {

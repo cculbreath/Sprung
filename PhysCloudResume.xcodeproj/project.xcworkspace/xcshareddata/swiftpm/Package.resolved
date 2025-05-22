@@ -1,5 +1,5 @@
 {
-  "originHash" : "24e49e4e21ce5769bda95b349ee90256d2ada89112505f8ed9e00fc3d7bc1567",
+  "originHash" : "54bd3854c0f71b453a2db0d162a0d8e666e15106771b4febd9c69e8b6e9756db",
   "pins" : [
     {
       "identity" : "swift-chunked-audio-player",
@@ -44,6 +44,15 @@
       "state" : {
         "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
         "version" : "5.0.2"
+      }
+    },
+    {
+      "identity" : "viewinspector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/nalexn/ViewInspector.git",
+      "state" : {
+        "revision" : "788e7879d38a839c4e348ab0762dcc0364e646a2",
+        "version" : "0.10.1"
       }
     }
   ],

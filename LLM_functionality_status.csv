@@ -1,0 +1,135 @@
+LLM Operation,Code Inviolved,"GPT-4,1",O4-mini,Grok,Gemini,Claude
+RecommendJobButton,"RecommendJobButton, JobRecommendationProvider",Works,"Error: API error (status code 400): status code 400 Unrecognized request argument supplied: reasoning_effort
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+<_TtGC7SwiftUI16PlatformViewHostGVS_P10$1d1515da032PlatformViewRepresentableAdaptorVS_18AppKitProgressView__: 0x16decc570> has an maximum length (32.142857) that doesn't satisfy min (32.142857) <= max (32.142857).
+ℹ️ [INFO] [JobRecommendationProvider.swift:117] fetchRecommendation(): Using model: gpt-4.1 for job recommendation
+🔍 [DEBUG] [SwiftOpenAIAdapterForOpenAI.swift:33] executeQuery(_:): Executing structured query with OpenAI model: gpt-4.1
+🔍 [DEBUG] [ModelMappingExtension.swift:79] from(_:): ⚠️ Using custom model mapping for OpenAI model: gpt-4.1
+🔍 [DEBUG] [LLMSchemaBuilder.swift:259] createResponseFormat(for:jsonSchema:): Creating response format for type: JobRecommendation
+🔍 [DEBUG] [LLMSchemaBuilder.swift:276] createResponseFormat(for:jsonSchema:): Using built-in schema for JobRecommendation
+🔍 [DEBUG] [SwiftOpenAIAdapterForOpenAI.swift:51] executeQuery(_:): Using extracted JSON: {
+  ""reason"": ""The Amazon Robotics, Learning Experience and Technology (LExT) Systems Development En...
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+🔍 [DEBUG] [LLMRequestService.swift:38] updateClientForCurrentModel(): 🔄 Updating client for model: o3-mini (Provider: OpenAI)
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+🔍 [DEBUG] [LLMRequestService.swift:45] updateClientForCurrentModel(): ✅ Initialized client for model: o3-mini
+🔍 [DEBUG] [LLMRequestService.swift:38] updateClientForCurrentModel(): 🔄 Updating client for model: o4-mini (Provider: OpenAI)
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+🔍 [DEBUG] [LLMRequestService.swift:45] updateClientForCurrentModel(): ✅ Initialized client for model: o4-mini
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+ℹ️ [INFO] [JobRecommendationProvider.swift:117] fetchRecommendation(): Using model: o4-mini for job recommendation
+🔍 [DEBUG] [SwiftOpenAIAdapterForOpenAI.swift:33] executeQuery(_:): Executing structured query with OpenAI model: o4-mini
+🔍 [DEBUG] [LLMSchemaBuilder.swift:259] createResponseFormat(for:jsonSchema:): Creating response format for type: JobRecommendation
+🔍 [DEBUG] [LLMSchemaBuilder.swift:276] createResponseFormat(for:jsonSchema:): Using built-in schema for JobRecommendation
+<_TtGC7SwiftUI16PlatformViewHostGVS_P10$1d1515da032PlatformViewRepresentableAdaptorVS_18AppKitProgressView__: 0x1268fd360> has an maximum length (32.142857) that doesn't satisfy min (32.142857) <= max (32.142857).
+🚨 [ERROR] [BaseSwiftOpenAIAdapter.swift:166] processAPIError(_:): API error (status code 400): status code 400 Unrecognized request argument supplied: reasoning_effort
+🚨 [ERROR] [JobRecommendationProvider.swift:204] fetchRecommendation(): Job recommendation error: API error (status code 400): status code 400 Unrecognized request argument supplied: reasoning_effort",Works,Works,Works
+CreateNewResume,"AICommsView, ResumeChatProvider, ReviewView, ResumeUpdateNode, ",Works,"Broken. ReviewView is displayed with “No revision to display” message. chars
+🔍 [DEBUG] [AiCommsView.swift:413] chatAction(hasRevisions:): Switching to OpenAI client for model: o4-mini
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+🔍 [DEBUG] [AiCommsView.swift:422] chatAction(hasRevisions:): Starting API call with model: o4-mini
+🔍 [DEBUG] [AiCommsView.swift:80] body: 
+Received 0 revision nodes from AI
+🔍 [DEBUG] [SwiftOpenAIAdapterForOpenAI.swift:33] executeQuery(_:): Executing structured query with OpenAI model: o4-mini
+🔍 [DEBUG] [LLMSchemaBuilder.swift:259] createResponseFormat(for:jsonSchema:): Creating response format for type: RevisionsContainer
+🔍 [DEBUG] [LLMSchemaBuilder.swift:276] createResponseFormat(for:jsonSchema:): Using built-in schema for RevisionsContainer
+🔍 [DEBUG] [AiCommsView.swift:316] validateRevs(res:revs:): Final count after validation: 0 (started with 0)
+🔍 [DEBUG] [AiCommsView.swift:117] body: After validation: 0 revision nodes (from original 0)
+🔍 [DEBUG] [AiCommsView.swift:140] body: No valid revision nodes available
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+🚨 [ERROR] [BaseSwiftOpenAIAdapter.swift:166] processAPIError(_:): API error (status code 400): status code 400 Unrecognized request argument supplied: reasoning_effort",Works,"Broken. Sort of. ReviewView is displayed with “No revision to display”  message. After prolonged delay, ReviewView is populated with RevNodes…Review🔍 [DEBUG] [SwiftOpenAIAdapterForGemini.swift:88] executeQuery(_:): 🌟 Sending request to Gemini API with model: models/gemini-2.0-flash
+🔍 [DEBUG] [AiCommsView.swift:316] validateRevs(res:revs:): Final count after validation: 0 (started with 0)
+🔍 [DEBUG] [AiCommsView.swift:117] body: After validation: 0 revision nodes (from original 0)
+🔍 [DEBUG] [AiCommsView.swift:140] body: No valid revision nodes available
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+🔍 [DEBUG] [SwiftOpenAIAdapterForGemini.swift:97] executeQuery(_:): 🌟 Gemini API request successful
+🔍 [DEBUG] [BaseLLMProvider.swift:188] processStructuredResponse(_:as:): 🔄 Attempting to decode structured data of length: 2054
+🔍 [DEBUG] [BaseLLMProvider.swift:190] processStructuredResponse(_:as:): 📝 JSON content preview: [
+  {
+    ""isTitleNode"": false,
+    ""id"": ""642DD92B-3B2D-45BB-89F6-4CACDE4580FB"",
+    ""value"": ""Senior Optical Engineer (PhD) with 8+ years' hands-on experience in optical metrology, imaging systems, ...
+🚨 [ERROR] [BaseLLMProvider.swift:197] processStructuredResponse(_:as:): ❌ Decoding error: The data couldn’t be read because it isn’t in the correct format.
+🔍 [DEBUG] [BaseLLMProvider.swift:313] handleRevisionsContainerFormats(dataString:): 🔄 Attempting to parse RevisionsContainer from: [
+  {
+    ""isTitleNode"": false,
+    ""id"": ""642DD92B-3B2D-45BB-89F6-4CACDE4580FB"",
+    ""value"": ""Seni...
+🔍 [DEBUG] [BaseLLMProvider.swift:321] handleRevisionsContainerFormats(dataString:): ✅ Parsed direct array format with 3 revisions
+🔍 [DEBUG] [AiCommsView.swift:80] body: 
+Received 3 revision nodes from AI
+🔍 [DEBUG] [AiCommsView.swift:316] validateRevs(res:revs:): Final count after validation: 3 (started with 3)
+🔍 [DEBUG] [AiCommsView.swift:117] body: After validation: 3 revision nodes (from original 3)
+🔍 [DEBUG] [AiCommsView.swift:426] chatAction(hasRevisions:): API call completed successfully
+Interrupted 0x600001e04880 _connection 0x600002e34820 _server 0x0","Broken. ReviewView is displayed with “No revision to display”  message.🔍 [DEBUG] [AiCommsView.swift:413] chatAction(hasRevisions:): Switching to Claude client for model: claude-3-5-haiku-20241022
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:32] init(config:): 👤 Creating Claude-specific API client
+🔍 [DEBUG] [SwiftOpenAIAdapterForAnthropic.swift:25] init(config:appState:): 👤 Claude adapter configured with:
+🔍 [DEBUG] [SwiftOpenAIAdapterForAnthropic.swift:26] init(config:appState:):   - Base URL: https://api.anthropic.com
+🔍 [DEBUG] [SwiftOpenAIAdapterForAnthropic.swift:27] init(config:appState:):   - API Version: v1
+🔍 [DEBUG] [AiCommsView.swift:422] chatAction(hasRevisions:): Starting API call with model: claude-3-5-haiku-20241022
+🔍 [DEBUG] [AiCommsView.swift:80] body: 
+Received 0 revision nodes from AI
+🔍 [DEBUG] [AiCommsView.swift:316] validateRevs(res:revs:): Final count after validation: 0 (started with 0)
+🔍 [DEBUG] [AiCommsView.swift:117] body: After validation: 0 revision nodes (from original 0)
+🔍 [DEBUG] [AiCommsView.swift:140] body: No valid revision nodes available
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI
+🔍 [DEBUG] [SwiftOpenAIAdapterForAnthropic.swift:90] executeQuery(_:): 👤 Claude JSON response extracted: {""recommendedJobId"": ""4168004314"", ""reason"": ""Christopher Culbreath's background is an excellent mat...
+🔍 [DEBUG] [BaseLLMProvider.swift:188] processStructuredResponse(_:as:): 🔄 Attempting to decode structured data of length: 505
+🔍 [DEBUG] [BaseLLMProvider.swift:190] processStructuredResponse(_:as:): 📝 JSON content preview: {""recommendedJobId"": ""4168004314"", ""reason"": ""Christopher Culbreath's background is an excellent match for the Senior Optical Engineer role at Magic Leap. His PhD in Chemical Physics, extensive experi...
+🚨 [ERROR] [BaseLLMProvider.swift:197] processStructuredResponse(_:as:): ❌ Decoding error: The data couldn’t be read because it is missing.
+🔍 [DEBUG] [BaseLLMProvider.swift:205] processStructuredResponse(_:as:): 🔄 Attempting to decode extracted JSON: {""recommendedJobId"": ""4168004314"", ""reason"": ""Christopher Culbreath's background is an excellent match for the Senior Optical Engineer role at Magic Leap. His PhD in Chemical Physics, extensive experi...
+🚨 [ERROR] [BaseLLMProvider.swift:208] processStructuredResponse(_:as:): ❌ Extracted JSON decoding error: The data couldn’t be read because it is missing.
+🔍 [DEBUG] [BaseLLMProvider.swift:313] handleRevisionsContainerFormats(dataString:): 🔄 Attempting to parse RevisionsContainer from: {""recommendedJobId"": ""4168004314"", ""reason"": ""Christopher Culbreath's background is an excellent mat...
+🚨 [ERROR] [BaseLLMProvider.swift:343] handleRevisionsContainerFormats(dataString:): ❌ Failed to parse normalized RevisionsContainer: The data couldn’t be read because it is missing.
+🚨 [ERROR] [BaseLLMProvider.swift:226] processStructuredResponse(_:as:): ❌ Revisions special handling error: Failed to parse revision data in any supported format
+🔍 [DEBUG] [BaseLLMProvider.swift:375] saveMessageToDebugFile(_:fileName:): Debug message NOT saved (saveDebugPrompts disabled)
+🔍 [DEBUG] [ResumeChatProvider.swift:207] processResumeInteraction(newUserInput:isInitialQuery:resumeDataForPrompt:): ⚠️ Creating empty fallback response after all parsing attempts failed
+🔍 [DEBUG] [AiCommsView.swift:426] chatAction(hasRevisions:): API call completed successfully"
+ResumeRevisionFedback,"ReviewView, AICommsView",Works,Untestable,Works,"Works perfectly 🔍 [DEBUG] [ReviewView.swift:489] aiResubmit(): PDF rendering complete for AI resubmission
+🔍 [DEBUG] [SwiftOpenAIAdapterForGemini.swift:97] executeQuery(_:): 🌟 Gemini API request successful
+🔍 [DEBUG] [SwiftOpenAIAdapterForGemini.swift:103] executeQuery(_:): 🌟 Extracted JSON: {
+  ""revArray"" : [
+    {
+      ""id"" : ""642DD92B-3B2D-45BB-89F6-4CACDE4580FB"",
+      ""isTitleNode"" : false,
+      ""newValue"" : ""Highly experienced Senior Optical Engineer (PhD) specializing in the deve
+🔍 [DEBUG] [BaseLLMProvider.swift:188] processStructuredResponse(_:as:): 🔄 Attempting to decode structured data of length: 806
+🔍 [DEBUG] [BaseLLMProvider.swift:190] processStructuredResponse(_:as:): 📝 JSON content preview: {
+  ""revArray"" : [
+    {
+      ""id"" : ""642DD92B-3B2D-45BB-89F6-4CACDE4580FB"",
+      ""isTitleNode"" : false,
+      ""newValue"" : ""Highly experienced Senior Optical Engineer (PhD) specializing in the deve...
+🔍 [DEBUG] [AiCommsView.swift:80] body: 
+Received 1 revision nodes from AI
+🔍 [DEBUG] [AiCommsView.swift:316] validateRevs(res:revs:): Final count after validation: 1 (started with 1)
+🔍 [DEBUG] [AiCommsView.swift:117] body: After validation: 1 revision nodes (from original 1)
+🔍 [DEBUG] [AiCommsView.swift:426] chatAction(hasRevisions:): API call completed successfully
+🔍 [DEBUG] [ReviewView.swift:342] nextNode(): Added node to feedbackArray. New index: 1/1
+🔍 [DEBUG] [ReviewView.swift:361] nextNode(): Reached end of revisionArray. Applying changes...
+🔍 [DEBUG] [ReviewView.swift:365] nextNode(): 
+===== FEEDBACK NODE STATISTICS =====
+🔍 [DEBUG] [ReviewView.swift:366] nextNode(): Total feedback nodes: 1
+🔍 [DEBUG] [ReviewView.swift:377] nextNode(): Accepted: 1
+🔍 [DEBUG] [ReviewView.swift:378] nextNode(): Accepted with changes: 0
+🔍 [DEBUG] [ReviewView.swift:379] nextNode(): No change needed: 0
+🔍 [DEBUG] [ReviewView.swift:380] nextNode(): Restored to original: 0
+🔍 [DEBUG] [ReviewView.swift:381] nextNode(): Revise (with comments): 0
+🔍 [DEBUG] [ReviewView.swift:382] nextNode(): Rewrite (no comments): 0
+🔍 [DEBUG] [ReviewView.swift:383] nextNode(): Mandated change (with comments): 0
+🔍 [DEBUG] [ReviewView.swift:384] nextNode(): Mandated change (no comments): 0
+🔍 [DEBUG] [ReviewView.swift:385] nextNode(): ==================================
+
+🔍 [DEBUG] [ReviewView.swift:396] nextNode(): Found 0 nodes requiring resubmission out of 1 total
+🔍 [DEBUG] [ReviewView.swift:416] nextNode(): No nodes need resubmission. All changes are applied, dismissing sheet...
+🔍 [DEBUG] [TreeToJson.swift:36] buildJsonString(): empty include-fonts
+🔍 [DEBUG] [TreeToJson.swift:36] buildJsonString(): empty projects-and-hobbies
+🔍 [DEBUG] [BaseSwiftOpenAIAdapter.swift:49] init(config:): 🔄 Creating API client for provider: OpenAI",Can’t be tested
+Reorder Skills,TBD,TBD,TBD,TBD,TBD,TBD
+CoverRecommendation,TBD,TBD,TBD,TBD,TBD,TBD
+CreateCoverLetter,TBD,TBD,TBD,TBD,TBD,TBD
+ReviewCoverLetter,TBD,TBD,TBD,TBD,TBD,TBD
+ResumeReview,TBD,TBD,TBD,TBD,TBD,TBD
+ApplicationReview,TBD,TBD,TBD,TBD,TBD,TBD
+"Fix Skills Overflow
+",TBD,TBD,TBD,TBD,TBD,TBD

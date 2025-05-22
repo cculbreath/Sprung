@@ -16,6 +16,25 @@ class OpenAIModelFetcher {
     static func getPreferredModelString() -> String {
         // Get the preferred model directly
         let rawModelString = UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o_latest
+        
+        // Check for gpt-3.5 and other unsupported models and replace with better defaults
+        let modelLower = rawModelString.lowercased()
+        
+        // Fix deprecated or troublesome models
+        if modelLower == "gpt-3.5" || modelLower == "gpt-3.5-turbo" || 
+           modelLower.contains("claude-2.0") || modelLower == "claude-3.5-haiku" {
+            Logger.warning("⚠️ Replacing deprecated/incorrectly formatted model '\(rawModelString)' with recommended alternative")
+            
+            // Check the model type to use an appropriate replacement
+            if modelLower.contains("gpt") {
+                return "o3-mini" // Replace GPT-3.5 family with o3-mini
+            } else if modelLower.contains("claude") {
+                return "claude-3-5-haiku-latest" // Replace old Claude models with latest Haiku
+            } else {
+                return AIModels.gpt4o_latest // Default fallback
+            }
+        }
+        
         // Sanitize and return corrected model name
         return sanitizeModelName(rawModelString)
     }
@@ -65,6 +84,8 @@ class OpenAIModelFetcher {
             return AIModels.claude_3_sonnet
         case "claude3-haiku", "claude-haiku", "claudehaiku":
             return AIModels.claude_3_haiku
+        case "claude-3.5-haiku", "claude3.5-haiku", "claude-3.5-haiku-latest", "claude-3-5-haiku":
+            return AIModels.claude_3_5_haiku // "claude-3-5-haiku-latest"
         
         // Grok corruptions
         case "grok1", "grok":
@@ -79,6 +100,10 @@ class OpenAIModelFetcher {
             return AIModels.gemini_pro
         case "gemini-flash", "geminiflash":
             return AIModels.gemini_1_5_flash
+        case "gemini-2.5-flash", "gemini2.5-flash", "gemini25flash":
+            return AIModels.gemini_2_5_flash_preview
+        case "gemini-2.0-flash", "gemini2.0-flash", "gemini20flash":
+            return AIModels.gemini_2_0_flash
             
         default:
             // Return the original if no correction is needed

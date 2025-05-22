@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		57306C042DDE83690053246D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57306C032DDE83690053246D /* SwiftyJSON */; };
+		57306C062DDE83690053246D /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 57306C052DDE83690053246D /* SwiftSoup */; };
+		57306C082DDE83690053246D /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 57306C072DDE83690053246D /* OrderedCollections */; };
+		57306C0A2DDE83690053246D /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 57306C092DDE83690053246D /* ChunkedAudioPlayer */; };
+		57306C0C2DDE83690053246D /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57306C0B2DDE83690053246D /* SwiftOpenAI */; };
+		57306C0E2DDE83690053246D /* ViewInspector in Frameworks */ = {isa = PBXBuildFile; productRef = 57306C0D2DDE83690053246D /* ViewInspector */; };
+		57306C0F2DDE83770053246D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 57306AFC2DDE6B730053246D /* SwiftUI.framework */; };
+		57306C102DDE837F0053246D /* SwiftData.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 57306AFA2DDE6B630053246D /* SwiftData.framework */; };
 		574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 574223A92DD9392200EF672C /* ChunkedAudioPlayer */; };
 		57DAC2742DDA558300B511B5 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57DAC2732DDA558300B511B5 /* SwiftOpenAI */; };
 		57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1C2DBA323F000F1A48 /* SwiftyJSON */; };
@@ -14,8 +22,22 @@
 		57DC509F2DBA3B68000F1A48 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC509E2DBA3B68000F1A48 /* OrderedCollections */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		57306BDE2DDE834C0053246D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 570FEC602C855BF50074D1E0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 570FEC672C855BF50074D1E0;
+			remoteInfo = PhysCloudResume;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		570FEC682C855BF50074D1E0 /* PhysCloudResume.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhysCloudResume.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		572326752DDE2CF90039462B /* PhysCloudResume.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = PhysCloudResume.xctestplan; sourceTree = "<group>"; };
+		57306AFA2DDE6B630053246D /* SwiftData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftData.framework; path = System/Library/Frameworks/SwiftData.framework; sourceTree = SDKROOT; };
+		57306AFC2DDE6B730053246D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		57306BDA2DDE834C0053246D /* JobRecTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JobRecTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -23,7 +45,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				CoverLetters/Utilities/CoverLetterPDFGenerator.swift.new,
-				Info.plist,
 				Scripts,
 			);
 			target = 570FEC672C855BF50074D1E0 /* PhysCloudResume */;
@@ -42,6 +63,11 @@
 			path = PhysCloudResume;
 			sourceTree = "<group>";
 		};
+		5723267B2DDE2D3C0039462B /* PhysCloudResumeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PhysCloudResumeTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,13 +83,30 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		57306BD72DDE834C0053246D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				57306C042DDE83690053246D /* SwiftyJSON in Frameworks */,
+				57306C0C2DDE83690053246D /* SwiftOpenAI in Frameworks */,
+				57306C062DDE83690053246D /* SwiftSoup in Frameworks */,
+				57306C0F2DDE83770053246D /* SwiftUI.framework in Frameworks */,
+				57306C082DDE83690053246D /* OrderedCollections in Frameworks */,
+				57306C0A2DDE83690053246D /* ChunkedAudioPlayer in Frameworks */,
+				57306C102DDE837F0053246D /* SwiftData.framework in Frameworks */,
+				57306C0E2DDE83690053246D /* ViewInspector in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		570FEC5F2C855BF50074D1E0 = {
 			isa = PBXGroup;
 			children = (
+				572326752DDE2CF90039462B /* PhysCloudResume.xctestplan */,
 				570FEC6A2C855BF50074D1E0 /* PhysCloudResume */,
+				5723267B2DDE2D3C0039462B /* PhysCloudResumeTests */,
 				57DC4F252DBA356C000F1A48 /* Frameworks */,
 				570FEC692C855BF50074D1E0 /* Products */,
 			);
@@ -73,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				570FEC682C855BF50074D1E0 /* PhysCloudResume.app */,
+				57306BDA2DDE834C0053246D /* JobRecTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -80,6 +124,8 @@
 		57DC4F252DBA356C000F1A48 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				57306AFC2DDE6B730053246D /* SwiftUI.framework */,
+				57306AFA2DDE6B630053246D /* SwiftData.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -107,6 +153,36 @@
 			productReference = 570FEC682C855BF50074D1E0 /* PhysCloudResume.app */;
 			productType = "com.apple.product-type.application";
 		};
+		57306BD92DDE834C0053246D /* JobRecTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 57306BE02DDE834C0053246D /* Build configuration list for PBXNativeTarget "JobRecTests" */;
+			buildPhases = (
+				57306BD62DDE834C0053246D /* Sources */,
+				57306BD72DDE834C0053246D /* Frameworks */,
+				57306BD82DDE834C0053246D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				57306BDF2DDE834C0053246D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				570FEC6A2C855BF50074D1E0 /* PhysCloudResume */,
+				5723267B2DDE2D3C0039462B /* PhysCloudResumeTests */,
+			);
+			name = JobRecTests;
+			packageProductDependencies = (
+				57306C032DDE83690053246D /* SwiftyJSON */,
+				57306C052DDE83690053246D /* SwiftSoup */,
+				57306C072DDE83690053246D /* OrderedCollections */,
+				57306C092DDE83690053246D /* ChunkedAudioPlayer */,
+				57306C0B2DDE83690053246D /* SwiftOpenAI */,
+				57306C0D2DDE83690053246D /* ViewInspector */,
+			);
+			productName = JobRecTests;
+			productReference = 57306BDA2DDE834C0053246D /* JobRecTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -114,11 +190,15 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1600;
+				LastSwiftUpdateCheck = 1630;
 				LastUpgradeCheck = 1630;
 				TargetAttributes = {
 					570FEC672C855BF50074D1E0 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					57306BD92DDE834C0053246D = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = 570FEC672C855BF50074D1E0;
 					};
 				};
 			};
@@ -136,6 +216,7 @@
 				57DC509D2DBA3B68000F1A48 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */,
 				57DAC2722DDA558300B511B5 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
+				57306AF32DDE57980053246D /* XCRemoteSwiftPackageReference "ViewInspector" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
@@ -143,12 +224,20 @@
 			projectRoot = "";
 			targets = (
 				570FEC672C855BF50074D1E0 /* PhysCloudResume */,
+				57306BD92DDE834C0053246D /* JobRecTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		570FEC662C855BF50074D1E0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		57306BD82DDE834C0053246D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -165,7 +254,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		57306BD62DDE834C0053246D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		57306BDF2DDE834C0053246D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 570FEC672C855BF50074D1E0 /* PhysCloudResume */;
+			targetProxy = 57306BDE2DDE834C0053246D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		570FEC772C855BF80074D1E0 /* Debug */ = {
@@ -361,6 +465,42 @@
 			};
 			name = Release;
 		};
+		57306BE12DDE834C0053246D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SHTVYKLJHV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Physics-Cloud.JobRecTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PhysCloudResume.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PhysCloudResume";
+			};
+			name = Debug;
+		};
+		57306BE22DDE834C0053246D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = SHTVYKLJHV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Physics-Cloud.JobRecTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PhysCloudResume.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PhysCloudResume";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -382,9 +522,26 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		57306BE02DDE834C0053246D /* Build configuration list for PBXNativeTarget "JobRecTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57306BE12DDE834C0053246D /* Debug */,
+				57306BE22DDE834C0053246D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		57306AF32DDE57980053246D /* XCRemoteSwiftPackageReference "ViewInspector" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/nalexn/ViewInspector.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.10.1;
+			};
+		};
 		574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/cculbreath/swift-chunked-audio-player";
@@ -428,6 +585,36 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		57306C032DDE83690053246D /* SwiftyJSON */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57DC4F1B2DBA323F000F1A48 /* XCRemoteSwiftPackageReference "SwiftyJSON" */;
+			productName = SwiftyJSON;
+		};
+		57306C052DDE83690053246D /* SwiftSoup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57DC4F1E2DBA324B000F1A48 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
+		};
+		57306C072DDE83690053246D /* OrderedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57DC509D2DBA3B68000F1A48 /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = OrderedCollections;
+		};
+		57306C092DDE83690053246D /* ChunkedAudioPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */;
+			productName = ChunkedAudioPlayer;
+		};
+		57306C0B2DDE83690053246D /* SwiftOpenAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57DAC2722DDA558300B511B5 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */;
+			productName = SwiftOpenAI;
+		};
+		57306C0D2DDE83690053246D /* ViewInspector */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57306AF32DDE57980053246D /* XCRemoteSwiftPackageReference "ViewInspector" */;
+			productName = ViewInspector;
+		};
 		574223A92DD9392200EF672C /* ChunkedAudioPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */;

@@ -48,6 +48,7 @@ struct ResumeSplitView: View {
                             minWidth: 300, idealWidth: 400,
                             maxWidth: .infinity, maxHeight: .infinity
                         )
+                        .id(selRes.id) // Force view recreation when selected resume changes
                         .layoutPriority(1) // Less priority, but still resizable
                 }.inspector(isPresented: $resumeButtons.showResumeInspector) {
                     ResumeInspectorView(refresh: $refresh)

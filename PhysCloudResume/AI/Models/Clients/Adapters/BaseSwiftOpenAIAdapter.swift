@@ -100,8 +100,17 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
         // Convert messages using the centralized MessageConverter
         let swiftMessages = MessageConverter.swiftOpenAIMessagesFrom(appMessages: query.messages)
         
+        // Use the config model if specified, otherwise use the query model
+        let modelId = config.model ?? query.modelIdentifier
+        
+        // CRITICAL FIX: Validate model and provider compatibility
+        validateModelProviderCompatibility(modelId: modelId, providerType: config.providerType)
+        
         // Create model from identifier
-        let model = SwiftOpenAI.Model.from(query.modelIdentifier)
+        let model = SwiftOpenAI.Model.from(modelId)
+        
+        // Log the actual model being used for debugging
+        Logger.debug("🔄 Using model: \(modelId) for \(config.providerType) request")
         
         // Get response format using the schema builder
         let swiftResponseFormat = LLMSchemaBuilder.createResponseFormat(
@@ -117,13 +126,83 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
             temperature: query.temperature
         )
         
-        // For reasoning models (o-series models), constrain reasoning effort to medium
+        // For reasoning models, apply appropriate reasoning effort parameters
+        // Different models support different reasoning parameters
         let idLower = query.modelIdentifier.lowercased()
-        if idLower.contains("gpt-4o") || idLower.contains("gpt-4-turbo") {
+        
+        // Only apply reasoning_effort to models that support it
+        // This is a critical fix to prevent 400 errors
+        if idLower.contains("o3") {
+            // OpenAI 'o3' models support reasoning_effort
             parameters.reasoningEffort = "medium"
+        } else if idLower.contains("grok-3-mini") {
+            // Grok-3-mini supports reasoning with high effort
+            parameters.reasoningEffort = "high"
+        } else if idLower.contains("gemini") {
+            // Gemini models (especially 2.5 and newer) support reasoning
+            parameters.reasoningEffort = "medium"
+        }
+        // Do NOT apply reasoning_effort to:
+        // - o4 models (they don't support it yet)
+        // - gpt-4.1, gpt-4o models
+        // - claude models
+        
+        // Special treatment for structured outputs with newer models
+        if query.desiredResponseType != nil && (idLower.contains("gpt-4") || idLower.contains("o4") || idLower.contains("o1")) {
+            // Enhance system message to enforce JSON output format if possible
+            if let firstMessage = swiftMessages.first, 
+               let roleString = String(describing: firstMessage.role).components(separatedBy: ".").last,
+               roleString == "system" {
+                let originalContent: String
+                if case let .text(text) = firstMessage.content {
+                    originalContent = text
+                } else {
+                    originalContent = ""
+                }
+                
+                // Type name for better model guidance
+                let typeName = String(describing: query.desiredResponseType).components(separatedBy: ".").last ?? "Object"
+                
+                let enhancedContent = originalContent + "\n\nIMPORTANT: Your response MUST be valid JSON conforming to the \(typeName) schema. "
+                    + "Output ONLY the JSON object with no additional text, comments, or explanation."
+                
+                // Replace first message with enhanced content
+                var enhancedMessages = swiftMessages
+                enhancedMessages[0] = ChatCompletionParameters.Message(
+                    role: .system,
+                    content: .text(enhancedContent)
+                )
+                
+                parameters.messages = enhancedMessages
+            }
         }
         
         return parameters
+    }
+    
+    /// Validates that the model and provider are compatible
+    /// - Parameters:
+    ///   - modelId: The model identifier
+    ///   - providerType: The provider type
+    private func validateModelProviderCompatibility(modelId: String, providerType: String) {
+        let modelLower = modelId.lowercased()
+        var expectedProvider = ""
+        
+        // Check model name to determine expected provider
+        if modelLower.contains("claude") {
+            expectedProvider = AIModels.Provider.claude
+        } else if modelLower.contains("gpt") || modelLower.contains("o3") || modelLower.contains("o4") {
+            expectedProvider = AIModels.Provider.openai
+        } else if modelLower.contains("grok") {
+            expectedProvider = AIModels.Provider.grok
+        } else if modelLower.contains("gemini") {
+            expectedProvider = AIModels.Provider.gemini
+        }
+        
+        // Check for mismatches
+        if !expectedProvider.isEmpty && expectedProvider != providerType {
+            Logger.warning("⚠️ Model-provider mismatch detected: \(modelId) is being used with \(providerType) provider, but should be used with \(expectedProvider)")
+        }
     }
     
     /// Process the API error and convert to AppLLMError
