@@ -48,12 +48,15 @@ import SwiftUI
     ///   - appState: The application state
     ///   - jobApps: List of job applications
     ///   - resume: The resume to use
-    init(appState: AppState, jobApps: [JobApp], resume: Resume?) {
-        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
-        let providerType = AIModels.providerForModel(modelIdentifier)
-        self.appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
+    ///   - specificModel: Optional specific model to use (overrides UserDefaults)
+    init(appState: AppState, jobApps: [JobApp], resume: Resume?, specificModel: String? = nil) {
+        let modelIdentifier = specificModel ?? OpenAIModelFetcher.getPreferredModelString()
+        self.appLLMClient = AppLLMClientFactory.createClientForModel(model: modelIdentifier, appState: appState)
         self.jobApps = jobApps
         self.resume = resume
+        
+        // Log which model we're using
+        Logger.debug("🚀 JobRecommendationProvider initialized with model: \(modelIdentifier)")
     }
 
     /// Direct initializer with LLM client
@@ -113,8 +116,14 @@ import SwiftUI
             AppLLMMessage(role: .user, text: prompt)
         ]
 
-        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        // No need to read from UserDefaults again - we'll use the same model that was
+        // used to initialize the adapter to prevent model mismatch
+        let modelIdentifier = (appLLMClient as? BaseSwiftOpenAIAdapter)?.config.model ?? OpenAIModelFetcher.getPreferredModelString()
         Logger.info("Using model: \(modelIdentifier) for job recommendation")
+
+        // Log detailed model information for debugging
+        Logger.info("🎯 Executing job recommendation with model: \(modelIdentifier)")
+        Logger.info("🔍 Provider type: \(AIModels.providerForModel(modelIdentifier))")
 
         let query = AppLLMQuery(
             messages: messages,
@@ -122,28 +131,112 @@ import SwiftUI
             responseType: JobRecommendation.self
         )
 
-        let response = try await appLLMClient.executeQuery(query)
-        let decoder = JSONDecoder()
-        switch response {
-        case .structured(let data):
-            let recommendation = try decoder.decode(JobRecommendation.self, from: data)
-            guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
-                throw NSError(domain: "JobRecommendationProvider", code: 5,
-                             userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format in response: \(recommendation.recommendedJobId)"])
-            }
-            return (uuid, recommendation.reason)
-        case .text(let text):
-            if let data = text.data(using: .utf8) {
-                let recommendation = try decoder.decode(JobRecommendation.self, from: data)
-                guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
-                    throw NSError(domain: "JobRecommendationProvider", code: 5,
-                                 userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format in response: \(recommendation.recommendedJobId)"])
+        // Attempt to get the structured response
+        do {
+            let response = try await appLLMClient.executeQuery(query)
+            let decoder = JSONDecoder()
+            
+            switch response {
+            case .structured(let data):
+                // Try to decode the structured data
+                do {
+                    let recommendation = try decoder.decode(JobRecommendation.self, from: data)
+                    if !recommendation.validate() {
+                        throw NSError(domain: "JobRecommendationProvider", code: 6,
+                                     userInfo: [NSLocalizedDescriptionKey: "Invalid recommendation format: failed validation"])
+                    }
+                    
+                    guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
+                        throw NSError(domain: "JobRecommendationProvider", code: 5,
+                                     userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format in response: \(recommendation.recommendedJobId)"])
+                    }
+                    return (uuid, recommendation.reason)
+                } catch {
+                    // Log the raw data for debugging
+                    let rawString = String(data: data, encoding: .utf8) ?? "Unable to convert to string"
+                    Logger.error("Failed to decode structured data: \(error.localizedDescription)")
+                    Logger.error("Raw data: \(rawString)")
+                    
+                    // Attempt to extract JSON from possibly malformed response
+                    if let extractedJson = extractJSONFromString(rawString),
+                       let extractedData = extractedJson.data(using: .utf8),
+                       let recommendation = try? decoder.decode(JobRecommendation.self, from: extractedData),
+                       recommendation.validate(),
+                       let uuid = UUID(uuidString: recommendation.recommendedJobId) {
+                        
+                        Logger.info("Successfully extracted valid JSON from malformed response")
+                        return (uuid, recommendation.reason)
+                    }
+                    
+                    // If all recovery attempts fail, rethrow the error
+                    throw error
                 }
-                return (uuid, recommendation.reason)
-            } else {
-                throw AppLLMError.unexpectedResponseFormat
+                
+            case .text(let text):
+                // Try to decode text as JSON
+                Logger.info("Received text response, attempting to parse as JSON")
+                
+                if let data = text.data(using: .utf8) {
+                    do {
+                        let recommendation = try decoder.decode(JobRecommendation.self, from: data)
+                        if !recommendation.validate() {
+                            throw NSError(domain: "JobRecommendationProvider", code: 6,
+                                         userInfo: [NSLocalizedDescriptionKey: "Invalid recommendation format: failed validation"])
+                        }
+                        
+                        guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
+                            throw NSError(domain: "JobRecommendationProvider", code: 5,
+                                         userInfo: [NSLocalizedDescriptionKey: "Invalid UUID format in response: \(recommendation.recommendedJobId)"])
+                        }
+                        return (uuid, recommendation.reason)
+                    } catch {
+                        // Try to extract JSON from possibly malformed text response
+                        if let extractedJson = extractJSONFromString(text),
+                           let extractedData = extractedJson.data(using: .utf8),
+                           let recommendation = try? decoder.decode(JobRecommendation.self, from: extractedData),
+                           recommendation.validate(),
+                           let uuid = UUID(uuidString: recommendation.recommendedJobId) {
+                            
+                            Logger.info("Successfully extracted valid JSON from text response")
+                            return (uuid, recommendation.reason)
+                        }
+                        
+                        // If all recovery attempts fail, throw a descriptive error
+                        throw NSError(domain: "JobRecommendationProvider", code: 7,
+                                     userInfo: [NSLocalizedDescriptionKey: "Failed to parse text response as JSON: \(error.localizedDescription)"])
+                    }
+                } else {
+                    throw AppLLMError.unexpectedResponseFormat
+                }
             }
+        } catch {
+            Logger.error("Job recommendation error: \(error.localizedDescription)")
+            throw error
         }
+    }
+    
+    /// Extracts a JSON object from a potentially malformed string
+    /// - Parameter text: The text that may contain JSON
+    /// - Returns: A valid JSON string or nil if extraction fails
+    private func extractJSONFromString(_ text: String) -> String? {
+        // Find the first { and the last } to extract the JSON object
+        guard let startIndex = text.firstIndex(of: "{"),
+              let endIndex = text.lastIndex(of: "}"),
+              startIndex < endIndex else {
+            return nil
+        }
+        
+        // Extract the JSON substring
+        let jsonSubstring = text[startIndex...endIndex]
+        let jsonString = String(jsonSubstring)
+        
+        // Validate that it's valid JSON
+        guard let data = jsonString.data(using: .utf8),
+              let _ = try? JSONSerialization.jsonObject(with: data) else {
+            return nil
+        }
+        
+        return jsonString
     }
 
     private func buildPrompt(newJobApps: [JobApp], resume: Resume) -> String {
@@ -179,18 +272,20 @@ import SwiftUI
         JOB LISTINGS (JSON FORMAT):
         \(jsonString)
 
-        RESPONSE INSTRUCTIONS:
-        You must return a valid JSON object with exactly these two fields:
-        1. "recommendedJobId": The exact UUID string from the 'id' field of the best matching job
-        2. "reason": A brief explanation of why this job is the best match
+        RESPONSE REQUIREMENTS:
+        - You MUST respond with a valid JSON object containing exactly these fields:
+          "recommendedJobId": The exact UUID string from the 'id' field of the best matching job
+          "reason": A brief explanation of why this job is the best match
+
+        - The recommendedJobId MUST be copied exactly from the job listing, character-for-character
+        - Do not include any text, comments, or explanations outside the JSON object
+        - Your entire response must be a valid JSON structure
 
         Example response format:
         {
           "recommendedJobId": "00000000-0000-0000-0000-000000000000",
           "reason": "This job aligns with the candidate's experience in..."
         }
-
-        IMPORTANT: The recommendedJobId MUST be copied exactly, character-for-character from the 'id' field of the job listing you select.
         """
 
         return prompt
@@ -200,5 +295,10 @@ import SwiftUI
     struct JobRecommendation: Codable, StructuredOutput {
         let recommendedJobId: String
         let reason: String
+        
+        // Validate that the recommendedJobId is a valid UUID
+        func validate() -> Bool {
+            return UUID(uuidString: recommendedJobId) != nil
+        }
     }
 }

@@ -26,6 +26,7 @@ struct AIModels {
     static let claude_3_sonnet = "claude-3-sonnet-20240229"
     static let claude_3_haiku = "claude-3-haiku-20240307"
     static let claude_3_5_sonnet = "claude-3-5-sonnet-20240620"
+    static let claude_3_5_haiku = "claude-3-5-haiku-latest"
     
     // xAI Grok models
     static let grok_1 = "grok-1"
@@ -33,6 +34,8 @@ struct AIModels {
     static let grok_1_5 = "grok-1.5"
     
     // Google Gemini models
+    static let gemini_2_5_flash_preview = "gemini-2.5-flash-preview-05-20"
+    static let gemini_2_0_flash = "gemini-2.0-flash"
     static let gemini_pro = "gemini-pro"
     static let gemini_1_5_pro = "gemini-1.5-pro"
     static let gemini_1_5_flash = "gemini-1.5-flash"
@@ -48,7 +51,9 @@ struct AIModels {
     // Check which provider a model belongs to
     static func providerForModel(_ model: String) -> String {
         let modelLower = model.lowercased()
-        if modelLower.contains("gpt") || modelLower.contains("dalle") {
+        
+        // More precise model family detection
+        if modelLower.contains("gpt") || modelLower.contains("dalle") || modelLower.starts(with: "o3") || modelLower.starts(with: "o4") {
             return Provider.openai
         } else if modelLower.contains("claude") {
             return Provider.claude
@@ -57,7 +62,17 @@ struct AIModels {
         } else if modelLower.contains("gemini") {
             return Provider.gemini
         }
+        
+        // Log a warning for unrecognized models
+        Logger.warning("⚠️ Using default provider (OpenAI) for unrecognized model: \(model)")
         return Provider.openai // Default to OpenAI for unknown models
+    }
+    
+    /// Get the provider for a given model name
+    /// - Parameter modelName: The model name
+    /// - Returns: The provider identifier
+    static func providerFor(modelName: String) -> String {
+        return providerForModel(modelName)
     }
     
     /// Returns a friendly, human-readable name for a model
@@ -116,7 +131,11 @@ struct AIModels {
         }
         else if modelName.lowercased().contains("gemini") {
             // Handle Gemini models
-            if components.count >= 2 {
+            if modelName.contains("2.5") && modelName.contains("flash") {
+                return "Gemini 2.5 Flash"
+            } else if modelName.contains("2.0") && modelName.contains("flash") {
+                return "Gemini 2.0 Flash"
+            } else if components.count >= 2 {
                 if components.contains("pro") {
                     return "Gemini Pro"
                 }
@@ -130,5 +149,67 @@ struct AIModels {
         
         // Default fallback: Use the first part of the model name, capitalized
         return modelName.split(separator: "-").first?.capitalized
+    }
+    }
+
+/// Enum for AI provider types
+// Model Discovery and Validation Extension
+extension AIModels {
+    // Static methods to discover available models for each provider
+    static func discoverOpenAIModels() -> [String] {
+        return [
+            gpt4o,
+            o4_mini,
+            gpt4o_mini,
+            gpt4_5,
+            gpt4o_latest
+        ]
+    }
+    
+    static func discoverClaudeModels() -> [String] {
+        return [
+            claude_3_opus,
+            claude_3_sonnet,
+            claude_3_haiku,
+            claude_3_5_sonnet,
+            claude_3_5_haiku
+        ]
+    }
+    
+    static func discoverGrokModels() -> [String] {
+        return [
+            grok_1,
+            grok_1_5,
+            grok_1_5_mini
+        ]
+    }
+    
+    static func discoverGeminiModels() -> [String] {
+        return [
+            gemini_2_5_flash_preview,
+            gemini_2_0_flash,
+            gemini_pro,
+            gemini_1_5_pro,
+            gemini_1_5_flash
+        ]
+    }
+    
+    // Validate if a model is available
+    static func isModelAvailable(_ modelName: String, appState: AppState) -> Bool {
+        let provider = providerForModel(modelName)
+        // This checks if we have an API key for the provider
+        return true // Change this to actual key check
+    }
+    
+    // Convenience method to get available models
+    static func getAvailableModels(appState: AppState) -> [String] {
+        let allModels = discoverOpenAIModels() + 
+                        discoverClaudeModels() + 
+                        discoverGrokModels() + 
+                        discoverGeminiModels()
+        
+        return allModels.filter { modelName in
+            isModelAvailable(modelName, appState: appState)
+        }
     }
 }

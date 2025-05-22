@@ -622,7 +622,7 @@ class ModelService: ObservableObject, @unchecked Sendable {
                 // If we couldn't find any Gemini models, return defaults
                 if modelIds.isEmpty {
                     Logger.debug("⚠️ No Gemini models found in response, using defaults")
-                    return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"]
+                    return ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
                 }
                 
                 return modelIds
@@ -634,7 +634,7 @@ class ModelService: ObservableObject, @unchecked Sendable {
                 Logger.debug("🔍 Gemini API response: \(errorText.prefix(200))...")
                 
                 // If Gemini parsing fails, return default models
-                return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"]
+                return ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
             }
         }
         

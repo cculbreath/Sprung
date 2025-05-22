@@ -9,6 +9,7 @@ import Foundation
 
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appState) private var appState
 
     @Binding var selectedResume: Resume?
     // Use the existing reviewService, it now has the new methods
@@ -572,6 +573,7 @@ struct ResumeReviewSheet: View {
         let reorderResult: Result<ReorderSkillsResponseContainer, Error> = await withCheckedContinuation { continuation in
             reviewService.sendReorderSkillsRequest(
                 resume: resume,
+                appState: appState,
                 onComplete: { result in
                     continuation.resume(returning: result)
                 }

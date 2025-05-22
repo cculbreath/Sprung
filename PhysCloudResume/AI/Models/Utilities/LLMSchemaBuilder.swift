@@ -25,6 +25,27 @@ class LLMSchemaBuilder {
             return createBestCoverLetterResponseSchema()
         }
         
+        // Add support for ReorderSkillsResponse type
+        if type == ReorderSkillsResponse.self {
+            return createReorderSkillsResponseSchema()
+        }
+        
+        // Add support for FixFitsResponseContainer type
+        if type == FixFitsResponseContainer.self {
+            return createFixFitsResponseContainerSchema()
+        }
+        
+        // Add support for ContentsFitResponse type
+        if type == ContentsFitResponse.self {
+            return createContentsFitResponseSchema()
+        }
+        
+        // Add support for JobRecommendation type
+        if let typeName = String(describing: type).components(separatedBy: ".").last,
+           typeName == "JobRecommendation" {
+            return createJobRecommendationSchema()
+        }
+        
         // Fallback - empty schema
         return SwiftOpenAI.JSONSchema(type: .object)
     }
@@ -37,22 +58,46 @@ class LLMSchemaBuilder {
             properties: [
                 "revArray": SwiftOpenAI.JSONSchema(
                     type: .array,
+                    description: "Array of revision nodes for the resume",
                     items: SwiftOpenAI.JSONSchema(
                         type: .object,
                         properties: [
-                            "id": SwiftOpenAI.JSONSchema(type: .string),
-                            "oldValue": SwiftOpenAI.JSONSchema(type: .string),
-                            "newValue": SwiftOpenAI.JSONSchema(type: .string),
-                            "valueChanged": SwiftOpenAI.JSONSchema(type: .boolean),
-                            "why": SwiftOpenAI.JSONSchema(type: .string),
-                            "isTitleNode": SwiftOpenAI.JSONSchema(type: .boolean),
-                            "treePath": SwiftOpenAI.JSONSchema(type: .string)
+                            "id": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "A unique string identifier for the revision"
+                            ),
+                            "oldValue": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The original text content from the resume"
+                            ),
+                            "newValue": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The suggested replacement text content"
+                            ),
+                            "valueChanged": SwiftOpenAI.JSONSchema(
+                                type: .boolean,
+                                description: "Whether the value has been changed (true if oldValue != newValue)"
+                            ),
+                            "why": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "Explanation for why this change was suggested"
+                            ),
+                            "isTitleNode": SwiftOpenAI.JSONSchema(
+                                type: .boolean,
+                                description: "Whether this node represents a section title"
+                            ),
+                            "treePath": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "Path to the node in the document tree structure"
+                            )
                         ],
-                        required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"]
+                        required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"],
+                        additionalProperties: false
                     )
                 )
             ],
-            required: ["revArray"]
+            required: ["revArray"],
+            additionalProperties: false
         )
     }
     
@@ -76,6 +121,124 @@ class LLMSchemaBuilder {
                 )
             ],
             required: ["strengthAndVoiceAnalysis", "bestLetterUuid", "verdict"]
+        )
+    }
+    
+    /// Creates a JSONSchema for JobRecommendation type
+    /// - Returns: A JSONSchema for JobRecommendation
+    private static func createJobRecommendationSchema() -> SwiftOpenAI.JSONSchema {
+        return SwiftOpenAI.JSONSchema(
+            type: .object,
+            properties: [
+                "recommendedJobId": SwiftOpenAI.JSONSchema(
+                    type: .string,
+                    description: "The exact UUID string from the job listing to recommend"
+                ),
+                "reason": SwiftOpenAI.JSONSchema(
+                    type: .string,
+                    description: "A brief explanation of why this job is the best match"
+                )
+            ],
+            required: ["recommendedJobId", "reason"],
+            additionalProperties: false
+        )
+    }
+    
+    /// Creates a JSONSchema for ReorderSkillsResponse type
+    /// - Returns: A JSONSchema for ReorderSkillsResponse
+    private static func createReorderSkillsResponseSchema() -> SwiftOpenAI.JSONSchema {
+        return SwiftOpenAI.JSONSchema(
+            type: .object,
+            properties: [
+                "reordered_skills_and_expertise": SwiftOpenAI.JSONSchema(
+                    type: .array,
+                    description: "Array of reordered skill items with their new positions and reasons",
+                    items: SwiftOpenAI.JSONSchema(
+                        type: .object,
+                        properties: [
+                            "id": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The exact UUID string from the input skill"
+                            ),
+                            "originalValue": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The original skill name from the input"
+                            ),
+                            "newPosition": SwiftOpenAI.JSONSchema(
+                                type: .integer,
+                                description: "The recommended new position (0-based index)"
+                            ),
+                            "reasonForReordering": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "Brief explanation of why this position is appropriate"
+                            )
+                        ],
+                        required: ["id", "originalValue", "newPosition", "reasonForReordering"],
+                        additionalProperties: false
+                    )
+                )
+            ],
+            required: ["reordered_skills_and_expertise"],
+            additionalProperties: false
+        )
+    }
+    
+    /// Creates a JSONSchema for FixFitsResponseContainer type
+    /// - Returns: A JSONSchema for FixFitsResponseContainer
+    private static func createFixFitsResponseContainerSchema() -> SwiftOpenAI.JSONSchema {
+        return SwiftOpenAI.JSONSchema(
+            type: .object,
+            properties: [
+                "revised_skills_and_expertise": SwiftOpenAI.JSONSchema(
+                    type: .array,
+                    description: "An array of objects, each representing a skill or expertise item with its original ID and revised content.",
+                    items: SwiftOpenAI.JSONSchema(
+                        type: .object,
+                        properties: [
+                            "id": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The original ID of the TreeNode for the skill."
+                            ),
+                            "newValue": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The revised content for the skill/expertise item. If no change, this should be the same as originalValue."
+                            ),
+                            "originalValue": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The original content of the skill/expertise item (echoed back)."
+                            ),
+                            "treePath": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The original treePath of the skill TreeNode (echoed back)."
+                            ),
+                            "isTitleNode": SwiftOpenAI.JSONSchema(
+                                type: .boolean,
+                                description: "Indicates if this skill entry is a title/heading (echoed back)."
+                            )
+                        ],
+                        required: ["id", "newValue", "originalValue", "treePath", "isTitleNode"],
+                        additionalProperties: false
+                    )
+                )
+            ],
+            required: ["revised_skills_and_expertise"],
+            additionalProperties: false
+        )
+    }
+    
+    /// Creates a JSONSchema for ContentsFitResponse type
+    /// - Returns: A JSONSchema for ContentsFitResponse
+    private static func createContentsFitResponseSchema() -> SwiftOpenAI.JSONSchema {
+        return SwiftOpenAI.JSONSchema(
+            type: .object,
+            properties: [
+                "contentsFit": SwiftOpenAI.JSONSchema(
+                    type: .boolean,
+                    description: "True if the content fits within its designated box without overflowing or overlapping other elements, false otherwise."
+                )
+            ],
+            required: ["contentsFit"],
+            additionalProperties: false
         )
     }
     
@@ -194,7 +357,7 @@ class LLMSchemaBuilder {
     
     // MARK: - Schema creation for SwiftOpenAI
     
-    /// Creates a SwiftOpenAI.ResponseFormat for structured JSON output
+    /// Creates a ResponseFormat for SwiftOpenAI
     /// - Parameters:
     ///   - responseType: The type to use for structured output
     ///   - jsonSchema: Optional JSON schema string to use
@@ -204,11 +367,16 @@ class LLMSchemaBuilder {
             return nil
         }
         
+        // Get type name for logging
+        let typeName = String(describing: responseType)
+        Logger.debug("Creating response format for type: \(typeName)")
+        
         // If a specific JSON schema was provided, parse and use it
         if let jsonSchema = jsonSchema, let schema = parseJSONSchemaString(jsonSchema) {
+            Logger.debug("Using provided JSON schema for \(typeName)")
             return .jsonSchema(
                 SwiftOpenAI.JSONSchemaResponseFormat(
-                    name: String(describing: responseType),
+                    name: typeName,
                     strict: true,
                     schema: schema
                 )
@@ -218,9 +386,10 @@ class LLMSchemaBuilder {
         else if createSchema(for: responseType).type != nil {
             // Get schema for the response type
             let schema = createSchema(for: responseType)
+            Logger.debug("Using built-in schema for \(typeName)")
             return .jsonSchema(
                 SwiftOpenAI.JSONSchemaResponseFormat(
-                    name: String(describing: responseType),
+                    name: typeName,
                     strict: true,
                     schema: schema
                 )
@@ -228,6 +397,7 @@ class LLMSchemaBuilder {
         }
         // Otherwise use the simpler JSON object format
         else {
+            Logger.debug("Using generic JSON object format for \(typeName)")
             return .jsonObject
         }
     }

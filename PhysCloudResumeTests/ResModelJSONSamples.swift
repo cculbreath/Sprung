@@ -1,0 +1,315 @@
+import Foundation
+
+/// Provides sample JSON data for testing ResModels
+struct ResModelJSONSamples {
+    /// Returns a sample resume JSON for testing
+    static let standardResume: String = """
+{
+    "includeFonts": "true",
+    "meta": {
+        "format": "FRESH@0.6.0",
+        "version": "0.1.0"
+    },
+    "font-sizes": {
+        "name": "44pt",
+        "job-titles": "16pt",
+        "objective": "11pt",
+        "box-titles": "22pt",
+        "skill-names": "13pt",
+        "skill-descriptions": "10pt",
+        "degree-names": "13pt",
+        "graduation-date": "13pt",
+        "schools": "10pt",
+        "section-title": "15pt",
+        "employment-dates": "11pt",
+        "employer-name": "13pt",
+        "employment-highlights": "9pt",
+        "projects": "9.5pt",
+        "website-box": "11pt"
+    },
+    "section-labels": {
+        "languages": "Languages and Frameworks",
+        "hobbies": "Projects",
+        "skills-and-expertise": "Skills and Expertise",
+        "publications": "Publications",
+        "more-info": "More Info",
+        "summary": "Objective",
+        "education": "Education",
+        "employment": "Work Experience",
+        "projects-highlights": "Projects",
+        "job-titles": "Job Titles",
+        "section-labels": "Section Labels"
+    },
+    "keys-in-editor": [
+        "projects-hightlights",
+        "employment",
+        "education",
+        "more",
+        "skills-and-expertise",
+        "summary",
+        "section-labels",
+        "job-titles",
+        "more-info",
+        "contact"
+    ],
+    "contact": {
+        "phone": "(805) 234-0847",
+        "name": "Christopher Culbreath",
+        "location": {
+            "country": "US",
+            "address": "7317 Shadywood Drive",
+            "code": "78745",
+            "state": "Texas",
+            "city": "Austin"
+        },
+        "email": "cc@physicscloud.net",
+        "website": "culbreath.net"
+    },
+    "job-titles": [
+        "Physicist",
+        "Educator",
+        "Programmer",
+        "Machinist"
+    ],
+    "summary": " Experienced Engineer with a PhD in Chemical Physics, offering a unique combination of expertise in materials science, electrical engineering, and electromechanical systems. Proficient in integrating electronics with mechanical systems, fostering innovation and tackling complex engineering challenges through first-principles thinking. Seeking to collaborate with talented colleagues on projects that advance robotics technology and exceed expectations.",
+    "employment": {
+        "Elastium Technologies": {
+            "start": "2017-03",
+            "end": "2020-08",
+            "position": "Automation & Materials Engineer",
+            "location": "Emeryville, CA",
+            "highlights": [
+                "Developed specialized manufacturing equipment and methods to produce previously unattainable high-performance shape memory alloys.",
+                "Designed and implemented a flexible automation framework that enabled rapid iteration and continuous process improvement.",
+                "Performed materials characterization experiments to assess process refinements and optimize alloy properties.",
+                "Led the project while contributing to furnace architecture, component fabrication, software development, systems integration, and troubleshooting."
+            ]
+        },
+        "NRD LLC": {
+            "position": "Materials Scientist",
+            "end": "2021-12",
+            "start": "2019-04",
+            "highlights": [
+                "Developed automation control systems for single-crystal shape-memory alloy furnace, integrating sensors and real-time feedback",
+                "Conducted system-level testing and evaluation to validate prototype functionality, performance, and regulatory feasibility.",
+                "Secured executive buy-in for a strategic partnership between Elastium Technologies and NRD to advance single-crystal shape memory alloy furnace development.",
+                "Contributed to scaling and refining auto-injector prototypes for manufacturability, optimizing design and production processes for commercial viability."
+            ],
+            "location": "San Luis Obispo, CA"
+        },
+        "Cal Poly": {
+            "position": "Senior Lecturer",
+            "start": "2016-09",
+            "highlights": [
+                "Taught physics to undergraduate engineers and scientists, specializing in optics, thermodynamics, and electromagnetism.",
+                "Integrated real-world applications and dynamic commentary into lectures on mechanics, waves, optics, thermodynamics, electricity and magnetism to enhance knowledge retention and student success.",
+                "Led research initiatives on novel shape-memory materials while teaching and mentoring student researchers.",
+                "Designed, developed, and maintained Physics Cloud, a bespoke web platform for assignment distribution, collection, and grading."
+            ],
+            "url": "https://calpoly.edu/",
+            "location": "San Luis Obispo, CA",
+            "end": "2024-06"
+        }
+    },
+    "skills-and-expertise": [
+        {
+            "title": "Prototyping & Fabrication",
+            "description": "CNC machining, 3D printing, CAD (SolidWorks, Fusion 360, OnShape), CAM programming"
+        },
+        {
+            "title": "Automation & Control",
+            "description": "Embedded C++, Python, LabVIEW, Arduino, ESP32, motion control, real-time systems"
+        },
+        {
+            "title": "Data Acquisition & Analysis",
+            "description": "MATLAB, Mathematica, Python, LabVIEW, signal processing, time-series analysis"
+        },
+        {
+            "title": "Scientific Computing",
+            "description": "Numerical modeling, Monte Carlo simulations, FEA, data visualization, computational physics"
+        },
+        {
+            "title": "Instrumentation & Sensors",
+            "description": "DAQ hardware, control systems, real-time monitoring, calibration, uncertainty quantification"
+        },
+        {
+            "title": "Software & Programming",
+            "description": "SwiftUI (macOS apps), PHP (LAMP stack), SQL databases, API development"
+        },
+        {
+            "title": "Physics & Communication",
+            "description": "Materials science, experimental instrumentation, optics, hands-on teaching, technical communication"
+        }
+    ],
+    "languages": [
+        "PHP",
+        "JavaScript",
+        "HTML5",
+        "CSS",
+        "SQL",
+        "Yii Framework",
+        "LAMP",
+        "Python",
+        "C++",
+        "MATLAB",
+        "LabVIEW",
+        "SwiftUI",
+        "Arduino",
+        "Raspberry Pi",
+        "Mathematica",
+        "LaTeX",
+        "Bootstrap"
+    ],
+    "projects-highlights": [
+        {
+            "name": "Drumline Robot",
+            "description": "Designing an ODrive-powered robotic percussion system with brushless motors and real-time control (in progress)."
+        },
+        {
+            "name": "Physics Cloud",
+            "description": "Developed a web-based Learning Management System for physics courses with a data-forward design."
+        },
+        {
+            "name": "Chore Cloud",
+            "description": "Created a mobile-friendly chore and allowance management app with an intuitive user interface."
+        },
+        {
+            "name": "Physics Cloud Résumé",
+            "description": "A macOS app (SwiftUI) for job tracking, featuring AI-assisted per-application customization."
+        }
+    ],
+    "education": {
+        "Liquid Crystal Institute, Kent State": {
+            "end": "2015",
+            "title": "PhD Chemical Physics",
+            "url": "https://lci.kent.edu/"
+        },
+        "Cal Poly San Luis Obispo": {
+            "end": "2008",
+            "title": "BS Physics",
+            "url": "https://calpoly.edu"
+        }
+    },
+    "publications": [
+        {
+            "month": "Mar",
+            "title": "Frank-Read Mechanism in Nematic Liquid Crystals",
+            "type": "article",
+            "publisher": "American Physical Society",
+            "doi": "10.1103/PhysRevX.14.011044",
+            "issue": "1",
+            "pages": "011044",
+            "journal": "Phys. Rev. X",
+            "year": "2024",
+            "url": "https://link.aps.org/doi/10.1103/PhysRevX.14.011044",
+            "volume": "14",
+            "authors": [
+                "Cheng Long",
+                "Matthew J. Deutsch",
+                "Joseph Angelo",
+                "Christopher Culbreath",
+                "Hiroshi Yokoyama",
+                "Jonathan V. Selinger",
+                "Robin L. B. Selinger"
+            ]
+        },
+        {
+            "year": "2017",
+            "journal": "Molecular Crystals and Liquid Crystals",
+            "issue": "1",
+            "volume": "646",
+            "publisher": "Taylor & Francis",
+            "doi": "10.1080/15421406.2017.1287486",
+            "pages": "214-219",
+            "authors": [
+                "Joseph Angelo",
+                "Christopher Culbreath",
+                "Hiroshi Yokoyama"
+            ],
+            "url": "https://doi.org/10.1080/15421406.2017.1287486",
+            "eprint": "https://doi.org/10.1080/15421406.2017.1287486",
+            "title": "Breaking planar liquid crystal anchoring to form controllable twist disclination loops",
+            "type": "article"
+        },
+        {
+            "title": "Switchable liquid-crystal phase-shift mask for super-resolution photolithography based on Pancharatnam-Berry phase",
+            "volume": "8",
+            "journal": "Applied Physics Express",
+            "issue": "11",
+            "year": "2015",
+            "url": "https://ui.adsabs.harvard.edu/abs/2015APExp…8k6501G",
+            "type": "article",
+            "adsnote": "Provided by the SAO/NASA Astrophysics Data System",
+            "month": "Nov",
+            "pages": "116501",
+            "doi": "10.7567/APEX.8.116501",
+            "authors": [
+                "Nikolaus Glazar",
+                "Christopher Culbreath",
+                "Yannian Li",
+                "Hiroshi Yokoyama"
+            ]
+        },
+        {
+            "type": "dissertation",
+            "title": "Artificial Microscopic Structures in Nematic Liquid Crystals Created by Patterned Photoalignment and Controlled Confinement: Instrumentation, Fabrication, and Characterization",
+            "journal": "Kent State University",
+            "authors": [
+                "Christopher Culbreath"
+            ],
+            "year": "2015"
+        },
+        {
+            "pages": "126107",
+            "year": "2011",
+            "abstract": "We present a fully automated maskless exposure system for the fabrication of microscopic orientational surface alignment patterns. The maskless system allows us to fabricate arbitrary surface patterns over a 2 mm × 2 mm area with a resolution of 2.2 μm. A confocal autofocus system ensures accurate and repeatable focus. Microscopic orientational surface patterns have been demonstrated to exhibit a variety of novel functionalities, such as surface alignment multi-stability.",
+            "authors": [
+                "Christopher Culbreath",
+                "Nikolaus Glazar",
+                "Hiroshi Yokoyama"
+            ],
+            "journal": "Review of Scientific Instruments",
+            "month": "Dec",
+            "type": "article",
+            "doi": "10.1063/1.3669528",
+            "eprint": "https://pubs.aip.org/aip/rsi/article-pdf/doi/10.1063/1.3669528/8827560/126107_1_online.pdf",
+            "title": "Automated maskless micro-multidomain photoalignment",
+            "issue": "12",
+            "volume": "82",
+            "issn": "0034-6748",
+            "url": "https://doi.org/10.1063/1.3669528"
+        }
+    ],
+    "more-info": "For Project photos, Research Papers, and more, <a href=\\"https://culbreath.net\\" style=\\"font-weight: bold; color: black; text-decoration: none;\\">visit culbreath.net↪︎</a>"
+}
+"""
+
+    /// Returns a minimal resume JSON for lightweight testing
+    static let minimalResume: String = """
+{
+  "contact": {
+    "name": "Test User",
+    "email": "test@example.com",
+    "phone": "(123) 456-7890"
+  },
+  "summary": "Test summary for resume creation.",
+  "education": {
+    "University": {
+      "title": "Test Degree",
+      "end": "2020"
+    }
+  },
+  "employment": {
+    "Test Company": {
+      "position": "Test Position",
+      "start": "2020-01",
+      "end": "2023-01",
+      "highlights": [
+        "Accomplishment 1",
+        "Accomplishment 2"
+      ]
+    }
+  }
+}
+"""
+}

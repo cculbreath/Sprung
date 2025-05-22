@@ -1,0 +1,104 @@
+
+🚀 Starting job recommendation compatibility tests...
+📝 Testing 6 models with available API keys:
+  - gpt-4.1 (OpenAI)
+  - o3 (OpenAI)
+  - o4-mini (OpenAI)
+  - grok-3-mini-fast (Grok)
+  - gemini-2.0-flash (Gemini)
+  - claude-3-5-haiku-20241022 (Claude)
+🔄 Starting test for model: gpt-4.1
+🔄 Starting test for model: o3
+🔄 Starting test for model: o4-mini
+🔄 Starting test for model: grok-3-mini-fast
+🔄 Starting test for model: gemini-2.0-flash
+🔄 Starting test for model: claude-3-5-haiku-20241022
+❌ Model o4-mini failed with error: API error (status code 400): status code 400 Unrecognized request argument supplied: reasoning_effort
+✅ Model gpt-4.1 successfully recommended: Magic Leap - Senior Optical Engineer
+⏱️ Response time: 3.54 seconds
+💬 Reason (first 100 chars): Christopher Culbreath's background as a Senior Optical Engineer at Waymo and his PhD in Chemical Physics m...
+✅ Model o3 successfully recommended: Lawrence Livermore National Laboratory - Lead Optical Physicist
+⏱️ Response time: 2.19 seconds
+💬 Reason (first 100 chars): Christopher Culbreath's background is an excellent match for the Lead Optical Physicist position at Lawren...
+✅ Model grok-3-mini-fast successfully recommended: Magic Leap - Senior Optical Engineer
+⏱️ Response time: 1.87 seconds
+💬 Reason (first 100 chars): The Senior Optical Engineer position at Magic Leap is the best match for Christopher Culbreath based on hi...
+✅ Model gemini-2.0-flash successfully recommended: Magic Leap - Senior Optical Engineer
+⏱️ Response time: 0.93 seconds
+💬 Reason (first 100 chars): The Senior Optical Engineer position at Magic Leap is the best match for Christopher Culbreath's qualifica...
+✅ Model claude-3-5-haiku-20241022 successfully recommended: Magic Leap - Senior Optical Engineer
+⏱️ Response time: 1.71 seconds
+💬 Reason (first 100 chars): Christopher Culbreath's background is an excellent match for the Senior Optical Engineer position at Magic...
+
+📊 LLM COMPATIBILITY TEST REPORT 📊
+==================================
+Model Name                  | Status | Duration (s) | Expected Behavior | Job Recommended
+-----------------------------|--------|--------------|-------------------|----------------
+claude-3-5-haiku-20241022   | ✅ PASS | 1.71        | ✓ Match         | Magic Leap - Senior Optical Engineer
+gemini-2.0-flash            | ✅ PASS | 0.93        | ✓ Match         | Magic Leap - Senior Optical Engineer
+gpt-4.1                     | ✅ PASS | 3.54        | ✓ Match         | Magic Leap - Senior Optical Engineer
+grok-3-mini-fast            | ✅ PASS | 1.87        | ✓ Match         | Magic Leap - Senior Optical Engineer
+o3                          | ✅ PASS | 2.19        | ✓ Match         | Lawrence Livermore National Laboratory - Lead Optical Physicist
+o4-mini                     | ❌ FAIL | 0.48        | ✓ Match         | None (Error)
+
+🧩 DETAILED RESULTS
+==================================
+
+🔹 Model: claude-3-5-haiku-20241022
+   Status: ✅ Success
+   Response Time: 1.71 seconds
+   Recommended Job: Magic Leap - Senior Optical Engineer
+   Reason: Christopher Culbreath's background is an excellent match for the Senior Optical Engineer position at Magic Leap. His PhD in Chemical Physics and current role as a Senior Optical Engineer at Waymo demonstrate the required educational background and relevant experience. His work with optical metrology systems, LiDAR calibration, and imaging system optimization directly aligns with Magic Leap's AR/VR focus. Additionally, his research experience and publication record indicate strong technical expertise and innovation capabilities needed for developing next-generation displays.
+   Reason Length: 587 characters
+   Expected Behavior: Success
+   Matches Expected: ✓ Yes
+
+🔹 Model: gemini-2.0-flash
+   Status: ✅ Success
+   Response Time: 0.93 seconds
+   Recommended Job: Magic Leap - Senior Optical Engineer
+   Reason: The Senior Optical Engineer position at Magic Leap is the best match for Christopher Culbreath's qualifications. His PhD in Chemical Physics and current role as a Senior Optical Engineer at Waymo directly align with the job requirements. His experience with optical metrology systems, LiDAR calibration, and imaging system optimization is highly relevant to Magic Leap's work on next-generation AR displays. His strong background in optical system design, demonstrated by his work at both Waymo and Stanford, makes him an excellent candidate for this role.
+   Reason Length: 522 characters
+   Expected Behavior: Success
+   Matches Expected: ✓ Yes
+
+🔹 Model: gpt-4.1
+   Status: ✅ Success
+   Response Time: 3.54 seconds
+   Recommended Job: Magic Leap - Senior Optical Engineer
+   Reason: Christopher Culbreath's background as a Senior Optical Engineer at Waymo and his PhD in Chemical Physics make him an excellent match for the Senior Optical Engineer position at Magic Leap. His experience with optical metrology systems, LiDAR calibration, and imaging system optimization directly aligns with Magic Leap's requirements for AR/VR technologies and optical system design. Additionally, his research background at Stanford and skills in optical system design, laser development, and data analysis fulfill all the key requirements listed in the job description.
+   Reason Length: 501 characters
+   Expected Behavior: Success
+   Matches Expected: ✓ Yes
+
+🔹 Model: grok-3-mini-fast
+   Status: ✅ Success
+   Response Time: 1.87 seconds
+   Recommended Job: Magic Leap - Senior Optical Engineer
+   Reason: The Senior Optical Engineer position at Magic Leap is the best match for Christopher Culbreath based on his qualifications. He has a PhD in Chemical Physics and extensive experience as a Senior Optical Engineer at Waymo where he designed optical metrology systems and optimized imaging systems. This directly aligns with Magic Leap's requirements for a PhD in a related field, 5+ years of optical system design experience, and proficiency in optical design. His background in optical system design, laser development, and technical leadership makes him an ideal candidate for developing next-generation AR displays.
+   Reason Length: 548 characters
+   Expected Behavior: Success
+   Matches Expected: ✓ Yes
+
+🔹 Model: o3
+   Status: ✅ Success
+   Response Time: 2.19 seconds
+   Recommended Job: Lawrence Livermore National Laboratory - Lead Optical Physicist
+   Reason: Christopher Culbreath's background is an excellent match for the Lead Optical Physicist position at Lawrence Livermore National Laboratory. With his PhD in Chemical Physics and extensive experience in optical metrology and imaging systems at Waymo, he meets the educational and experience requirements. His work with laser development and optical system design aligns perfectly with the lab's focus on high-energy laser systems for national security. Additionally, his experience with data analysis and signal processing would be valuable for the simulation and modeling aspects of the role.
+   Reason Length: 535 characters
+   Expected Behavior: Success
+   Matches Expected: ✓ Yes
+
+🔹 Model: o4-mini
+   Status: ❌ Failed
+   Response Time: 0.48 seconds
+   Error Details: Domain: OpenAI, Code: 400, Description: API error (status code 400): status code 400 Unrecognized request argument supplied: reasoning_effort
+   ⚠️ This contains the expected 'reasoning_effort' error for o4-mini
+   Expected Behavior: Failure
+   Matches Expected: ✓ Yes
+
+==================================
+
+All tests completed successfully. Results match expected behaviors from the CSV file.
+5 models passed, 1 model failed with expected error.
+Most models recommended the Senior Optical Engineer position at Magic Leap as the best match for the candidate.

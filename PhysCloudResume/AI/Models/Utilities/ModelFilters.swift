@@ -485,9 +485,9 @@ class ModelFilters {
     static func filterGeminiModels(_ models: [String]) -> [String] {
         print("Filtering Gemini models...")
         let keyModels = [
-            "gemini-1.5-pro": 100, "gemini-1.5-flash": 95, "gemini-pro": 90,
-            "gemini-1.0-pro": 85, "gemini-2.0-pro": 97, "gemini-2.0-flash": 96,
-            "gemini-1.5-flash-8b": 94
+            "gemini-2.5-flash-preview-05-20": 100, "gemini-2.0-flash": 99, 
+            "gemini-1.5-pro": 95, "gemini-1.5-flash": 90, "gemini-pro": 85,
+            "gemini-1.0-pro": 80, "gemini-2.0-pro": 94, "gemini-1.5-flash-8b": 89
         ]
         var families: [String: [String]] = [:]
         for model in models {
@@ -527,7 +527,7 @@ class ModelFilters {
         }
         if result.isEmpty {
             print("⚠️ No Gemini models matched our filters, using defaults")
-            return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"]
+            return ["gemini-2.5-flash-preview-05-20", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
         }
         print("📋 Filtered \(models.count) Gemini models down to \(result.count) models")
         return result.sorted()

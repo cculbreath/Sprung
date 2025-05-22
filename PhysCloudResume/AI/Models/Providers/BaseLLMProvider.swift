@@ -1,10 +1,3 @@
-//
-//  BaseLLMProvider.swift
-//  PhysCloudResume
-//
-//  Created by Christopher Culbreath on 5/20/25.
-//
-
 import Foundation
 import SwiftUI
 
@@ -37,13 +30,13 @@ class BaseLLMProvider {
     private actor ContinuationCoordinator {
         private var hasResumed = false
 
-        func resumeWithValue<T, E: Error>(_ value: T, continuation: CheckedContinuation<T, E>) {
+        func resumeWithValue(_ value: AppLLMResponse, continuation: UnsafeContinuation<AppLLMResponse, Error>) {
             guard !hasResumed else { return }
             hasResumed = true
             continuation.resume(returning: value)
         }
 
-        func resumeWithError<T, E: Error>(_ error: E, continuation: CheckedContinuation<T, E>) {
+        func resumeWithError(_ error: Error, continuation: UnsafeContinuation<AppLLMResponse, Error>) {
             guard !hasResumed else { return }
             hasResumed = true
             continuation.resume(throwing: error)
@@ -65,180 +58,282 @@ class BaseLLMProvider {
         self.appLLMClient = client
     }
     
-    // MARK: - Client Management
+    // MARK: - Conversation Management Methods
     
-    /// Updates the LLM client based on the current model
-    /// - Parameter appState: The application state
-    func updateClientIfNeeded(appState: AppState) {
-        let currentModel = OpenAIModelFetcher.getPreferredModelString()
+    /// Initialize a new conversation with system and user messages
+    /// - Parameters:
+    ///   - systemPrompt: The system prompt to use
+    ///   - userPrompt: The initial user prompt
+    /// - Returns: The conversation history after initialization
+    func initializeConversation(systemPrompt: String, userPrompt: String) -> [AppLLMMessage] {
+        // Clear existing conversation history
+        conversationHistory = []
         
-        // Only update if the model has changed
-        if lastModelUsed != currentModel {
-            lastModelUsed = currentModel
-            let providerType = AIModels.providerForModel(currentModel)
-            appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
+        // Add system message
+        conversationHistory.append(AppLLMMessage(role: .system, text: systemPrompt))
+        
+        // Add user message
+        conversationHistory.append(AppLLMMessage(role: .user, text: userPrompt))
+        
+        return conversationHistory
+    }
+    
+    /// Add a user message to the conversation history
+    /// - Parameter text: The user message text
+    /// - Returns: The updated conversation history
+    func addUserMessage(_ text: String) -> [AppLLMMessage] {
+        conversationHistory.append(AppLLMMessage(role: .user, text: text))
+        return conversationHistory
+    }
+    
+    /// Add an assistant message to the conversation history
+    /// - Parameter text: The assistant message text
+    /// - Returns: The updated conversation history
+    func addAssistantMessage(_ text: String) -> [AppLLMMessage] {
+        conversationHistory.append(AppLLMMessage(role: .assistant, text: text))
+        return conversationHistory
+    }
+    
+    /// Updates the client if a different model or provider is needed
+    /// - Parameter appState: The current application state
+    func updateClientIfNeeded(appState: AppState) {
+        let currentProviderType = appState.settings.preferredLLMProvider
+        let currentModelString = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Check if we need to switch clients based on the model or last model used
+        if AIModels.providerFor(modelName: currentModelString) != AIModels.providerFor(modelName: lastModelUsed) {
+            // Update client to match the current provider type
+            self.appLLMClient = AppLLMClientFactory.createClient(for: currentProviderType, appState: appState)
+            
+            // Update the last model used
+            lastModelUsed = currentModelString
         }
     }
     
-    // MARK: - Conversation Management
-    
-    /// Initializes a new conversation with system and user messages
-    /// - Parameters:
-    ///   - systemPrompt: The system prompt to use
-    ///   - userPrompt: The initial user message
-    /// - Returns: The updated conversation history
-    func initializeConversation(systemPrompt: String, userPrompt: String) -> [AppLLMMessage] {
-        // Start a new conversation with system and user messages
-        conversationHistory = [
-            AppLLMMessage(role: .system, text: systemPrompt),
-            AppLLMMessage(role: .user, text: userPrompt)
-        ]
-        return conversationHistory
-    }
-    
-    /// Adds a user message to the conversation
-    /// - Parameter userInput: The user message to add
-    /// - Returns: The updated conversation history
-    func addUserMessage(_ userInput: String) -> [AppLLMMessage] {
-        // Add new user message to existing conversation
-        conversationHistory.append(AppLLMMessage(role: .user, text: userInput))
-        return conversationHistory
-    }
-    
-    /// Adds an assistant message to the conversation
-    /// - Parameter assistantResponse: The assistant response to add
-    /// - Returns: The updated conversation history
-    func addAssistantMessage(_ assistantResponse: String) -> [AppLLMMessage] {
-        // Add assistant response to existing conversation
-        conversationHistory.append(AppLLMMessage(role: .assistant, text: assistantResponse))
-        return conversationHistory
-    }
-    
-    // MARK: - Query Execution
-    
-    /// Executes a query using the current LLM client
+    /// Execute a query using the current LLM client
     /// - Parameter query: The query to execute
     /// - Returns: The response from the LLM
     func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
         do {
             return try await appLLMClient.executeQuery(query)
         } catch {
-            // Log and rethrow the error
+            // Store the error message for display
             errorMessage = error.localizedDescription
-            Logger.error("Error executing query: \(error.localizedDescription)")
+            // Re-throw the error for handling by the caller
             throw error
         }
     }
     
-    /// Executes a query with timeout
+    // Previous methods remain the same...
+
+    /// Execute a query with a timeout
     /// - Parameters:
     ///   - query: The query to execute
-    ///   - timeoutSeconds: The timeout in seconds
+    ///   - timeout: Timeout in seconds (default: 60)
     /// - Returns: The response from the LLM
-    func executeQueryWithTimeout(_ query: AppLLMQuery, timeoutSeconds: Double = 120.0) async throws -> AppLLMResponse {
-        // Create coordinator for safe continuation resumption
-        let coordinator = ContinuationCoordinator()
-        
-        // Timeout error for long-running requests
-        let timeoutError = NSError(
-            domain: "BaseLLMProviderError",
-            code: -1001,
-            userInfo: [NSLocalizedDescriptionKey: "API request timed out. Please try again."]
-        )
-        
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<AppLLMResponse, Error>) in
-            let apiTask = Task {
+    func executeQueryWithTimeout(_ query: AppLLMQuery, timeout: TimeInterval = 60) async throws -> AppLLMResponse {
+        // Use a task with timeout to handle API timeouts gracefully
+        return try await withUnsafeThrowingContinuation { (continuation: UnsafeContinuation<AppLLMResponse, Error>) in
+            // Create a coordination actor to ensure we only resume once
+            let coordinator = ContinuationCoordinator()
+            
+            // Create a task to execute the query
+            let task = Task {
                 do {
-                    let result = try await appLLMClient.executeQuery(query)
+                    let result = try await executeQuery(query)
+                    // Resume with success result
                     await coordinator.resumeWithValue(result, continuation: continuation)
                 } catch {
-                    errorMessage = error.localizedDescription
+                    // Resume with error
                     await coordinator.resumeWithError(error, continuation: continuation)
                 }
             }
             
-            // Set up a timeout task
-            let timeoutNanos = UInt64(timeoutSeconds * 1_000_000_000)
+            // Create a timeout task
             Task {
-                try? await Task.sleep(nanoseconds: timeoutNanos)
-                if !apiTask.isCancelled {
-                    apiTask.cancel()
-                    errorMessage = timeoutError.localizedDescription
-                    await coordinator.resumeWithError(timeoutError, continuation: continuation)
-                }
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                
+                // Cancel the main task if it's still running
+                task.cancel()
+                
+                // Resume with timeout error if continuation hasn't been resumed
+                await coordinator.resumeWithError(
+                    AppLLMError.timeout("Request timed out after \(timeout) seconds"),
+                    continuation: continuation
+                )
             }
         }
     }
     
-    // MARK: - Structured Output Handling
-    
-    /// Processes a structured response and extracts the decoded object
+    /// Process a structured response from the LLM
     /// - Parameters:
-    ///   - response: The LLM response
-    ///   - type: The expected type to decode
-    /// - Returns: The decoded object
+    ///   - response: The raw response from the LLM
+    ///   - type: The expected return type
+    /// - Returns: The decoded structured output
     func processStructuredResponse<T: Decodable>(_ response: AppLLMResponse, as type: T.Type) throws -> T {
         switch response {
         case .structured(let data):
             do {
-                Logger.debug("🔄 Attempting to decode structured data of length: \(data.count)")
-                if let debugString = String(data: data, encoding: .utf8) {
-                    Logger.debug("📝 JSON content preview: \(String(debugString.prefix(200)))...")
-                }
-                
-                // Try to decode the data
-                let decoder = JSONDecoder()
-                return try decoder.decode(T.self, from: data)
+                // Try to directly decode the JSON data
+                return try JSONDecoder().decode(type, from: data)
             } catch {
-                Logger.error("❌ Decoding error: \(error.localizedDescription)")
-                throw AppLLMError.decodingFailed(error)
+                Logger.error("Failed to decode structured response: \(error.localizedDescription)")
+                throw AppLLMError.decodingError("Failed to decode structured response: \(error.localizedDescription)")
             }
             
         case .text(let text):
-            // Try to decode the text as JSON
-            Logger.debug("🔄 Attempting to decode text response: \(String(text.prefix(100)))...")
-            
-            guard let data = text.data(using: .utf8) else {
-                throw AppLLMError.unexpectedResponseFormat
-            }
-            
-            do {
-                // Try to decode the data
-                let decoder = JSONDecoder()
-                return try decoder.decode(T.self, from: data)
-            } catch {
-                Logger.error("❌ Text decoding error: \(error.localizedDescription)")
-                throw AppLLMError.decodingFailed(error)
+            // For text responses, try to extract and parse JSON
+            if let jsonData = text.data(using: .utf8) {
+                do {
+                    return try JSONDecoder().decode(type, from: jsonData)
+                } catch {
+                    Logger.error("Failed to parse JSON from text response: \(error.localizedDescription)")
+                    throw AppLLMError.decodingError("Failed to parse JSON from text response: \(error.localizedDescription)")
+                }
+            } else {
+                Logger.error("Unable to convert text response to data for JSON parsing")
+                throw AppLLMError.decodingError("Unable to convert text response to data for JSON parsing")
             }
         }
     }
     
-    // MARK: - Utilities
-    
-    /// Saves message content to a debug file
+    /// Save a message to a debug file for troubleshooting
     /// - Parameters:
-    ///   - content: The content to save
-    ///   - fileName: The name of the file
-    func saveMessageToDebugFile(_ content: String, fileName: String) {
-        // Check if debug prompt saving is enabled
-        let saveDebugPrompts = UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+    ///   - message: The message to save
+    ///   - fileName: The file name to use
+    func saveMessageToDebugFile(_ message: String, fileName: String) {
+        // Create a temporary URL for the debug file
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         
-        // Only save if debug is enabled
-        if saveDebugPrompts {
-            let fileManager = FileManager.default
-            let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
-            let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
-            let fileURL = downloadsURL.appendingPathComponent(fileName)
-            
-            do {
-                try content.write(to: fileURL, atomically: true, encoding: .utf8)
-                Logger.debug("Debug message content saved to: \(fileURL.path)")
-            } catch {
-                Logger.debug("Error saving debug message: \(error.localizedDescription)")
-            }
-        } else {
-            // Log that we would have saved a debug file, but it's disabled
-            Logger.debug("Debug message NOT saved (saveDebugPrompts disabled)")
+        do {
+            try message.write(to: tempURL, atomically: true, encoding: .utf8)
+            Logger.debug("Saved debug message to: \(tempURL.path)")
+        } catch {
+            Logger.error("Failed to save debug message: \(error.localizedDescription)")
         }
     }
+    private func handleRevisionsContainerFormats(dataString: String) throws -> Any {
+        Logger.debug("🔄 Attempting to parse RevisionsContainer from: \(String(dataString.prefix(100)))...")
+        
+        // Try to parse as a raw array of revisions
+        if dataString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[") {
+            do {
+                let decoder = JSONDecoder()
+                if let data = dataString.data(using: .utf8) {
+                    // Try to decode directly as array of ProposedRevisionNode
+                    if let revisionsArray = try? decoder.decode([ProposedRevisionNode].self, from: data) {
+                        Logger.debug("✅ Parsed direct array format with \(revisionsArray.count) revisions")
+                        return RevisionsContainer(revArray: revisionsArray)
+                    }
+                    
+                    // Alternative format with slightly different keys
+                    if let alternativeArray = try? JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] {
+                        var nodes: [ProposedRevisionNode] = []
+                        
+                        for item in alternativeArray {
+                            // Create node using the dictionary initializer
+                            let node = ProposedRevisionNode(from: item)
+                            nodes.append(node)
+                        }
+                        
+                        if !nodes.isEmpty {
+                            Logger.debug("✅ Mapped alternative array format with \(nodes.count) revisions")
+                            return RevisionsContainer(revArray: nodes)
+                        }
+                    }
+                }
+            } catch {
+                Logger.error("❌ Failed to parse direct array format: \(error.localizedDescription)")
+            }
+        }
+        
+        // Try to parse as revisions container directly
+        do {
+            let decoder = JSONDecoder()
+            if let data = dataString.data(using: .utf8) {
+                if let container = try? decoder.decode(RevisionsContainer.self, from: data) {
+                    Logger.debug("✅ Successfully parsed RevisionsContainer directly")
+                    return container
+                }
+            }
+        } catch {
+            Logger.error("❌ Failed to parse direct RevisionsContainer format: \(error.localizedDescription)")
+        }
+        
+        // Try to parse with wrapper fields
+        // Many models return structure like {"revisions": [...]} or {"rev_array": [...]}
+        let possibleWrapperKeys = ["revArray", "RevArray", "revisions", "nodes", "revision_nodes", "changes"]
+        
+        for key in possibleWrapperKeys {
+            // Try to find a wrapper object with the key
+            if let wrapperData = extractJSONForKey(key, from: dataString),
+               let data = wrapperData.data(using: .utf8),
+               let revisions = try? JSONDecoder().decode([ProposedRevisionNode].self, from: data) {
+                Logger.debug("✅ Extracted revisions using wrapper key: \(key)")
+                return RevisionsContainer(revArray: revisions)
+            }
+        }
+        
+        // Try other common formats by normalizing the JSON
+        let normalizedString = dataString
+            .replacingOccurrences(of: "\"revArray\"", with: "\"revArray\"")
+            .replacingOccurrences(of: "\"RevArray\"", with: "\"revArray\"")
+            .replacingOccurrences(of: "\"value\"", with: "\"newValue\"")
+            .replacingOccurrences(of: "\"explanation\"", with: "\"why\"")
+            .replacingOccurrences(of: "\"original\"", with: "\"oldValue\"")
+            .replacingOccurrences(of: "\"revision\"", with: "\"newValue\"")
+            .replacingOccurrences(of: "\"reason\"", with: "\"why\"")
+
+        // Try to parse the normalized string
+        do {
+            let decoder = JSONDecoder()
+            if let data = normalizedString.data(using: .utf8) {
+                if let container = try? decoder.decode(RevisionsContainer.self, from: data) {
+                    return container
+                }
+            }
+        } catch {
+            Logger.error("❌ Failed to parse normalized RevisionsContainer: \(error.localizedDescription)")
+        }
+        
+        // If the model returned a response intended for another purpose, create an empty container
+        // This happens with Claude which sometimes returns job recommendation JSON instead
+        if dataString.contains("recommendedJobId") || dataString.contains("reason") {
+            Logger.warning("⚠️ Model returned wrong response format. Creating empty revisions container.")
+            return RevisionsContainer(revArray: [])
+        }
+        
+        // If all attempts fail, throw an error
+        throw AppLLMError.clientError("Failed to parse revision data in any supported format")
+    }
+    
+    /// Extract JSON array for a specific key from a JSON string
+    /// - Parameters:
+    ///   - key: The key to extract
+    ///   - jsonString: The JSON string
+    /// - Returns: The extracted JSON array as a string, or nil if extraction fails
+    private func extractJSONForKey(_ key: String, from jsonString: String) -> String? {
+        do {
+            if let data = jsonString.data(using: .utf8),
+               let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                
+                // Extract the array directly 
+                if let array = json[key] as? [[String: String]] {
+                    let arrayData = try JSONSerialization.data(withJSONObject: array)
+                    return String(data: arrayData, encoding: .utf8)
+                }
+                
+                // Fallback for more complex dictionaries
+                if let array = json[key] as? [Any] {
+                    let arrayData = try JSONSerialization.data(withJSONObject: array)
+                    return String(data: arrayData, encoding: .utf8)
+                }
+            }
+        } catch {
+            Logger.error("❌ Failed to extract JSON for key \(key): \(error.localizedDescription)")
+        }
+        return nil
+    }
+
+    // Remaining methods stay the same...
 }

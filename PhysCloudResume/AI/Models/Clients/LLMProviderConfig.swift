@@ -27,26 +27,34 @@ struct LLMProviderConfig {
     /// Additional headers for API requests
     let extraHeaders: [String: String]? // For SwiftOpenAI extraHeaders
     
+    /// The specific model to use
+    let model: String?
+    
     // MARK: - Factory methods for common providers
     
     /// Creates configuration for OpenAI API
-    /// - Parameter apiKey: The API key for OpenAI
+    /// - Parameters:
+    ///   - apiKey: The API key for OpenAI
+    ///   - model: Optional specific model to use
     /// - Returns: Configuration for OpenAI API
-    static func forOpenAI(apiKey: String) -> LLMProviderConfig {
+    static func forOpenAI(apiKey: String, model: String? = nil) -> LLMProviderConfig {
         return LLMProviderConfig(
             providerType: AIModels.Provider.openai,
             apiKey: apiKey,
             baseURL: nil, // Default OpenAI URL
             apiVersion: nil, // Default OpenAI version
             proxyPath: nil,
-            extraHeaders: nil
+            extraHeaders: nil,
+            model: model
         )
     }
     
     /// Creates configuration for Claude API
-    /// - Parameter apiKey: The API key for Claude
+    /// - Parameters:
+    ///   - apiKey: The API key for Claude
+    ///   - model: Optional specific model to use
     /// - Returns: Configuration for Claude API
-    static func forClaude(apiKey: String) -> LLMProviderConfig {
+    static func forClaude(apiKey: String, model: String? = nil) -> LLMProviderConfig {
         return LLMProviderConfig(
             providerType: AIModels.Provider.claude,
             apiKey: apiKey,
@@ -55,28 +63,34 @@ struct LLMProviderConfig {
             proxyPath: nil,
             extraHeaders: [
                 "anthropic-version": "2023-06-01"
-            ]
+            ],
+            model: model
         )
     }
     
     /// Creates configuration for Gemini API using OpenAI-compatible endpoint
-    /// - Parameter apiKey: The API key for Gemini
+    /// - Parameters:
+    ///   - apiKey: The API key for Gemini
+    ///   - model: Optional specific model to use
     /// - Returns: Configuration for Gemini API
-    static func forGemini(apiKey: String) -> LLMProviderConfig {
+    static func forGemini(apiKey: String, model: String? = nil) -> LLMProviderConfig {
         return LLMProviderConfig(
             providerType: AIModels.Provider.gemini,
             apiKey: apiKey,
             baseURL: "https://generativelanguage.googleapis.com",
             apiVersion: "v1beta",
             proxyPath: nil,
-            extraHeaders: nil
+            extraHeaders: nil,
+            model: model
         )
     }
     
     /// Creates configuration for Grok API
-    /// - Parameter apiKey: The API key for Grok
+    /// - Parameters:
+    ///   - apiKey: The API key for Grok
+    ///   - model: Optional specific model to use
     /// - Returns: Configuration for Grok API
-    static func forGrok(apiKey: String) -> LLMProviderConfig {
+    static func forGrok(apiKey: String, model: String? = nil) -> LLMProviderConfig {
         // Check if this is an X.AI Grok key (starts with xai-)
         if apiKey.hasPrefix("xai-") {
             return LLMProviderConfig(
@@ -85,7 +99,8 @@ struct LLMProviderConfig {
                 baseURL: "https://api.x.ai",
                 apiVersion: "v1",
                 proxyPath: nil,
-                extraHeaders: nil
+                extraHeaders: nil,
+                model: model
             )
         } else {
             // Legacy Groq API
@@ -95,7 +110,8 @@ struct LLMProviderConfig {
                 baseURL: "https://api.groq.com",
                 apiVersion: "v1",
                 proxyPath: nil,
-                extraHeaders: nil
+                extraHeaders: nil,
+                model: model
             )
         }
     }

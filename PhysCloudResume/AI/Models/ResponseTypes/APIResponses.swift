@@ -13,9 +13,8 @@ import SwiftUI
 // MARK: - Local Protocol Definitions
 // These protocols replace OpenAI dependencies for our abstraction layer
 
-/// Protocol for structured output types that can be used with AI models
-/// This replaces the OpenAI StructuredOutput protocol
-protocol StructuredOutput: Codable {}
+// This line is commented out since we now have a better implementation in StructuredOutput.swift
+// protocol StructuredOutput: Codable {}
 
 // MARK: - Chat Response Format Types
 
@@ -109,7 +108,14 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     let strengthAndVoiceAnalysis: String
     let bestLetterUuid: String
     let verdict: String
-
+    
+    // Implement validate for StructuredOutput
+    func validate() -> Bool {
+        // Check if we have non-empty values
+        return !strengthAndVoiceAnalysis.isEmpty &&
+               !bestLetterUuid.isEmpty &&
+               !verdict.isEmpty
+    }
 }
 
 

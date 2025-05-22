@@ -20,4 +20,9 @@ final class ResumePDFViewModel {
     init(resume: Resume) {
         self.resume = resume
     }
+    
+    /// Updates the resume reference when switching between resumes
+    func updateResume(_ newResume: Resume) {
+        self.resume = newResume
+    }
 }
