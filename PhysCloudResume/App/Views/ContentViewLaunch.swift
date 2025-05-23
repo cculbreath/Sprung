@@ -28,6 +28,9 @@ struct ContentViewLaunch: View {
             .environment(coverLetterStore)
             .environment(dragInfo) // Inject DragInfo here
             .onAppear {
+                // Check and migrate database if needed
+                DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
+                
                 // Initialize ConversationContextManager with ModelContext
                 ConversationContextManager.shared.setModelContext(modelContext)
             }

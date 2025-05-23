@@ -35,6 +35,10 @@ class ConversationContextManager: ObservableObject {
             }
         } catch {
             Logger.debug("Failed to fetch conversation context: \(error)")
+            // If database schema issues are detected, log them but continue gracefully
+            if error.localizedDescription.contains("no such table") {
+                Logger.warning("Conversation context table not found - database may need migration")
+            }
             return nil
         }
     }
@@ -45,7 +49,8 @@ class ConversationContextManager: ObservableObject {
         }
         
         guard let modelContext = modelContext else {
-            fatalError("ModelContext not set")
+            Logger.warning("ModelContext not set - returning new context without persistence")
+            return ConversationContext(objectId: objectId, objectType: type)
         }
         
         let context = ConversationContext(objectId: objectId, objectType: type)
@@ -56,6 +61,10 @@ class ConversationContextManager: ObservableObject {
             return context
         } catch {
             Logger.debug("Failed to create context: \(error)")
+            // If database schema issues are detected, provide graceful fallback
+            if error.localizedDescription.contains("no such table") {
+                Logger.warning("Cannot save conversation context - database schema issue detected")
+            }
             return context
         }
     }

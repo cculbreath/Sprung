@@ -92,10 +92,8 @@ class LLMRequestService: @unchecked Sendable {
         let provider = AIModels.providerForModel(model)
 
         if provider == AIModels.Provider.grok {
-            // If the chosen Grok model is not the vision capable one, switch to it.
-            if !model.lowercased().contains("-vision") {
-                return "grok-2-vision-1212"
-            }
+            // Grok vision models are unreliable, use o4-mini instead for image analysis
+            return "o4-mini"
         }
 
         return model
@@ -204,12 +202,10 @@ class LLMRequestService: @unchecked Sendable {
         }
     }
     
-    /// Sends a request that can include an image and/or JSON schema
-    func sendMixedRequest<T: Decodable>(
+    /// Sends a request with image support but no structured output
+    func sendMixedRequest(
         promptText: String,
         base64Image: String?,
-        schema: (name: String, jsonString: String)?,
-        responseType: T.Type? = nil,
         requestID: UUID = UUID(),
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     ) {
@@ -224,20 +220,26 @@ class LLMRequestService: @unchecked Sendable {
                     }
                 }
                 
-                // Get client after initialization
-                let clientOptional = await MainActor.run { self.appLLMClient }
-                guard let client = clientOptional else {
-                    throw AppLLMError.clientError("LLM client not initialized")
-                }
-                
-                // Determine which model to use
                 let selectedModel = OpenAIModelFetcher.getPreferredModelString()
                 let currentModel = LLMRequestService.modelForImageRequest(
                     selectedModel: selectedModel,
                     wantsImage: base64Image != nil
                 )
+                if appLLMClient == nil || selectedModel != currentModel {
+                    await MainActor.run {
+                        let provider = AIModels.providerForModel(currentModel)
+                        Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
+                        let appState = AppState()
+                        self.appLLMClient = AppLLMClientFactory.createClient(for: provider, appState: appState)
+                    }
+                }
+
+                let clientOptional = await MainActor.run { self.appLLMClient }
+                guard let client = clientOptional else {
+                    throw AppLLMError.clientError("LLM client not initialized")
+                }
                 
-                // Build message content using MessageConverter helper methods
+                // Build message content
                 var contentParts: [AppLLMMessageContentPart] = []
                 
                 // Add text part
@@ -251,30 +253,12 @@ class LLMRequestService: @unchecked Sendable {
                 // Create message
                 let message = AppLLMMessage(role: .user, contentParts: contentParts)
                 
-                // Create query
-                let query: AppLLMQuery
-                
-                // Handle structured output if schema provided
-                if let schema = schema {
-                    // Use the provided response type or fallback to Data
-                    let actualResponseType = responseType ?? Data.self
-                    
-                    // Use schema builder utility
-                    query = AppLLMQuery(
-                        messages: [message],
-                        modelIdentifier: currentModel,
-                        temperature: 1.0,
-                        responseType: actualResponseType,
-                        jsonSchema: schema.jsonString
-                    )
-                } else {
-                    // Simple text query
-                    query = AppLLMQuery(
-                        messages: [message],
-                        modelIdentifier: currentModel,
-                        temperature: 1.0
-                    )
-                }
+                // Create simple text query (no structured output)
+                let query = AppLLMQuery(
+                    messages: [message],
+                    modelIdentifier: currentModel,
+                    temperature: 1.0
+                )
                 
                 // Execute query
                 let response = try await client.executeQuery(query)
@@ -301,6 +285,99 @@ class LLMRequestService: @unchecked Sendable {
             } catch {
                 await MainActor.run {
                     Logger.debug("Error in sendMixedRequest: \(error.localizedDescription)")
+                    onComplete(.failure(error))
+                }
+            }
+        }
+    }
+    
+    /// Sends a request with image support and structured output enforced by schema
+    func sendStructuredMixedRequest<T: Decodable>(
+        promptText: String,
+        base64Image: String?,
+        responseType: T.Type,
+        jsonSchema: String? = nil,  // Make this optional
+        requestID: UUID = UUID(),
+        onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
+    ) {
+        currentRequestID = requestID
+        
+        Task {
+            do {
+                // Initialize client if needed
+                if appLLMClient == nil {
+                    await MainActor.run {
+                        initialize()
+                    }
+                }
+                
+                let selectedModel = OpenAIModelFetcher.getPreferredModelString()
+                let currentModel = LLMRequestService.modelForImageRequest(
+                    selectedModel: selectedModel,
+                    wantsImage: base64Image != nil
+                )
+                if appLLMClient == nil || selectedModel != currentModel {
+                    await MainActor.run {
+                        let provider = AIModels.providerForModel(currentModel)
+                        Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
+                        let appState = AppState()
+                        self.appLLMClient = AppLLMClientFactory.createClient(for: provider, appState: appState)
+                    }
+                }
+
+                let clientOptional = await MainActor.run { self.appLLMClient }
+                guard let client = clientOptional else {
+                    throw AppLLMError.clientError("LLM client not initialized")
+                }
+                
+                // Build message content
+                var contentParts: [AppLLMMessageContentPart] = []
+                
+                // Add text part
+                contentParts.append(.text(promptText))
+                
+                // Add image part if provided
+                if let image = base64Image {
+                    contentParts.append(.imageUrl(base64Data: image, mimeType: "image/png"))
+                }
+                
+                // Create message
+                let message = AppLLMMessage(role: .user, contentParts: contentParts)
+                
+                // Create structured query with response format enforcement
+                let query = AppLLMQuery(
+                    messages: [message],
+                    modelIdentifier: currentModel,
+                    temperature: 1.0,
+                    responseType: responseType,
+                    jsonSchema: jsonSchema  // Can be nil - let the system infer from responseType
+                )
+                
+                // Execute query
+                let response = try await client.executeQuery(query)
+                
+                // Extract response content
+                let responseText: String
+                switch response {
+                case .text(let text):
+                    responseText = text
+                case .structured(let data):
+                    responseText = String(data: data, encoding: .utf8) ?? ""
+                }
+                
+                // Convert to legacy ResponsesAPIResponse format
+                let compatResponse = ResponsesAPIResponse(
+                    id: UUID().uuidString,
+                    content: responseText,
+                    model: currentModel
+                )
+                
+                await MainActor.run {
+                    onComplete(.success(compatResponse))
+                }
+            } catch {
+                await MainActor.run {
+                    Logger.debug("Error in sendStructuredMixedRequest: \(error.localizedDescription)")
                     onComplete(.failure(error))
                 }
             }

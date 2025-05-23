@@ -26,6 +26,10 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
         let urlConfig = URLSessionConfiguration.default
         urlConfig.timeoutIntervalForRequest = 900.0 // 15 minutes for reasoning models
         
+        // ENHANCED DEBUG: Log the actual configuration being used
+        Logger.debug("🔄 Creating API client for provider: \(config.providerType)")
+        Logger.debug("🔧 Configuration: baseURL=\(config.baseURL ?? "nil"), apiVersion=\(config.apiVersion ?? "nil")")
+        
         // Configure the service based on provider settings
         if config.providerType == AIModels.Provider.claude {
             // Special handling for Claude API
@@ -56,6 +60,7 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
             case AIModels.Provider.gemini:
                 baseURL = config.baseURL ?? "https://generativelanguage.googleapis.com"
                 apiVersion = config.apiVersion ?? "v1beta"
+                Logger.debug("📱 Using Gemini endpoints: \(baseURL)")
             case AIModels.Provider.grok:
                 if config.apiKey.hasPrefix("xai-") {
                     baseURL = config.baseURL ?? "https://api.x.ai"
@@ -63,12 +68,15 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
                     baseURL = config.baseURL ?? "https://api.groq.com"
                 }
                 apiVersion = config.apiVersion ?? "v1"
+                Logger.debug("🚀 Using Grok endpoints: \(baseURL)")
             case AIModels.Provider.openai:
                 baseURL = config.baseURL ?? "https://api.openai.com"
                 apiVersion = config.apiVersion ?? "v1"
+                Logger.debug("🤖 Using OpenAI endpoints: \(baseURL)")
             default:
                 baseURL = config.baseURL ?? "https://api.openai.com"
                 apiVersion = config.apiVersion ?? "v1"
+                Logger.debug("❓ Using default OpenAI endpoints for unknown provider \(config.providerType): \(baseURL)")
             }
             
             // Create the service with proper handling of parameters
@@ -80,6 +88,8 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
                 overrideVersion: apiVersion,
                 extraHeaders: config.extraHeaders
             )
+            
+            Logger.debug("✅ Service created with baseURL: \(baseURL)")
         }
     }
     
@@ -98,7 +108,12 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
     /// - Returns: ChatCompletionParameters for SwiftOpenAI
     func prepareChatParameters(for query: AppLLMQuery) -> ChatCompletionParameters {
         // Convert messages using the centralized MessageConverter
+        Logger.debug("📥 Preparing chat parameters with \(query.messages.count) messages")
+        if query.messages.isEmpty {
+            Logger.error("⚠️ Query messages array is empty!")
+        }
         let swiftMessages = MessageConverter.swiftOpenAIMessagesFrom(appMessages: query.messages)
+        Logger.debug("🔄 Converted to \(swiftMessages.count) SwiftOpenAI messages")
         
         // Use the config model if specified, otherwise use the query model
         let modelId = config.model ?? query.modelIdentifier

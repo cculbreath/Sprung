@@ -14,6 +14,9 @@ import SwiftData
     /// Local index within the font‑size array (provided by the builder).
     var index: Int
     var fontValue: Float
+    
+    // Relationship back to Resume
+    var resume: Resume?
     var fontString: String {
         get {
             return "\(fontValue)pt"
@@ -27,13 +30,14 @@ import SwiftData
         id: String = UUID().uuidString,
         key: String,
         index: Int,
-        fontString: String
-
+        fontString: String,
+        resume: Resume? = nil
     ) {
         self.index = index
         self.id = id
         self.key = key
         fontValue = FontSizeNode.parseFontString(fontString)
+        self.resume = resume
     }
 
     /// Converts a "12pt" style string to a Float value

@@ -201,7 +201,7 @@ struct RichTextView: View {
 
     private func bulletList(_ content: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(content.split(separator: "\n"), id: \.self) { line in
+            ForEach(Array(content.split(separator: "\n").enumerated()), id: \.offset) { index, line in
                 let lineText = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
                 if lineText.hasPrefix("* ") || lineText.hasPrefix("• ") {
                     HStack(alignment: .top, spacing: 4) {

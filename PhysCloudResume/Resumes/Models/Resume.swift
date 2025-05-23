@@ -27,6 +27,8 @@ class Resume: Identifiable, Hashable {
 
     @Relationship(deleteRule: .cascade)
     var rootNode: TreeNode? // The top-level node
+    
+    @Relationship(deleteRule: .cascade, inverse: \FontSizeNode.resume)
     var fontSizeNodes: [FontSizeNode] = []
     var includeFonts: Bool = false
     // Labels for keys previously imported; persisted as keyLabels map

@@ -12,6 +12,9 @@ import SwiftOpenAI
 /// Service for fetching and caching AI model information from all supported providers
 @available(iOS 16.0, macOS 13.0, *)
 class ModelService: ObservableObject, @unchecked Sendable {
+    
+    /// Shared singleton instance
+    static let shared = ModelService()
     // MARK: - Published properties
     
     /// Available OpenAI models, updated on fetch
@@ -33,6 +36,9 @@ class ModelService: ObservableObject, @unchecked Sendable {
     
     /// Cached SwiftOpenAI service instances by provider
     private var services: [String: OpenAIService] = [:]
+    
+    /// Queue for thread-safe access to services dictionary
+    private let servicesQueue = DispatchQueue(label: "com.physcloudresume.modelservice.services", attributes: .concurrent)
     
     /// Semaphore to prevent multiple concurrent fetches
     private let fetchSemaphore = DispatchSemaphore(value: 1)
@@ -298,6 +304,22 @@ class ModelService: ObservableObject, @unchecked Sendable {
         ]
     }
     
+    /// Gets all available models as a flat array
+    /// - Returns: Array of all model identifiers
+    func getAllAvailableModels() async -> [String] {
+        // Use Set to automatically handle duplicates
+        var uniqueModels = Set<String>()
+        
+        // Collect all models from all providers
+        uniqueModels.formUnion(openAIModels)
+        uniqueModels.formUnion(claudeModels)
+        uniqueModels.formUnion(grokModels)
+        uniqueModels.formUnion(geminiModels)
+        
+        // Convert to array and sort
+        return Array(uniqueModels).sorted()
+    }
+    
     // MARK: - Private Methods
     
     /// Creates or retrieves a cached OpenAIService for a provider
@@ -307,7 +329,14 @@ class ModelService: ObservableObject, @unchecked Sendable {
     /// - Returns: A configured OpenAIService instance
     private func getOrCreateService(for provider: String, apiKey: String) -> OpenAIService {
         // Check if we already have a service cached with the same apiKey
-        if let existingService = services[provider] {
+        var existingService: OpenAIService?
+        
+        // Thread-safe read
+        servicesQueue.sync {
+            existingService = services[provider]
+        }
+        
+        if let existingService = existingService {
             // Verify the service has the correct API key
             let existingKey = existingService.apiKey
             if !existingKey.isEmpty && existingKey == apiKey {
@@ -408,8 +437,10 @@ class ModelService: ObservableObject, @unchecked Sendable {
             Logger.debug("✅ Service created with API key: \(serviceKey.prefix(4))...")
         }
         
-        // Cache the service
-        services[provider] = service
+        // Cache the service with thread-safe write
+        servicesQueue.async(flags: .barrier) {
+            self.services[provider] = service
+        }
         
         return service
     }

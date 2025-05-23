@@ -16,7 +16,6 @@ struct AIModels {
     static let gpt4o = "gpt-4o"
     static let o4_mini = "o4-mini"
     static let gpt4o_mini = "gpt-4o-mini"
-    static let gpt4_5 = "gpt-4.5-turbo"
     static let gpt4o_latest = "gpt-4o-2024-05-13"  // Latest version
     static let gpt_4o_mini_tts = "gpt-4o-mini-tts" // TTS model
     static let gpt4o_2024_08_06 = "gpt-4o-2024-08-06" // August 2024 update
@@ -25,7 +24,6 @@ struct AIModels {
     static let claude_3_opus = "claude-3-opus-20240229"
     static let claude_3_sonnet = "claude-3-sonnet-20240229"
     static let claude_3_haiku = "claude-3-haiku-20240307"
-    static let claude_3_5_sonnet = "claude-3-5-sonnet-20240620"
     static let claude_3_5_haiku = "claude-3-5-haiku-latest"
     
     // xAI Grok models
@@ -37,7 +35,6 @@ struct AIModels {
     static let gemini_2_5_flash_preview = "gemini-2.5-flash-preview-05-20"
     static let gemini_2_0_flash = "gemini-2.0-flash"
     static let gemini_pro = "gemini-pro"
-    static let gemini_1_5_pro = "gemini-1.5-pro"
     static let gemini_1_5_flash = "gemini-1.5-flash"
     
     // Model provider prefixes for displaying and identifying models
@@ -52,6 +49,12 @@ struct AIModels {
     static func providerForModel(_ model: String) -> String {
         let modelLower = model.lowercased()
         
+        // Handle empty or invalid model strings
+        if model.isEmpty || model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Logger.warning("⚠️ Empty model string passed to providerForModel - this indicates a bug in the calling code")
+            return Provider.openai // Default to OpenAI for empty models
+        }
+        
         // More precise model family detection
         if modelLower.contains("gpt") || modelLower.contains("dalle") || modelLower.starts(with: "o3") || modelLower.starts(with: "o4") {
             return Provider.openai
@@ -64,7 +67,7 @@ struct AIModels {
         }
         
         // Log a warning for unrecognized models
-        Logger.warning("⚠️ Using default provider (OpenAI) for unrecognized model: \(model)")
+        Logger.warning("⚠️ Using default provider (OpenAI) for unrecognized model: '\(model)'")
         return Provider.openai // Default to OpenAI for unknown models
     }
     
@@ -82,6 +85,16 @@ struct AIModels {
         let components = modelName.split(separator: "-")
         
         // Handle different model naming patterns
+        
+        // Handle o3 models first (before general GPT handling)
+        if modelName.lowercased().starts(with: "o3") {
+            if modelName.lowercased().contains("mini") {
+                return "o3-mini"
+            } else {
+                return "o3"
+            }
+        }
+        
         if modelName.lowercased().contains("gpt") {
             if components.count >= 2 {
                 // Extract main version (e.g., "GPT-4" from "gpt-4-1106-preview")
@@ -161,7 +174,6 @@ extension AIModels {
             gpt4o,
             o4_mini,
             gpt4o_mini,
-            gpt4_5,
             gpt4o_latest
         ]
     }
@@ -171,7 +183,6 @@ extension AIModels {
             claude_3_opus,
             claude_3_sonnet,
             claude_3_haiku,
-            claude_3_5_sonnet,
             claude_3_5_haiku
         ]
     }
@@ -189,7 +200,6 @@ extension AIModels {
             gemini_2_5_flash_preview,
             gemini_2_0_flash,
             gemini_pro,
-            gemini_1_5_pro,
             gemini_1_5_flash
         ]
     }

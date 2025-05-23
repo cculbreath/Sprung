@@ -232,6 +232,7 @@ final class ResumeChatProvider: BaseLLMProvider {
         resume: Resume? = nil,
         continueConversation: Bool = false
     ) async throws {
+        _ = resume // Unused parameter kept for backwards compatibility
         // Convert legacy ChatMessages to AppLLMMessages if needed
         if conversationHistory.isEmpty {
             conversationHistory = MessageConverter.appLLMMessagesFrom(chatMessages: messages)

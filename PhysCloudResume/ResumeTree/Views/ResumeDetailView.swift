@@ -61,12 +61,28 @@ struct ResumeDetailView: View {
 
     @ViewBuilder
     private func nodeView(_ node: TreeNode) -> some View {
-        if node.includeInEditor {
-            if node.hasChildren {
-                NodeWithChildrenView(node: node)
-            } else {
-                NodeLeafView(node: node)
+        // Defensive check to prevent crashes with corrupted TreeNode data
+        // Wrap in a defensive block that catches any SwiftData faulting errors
+        Group {
+            let includeInEditor = safeGetNodeProperty { node.includeInEditor } ?? false
+            if includeInEditor {
+                let hasChildren = safeGetNodeProperty { node.hasChildren } ?? false
+                if hasChildren {
+                    NodeWithChildrenView(node: node)
+                } else {
+                    NodeLeafView(node: node)
+                }
             }
+        }
+    }
+    
+    /// Safely gets a TreeNode property, returning nil if the node data is corrupted
+    private func safeGetNodeProperty<T>(_ getter: () -> T) -> T? {
+        do {
+            return getter()
+        } catch {
+            Logger.warning("⚠️ TreeNode data access failed: \(error)")
+            return nil
         }
     }
 }

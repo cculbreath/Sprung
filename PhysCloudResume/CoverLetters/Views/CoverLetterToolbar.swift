@@ -35,6 +35,14 @@ func CoverLetterToolbar(
         HStack(spacing: 8) {
             // Get the existing view from our provider - this avoids creating it during rendering
             CoverLetterAiViewProvider.shared.getView(buttons: buttons, refresh: refresh)
+            
+            // Batch generation button
+            Button(action: {
+                buttons.wrappedValue.showBatchGeneration = true
+            }) {
+                Label("Batch Generate", systemImage: "square.stack.3d.up.fill")
+            }
+            .help("Generate cover letters with multiple models")
 
             Button(action: {
                 buttons.wrappedValue.showInspector.toggle()

@@ -28,6 +28,8 @@ class SwiftOpenAIAdapterForAnthropic: BaseSwiftOpenAIAdapter {
         let isStructuredOutput = query.desiredResponseType != nil
         let typeName = isStructuredOutput ? String(describing: query.desiredResponseType) : "none"
         let isRevisionsContainer = typeName.contains("RevisionsContainer")
+        let isFixFitsResponseContainer = typeName.contains("FixFitsResponseContainer")
+        let isContentsFitResponse = typeName.contains("ContentsFitResponse")
 
         // Ensure we're using a valid Claude model - CRITICAL FIX
         let modelIdentifier = query.modelIdentifier
@@ -92,6 +94,49 @@ class SwiftOpenAIAdapterForAnthropic: BaseSwiftOpenAIAdapter {
                 4. Your response must ONLY contain this JSON structure with no additional text or explanation
                 5. Each revision should be focused on a specific portion of the resume
                 """
+            } else if isFixFitsResponseContainer {
+                // Special handling for FixFitsResponseContainer
+                enhancedContent += """
+                
+                IMPORTANT: Your response MUST be a valid JSON object with the following structure:
+                {
+                  "revised_skills_and_expertise": [
+                    {
+                      "id": "original-uuid-string",
+                      "newValue": "revised content for the skill",
+                      "originalValue": "original content echoed back",
+                      "treePath": "original treePath echoed back",
+                      "isTitleNode": true or false
+                    },
+                    ... more skill nodes ...
+                  ]
+                }
+                
+                Important requirements:
+                1. Wrap the array in an object with the key "revised_skills_and_expertise"
+                2. Echo back the exact original values for id, originalValue, treePath, and isTitleNode
+                3. Only modify the "newValue" field to make content shorter/more concise
+                4. Your response must ONLY contain this JSON structure with no additional text
+                """
+            } else if isContentsFitResponse {
+                // Special handling for ContentsFitResponse
+                enhancedContent += """
+                
+                IMPORTANT: Your response MUST be a valid JSON object with the following structure:
+                {
+                  "contentsFit": true or false,
+                  "overflow_line_count": integer
+                }
+                
+                Important requirements:
+                1. Analyze the image to determine if content fits without overflow
+                2. Count the number of text lines that are overflowing or overlapping content below
+                3. Use 0 for overflow_line_count if content fits properly OR if bounding boxes overlap but no actual text lines overflow
+                4. Be conservative in line count estimation - better to underestimate than overestimate
+                5. Return exactly this JSON structure with no additional text
+                6. Use boolean true/false for contentsFit, not strings
+                7. Use integer number for overflow_line_count, not strings
+                """
             } else if typeName.contains("JobRecommendation") {
                 enhancedContent += "\n\nIMPORTANT: Your response MUST be a valid JSON object with exactly these fields: "
                 + "recommendedJobId (a string containing a UUID) and reason (a string explanation). "
@@ -132,15 +177,57 @@ class SwiftOpenAIAdapterForAnthropic: BaseSwiftOpenAIAdapter {
 
             // If structured output is requested, handle it specially
             if isStructuredOutput {
-                // Claude may include text before or after the JSON, try to extract just the JSON object
+                // First, check if we need to wrap arrays for specific response types
+                let processedContent: Data
+                
+                // Extract JSON content from markdown or other formatting
                 if let jsonContent = extractJSONFromContent(content) {
                     Logger.debug("👤 Claude JSON response extracted: \(String(describing: jsonContent.prefix(100)))...")
-                    return .structured(jsonContent.data(using: .utf8) ?? Data())
+                    
+                    // Check if content is a JSON array that needs wrapping
+                    let trimmedContent = jsonContent.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                    if trimmedContent.hasPrefix("[") {
+                        // Validate it's a proper JSON array
+                        if let data = trimmedContent.data(using: .utf8),
+                           let _ = try? JSONSerialization.jsonObject(with: data) {
+                            
+                            if isRevisionsContainer {
+                                // Wrap array in revArray object
+                                let revisionsContent = """
+                                {
+                                  "revArray": \(trimmedContent)
+                                }
+                                """
+                                Logger.debug("👤 Wrapped array in revArray object")
+                                processedContent = Data(revisionsContent.utf8)
+                            } else if isFixFitsResponseContainer {
+                                // Wrap array in revised_skills_and_expertise object
+                                let fixFitsContent = """
+                                {
+                                  "revised_skills_and_expertise": \(trimmedContent)
+                                }
+                                """
+                                Logger.debug("👤 Wrapped array in revised_skills_and_expertise object")
+                                processedContent = Data(fixFitsContent.utf8)
+                            } else {
+                                // For other types, use the array as-is
+                                processedContent = Data(trimmedContent.utf8)
+                            }
+                        } else {
+                            // Invalid JSON array, use as-is
+                            processedContent = Data(jsonContent.utf8)
+                        }
+                    } else {
+                        // Not an array, use the extracted JSON as-is
+                        processedContent = Data(jsonContent.utf8)
+                    }
                 } else {
                     // If extraction fails, try with the raw content
                     Logger.debug("👤 Claude JSON extraction failed, using raw content")
-                    return .structured(content.data(using: .utf8) ?? Data())
+                    processedContent = Data(content.utf8)
                 }
+                
+                return .structured(processedContent)
             } else {
                 // Return text response for non-structured outputs
                 return .text(content)
@@ -166,31 +253,92 @@ class SwiftOpenAIAdapterForAnthropic: BaseSwiftOpenAIAdapter {
     /// - Parameter content: The raw content string that may contain JSON
     /// - Returns: Cleaned JSON string or nil if extraction fails
     private func extractJSONFromContent(_ content: String) -> String? {
-        // Special case: if the content is already valid JSON array, return it
-        if content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).hasPrefix("[") {
-            if let data = content.data(using: .utf8),
+        let trimmed = content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        
+        // Handle markdown code blocks first
+        if trimmed.hasPrefix("```json") || trimmed.hasPrefix("```") {
+            // Extract content between code block markers
+            let lines = trimmed.components(separatedBy: .newlines)
+            var jsonLines: [String] = []
+            var insideCodeBlock = false
+            
+            for line in lines {
+                if line.hasPrefix("```") {
+                    if !insideCodeBlock {
+                        insideCodeBlock = true
+                        continue
+                    } else {
+                        // End of code block
+                        break
+                    }
+                } else if insideCodeBlock {
+                    jsonLines.append(line)
+                }
+            }
+            
+            let extractedContent = jsonLines.joined(separator: "\n")
+            return validateAndReturnJSON(extractedContent)
+        }
+        
+        // Handle direct JSON content
+        return validateAndReturnJSON(trimmed)
+    }
+    
+    /// Validates and returns JSON content if valid
+    /// - Parameter content: The content to validate
+    /// - Returns: Valid JSON string or nil
+    private func validateAndReturnJSON(_ content: String) -> String? {
+        let trimmed = content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        
+        // Special case: if the content is already a valid JSON array, return it
+        if trimmed.hasPrefix("[") {
+            if let data = trimmed.data(using: .utf8),
                let _ = try? JSONSerialization.jsonObject(with: data) {
-                return content
+                return trimmed
             }
         }
-
-        // Look for the first { and the last } to extract the JSON object
-        guard let startIndex = content.firstIndex(of: "{"),
-              let endIndex = content.lastIndex(of: "}"),
-              startIndex < endIndex else {
-            return nil
+        
+        // Special case: if the content is already a valid JSON object, return it
+        if trimmed.hasPrefix("{") {
+            if let data = trimmed.data(using: .utf8),
+               let _ = try? JSONSerialization.jsonObject(with: data) {
+                return trimmed
+            }
         }
-
-        // Extract the JSON substring
-        let jsonSubstring = content[startIndex...endIndex]
+        
+        // Look for the first { and the last } to extract the JSON object
+        guard let startIndex = trimmed.firstIndex(of: "{"),
+              let endIndex = trimmed.lastIndex(of: "}"),
+              startIndex < endIndex else {
+            // Try looking for JSON array instead
+            guard let arrayStart = trimmed.firstIndex(of: "["),
+                  let arrayEnd = trimmed.lastIndex(of: "]"),
+                  arrayStart < arrayEnd else {
+                return nil
+            }
+            
+            let jsonSubstring = trimmed[arrayStart...arrayEnd]
+            let jsonString = String(jsonSubstring)
+            
+            // Validate that it's valid JSON
+            guard let data = jsonString.data(using: .utf8),
+                  let _ = try? JSONSerialization.jsonObject(with: data) else {
+                return nil
+            }
+            
+            return jsonString
+        }
+        
+        // Extract the JSON substring for objects
+        let jsonSubstring = trimmed[startIndex...endIndex]
         let jsonString = String(jsonSubstring)
-
+        
         // Validate that it's valid JSON
         guard let data = jsonString.data(using: .utf8),
               let _ = try? JSONSerialization.jsonObject(with: data) else {
             return nil
         }
-
+        
         return jsonString
     }
 }

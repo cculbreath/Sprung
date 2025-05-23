@@ -66,7 +66,6 @@ class ResumeReviewService: @unchecked Sendable {
             LLMRequestService.shared.sendMixedRequest(
                 promptText: promptText,
                 base64Image: img,
-                schema: nil,
                 requestID: requestID
             ) { result in
                 if case let .success(responseWrapper) = result {
@@ -98,104 +97,141 @@ class ResumeReviewService: @unchecked Sendable {
     ///   - resume: The resume containing the skills
     ///   - skillsJsonString: JSON string representation of skills
     ///   - base64Image: Base64 encoded image of the resume
+    ///   - overflowLineCount: Number of lines overflowing from previous contentsFit check
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendFixFitsRequest(
         resume: Resume,
         skillsJsonString: String,
         base64Image: String,
+        overflowLineCount: Int = 0,
         onComplete: @escaping (Result<FixFitsResponseContainer, Error>) -> Void
     ) {
-        let prompt = PromptBuilderService.shared.buildFixFitsPrompt(skillsJsonString: skillsJsonString)
-        let schemaName = "fix_skills_overflow_schema"
-        let schema = OverflowSchemas.fixFitsSchemaString
+        _ = resume // Unused parameter
+        let currentModel = OpenAIModelFetcher.getPreferredModelString()
+        let provider = AIModels.providerForModel(currentModel)
         
         let requestID = UUID()
         currentRequestID = requestID
         
-        LLMRequestService.shared.sendMixedRequest(
-            promptText: prompt,
-            base64Image: base64Image,
-            schema: (name: schemaName, jsonString: schema),
-            requestID: requestID
-        ) { result in
-            guard self.currentRequestID == requestID else { return }
+        // Special handling for Grok models - use text-only approach
+        if provider == AIModels.Provider.grok {
+            Logger.debug("Using Grok text-only approach for fix fits request with \(overflowLineCount) overflow lines")
             
-            switch result {
-            case let .success(responseWrapper):
+            // Build specialized prompt for Grok that doesn't require image analysis
+            let grokPrompt = PromptBuilderService.shared.buildGrokFixFitsPrompt(skillsJsonString: skillsJsonString, overflowLineCount: overflowLineCount)
+            
+            LLMRequestService.shared.sendStructuredMixedRequest(
+                promptText: grokPrompt,
+                base64Image: nil,  // No image for Grok
+                responseType: FixFitsResponseContainer.self,
+                jsonSchema: nil,
+                requestID: requestID
+            ) { result in
+                guard self.currentRequestID == requestID else { return }
+                self.handleFixFitsResponse(result: result, onComplete: onComplete)
+            }
+        } else {
+            Logger.debug("Using standard image-based approach for fix fits request")
+            
+            // Standard approach for other models (OpenAI, Claude, Gemini)
+            let prompt = PromptBuilderService.shared.buildFixFitsPrompt(skillsJsonString: skillsJsonString)
+            
+            LLMRequestService.shared.sendStructuredMixedRequest(
+                promptText: prompt,
+                base64Image: base64Image,
+                responseType: FixFitsResponseContainer.self,
+                jsonSchema: nil,
+                requestID: requestID
+            ) { result in
+                guard self.currentRequestID == requestID else { return }
+                self.handleFixFitsResponse(result: result, onComplete: onComplete)
+            }
+        }
+    }
+    
+    /// Handles the response from a fix fits request (shared logic)
+    /// - Parameters:
+    ///   - result: The result from the LLM request
+    ///   - onComplete: The completion callback
+    private func handleFixFitsResponse(
+        result: Result<ResponsesAPIResponse, Error>,
+        onComplete: @escaping (Result<FixFitsResponseContainer, Error>) -> Void
+    ) {
+        switch result {
+        case let .success(responseWrapper):
+            
+            do {
+                // Get detailed information about the response for debugging
+                Logger.debug("Response ID: \(responseWrapper.id)")
+                Logger.debug("Response Model: \(responseWrapper.model)")
                 
+                let content = responseWrapper.content
+                Logger.debug("Content from wrapper: \(content.prefix(100))...")
+                
+                guard let responseData = content.data(using: .utf8) else {
+                    throw NSError(domain: "ResumeReviewService", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data."])
+                }
+                
+                // Log the JSON for debugging
+                Logger.debug("FixFits response JSON: \(content)")
+                
+                // First try the standard JSON decoder
                 do {
-                    // Get detailed information about the response for debugging
-                    Logger.debug("Response ID: \(responseWrapper.id)")
-                    Logger.debug("Response Model: \(responseWrapper.model)")
+                    let decodedResponse = try JSONDecoder().decode(FixFitsResponseContainer.self, from: responseData)
+                    onComplete(.success(decodedResponse))
+                } catch let decodingError {
+                    Logger.debug("Standard JSON decoding failed: \(decodingError.localizedDescription)")
                     
-                    let content = responseWrapper.content
-                    Logger.debug("Content from wrapper: \(content.prefix(100))...")
-                    
-                    guard let responseData = content.data(using: .utf8) else {
-                        throw NSError(domain: "ResumeReviewService", code: 1004, userInfo: [NSLocalizedDescriptionKey: "Failed to convert LLM content to Data."])
-                    }
-                    
-                    // Log the JSON for debugging
-                    Logger.debug("FixFits response JSON: \(content)")
-                    
-                    // First try the standard JSON decoder
+                    // If standard decoding fails, try a more lenient approach using JSONSerialization
                     do {
-                        let decodedResponse = try JSONDecoder().decode(FixFitsResponseContainer.self, from: responseData)
-                        onComplete(.success(decodedResponse))
-                    } catch let decodingError {
-                        Logger.debug("Standard JSON decoding failed: \(decodingError.localizedDescription)")
-                        
-                        // If standard decoding fails, try a more lenient approach using JSONSerialization
-                        do {
-                            if let jsonObject = try JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-                               let skillsArray = jsonObject["revised_skills_and_expertise"] as? [[String: Any]] {
-                                
-                                // Convert to our model manually
-                                var revisedNodes: [RevisedSkillNode] = []
-                                
-                                for item in skillsArray {
-                                    if let id = item["id"] as? String,
-                                       let newValue = item["newValue"] as? String,
-                                       let originalValue = item["originalValue"] as? String,
-                                       let treePath = item["treePath"] as? String,
-                                       let isTitleNode = item["isTitleNode"] as? Bool {
-                                        
-                                        let node = RevisedSkillNode(
-                                            id: id,
-                                            newValue: newValue,
-                                            originalValue: originalValue,
-                                            treePath: treePath,
-                                            isTitleNode: isTitleNode
-                                        )
-                                        revisedNodes.append(node)
-                                    }
-                                }
-                                
-                                if !revisedNodes.isEmpty {
-                                    // If we parsed something, return it
-                                    onComplete(.success(FixFitsResponseContainer(revisedSkillsAndExpertise: revisedNodes)))
-                                    return
+                        if let jsonObject = try JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+                           let skillsArray = jsonObject["revised_skills_and_expertise"] as? [[String: Any]] {
+                            
+                            // Convert to our model manually
+                            var revisedNodes: [RevisedSkillNode] = []
+                            
+                            for item in skillsArray {
+                                if let id = item["id"] as? String,
+                                   let newValue = item["newValue"] as? String,
+                                   let originalValue = item["originalValue"] as? String,
+                                   let treePath = item["treePath"] as? String,
+                                   let isTitleNode = item["isTitleNode"] as? Bool {
+                                    
+                                    let node = RevisedSkillNode(
+                                        id: id,
+                                        newValue: newValue,
+                                        originalValue: originalValue,
+                                        treePath: treePath,
+                                        isTitleNode: isTitleNode
+                                    )
+                                    revisedNodes.append(node)
                                 }
                             }
                             
-                            // Couldn't handle it with manual parsing either
-                            throw decodingError
-                        } catch {
-                            // All parsing failed, log full error details
-                            Logger.debug("Error decoding FixFitsResponseContainer: \(error.localizedDescription)")
-                            Logger.debug("Raw JSON: \(content)")
-                            onComplete(.failure(error))
+                            if !revisedNodes.isEmpty {
+                                // If we parsed something, return it
+                                onComplete(.success(FixFitsResponseContainer(revisedSkillsAndExpertise: revisedNodes)))
+                                return
+                            }
                         }
+                        
+                        // Couldn't handle it with manual parsing either
+                        throw decodingError
+                    } catch {
+                        // All parsing failed, log full error details
+                        Logger.debug("Error decoding FixFitsResponseContainer: \(error.localizedDescription)")
+                        Logger.debug("Raw JSON: \(content)")
+                        onComplete(.failure(error))
                     }
-                } catch {
-                    Logger.debug("Error decoding FixFitsResponseContainer: \(error.localizedDescription)")
-                    onComplete(.failure(error))
                 }
-                
-            case let .failure(error):
+            } catch {
+                Logger.debug("Error decoding FixFitsResponseContainer: \(error.localizedDescription)")
                 onComplete(.failure(error))
             }
+            
+        case let .failure(error):
+            onComplete(.failure(error))
         }
     }
     
@@ -210,22 +246,21 @@ class ResumeReviewService: @unchecked Sendable {
         base64Image: String,
         onComplete: @escaping (Result<ContentsFitResponse, Error>) -> Void
     ) {
+        _ = resume // Unused parameter
         Logger.debug("ResumeReviewService: sendContentsFitRequest called")
         let prompt = PromptBuilderService.shared.buildContentsFitPrompt()
-        let schemaName = "check_content_fit_schema"
-        let schema = OverflowSchemas.contentsFitSchemaString
         
         Logger.debug("ResumeReviewService: ContentsFit prompt:\n\(prompt)")
-        Logger.debug("ResumeReviewService: ContentsFit schema:\n\(schema)")
         
         let requestID = UUID()
         currentRequestID = requestID
         
         Logger.debug("ResumeReviewService: About to send mixed request for ContentsFit check")
-        LLMRequestService.shared.sendMixedRequest(
+        LLMRequestService.shared.sendStructuredMixedRequest(
             promptText: prompt,
             base64Image: base64Image,
-            schema: (name: schemaName, jsonString: schema),
+            responseType: ContentsFitResponse.self,
+            jsonSchema: nil,  // Let LLMSchemaBuilder create the schema
             requestID: requestID
         ) { result in
             Logger.debug("ResumeReviewService: Received response for ContentsFit check")
@@ -265,12 +300,16 @@ class ResumeReviewService: @unchecked Sendable {
                         if content.contains("\"contentsFit\":true") || 
                            content.contains("\"contentsFit\": true") {
                             Logger.debug("Found contentsFit:true via string search")
-                            onComplete(.success(ContentsFitResponse(contentsFit: true)))
+                            // Try to extract overflow line count, default to 0
+                            let overflowLineCount = self.extractOverflowLineCount(from: content) ?? 0
+                            onComplete(.success(ContentsFitResponse(contentsFit: true, overflowLineCount: overflowLineCount)))
                             return
                         } else if content.contains("\"contentsFit\":false") || 
                                   content.contains("\"contentsFit\": false") {
                             Logger.debug("Found contentsFit:false via string search")
-                            onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                            // Try to extract overflow line count, default to 0
+                            let overflowLineCount = self.extractOverflowLineCount(from: content) ?? 0
+                            onComplete(.success(ContentsFitResponse(contentsFit: false, overflowLineCount: overflowLineCount)))
                             return
                         }
                         
@@ -282,7 +321,8 @@ class ResumeReviewService: @unchecked Sendable {
                             if let jsonObject = try JSONSerialization.jsonObject(with: responseData) as? [String: Any],
                                let contentsFit = jsonObject["contentsFit"] as? Bool {
                                 Logger.debug("Found contentsFit:\(contentsFit) via JSONSerialization")
-                                onComplete(.success(ContentsFitResponse(contentsFit: contentsFit)))
+                                let overflowLineCount = jsonObject["overflow_line_count"] as? Int ?? 0
+                                onComplete(.success(ContentsFitResponse(contentsFit: contentsFit, overflowLineCount: overflowLineCount)))
                                 return
                             }
                             
@@ -292,30 +332,30 @@ class ResumeReviewService: @unchecked Sendable {
                             if jsonString.contains("true") && !jsonString.contains("false") {
                                 // If only "true" appears, assume it's a contentsFit:true
                                 Logger.debug("Assuming contentsFit:true based on JSON values")
-                                onComplete(.success(ContentsFitResponse(contentsFit: true)))
+                                onComplete(.success(ContentsFitResponse(contentsFit: true, overflowLineCount: 0)))
                                 return
                             } else if jsonString.contains("false") && !jsonString.contains("true") {
                                 // If only "false" appears, assume it's a contentsFit:false
                                 Logger.debug("Assuming contentsFit:false based on JSON values")
-                                onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                                onComplete(.success(ContentsFitResponse(contentsFit: false, overflowLineCount: 0)))
                                 return
                             }
                             
                             // If all parsing fails, default to not fitting to force another iteration
                             Logger.debug("Could not parse contentsFit value, defaulting to false")
-                            onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                            onComplete(.success(ContentsFitResponse(contentsFit: false, overflowLineCount: 0)))
                         } catch {
                             // All parsing failed, log details and default to false to continue
                             Logger.debug("All ContentsFit parsing failed: \(error.localizedDescription)")
                             Logger.debug("Raw JSON: \(content)")
                             Logger.debug("Defaulting to contentsFit:false to continue iterations")
-                            onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                            onComplete(.success(ContentsFitResponse(contentsFit: false, overflowLineCount: 0)))
                         }
                     }
                 } catch {
                     Logger.debug("Error in initial ContentsFitResponse handling: \(error.localizedDescription)")
                     // Default to false to force another attempt
-                    onComplete(.success(ContentsFitResponse(contentsFit: false)))
+                    onComplete(.success(ContentsFitResponse(contentsFit: false, overflowLineCount: 0)))
                 }
                 
             case let .failure(error):
@@ -371,5 +411,29 @@ class ResumeReviewService: @unchecked Sendable {
     func cancelRequest() {
         currentRequestID = nil
         LLMRequestService.shared.cancelRequest()
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Extracts overflow line count from JSON content string
+    /// - Parameter content: The JSON content string
+    /// - Returns: The overflow line count, or nil if not found
+    private func extractOverflowLineCount(from content: String) -> Int? {
+        // Try to find overflow_line_count in the JSON string
+        let patterns = [
+            "\"overflow_line_count\"\\s*:\\s*(\\d+)",
+            "\"overflow_line_count\":(\\d+)"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+               let match = regex.firstMatch(in: content, options: [], range: NSRange(content.startIndex..., in: content)),
+               let numberRange = Range(match.range(at: 1), in: content) {
+                let numberString = String(content[numberRange])
+                return Int(numberString)
+            }
+        }
+        
+        return nil
     }
 }

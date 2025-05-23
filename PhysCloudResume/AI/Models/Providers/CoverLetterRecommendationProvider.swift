@@ -156,8 +156,15 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
         // Get model identifier
         let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
         
+        // Determine the provider for this model
+        let modelProvider = AIModels.providerFor(modelName: modelIdentifier)
+        
+        // Update the app state's preferred provider to match the model's provider
+        let appState = AppState()
+        appState.settings.preferredLLMProvider = modelProvider
+        
         // Update client if needed for this model
-        updateClientIfNeeded(appState: AppState())
+        updateClientIfNeeded(appState: appState)
 
         do {
             // Create query for structured output

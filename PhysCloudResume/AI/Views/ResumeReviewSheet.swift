@@ -327,6 +327,7 @@ struct ResumeReviewSheet: View {
     func performFixOverflow(resume: Resume) async {
         var loopCount = 0
         var operationSuccess = false
+        var currentOverflowLineCount = 0  // Track overflow lines between iterations
         
         Logger.debug("FixOverflow: Starting performFixOverflow with max iterations: \(fixOverflowMaxIterations)")
 
@@ -386,7 +387,8 @@ struct ResumeReviewSheet: View {
                 reviewService.sendFixFitsRequest(
                     resume: resume,
                     skillsJsonString: skillsJsonString,
-                    base64Image: currentImageBase64
+                    base64Image: currentImageBase64,
+                    overflowLineCount: currentOverflowLineCount
                 ) { result in
                     continuation.resume(returning: result)
                 }
@@ -432,11 +434,8 @@ struct ResumeReviewSheet: View {
                 var changesSummary = "Iteration \(loopCount): \(changedNodes.count) node\(changedNodes.count > 1 ? "s" : "") updated:\n\n"
                 
                 for (index, change) in changedNodes.enumerated() {
-                    // Truncate values if they're too long for display
-                    let oldValueDisplay = change.oldValue.count > 50 ? change.oldValue.prefix(47) + "..." : change.oldValue
-                    let newValueDisplay = change.newValue.count > 50 ? change.newValue.prefix(47) + "..." : change.newValue
-                    
-                    changesSummary += "\(index + 1). \"\(oldValueDisplay)\" → \"\(newValueDisplay)\"\n\n"
+                    // Show the full values without truncation
+                    changesSummary += "\(index + 1). \"\(change.oldValue)\" → \"\(change.newValue)\"\n\n"
                 }
                 
                 // Store in the change message, not the status message
@@ -493,14 +492,19 @@ struct ResumeReviewSheet: View {
                 break
             }
 
-            Logger.debug("FixOverflow: contentsFitResponse.contentsFit = \(contentsFitResponse.contentsFit)")
+            Logger.debug("FixOverflow: contentsFitResponse.contentsFit = \(contentsFitResponse.contentsFit), overflowLineCount = \(contentsFitResponse.overflowLineCount)")
+            
+            // Update our tracking of overflow lines for the next iteration
+            currentOverflowLineCount = contentsFitResponse.overflowLineCount
+            
             if contentsFitResponse.contentsFit {
                 fixOverflowStatusMessage = "AI confirms content fits after \(loopCount) iteration(s)."
                 operationSuccess = true
                 Logger.debug("FixOverflow: Content fits! Breaking loop.")
                 break
             } else {
-                Logger.debug("FixOverflow: Content does NOT fit. Will continue iterations if possible.")
+                let overflowDetail = currentOverflowLineCount > 0 ? " (\(currentOverflowLineCount) lines overflowing)" : ""
+                Logger.debug("FixOverflow: Content does NOT fit\(overflowDetail). Will continue iterations if possible.")
             }
 
             if loopCount >= fixOverflowMaxIterations {
