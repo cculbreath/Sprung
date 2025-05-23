@@ -107,7 +107,7 @@ class JsonToTree {
             let fontString = myValue as? String ?? ""
             let idx = indexCounter
             indexCounter += 1
-            let node = FontSizeNode(key: myKey, index: idx, fontString: fontString)
+            let node = FontSizeNode(key: myKey, index: idx, fontString: fontString, resume: res)
             nodes.append(node)
         }
 

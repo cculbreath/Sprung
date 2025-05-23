@@ -29,6 +29,8 @@ class CoverLetter: Identifiable, Hashable {
     var content: String = ""
     var generated: Bool = false
     var includeResumeRefs: Bool = false
+    // The AI model used to generate this cover letter
+    var generationModel: String? = nil
     var encodedEnabledRefs: Data? // Store as Data
     var encodedMessageHistory: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none

@@ -28,7 +28,7 @@ struct CoverLetterAiManager: View {
 
     // MARK: - AppStorage
 
-    @AppStorage("preferredOpenAIModel") private var preferredOpenAIModel: String = "gpt-4o"
+    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
 
     // MARK: - State
 
@@ -171,7 +171,7 @@ struct CoverLetterAiManager: View {
                 checkForSettingsChange()
             }
             // Watch for AI model changes
-            .onChange(of: preferredOpenAIModel) {
+            .onChange(of: preferredLLMModel) {
                 checkForSettingsChange()
             }
             .onChange(of: ttsEnabled) { _, newTtsEnabledState in
@@ -230,7 +230,7 @@ struct CoverLetterAiManager: View {
                 checkForSettingsChange()
             }
             // Watch for AI model changes
-            .onChange(of: preferredOpenAIModel) {
+            .onChange(of: preferredLLMModel) {
                 checkForSettingsChange()
             }
             .onChange(of: ttsEnabled) { _, newTtsEnabledState in
@@ -269,7 +269,7 @@ struct CoverLetterAiManager: View {
 
     private func initializeStateTracking() {
         // Initialize state tracking with current model value from AppStorage
-        previousModel = preferredOpenAIModel
+        previousModel = preferredLLMModel
         if let letter = jobAppStore.selectedApp?.selectedCover {
             previousIncludeResumeBG = letter.includeResumeRefs
         }
@@ -339,7 +339,7 @@ struct CoverLetterAiManager: View {
         if let jobApp = jobAppStore.selectedApp,
            let letter = jobApp.selectedCover
         {
-            let modelChanged = preferredOpenAIModel != previousModel
+            let modelChanged = preferredLLMModel != previousModel
             let includeBGChanged = letter.includeResumeRefs != previousIncludeResumeBG
 
             if (modelChanged || includeBGChanged) && letter.generated {
@@ -358,7 +358,7 @@ struct CoverLetterAiManager: View {
             }
 
             // Update previous state for next check
-            previousModel = preferredOpenAIModel
+            previousModel = preferredLLMModel
             previousIncludeResumeBG = letter.includeResumeRefs
         }
     }

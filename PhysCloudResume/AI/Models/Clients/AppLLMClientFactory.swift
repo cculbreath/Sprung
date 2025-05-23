@@ -48,7 +48,7 @@ class AppLLMClientFactory {
             
         case AIModels.Provider.grok:
             config = LLMProviderConfig.forGrok(apiKey: apiKey)
-            // For now, Grok can use the OpenAI adapter as it's compatible
+            // Use OpenAI adapter but with Grok configuration (endpoints are configured in BaseSwiftOpenAIAdapter)
             return SwiftOpenAIAdapterForOpenAI(config: config, appState: appState)
             
         default:
@@ -65,9 +65,15 @@ class AppLLMClientFactory {
     ///   - appState: The application state
     /// - Returns: An LLM client configured for the specified model
     static func createClientForModel(model: String, appState: AppState) -> AppLLMClientProtocol {
+        // ENHANCED DEBUG: Log the incoming model and detected provider
+        Logger.debug("🏭 Factory called with model: '\(model)'")
+        
         // Determine provider from model
         let provider = AIModels.providerForModel(model)
+        Logger.debug("🔍 Detected provider: '\(provider)' for model: '\(model)'")
+        
         let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
+        Logger.debug("🧹 Sanitized model: '\(sanitizedModel)'")
         
         // Add validation to ensure provider and model match
         // This avoids the Claude adapter from being used with Grok models and vice versa
@@ -94,6 +100,8 @@ class AppLLMClientFactory {
             correctedProvider = AIModels.Provider.gemini
         }
         
+        Logger.debug("✅ Final provider: '\(correctedProvider)' for model: '\(model)'")
+        
         // Get the API key using UserDefaults
         var apiKey = ""
         
@@ -110,24 +118,31 @@ class AppLLMClientFactory {
             apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? ""
         }
         
+        Logger.debug("🔑 Using API key for \(correctedProvider): \(apiKey.prefix(4))..., length: \(apiKey.count)")
+        
         // Create the appropriate configuration and adapter
         var config: LLMProviderConfig
         switch correctedProvider {
         case AIModels.Provider.openai:
+            Logger.debug("🏗️ Creating OpenAI config")
             config = LLMProviderConfig.forOpenAI(apiKey: apiKey, model: sanitizedModel)
             return SwiftOpenAIAdapterForOpenAI(config: config, appState: appState)
             
         case AIModels.Provider.gemini:
+            Logger.debug("🏗️ Creating Gemini config")
             config = LLMProviderConfig.forGemini(apiKey: apiKey, model: sanitizedModel)
             return SwiftOpenAIAdapterForGemini(config: config, appState: appState)
             
         case AIModels.Provider.claude:
+            Logger.debug("🏗️ Creating Claude config")
             config = LLMProviderConfig.forClaude(apiKey: apiKey, model: sanitizedModel)
             return SwiftOpenAIAdapterForAnthropic(config: config, appState: appState)
             
         case AIModels.Provider.grok:
+            Logger.debug("🏗️ Creating Grok config")
             config = LLMProviderConfig.forGrok(apiKey: apiKey, model: sanitizedModel)
-            // For now, Grok can use the OpenAI adapter as it's compatible
+            Logger.debug("🔧 Grok config created: providerType=\(config.providerType), baseURL=\(config.baseURL ?? "nil")")
+            // Use OpenAI adapter but with Grok configuration (endpoints are configured in BaseSwiftOpenAIAdapter)
             return SwiftOpenAIAdapterForOpenAI(config: config, appState: appState)
             
         default:

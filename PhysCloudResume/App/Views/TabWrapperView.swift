@@ -145,6 +145,8 @@ struct CoverLetterButtons {
     var isEditing: Bool = false
     /// Whether the current cover letter is editable (i.e., already generated)
     var canEdit: Bool = true
+    /// Show batch generation sheet
+    var showBatchGeneration: Bool = false
 }
 
 struct ResumeButtons {

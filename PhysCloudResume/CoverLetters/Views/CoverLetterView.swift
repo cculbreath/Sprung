@@ -10,12 +10,20 @@ import SwiftUI
 struct CoverLetterView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+    @Environment(AppState.self) private var appState: AppState
 
     @Binding var buttons: CoverLetterButtons
     @State private var selectedInspectorTab: InspectorTab = .references // State to manage selected tab
 
     var body: some View {
         contentView()
+            .sheet(isPresented: $buttons.showBatchGeneration) {
+                BatchCoverLetterView()
+                    .environment(appState)
+                    .environment(jobAppStore)
+                    .environment(coverLetterStore)
+                    .environmentObject(ModelService.shared)
+            }
     }
 
     @ViewBuilder

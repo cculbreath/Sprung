@@ -114,21 +114,69 @@ class PromptBuilderService {
         return """
         You are an expert document layout analyzer. Examine the attached resume image, specifically the 'Skills and Expertise' section (labeled with that header).
         
-        Your task is to determine if this section fits properly without overflowing or overlapping with other content.
+        Your task is to determine if this section fits properly and estimate any overflow.
         
-        Key things to check:
-        1. Is there any text that extends beyond the section's boundaries?
+        Context for analysis:
+        - Entry values (content text) typically display about 44 characters per line before wrapping
+        - Entry titles typically display about 28 characters per line before wrapping
+        - Each entry starts on its own line
+        
+        Key things to analyze:
+        1. Does any text extend beyond the Skills section's boundaries?
         2. Is there any overlap between the Skills section and the Education section below it?
-        3. Is there a small, clean margin between the bottom of the Skills section and whatever comes after it?
+        3. How many text lines (if any) are overflowing or overlapping?
+        4. Is there a clean margin between the bottom of the Skills section and whatever comes after it?
         
-        A properly fitting section has all text fully contained within its boundaries and has a visible margin to the section below it.
+        For the overflow_line_count estimation:
+        - Count each line of text that visibly extends beyond the intended section boundary
+        - Count lines that overlap with content below (even if text doesn't extend past boundaries)
+        - Use 0 if content fits properly OR if bounding boxes overlap but no actual text lines overflow
+        - Be conservative in your estimate - it's better to underestimate than overestimate
         
-        IMPORTANT: Respond ONLY with the JSON structure specified in the API request's 'response_format.schema' parameter and NOTHING ELSE:
+        Examples:
+        - Content fits perfectly: {"contentsFit": true, "overflow_line_count": 0}
+        - Minor overlap, no text overflow: {"contentsFit": false, "overflow_line_count": 0}
+        - 2 lines of text clearly overflow: {"contentsFit": false, "overflow_line_count": 2}
+        - Significant overflow, about 3-4 lines: {"contentsFit": false, "overflow_line_count": 4}
         
-        {"contentsFit": true}  - if everything fits properly
-        {"contentsFit": false} - if there is any overflow or text cuts off
+        IMPORTANT: Respond ONLY with the JSON structure specified in the API request's 'response_format.schema' parameter and NOTHING ELSE. Your ENTIRE response must be ONLY the JSON object. This is critical for automated processing and will be validated on the server side against the schema.
+        """
+    }
+    
+    /// Builds a specialized prompt for the 'fixFits' feature for Grok models (text-only)
+    /// - Parameters:
+    ///   - skillsJsonString: JSON string representation of skills
+    ///   - overflowLineCount: Number of lines that are overflowing (0 if just touching boundaries)
+    /// - Returns: A formatted prompt string for Grok that doesn't require image analysis
+    func buildGrokFixFitsPrompt(skillsJsonString: String, overflowLineCount: Int = 0) -> String {
+        let overflowGuidance = overflowLineCount > 0 
+            ? "Visual analysis indicates approximately \(overflowLineCount) lines of text are overflowing the intended space. Focus your editing efforts on reducing content by roughly this amount."
+            : "Visual analysis indicates the content boundaries are overlapping but no significant text overflow. Make minimal adjustments to ensure clean spacing."
         
-        DO NOT include any explanation, analysis, or additional text. Your ENTIRE response must be ONLY the JSON object. This is critical for automated processing and will be validated on the server side against the schema.
+        return """
+        You are an expert resume editor. It has been determined that the text column produced by these data nodes is too long for the available space. Please reduce the length of the text, doing your best to preserve all meaning while avoiding awkward or uncommon abbreviations or truncation. Pay special attention to entries that are longer than the others. 
+
+        \(overflowGuidance)
+
+        At the rendered font size that the "value" field is rendered, approximately 44 characters can fit on a single line. Use this information to implement changes that maximize the content per line while minimizing the number of lines overall. Each node "value" starts on its own line. A entry's title can accommodate approximately 28 characters. Try to keep all titles to no more than one line.
+
+        IMPORTANT CONSTRAINTS:
+        1. DO NOT use non-standard abbreviations or acronyms that aren't widely recognized in the industry.
+        2. DO NOT truncate words to make them non-words (e.g., don't change "development" to "devt" or "devlpmnt").
+        3. DO NOT create new terminology that isn't standard in the field.
+        4. Only use standard, professionally accepted abbreviations (e.g., "MS" for Microsoft, "UI/UX" for User Interface/User Experience).
+        5. Focus on rewording and condensing phrases to be more concise rather than abbreviating individual words.
+        6. Maintain consistent grammar and professional language throughout.
+        7. Avoid exaggerating or misrepresenting the applicant's actual experience level.
+        8. When significant reductions are needed, balance edits across multiple entries rather than drastically shortening just one or two entries while leaving others at full length.
+        9. Apply a consistent editing approach across similar types of entries.
+        10. Do not shorten entries more than necessary to resolve the overflow.
+
+        The current skills and expertise content is provided as a JSON array of nodes:
+
+        \(skillsJsonString)
+
+        Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. Each node in your response must include the original 'id', 'originalValue', 'isTitleNode', and 'treePath' fields exactly as they were provided in the input. Provide your suggested change in the 'newValue' field.
         """
     }
     

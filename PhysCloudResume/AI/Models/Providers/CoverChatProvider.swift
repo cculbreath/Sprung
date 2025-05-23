@@ -13,13 +13,36 @@ final class CoverChatProvider: BaseLLMProvider {
     var resultsAvailable: Bool = false
     var lastResponse: String = ""
     
+    /// Extract cover letter content from response, handling Gemini and Claude JSON formats
+    func extractCoverLetterContent(from text: String) -> String {
+        // First, try to parse as JSON
+        if let data = text.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // Check for Gemini format
+            if let coverLetterBody = json["cover_letter_body"] as? String {
+                return coverLetterBody
+            }
+            // Check for Claude format
+            if let coverLetter = json["cover_letter"] as? String {
+                return coverLetter
+            }
+        }
+        
+        // If not JSON or doesn't have either field, return as-is
+        return text
+    }
+    
 
     // MARK: - Initializers
 
     /// Initialize with the app state
     /// - Parameter appState: The application state
     override init(appState: AppState) {
-        super.init(appState: appState)
+        // Get the current model and create appropriate client
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        let client = AppLLMClientFactory.createClientForModel(model: modelString, appState: appState)
+        super.init(client: client)
+        Logger.debug("🎯 CoverChatProvider initialized with model: \(modelString)")
     }
     
     /// Initialize with AppLLM client
@@ -110,14 +133,19 @@ final class CoverChatProvider: BaseLLMProvider {
         buttons.wrappedValue.runRequested = true
 
         if isNewConversation {
-            // Clear conversation context and reset our history
-            Task { @MainActor in
-                letter.clearConversationContext()
-                conversationHistory = []
-            }
+            // Clear conversation context and reset our history synchronously
+            letter.clearConversationContext()
+            conversationHistory = []
+            Logger.debug("🧹 Cleared conversation context for new conversation")
         }
 
-        let systemMessage = CoverLetterPrompts.systemMessage.content
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        var systemMessage = CoverLetterPrompts.systemMessage.content
+        
+        // For Gemini models, explicitly state not to use JSON formatting
+        if modelString.lowercased().contains("gemini") {
+            systemMessage += " Do not format your response as JSON. Return the cover letter text directly without any JSON wrapping or structure."
+        }
         
         // Get the user input depending on the mode
         let userMessage = CoverLetterPrompts.generate(
@@ -134,18 +162,19 @@ final class CoverChatProvider: BaseLLMProvider {
         // Initialize or continue conversation using BaseLLMProvider methods
         if isNewConversation {
             _ = initializeConversation(systemPrompt: systemMessage, userPrompt: userMessage)
+            Logger.debug("📝 Initialized conversation with \(conversationHistory.count) messages")
         } else {
             _ = addUserMessage(userMessage)
+            Logger.debug("📝 Added user message, total messages: \(conversationHistory.count)")
         }
-        
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
-        // Check if we need to update the client for this model
-        updateClientIfNeeded(appState: AppState())
 
         Task {
             do {
                 // Create query using our conversation history
+                Logger.debug("📦 Creating query with \(conversationHistory.count) messages")
+                if conversationHistory.isEmpty {
+                    Logger.error("⚠️ Conversation history is empty!")
+                }
                 let query = AppLLMQuery(
                     messages: conversationHistory,
                     modelIdentifier: modelString,
@@ -159,9 +188,14 @@ final class CoverChatProvider: BaseLLMProvider {
                 let responseText: String
                 switch response {
                 case .text(let text):
-                    responseText = text
+                    // Check if this is a JSON response from Gemini
+                    responseText = extractCoverLetterContent(from: text)
                 case .structured(let data):
-                    responseText = String(data: data, encoding: .utf8) ?? ""
+                    if let text = String(data: data, encoding: .utf8) {
+                        responseText = extractCoverLetterContent(from: text)
+                    } else {
+                        responseText = ""
+                    }
                 }
                 
                 // Add response to conversation history
@@ -322,6 +356,12 @@ final class CoverChatProvider: BaseLLMProvider {
         Please provide helpful suggestions, improvements, and revisions to make this cover letter more effective for the target position.
         """
         
+        // For Gemini models, explicitly state not to use JSON formatting
+        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        if modelString.lowercased().contains("gemini") {
+            systemPrompt += " Do not format your response as JSON. Return the text directly without any JSON wrapping or structure."
+        }
+        
         return systemPrompt
     }
 
@@ -336,6 +376,7 @@ final class CoverChatProvider: BaseLLMProvider {
         coverLetter.content = newMessage
         coverLetter.generated = true
         coverLetter.moddedDate = Date()
+        coverLetter.generationModel = model
 
         let formattedModel = formatModelName(model ?? "LLM")
 
@@ -421,14 +462,20 @@ final class CoverChatProvider: BaseLLMProvider {
         buttons.wrappedValue.runRequested = true
 
         if isNewConversation { // Should generally be false for revisions
-            // Clear conversation context
-            Task { @MainActor in
-                letter.clearConversationContext()
-                conversationHistory = []
-            }
+            // Clear conversation context synchronously
+            letter.clearConversationContext()
+            conversationHistory = []
+            Logger.debug("🧹 Cleared conversation context for new revision conversation")
         }
 
-        let systemPrompt = CoverLetterPrompts.systemMessage.content
+        // Use the same model that generated the original cover letter, fallback to preferred model
+        let modelString = letter.generationModel ?? OpenAIModelFetcher.getPreferredModelString()
+        var systemPrompt = CoverLetterPrompts.systemMessage.content
+        
+        // For Gemini models, explicitly state not to use JSON formatting
+        if modelString.lowercased().contains("gemini") {
+            systemPrompt += " Do not format your response as JSON. Return the cover letter text directly without any JSON wrapping or structure."
+        }
 
         // Build user message based on editor prompt
         let userMessage: String
@@ -446,14 +493,18 @@ final class CoverChatProvider: BaseLLMProvider {
             \(letter.content)
             """
         } else {
-            let promptTemplate = letter.editorPrompt
-            userMessage = """
-            My initial draft of a cover letter to accompany my application is included below.
-            \(promptTemplate.rawValue)
-
-            Cover Letter initial draft:
-            \(letter.content)
-            """
+            // Use the same consolidated prompt logic as batch generation
+            guard let resume = app.selectedRes else {
+                userMessage = "Error: No resume selected"
+                return
+            }
+            
+            userMessage = CoverLetterPrompts.generate(
+                coverLetter: letter, 
+                resume: resume, 
+                mode: .rewrite,
+                customFeedbackString: ""
+            )
         }
         
         // Initialize or continue conversation
@@ -462,14 +513,15 @@ final class CoverChatProvider: BaseLLMProvider {
         } else {
             _ = addUserMessage(userMessage)
         }
-        
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
-        // Check if we need to update the client for this model
-        updateClientIfNeeded(appState: AppState())
 
         Task {
             do {
+                // Create client for the specific model
+                let specificClient = AppLLMClientFactory.createClientForModel(
+                    model: modelString, 
+                    appState: AppState()
+                )
+                
                 // Create query
                 let query = AppLLMQuery(
                     messages: conversationHistory,
@@ -477,16 +529,21 @@ final class CoverChatProvider: BaseLLMProvider {
                     temperature: 1.0
                 )
                 
-                // Execute query
-                let response = try await executeQuery(query)
+                // Execute query with the specific client
+                let response = try await specificClient.executeQuery(query)
                 
                 // Extract response content
                 let responseText: String
                 switch response {
                 case .text(let text):
-                    responseText = text
+                    // Check if this is a JSON response from Gemini
+                    responseText = extractCoverLetterContent(from: text)
                 case .structured(let data):
-                    responseText = String(data: data, encoding: .utf8) ?? ""
+                    if let text = String(data: data, encoding: .utf8) {
+                        responseText = extractCoverLetterContent(from: text)
+                    } else {
+                        responseText = ""
+                    }
                 }
                 
                 // Add response to conversation history

@@ -1,19 +1,19 @@
 //
-//  SwiftOpenAIAdapterForOpenAI.swift
+//  SwiftOpenAIAdapterForGrok.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 5/20/25.
+//  Created by Claude on 5/22/25.
 //
 
 import Foundation
 import SwiftOpenAI
 
-/// OpenAI-specific adapter for SwiftOpenAI
-class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
+/// Grok-specific adapter for SwiftOpenAI
+class SwiftOpenAIAdapterForGrok: BaseSwiftOpenAIAdapter {
     /// The app state that contains user settings and preferences
     private weak var appState: AppState?
     
-    /// Initializes the adapter with OpenAI configuration and app state
+    /// Initializes the adapter with Grok configuration and app state
     /// - Parameters:
     ///   - config: The provider configuration
     ///   - appState: The application state
@@ -22,18 +22,15 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
         super.init(config: config)
     }
     
-    /// Executes a query against the OpenAI API using SwiftOpenAI
+    /// Executes a query against the Grok API using SwiftOpenAI
     /// - Parameter query: The query to execute
-    /// - Returns: The response from the OpenAI API
+    /// - Returns: The response from the Grok API
     override func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
         // Determine if this is a request for structured output
         let isStructuredOutput = query.desiredResponseType != nil
         
-        // Detect if this is actually a Grok model being handled by OpenAI adapter
-        let providerName = config.providerType == AIModels.Provider.grok ? "Grok" : "OpenAI"
-        
         // Log the model and whether this is a structured output request
-        Logger.debug("Executing \(isStructuredOutput ? "structured" : "text") query with \(providerName) model: \(query.modelIdentifier)")
+        Logger.debug("Executing \(isStructuredOutput ? "structured" : "text") query with Grok model: \(query.modelIdentifier)")
         
         // Prepare parameters for the model
         let parameters = prepareChatParameters(for: query)
@@ -64,8 +61,8 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
                         _ = try JSONSerialization.jsonObject(with: contentData)
                         return .structured(contentData)
                     } catch {
-                        Logger.error("Invalid JSON returned from \(providerName): \(error.localizedDescription)")
-                        throw AppLLMError.clientError("\(providerName) returned invalid JSON: \(error.localizedDescription)")
+                        Logger.error("Invalid JSON returned from Grok: \(error.localizedDescription)")
+                        throw AppLLMError.clientError("Grok returned invalid JSON: \(error.localizedDescription)")
                     }
                 }
             } else {
@@ -100,66 +97,5 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
         }
         
         return jsonString
-    }
-    
-    // MARK: - TTSCapable Implementation
-    
-    func sendTTSRequest(
-        text: String,
-        voice: String,
-        instructions: String?,
-        onComplete: @escaping (Result<Data, Error>) -> Void
-    ) {
-        _ = instructions // Unused but required by protocol
-        Task {
-            do {
-                let parameters = AudioSpeechParameters(
-                    model: .tts1,
-                    input: text,
-                    voice: AudioSpeechParameters.Voice(rawValue: voice) ?? .alloy,
-                    responseFormat: .mp3,
-                    speed: 1.0,
-                    stream: false
-                )
-                let response = try await swiftService.createSpeech(parameters: parameters)
-                onComplete(.success(response.output))
-            } catch {
-                onComplete(.failure(error))
-            }
-        }
-    }
-    
-    func sendTTSStreamingRequest(
-        text: String,
-        voice: String,
-        instructions: String?,
-        onChunk: @escaping (Result<Data, Error>) -> Void,
-        onComplete: @escaping (Error?) -> Void
-    ) {
-        _ = instructions // Unused but required by protocol
-        Task {
-            do {
-                let parameters = AudioSpeechParameters(
-                    model: .tts1,
-                    input: text,
-                    voice: AudioSpeechParameters.Voice(rawValue: voice) ?? .alloy,
-                    responseFormat: .mp3,
-                    speed: 1.0,
-                    stream: true
-                )
-                let stream = try await swiftService.createStreamingSpeech(parameters: parameters)
-                for try await chunk in stream {
-                    if chunk.isLastChunk {
-                        onComplete(nil)
-                        return
-                    } else {
-                        onChunk(.success(chunk.chunk))
-                    }
-                }
-                onComplete(nil)
-            } catch {
-                onComplete(error)
-            }
-        }
     }
 }

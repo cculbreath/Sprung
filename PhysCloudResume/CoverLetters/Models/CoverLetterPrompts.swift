@@ -72,8 +72,9 @@ enum CoverLetterPrompts {
 
             \(resume.textRes)
 
-            \(applicant.name) has also included a few samples of cover letters they wrote for earlier applications that they are particularly satisfied with. Use these writing samples as a guide to the writing style and voice of your cover letter draft:
+            \(applicant.name) has also included writing samples from cover letters they wrote for earlier applications that they are particularly satisfied with. These samples demonstrate \(applicant.name)'s preferred writing style and voice that should be emulated:
 
+            **WRITING SAMPLES TO EMULATE:**
             \(coverLetter.writingSamplesString)
 
             """
@@ -97,12 +98,32 @@ enum CoverLetterPrompts {
         case .rewrite:
             prompt = """
                 My initial draft of a cover letter to accompany my application to be hired as a  \(app?.jobPosition ?? "") at \(app?.companyName ?? "") is included below.
-                \(coverLetter.editorPrompt)
+                
+                \(coverLetter.editorPrompt.rawValue)
 
             Cover Letter initial draft:
             \(coverLetter.content)
 
             """
+            
+            // For mimic revisions, add the writing samples context
+            if coverLetter.editorPrompt == .mimic {
+                prompt = """
+                    \(applicant.name) has written an initial draft of a cover letter to accompany their application to be hired as a \(app?.jobPosition ?? "") at \(app?.companyName ?? "").
+                    
+                    \(applicant.name) has also included writing samples from cover letters they wrote for earlier applications that they are particularly satisfied with. These samples demonstrate \(applicant.name)'s preferred writing style and voice that should be emulated:
+
+                    **WRITING SAMPLES TO EMULATE:**
+                    \(coverLetter.writingSamplesString)
+
+                    **REVISION INSTRUCTIONS:**
+                    \(coverLetter.editorPrompt.rawValue)
+
+                    **COVER LETTER INITIAL DRAFT:**
+                    \(coverLetter.content)
+
+                    """
+            }
         case .none:
             prompt = "none"
         }

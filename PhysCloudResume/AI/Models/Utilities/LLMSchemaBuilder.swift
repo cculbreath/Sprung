@@ -235,9 +235,13 @@ class LLMSchemaBuilder {
                 "contentsFit": SwiftOpenAI.JSONSchema(
                     type: .boolean,
                     description: "True if the content fits within its designated box without overflowing or overlapping other elements, false otherwise."
+                ),
+                "overflow_line_count": SwiftOpenAI.JSONSchema(
+                    type: .integer,
+                    description: "Estimated number of text lines that are overflowing or overlapping the content below. 0 if contentsFit is true, or if text overlaps bounding boxes but no actual text lines overflow."
                 )
             ],
-            required: ["contentsFit"],
+            required: ["contentsFit", "overflow_line_count"],
             additionalProperties: false
         )
     }

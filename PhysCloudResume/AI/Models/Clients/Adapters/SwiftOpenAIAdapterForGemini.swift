@@ -30,6 +30,8 @@ class SwiftOpenAIAdapterForGemini: BaseSwiftOpenAIAdapter {
         let typeName = isStructuredOutput ? String(describing: query.desiredResponseType) : "none"
         let isRevisionsContainer = typeName.contains("RevisionsContainer")
         let isJobRecommendation = typeName.contains("JobRecommendation")
+        let isFixFitsResponseContainer = typeName.contains("FixFitsResponseContainer")
+        let isContentsFitResponse = typeName.contains("ContentsFitResponse")
 
         // Ensure we're using a valid Gemini model - CRITICAL FIX
         let modelIdentifier = query.modelIdentifier
@@ -96,6 +98,49 @@ class SwiftOpenAIAdapterForGemini: BaseSwiftOpenAIAdapter {
                 4. Your response must ONLY contain this JSON structure with no additional text or explanation
                 5. Each revision should be focused on a specific portion of the resume
                 """
+            } else if isFixFitsResponseContainer {
+                // Special handling for FixFitsResponseContainer
+                enhancedContent += """
+                
+                IMPORTANT: Your response MUST be a valid JSON object with the following structure:
+                {
+                  "revised_skills_and_expertise": [
+                    {
+                      "id": "original-uuid-string",
+                      "newValue": "revised content for the skill",
+                      "originalValue": "original content echoed back",
+                      "treePath": "original treePath echoed back",
+                      "isTitleNode": true or false
+                    },
+                    ... more skill nodes ...
+                  ]
+                }
+                
+                Important requirements:
+                1. Wrap the array in an object with the key "revised_skills_and_expertise"
+                2. Echo back the exact original values for id, originalValue, treePath, and isTitleNode
+                3. Only modify the "newValue" field to make content shorter/more concise
+                4. Your response must ONLY contain this JSON structure with no additional text
+                """
+            } else if isContentsFitResponse {
+                // Special handling for ContentsFitResponse
+                enhancedContent += """
+                
+                IMPORTANT: Your response MUST be a valid JSON object with the following structure:
+                {
+                  "contentsFit": true or false,
+                  "overflow_line_count": integer
+                }
+                
+                Important requirements:
+                1. Analyze the image to determine if content fits without overflow
+                2. Count the number of text lines that are overflowing or overlapping content below
+                3. Use 0 for overflow_line_count if content fits properly OR if bounding boxes overlap but no actual text lines overflow
+                4. Be conservative in line count estimation - better to underestimate than overestimate
+                5. Return exactly this JSON structure with no additional text
+                6. Use boolean true/false for contentsFit, not strings
+                7. Use integer number for overflow_line_count, not strings
+                """
             } else if isJobRecommendation {
                 enhancedContent += "\n\nIMPORTANT: Your response MUST be a valid JSON object with exactly these fields: "
                 + "recommendedJobId (a string containing a UUID) and reason (a string explanation). "
@@ -139,27 +184,57 @@ class SwiftOpenAIAdapterForGemini: BaseSwiftOpenAIAdapter {
 
             // For structured responses, we need to clean the JSON
             if isStructuredOutput {
-                // Extract JSON from the content
+                // First, check if we need to wrap arrays for specific response types
                 let processedContent: Data
-                if let jsonContent = extractJSONFromContent(content) {
-                    Logger.debug("🌟 Extracted JSON: \(String(describing: jsonContent.prefix(200)))")
-                    processedContent = Data(jsonContent.utf8)
-                } else {
-                    // Try to handle array format responses
-                    if isRevisionsContainer && content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).hasPrefix("[") {
-                        // If this is a RevisionsContainer expecting an array
-                        let revisionsContent = """
-                        {
-                          "revArray": \(content)
+                
+                // Check if content is a JSON array that needs wrapping
+                let trimmedContent = content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                if trimmedContent.hasPrefix("[") {
+                    // Validate it's a proper JSON array
+                    if let data = trimmedContent.data(using: .utf8),
+                       let _ = try? JSONSerialization.jsonObject(with: data) {
+                        
+                        if isRevisionsContainer {
+                            // Wrap array in revArray object
+                            let revisionsContent = """
+                            {
+                              "revArray": \(trimmedContent)
+                            }
+                            """
+                            Logger.debug("🌟 Wrapped array in revArray object")
+                            processedContent = Data(revisionsContent.utf8)
+                        } else if isFixFitsResponseContainer {
+                            // Wrap array in revised_skills_and_expertise object
+                            let fixFitsContent = """
+                            {
+                              "revised_skills_and_expertise": \(trimmedContent)
+                            }
+                            """
+                            Logger.debug("🌟 Wrapped array in revised_skills_and_expertise object")
+                            processedContent = Data(fixFitsContent.utf8)
+                        } else {
+                            // For other types, use the array as-is
+                            processedContent = Data(trimmedContent.utf8)
                         }
-                        """
-                        Logger.debug("🌟 Wrapped array in revArray object")
-                        processedContent = Data(revisionsContent.utf8)
                     } else {
-                        // If we couldn't extract JSON, try to pass the content directly
+                        // Invalid JSON array, try to extract valid JSON
+                        if let jsonContent = extractJSONFromContent(content) {
+                            Logger.debug("🌟 Extracted JSON: \(String(describing: jsonContent.prefix(200)))")
+                            processedContent = Data(jsonContent.utf8)
+                        } else {
+                            processedContent = Data(content.utf8)
+                        }
+                    }
+                } else {
+                    // Not an array, try to extract JSON object
+                    if let jsonContent = extractJSONFromContent(content) {
+                        Logger.debug("🌟 Extracted JSON: \(String(describing: jsonContent.prefix(200)))")
+                        processedContent = Data(jsonContent.utf8)
+                    } else {
                         processedContent = Data(content.utf8)
                     }
                 }
+                
                 return .structured(processedContent)
             } else {
                 // Return text response

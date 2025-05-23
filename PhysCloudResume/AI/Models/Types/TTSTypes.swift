@@ -41,6 +41,7 @@ class PlaceholderTTSClient: TTSCapable {
         instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
+        _ = instructions // Unused parameter
         let error = NSError(
             domain: "TTSCapable",
             code: 4001,
@@ -56,6 +57,7 @@ class PlaceholderTTSClient: TTSCapable {
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
+        _ = instructions // Unused parameter
         let error = NSError(
             domain: "TTSCapable",
             code: 4001,

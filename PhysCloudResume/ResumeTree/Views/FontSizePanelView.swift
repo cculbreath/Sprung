@@ -24,15 +24,22 @@ struct FontSizePanelView: View {
         .cornerRadius(5)
         .padding(.vertical, 2)
 
-        if isExpanded { VStack {
-            ForEach(
-                jobAppStore.selectedApp?.selectedRes?.fontSizeNodes.sorted { $0.index < $1.index } ?? [],
-                id: \.self
-            ) { node in
-                FontNodeView(node: node)
+        if isExpanded { 
+            VStack {
+                // Safely access fontSizeNodes to avoid CoreData faulting issues
+                if let resume = jobAppStore.selectedApp?.selectedRes {
+                    // Try to access fontSizeNodes with error handling
+                    let nodes = (try? resume.fontSizeNodes.sorted { $0.index < $1.index }) ?? []
+                    ForEach(nodes, id: \.id) { node in
+                        FontNodeView(node: node)
+                    }
+                } else {
+                    Text("No font sizes available")
+                        .foregroundColor(.secondary)
+                        .italic()
+                }
             }
-        }
-        .padding(.trailing, 16) // Avoid overlap on trailing side.
+            .padding(.trailing, 16) // Avoid overlap on trailing side.
         }
     }
 }
