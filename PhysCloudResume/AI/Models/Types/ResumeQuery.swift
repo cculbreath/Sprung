@@ -109,6 +109,7 @@ import SwiftUI
 
     var updatableFieldsString: String {
         guard let rootNode = res.rootNode else {
+            Logger.debug("⚠️ updatableFieldsString: rootNode is nil!")
             return ""
         }
         let exportDict = TreeNode.traverseAndExportNodes(node: rootNode)
@@ -118,6 +119,24 @@ import SwiftUI
             )
             let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
             print("🫥🫥🫥🫥🫥🫥 UPDATABLE NODES 🫥🫥🫥🫥🫥🫥")
+            print(returnString)
+            return returnString
+        } catch {
+            return ""
+        }
+    }
+
+    var allEditableFieldsString: String {
+        guard let rootNode = res.rootNode else {
+            return ""
+        }
+        let exportDict = TreeNode.traverseAndExportAllEditableNodes(node: rootNode)
+        do {
+            let updatableJsonData = try JSONSerialization.data(
+                withJSONObject: exportDict, options: .prettyPrinted
+            )
+            let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
+            print("🫥🫥🫥🫥🫥🫥 ALL EDITABLE NODES 🫥🫥🫥🫥🫥🫥")
             print(returnString)
             return returnString
         } catch {
@@ -144,11 +163,6 @@ import SwiftUI
             phone: profile.phone
         )
         self.saveDebugPrompt = saveDebugPrompt
-
-        // Debug: print JSON block that will be supplied to the LLM so we can verify content
-        var loggerString = "▶️ updatableFieldsString JSON sent to LLM:\n"
-        loggerString += updatableFieldsString
-        Logger.debug(loggerString)
     }
 
 
@@ -199,6 +213,7 @@ import SwiftUI
         // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
         // This assumes res.ensureFreshRenderedText() will update res.model.renderedResumeText.
         try? await res.ensureFreshRenderedText()
+        
 
         // Generate language that controls how strongly we emphasize achievements
 //        switch res.attentionGrab {

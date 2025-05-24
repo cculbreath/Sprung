@@ -46,9 +46,11 @@ struct AiFunctionView: View {
             }
         }
 
-        // Initialize LLM client for chat
-        _llmClient = State(initialValue: AppLLMClientFactory.createClient(
-            for: AIModels.Provider.openai,
+        // Initialize LLM client based on the preferred model
+        let preferredModel = OpenAIModelFetcher.getPreferredModelString()
+        let provider = AIModels.providerForModel(preferredModel)
+        _llmClient = State(initialValue: AppLLMClientFactory.createClientForModel(
+            model: preferredModel,
             appState: AppState()
         ))
         
@@ -120,9 +122,10 @@ struct AiFunctionView: View {
             }
         }
         .onAppear {
-            // Properly initialize the client with AppState
-            llmClient = AppLLMClientFactory.createClient(
-                for: AIModels.Provider.openai,
+            // Properly initialize the client with AppState based on preferred model
+            let preferredModel = OpenAIModelFetcher.getPreferredModelString()
+            llmClient = AppLLMClientFactory.createClientForModel(
+                model: preferredModel,
                 appState: appState
             )
 

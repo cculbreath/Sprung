@@ -498,7 +498,7 @@ struct AiCommsView: View {
                     Logger.debug("Switching to \(providerType) client for model: \(modelString)")
                     let newClient = AppLLMClientFactory.createClientForModel(model: modelString, appState: appState)
                     let messages = chatProvider.genericMessages
-                    chatProvider = ResumeChatProvider(appState: appState)
+                    chatProvider = ResumeChatProvider(client: newClient)
                     chatProvider.genericMessages = messages
                     chatProvider.lastModelUsed = modelString
                 }

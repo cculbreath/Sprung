@@ -358,15 +358,17 @@ struct CoverLetterAiManager: View {
             if (modelChanged || includeBGChanged) && letter.generated {
                 Logger.debug("[CoverLetterAiManager] Settings changed for a generated letter. Model changed: \(modelChanged), BG changed: \(includeBGChanged).")
 
-                if !jobApp.coverLetters.contains(where: { !$0.generated }) {
+                // Check if an ungenerated draft already exists
+                if let existingUngenerated = jobApp.coverLetters.first(where: { !$0.generated }) {
+                    Logger.debug("[CoverLetterAiManager] Ungenerated draft already exists, selecting it.")
+                    jobApp.selectedCover = existingUngenerated
+                } else {
                     Logger.debug("[CoverLetterAiManager] No ungenerated draft found. Creating a new one.")
                     let newLetter = coverLetterStore.createDuplicate(letter: letter)
                     newLetter.generated = false // Mark as ungenerated
                     // The new letter should inherit includeResumeRefs from the current settings
                     newLetter.includeResumeRefs = letter.includeResumeRefs // This ensures the new draft reflects the current setting
                     jobApp.selectedCover = newLetter // Select the new ungenerated draft
-                } else {
-                    Logger.debug("[CoverLetterAiManager] Ungenerated draft already exists.")
                 }
             }
 

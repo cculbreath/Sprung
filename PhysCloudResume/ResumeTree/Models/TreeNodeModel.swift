@@ -114,9 +114,52 @@ enum LeafStatus: String, Codable, Hashable {
             }
         }
 
-        for child in node.children ?? [] {
+        // Force load children to ensure SwiftData loads the relationship
+        let childNodes = node.children ?? []
+        for child in childNodes {
             // Pass the child's full path for its children's context
             result.append(contentsOf: traverseAndExportNodes(node: child, currentPath: newPath))
+        }
+        return result
+    }
+
+    static func traverseAndExportAllEditableNodes(node: TreeNode, currentPath _: String = "")
+        -> [[String: Any]]
+    {
+        var result: [[String: Any]] = []
+        let newPath = node.buildTreePath() // Use the instance method
+
+        // Export all nodes that are editable (not disabled and not root-level containers)
+        // Skip nodes that are purely structural (empty name and value)
+        if node.status != .disabled && node.status != .isNotLeaf {
+            // First, handle title node content if present (name field)
+            if !node.name.isEmpty { // Always export name field as a title node if it's not empty
+                let titleNodeData: [String: Any] = [
+                    "id": node.id,
+                    "value": node.name, // Exporting node.name as "value" for the LLM
+                    "name": node.name, // Also include the actual name field for context
+                    "tree_path": newPath, // Path to this node
+                    "isTitleNode": true, // Explicitly mark as title node
+                ]
+                result.append(titleNodeData)
+            }
+
+            // Then, handle value node content if present
+            if !node.value.isEmpty { // Always export value field as a content node if it's not empty
+                let valueNodeData: [String: Any] = [
+                    "id": node.id,
+                    "value": node.value, // Exporting node.value
+                    "name": node.name, // Include name for context/reference
+                    "tree_path": newPath,
+                    "isTitleNode": false, // Explicitly mark as not a title node
+                ]
+                result.append(valueNodeData)
+            }
+        }
+
+        for child in node.children ?? [] {
+            // Pass the child's full path for its children's context
+            result.append(contentsOf: traverseAndExportAllEditableNodes(node: child, currentPath: newPath))
         }
         return result
     }

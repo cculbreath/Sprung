@@ -31,7 +31,7 @@ func CoverLetterToolbar(
     buttons: Binding<CoverLetterButtons>,
     refresh: Binding<Bool>
 ) -> some ToolbarContent {
-    ToolbarItem(placement: .primaryAction) {
+    ToolbarItem(placement: .automatic) {
         HStack(spacing: 8) {
             // Get the existing view from our provider - this avoids creating it during rendering
             CoverLetterAiViewProvider.shared.getView(buttons: buttons, refresh: refresh)

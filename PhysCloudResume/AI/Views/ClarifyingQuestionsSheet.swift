@@ -14,6 +14,7 @@ struct ClarifyingQuestionsSheet: View {
     
     @State private var answers: [String: String] = [:]
     @State private var declinedQuestions: Set<String> = []
+    @FocusState private var focusedQuestionId: String?
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -39,7 +40,7 @@ struct ClarifyingQuestionsSheet: View {
             // Questions
             ScrollView {
                 VStack(spacing: 20) {
-                    ForEach(questions) { question in
+                    ForEach(Array(questions.enumerated()), id: \.element.id) { index, question in
                         QuestionView(
                             question: question,
                             answer: Binding(
@@ -56,8 +57,25 @@ struct ClarifyingQuestionsSheet: View {
                                         declinedQuestions.remove(question.id)
                                     }
                                 }
-                            )
+                            ),
+                            isFocused: focusedQuestionId == question.id,
+                            onTabPressed: {
+                                // Move to next question
+                                if index < questions.count - 1 {
+                                    focusedQuestionId = questions[index + 1].id
+                                } else {
+                                    // If last question, move focus to submit button
+                                    focusedQuestionId = nil
+                                }
+                            },
+                            onShiftTabPressed: {
+                                // Move to previous question
+                                if index > 0 {
+                                    focusedQuestionId = questions[index - 1].id
+                                }
+                            }
                         )
+                        .focused($focusedQuestionId, equals: question.id)
                     }
                 }
                 .padding()
@@ -82,6 +100,12 @@ struct ClarifyingQuestionsSheet: View {
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 400)
         .background(Color(NSColor.controlBackgroundColor))
+        .onAppear {
+            // Focus the first question when the sheet appears
+            if let firstQuestion = questions.first {
+                focusedQuestionId = firstQuestion.id
+            }
+        }
     }
     
     private var isValidToSubmit: Bool {
@@ -108,6 +132,9 @@ struct QuestionView: View {
     let question: ClarifyingQuestion
     @Binding var answer: String
     @Binding var isDeclined: Bool
+    let isFocused: Bool
+    let onTabPressed: () -> Void
+    let onShiftTabPressed: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -135,14 +162,18 @@ struct QuestionView: View {
             
             // Answer field
             if !isDeclined {
-                TextEditor(text: $answer)
-                    .font(.body)
-                    .frame(minHeight: 80, maxHeight: 120)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                    )
-                    .disabled(isDeclined)
+                TabNavigableTextEditor(
+                    text: $answer,
+                    onTabPressed: onTabPressed,
+                    onShiftTabPressed: onShiftTabPressed
+                )
+                .font(.body)
+                .frame(minHeight: 80, maxHeight: 120)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+                .disabled(isDeclined)
             } else {
                 Text("Question declined")
                     .font(.body)
@@ -158,6 +189,59 @@ struct QuestionView: View {
         .padding()
         .background(Color(NSColor.textBackgroundColor))
         .cornerRadius(8)
+    }
+}
+
+// Custom TextEditor that handles Tab navigation
+struct TabNavigableTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    let onTabPressed: () -> Void
+    let onShiftTabPressed: () -> Void
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        let textView = scrollView.documentView as! NSTextView
+        textView.delegate = context.coordinator
+        textView.string = text
+        textView.isRichText = false
+        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        textView.allowsUndo = true
+        return scrollView
+    }
+    
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        let textView = nsView.documentView as! NSTextView
+        if textView.string != text {
+            textView.string = text
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: TabNavigableTextEditor
+        
+        init(_ parent: TabNavigableTextEditor) {
+            self.parent = parent
+        }
+        
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+        }
+        
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSStandardKeyBindingResponding.insertTab(_:)) {
+                parent.onTabPressed()
+                return true
+            } else if commandSelector == #selector(NSStandardKeyBindingResponding.insertBacktab(_:)) {
+                parent.onShiftTabPressed()
+                return true
+            }
+            return false
+        }
     }
 }
 

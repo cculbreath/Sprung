@@ -24,21 +24,10 @@ struct PhysicsCloudResumeApp: App {
                 .environment(appState)
                 .environmentObject(appState.modelService)
         }
-        .modelContainer(for: [
-            JobApp.self,
-            Resume.self,
-            ResRef.self,
-            TreeNode.self,
-            FontSizeNode.self,
-            CoverLetter.self,
-            MessageParams.self,
-            CoverRef.self,
-            ApplicantProfile.self,
-            ResModel.self,
-            // Add conversation models for ChatCompletions API
-            ConversationContext.self,
-            ConversationMessage.self,
-        ])
+        .modelContainer(
+            for: SchemaV3.models,
+            migrationPlan: PhysCloudResumeMigrationPlan.self
+        )
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
         .commands {
             CommandGroup(replacing: .appSettings) {

@@ -48,8 +48,8 @@ class AppLLMClientFactory {
             
         case AIModels.Provider.grok:
             config = LLMProviderConfig.forGrok(apiKey: apiKey)
-            // Use OpenAI adapter but with Grok configuration (endpoints are configured in BaseSwiftOpenAIAdapter)
-            return SwiftOpenAIAdapterForOpenAI(config: config, appState: appState)
+            // Use Grok-specific adapter
+            return SwiftOpenAIAdapterForGrok(config: config, appState: appState)
             
         default:
             // Default to OpenAI for unknown providers
@@ -142,8 +142,8 @@ class AppLLMClientFactory {
             Logger.debug("🏗️ Creating Grok config")
             config = LLMProviderConfig.forGrok(apiKey: apiKey, model: sanitizedModel)
             Logger.debug("🔧 Grok config created: providerType=\(config.providerType), baseURL=\(config.baseURL ?? "nil")")
-            // Use OpenAI adapter but with Grok configuration (endpoints are configured in BaseSwiftOpenAIAdapter)
-            return SwiftOpenAIAdapterForOpenAI(config: config, appState: appState)
+            // Use Grok-specific adapter
+            return SwiftOpenAIAdapterForGrok(config: config, appState: appState)
             
         default:
             // Default to OpenAI for unknown providers

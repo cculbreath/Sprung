@@ -67,7 +67,7 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
     private let writingSamples: String
     
     /// Optional model override for multi-model voting
-    var overrideModel: String?
+    public var overrideModel: String?
 
     /// Writes debug information to a file in the Downloads folder
     /// - Parameter content: The content to write
@@ -158,16 +158,13 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
 
         // Get model identifier - use override if provided
         let modelIdentifier = overrideModel ?? OpenAIModelFetcher.getPreferredModelString()
-        
-        // Determine the provider for this model
-        let modelProvider = AIModels.providerFor(modelName: modelIdentifier)
-        
-        // Update the app state's preferred provider to match the model's provider
-        let appState = AppState()
-        appState.settings.preferredLLMProvider = modelProvider
-        
-        // Update client if needed for this model
-        updateClientIfNeeded(appState: appState)
+
+        // Ensure we have an appState for client creation
+        if self.appState == nil {
+            // Create a temporary app state if we don't have one
+            self.appState = AppState()
+            self.appState?.settings.preferredLLMProvider = AIModels.providerFor(modelName: modelIdentifier)
+        }
 
         do {
             // Create query for structured output
@@ -177,8 +174,8 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
                 responseType: BestCoverLetterResponse.self
             )
             
-            // Execute query using BaseLLMProvider's method
-            let response = try await executeQuery(query)
+            // Execute query using executeQueryWithTimeout which will update the client as needed
+            let response = try await executeQueryWithTimeout(query)
             
             // Process structured response using BaseLLMProvider's method
             return try processStructuredResponse(response, as: BestCoverLetterResponse.self)

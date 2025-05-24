@@ -22,27 +22,35 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     @State private var progress: Double = 0
     @State private var totalOperations: Int = 0
     @State private var completedOperations: Int = 0
+    @State private var reasoningSummary: String?
+    @State private var isGeneratingSummary = false
     
     @EnvironmentObject private var modelService: ModelService
     
     @Binding var coverLetter: CoverLetter
     
     var body: some View {
-        VStack(spacing: 20) {
-            headerSection
-            modelSelectionSection
-            if isProcessing {
-                progressSection
+        ScrollView {
+            VStack(spacing: 20) {
+                headerSection
+                modelSelectionSection
+                if isProcessing {
+                    progressSection
+                }
+                if !voteTally.isEmpty {
+                    resultsSection
+                }
+                if !modelReasonings.isEmpty || reasoningSummary != nil {
+                    reasoningsSection
+                }
             }
-            if !voteTally.isEmpty {
-                resultsSection
-            }
-            if !modelReasonings.isEmpty {
-                reasoningsSection
-            }
-            actionSection
+            .padding()
         }
-        .padding()
+        .safeAreaInset(edge: .bottom) {
+            actionSection
+                .padding()
+                .background(.regularMaterial)
+        }
         .frame(width: 600, height: 700)
         .onAppear {
             // Check if we need to auto-fetch models on appear
@@ -90,19 +98,19 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                                     .textCase(.uppercase)
                                 
                                 ForEach(models, id: \.self) { model in
-                                    let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
                                     HStack {
                                         Toggle(isOn: Binding(
-                                            get: { selectedModels.contains(sanitizedModel) },
+                                            get: { selectedModels.contains(model) },
                                             set: { isSelected in
                                                 if isSelected {
-                                                    selectedModels.insert(sanitizedModel)
+                                                    selectedModels.insert(model)
                                                 } else {
-                                                    selectedModels.remove(sanitizedModel)
+                                                    selectedModels.remove(model)
                                                 }
                                             }
                                         )) {
-                                            Text(formatModelName(sanitizedModel))
+                                            // Display raw model name for better distinction
+                                            Text(model)
                                                 .font(.system(.body))
                                         }
                                         .toggleStyle(CheckboxToggleStyle())
@@ -150,31 +158,48 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     }
     
     private var reasoningsSection: some View {
-        GroupBox("Model Reasonings") {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(modelReasonings, id: \.model) { reasoning in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(formatModelName(reasoning.model))
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.secondary)
-                            
-                            Text("Selected: \(getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown")")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                            
-                            Text(reasoning.response.verdict)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Divider()
+        GroupBox("Analysis Summary") {
+            if isGeneratingSummary {
+                VStack {
+                    ProgressView("Generating summary...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .padding()
+                }
+                .frame(maxHeight: 200)
+            } else if let summary = reasoningSummary {
+                ScrollView {
+                    Text(summary)
+                        .font(.system(.body))
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 200)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(modelReasonings, id: \.model) { reasoning in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(reasoning.model)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Selected: \(getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown")")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                
+                                Text(reasoning.response.verdict)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Divider()
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxHeight: 200)
             }
-            .frame(maxHeight: 200)
         }
     }
     
@@ -183,7 +208,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             Button("Cancel") {
                 dismiss()
             }
-            .disabled(isProcessing)
+            .disabled(isProcessing || isGeneratingSummary)
             
             Spacer()
             
@@ -193,13 +218,28 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                     .foregroundColor(.red)
             }
             
-            Button("Choose Best Cover Letter") {
-                Task {
-                    await performMultiModelSelection()
+            // Show different buttons based on state
+            if !voteTally.isEmpty {
+                // After voting is complete, show OK button
+                Button("OK") {
+                    // Select the winning letter before dismissing
+                    if let winningLetter = getWinningLetter() {
+                        jobAppStore.selectedApp?.selectedCover = winningLetter
+                    }
+                    dismiss()
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(isGeneratingSummary)
+            } else {
+                // Before voting, show the choose button
+                Button("Choose Best Cover Letter") {
+                    Task {
+                        await performMultiModelSelection()
+                    }
+                }
+                .disabled(selectedModels.isEmpty || isProcessing)
+                .buttonStyle(.borderedProminent)
             }
-            .disabled(selectedModels.isEmpty || isProcessing)
-            .buttonStyle(.borderedProminent)
         }
     }
     
@@ -263,8 +303,11 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             for model in selectedModels {
                 group.addTask {
                     do {
+                        // Sanitize the model name for API usage
+                        let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
+                        
                         // Determine the provider for this model
-                        let modelProvider = AIModels.providerFor(modelName: model)
+                        let modelProvider = AIModels.providerFor(modelName: sanitizedModel)
                         
                         // Create a new app state instance for this specific request
                         let tempAppState = AppState()
@@ -277,11 +320,12 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                             writingSamples: writingSamples
                         )
                         
-                        // Override the model in the provider's query
-                        provider.overrideModel = model
+                        // Set the override model to ensure this provider uses the correct model
+                        provider.overrideModel = sanitizedModel
                         
                         let response = try await provider.fetchBestCoverLetter()
-                        return (model, .success(response))
+                        
+                        return (model, .success(response))  // Return original model name for display
                     } catch {
                         return (model, .failure(error))
                     }
@@ -313,17 +357,94 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         await MainActor.run {
             isProcessing = false
             
-            // Select the winning letter
-            if let winningLetter = getWinningLetter() {
-                jobAppStore.selectedApp?.selectedCover = winningLetter
-                
-                // Give a brief delay before dismissing to show the result
-                Task {
-                    try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-                    dismiss()
-                }
-            } else {
+            // Generate summary of reasonings if we have any
+            if !modelReasonings.isEmpty {
+                isGeneratingSummary = true
+            }
+        }
+        
+        // Generate summary using o3-mini
+        if !modelReasonings.isEmpty {
+            await generateReasoningSummary()
+        }
+        
+        await MainActor.run {
+            // Determine the winning letter but don't select it yet
+            if getWinningLetter() == nil {
                 errorMessage = "No clear winner could be determined"
+            }
+        }
+    }
+    
+    /// Generates a summary of all model reasonings using o3-mini
+    private func generateReasoningSummary() async {
+        guard let jobApp = jobAppStore.selectedApp else { return }
+        
+        // Build the prompt for summary generation
+        var summaryPrompt = "You are analyzing the reasoning from multiple AI models that evaluated cover letters for a \(jobApp.jobPosition) position at \(jobApp.companyName). "
+        summaryPrompt += "Each model voted for their preferred cover letter and provided reasoning. "
+        summaryPrompt += "Please provide a comprehensive summary that:\n"
+        summaryPrompt += "1. Identifies key themes and criteria the models used\n"
+        summaryPrompt += "2. Highlights areas of agreement and disagreement\n"
+        summaryPrompt += "3. Synthesizes the overall reasoning behind the winning choice\n"
+        summaryPrompt += "4. Notes any interesting insights about what makes an effective cover letter based on the models' analyses\n\n"
+        summaryPrompt += "Here are the model reasonings:\n\n"
+        
+        // Add all model reasonings with their votes
+        for reasoning in modelReasonings {
+            let letterName = getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown"
+            summaryPrompt += "**\(reasoning.model)** voted for '\(letterName)':\n"
+            summaryPrompt += "\(reasoning.response.verdict)\n\n"
+        }
+        
+        // Add vote tally
+        summaryPrompt += "Final vote tally:\n"
+        for (letterId, votes) in voteTally {
+            if let letter = jobApp.coverLetters.first(where: { $0.id == letterId }) {
+                summaryPrompt += "- \(letter.sequencedName): \(votes) vote(s)\n"
+            }
+        }
+        
+        do {
+            // Create a provider using o4-mini
+            let provider = BaseLLMProvider(client: AppLLMClientFactory.createClientForModel(
+                model: AIModels.o4_mini,
+                appState: appState
+            ))
+            
+            // Initialize conversation
+            _ = provider.initializeConversation(
+                systemPrompt: "You are an expert at analyzing and summarizing AI model reasoning. Provide clear, insightful summaries that help users understand the decision-making process.",
+                userPrompt: summaryPrompt
+            )
+            
+            // Execute query
+            let query = AppLLMQuery(
+                messages: provider.conversationHistory,
+                modelIdentifier: AIModels.o4_mini,
+                temperature: 0.7
+            )
+            
+            let response = try await provider.executeQuery(query)
+            
+            // Extract text from response
+            let summaryText: String
+            switch response {
+            case .text(let text):
+                summaryText = text
+            case .structured(let data):
+                summaryText = String(data: data, encoding: .utf8) ?? "Failed to decode summary"
+            }
+            
+            await MainActor.run {
+                self.reasoningSummary = summaryText
+                self.isGeneratingSummary = false
+            }
+            
+        } catch {
+            await MainActor.run {
+                self.reasoningSummary = "Failed to generate summary: \(error.localizedDescription)"
+                self.isGeneratingSummary = false
             }
         }
     }

@@ -34,6 +34,7 @@ class DatabaseSchemaFixer {
         
         try fixTreeNodeSchema(db: db)
         try fixResumeSchema(db: db)
+        try fixResRefRelationshipSchema(db: db)
         
         Logger.debug("✅ Database schema fix completed")
     }
@@ -129,6 +130,62 @@ class DatabaseSchemaFixer {
             if sqlite3_exec(db, createFontSizeTable, nil, nil, nil) != SQLITE_OK {
                 Logger.warning("⚠️ Could not create ZFONTSIZENODE table")
             }
+        }
+    }
+    
+    private static func fixResRefRelationshipSchema(db: OpaquePointer?) throws {
+        Logger.debug("🔧 Fixing ResRef relationship schema...")
+        
+        // Check if the join table exists for the many-to-many relationship
+        let checkJoinTable = "SELECT name FROM sqlite_master WHERE type='table' AND name='Z_10ENABLEDRESUMES';"
+        var hasJoinTable = false
+        
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, checkJoinTable, -1, &stmt, nil) == SQLITE_OK {
+            if sqlite3_step(stmt) == SQLITE_ROW {
+                hasJoinTable = true
+            }
+        }
+        sqlite3_finalize(stmt)
+        
+        if !hasJoinTable {
+            Logger.debug("➕ Creating Z_10ENABLEDRESUMES join table for Resume-ResRef relationship")
+            
+            // Create the join table with the expected structure
+            // This table links Resume and ResRef entities in a many-to-many relationship
+            let createJoinTable = """
+                CREATE TABLE Z_10ENABLEDRESUMES (
+                    Z_10ENABLEDSOURCES INTEGER,
+                    Z_18ENABLEDRESUMES INTEGER,
+                    PRIMARY KEY (Z_10ENABLEDSOURCES, Z_18ENABLEDRESUMES)
+                );
+                """
+            
+            if sqlite3_exec(db, createJoinTable, nil, nil, nil) != SQLITE_OK {
+                let errorMsg = String(cString: sqlite3_errmsg(db))
+                Logger.error("❌ Failed to create Z_10ENABLEDRESUMES table: \(errorMsg)")
+                
+                // Try an alternative naming convention that SwiftData might use
+                let alternativeCreateTable = """
+                    CREATE TABLE IF NOT EXISTS Z_10ENABLEDRESUMES (
+                        Z_10ENABLEDSOURCES INTEGER NOT NULL,
+                        Z_18ENABLEDRESUMES INTEGER NOT NULL,
+                        PRIMARY KEY (Z_10ENABLEDSOURCES, Z_18ENABLEDRESUMES),
+                        FOREIGN KEY (Z_10ENABLEDSOURCES) REFERENCES ZRESUME(Z_PK),
+                        FOREIGN KEY (Z_18ENABLEDRESUMES) REFERENCES ZRESREF(Z_PK)
+                    );
+                    """
+                
+                if sqlite3_exec(db, alternativeCreateTable, nil, nil, nil) == SQLITE_OK {
+                    Logger.debug("✅ Created Z_10ENABLEDRESUMES table with alternative schema")
+                } else {
+                    Logger.warning("⚠️ Could not create Z_10ENABLEDRESUMES table")
+                }
+            } else {
+                Logger.debug("✅ Created Z_10ENABLEDRESUMES join table")
+            }
+        } else {
+            Logger.debug("✅ Z_10ENABLEDRESUMES join table already exists")
         }
     }
     
