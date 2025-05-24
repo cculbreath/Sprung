@@ -48,6 +48,14 @@ final class CoverLetterStore: SwiftDataStore {
     }
 
     func createBlank(jobApp: JobApp) {
+        // Check if an ungenerated draft already exists
+        if let existingUngenerated = jobApp.coverLetters.first(where: { !$0.generated }) {
+            // Select the existing ungenerated draft instead of creating a new one
+            jobApp.selectedCover = existingUngenerated
+            Logger.debug("Found existing ungenerated draft, selecting it instead of creating new one")
+            return
+        }
+        
         let letter = CoverLetter(
             enabledRefs: coverRefStore.defaultSources, // Start with default refs
             jobApp: jobApp

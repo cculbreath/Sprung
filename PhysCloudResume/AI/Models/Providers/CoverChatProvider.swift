@@ -15,20 +15,44 @@ final class CoverChatProvider: BaseLLMProvider {
     
     /// Extract cover letter content from response, handling Gemini and Claude JSON formats
     func extractCoverLetterContent(from text: String) -> String {
-        // First, try to parse as JSON
-        if let data = text.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            // Check for Gemini format
-            if let coverLetterBody = json["cover_letter_body"] as? String {
-                return coverLetterBody
-            }
-            // Check for Claude format
-            if let coverLetter = json["cover_letter"] as? String {
-                return coverLetter
+        // Check if the response contains curly braces (indicating JSON)
+        if text.contains("{") && text.contains("}") {
+            // Find the JSON portion (from first { to last })
+            if let jsonStart = text.range(of: "{"),
+               let jsonEnd = text.range(of: "}", options: .backwards) {
+                let jsonSubstring = String(text[jsonStart.lowerBound...jsonEnd.upperBound])
+                
+                // Try to parse the JSON
+                if let data = jsonSubstring.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    // First check for known field names
+                    let knownKeys = ["cover_letter_body", "body_content", "cover_letter", "letter", "content", "text"]
+                    for key in knownKeys {
+                        if let value = json[key] as? String {
+                            return value
+                        }
+                    }
+                    
+                    // If no known keys found, look for any string value that looks like cover letter content
+                    // (long enough to be a cover letter, contains multiple sentences/paragraphs)
+                    for (_, value) in json {
+                        if let stringValue = value as? String,
+                           stringValue.count > 100,  // At least 100 characters
+                           stringValue.contains(".") || stringValue.contains("\n") {  // Has sentences or paragraphs
+                            return stringValue
+                        }
+                    }
+                    
+                    // If JSON has only one key-value pair with a string value, use it
+                    if json.count == 1,
+                       let firstValue = json.values.first as? String {
+                        return firstValue
+                    }
+                }
             }
         }
         
-        // If not JSON or doesn't have either field, return as-is
+        // If no JSON detected or parsing failed, return as-is
         return text
     }
     
@@ -142,9 +166,12 @@ final class CoverChatProvider: BaseLLMProvider {
         let modelString = OpenAIModelFetcher.getPreferredModelString()
         var systemMessage = CoverLetterPrompts.systemMessage.content
         
-        // For Gemini models, explicitly state not to use JSON formatting
+        // Model-specific formatting instructions
         if modelString.lowercased().contains("gemini") {
             systemMessage += " Do not format your response as JSON. Return the cover letter text directly without any JSON wrapping or structure."
+        } else if modelString.lowercased().contains("claude") {
+            // Claude tends to return JSON even when not asked, so be very explicit
+            systemMessage += "\n\nIMPORTANT: Return ONLY the plain text body of the cover letter. Do NOT include JSON formatting, do NOT include 'Dear Hiring Manager' or any salutation, do NOT include any closing or signature. Start directly with the first paragraph of the letter body and end with the last paragraph. No JSON, no formatting, just the plain text paragraphs."
         }
         
         // Get the user input depending on the mode

@@ -22,9 +22,8 @@ final class AiCommunicatorSimpleTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         
-        // Initialize in-memory SwiftData container for testing
-        modelContainer = try ModelContainer(for: JobApp.self, Resume.self, TreeNode.self, ResModel.self, 
-                                          configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        // Initialize in-memory SwiftData container for testing with migration support
+        modelContainer = try ModelContainer.createForTesting()
         
         modelContext = ModelContext(modelContainer)
         

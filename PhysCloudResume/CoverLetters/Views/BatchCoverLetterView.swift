@@ -378,14 +378,8 @@ struct BatchCoverLetterView: View {
     /// - Parameter model: The raw model name
     /// - Returns: A formatted model name
     private func formatModelNameFromPicker(_ model: String) -> String {
-        // Show last part of the model name if it has a version timestamp
-        if model.contains("-2024") {
-            let components = model.components(separatedBy: "-20")
-            if components.count > 1 {
-                return "\(components[0]) (20\(components[1]))"
-            }
-        }
-        return model
+        // Use the same formatting as MultiModelChooseBestCoverLetterSheet
+        return AIModels.friendlyModelName(for: model) ?? model
     }
     
     /// Fetches all models from enabled providers (exact same logic as ModelPickerView)

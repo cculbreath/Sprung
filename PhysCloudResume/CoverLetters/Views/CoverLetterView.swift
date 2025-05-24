@@ -24,6 +24,25 @@ struct CoverLetterView: View {
                     .environment(coverLetterStore)
                     .environmentObject(ModelService.shared)
             }
+            .toolbar {
+                ToolbarItemGroup(placement: .automatic) {
+                    CoverLetterAiViewProvider.shared.getView(buttons: $buttons, refresh: .constant(false))
+                    
+                    Button(action: {
+                        buttons.showBatchGeneration = true
+                    }) {
+                        Label("Batch Generate", systemImage: "square.stack.3d.up.fill")
+                    }
+                    .help("Generate cover letters with multiple models")
+
+                    Button(action: {
+                        buttons.showInspector.toggle()
+                    }) {
+                        Label("Toggle Inspector", systemImage: "sidebar.right")
+                    }
+                    .help("Toggle Inspector Panel")
+                }
+            }
     }
 
     @ViewBuilder

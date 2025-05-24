@@ -11,7 +11,7 @@ class BaseLLMProvider {
     private(set) var appLLMClient: AppLLMClientProtocol
     
     /// The app state for creating model-specific clients
-    private var appState: AppState?
+    internal var appState: AppState?
     
     // Message tracking properties
     private var streamTask: Task<Void, Never>?
@@ -105,7 +105,8 @@ class BaseLLMProvider {
         let currentModelString = OpenAIModelFetcher.getPreferredModelString()
         
         // Check if we need to switch clients based on the model or last model used
-        if AIModels.providerFor(modelName: currentModelString) != AIModels.providerFor(modelName: lastModelUsed) {
+        // Only compare if lastModelUsed is not empty
+        if lastModelUsed.isEmpty || AIModels.providerFor(modelName: currentModelString) != AIModels.providerFor(modelName: lastModelUsed) {
             // Update client to match the current provider type
             self.appLLMClient = AppLLMClientFactory.createClient(for: currentProviderType, appState: appState)
             

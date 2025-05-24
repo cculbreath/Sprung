@@ -165,11 +165,11 @@ struct BuildToolbar: ToolbarContent {
     private func coverLetterToolbarItem(for selApp: JobApp) -> some ToolbarContent {
         if selectedTab == .coverLetter {
             if selApp.selectedCover != nil {
-                // CoverLetterToolbar returns ToolbarContent directly
-                CoverLetterToolbar(
-                    buttons: $letterButtons,
-                    refresh: $refresh
-                )
+                // CoverLetterToolbar is now shown as an overlay in CoverLetterView
+                // so we don't need to show it in the window toolbar
+                ToolbarItem(placement: .primaryAction) {
+                    EmptyView()
+                }
             } else {
                 ToolbarItem(placement: .primaryAction) {
                     EmptyView()

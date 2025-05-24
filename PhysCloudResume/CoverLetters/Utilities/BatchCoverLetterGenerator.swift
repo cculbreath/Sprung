@@ -273,9 +273,12 @@ class BatchCoverLetterGenerator {
     private func buildSystemMessage(for model: String) -> String {
         var systemMessage = CoverLetterPrompts.systemMessage.content
         
-        // For Gemini models, explicitly state not to use JSON formatting
+        // Model-specific formatting instructions
         if model.lowercased().contains("gemini") {
             systemMessage += " Do not format your response as JSON. Return the cover letter text directly without any JSON wrapping or structure."
+        } else if model.lowercased().contains("claude") {
+            // Claude tends to return JSON even when not asked, so be very explicit
+            systemMessage += "\n\nIMPORTANT: Return ONLY the plain text body of the cover letter. Do NOT include JSON formatting, do NOT include 'Dear Hiring Manager' or any salutation, do NOT include any closing or signature. Start directly with the first paragraph of the letter body and end with the last paragraph. No JSON, no formatting, just the plain text paragraphs."
         }
         
         return systemMessage

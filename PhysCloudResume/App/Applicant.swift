@@ -130,19 +130,11 @@ class ApplicantProfileManager {
     /// safely coexist while pointing at the same `default.store` file.
     private func setupModelContainer() {
         do {
-            // Keep this list in sync with PhysicsCloudResumeApp.modelContainer(for:)
-            modelContainer = try ModelContainer(for:
-                JobApp.self,
-                Resume.self,
-                ResRef.self,
-                TreeNode.self,
-                FontSizeNode.self,
-                CoverLetter.self,
-                MessageParams.self,
-                CoverRef.self,
-                ApplicantProfile.self,
-                ResModel.self)
-        } catch {}
+            // Use the migration-enabled container factory to ensure schema compatibility
+            modelContainer = try ModelContainer.createWithMigration()
+        } catch {
+            Logger.error("Failed to setup model container with migration: \(error)")
+        }
     }
 
     func getProfile() -> ApplicantProfile {

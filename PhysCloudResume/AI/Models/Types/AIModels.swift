@@ -138,7 +138,18 @@ struct AIModels {
         else if modelName.lowercased().contains("grok") {
             // Handle Grok models
             if components.count >= 2 {
-                return "Grok \(components[1])"
+                var result = "Grok \(components[1])"
+                
+                // Check for mini variant
+                if components.contains("mini") {
+                    result += " Mini"
+                    // Check for fast variant
+                    if components.contains("fast") {
+                        result += " Fast"
+                    }
+                }
+                
+                return result
             }
             return "Grok"
         }
