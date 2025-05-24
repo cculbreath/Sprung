@@ -7,9 +7,11 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct AiFunctionView: View {
     @Binding var res: Resume?
+    @State var queryMode: ResumeQueryMode = .normal
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") var ttsVoice: String = "nova"
     @AppStorage("openAiApiKey") var openAiKey: String = "none"
@@ -17,6 +19,8 @@ struct AiFunctionView: View {
     // Add state for the query to handle asynchronous loading
     @State private var query: ResumeApiQuery?
     @State private var isLoadingQuery: Bool = false
+    @State private var isOptionPressed: Bool = false
+    @State private var eventMonitor: Any?
 
     // Use our unified LLM client as a State property
     @State private var llmClient: AppLLMClientProtocol
@@ -30,8 +34,9 @@ struct AiFunctionView: View {
     // Access to AppState using Swift 6 conventions
     @Environment(\.appState) private var appState
 
-    init(res: Binding<Resume?>, isNewConversation: Bool = false) {
+    init(res: Binding<Resume?>, queryMode: ResumeQueryMode = .normal, isNewConversation: Bool = false) {
         _res = res
+        _queryMode = State(initialValue: queryMode)
         self.isNewConversation = isNewConversation
         
         if let resume = res.wrappedValue {
@@ -52,11 +57,13 @@ struct AiFunctionView: View {
     
     // Load the query when the resume changes
     private func loadQuery() {
-        guard let myRes = res, query == nil else { return }
+        guard let myRes = res else { return }
         
         isLoadingQuery = true
         // Use the non-async version which now properly populates applicant data synchronously
         query = myRes.generateQuery()
+        // Set the query mode
+        query?.queryMode = queryMode
         isLoadingQuery = false
     }
 
@@ -75,9 +82,36 @@ struct AiFunctionView: View {
                     ProgressView("Preparing...")
                         .frame(width: 100, height: 30)
                 } else {
-                    // This is a fallback that should rarely be seen
-                    Button(action: { loadQuery() }) {
-                        Label("Reload", systemImage: "arrow.clockwise")
+                    // Show the ai-squiggle button that responds to option-click
+                    Button(action: { 
+                        // Check for option key
+                        if NSEvent.modifierFlags.contains(.option) {
+                            queryMode = .withClarifyingQuestions
+                        } else {
+                            queryMode = .normal
+                        }
+                        loadQuery() 
+                    }) {
+                        Image(isOptionPressed ? "ai-squiggle.badge.questionmark" : "ai-squiggle")
+                            .renderingMode(.template)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isOptionPressed 
+                        ? "Option-click to revise with clarifying questions"
+                        : "Generate AI resume revisions")
+                    .onAppear {
+                        // Monitor for modifier key changes
+                        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                            isOptionPressed = event.modifierFlags.contains(.option)
+                            return event
+                        }
+                    }
+                    .onDisappear {
+                        // Clean up the event monitor
+                        if let monitor = eventMonitor {
+                            NSEvent.removeMonitor(monitor)
+                        }
                     }
                 }
             }

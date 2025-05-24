@@ -15,6 +15,9 @@ import SwiftUI
 
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
+    
+    /// The mode for this query (normal or with clarifying questions)
+    var queryMode: ResumeQueryMode = .normal
 
     // JSON Schema for revisions (used to be JSONSchemaResponseFormat from SwiftOpenAI)
     static let revNodeArraySchemaString = """

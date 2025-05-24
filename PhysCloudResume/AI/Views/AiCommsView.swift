@@ -26,6 +26,13 @@ struct AiCommsView: View {
     @State private var showError: Bool = false
     @State private var retryCount: Int = 0
     @State private var isRetrying: Bool = false
+    
+    // Clarifying questions state
+    @State private var clarifyingQuestions: [ClarifyingQuestion] = []
+    @State private var showClarifyingQuestionsSheet: Bool = false
+    @State private var isWaitingForAnswers: Bool = false
+    @State private var isOptionPressed: Bool = false
+    @State private var eventMonitor: Any?
 
     // TTS related state
     @Binding var ttsEnabled: Bool
@@ -65,6 +72,15 @@ struct AiCommsView: View {
                     )
                     .frame(minWidth: 650)
                 }
+            }
+            .sheet(isPresented: $showClarifyingQuestionsSheet) {
+                ClarifyingQuestionsSheet(
+                    questions: clarifyingQuestions,
+                    isPresented: $showClarifyingQuestionsSheet,
+                    onSubmit: { answers in
+                        handleClarifyingQuestionAnswers(answers)
+                    }
+                )
             }
             .alert("API Request Error", isPresented: $showError) {
                 Button("OK") {
@@ -197,12 +213,31 @@ struct AiCommsView: View {
                         > 0
                     {
                         Button(action: {
+                            // Check for option key when clicking
+                            if NSEvent.modifierFlags.contains(.option) {
+                                q.queryMode = .withClarifyingQuestions
+                            } else {
+                                q.queryMode = .normal
+                            }
                             chatAction()
                         }) {
-                            Image("ai-squiggle")
+                            Image(isOptionPressed ? "ai-squiggle.badge.questionmark" : "ai-squiggle")
                                 .font(.system(size: 20, weight: .regular))
                         }
-                        .help("Create new Résumé")
+                        .help(isOptionPressed ? "Option-click to revise with clarifying questions" : "Create new Résumé")
+                        .onAppear {
+                            // Monitor for modifier key changes
+                            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                                isOptionPressed = event.modifierFlags.contains(.option)
+                                return event
+                            }
+                        }
+                        .onDisappear {
+                            // Clean up the event monitor
+                            if let monitor = eventMonitor {
+                                NSEvent.removeMonitor(monitor)
+                            }
+                        }
                     } else {
                         Image("ai-squiggle.slash").font(.system(size: 20, weight: .regular)).help("Select fields for ai update")
                     }
@@ -318,6 +353,31 @@ struct AiCommsView: View {
         }
         return nil
     }
+    
+    // Handle answers to clarifying questions
+    func handleClarifyingQuestionAnswers(_ answers: [QuestionAnswer]) {
+        Task {
+            isLoading = true
+            isWaitingForAnswers = false
+            
+            do {
+                // Process answers and get revisions
+                let revisionsContainer = try await chatProvider.processAnswersAndGenerateRevisions(
+                    answers: answers,
+                    resumeQuery: q
+                )
+                
+                // The revisions are already set in chatProvider.lastRevNodeArray
+                // The onChange handler will pick them up
+                isLoading = false
+                
+            } catch {
+                self.errorMessage = error.localizedDescription
+                self.showError = true
+                isLoading = false
+            }
+        }
+    }
 
     /// Uses TTS to speak the AI revision suggestions
 
@@ -336,6 +396,27 @@ struct AiCommsView: View {
                     if let myRes = myRes {
                         Logger.debug("Starting new resume generation - clearing conversation context")
                         myRes.clearConversationContext()
+                    }
+                    
+                    // Check if we're in clarifying questions mode
+                    if q.queryMode == .withClarifyingQuestions && !isWaitingForAnswers {
+                        // Request clarifying questions first
+                        Logger.debug("Requesting clarifying questions from AI")
+                        
+                        if let questionsRequest = try await chatProvider.requestClarifyingQuestions(resumeQuery: q) {
+                            if questionsRequest.proceedWithRevisions || questionsRequest.questions.isEmpty {
+                                // LLM decided no questions needed, proceed directly to revisions
+                                Logger.debug("AI opted to proceed without clarifying questions")
+                                // Fall through to normal revision generation below
+                            } else {
+                                // Show questions to user
+                                clarifyingQuestions = questionsRequest.questions
+                                showClarifyingQuestionsSheet = true
+                                isWaitingForAnswers = true
+                                isLoading = false
+                                return
+                            }
+                        }
                     }
 
                     // Set up system and user messages for initial query
