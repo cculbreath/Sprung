@@ -11,7 +11,6 @@ struct APIKeysSettingsView: View {
     // AppStorage properties specific to this view
     @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
-    @AppStorage("brightDataApiKey") private var brightDataApiKey: String = "none"
     @AppStorage("proxycurlApiKey") private var proxycurlApiKey: String = "none"
     @AppStorage("claudeApiKey") private var claudeApiKey: String = "none"
     @AppStorage("grokApiKey") private var grokApiKey: String = "none"
@@ -19,7 +18,6 @@ struct APIKeysSettingsView: View {
 
     // State for managing editing mode for each key
     @State private var isEditingScrapingDog = false
-    @State private var isEditingBrightData = false
     @State private var isEditingOpenAI = false
     @State private var isEditingProxycurl = false
     @State private var isEditingClaude = false
@@ -29,7 +27,6 @@ struct APIKeysSettingsView: View {
     // State for holding the edited value temporarily
     @State private var editedScrapingDogApiKey = ""
     @State private var editedOpenAiApiKey = ""
-    @State private var editedBrightDataApiKey = ""
     @State private var editedProxycurlApiKey = ""
     @State private var editedClaudeApiKey = ""
     @State private var editedGrokApiKey = ""
@@ -128,17 +125,6 @@ struct APIKeysSettingsView: View {
                     isHoveringCheckmark: $isHoveringCheckmark,
                     isHoveringXmark: $isHoveringXmark,
                     onSave: onOpenAIKeyUpdate // Trigger model fetch on save
-                )
-                Divider()
-                // Bright Data API Key Row
-                apiKeyRow(
-                    label: "Bright Data",
-                    icon: "sun.max.fill", // Changed icon for Bright Data
-                    value: $brightDataApiKey,
-                    isEditing: $isEditingBrightData,
-                    editedValue: $editedBrightDataApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark
                 )
                 Divider()
                 // Proxycurl API Key Row

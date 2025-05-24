@@ -65,6 +65,9 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
 
     private let jobApp: JobApp
     private let writingSamples: String
+    
+    /// Optional model override for multi-model voting
+    var overrideModel: String?
 
     /// Writes debug information to a file in the Downloads folder
     /// - Parameter content: The content to write
@@ -153,8 +156,8 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
         // Initialize a conversation with the system prompt and user prompt
         initializeConversation(systemPrompt: systemPrompt, userPrompt: prompt)
 
-        // Get model identifier
-        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        // Get model identifier - use override if provided
+        let modelIdentifier = overrideModel ?? OpenAIModelFetcher.getPreferredModelString()
         
         // Determine the provider for this model
         let modelProvider = AIModels.providerFor(modelName: modelIdentifier)

@@ -12,7 +12,6 @@ struct NewAppSheetView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
 
     @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
-    @AppStorage("brightDataApiKey") var brightDataApiKey: String = "none"
     @AppStorage("proxycurlApiKey") var proxycurlApiKey: String = "none"
 
     @AppStorage("preferredApi") var preferredApi: apis = .scrapingDog
@@ -101,9 +100,6 @@ struct NewAppSheetView: View {
                         await ScrapingDogfetchLinkedInJobDetails(jobID: jobID, posting_url: url)
                     }
                 }
-                if preferredApi == .brightData {
-                    await BrightDatafetchLinkedInJobDetails(posting_url: url)
-                }
                 if preferredApi == .proxycurl {
                     await ProxycurlfetchLinkedInJobDetails(posting_url: url)
                 }
@@ -173,133 +169,6 @@ struct NewAppSheetView: View {
         isLoading = false
     }
 
-    private func BrightDatafetchLinkedInJobDetails(posting_url: URL) async {
-        let apiKey = brightDataApiKey
-        let requestURL_string = "https://api.brightdata.com/datasets/v3/trigger?dataset_id=gd_lpfll7v5hcqtkxl6l"
-
-        guard let requestUrl = URL(string: requestURL_string) else { return }
-
-        // Create the URLRequest
-        var request = URLRequest(url: requestUrl)
-        request.httpMethod = "POST"
-
-        // Set the headers
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // The job URL you have as a starting point
-        let payload = [
-            ["url": posting_url.absoluteString],
-        ]
-
-        do {
-            // Serialize the payload to JSON data
-            let jsonData = try JSONSerialization.data(withJSONObject: payload, options: [])
-            request.httpBody = jsonData
-
-            // Perform the request
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            // Check the HTTP response status
-            guard let httpResponse = response as? HTTPURLResponse else {
-                isLoading = false
-                isPresented = false
-
-                return
-            }
-
-            if httpResponse.statusCode == 200 {
-                // Parse the response to get the snapshot_id
-                if let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []),
-                   let jsonDict = jsonObject as? [String: Any],
-                   let snapshotId = jsonDict["snapshot_id"] as? String
-                {
-                    // Wait for the data to be ready (optional, depending on API behavior)
-                    try await Task.sleep(nanoseconds: 5 * 1_000_000_000) // Sleep for 5 seconds
-
-                    // Second Request: Retrieve the snapshot data
-                    try await fetchSnapshotData(snapshotId: snapshotId, posting_url: posting_url)
-
-                } else {
-                    isLoading = false
-                    isPresented = false
-                }
-            } else {
-                // Handle HTTP error
-                isLoading = false
-                isPresented = false
-            }
-        } catch {
-            // Handle errors (e.g., serialization, network errors)
-            isLoading = false
-            isPresented = false
-        }
-        isLoading = false
-    }
-
-    func fetchSnapshotData(snapshotId: String, posting_url _: URL) async throws {
-        // Construct the request URL for the snapshot
-        let snapshotURLString = "https://api.brightdata.com/datasets/v3/snapshot/\(snapshotId)?format=json"
-        guard let snapshotURL = URL(string: snapshotURLString) else {
-            return
-        }
-
-        // Create the URLRequest
-        var snapshotRequest = URLRequest(url: snapshotURL)
-        snapshotRequest.httpMethod = "GET"
-
-        // Set the Authorization header
-        snapshotRequest.setValue("Bearer \(brightDataApiKey)", forHTTPHeaderField: "Authorization")
-
-        // Initialize a retry counter
-        var retryCount = 0
-        let maxRetries = 2
-
-        var httpResponse: HTTPURLResponse?
-
-        repeat {
-            // Perform the snapshot request
-            let (_, response) = try await URLSession.shared.data(for: snapshotRequest)
-
-            // Check the HTTP response status
-            guard let responseHttp = response as? HTTPURLResponse else {
-                return
-            }
-            httpResponse = responseHttp
-
-            if httpResponse?.statusCode == 202 {
-                // Data not ready, wait and retry
-                if retryCount < 1 {
-                    delayed = true
-                    try await Task.sleep(nanoseconds: 10 * 1_000_000_000) // Sleep for 10 seconds
-                    retryCount += 1
-                } else if retryCount < maxRetries {
-                    delayed = false
-                    verydelayed = true
-                    try await Task.sleep(nanoseconds: 200 * 1_000_000_000) // Sleep for 10 seconds
-                } else {
-                    isLoading = false
-                    // Optionally, you can throw an error or handle it as needed
-                    return
-                }
-            } else {
-                delayed = false
-                // Exit the loop if status code is not 202
-                break
-            }
-        } while retryCount <= maxRetries
-
-        if httpResponse?.statusCode == 200 {
-            // Process the snapshot data
-
-            isLoading = false
-            isPresented = false
-
-        } else {
-            // Handle HTTP error
-            isLoading = false
-        }
-    }
 
     private func ProxycurlfetchLinkedInJobDetails(posting_url: URL) async {
         let apiKey = proxycurlApiKey

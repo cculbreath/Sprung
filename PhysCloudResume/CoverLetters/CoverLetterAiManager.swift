@@ -54,6 +54,7 @@ struct CoverLetterAiManager: View {
 
     @State private var showTTSError: Bool = false
     @State private var errorWrapper: ErrorMessageWrapper? = nil
+    @State private var showMultiModelSheet: Bool = false
 
     // MARK: - Dependencies
 
@@ -138,6 +139,7 @@ struct CoverLetterAiManager: View {
                 buttons: $buttons,
                 chatProvider: chatProvider,
                 chooseBestAction: chooseBestCoverLetter,
+                multiModelChooseBestAction: { showMultiModelSheet = true },
                 speakAction: speakCoverLetter,
                 ttsEnabled: $ttsEnabled,
                 ttsVoice: $ttsVoice,
@@ -204,6 +206,11 @@ struct CoverLetterAiManager: View {
             } message: {
                 Text(vm.ttsError ?? "An error occurred with text-to-speech")
             }
+            // Sheet for multi-model selection
+            .sheet(isPresented: $showMultiModelSheet) {
+                MultiModelChooseBestCoverLetterSheet(coverLetter: cL)
+                    .environmentObject(ModelService())
+            }
         } else {
             // Simplified version without TTS
             CoverLetterActionButtonsView(
@@ -211,6 +218,7 @@ struct CoverLetterAiManager: View {
                 buttons: $buttons,
                 chatProvider: chatProvider,
                 chooseBestAction: chooseBestCoverLetter,
+                multiModelChooseBestAction: { showMultiModelSheet = true },
                 speakAction: {
                     Logger.debug("[CoverLetterAiManager] SpeakAction called but TTS is disabled or ViewModel is nil.")
                 },
@@ -249,6 +257,11 @@ struct CoverLetterAiManager: View {
                     message: Text(wrapper.message),
                     dismissButton: .default(Text("OK"))
                 )
+            }
+            // Sheet for multi-model selection
+            .sheet(isPresented: $showMultiModelSheet) {
+                MultiModelChooseBestCoverLetterSheet(coverLetter: cL)
+                    .environmentObject(ModelService())
             }
         }
     }
