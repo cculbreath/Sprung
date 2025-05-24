@@ -29,6 +29,9 @@ struct CoverLetterActionButtonsView: View {
 
     /// Action to perform when choosing the best cover letter
     let chooseBestAction: () -> Void
+    
+    /// Action to perform when choosing with multiple models
+    let multiModelChooseBestAction: () -> Void
 
     /// Action to perform when activating speech
     let speakAction: () -> Void
@@ -66,7 +69,8 @@ struct CoverLetterActionButtonsView: View {
                 ChooseBestCoverLetterButton(
                     cL: $coverLetter,
                     buttons: $buttons,
-                    action: chooseBestAction
+                    action: chooseBestAction,
+                    multiModelAction: multiModelChooseBestAction
                 )
 
                 // Button for text-to-speech functionality

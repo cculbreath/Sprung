@@ -10,6 +10,9 @@ class BaseLLMProvider {
     /// The LLM client that will be used for API calls
     private(set) var appLLMClient: AppLLMClientProtocol
     
+    /// The app state for creating model-specific clients
+    private var appState: AppState?
+    
     // Message tracking properties
     private var streamTask: Task<Void, Never>?
     var message: String = ""
@@ -50,6 +53,7 @@ class BaseLLMProvider {
     init(appState: AppState) {
         let providerType = appState.settings.preferredLLMProvider
         self.appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
+        self.appState = appState
     }
     
     /// Initialize with a specific app LLM client
@@ -132,6 +136,13 @@ class BaseLLMProvider {
     ///   - timeout: Timeout in seconds (default: 60)
     /// - Returns: The response from the LLM
     func executeQueryWithTimeout(_ query: AppLLMQuery, timeout: TimeInterval = 60) async throws -> AppLLMResponse {
+        // Update the client if needed based on the model in the query
+        if let appState = self.appState, query.modelIdentifier != lastModelUsed {
+            self.appLLMClient = AppLLMClientFactory.createClientForModel(model: query.modelIdentifier, appState: appState)
+            lastModelUsed = query.modelIdentifier
+            Logger.debug("Updated LLM client for model: \(query.modelIdentifier)")
+        }
+        
         // Use a task with timeout to handle API timeouts gracefully
         return try await withUnsafeThrowingContinuation { (continuation: UnsafeContinuation<AppLLMResponse, Error>) in
             // Create a coordination actor to ensure we only resume once

@@ -59,6 +59,10 @@ struct AiCommsView: View {
 
     var body: some View {
         execQuery
+            .onAppear {
+                // Update chatProvider with actual appState
+                chatProvider = ResumeChatProvider(appState: appState)
+            }
             .sheet(isPresented: $sheetOn) {} content: {
                 if sheetOn {
                     ReviewView(
@@ -494,7 +498,7 @@ struct AiCommsView: View {
                     Logger.debug("Switching to \(providerType) client for model: \(modelString)")
                     let newClient = AppLLMClientFactory.createClientForModel(model: modelString, appState: appState)
                     let messages = chatProvider.genericMessages
-                    chatProvider = ResumeChatProvider(client: newClient)
+                    chatProvider = ResumeChatProvider(appState: appState)
                     chatProvider.genericMessages = messages
                     chatProvider.lastModelUsed = modelString
                 }

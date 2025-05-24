@@ -12,7 +12,6 @@ import SwiftUI
 enum apis: String, Identifiable, CaseIterable {
     var id: Self { self }
     case scrapingDog = "Scraping Dog"
-    case brightData = "Bright Data"
     case proxycurl = "Proxycurl"
 }
 
