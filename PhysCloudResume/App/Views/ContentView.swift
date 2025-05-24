@@ -7,6 +7,7 @@ struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
 
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(\.appState) private var appState
     // DragInfo is inherited from ContentViewLaunch
 
     // States managed by ContentView
@@ -15,6 +16,7 @@ struct ContentView: View {
     @State var showSlidingList: Bool = false
     @State var selectedTab: TabList = .listing
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
+    @State private var showImportSheet: Bool = false
 
     // App Storage remains here as it's app-level config
     @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
@@ -71,8 +73,27 @@ struct ContentView: View {
                 scrapingDogApiKey: scrapingDogApiKey,
                 isPresented: $showNewAppSheet
             )
+            .environment(jobAppStore)
+        }
+        .sheet(isPresented: $showImportSheet) {
+            ImportJobAppsFromURLsView()
+                .environment(jobAppStore)
+        }
+        .onChange(of: appState.showImportJobAppsSheet) { _, newValue in
+            Logger.debug("🟢 ContentView detected appState.showImportJobAppsSheet changed to: \(newValue)")
+            if newValue {
+                showImportSheet = true
+                // Reset the appState flag
+                appState.showImportJobAppsSheet = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowImportJobApps"))) { _ in
+            Logger.debug("🟢 ContentView received ShowImportJobApps notification")
+            showImportSheet = true
         }
         .onAppear {
+            Logger.debug("🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
+            Logger.debug("🟡 Initial appState.showImportJobAppsSheet: \(appState.showImportJobAppsSheet)")
             // Initial setup or logging can remain here
             if let storeURL = FileManager.default
                 .urls(for: .applicationSupportDirectory, in: .userDomainMask)

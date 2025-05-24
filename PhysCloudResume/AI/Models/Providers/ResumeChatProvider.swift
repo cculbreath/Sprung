@@ -21,11 +21,40 @@ final class ResumeChatProvider: BaseLLMProvider {
     
     // Stores generic chat messages for the abstraction layer (legacy)
     var genericMessages: [ChatMessage] = []
+    
+    // Clarifying questions state
+    var lastClarifyingQuestions: [ClarifyingQuestion] = []
 
     // MARK: - Initializers
 
 
     // MARK: - Resume-specific Methods
+    
+    /// System prompt for clarifying questions mode
+    private let clarifyingQuestionsSystemPrompt = """
+    You are a helpful resume assistant. The user has requested an enhanced revision process where you may ask clarifying questions before proposing modifications.
+
+    Review the resume and selected nodes carefully. You have two options:
+
+    1. If you have specific questions that would help you provide better, more targeted revisions, you may ask up to 3 clarifying questions.
+
+    2. If you have sufficient information to provide excellent revisions without additional context, you may proceed directly to generating revisions.
+
+    Respond with a JSON object in this format:
+    {
+        "questions": [
+            {
+                "id": "q1",
+                "question": "Your specific question here",
+                "context": "Optional explanation of why this information would be helpful"
+            }
+            // ... up to 3 questions
+        ],
+        "proceedWithRevisions": false  // or true if no questions needed
+    }
+
+    If proceedWithRevisions is true, the questions array should be empty.
+    """
 
     /// Process a resume interaction using the unified AppLLMClientProtocol
     /// - Parameters:
@@ -385,5 +414,127 @@ final class ResumeChatProvider: BaseLLMProvider {
                 onComplete(.failure(error))
             }
         }
+    }
+    
+    // MARK: - Clarifying Questions Methods
+    
+    /// Request clarifying questions from the LLM
+    /// - Parameter resumeQuery: The resume query containing the context
+    /// - Returns: The clarifying questions request or nil if proceeding without questions
+    func requestClarifyingQuestions(resumeQuery: ResumeApiQuery) async throws -> ClarifyingQuestionsRequest? {
+        // Clear previous error message
+        errorMessage = ""
+        
+        // Build the prompt for clarifying questions
+        let userPrompt = await buildClarifyingQuestionsPrompt(resumeQuery: resumeQuery)
+        
+        // Initialize conversation with clarifying questions system prompt
+        conversationHistory = [
+            AppLLMMessage(role: .system, text: clarifyingQuestionsSystemPrompt),
+            AppLLMMessage(role: .user, text: userPrompt)
+        ]
+        
+        // Get model identifier
+        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Create query for structured output
+        let query = AppLLMQuery(
+            messages: conversationHistory,
+            modelIdentifier: modelIdentifier,
+            responseType: ClarifyingQuestionsRequest.self
+        )
+        
+        do {
+            // Execute the query
+            let response = try await executeQueryWithTimeout(query)
+            
+            // Process the structured response
+            let questionsRequest = try processStructuredResponse(response, as: ClarifyingQuestionsRequest.self)
+            
+            // Store the questions for later reference
+            lastClarifyingQuestions = questionsRequest.questions
+            
+            // Add assistant response to conversation history
+            let jsonData = try JSONEncoder().encode(questionsRequest)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+            conversationHistory.append(AppLLMMessage(role: .assistant, text: jsonString))
+            
+            // Return the request (caller will check if proceedWithRevisions is true)
+            return questionsRequest
+            
+        } catch {
+            Logger.error("Failed to get clarifying questions: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// Build the prompt for requesting clarifying questions
+    private func buildClarifyingQuestionsPrompt(resumeQuery: ResumeApiQuery) async -> String {
+        // Get the resume data
+        let resumeText = await resumeQuery.wholeResumeQueryString()
+        
+        return """
+        The user has requested resume modifications with the option to ask clarifying questions first.
+        
+        Here is the context:
+        
+        \(resumeText)
+        
+        Review this information and decide:
+        1. If you need additional information to provide excellent revisions, ask up to 3 specific questions
+        2. If you have sufficient information, set proceedWithRevisions to true and provide an empty questions array
+        
+        Focus on questions that would help you:
+        - Better tailor the resume to the specific job
+        - Highlight relevant achievements or experiences
+        - Use appropriate industry terminology
+        - Quantify accomplishments where possible
+        """
+    }
+    
+    /// Process answers to clarifying questions and continue with revisions
+    /// - Parameters:
+    ///   - answers: The user's answers to the clarifying questions
+    ///   - resumeQuery: The original resume query
+    /// - Returns: The revisions container with suggested changes
+    func processAnswersAndGenerateRevisions(
+        answers: [QuestionAnswer],
+        resumeQuery: ResumeApiQuery
+    ) async throws -> RevisionsContainer {
+        // Build a summary of Q&A for the conversation
+        var answersText = "Here are the answers to your clarifying questions:\n\n"
+        
+        for answer in answers {
+            if let question = lastClarifyingQuestions.first(where: { $0.id == answer.questionId }) {
+                answersText += "Q: \(question.question)\n"
+                answersText += "A: \(answer.answer ?? "User declined to answer")\n\n"
+            }
+        }
+        
+        // Add the answers to conversation history
+        conversationHistory.append(AppLLMMessage(role: .user, text: answersText))
+        
+        // Now request revisions with the additional context
+        let revisionsPrompt = await resumeQuery.wholeResumeQueryString()
+        conversationHistory.append(AppLLMMessage(role: .user, text: "Now please provide your resume revision suggestions based on all the information provided."))
+        
+        // Get model identifier
+        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        
+        // Create query for structured output (revisions)
+        let query = AppLLMQuery(
+            messages: conversationHistory,
+            modelIdentifier: modelIdentifier,
+            responseType: RevisionsContainer.self
+        )
+        
+        // Execute and process the response
+        let response = try await executeQueryWithTimeout(query)
+        let revisions = try processStructuredResponse(response, as: RevisionsContainer.self)
+        
+        // Update lastRevNodeArray
+        lastRevNodeArray = revisions.revArray
+        
+        return revisions
     }
 }

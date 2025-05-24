@@ -106,3 +106,35 @@ public enum AIJSONSchema {
         return result
     }
 }
+
+// MARK: - Clarifying Questions Types
+
+/// Structure for the LLM's clarifying questions request
+struct ClarifyingQuestionsRequest: Codable {
+    let questions: [ClarifyingQuestion]
+    let proceedWithRevisions: Bool  // True if LLM wants to skip questions
+}
+
+/// Individual clarifying question
+struct ClarifyingQuestion: Codable, Identifiable {
+    let id: String
+    let question: String
+    let context: String? // Optional context about why this question is being asked
+}
+
+/// Structure for user's answers to clarifying questions
+struct ClarifyingQuestionsResponse: Codable {
+    let answers: [QuestionAnswer]
+}
+
+/// Individual question answer
+struct QuestionAnswer: Codable {
+    let questionId: String
+    let answer: String?  // nil if user declined to answer
+}
+
+/// Mode for resume query workflow
+enum ResumeQueryMode {
+    case normal
+    case withClarifyingQuestions
+}

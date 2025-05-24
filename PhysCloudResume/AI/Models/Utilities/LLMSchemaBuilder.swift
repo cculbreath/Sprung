@@ -46,6 +46,11 @@ class LLMSchemaBuilder {
             return createJobRecommendationSchema()
         }
         
+        // Add support for ClarifyingQuestionsRequest type
+        if type == ClarifyingQuestionsRequest.self {
+            return createClarifyingQuestionsRequestSchema()
+        }
+        
         // Fallback - empty schema
         return SwiftOpenAI.JSONSchema(type: .object)
     }
@@ -140,6 +145,41 @@ class LLMSchemaBuilder {
                 )
             ],
             required: ["recommendedJobId", "reason"],
+            additionalProperties: false
+        )
+    }
+    
+    /// Creates a JSONSchema for ClarifyingQuestionsRequest type
+    /// - Returns: A JSONSchema for ClarifyingQuestionsRequest
+    private static func createClarifyingQuestionsRequestSchema() -> SwiftOpenAI.JSONSchema {
+        return SwiftOpenAI.JSONSchema(
+            type: .object,
+            properties: [
+                "questions": SwiftOpenAI.JSONSchema(
+                    type: .array,
+                    description: "Array of clarifying questions (up to 3)",
+                    items: SwiftOpenAI.JSONSchema(
+                        type: .object,
+                        properties: [
+                            "id": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "Unique identifier for the question"
+                            ),
+                            "question": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The clarifying question to ask"
+                            )
+                        ],
+                        required: ["id", "question"],
+                        additionalProperties: false
+                    )
+                ),
+                "proceedWithRevisions": SwiftOpenAI.JSONSchema(
+                    type: .boolean,
+                    description: "True if proceeding without questions, false if questions are needed"
+                )
+            ],
+            required: ["questions", "proceedWithRevisions"],
             additionalProperties: false
         )
     }

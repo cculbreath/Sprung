@@ -19,6 +19,9 @@ class AppState {
     var recommendedJobId: UUID?
     var isLoadingRecommendation: Bool = false
     
+    // Import job apps sheet
+    var showImportJobAppsSheet: Bool = false
+    
     // AI model service
     let modelService = ModelService()
 }
