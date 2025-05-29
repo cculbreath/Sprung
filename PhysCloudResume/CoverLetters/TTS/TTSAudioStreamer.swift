@@ -168,7 +168,7 @@ final class TTSAudioStreamer {
             Logger.debug("TTSAudioStreamer: Successfully saved audio to \(url.path)")
             return true
         } catch {
-            Logger.error("TTSAudioStreamer: Failed to save audio to \(url.path): \(error.localizedDescription)")
+//            Logger.error("TTSAudioStreamer: Failed to save audio to \(url.path): \(error.localizedDescription)")
             return false
         }
     }

@@ -168,7 +168,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                 .frame(maxHeight: 200)
             } else if let summary = reasoningSummary {
                 ScrollView {
-                    Text(summary)
+                    Text(replaceUUIDsWithLetterNames(in: summary))
                         .font(.system(.body))
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,7 +188,8 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                                     .font(.caption)
                                     .fontWeight(.medium)
                                 
-                                Text(reasoning.response.verdict)
+                                // Replace UUIDs with letter names in the verdict text
+                                Text(replaceUUIDsWithLetterNames(in: reasoning.response.verdict))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 
@@ -262,14 +263,27 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         }
     }
     
-    private func formatModelName(_ model: String) -> String {
-        return AIModels.friendlyModelName(for: model) ?? model
-    }
-    
     private func getLetterName(for uuid: String) -> String? {
         guard let jobApp = jobAppStore.selectedApp,
               let uuid = UUID(uuidString: uuid) else { return nil }
         return jobApp.coverLetters.first(where: { $0.id == uuid })?.sequencedName
+    }
+    
+    /// Replaces all UUID references in text with their corresponding letter names
+    private func replaceUUIDsWithLetterNames(in text: String) -> String {
+        guard let jobApp = jobAppStore.selectedApp else { return text }
+        
+        var result = text
+        
+        // Replace each cover letter's UUID with its name
+        for letter in jobApp.coverLetters {
+            let uuidString = letter.id.uuidString
+            if result.contains(uuidString) {
+                result = result.replacingOccurrences(of: uuidString, with: letter.sequencedName)
+            }
+        }
+        
+        return result
     }
     
     private func getWinningLetter() -> CoverLetter? {
@@ -392,9 +406,10 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         
         // Add all model reasonings with their votes
         for reasoning in modelReasonings {
-            let letterName = getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown"
+            let letterName = getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown Letter"
             summaryPrompt += "**\(reasoning.model)** voted for '\(letterName)':\n"
-            summaryPrompt += "\(reasoning.response.verdict)\n\n"
+            // Replace UUIDs in verdict before adding to summary prompt
+            summaryPrompt += "\(replaceUUIDsWithLetterNames(in: reasoning.response.verdict))\n\n"
         }
         
         // Add vote tally
@@ -448,9 +463,4 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             }
         }
     }
-}
-
-// Helper to format model names from picker (matching BatchCoverLetterView)
-private func formatModelNameFromPicker(_ model: String) -> String {
-    return AIModels.friendlyModelName(for: model) ?? model
 }

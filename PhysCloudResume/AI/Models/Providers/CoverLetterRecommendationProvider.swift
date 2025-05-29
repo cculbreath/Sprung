@@ -46,14 +46,14 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
     **Example Input:**
     - Job Details: [Details about the job]
     - Candidate's Writing Samples: [Sample 1, Sample 2]
-    - Cover Letter Drafts: [Draft 1, Draft 2, Draft 3]
+    - Cover Letter Options: [Letter ID: 550e8400-e29b-41d4-a716-446655440000, Letter ID: 650e8400-e29b-41d4-a716-446655440001, Letter ID: 750e8400-e29b-41d4-a716-446655440002]
 
     **Example Output:**
     ```json
     {
-    "strengthAndVoiceAnalysis": "Draft 1 is strong in voice but lacks style. Draft 2 mirrors the candidate's voice best while maintaining a professional style. Draft 3 is coherent but less engaging.",
-    "bestLetterUuid": "UUID-of-Draft-2",
-    "verdict": "Draft 2 is selected as it aligns closely with the candidate's unique voice and effectively addresses the job requirements."
+    "strengthAndVoiceAnalysis": "Letter 550e8400-e29b-41d4-a716-446655440000 is strong in voice but lacks style. Letter 650e8400-e29b-41d4-a716-446655440001 mirrors the candidate's voice best while maintaining a professional style. Letter 750e8400-e29b-41d4-a716-446655440002 is coherent but less engaging.",
+    "bestLetterUuid": "650e8400-e29b-41d4-a716-446655440001",
+    "verdict": "Letter 650e8400-e29b-41d4-a716-446655440001 is selected as it aligns closely with the candidate's unique voice and effectively addresses the job requirements."
     }
     ```
 
@@ -128,10 +128,12 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
         }
         let applicant = await MainActor.run { Applicant() }
         var prompt = "\(applicant.name) is applying for this job: \(jobApp.jobPosition) at \(jobApp.companyName).\n\n"
-        prompt += "Here are several cover letter options:\n"
+        prompt += "Here are several cover letter options identified by their IDs:\n"
         var letterBundle = ""
+        
+        // Only use UUIDs - no names or labels that could reveal generation status
         for letter in letters {
-            letterBundle += "id: \(letter.id.uuidString), name: \(letter.sequencedName), content:\n\(letter.content)\n\n"
+            letterBundle += "Letter ID: \(letter.id.uuidString)\nContent:\n\(letter.content)\n\n"
         }
         Logger.debug("================ letter bundle!!")
         Logger.debug(letterBundle)
@@ -140,11 +142,11 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
         prompt += "**For reference here are some of \(applicant.name)'s previous cover letters that he's particularly satisfied with:\n**"
         prompt += "\(writingSamples)\n\n"
         prompt += "Which of the cover letters is strongest? Which cover letter best matches the style, voice and quality of \(applicant.name)'s previous letters? For your response, please return a brief summary ranking/assessment of each letter's relative strength and the degree to which it captures the author's voice and style, determine the one letter that is the strongest and most convincingly in the author's voice, and a brief reason for your ultimate choice."
-        prompt += "\nWhen providing the strengthAndVoiceAnalysis and verdict responses, reference each letter by its name, not its id.\n"
+        prompt += "\nWhen providing the strengthAndVoiceAnalysis and verdict responses, reference each letter by its ID.\n"
         prompt += "\nYou MUST return a JSON object with exactly these fields:\n"
         prompt += "{\n"
         prompt += "  \"strengthAndVoiceAnalysis\": \"Brief summary ranking/assessment of each letter's strength and voice\",\n"
-        prompt += "  \"bestLetterUuid\": \"UUID of the selected best cover letter\",\n"
+        prompt += "  \"bestLetterUuid\": \"The exact UUID string of the selected best cover letter (must be one of the IDs provided above)\",\n"
         prompt += "  \"verdict\": \"Reason for the ultimate choice\"\n"
         prompt += "}\n"
 

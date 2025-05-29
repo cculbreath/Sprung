@@ -29,11 +29,29 @@ class BatchCoverLetterGenerator {
         revisionModel: String,
         onProgress: @escaping (Int, Int) async -> Void
     ) async throws {
+        // Clean up any existing ungenerated drafts before starting
+        cleanupUngeneratedDrafts()
+        
         // Calculate total operations
         let baseGenerations = models.count
         let revisionOperations = models.count * revisions.count
         let totalOperations = baseGenerations + revisionOperations
-        var completedOperations = 0
+        
+        // Use actor for thread-safe progress tracking
+        actor ProgressTracker {
+            private var _completedOperations = 0
+            
+            func increment() -> Int {
+                _completedOperations += 1
+                return _completedOperations
+            }
+            
+            func get() -> Int {
+                return _completedOperations
+            }
+        }
+        
+        let progressTracker = ProgressTracker()
         
         // Create task group for parallel execution
         await withTaskGroup(of: GenerationResult.self) { group in
@@ -62,12 +80,26 @@ class BatchCoverLetterGenerator {
                                 modelToUseForRevisions = revisionModel
                             }
                             
-                            await self.generateRevisions(
-                                baseCoverLetter: coverLetter,
-                                resume: resume,
-                                model: modelToUseForRevisions,
-                                revisions: revisions
-                            )
+                            // Generate revisions and track their progress
+                            var revisionResults: [GenerationResult] = []
+                            for revision in revisions {
+                                do {
+                                    _ = try await self.generateSingleCoverLetter(
+                                        baseCoverLetter: coverLetter,
+                                        resume: resume,
+                                        model: modelToUseForRevisions,
+                                        revision: revision
+                                    )
+                                    revisionResults.append(GenerationResult(success: true, model: modelToUseForRevisions))
+                                } catch {
+                                    Logger.error("🚨 Failed to generate revision \(revision.rawValue) for model \(modelToUseForRevisions): \(error)")
+                                    revisionResults.append(GenerationResult(success: false, model: modelToUseForRevisions, error: error.localizedDescription))
+                                }
+                                
+                                // Update progress for each revision
+                                let completed = await progressTracker.increment()
+                                await onProgress(completed, totalOperations)
+                            }
                         }
                         
                         return GenerationResult(success: true, model: model)
@@ -77,10 +109,10 @@ class BatchCoverLetterGenerator {
                 }
             }
             
-            // Collect results and update progress
+            // Collect results and update progress for base generations only
             for await result in group {
-                completedOperations += 1
-                await onProgress(completedOperations, totalOperations)
+                let completed = await progressTracker.increment()
+                await onProgress(completed, totalOperations)
                 
                 if !result.success {
                     Logger.error("🚨 Batch generation failed for model \(result.model ?? "unknown"): \(result.error ?? "Unknown error")")
@@ -105,7 +137,18 @@ class BatchCoverLetterGenerator {
     ) async throws {
         // Calculate total operations
         let totalOperations = existingLetters.count * revisions.count
-        var completedOperations = 0
+        
+        // Use actor for thread-safe progress tracking
+        actor ProgressTracker {
+            private var _completedOperations = 0
+            
+            func increment() -> Int {
+                _completedOperations += 1
+                return _completedOperations
+            }
+        }
+        
+        let progressTracker = ProgressTracker()
         
         // Create task group for parallel execution
         await withTaskGroup(of: GenerationResult.self) { group in
@@ -144,8 +187,8 @@ class BatchCoverLetterGenerator {
             
             // Collect results and update progress
             for await result in group {
-                completedOperations += 1
-                await onProgress(completedOperations, totalOperations)
+                let completed = await progressTracker.increment()
+                await onProgress(completed, totalOperations)
                 
                 if !result.success {
                     Logger.error("🚨 Revision generation failed for model \(result.model ?? "unknown"): \(result.error ?? "Unknown error")")
@@ -161,9 +204,6 @@ class BatchCoverLetterGenerator {
         model: String,
         revision: CoverLetterPrompts.EditorPrompts?
     ) async throws -> CoverLetter {
-        // Create a new cover letter as a copy of the base
-        let newLetter = coverLetterStore.createDuplicate(letter: baseCoverLetter)
-        
         // Set up the model-specific client
         let client = AppLLMClientFactory.createClientForModel(
             model: model,
@@ -173,28 +213,35 @@ class BatchCoverLetterGenerator {
         // Create provider with the specific client
         let provider = CoverChatProvider(client: client)
         
-        // Update the letter's name to indicate the model and revision
+        // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model
+        let letterName: String
         if let revision = revision {
-            newLetter.name = "Option \(newLetter.optionLetter): \(modelName) - \(revision.operation.rawValue)"
+            letterName = "\(modelName) - \(revision.operation.rawValue)"
         } else {
-            newLetter.name = "Option \(newLetter.optionLetter): \(modelName)"
+            letterName = modelName
         }
         
-        // Set up for generation or revision
-        if let revision = revision {
-            newLetter.editorPrompt = revision
-            newLetter.currentMode = .rewrite
-        } else {
-            newLetter.currentMode = .generate
-        }
+        // Set up mode
+        let mode: CoverAiMode = revision != nil ? .rewrite : .generate
         
-        // Prepare messages
+        // Prepare messages using the base letter's data
         let systemMessage = buildSystemMessage(for: model)
+        
+        // Create a temporary letter object just for prompt generation (not persisted)
+        let tempLetter = CoverLetter(
+            enabledRefs: baseCoverLetter.enabledRefs,
+            jobApp: baseCoverLetter.jobApp
+        )
+        tempLetter.includeResumeRefs = baseCoverLetter.includeResumeRefs
+        tempLetter.content = baseCoverLetter.content
+        tempLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zissner
+        tempLetter.currentMode = mode
+        
         let userMessage = CoverLetterPrompts.generate(
-            coverLetter: newLetter,
+            coverLetter: tempLetter,
             resume: resume,
-            mode: newLetter.currentMode ?? .generate
+            mode: mode
         )
         
         // Initialize conversation
@@ -207,6 +254,7 @@ class BatchCoverLetterGenerator {
             temperature: 1.0
         )
         
+        // Execute the API call - MUST succeed before creating the cover letter
         let response = try await provider.executeQuery(query)
         
         // Extract content from response
@@ -222,11 +270,28 @@ class BatchCoverLetterGenerator {
             }
         }
         
-        // Update the cover letter with generated content
+        // Validate that the response is not empty BEFORE creating the letter
+        guard !responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
+        }
+        
+        // Create a new cover letter object WITHOUT persisting it yet
+        let newLetter = CoverLetter(
+            enabledRefs: baseCoverLetter.enabledRefs,
+            jobApp: baseCoverLetter.jobApp
+        )
+        newLetter.includeResumeRefs = baseCoverLetter.includeResumeRefs
         newLetter.content = responseText
-        newLetter.generated = true
+        newLetter.generated = true  // Mark as generated since we have content
         newLetter.moddedDate = Date()
         newLetter.generationModel = model
+        newLetter.encodedMessageHistory = baseCoverLetter.encodedMessageHistory
+        newLetter.currentMode = mode
+        newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zissner
+        
+        // Get next available option letter BEFORE adding to job app
+        let nextOptionLetter = newLetter.getNextOptionLetter()
+        newLetter.name = "Option \(nextOptionLetter): \(letterName)"
         
         // Store conversation history
         newLetter.messageHistory = provider.conversationHistory.map { appMessage in
@@ -239,34 +304,22 @@ class BatchCoverLetterGenerator {
             )
         }
         
+        // Only persist the letter after it's fully populated
+        if let jobApp = baseCoverLetter.jobApp {
+            coverLetterStore.addLetter(letter: newLetter, to: jobApp)
+        }
+        
+        Logger.debug("📝 Created cover letter: \(newLetter.name) for model: \(model)")
+        
         return newLetter
     }
     
-    /// Generates revisions for a base cover letter
-    private func generateRevisions(
-        baseCoverLetter: CoverLetter,
-        resume: Resume,
-        model: String,
-        revisions: [CoverLetterPrompts.EditorPrompts]
-    ) async {
-        await withTaskGroup(of: Void.self) { group in
-            for revision in revisions {
-                group.addTask { [weak self] in
-                    guard let self = self else { return }
-                    
-                    do {
-                        _ = try await self.generateSingleCoverLetter(
-                            baseCoverLetter: baseCoverLetter,
-                            resume: resume,
-                            model: model,
-                            revision: revision
-                        )
-                    } catch {
-                        Logger.error("🚨 Failed to generate revision \(revision.rawValue) for model \(model): \(error)")
-                    }
-                }
-            }
-        }
+    // REMOVED: generateRevisions method is no longer needed as revision generation
+    // is now handled inline with proper progress tracking
+    
+    /// Cleans up any ungenerated draft letters in the store
+    func cleanupUngeneratedDrafts() {
+        coverLetterStore.deleteUngeneratedDrafts()
     }
     
     /// Builds system message with model-specific adjustments

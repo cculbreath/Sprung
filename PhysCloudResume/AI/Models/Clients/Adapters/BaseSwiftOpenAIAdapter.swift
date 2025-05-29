@@ -228,6 +228,14 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
             switch apiError {
             case .responseUnsuccessful(let description, let statusCode):
                 Logger.error("API error (status code \(statusCode)): \(description)")
+                
+                // Check for rate limit error
+                if statusCode == 429 {
+                    // Try to parse retry-after header if available
+                    // For now, we'll use a default retry time
+                    return AppLLMError.rateLimited(retryAfter: 60) // Default to 60 seconds
+                }
+                
                 return AppLLMError.clientError("API error (status code \(statusCode)): \(description)")
             default:
                 Logger.error("API error: \(apiError.localizedDescription)")

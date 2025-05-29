@@ -13,13 +13,13 @@ extension ModelContainer {
     /// Creates an in-memory container for testing with migration support
     static func createForTesting() throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV3.models),
+            schema: Schema(SchemaV2.models),
             isStoredInMemoryOnly: true,
             allowsSave: true
         )
         
         return try ModelContainer(
-            for: Schema(SchemaV3.models),
+            for: Schema(SchemaV2.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )
@@ -28,14 +28,14 @@ extension ModelContainer {
     /// Creates a file-based container for testing with migration support
     static func createForTesting(at url: URL) throws -> ModelContainer {
         let configuration = ModelConfiguration(
+            schema: Schema(SchemaV2.models),
             url: url,
-            schema: Schema(SchemaV3.models),
-            isStoredInMemoryOnly: false,
-            allowsSave: true
+            allowsSave: true,
+            cloudKitDatabase: .none
         )
         
         return try ModelContainer(
-            for: Schema(SchemaV3.models),
+            for: Schema(SchemaV2.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )

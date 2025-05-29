@@ -232,6 +232,12 @@ struct CoverLetterContentView: View {
             .first
         {
             jobApp.selectedCover = mostRecentGenerated
+        } else if let anyLetter = jobApp.coverLetters.first {
+            // If no generated letters exist, select any remaining letter
+            jobApp.selectedCover = anyLetter
+        } else {
+            // If no letters remain, create a new blank one
+            coverLetterStore.createBlank(jobApp: jobApp)
         }
     }
 }

@@ -26,6 +26,7 @@ struct ResumeReviewSheet: View {
     @State private var fixOverflowChangeMessage: String = ""
     @State private var isProcessingFixOverflow: Bool = false
     @State private var fixOverflowError: String? = nil
+    @State private var currentOverflowLineCount: Int = 0
 
     // General processing and error state (can be shared or separated)
     @State private var isProcessingGeneral: Bool = false
@@ -36,6 +37,9 @@ struct ResumeReviewSheet: View {
     // Persisted preferred LLM model across the app
     @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
     // Persisted preferred model across the app
+    
+    // State for entity merge option
+    @State private var allowEntityMerge: Bool = false
    
     // Computed property for the content view (remains the same)
     private var contentView: some View {
@@ -57,6 +61,16 @@ struct ResumeReviewSheet: View {
                     Text(fixOverflowStatusMessage.isEmpty ? "Optimizing skills section..." : fixOverflowStatusMessage)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, alignment: .center)
+                    if currentOverflowLineCount > 0 {
+                        Text("Overflow detected: ~\(currentOverflowLineCount) lines")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    if !fixOverflowChangeMessage.isEmpty && fixOverflowChangeMessage.contains("Merge performed") {
+                        Text("✓ Merge operation completed")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -151,6 +165,15 @@ struct ResumeReviewSheet: View {
                     // Custom options if custom type is selected
                     if selectedReviewType == .custom {
                         CustomReviewOptionsView(customOptions: $customOptions)
+                    }
+                    
+                    // Fix Overflow options
+                    if selectedReviewType == .fixOverflow {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle("Allow entity merge", isOn: $allowEntityMerge)
+                                .help("When enabled, allows the AI to merge two redundant or conceptually overlapping entries into a single entry to help with fit and improve resume strength")
+                        }
+                        .padding(.vertical, 8)
                     }
                     
                     // AI Model Selection
@@ -263,7 +286,7 @@ struct ResumeReviewSheet: View {
             isProcessingFixOverflow = true
             fixOverflowStatusMessage = "Starting skills optimization..."
             Task {
-                await performFixOverflow(resume: resume)
+                await performFixOverflow(resume: resume, allowEntityMerge: allowEntityMerge)
             }
         } else if selectedReviewType == .reorderSkills {
             isProcessingFixOverflow = true
@@ -324,10 +347,10 @@ struct ResumeReviewSheet: View {
     // MARK: - Fix Overflow Logic (Unchanged)
 
     @MainActor
-    func performFixOverflow(resume: Resume) async {
+    func performFixOverflow(resume: Resume, allowEntityMerge: Bool) async {
         var loopCount = 0
         var operationSuccess = false
-        var currentOverflowLineCount = 0  // Track overflow lines between iterations
+        currentOverflowLineCount = 0  // Track overflow lines between iterations
         
         Logger.debug("FixOverflow: Starting performFixOverflow with max iterations: \(fixOverflowMaxIterations)")
 
@@ -367,7 +390,7 @@ struct ResumeReviewSheet: View {
             }
             Logger.debug("FixOverflow: Successfully converted PDF to image")
 
-            guard let skillsJsonString = reviewService.extractSkillsForLLM(resume: resume) else {
+            guard let skillsJsonString = reviewService.extractSkillsForFixOverflow(resume: resume) else {
                 fixOverflowError = "Error extracting skills from resume (Iteration \(loopCount))."
                 Logger.debug("FixOverflow: Failed to extract skills from resume in iteration \(loopCount)")
                 break
@@ -388,7 +411,8 @@ struct ResumeReviewSheet: View {
                     resume: resume,
                     skillsJsonString: skillsJsonString,
                     base64Image: currentImageBase64,
-                    overflowLineCount: currentOverflowLineCount
+                    overflowLineCount: currentOverflowLineCount,
+                    allowEntityMerge: allowEntityMerge
                 ) { result in
                     continuation.resume(returning: result)
                 }
@@ -407,22 +431,62 @@ struct ResumeReviewSheet: View {
             var changesMadeInThisIteration = false
             var changedNodes: [(oldValue: String, newValue: String)] = []
             
+            // First, handle any merge operation
+            if let mergeOp = fixFitsResponse.mergeOperation {
+                Logger.debug("FixOverflow: Processing merge operation in iteration \(loopCount)")
+                if let keepNode = findTreeNode(byId: mergeOp.skillToKeepId, in: resume),
+                   let deleteNode = findTreeNode(byId: mergeOp.skillToDeleteId, in: resume) {
+                    
+                    // Update the kept node with merged content
+                    let oldTitle = keepNode.name
+                    let oldDescription = keepNode.value
+                    keepNode.name = mergeOp.mergedTitle
+                    keepNode.value = mergeOp.mergedDescription
+                    
+                    // Delete the redundant node
+                    if let parent = deleteNode.parent,
+                       let index = parent.children?.firstIndex(where: { $0.id == deleteNode.id }) {
+                        parent.children?.remove(at: index)
+                        
+                        // Update indices of remaining children
+                        parent.children?.enumerated().forEach { index, child in
+                            child.myIndex = index
+                        }
+                    }
+                    
+                    changesMadeInThisIteration = true
+                    changedNodes.append((oldValue: "\(oldTitle): \(oldDescription) [merged with \(deleteNode.name)]", 
+                                       newValue: "\(mergeOp.mergedTitle): \(mergeOp.mergedDescription)"))
+                    
+                    fixOverflowChangeMessage += "\n\nMerge performed: \(mergeOp.mergeReason)"
+                }
+            }
+            
+            // Then handle regular revisions
             for revisedNode in fixFitsResponse.revisedSkillsAndExpertise {
                 if let treeNode = findTreeNode(byId: revisedNode.id, in: resume) {
-                    if revisedNode.isTitleNode {
-                        if treeNode.name != revisedNode.newValue {
-                            let oldValue = treeNode.name
-                            treeNode.name = revisedNode.newValue
-                            changesMadeInThisIteration = true
-                            changedNodes.append((oldValue: oldValue, newValue: revisedNode.newValue))
+                    var changed = false
+                    var oldDisplay = ""
+                    var newDisplay = ""
+                    
+                    if let newTitle = revisedNode.newTitle, treeNode.name != newTitle {
+                        oldDisplay = "\(treeNode.name): \(treeNode.value)"
+                        treeNode.name = newTitle
+                        changed = true
+                    }
+                    
+                    if let newDescription = revisedNode.newDescription, treeNode.value != newDescription {
+                        if oldDisplay.isEmpty {
+                            oldDisplay = "\(treeNode.name): \(treeNode.value)"
                         }
-                    } else {
-                        if treeNode.value != revisedNode.newValue {
-                            let oldValue = treeNode.value
-                            treeNode.value = revisedNode.newValue
-                            changesMadeInThisIteration = true
-                            changedNodes.append((oldValue: oldValue, newValue: revisedNode.newValue))
-                        }
+                        treeNode.value = newDescription
+                        changed = true
+                    }
+                    
+                    if changed {
+                        newDisplay = "\(treeNode.name): \(treeNode.value)"
+                        changesMadeInThisIteration = true
+                        changedNodes.append((oldValue: oldDisplay, newValue: newDisplay))
                     }
                 } else {
                     Logger.debug("Warning: TreeNode with ID \(revisedNode.id) not found for applying revision.")

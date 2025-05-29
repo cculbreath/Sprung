@@ -12,23 +12,13 @@ import SwiftUI
 
 /// Service responsible for sending application packet reviews (cover letter + resume)
 class ApplicationReviewService: @unchecked Sendable {
-    private var client: AppLLMClientProtocol?
     private var currentRequestID: UUID?
-
+    
     // MARK: - Init
-
+    
     @MainActor
     func initialize() {
-        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? ""
-        guard ModelFilters.validateAPIKey(apiKey, for: AIModels.Provider.openai) != nil else {
-            Logger.warning("⚠️ Invalid API key format for ApplicationReviewService")
-            return
-        }
-
-        client = AppLLMClientFactory.createClient(
-            for: AIModels.Provider.openai,
-            appState: AppState()
-        )
+        LLMRequestService.shared.initialize()
     }
 
     // MARK: - Using ImageConversionService for image conversion
@@ -74,6 +64,13 @@ class ApplicationReviewService: @unchecked Sendable {
     private func buildCustomPrompt(options: CustomApplicationReviewOptions) -> String {
         var segments: [String] = []
 
+        Logger.debug("🔧 [ApplicationReview] Building custom prompt")
+        Logger.debug("🔧 [ApplicationReview] Include cover letter: \(options.includeCoverLetter)")
+        Logger.debug("🔧 [ApplicationReview] Include resume text: \(options.includeResumeText)")
+        Logger.debug("🔧 [ApplicationReview] Include resume image: \(options.includeResumeImage)")
+        Logger.debug("🔧 [ApplicationReview] Include background docs: \(options.includeBackgroundDocs)")
+        Logger.debug("🔧 [ApplicationReview] Custom prompt length: \(options.customPrompt.count)")
+
         if options.includeCoverLetter {
             segments.append("""
             Cover Letter
@@ -102,8 +99,18 @@ class ApplicationReviewService: @unchecked Sendable {
             """)
         }
 
-        segments.append(options.customPrompt)
-        return segments.joined(separator: "\n\n")
+        // Add custom prompt or a default if empty
+        let finalPrompt = options.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if finalPrompt.isEmpty {
+            Logger.warning("🔧 [ApplicationReview] Custom prompt is empty, using default")
+            segments.append("Please review the above materials and provide your analysis.")
+        } else {
+            segments.append(finalPrompt)
+        }
+        
+        let result = segments.joined(separator: "\n\n")
+        Logger.debug("🔧 [ApplicationReview] Custom prompt built, total length: \(result.count)")
+        return result
     }
 
     // MARK: - LLM Request (non-image handled by client, image via raw call)
@@ -118,15 +125,10 @@ class ApplicationReviewService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        if client == nil { initialize() }
-        guard let client = client else {
-            onComplete(.failure(NSError(domain: "AppReview", code: 900, userInfo: [NSLocalizedDescriptionKey: "Client not initialised"])))
-            return
-        }
-
-        // Decide about image
-        let supportsImages = checkIfModelSupportsImages()
+        // Check if model supports images
+        let supportsImages = LLMRequestService.shared.checkIfModelSupportsImages()
         var imageBase64: String?
+        
         if supportsImages,
            reviewType != .custom || (customOptions?.includeResumeImage ?? false),
            let pdfData = resume.pdfData
@@ -136,6 +138,7 @@ class ApplicationReviewService: @unchecked Sendable {
 
         let includeImage = imageBase64 != nil
 
+        // Build the prompt
         let prompt = buildPrompt(
             reviewType: reviewType,
             jobApp: jobApp,
@@ -145,121 +148,57 @@ class ApplicationReviewService: @unchecked Sendable {
             customOptions: customOptions
         )
 
-        // If we must attach an image, fall back to raw API call similar to ResumeReviewService
-        if includeImage, let base64 = imageBase64 {
-            sendImageReviewRequest(promptText: prompt, base64Image: base64, onProgress: onProgress, onComplete: onComplete)
-            return
-        }
+        let requestID = UUID()
+        currentRequestID = requestID
+        
+        // Add system prompt to the beginning
+        let fullPrompt = "You are an expert recruiter reviewing job application packets.\n\n" + prompt
 
-        // Build messages and send via client (async/await)
-        let requestID = UUID(); currentRequestID = requestID
-        let messages: [ChatMessage] = [
-            ChatMessage(role: .system, content: "You are an expert recruiter reviewing job application packets."),
-            ChatMessage(role: .user, content: prompt),
-        ]
-
-        Task {
-            do {
-                // Check if request is still current before proceeding
-                guard self.currentRequestID == requestID else { return }
-                
-                // Execute the query via unified LLM client
-                let appMessages = messages.map { AppLLMMessage.from(chatMessage: $0) }
-                let query = AppLLMQuery(
-                    messages: appMessages,
-                    modelIdentifier: OpenAIModelFetcher.getPreferredModelString(),
-                    temperature: nil
-                )
-                let response = try await client.executeQuery(query)
-                // Check again if request is still current before calling callbacks
-                guard self.currentRequestID == requestID else { return }
-
-                switch response {
-                case .text(let content):
-                    onProgress(content)
+        if includeImage, let img = imageBase64 {
+            // Image request requires mixed request handling
+            Logger.debug("📸 [ApplicationReview] Using image-based request path")
+            LLMRequestService.shared.sendMixedRequest(
+                promptText: fullPrompt,
+                base64Image: img,
+                requestID: requestID
+            ) { result in
+                switch result {
+                case .success(let responseWrapper):
+                    Logger.debug("📥 [ApplicationReview] Received response")
+                    Logger.debug("📥 [ApplicationReview] Response length: \(responseWrapper.content.count) characters")
+                    onProgress(responseWrapper.content)
                     onComplete(.success("Done"))
-                case .structured:
-                    onComplete(.failure(AppLLMError.unexpectedResponseFormat))
+                case .failure(let error):
+                    Logger.error("❌ [ApplicationReview] Error: \(error)")
+                    onComplete(.failure(error))
                 }
-                
-            } catch {
-                // Check if request is still current before reporting error
-                guard self.currentRequestID == requestID else { return }
-                onComplete(.failure(error))
             }
+        } else {
+            // Text-only request
+            Logger.debug("📤 [ApplicationReview] Sending text-only request")
+            Logger.debug("📤 [ApplicationReview] Review type: \(reviewType.rawValue)")
+            Logger.debug("📤 [ApplicationReview] Prompt length: \(prompt.count) characters")
+            
+            LLMRequestService.shared.sendTextRequest(
+                promptText: fullPrompt,
+                model: OpenAIModelFetcher.getPreferredModelString(),
+                onProgress: onProgress,
+                onComplete: { result in
+                    switch result {
+                    case .success(_):
+                        Logger.debug("📥 [ApplicationReview] Review complete")
+                        onComplete(.success("Done"))
+                    case .failure(let error):
+                        Logger.error("❌ [ApplicationReview] Error: \(error)")
+                        onComplete(.failure(error))
+                    }
+                }
+            )
         }
-    }
-
-    // Raw image-request (non-streaming)
-    private func sendImageReviewRequest(
-        promptText: String,
-        base64Image: String,
-        onProgress: @escaping (String) -> Void,
-        onComplete: @escaping (Result<String, Error>) -> Void
-    ) {
-        let requestID = UUID(); currentRequestID = requestID
-        guard client != nil else { return }
-        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? ""
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let imgURL = "data:image/png;base64,\(base64Image)"
-        let currentModel = OpenAIModelFetcher.getPreferredModelString()
-        let body: [String: Any] = [
-            "model": currentModel,
-            "messages": [
-                ["role": "system", "content": "You are an expert recruiter reviewing job application packets."],
-                ["role": "user", "content": [["type": "text", "text": promptText], ["type": "image_url", "image_url": ["url": imgURL]]]],
-            ],
-            "stream": false
-        ]
-
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
-            guard self != nil else { return }
-            if let err = error { onComplete(.failure(err)); return }
-            guard let data = data else { onComplete(.failure(NSError(domain: "", code: -1))); return }
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let choices = json["choices"] as? [[String: Any]],
-               let msg = choices.first?["message"] as? [String: Any],
-               let content = msg["content"] as? String
-            {
-                DispatchQueue.main.async { onProgress(content); onComplete(.success("Done")) }
-            } else {
-                DispatchQueue.main.async { onComplete(.failure(NSError(domain: "", code: -2))) }
-            }
-        }
-        task.resume()
     }
 
     // Cancel
-    func cancelRequest() { currentRequestID = nil }
-
-    private func checkIfModelSupportsImages() -> Bool {
-        let model = OpenAIModelFetcher.getPreferredModelString().lowercased()
-        
-        // Check provider and model for vision support
-        let provider = AIModels.providerForModel(model)
-        
-        // Only OpenAI and Gemini currently support vision
-        if provider == AIModels.Provider.openai {
-            // OpenAI vision-supporting models
-            return [
-                "gpt-4o", "gpt-4.1", "gpt-4-vision", "gpt-4-1106-vision"
-            ].contains { model.contains($0) }
-        } else if provider == AIModels.Provider.gemini {
-            // Gemini vision-supporting models
-            return [
-                "gemini-1.5", "gemini-pro-vision"
-            ].contains { model.contains($0) }
-        }
-        
-        // All other models don't support vision
-        return false
+    func cancelRequest() { 
+        currentRequestID = nil 
     }
 }

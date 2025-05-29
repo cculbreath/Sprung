@@ -21,7 +21,6 @@ func buildToolbar(
 
 struct BuildToolbar: ToolbarContent {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(\.appState) private var appState
     // @Environment(ResStore.self) private var resStore: ResStore // Not directly used here
     // @Environment(ResRefStore.self) private var resRefStore: ResRefStore // Not directly used here
 

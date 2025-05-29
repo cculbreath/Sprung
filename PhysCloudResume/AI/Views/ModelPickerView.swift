@@ -113,35 +113,6 @@ struct ModelPickerView: View {
         return model
     }
     
-    /// Gets the status text for model fetching
-    /// - Returns: A formatted status string
-    private func getStatusText() -> String {
-        let relevantProviders = providerFilter ?? [
-            AIModels.Provider.openai,
-            AIModels.Provider.claude,
-            AIModels.Provider.grok,
-            AIModels.Provider.gemini
-        ]
-        
-        // Check if any fetch is in progress
-        let anyInProgress = relevantProviders.contains { provider in
-            guard let status = modelService.fetchStatus[provider] else { return false }
-            return status.isInProgress
-        }
-        
-        if anyInProgress {
-            return "Fetching models..."
-        }
-        
-        // Get the provider for the selected model
-        let provider = AIModels.providerForModel(selectedModel)
-        guard let status = modelService.fetchStatus[provider] else {
-            return "Model list not fetched"
-        }
-        
-        return status.displayText
-    }
-    
     /// Fetches all models from enabled providers
     private func fetchModels() {
         Logger.debug("Fetching all model lists")

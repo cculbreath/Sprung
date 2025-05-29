@@ -206,10 +206,21 @@ final class ResumeChatProvider: BaseLLMProvider {
                     
                     // Try to find JSON in the text response
                     if let jsonStart = text.range(of: "{"),
-                       let jsonEnd = text.range(of: "}", options: .backwards) {
+                       let jsonEnd = text.range(of: "}", options: .backwards),
+                       jsonStart.lowerBound <= jsonEnd.lowerBound {
                         
-                        let jsonRange = jsonStart.lowerBound..<jsonEnd.upperBound
-                        let jsonString = String(text[jsonRange])
+                        // Use index(after:) to include the closing brace
+                        let endIndex = text.index(after: jsonEnd.lowerBound)
+                        guard endIndex <= text.endIndex else {
+                            Logger.error("JSON end index out of bounds")
+                            throw NSError(
+                                domain: "ResumeChatProviderError",
+                                code: 1003,
+                                userInfo: [NSLocalizedDescriptionKey: "JSON extraction failed: end index out of bounds"]
+                            )
+                        }
+                        
+                        let jsonString = String(text[jsonStart.lowerBound..<endIndex])
                         
                         if let jsonData = jsonString.data(using: .utf8) {
                             do {

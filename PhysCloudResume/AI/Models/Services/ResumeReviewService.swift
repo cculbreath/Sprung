@@ -98,6 +98,7 @@ class ResumeReviewService: @unchecked Sendable {
     ///   - skillsJsonString: JSON string representation of skills
     ///   - base64Image: Base64 encoded image of the resume
     ///   - overflowLineCount: Number of lines overflowing from previous contentsFit check
+    ///   - allowEntityMerge: Whether to allow merging of redundant entries
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendFixFitsRequest(
@@ -105,6 +106,7 @@ class ResumeReviewService: @unchecked Sendable {
         skillsJsonString: String,
         base64Image: String,
         overflowLineCount: Int = 0,
+        allowEntityMerge: Bool = false,
         onComplete: @escaping (Result<FixFitsResponseContainer, Error>) -> Void
     ) {
         _ = resume // Unused parameter
@@ -119,7 +121,7 @@ class ResumeReviewService: @unchecked Sendable {
             Logger.debug("Using Grok text-only approach for fix fits request with \(overflowLineCount) overflow lines")
             
             // Build specialized prompt for Grok that doesn't require image analysis
-            let grokPrompt = PromptBuilderService.shared.buildGrokFixFitsPrompt(skillsJsonString: skillsJsonString, overflowLineCount: overflowLineCount)
+            let grokPrompt = PromptBuilderService.shared.buildGrokFixFitsPrompt(skillsJsonString: skillsJsonString, overflowLineCount: overflowLineCount, allowEntityMerge: allowEntityMerge)
             
             LLMRequestService.shared.sendStructuredMixedRequest(
                 promptText: grokPrompt,
@@ -135,7 +137,7 @@ class ResumeReviewService: @unchecked Sendable {
             Logger.debug("Using standard image-based approach for fix fits request")
             
             // Standard approach for other models (OpenAI, Claude, Gemini)
-            let prompt = PromptBuilderService.shared.buildFixFitsPrompt(skillsJsonString: skillsJsonString)
+            let prompt = PromptBuilderService.shared.buildFixFitsPrompt(skillsJsonString: skillsJsonString, allowEntityMerge: allowEntityMerge)
             
             LLMRequestService.shared.sendStructuredMixedRequest(
                 promptText: prompt,
@@ -193,25 +195,44 @@ class ResumeReviewService: @unchecked Sendable {
                             
                             for item in skillsArray {
                                 if let id = item["id"] as? String,
-                                   let newValue = item["newValue"] as? String,
-                                   let originalValue = item["originalValue"] as? String,
-                                   let treePath = item["treePath"] as? String,
-                                   let isTitleNode = item["isTitleNode"] as? Bool {
+                                   let originalTitle = item["original_title"] as? String,
+                                   let originalDescription = item["original_description"] as? String {
+                                    
+                                    let newTitle = item["new_title"] as? String
+                                    let newDescription = item["new_description"] as? String
                                     
                                     let node = RevisedSkillNode(
                                         id: id,
-                                        newValue: newValue,
-                                        originalValue: originalValue,
-                                        treePath: treePath,
-                                        isTitleNode: isTitleNode
+                                        newTitle: newTitle,
+                                        newDescription: newDescription,
+                                        originalTitle: originalTitle,
+                                        originalDescription: originalDescription
                                     )
                                     revisedNodes.append(node)
                                 }
                             }
                             
+                            // Also check for merge operation
+                            var mergeOp: MergeOperation? = nil
+                            if let mergeData = jsonObject["merge_operation"] as? [String: Any],
+                               let keepId = mergeData["skill_to_keep_id"] as? String,
+                               let deleteId = mergeData["skill_to_delete_id"] as? String,
+                               let mergedTitle = mergeData["merged_title"] as? String,
+                               let mergedDescription = mergeData["merged_description"] as? String,
+                               let reason = mergeData["merge_reason"] as? String {
+                                
+                                mergeOp = MergeOperation(
+                                    skillToKeepId: keepId,
+                                    skillToDeleteId: deleteId,
+                                    mergedTitle: mergedTitle,
+                                    mergedDescription: mergedDescription,
+                                    mergeReason: reason
+                                )
+                            }
+                            
                             if !revisedNodes.isEmpty {
                                 // If we parsed something, return it
-                                onComplete(.success(FixFitsResponseContainer(revisedSkillsAndExpertise: revisedNodes)))
+                                onComplete(.success(FixFitsResponseContainer(revisedSkillsAndExpertise: revisedNodes, mergeOperation: mergeOp)))
                                 return
                             }
                         }
@@ -369,6 +390,13 @@ class ResumeReviewService: @unchecked Sendable {
     /// - Returns: A JSON string representing the skills and expertise
     func extractSkillsForLLM(resume: Resume) -> String? {
         return TreeNodeExtractor.shared.extractSkillsForLLM(resume: resume)
+    }
+    
+    /// Extracts skills for fix overflow operation with bundled title/description
+    /// - Parameter resume: The resume to extract skills from
+    /// - Returns: A JSON string representing the bundled skills
+    func extractSkillsForFixOverflow(resume: Resume) -> String? {
+        return TreeNodeExtractor.shared.extractSkillsForFixOverflow(resume: resume)
     }
     
     /// Sends a request to reorder skills based on job relevance

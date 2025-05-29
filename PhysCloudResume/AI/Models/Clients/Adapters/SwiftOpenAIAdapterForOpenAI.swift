@@ -121,9 +121,22 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
                     speed: 1.0,
                     stream: false
                 )
+                Logger.debug("🎤 [TTS] Sending non-streaming request with voice: \(voice), text length: \(text.count)")
                 let response = try await swiftService.createSpeech(parameters: parameters)
+                Logger.debug("🎤 [TTS] Received response with audio data size: \(response.output.count)")
                 onComplete(.success(response.output))
             } catch {
+                Logger.error("🚨 [TTS] Non-streaming speech error: \(error)")
+                
+                // Log more details about the error
+                if let apiError = error as? SwiftOpenAI.APIError {
+                    Logger.error("🚨 [TTS] SwiftOpenAI API Error: \(apiError)")
+                } else if let urlError = error as? URLError {
+                    Logger.error("🚨 [TTS] URL Error - Code: \(urlError.code), Description: \(urlError.localizedDescription)")
+                } else {
+                    Logger.error("🚨 [TTS] Unknown error type: \(type(of: error)), Description: \(error.localizedDescription)")
+                }
+                
                 onComplete(.failure(error))
             }
         }
@@ -147,17 +160,31 @@ class SwiftOpenAIAdapterForOpenAI: BaseSwiftOpenAIAdapter, TTSCapable {
                     speed: 1.0,
                     stream: true
                 )
+                Logger.debug("🎤 [TTS] Sending streaming request with voice: \(voice), text length: \(text.count)")
                 let stream = try await swiftService.createStreamingSpeech(parameters: parameters)
                 for try await chunk in stream {
                     if chunk.isLastChunk {
+                        Logger.debug("🎤 [TTS] Received last chunk")
                         onComplete(nil)
                         return
                     } else {
+                        Logger.debug("🎤 [TTS] Received chunk of size: \(chunk.chunk.count)")
                         onChunk(.success(chunk.chunk))
                     }
                 }
                 onComplete(nil)
             } catch {
+                Logger.error("🚨 [TTS] Streaming speech error: \(error)")
+                
+                // Log more details about the error
+                if let apiError = error as? SwiftOpenAI.APIError {
+                    Logger.error("🚨 [TTS] SwiftOpenAI API Error: \(apiError)")
+                } else if let urlError = error as? URLError {
+                    Logger.error("🚨 [TTS] URL Error - Code: \(urlError.code), Description: \(urlError.localizedDescription)")
+                } else {
+                    Logger.error("🚨 [TTS] Unknown error type: \(type(of: error)), Description: \(error.localizedDescription)")
+                }
+                
                 onComplete(error)
             }
         }
