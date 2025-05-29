@@ -218,69 +218,6 @@ class APIKeyValidator {
         }
     }
     
-    /// Visually checks an API key for display in UI
-    /// - Parameters:
-    ///   - provider: The provider name
-    ///   - apiKey: The API key to check
-    /// - Returns: Status of the key: .valid, .invalid, or .missing
-    static func visualStatus(provider: String, apiKey: String) -> KeyStatus {
-        // First check if the key is empty or "none"
-        if apiKey.isEmpty || apiKey == "none" {
-            return .missing
-        }
-        
-        // Check if the key has the correct format
-        if isValidFormat(provider: provider, apiKey: apiKey) {
-            return .valid
-        }
-        
-        // Key is present but has invalid format
-        return .invalid
-    }
-    
-    /// Status of an API key for UI display
-    enum KeyStatus {
-        case valid    // Key is present and has correct format
-        case invalid  // Key is present but has incorrect format
-        case missing  // Key is not provided
-        
-        /// Color to use for the status indicator
-        var color: Color {
-            switch self {
-            case .valid: 
-                return .green
-            case .invalid: 
-                return .orange
-            case .missing: 
-                return .red
-            }
-        }
-        
-        /// Text to display for the status
-        var text: String {
-            switch self {
-            case .valid:
-                return "Valid"
-            case .invalid:
-                return "Invalid format"
-            case .missing:
-                return "Not configured"
-            }
-        }
-    }
-    
-    /// Logs details about an API key for debugging (without revealing the entire key)
-    /// - Parameters:
-    ///   - provider: The provider name
-    ///   - apiKey: The API key to log
-    static func logKeyInfo(provider: String, apiKey: String) {
-        let firstChars = apiKey.prefix(5)
-        let lastChars = apiKey.suffix(3)
-        let length = apiKey.count
-        
-        Logger.debug("API Key for \(provider): First chars: \(firstChars), Length: \(length), Last chars: \(lastChars)")
-    }
-    
     /// Sanitizes an API key by trimming whitespace
     /// - Parameter apiKey: The API key to sanitize
     /// - Returns: The sanitized API key

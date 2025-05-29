@@ -40,12 +40,17 @@ struct ApplicationReviewSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Fixed header
             Text("AI Application Review")
                 .font(.title)
-
-            // Application context section with information about what's being analyzed
-            GroupBox(label: Text("Analysis Context").fontWeight(.medium)) {
+                .padding(.bottom, 16)
+            
+            // Scrollable content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Application context section with information about what's being analyzed
+                    GroupBox(label: Text("Analysis Context").fontWeight(.medium)) {
                 VStack(alignment: .leading, spacing: 12) {
                     // Job information
                     VStack(alignment: .leading, spacing: 6) {
@@ -121,13 +126,23 @@ struct ApplicationReviewSheet: View {
                 .padding(.vertical, 4)
             }
 
-            // Response area
-            GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
-                responseContent
-                    .frame(minHeight: 200)
+                    // Response area
+                    GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
+                        responseContent
+                            .frame(minHeight: 200)
+                    }
+                    
+                    // Debug info
+                    if !responseText.isEmpty {
+                        Text("Debug: Response has \(responseText.count) characters")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(.bottom, 16)
             }
-
-            // Buttons
+            
+            // Fixed buttons at bottom
             HStack {
                 if isProcessing {
                     Button("Stop") { reviewService.cancelRequest(); isProcessing = false }
@@ -140,9 +155,11 @@ struct ApplicationReviewSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
+            .padding(.top, 8)
         }
         .padding()
-        .frame(width: 700, height: 600, alignment: .topLeading)
+        .frame(width: 700)
+        .frame(minHeight: 600, maxHeight: 800)
     }
 
     // Persisted preferred model across the app
@@ -207,10 +224,14 @@ struct ApplicationReviewSheet: View {
             }
             .frame(maxWidth: .infinity)
         } else if !responseText.isEmpty {
-            // Use MarkdownView for rich text rendering
-            MarkdownView(markdown: responseText)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(8)
+            // Use selectable text for the response
+            ScrollView {
+                Text(responseText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+            }
+            .frame(maxHeight: 400) // Limit height to ensure it doesn't overflow
         } else if let error = errorMessage {
             Text(error)
                 .foregroundColor(.red)
@@ -248,25 +269,43 @@ struct ApplicationReviewSheet: View {
             }
         }()
 
-        reviewService.sendReviewRequest(
-            reviewType: selectedType,
-            jobApp: jobApp,
-            resume: resume,
-            coverLetter: coverLetterToUse,
-            customOptions: selectedType == .custom ? customOptions : nil,
-            onProgress: { chunk in
-                DispatchQueue.main.async {
-                    // If we're just starting, clear any previous placeholder
-                    if responseText == "Submitting request..." { responseText = "" }
-                    responseText += chunk
+        Logger.debug("🚀 [ApplicationReviewSheet] Submitting review request")
+        Logger.debug("🚀 [ApplicationReviewSheet] Review type: \(selectedType.rawValue)")
+        Logger.debug("🚀 [ApplicationReviewSheet] Has custom options: \(selectedType == .custom)")
+        
+        Task { @MainActor in
+            reviewService.sendReviewRequest(
+                reviewType: selectedType,
+                jobApp: jobApp,
+                resume: resume,
+                coverLetter: coverLetterToUse,
+                customOptions: selectedType == .custom ? customOptions : nil,
+                onProgress: { chunk in
+                    Logger.debug("📝 [ApplicationReviewSheet] Progress callback - chunk length: \(chunk.count)")
+                    Task { @MainActor in
+                        // If we're just starting, clear any previous placeholder
+                        if self.responseText == "Submitting request..." { 
+                            self.responseText = "" 
+                        }
+                        self.responseText += chunk
+                        Logger.debug("📝 [ApplicationReviewSheet] Updated response text length: \(self.responseText.count)")
+                    }
+                },
+                onComplete: { result in
+                    Logger.debug("✅ [ApplicationReviewSheet] Complete callback")
+                    Task { @MainActor in
+                        self.isProcessing = false
+                        if case let .failure(err) = result { 
+                            self.errorMessage = err.localizedDescription
+                            Logger.error("❌ [ApplicationReviewSheet] Error: \(err)")
+                        } else {
+                            Logger.debug("✅ [ApplicationReviewSheet] Success")
+                            Logger.debug("✅ [ApplicationReviewSheet] Final responseText: \(self.responseText.prefix(100))...")
+                            Logger.debug("✅ [ApplicationReviewSheet] isProcessing: \(self.isProcessing)")
+                        }
+                    }
                 }
-            },
-            onComplete: { result in
-                DispatchQueue.main.async {
-                    isProcessing = false
-                    if case let .failure(err) = result { errorMessage = err.localizedDescription }
-                }
-            }
-        )
+            )
+        }
     }
 }

@@ -16,17 +16,22 @@ class ConversationContextManager: ObservableObject {
     
     private var modelContext: ModelContext?
     private let maxContextTokens: Int = 4000 // Default context window
+    private var isInitialized = false
     
     private init() {}
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
+        self.isInitialized = true
     }
     
     // MARK: - Context Management
     
     func getContext(for objectId: UUID, type: ConversationType) -> ConversationContext? {
-        guard let modelContext = modelContext else { return nil }
+        guard let modelContext = modelContext else { 
+            // Early access before initialization - return nil gracefully
+            return nil 
+        }
         
         do {
             let contexts = try modelContext.fetch(FetchDescriptor<ConversationContext>())
@@ -95,8 +100,15 @@ class ConversationContextManager: ObservableObject {
     }
     
     func clearContext(for objectId: UUID, type: ConversationType) {
-        guard let modelContext = modelContext,
-              let context = getContext(for: objectId, type: type) else { return }
+        guard let modelContext = modelContext else { 
+            // Early access before initialization - only log if we expected to be initialized
+            if isInitialized {
+                Logger.debug("ConversationContextManager modelContext is nil after initialization")
+            }
+            return 
+        }
+        
+        guard let context = getContext(for: objectId, type: type) else { return }
         
         modelContext.delete(context)
         

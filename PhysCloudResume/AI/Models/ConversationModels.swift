@@ -29,14 +29,6 @@ class ConversationContext {
     }
     
     // Computed properties
-    var conversationType: ConversationType {
-        return ConversationType(rawValue: objectType) ?? .resume
-    }
-    
-    var messageCount: Int {
-        return messages.count
-    }
-    
     var estimatedTokenCount: Int {
         return messages.reduce(0) { $0 + $1.estimatedTokens }
     }

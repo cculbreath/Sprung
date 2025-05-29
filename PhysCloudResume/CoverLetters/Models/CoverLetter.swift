@@ -14,12 +14,6 @@ class CoverLetter: Identifiable, Hashable {
     func clearConversationContext() {
         ConversationContextManager.shared.clearContext(for: self.id, type: .coverLetter)
     }
-    
-    /// Checks if this cover letter has an active conversation context
-    @MainActor
-    var hasConversationContext: Bool {
-        return ConversationContextManager.shared.getContext(for: self.id, type: .coverLetter) != nil
-    }
 
     var createdDate: Date = Date()
     var moddedDate: Date = Date()

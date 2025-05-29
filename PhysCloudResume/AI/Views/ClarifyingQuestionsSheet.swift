@@ -244,25 +244,3 @@ struct TabNavigableTextEditor: NSViewRepresentable {
         }
     }
 }
-
-// Preview
-struct ClarifyingQuestionsSheet_Previews: PreviewProvider {
-    static var previews: some View {
-        ClarifyingQuestionsSheet(
-            questions: [
-                ClarifyingQuestion(
-                    id: "q1",
-                    question: "What specific technologies or frameworks did you use in your shape memory alloy research?",
-                    context: "This will help tailor your technical skills section"
-                ),
-                ClarifyingQuestion(
-                    id: "q2",
-                    question: "Can you describe a specific achievement or metric from your automation work?",
-                    context: nil
-                )
-            ],
-            isPresented: .constant(true),
-            onSubmit: { _ in }
-        )
-    }
-}

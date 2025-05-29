@@ -10,8 +10,6 @@ import SwiftUI
 struct ResumeSplitView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResStore.self) private var resStore: ResStore
-    @Environment(ResModelStore.self) private var resModelStore: ResModelStore
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     
     @Binding var isWide: Bool
     @Binding var tab: TabList

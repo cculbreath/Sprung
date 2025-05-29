@@ -19,8 +19,18 @@ final class CoverChatProvider: BaseLLMProvider {
         if text.contains("{") && text.contains("}") {
             // Find the JSON portion (from first { to last })
             if let jsonStart = text.range(of: "{"),
-               let jsonEnd = text.range(of: "}", options: .backwards) {
-                let jsonSubstring = String(text[jsonStart.lowerBound...jsonEnd.upperBound])
+               let jsonEnd = text.range(of: "}", options: .backwards),
+               jsonStart.lowerBound <= jsonEnd.lowerBound {
+                // Safely extract the substring using indices
+                let startIndex = jsonStart.lowerBound
+                let endIndex = text.index(after: jsonEnd.lowerBound) // Include the closing brace
+                
+                // Ensure we don't go past the end of the string
+                guard endIndex <= text.endIndex else {
+                    return text // Return original text if indices are invalid
+                }
+                
+                let jsonSubstring = String(text[startIndex..<endIndex])
                 
                 // Try to parse the JSON
                 if let data = jsonSubstring.data(using: .utf8),

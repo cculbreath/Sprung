@@ -83,8 +83,26 @@ class PromptBuilderService {
     /// Builds a specialized prompt for the 'fixFits' feature
     /// - Parameters:
     ///   - skillsJsonString: JSON string representation of skills
+    ///   - allowEntityMerge: Whether to allow merging of redundant entries
     /// - Returns: A formatted prompt string
-    func buildFixFitsPrompt(skillsJsonString: String) -> String {
+    func buildFixFitsPrompt(skillsJsonString: String, allowEntityMerge: Bool = false) -> String {
+        let mergeInstructions = allowEntityMerge ? """
+        
+        ENTITY MERGE OPTION:
+        You are allowed to merge two redundant or conceptually overlapping skill entries if it will help with fit and improve the resume's overall strength. When merging:
+        - Each skill entry in the JSON contains: id, title, description, original_title, and original_description
+        - Only merge skill entries that are truly redundant or where combining them creates a stronger, more comprehensive statement
+        - Combine the best elements of both entries into a single, more impactful skill entry
+        - The merged entry should preserve all unique aspects of both original entries
+        - Only ONE merge operation is allowed per request
+        - If you perform a merge, include a "merge_operation" object in your response with:
+          - "skill_to_keep_id": The ID of the skill entry you want to keep
+          - "skill_to_delete_id": The ID of the skill entry you want to delete
+          - "merged_title": The combined skill title
+          - "merged_description": The combined skill description
+          - "merge_reason": A brief explanation of why these entries were merged
+        """ : ""
+        
         return """
         You are an expert resume editor. The 'Skills and Expertise' section in the attached resume image is overflowing. Please revise the content of this section to fit the available space without sacrificing its impact. Prioritize shortening entries that are only slightly too long (e.g., a few words on the last line). Ensure revised entries remain strong and relevant to the job application.
 
@@ -104,7 +122,7 @@ class PromptBuilderService {
 
         \(skillsJsonString)
 
-        Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. Each node in your response must include the original 'id', 'originalValue', 'isTitleNode', and 'treePath' fields exactly as they were provided in the input. Provide your suggested change in the 'newValue' field.
+        Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. For each skill in your response, provide 'id', 'new_title' (if changed), 'new_description' (if changed), 'original_title', and 'original_description'. If you don't change a title or description, omit the corresponding 'new_' field.
         """
     }
     
@@ -147,11 +165,29 @@ class PromptBuilderService {
     /// - Parameters:
     ///   - skillsJsonString: JSON string representation of skills
     ///   - overflowLineCount: Number of lines that are overflowing (0 if just touching boundaries)
+    ///   - allowEntityMerge: Whether to allow merging of redundant entries
     /// - Returns: A formatted prompt string for Grok that doesn't require image analysis
-    func buildGrokFixFitsPrompt(skillsJsonString: String, overflowLineCount: Int = 0) -> String {
+    func buildGrokFixFitsPrompt(skillsJsonString: String, overflowLineCount: Int = 0, allowEntityMerge: Bool = false) -> String {
         let overflowGuidance = overflowLineCount > 0 
             ? "Visual analysis indicates approximately \(overflowLineCount) lines of text are overflowing the intended space. Focus your editing efforts on reducing content by roughly this amount."
             : "Visual analysis indicates the content boundaries are overlapping but no significant text overflow. Make minimal adjustments to ensure clean spacing."
+        
+        let mergeInstructions = allowEntityMerge ? """
+        
+        ENTITY MERGE OPTION:
+        You are allowed to merge two redundant or conceptually overlapping skill entries if it will help with fit and improve the resume's overall strength. When merging:
+        - Each skill entry in the JSON contains: id, title, description, original_title, and original_description
+        - Only merge skill entries that are truly redundant or where combining them creates a stronger, more comprehensive statement
+        - Combine the best elements of both entries into a single, more impactful skill entry
+        - The merged entry should preserve all unique aspects of both original entries
+        - Only ONE merge operation is allowed per request
+        - If you perform a merge, include a "merge_operation" object in your response with:
+          - "skill_to_keep_id": The ID of the skill entry you want to keep
+          - "skill_to_delete_id": The ID of the skill entry you want to delete
+          - "merged_title": The combined skill title
+          - "merged_description": The combined skill description
+          - "merge_reason": A brief explanation of why these entries were merged
+        """ : ""
         
         return """
         You are an expert resume editor. It has been determined that the text column produced by these data nodes is too long for the available space. Please reduce the length of the text, doing your best to preserve all meaning while avoiding awkward or uncommon abbreviations or truncation. Pay special attention to entries that are longer than the others. 
@@ -176,7 +212,7 @@ class PromptBuilderService {
 
         \(skillsJsonString)
 
-        Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. Each node in your response must include the original 'id', 'originalValue', 'isTitleNode', and 'treePath' fields exactly as they were provided in the input. Provide your suggested change in the 'newValue' field.
+        Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. For each skill in your response, provide 'id', 'new_title' (if changed), 'new_description' (if changed), 'original_title', and 'original_description'. If you don't change a title or description, omit the corresponding 'new_' field.
         """
     }
     

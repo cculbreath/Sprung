@@ -25,6 +25,7 @@ struct CoverLetterAiManager: View {
 
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(\.appState) private var appState
 
     // MARK: - AppStorage
 
@@ -90,10 +91,10 @@ struct CoverLetterAiManager: View {
             // We'll further check ttsEnabled.wrappedValue inside speakCoverLetter
             // or ensure ttsViewModel is updated if ttsEnabled changes.
             _ttsViewModel = State(initialValue: TTSViewModel(ttsProvider: provider))
-            Logger.debug("[CoverLetterAiManager] TTSViewModel INITIALIZED in init.")
+//            Logger.debug("[CoverLetterAiManager] TTSViewModel INITIALIZED in init.")
         } else {
             _ttsViewModel = State(initialValue: nil) // Explicitly nil
-            Logger.debug("[CoverLetterAiManager] TTSViewModel IS NIL in init (ttsProvider was nil).")
+//            Logger.debug("[CoverLetterAiManager] TTSViewModel IS NIL in init (ttsProvider was nil).")
         }
 
         // Handle new conversation state for toolbar button presses -
@@ -120,7 +121,16 @@ struct CoverLetterAiManager: View {
             return .constant(dummyCoverLetter)
         }
         return Binding(get: {
-            selectedApp.selectedCover! // Assuming selectedCover is always non-nil if selectedApp is non-nil
+            // Handle the case where selectedCover might be nil
+            if let selectedCover = selectedApp.selectedCover {
+                return selectedCover
+            } else {
+                // Create a new blank cover letter if none is selected
+                Logger.debug("[CoverLetterAiManager] No selected cover letter, creating a new one")
+                coverLetterStore.createBlank(jobApp: selectedApp)
+                // Return the newly created cover letter (should be selected automatically)
+                return selectedApp.selectedCover ?? CoverLetter(enabledRefs: [], jobApp: selectedApp)
+            }
         }, set: {
             selectedApp.selectedCover = $0
         })
@@ -162,7 +172,7 @@ struct CoverLetterAiManager: View {
                 Logger.debug("[CoverLetterAiManager] Appeared (with TTSViewModel). ttsEnabled: \(ttsEnabled)")
                 // Ensure TTSViewModel is correctly initialized if ttsEnabled changes after initial init
                 if self.ttsViewModel == nil && self.ttsEnabled && self.ttsProvider != nil {
-                    Logger.debug("[CoverLetterAiManager] Re-initializing TTSViewModel in onAppear because ttsEnabled is true and viewModel was nil.")
+//                    Logger.debug("[CoverLetterAiManager] Re-initializing TTSViewModel in onAppear because ttsEnabled is true and viewModel was nil.")
                     self.ttsViewModel = TTSViewModel(ttsProvider: self.ttsProvider!)
                 }
                 handleNewConversationOnAppear()
@@ -184,7 +194,7 @@ struct CoverLetterAiManager: View {
                         self.ttsViewModel = TTSViewModel(ttsProvider: provider)
                     }
                 } else {
-                    Logger.debug("[CoverLetterAiManager] ttsEnabled is now false. Stopping TTS and clearing ViewModel.")
+//                    Logger.debug("[CoverLetterAiManager] ttsEnabled is now false. Stopping TTS and clearing ViewModel.")
                     self.ttsViewModel?.stop()
                     // self.ttsViewModel = nil // Consider if you want to nil it out or just stop
                 }
@@ -220,7 +230,7 @@ struct CoverLetterAiManager: View {
                 chooseBestAction: chooseBestCoverLetter,
                 multiModelChooseBestAction: { showMultiModelSheet = true },
                 speakAction: {
-                    Logger.debug("[CoverLetterAiManager] SpeakAction called but TTS is disabled or ViewModel is nil.")
+//                    Logger.debug("[CoverLetterAiManager] SpeakAction called but TTS is disabled or ViewModel is nil.")
                 },
                 ttsEnabled: $ttsEnabled,
                 ttsVoice: $ttsVoice,
@@ -229,7 +239,7 @@ struct CoverLetterAiManager: View {
                 isBuffering: .constant(false)
             )
             .onAppear {
-                Logger.debug("[CoverLetterAiManager] Appeared (TTS DISABLED or ViewModel nil). ttsEnabled: \(ttsEnabled)")
+//                Logger.debug("[CoverLetterAiManager] Appeared (TTS DISABLED or ViewModel nil). ttsEnabled: \(ttsEnabled)")
                 handleNewConversationOnAppear()
                 initializeStateTracking()
             }
@@ -242,11 +252,11 @@ struct CoverLetterAiManager: View {
                 checkForSettingsChange()
             }
             .onChange(of: ttsEnabled) { _, newTtsEnabledState in
-                Logger.debug("[CoverLetterAiManager] ttsEnabled changed to: \(newTtsEnabledState) (in non-TTS branch)")
+//                Logger.debug("[CoverLetterAiManager] ttsEnabled changed to: \(newTtsEnabledState) (in non-TTS branch)")
                 // Logic to potentially re-evaluate if TTS should be enabled
                 if newTtsEnabledState && self.ttsProvider != nil {
                     // This might trigger a view update if `body` re-evaluates and `ttsViewModel` becomes non-nil
-                    Logger.debug("[CoverLetterAiManager] TTS was enabled, attempting to re-initialize ViewModel if provider exists.")
+//                    Logger.debug("[CoverLetterAiManager] TTS was enabled, attempting to re-initialize ViewModel if provider exists.")
                     self.ttsViewModel = TTSViewModel(ttsProvider: self.ttsProvider!)
                 }
             }
@@ -295,13 +305,13 @@ struct CoverLetterAiManager: View {
 
     /// Handle toolbar TTS button interaction following the state‑chart specification.
     private func speakCoverLetter() {
-        Logger.debug("[CoverLetterAiManager] speakCoverLetter called. ttsEnabled: \(ttsEnabled). TTSViewModel is \(ttsViewModel == nil ? "nil" : "NOT nil").")
+//        Logger.debug("[CoverLetterAiManager] speakCoverLetter called. ttsEnabled: \(ttsEnabled). TTSViewModel is \(ttsViewModel == nil ? "nil" : "NOT nil").")
 
         guard let currentTTSViewModel = ttsViewModel, ttsEnabled else {
-            Logger.debug("[CoverLetterAiManager] speakCoverLetter: Bailing out. TTSViewModel is \(ttsViewModel == nil ? "nil" : "not nil"), ttsEnabled is \(ttsEnabled)")
+//            Logger.debug("[CoverLetterAiManager] speakCoverLetter: Bailing out. TTSViewModel is \(ttsViewModel == nil ? "nil" : "not nil"), ttsEnabled is \(ttsEnabled)")
             return
         }
-        Logger.debug("[CoverLetterAiManager] speakCoverLetter: Proceeding with TTS.")
+//        Logger.debug("[CoverLetterAiManager] speakCoverLetter: Proceeding with TTS.")
 
         let optionKeyPressed = NSEvent.modifierFlags.contains(.option)
 
@@ -312,26 +322,26 @@ struct CoverLetterAiManager: View {
         }
 
         if currentTTSViewModel.isSpeaking {
-            Logger.debug("[CoverLetterAiManager] TTS is speaking, pausing.")
+//            Logger.debug("[CoverLetterAiManager] TTS is speaking, pausing.")
             currentTTSViewModel.pause()
             return
         }
 
         if currentTTSViewModel.isPaused {
-            Logger.debug("[CoverLetterAiManager] TTS is paused, resuming.")
+//            Logger.debug("[CoverLetterAiManager] TTS is paused, resuming.")
             currentTTSViewModel.resume()
             return
         }
 
         if currentTTSViewModel.isBuffering {
-            Logger.debug("[CoverLetterAiManager] TTS is buffering, stopping.")
+//            Logger.debug("[CoverLetterAiManager] TTS is buffering, stopping.")
             currentTTSViewModel.stop()
             return
         }
 
         let content = cL.wrappedValue.content
         guard !content.isEmpty else {
-            Logger.debug("[CoverLetterAiManager] No content to speak.")
+//            Logger.debug("[CoverLetterAiManager] No content to speak.")
             currentTTSViewModel.ttsError = "No content to speak"
             showTTSError = true // Assuming showTTSError is observed by an alert
             return
@@ -340,7 +350,7 @@ struct CoverLetterAiManager: View {
         Logger.debug("[CoverLetterAiManager] Content to speak: \(String(content.prefix(50)))...")
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-        Logger.debug("[CoverLetterAiManager] Using voice: \(voice.rawValue), instructions: \(instructions ?? "none")")
+//        Logger.debug("[CoverLetterAiManager] Using voice: \(voice.rawValue), instructions: \(instructions ?? "none")")
 
         currentTTSViewModel.speakContent(content, voice: voice, instructions: instructions)
     }
@@ -349,6 +359,16 @@ struct CoverLetterAiManager: View {
 
     /// Checks if AI settings have changed and creates a new ungenerated draft if needed
     private func checkForSettingsChange() {
+        // Only create/switch drafts when on the cover letter tab
+        guard appState.selectedTab == .coverLetter else {
+            // Still update previous state to track changes
+            previousModel = preferredLLMModel
+            if let letter = jobAppStore.selectedApp?.selectedCover {
+                previousIncludeResumeBG = letter.includeResumeRefs
+            }
+            return
+        }
+        
         if let jobApp = jobAppStore.selectedApp,
            let letter = jobApp.selectedCover
         {

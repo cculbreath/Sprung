@@ -27,7 +27,7 @@ extension JobApp {
         case .interview:
             RoundedTagView(tagText: "Interview", backgroundColor: .pink, foregroundColor: .white)
         case .closed:
-            RoundedTagView(tagText: "Closed", backgroundColor: .gray, foregroundColor: .white)
+            RoundedTagView(tagText: "Closed", backgroundColor: .purple, foregroundColor: .white)
         case .followUp:
             RoundedTagView(tagText: "Follow Up", backgroundColor: .yellow, foregroundColor: .white)
         case .abandonned:

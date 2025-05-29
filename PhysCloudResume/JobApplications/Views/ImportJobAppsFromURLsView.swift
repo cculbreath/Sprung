@@ -10,7 +10,6 @@ import SwiftData
 
 struct ImportJobAppsFromURLsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Environment(JobAppStore.self) private var jobAppStore
     
     @State private var isImporting = false
@@ -19,7 +18,6 @@ struct ImportJobAppsFromURLsView: View {
     @State private var currentJobName = ""
     @State private var importedCount = 0
     @State private var skippedCount = 0
-    @State private var totalCount = 0
     @State private var errorMessage: String?
     @State private var showError = false
     
@@ -191,12 +189,5 @@ struct ImportJobAppsFromURLsView: View {
                 isImporting = false
             }
         }
-    }
-}
-
-// Preview
-struct ImportJobAppsFromURLsView_Previews: PreviewProvider {
-    static var previews: some View {
-        ImportJobAppsFromURLsView()
     }
 }

@@ -37,9 +37,9 @@ class LLMRequestService: @unchecked Sendable {
         
         Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
         
-        // Create client with app state
+        // Create client with app state using the factory method that handles model-provider mapping
         let appState = AppState()
-        appLLMClient = AppLLMClientFactory.createClient(for: provider, appState: appState)
+        appLLMClient = AppLLMClientFactory.createClientForModel(model: currentModel, appState: appState)
         
         if appLLMClient != nil {
             Logger.debug("✅ Initialized client for model: \(currentModel)")
@@ -180,6 +180,12 @@ class LLMRequestService: @unchecked Sendable {
                         userErrorMessage += message
                     case .timeout(let message):
                         userErrorMessage += message
+                    case .rateLimited(let retryAfter):
+                        if let retryAfter = retryAfter {
+                            userErrorMessage = "Rate limit exceeded. Please try again in \(Int(retryAfter)) seconds."
+                        } else {
+                            userErrorMessage = "Rate limit exceeded. Please try again later."
+                        }
                     }
                 } else {
                     let nsError = error as NSError

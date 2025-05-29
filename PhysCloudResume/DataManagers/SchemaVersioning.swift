@@ -30,7 +30,7 @@ enum SchemaV1: VersionedSchema {
     }
 }
 
-// MARK: - Schema V2 (Added Conversation Models)
+// MARK: - Schema V2 (Current Schema - Added Conversation Models)
 enum SchemaV2: VersionedSchema {
     static var versionIdentifier = Schema.Version(2, 0, 0)
     
@@ -53,37 +53,14 @@ enum SchemaV2: VersionedSchema {
     }
 }
 
-// MARK: - Schema V3 (Current Schema with Relationship Fixes)
-// This version ensures all relationships are properly defined
-enum SchemaV3: VersionedSchema {
-    static var versionIdentifier = Schema.Version(3, 0, 0)
-    
-    static var models: [any PersistentModel.Type] {
-        [
-            JobApp.self,
-            Resume.self,
-            ResRef.self,
-            TreeNode.self,
-            FontSizeNode.self,
-            CoverLetter.self,
-            MessageParams.self,
-            CoverRef.self,
-            ApplicantProfile.self,
-            ResModel.self,
-            ConversationContext.self,
-            ConversationMessage.self
-        ]
-    }
-}
-
 // MARK: - Migration Plan
 enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self, SchemaV3.self]
+        [SchemaV1.self, SchemaV2.self]
     }
     
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3]
+        [migrateV1toV2]
     }
     
     // MARK: - Migration Stages
@@ -108,21 +85,6 @@ enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
             } catch {
                 Logger.warning("⚠️ Could not verify ConversationContext table: \(error)")
             }
-        }
-    )
-    
-    /// Migrates from V2 to V3 to ensure relationships are properly set up
-    static let migrateV2toV3 = MigrationStage.custom(
-        fromVersion: SchemaV2.self,
-        toVersion: SchemaV3.self,
-        willMigrate: { context in
-            Logger.debug("🔄 Starting migration from Schema V2 to V3...")
-            
-            // This migration ensures the many-to-many relationship tables are created
-            // SwiftData should handle this automatically, but we log it for verification
-        },
-        didMigrate: { context in
-            Logger.debug("✅ Completed migration from Schema V2 to V3")
             
             // Verify relationships are working
             do {
@@ -141,7 +103,7 @@ enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
                     Logger.debug("✅ JobApp relationships verified")
                 }
                 
-                Logger.debug("✅ All relationships verified in Schema V3")
+                Logger.debug("✅ All relationships verified in Schema V2")
             } catch {
                 Logger.warning("⚠️ Could not verify relationships: \(error)")
             }
@@ -177,13 +139,13 @@ extension ModelContainer {
     /// Creates a model container with the migration plan
     static func createWithMigration() throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV3.models),
+            schema: Schema(SchemaV2.models),
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
         
         return try ModelContainer(
-            for: Schema(SchemaV3.models),
+            for: Schema(SchemaV2.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )
@@ -192,14 +154,14 @@ extension ModelContainer {
     /// Creates a model container for a specific URL with migration support
     static func createWithMigration(url: URL) throws -> ModelContainer {
         let configuration = ModelConfiguration(
+            schema: Schema(SchemaV2.models),
             url: url,
-            schema: Schema(SchemaV3.models),
-            isStoredInMemoryOnly: false,
-            allowsSave: true
+            allowsSave: true,
+            cloudKitDatabase: .none
         )
         
         return try ModelContainer(
-            for: Schema(SchemaV3.models),
+            for: Schema(SchemaV2.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )

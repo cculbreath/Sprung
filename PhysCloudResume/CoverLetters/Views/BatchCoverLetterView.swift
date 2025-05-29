@@ -7,7 +7,6 @@ enum BatchMode {
 }
 
 struct BatchCoverLetterView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) var appState: AppState
     @Environment(JobAppStore.self) var jobAppStore: JobAppStore
@@ -119,7 +118,8 @@ struct BatchCoverLetterView: View {
                                                 }
                                             }
                                         )) {
-                                            Text(formatModelNameFromPicker(sanitizedModel))
+                                            // Display raw model name for better distinction
+                                            Text(model)
                                                 .font(.system(.body))
                                         }
                                         .toggleStyle(CheckboxToggleStyle())
@@ -183,7 +183,8 @@ struct BatchCoverLetterView: View {
                                 Section(header: Text(provider)) {
                                     ForEach(models, id: \.self) { model in
                                         let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
-                                        Text(formatModelNameFromPicker(sanitizedModel)).tag(sanitizedModel)
+                                        // Display raw model name for better distinction
+                                        Text(model).tag(sanitizedModel)
                                     }
                                 }
                             }
@@ -285,7 +286,8 @@ struct BatchCoverLetterView: View {
                             Section(header: Text(provider)) {
                                 ForEach(models, id: \.self) { model in
                                     let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
-                                    Text(formatModelNameFromPicker(sanitizedModel)).tag(sanitizedModel)
+                                    // Display raw model name for better distinction
+                                    Text(model).tag(sanitizedModel)
                                 }
                             }
                         }
@@ -372,14 +374,6 @@ struct BatchCoverLetterView: View {
         } else {
             return AIModels.friendlyModelName(for: revisionModel) ?? revisionModel
         }
-    }
-    
-    /// Formats a model name for display (exact same logic as ModelPickerView)
-    /// - Parameter model: The raw model name
-    /// - Returns: A formatted model name
-    private func formatModelNameFromPicker(_ model: String) -> String {
-        // Use the same formatting as MultiModelChooseBestCoverLetterSheet
-        return AIModels.friendlyModelName(for: model) ?? model
     }
     
     /// Fetches all models from enabled providers (exact same logic as ModelPickerView)
@@ -471,6 +465,10 @@ struct BatchCoverLetterView: View {
                 }
                 
                 await MainActor.run {
+                    // Clean up any extra ungenerated drafts after batch generation
+                    if let app = jobAppStore.selectedApp {
+                        coverLetterStore.cleanupExtraUngeneratedDrafts(for: app)
+                    }
                     dismiss()
                 }
             } catch {

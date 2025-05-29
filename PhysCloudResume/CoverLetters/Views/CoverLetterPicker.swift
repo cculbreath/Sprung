@@ -28,9 +28,9 @@ struct CoverLetterPicker: View {
             }
             ForEach(coverLetters, id: \.id) { letter in
                 Text(letter.generated ? letter.sequencedName : "Ungenerated draft")
-                    .tag(letter as CoverLetter?)
+                    .tag(Optional(letter))
             }
         }
-        .id(selection?.id) // Force refresh when selection changes
+        .id(coverLetters.map(\.id)) // Force refresh when letters array changes
     }
 }

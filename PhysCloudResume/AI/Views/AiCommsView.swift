@@ -366,6 +366,8 @@ struct AiCommsView: View {
             
             do {
                 // Process answers and get revisions
+                // Note: The conversation context was already cleared when the button was clicked,
+                // so this continues with the fresh conversation that includes the clarifying questions
                 let revisionsContainer = try await chatProvider.processAnswersAndGenerateRevisions(
                     answers: answers,
                     resumeQuery: q
@@ -396,14 +398,22 @@ struct AiCommsView: View {
             do {
                 // Prepare messages for API call using our abstraction layer
                 if !hasRevisions {
-                    // For a new resume generation, we want to clear conversation context
+                    // Always clear conversation context when starting a new conversation
+                    // This ensures both regular clicks and option-clicks start fresh
                     if let myRes = myRes {
-                        Logger.debug("Starting new resume generation - clearing conversation context")
+                        Logger.debug("Starting new conversation - clearing conversation context")
                         myRes.clearConversationContext()
                     }
                     
+                    // Also clear the chat provider's conversation history to ensure clean start
+                    chatProvider.conversationHistory = []
+                    
                     // Check if we're in clarifying questions mode
                     if q.queryMode == .withClarifyingQuestions && !isWaitingForAnswers {
+                        // Clear any previous clarifying questions state
+                        clarifyingQuestions = []
+                        chatProvider.lastClarifyingQuestions = []
+                        
                         // Request clarifying questions first
                         Logger.debug("Requesting clarifying questions from AI")
                         

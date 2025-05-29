@@ -13,8 +13,23 @@ import SwiftUI
 struct PhysicsCloudResumeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Bindable private var appState = AppState()
+    private let modelContainer: ModelContainer
     
     init() {
+        // Create the model container first
+        do {
+            let container = try ModelContainer(
+                for: Schema(SchemaV2.models),
+                migrationPlan: PhysCloudResumeMigrationPlan.self
+            )
+            self.modelContainer = container
+            Logger.debug("✅ ModelContainer created with migration plan")
+        } catch {
+            Logger.error("❌ Failed to create ModelContainer: \(error)")
+            fatalError("Failed to create ModelContainer: \(error)")
+        }
+        
+        // Log after all properties are initialized
         Logger.debug("🔴 PhysicsCloudResumeApp init - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
     }
 
@@ -24,10 +39,7 @@ struct PhysicsCloudResumeApp: App {
                 .environment(appState)
                 .environmentObject(appState.modelService)
         }
-        .modelContainer(
-            for: SchemaV3.models,
-            migrationPlan: PhysCloudResumeMigrationPlan.self
-        )
+        .modelContainer(modelContainer)
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
         .commands {
             CommandGroup(replacing: .appSettings) {

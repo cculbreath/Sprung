@@ -92,6 +92,63 @@ class TreeNodeExtractor {
         }
     }
     
+    /// Extracts "Skills and Expertise" nodes for fix overflow operation.
+    /// Each skill node contains both title and description.
+    /// - Parameter resume: The resume to extract skills from.
+    /// - Returns: A JSON string representing the skills with both title and description, or nil if an error occurs.
+    func extractSkillsForFixOverflow(resume: Resume) -> String? {
+        // First, ensure the resume has a rootNode.
+        guard let actualRootNode = resume.rootNode else {
+            Logger.debug("Error: Resume has no rootNode.")
+            return nil
+        }
+
+        // Attempt to find the "Skills and Expertise" section node.
+        var skillsSectionNode: TreeNode? = actualRootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        })
+
+        // If not found with primary names, try the fallback key.
+        if skillsSectionNode == nil {
+            skillsSectionNode = actualRootNode.children?.first(where: { $0.name == "skills-and-expertise" })
+        }
+
+        // If still not found after both attempts, print an error and return nil.
+        guard let finalSkillsSectionNode = skillsSectionNode else {
+            Logger.debug("Error: 'Skills and Expertise' section node not found in the resume under rootNode.")
+            return nil
+        }
+
+        var exportableSkills: [[String: Any]] = []
+
+        // Each child of the skills section is a complete skill with title (name) and description (value)
+        finalSkillsSectionNode.children?.forEach { skillNode in
+            // Skip nodes without both name and value
+            guard !skillNode.name.isEmpty else { return }
+            
+            exportableSkills.append([
+                "id": skillNode.id,
+                "title": skillNode.name,
+                "description": skillNode.value,
+                "original_title": skillNode.name,
+                "original_description": skillNode.value
+            ])
+        }
+
+        guard !exportableSkills.isEmpty else {
+            Logger.debug("Warning: No exportable skill nodes found under the identified section.")
+            return "[]"
+        }
+
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: exportableSkills, options: [.prettyPrinted])
+            return String(data: jsonData, encoding: .utf8)
+        } catch {
+            Logger.debug("Error serializing skills to JSON: \(error)")
+            return nil
+        }
+    }
+    
     /// Extracts "Skills and Expertise" nodes into a JSON string format for the LLM.
     /// - Parameter resume: The resume to extract skills from.
     /// - Returns: A JSON string representing the skills and expertise, or nil if an error occurs.

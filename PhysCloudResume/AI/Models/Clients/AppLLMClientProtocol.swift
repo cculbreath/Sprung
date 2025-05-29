@@ -76,6 +76,7 @@ enum AppLLMError: Error {
     case clientError(String)
     case decodingError(String)
     case timeout(String)
+    case rateLimited(retryAfter: TimeInterval?)
     // Add other specific errors as needed
 }
 
@@ -93,6 +94,12 @@ extension AppLLMError: LocalizedError {
             return message
         case .timeout(let message):
             return message
+        case .rateLimited(let retryAfter):
+            if let retryAfter = retryAfter {
+                return "Rate limit exceeded. Please try again in \(Int(retryAfter)) seconds."
+            } else {
+                return "Rate limit exceeded. Please try again later."
+            }
         }
     }
 }
