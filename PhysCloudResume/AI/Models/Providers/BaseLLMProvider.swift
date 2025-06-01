@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import SwiftOpenAI
 
 /// Base provider class for LLM interactions
 /// Provides common functionality for all LLM provider implementations
@@ -7,10 +8,10 @@ import SwiftUI
 class BaseLLMProvider {
     // MARK: - Properties
     
-    /// The LLM client that will be used for API calls
-    private(set) var appLLMClient: AppLLMClientProtocol
+    /// The OpenRouter client that will be used for API calls
+    private(set) var openRouterClient: OpenAIService?
     
-    /// The app state for creating model-specific clients
+    /// The app state for accessing OpenRouter configuration
     internal var appState: AppState?
     
     // Message tracking properties
@@ -48,18 +49,19 @@ class BaseLLMProvider {
     
     // MARK: - Initializers
     
-    /// Initialize with an app state to create the appropriate LLM client
+    /// Initialize with an app state to create the OpenRouter client
     /// - Parameter appState: The application state
     init(appState: AppState) {
-        let providerType = appState.settings.preferredLLMProvider
-        self.appLLMClient = AppLLMClientFactory.createClient(for: providerType, appState: appState)
         self.appState = appState
+        if !appState.openRouterApiKey.isEmpty {
+            self.openRouterClient = OpenRouterClientFactory.createClient(apiKey: appState.openRouterApiKey)
+        }
     }
     
-    /// Initialize with a specific app LLM client
-    /// - Parameter client: A client conforming to AppLLMClientProtocol
-    init(client: AppLLMClientProtocol) {
-        self.appLLMClient = client
+    /// Initialize with a specific OpenRouter client
+    /// - Parameter client: An OpenRouter client
+    init(openRouterClient: OpenAIService) {
+        self.openRouterClient = openRouterClient
     }
     
     // MARK: - Conversation Management Methods
@@ -98,38 +100,135 @@ class BaseLLMProvider {
         return conversationHistory
     }
     
-    /// Updates the client if a different model or provider is needed
+    /// Updates the OpenRouter client if needed
     /// - Parameter appState: The current application state
     func updateClientIfNeeded(appState: AppState) {
-        let currentProviderType = appState.settings.preferredLLMProvider
-        let currentModelString = OpenAIModelFetcher.getPreferredModelString()
-        
-        // Check if we need to switch clients based on the model or last model used
-        // Only compare if lastModelUsed is not empty
-        if lastModelUsed.isEmpty || AIModels.providerFor(modelName: currentModelString) != AIModels.providerFor(modelName: lastModelUsed) {
-            // Update client to match the current provider type
-            self.appLLMClient = AppLLMClientFactory.createClient(for: currentProviderType, appState: appState)
-            
-            // Update the last model used
-            lastModelUsed = currentModelString
+        // Only update if we don't have a client or the API key changed
+        if openRouterClient == nil && !appState.openRouterApiKey.isEmpty {
+            self.openRouterClient = OpenRouterClientFactory.createClient(apiKey: appState.openRouterApiKey)
+            self.appState = appState
         }
     }
     
-    /// Execute a query using the current LLM client
+    /// Execute a query using the OpenRouter client
     /// - Parameter query: The query to execute
     /// - Returns: The response from the LLM
     func executeQuery(_ query: AppLLMQuery) async throws -> AppLLMResponse {
-        do {
-            return try await appLLMClient.executeQuery(query)
-        } catch {
-            // Store the error message for display
+        guard let client = openRouterClient else {
+            let error = AppLLMError.clientError("OpenRouter client not configured")
             errorMessage = error.localizedDescription
-            // Re-throw the error for handling by the caller
+            throw error
+        }
+        
+        do {
+            return try await executeOpenRouterQuery(query, using: client)
+        } catch {
+            errorMessage = error.localizedDescription
             throw error
         }
     }
     
-    // Previous methods remain the same...
+    /// Execute a query directly with OpenRouter
+    private func executeOpenRouterQuery(_ query: AppLLMQuery, using client: OpenAIService) async throws -> AppLLMResponse {
+        // Convert AppLLMMessage to SwiftOpenAI format
+        let openAIMessages = try convertToOpenAIMessages(query.messages)
+        
+        // Check if model supports structured output
+        let model = appState?.openRouterService.findModel(id: query.modelIdentifier)
+        let supportsStructuredOutput = model?.supportsStructuredOutput ?? false
+        
+        // Build parameters
+        var parameters = ChatCompletionParameters(
+            messages: openAIMessages,
+            model: .init(rawValue: query.modelIdentifier)
+        )
+        
+        if let temperature = query.temperature {
+            parameters.temperature = temperature
+        }
+        
+        // Handle structured output if requested and supported
+        if let responseType = query.desiredResponseType, supportsStructuredOutput {
+            if let jsonSchema = query.jsonSchema {
+                parameters.responseFormat = LLMSchemaBuilder.createResponseFormat(
+                    for: responseType,
+                    jsonSchema: jsonSchema
+                )
+            } else {
+                parameters.responseFormat = LLMSchemaBuilder.createResponseFormat(for: responseType)
+            }
+        } else if query.desiredResponseType != nil && !supportsStructuredOutput {
+            // Add system prompt for non-structured output models
+            let fallbackPrompt = createFallbackStructuredPrompt(for: query.desiredResponseType!)
+            parameters.messages.insert(
+                .init(role: .system, content: fallbackPrompt),
+                at: 0
+            )
+        }
+        
+        // Execute the request
+        let response = try await client.startChatCompletion(parameters: parameters)
+        
+        // Process response
+        if let content = response.choices.first?.message.content {
+            if query.desiredResponseType != nil {
+                // Return as structured data for JSON decoding
+                guard let data = content.data(using: .utf8) else {
+                    throw AppLLMError.decodingError("Could not convert response to UTF-8 data")
+                }
+                return .structured(data)
+            } else {
+                return .text(content)
+            }
+        } else {
+            throw AppLLMError.unexpectedResponseFormat
+        }
+    }
+    
+    /// Convert AppLLMMessage array to SwiftOpenAI message format
+    private func convertToOpenAIMessages(_ messages: [AppLLMMessage]) throws -> [ChatCompletionParameters.Message] {
+        return messages.map { appMessage in
+            let role: ChatCompletionParameters.Message.Role
+            switch appMessage.role {
+            case .system: role = .system
+            case .user: role = .user
+            case .assistant: role = .assistant
+            }
+            
+            // Handle multimodal content
+            if appMessage.contentParts.count == 1, case .text(let text) = appMessage.contentParts[0] {
+                // Simple text message
+                return ChatCompletionParameters.Message(role: role, content: text)
+            } else {
+                // Multimodal message with text and/or images
+                let content = appMessage.contentParts.compactMap { part -> ChatCompletionParameters.Message.Content? in
+                    switch part {
+                    case .text(let text):
+                        return .text(text)
+                    case .imageUrl(let base64Data, let mimeType):
+                        return .imageUrl(.init(url: "data:\(mimeType);base64,\(base64Data)"))
+                    }
+                }
+                return ChatCompletionParameters.Message(role: role, content: content)
+            }
+        }
+    }
+    
+    /// Create fallback system prompt for models that don't support structured output
+    private func createFallbackStructuredPrompt(for responseType: Decodable.Type) -> String {
+        let typeName = String(describing: responseType)
+        return """
+        You must respond with valid JSON that matches the expected structure. Your response should contain ONLY the JSON object, with no additional text, explanations, or formatting. The JSON must be valid and parseable.
+        
+        Expected response type: \(typeName)
+        
+        Ensure your JSON response:
+        - Is properly formatted with correct syntax
+        - Contains all required fields for the \(typeName) structure
+        - Uses appropriate data types (strings in quotes, numbers without quotes, booleans as true/false)
+        - Has no trailing commas or syntax errors
+        """
+    }
 
     /// Execute a query with a timeout
     /// - Parameters:
@@ -137,12 +236,9 @@ class BaseLLMProvider {
     ///   - timeout: Timeout in seconds (default: 180)
     /// - Returns: The response from the LLM
     func executeQueryWithTimeout(_ query: AppLLMQuery, timeout: TimeInterval = 180) async throws -> AppLLMResponse {
-        // Update the client if needed based on the model in the query
-        if let appState = self.appState, query.modelIdentifier != lastModelUsed {
-            self.appLLMClient = AppLLMClientFactory.createClientForModel(model: query.modelIdentifier, appState: appState)
-            lastModelUsed = query.modelIdentifier
-            Logger.debug("Updated LLM client for model: \(query.modelIdentifier)")
-        }
+        // Update the last model used for tracking
+        lastModelUsed = query.modelIdentifier
+        Logger.debug("Executing query with model: \(query.modelIdentifier)")
         
         // Use a task with timeout to handle API timeouts gracefully
         return try await withUnsafeThrowingContinuation { (continuation: UnsafeContinuation<AppLLMResponse, Error>) in
