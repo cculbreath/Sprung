@@ -9,13 +9,10 @@ import SwiftUI
 
 struct CoverRevisionsView: View {
     @Binding var buttons: CoverLetterButtons
+    @Environment(\.appState) private var appState
 
     var body: some View {
-        let client: AppLLMClientProtocol = AppLLMClientFactory.createClient(
-            for: AIModels.Provider.openai,
-            appState: AppState()
-        )
-        RevisionsViewContent(client: client, buttons: $buttons)
+        RevisionsViewContent(appState: appState, buttons: $buttons)
             .onAppear { Logger.debug("Ai Cover Letterv2") }
     }
 }
@@ -26,18 +23,18 @@ struct RevisionsViewContent: View {
     @State var tempMode: CoverLetterPrompts.EditorPrompts = .zissner
     @State private var customFeedback: String = ""
     @Binding var buttons: CoverLetterButtons
-    let client: AppLLMClientProtocol
+    let appState: AppState
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
 
     init(
-        client: AppLLMClientProtocol,
+        appState: AppState,
         buttons: Binding<CoverLetterButtons>
     ) {
-        self.client = client
+        self.appState = appState
         _buttons = buttons
-        chatProvider = CoverChatProvider(client: client)
+        chatProvider = CoverChatProvider(appState: appState)
     }
 
     var body: some View {

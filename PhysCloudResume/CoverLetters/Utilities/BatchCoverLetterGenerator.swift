@@ -205,14 +205,8 @@ class BatchCoverLetterGenerator {
         model: String,
         revision: CoverLetterPrompts.EditorPrompts?
     ) async throws -> CoverLetter {
-        // Set up the model-specific client
-        let client = AppLLMClientFactory.createClientForModel(
-            model: model,
-            appState: appState
-        )
-        
-        // Create provider with the specific client
-        let provider = CoverChatProvider(client: client)
+        // Create provider with app state
+        let provider = CoverChatProvider(appState: appState)
         
         // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model

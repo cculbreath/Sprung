@@ -59,14 +59,12 @@ struct CoverLetterAiManager: View {
 
     // MARK: - Dependencies
 
-    private let client: AppLLMClientProtocol
     private let chatProvider: CoverChatProvider
     private let ttsProvider: OpenAITTSProvider?
 
     // MARK: - Initialization
 
     init(
-        client: AppLLMClientProtocol,
         ttsProvider: OpenAITTSProvider?,
         buttons: Binding<CoverLetterButtons>,
         refresh: Binding<Bool>,
@@ -74,10 +72,12 @@ struct CoverLetterAiManager: View {
         ttsVoice: Binding<String> = .constant("nova"),
         isNewConversation: Bool = true
     ) {
-        self.client = client
         self.ttsProvider = ttsProvider // Store the passed provider
-        chatProvider = CoverChatProvider(client: client)
-        recommendationService = CoverLetterRecommendationService(client: client)
+        chatProvider = CoverChatProvider(appState: AppState())
+        recommendationService = CoverLetterRecommendationService(
+            appState: AppState(),
+            modelId: OpenAIModelFetcher.getPreferredModelString()
+        )
 
         _buttons = buttons
         _refresh = refresh
@@ -219,7 +219,6 @@ struct CoverLetterAiManager: View {
             // Sheet for multi-model selection
             .sheet(isPresented: $showMultiModelSheet) {
                 MultiModelChooseBestCoverLetterSheet(coverLetter: cL)
-                    .environmentObject(ModelService())
             }
         } else {
             // Simplified version without TTS
@@ -271,7 +270,6 @@ struct CoverLetterAiManager: View {
             // Sheet for multi-model selection
             .sheet(isPresented: $showMultiModelSheet) {
                 MultiModelChooseBestCoverLetterSheet(coverLetter: cL)
-                    .environmentObject(ModelService())
             }
         }
     }

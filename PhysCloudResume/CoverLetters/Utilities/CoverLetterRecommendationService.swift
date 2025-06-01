@@ -11,15 +11,21 @@ import Foundation
 class CoverLetterRecommendationService {
     // MARK: - Properties
 
-    /// The LLM client used for API calls
-    private let client: AppLLMClientProtocol
+    /// The app state for creating OpenRouter clients
+    private let appState: AppState
+    
+    /// The model ID to use for recommendations
+    private let modelId: String
 
     // MARK: - Initialization
 
     /// Initializes a new recommendation service
-    /// - Parameter client: The LLM client to use for API calls
-    init(client: AppLLMClientProtocol) {
-        self.client = client
+    /// - Parameters:
+    ///   - appState: The application state
+    ///   - modelId: The OpenRouter model ID to use
+    init(appState: AppState, modelId: String) {
+        self.appState = appState
+        self.modelId = modelId
     }
 
     // MARK: - Public Methods
@@ -32,9 +38,10 @@ class CoverLetterRecommendationService {
     func chooseBestCoverLetter(jobApp: JobApp, writingSamples: String) async throws -> BestCoverLetterResponse {
         // Create the recommendation provider with necessary context
         let provider = CoverLetterRecommendationProvider(
-            client: client,
+            appState: appState,
             jobApp: jobApp,
-            writingSamples: writingSamples
+            writingSamples: writingSamples,
+            modelId: modelId
         )
 
         // Fetch the recommendation from the provider

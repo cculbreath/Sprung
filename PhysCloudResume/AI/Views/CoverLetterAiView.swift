@@ -68,8 +68,7 @@ struct CoverLetterAiView: View {
     // Flag to determine if this is a new conversation or not
     private let isNewConversation: Bool
 
-    // Keep client instance as a state property
-    @State private var client: AppLLMClientProtocol
+    // Remove client property as we'll use AppState for OpenRouter
 
     // Get shared TTS provider only if TTS is enabled
     private var ttsProvider: OpenAITTSProvider? {
@@ -82,21 +81,12 @@ struct CoverLetterAiView: View {
         _buttons = buttons
         _refresh = refresh
         self.isNewConversation = isNewConversation
-        
-        // Get the current model string and create appropriate client
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
-        
-        _client = State(initialValue: AppLLMClientFactory.createClientForModel(
-            model: modelString,
-            appState: AppState()
-        ))
     }
 
     // MARK: - Body
 
     var body: some View {
         CoverLetterAiManager(
-            client: client,
             ttsProvider: ttsProvider,
             buttons: $buttons,
             refresh: $refresh,
@@ -106,31 +96,6 @@ struct CoverLetterAiView: View {
         )
         .onAppear {
             Logger.debug("AI Cover Letter View appeared (TTS enabled: \(ttsEnabled))")
-            // Update client based on current model selection
-            let modelString = preferredLLMModel
-            let provider = AIModels.providerForModel(modelString)
-            Logger.debug("🔍 [CoverLetterAiView] Creating client for model: \(modelString), provider: \(provider)")
-            client = AppLLMClientFactory.createClientForModel(
-                model: modelString,
-                appState: appState
-            )
-        }
-        .onChange(of: openAiApiKey) { _, _ in
-            // Update client when API key changes
-            let modelString = preferredLLMModel
-            client = AppLLMClientFactory.createClientForModel(
-                model: modelString,
-                appState: appState
-            )
-        }
-        .onChange(of: preferredLLMModel) { _, newModel in
-            // Update client when model selection changes
-            let provider = AIModels.providerForModel(newModel)
-            Logger.debug("🔄 [CoverLetterAiView] Model changed to: \(newModel), updating client for provider: \(provider)")
-            client = AppLLMClientFactory.createClientForModel(
-                model: newModel,
-                appState: appState
-            )
         }
     }
 }

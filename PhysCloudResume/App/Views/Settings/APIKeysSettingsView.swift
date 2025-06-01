@@ -35,6 +35,9 @@ struct APIKeysSettingsView: View {
     // State for hover effects on save/cancel buttons
     @State private var isHoveringCheckmark = false
     @State private var isHoveringXmark = false
+    
+    // Environment
+    @Environment(\.appState) private var appState
 
     // Action to trigger model fetch when keys change
     var onOpenAIKeyUpdate: () -> Void = {} // Callback
@@ -47,15 +50,11 @@ struct APIKeysSettingsView: View {
             // This will initialize the appropriate client based on current model and available API keys
             LLMRequestService.shared.updateClientForCurrentModel()
             
-            // Also validate the API key that changed
-            if isEditingOpenAI {
-                modelService.fetchModelsForProvider(provider: AIModels.Provider.openai, apiKey: openAiApiKey)
-            } else if isEditingClaude {
-                modelService.fetchModelsForProvider(provider: AIModels.Provider.claude, apiKey: claudeApiKey)
-            } else if isEditingGrok {
-                modelService.fetchModelsForProvider(provider: AIModels.Provider.grok, apiKey: grokApiKey)
-            } else if isEditingGemini {
-                modelService.fetchModelsForProvider(provider: AIModels.Provider.gemini, apiKey: geminiApiKey)
+            // Fetch OpenRouter models if the OpenRouter API key was changed
+            if !appState.openRouterApiKey.isEmpty {
+                Task {
+                    await appState.openRouterService.fetchModels()
+                }
             }
         }
     }

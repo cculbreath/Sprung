@@ -1,14 +1,16 @@
 import Foundation
 import SwiftOpenAI
 import os.log
+import Observation
 
 @MainActor
-final class OpenRouterService: ObservableObject {
+@Observable
+final class OpenRouterService {
     static let shared = OpenRouterService()
     
-    @Published var availableModels: [OpenRouterModel] = []
-    @Published var isLoading = false
-    @Published var lastError: String?
+    var availableModels: [OpenRouterModel] = []
+    var isLoading = false
+    var lastError: String?
     
     private let baseURL = "https://openrouter.ai/api/v1"
     private let modelsEndpoint = "/models"
@@ -38,7 +40,7 @@ final class OpenRouterService: ObservableObject {
     }
     
     func fetchModels() async {
-        guard let client = openRouterClient else {
+        guard openRouterClient != nil else {
             lastError = "OpenRouter client not configured"
             Logger.error("🔴 OpenRouter client not configured")
             return

@@ -79,7 +79,8 @@ struct SidebarRecommendButton: View {
                 let provider = JobRecommendationProvider(
                     appState: appState,
                     jobApps: jobAppStore.jobApps,
-                    resume: resumeToUse
+                    resume: resumeToUse,
+                    modelId: OpenAIModelFetcher.getPreferredModelString()
                 )
 
                 let (jobId, reason) = try await provider.fetchRecommendation()

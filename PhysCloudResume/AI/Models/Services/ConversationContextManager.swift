@@ -7,11 +7,13 @@
 
 import SwiftData
 import Foundation
+import Observation
 
 // MARK: - Conversation Context Manager (Only for Chat Providers)
 
 @MainActor
-class ConversationContextManager: ObservableObject {
+@Observable
+class ConversationContextManager {
     static let shared = ConversationContextManager()
     
     private var modelContext: ModelContext?

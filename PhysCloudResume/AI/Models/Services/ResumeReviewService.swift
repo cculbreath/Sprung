@@ -426,7 +426,8 @@ class ResumeReviewService: @unchecked Sendable {
                 let provider = ReorderSkillsProvider(
                     appState: appState,
                     resume: resume,
-                    jobDescription: jobApp.jobDescription
+                    jobDescription: jobApp.jobDescription,
+                    modelId: OpenAIModelFetcher.getPreferredModelString()
                 )
                 
                 let reorderedNodes = try await provider.fetchReorderedSkills()
