@@ -1,6 +1,6 @@
 import Foundation
 
-struct OpenRouterModel: Codable, Identifiable, Hashable {
+struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     let id: String
     let name: String
     let description: String?
@@ -10,7 +10,7 @@ struct OpenRouterModel: Codable, Identifiable, Hashable {
     let supportedParameters: [String]
     let created: TimeInterval?
     
-    struct Architecture: Codable {
+    struct Architecture: Codable, Hashable {
         let modality: String
         let inputModalities: [String]
         let outputModalities: [String]
@@ -26,7 +26,7 @@ struct OpenRouterModel: Codable, Identifiable, Hashable {
         }
     }
     
-    struct Pricing: Codable {
+    struct Pricing: Codable, Hashable {
         let prompt: String
         let completion: String
         let request: String

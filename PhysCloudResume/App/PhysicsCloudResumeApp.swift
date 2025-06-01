@@ -48,7 +48,6 @@ struct PhysicsCloudResumeApp: App {
         Window("Physics Cloud Résumé", id: "myApp") {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization
                 .environment(appState)
-                .environmentObject(appState.modelService)
                 .onAppear {
                     // Pass appState to AppDelegate so it can use it for settings window
                     appDelegate.appState = appState

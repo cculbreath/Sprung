@@ -6,7 +6,7 @@ struct OpenRouterClientFactory {
     private static let baseURL = "https://openrouter.ai/api/v1"
     
     static func createClient(apiKey: String) -> OpenAIService {
-        Logger.shared.info("🔧 Creating OpenRouter client")
+        Logger.info("🔧 Creating OpenRouter client")
         
         return OpenAIServiceFactory.service(
             apiKey: apiKey,
@@ -15,7 +15,7 @@ struct OpenRouterClientFactory {
     }
     
     static func createTTSClient(openAiApiKey: String) -> OpenAIService {
-        Logger.shared.info("🔧 Creating dedicated OpenAI TTS client")
+        Logger.info("🔧 Creating dedicated OpenAI TTS client")
         
         return OpenAIServiceFactory.service(
             apiKey: openAiApiKey

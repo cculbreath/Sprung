@@ -22,8 +22,8 @@ struct AiFunctionView: View {
     @State private var isOptionPressed: Bool = false
     @State private var eventMonitor: Any?
 
-    // Use our unified LLM client as a State property
-    @State private var llmClient: AppLLMClientProtocol
+    // Use our unified LLM provider as a State property
+    @State private var llmProvider: BaseLLMProvider?
     
     // For TTS functionality - using lazy initialization
     @State private var ttsProvider: OpenAITTSProvider?
@@ -46,13 +46,7 @@ struct AiFunctionView: View {
             }
         }
 
-        // Initialize LLM client based on the preferred model
-        let preferredModel = OpenAIModelFetcher.getPreferredModelString()
-        _ = AIModels.providerForModel(preferredModel)
-        _llmClient = State(initialValue: AppLLMClientFactory.createClientForModel(
-            model: preferredModel,
-            appState: AppState()
-        ))
+        // LLM provider will be initialized in onAppear with proper AppState
         
         // TTS will be initialized in onAppear
     }
@@ -74,7 +68,6 @@ struct AiFunctionView: View {
             if res != nil {
                 if let currentQuery = query {
                     AiCommsView(
-                        client: llmClient,
                         query: currentQuery,
                         res: $res,
                         ttsEnabled: $ttsEnabled,
@@ -123,11 +116,8 @@ struct AiFunctionView: View {
         }
         .onAppear {
             // Properly initialize the client with AppState based on preferred model
-            let preferredModel = OpenAIModelFetcher.getPreferredModelString()
-            llmClient = AppLLMClientFactory.createClientForModel(
-                model: preferredModel,
-                appState: appState
-            )
+            // Initialize LLM provider with app state
+            llmProvider = BaseLLMProvider(appState: appState)
 
             if let myRes = res {
                 // Always export the resume when appearing

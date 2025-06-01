@@ -17,6 +17,7 @@ final class OpenRouterService: ObservableObject {
     private let cacheValidityDuration: TimeInterval = 3600 // 1 hour
     
     private var openRouterClient: OpenAIService?
+    private var apiKey: String = ""
     
     private init() {
         loadCachedModels()
@@ -24,11 +25,12 @@ final class OpenRouterService: ObservableObject {
     
     func configure(apiKey: String) {
         guard !apiKey.isEmpty else {
-            Logger.shared.error("🔴 OpenRouter API key is empty")
+            Logger.error("🔴 OpenRouter API key is empty")
             return
         }
         
-        Logger.shared.info("🔧 Configuring OpenRouter client")
+        Logger.info("🔧 Configuring OpenRouter client")
+        self.apiKey = apiKey
         openRouterClient = OpenAIServiceFactory.service(
             apiKey: apiKey,
             overrideBaseURL: baseURL
@@ -38,7 +40,7 @@ final class OpenRouterService: ObservableObject {
     func fetchModels() async {
         guard let client = openRouterClient else {
             lastError = "OpenRouter client not configured"
-            Logger.shared.error("🔴 OpenRouter client not configured")
+            Logger.error("🔴 OpenRouter client not configured")
             return
         }
         
@@ -46,11 +48,11 @@ final class OpenRouterService: ObservableObject {
         lastError = nil
         
         do {
-            Logger.shared.info("🌐 Fetching models from OpenRouter")
+            Logger.info("🌐 Fetching models from OpenRouter")
             
             let url = URL(string: baseURL + modelsEndpoint)!
             var request = URLRequest(url: url)
-            request.setValue("Bearer \(client.apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -67,14 +69,14 @@ final class OpenRouterService: ObservableObject {
             
             await MainActor.run {
                 availableModels = modelsResponse.data.sorted { $0.name < $1.name }
-                Logger.shared.info("✅ Fetched \(availableModels.count) models from OpenRouter")
+                Logger.info("✅ Fetched \(availableModels.count) models from OpenRouter")
                 cacheModels()
             }
             
         } catch {
             await MainActor.run {
                 lastError = error.localizedDescription
-                Logger.shared.error("🔴 Failed to fetch OpenRouter models: \(error.localizedDescription)")
+                Logger.error("🔴 Failed to fetch OpenRouter models: \(error.localizedDescription)")
             }
         }
         
@@ -103,15 +105,15 @@ final class OpenRouterService: ObservableObject {
             let data = try JSONEncoder().encode(availableModels)
             UserDefaults.standard.set(data, forKey: cacheKey)
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: cacheTimestampKey)
-            Logger.shared.debug("💾 Cached \(availableModels.count) models")
+            Logger.debug("💾 Cached \(availableModels.count) models")
         } catch {
-            Logger.shared.error("🔴 Failed to cache models: \(error.localizedDescription)")
+            Logger.error("🔴 Failed to cache models: \(error.localizedDescription)")
         }
     }
     
     private func loadCachedModels() {
         guard let data = UserDefaults.standard.data(forKey: cacheKey) else {
-            Logger.shared.debug("📭 No cached models found")
+            Logger.debug("📭 No cached models found")
             return
         }
         
@@ -119,15 +121,15 @@ final class OpenRouterService: ObservableObject {
         let cacheAge = Date().timeIntervalSince1970 - cacheTimestamp
         
         if cacheAge > cacheValidityDuration {
-            Logger.shared.debug("⏰ Cached models expired (age: \(Int(cacheAge))s)")
+            Logger.debug("⏰ Cached models expired (age: \(Int(cacheAge))s)")
             return
         }
         
         do {
             availableModels = try JSONDecoder().decode([OpenRouterModel].self, from: data)
-            Logger.shared.info("📦 Loaded \(availableModels.count) cached models")
+            Logger.info("📦 Loaded \(availableModels.count) cached models")
         } catch {
-            Logger.shared.error("🔴 Failed to load cached models: \(error.localizedDescription)")
+            Logger.error("🔴 Failed to load cached models: \(error.localizedDescription)")
         }
     }
 }
