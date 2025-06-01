@@ -5,6 +5,7 @@ import PDFKit
 import AppKit
 import SwiftUI
 import SwiftData
+import SwiftOpenAI
 
 @Observable
 final class CoverChatProvider: BaseLLMProvider {
@@ -72,17 +73,14 @@ final class CoverChatProvider: BaseLLMProvider {
     /// Initialize with the app state
     /// - Parameter appState: The application state
     override init(appState: AppState) {
-        // Get the current model and create appropriate client
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
-        let client = AppLLMClientFactory.createClientForModel(model: modelString, appState: appState)
-        super.init(client: client)
-        Logger.debug("🎯 CoverChatProvider initialized with model: \(modelString)")
+        super.init(appState: appState)
+        Logger.debug("🎯 CoverChatProvider initialized with OpenRouter")
     }
     
-    /// Initialize with AppLLM client
-    /// - Parameter client: AppLLM client conforming to AppLLMClientProtocol
-    override init(client: AppLLMClientProtocol) {
-        super.init(client: client)
+    /// Initialize with OpenRouter client
+    /// - Parameter openRouterClient: OpenRouter client
+    override init(openRouterClient: OpenAIService) {
+        super.init(openRouterClient: openRouterClient)
     }
     
 
@@ -573,21 +571,15 @@ final class CoverChatProvider: BaseLLMProvider {
 
         Task {
             do {
-                // Create client for the specific model
-                let specificClient = AppLLMClientFactory.createClientForModel(
-                    model: modelString, 
-                    appState: AppState()
-                )
-                
-                // Create query
+                // Create query using the inherited OpenRouter client
                 let query = AppLLMQuery(
                     messages: conversationHistory,
                     modelIdentifier: modelString,
                     temperature: 1.0
                 )
                 
-                // Execute query with the specific client
-                let response = try await specificClient.executeQuery(query)
+                // Execute query with the inherited OpenRouter client
+                let response = try await executeQuery(query)
                 
                 // Extract response content
                 let responseText: String
