@@ -64,7 +64,7 @@ struct AiFunctionView: View {
     }
 
     var body: some View {
-        Group {
+        VStack {
             if res != nil {
                 if let currentQuery = query {
                     AiCommsView(
@@ -91,9 +91,17 @@ struct AiFunctionView: View {
                         }
                         loadQuery() 
                     }) {
-                        Image(systemName: isOptionPressed ? "wand.and.stars.inverse" : "wand.and.stars")
-                            .renderingMode(.template)
-                            .foregroundColor(.secondary)
+                        Group {
+                            if isOptionPressed {
+                                Image("custom.wand.and.sparkles.badge.questionmark")
+                                    .renderingMode(.template)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Image(systemName: "wand.and.stars")
+                                    .renderingMode(.template)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .help(isOptionPressed 

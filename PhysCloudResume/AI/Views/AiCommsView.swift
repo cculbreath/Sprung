@@ -244,8 +244,14 @@ struct AiCommsView: View {
                             }
                             chatAction()
                         }) {
-                            Image(systemName: isOptionPressed ? "wand.and.stars.inverse" : "wand.and.stars")
-                                .font(.system(size: 20, weight: .regular))
+                            Group {
+                                if isOptionPressed {
+                                    Image("custom.wand.and.sparkles.badge.questionmark")
+                                } else {
+                                    Image(systemName: "wand.and.stars")
+                                }
+                            }
+                            .font(.system(size: 20, weight: .regular))
                         }
                         .help(isOptionPressed ? "Option-click to revise with clarifying questions" : "Create new Résumé")
                         .onAppear {
