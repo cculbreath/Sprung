@@ -162,7 +162,6 @@ struct OpenRouterModelSelectionSheet: View {
                 }
             }
             .navigationTitle("Choose Models")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {

@@ -1,9 +1,11 @@
 // PhysCloudResume/CoverLetters/Views/CoverLetterToolbar.swift
 import SwiftUI
+import Observation
 
 /// Cover Letter AI View Provider to ensure we only create one instance
 @MainActor
-class CoverLetterAiViewProvider: ObservableObject {
+@Observable
+class CoverLetterAiViewProvider {
     static let shared = CoverLetterAiViewProvider()
     private var instance: CoverLetterAiView? = nil
 

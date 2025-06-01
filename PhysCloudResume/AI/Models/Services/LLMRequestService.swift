@@ -9,49 +9,58 @@ import Foundation
 import SwiftUI
 import SwiftData
 
-/// Service responsible for handling LLM API requests
+/// Service responsible for handling LLM API requests via OpenRouter
 class LLMRequestService: @unchecked Sendable {
     /// Shared instance of the service
     static let shared = LLMRequestService()
     
-    private var appLLMClient: AppLLMClientProtocol?
+    private var baseLLMProvider: BaseLLMProvider?
     private var currentRequestID: UUID?
     private let apiQueue = DispatchQueue(label: "com.physcloudresume.apirequest", qos: .userInitiated)
+    private var appState: AppState?
     
     // Private initializer for singleton pattern
     private init() {}
     
-    /// Initializes the LLM client with the appropriate provider for the current model
+    /// Initializes the LLM provider with OpenRouter
     @MainActor
     func initialize() {
-        // Simply call our updateClientForCurrentModel method
         updateClientForCurrentModel()
     }
     
-    /// Updates the client for the current model - call this whenever the preferred model changes
+    /// Updates the provider for the current model - call this whenever the preferred model changes
     @MainActor
     func updateClientForCurrentModel() {
-        // Create client for the preferred model
         let currentModel = OpenAIModelFetcher.getPreferredModelString()
-        let provider = AIModels.providerForModel(currentModel)
         
-        Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
+        Logger.debug("🔄 Updating OpenRouter provider for model: \(currentModel)")
         
-        // Create client with app state using the factory method that handles model-provider mapping
-        let appState = AppState()
-        appLLMClient = AppLLMClientFactory.createClientForModel(model: currentModel, appState: appState)
+        // Initialize AppState if needed
+        if appState == nil {
+            appState = AppState()
+        }
         
-        if appLLMClient != nil {
-            Logger.debug("✅ Initialized client for model: \(currentModel)")
+        // Create BaseLLMProvider with OpenRouter
+        if let state = appState {
+            baseLLMProvider = BaseLLMProvider(appState: state)
+            Logger.debug("✅ Initialized OpenRouter provider for model: \(currentModel)")
         } else {
-            Logger.error("❌ Failed to initialize LLM client")
+            Logger.error("❌ Failed to initialize OpenRouter provider")
         }
     }
     
     /// Checks if the currently selected model supports images
+    @MainActor
     func checkIfModelSupportsImages() -> Bool {
-        let model = OpenAIModelFetcher.getPreferredModelString().lowercased()
+        guard let state = appState else { return false }
         
+        let modelId = OpenAIModelFetcher.getPreferredModelString()
+        if let model = state.openRouterService.findModel(id: modelId) {
+            return model.supportsImages
+        }
+        
+        // Fallback to legacy logic if model not found in OpenRouter
+        let model = modelId.lowercased()
         let provider = AIModels.providerForModel(model)
 
         // For OpenAI models – all of the filtered models support images
@@ -103,19 +112,13 @@ class LLMRequestService: @unchecked Sendable {
     @MainActor
     func sendTextRequest(
         promptText: String,
-        model: String? = nil, // Make model parameter optional so we can use the default
+        model: String? = nil,
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     ) {
-        // Initialize client if needed
-        if appLLMClient == nil {
+        // Initialize provider if needed
+        if baseLLMProvider == nil {
             initialize()
-        }
-        
-        guard let appLLMClient = appLLMClient else {
-            onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000,
-                                      userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
-            return
         }
         
         // Use provided model or fall back to preferred model
@@ -126,6 +129,12 @@ class LLMRequestService: @unchecked Sendable {
         
         Task {
             do {
+                // Ensure we have a provider
+                guard let provider = baseLLMProvider else {
+                    throw NSError(domain: "LLMRequestService", code: 1000,
+                                userInfo: [NSLocalizedDescriptionKey: "OpenRouter provider not initialized"])
+                }
+                
                 // Convert single text prompt to AppLLMMessage format
                 let messages = [AppLLMMessage(role: .user, text: promptText)]
                 
@@ -137,7 +146,7 @@ class LLMRequestService: @unchecked Sendable {
                 )
 
                 // Execute query
-                let response = try await appLLMClient.executeQuery(query)
+                let response = try await provider.executeQuery(query)
                 
                 // Ensure request is still current
                 guard self.currentRequestID == requestID else { return }
@@ -152,7 +161,9 @@ class LLMRequestService: @unchecked Sendable {
                 }
                 
                 // Provide progress update
-                onProgress(responseText)
+                await MainActor.run {
+                    onProgress(responseText)
+                }
                 
                 // Convert to legacy ResponsesAPIResponse format for backward compatibility
                 let compatResponse = ResponsesAPIResponse(
@@ -161,7 +172,9 @@ class LLMRequestService: @unchecked Sendable {
                     model: modelToUse
                 )
                 
-                onComplete(.success(compatResponse))
+                await MainActor.run {
+                    onComplete(.success(compatResponse))
+                }
             } catch {
                 Logger.debug("Error in sendTextRequest: \(error.localizedDescription)")
                 
@@ -199,11 +212,13 @@ class LLMRequestService: @unchecked Sendable {
                 // Ensure request is still current
                 guard self.currentRequestID == requestID else { return }
                 
-                onComplete(.failure(NSError(
-                    domain: "LLMRequestService",
-                    code: 1100,
-                    userInfo: [NSLocalizedDescriptionKey: userErrorMessage]
-                )))
+                await MainActor.run {
+                    onComplete(.failure(NSError(
+                        domain: "LLMRequestService",
+                        code: 1100,
+                        userInfo: [NSLocalizedDescriptionKey: userErrorMessage]
+                    )))
+                }
             }
         }
     }
@@ -219,11 +234,15 @@ class LLMRequestService: @unchecked Sendable {
         
         Task {
             do {
-                // Initialize client if needed
-                if appLLMClient == nil {
+                // Initialize provider if needed
+                if baseLLMProvider == nil {
                     await MainActor.run {
                         initialize()
                     }
+                }
+                
+                guard let provider = baseLLMProvider else {
+                    throw AppLLMError.clientError("OpenRouter provider not initialized")
                 }
                 
                 let selectedModel = OpenAIModelFetcher.getPreferredModelString()
@@ -231,19 +250,6 @@ class LLMRequestService: @unchecked Sendable {
                     selectedModel: selectedModel,
                     wantsImage: base64Image != nil
                 )
-                if appLLMClient == nil || selectedModel != currentModel {
-                    await MainActor.run {
-                        let provider = AIModels.providerForModel(currentModel)
-                        Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
-                        let appState = AppState()
-                        self.appLLMClient = AppLLMClientFactory.createClient(for: provider, appState: appState)
-                    }
-                }
-
-                let clientOptional = await MainActor.run { self.appLLMClient }
-                guard let client = clientOptional else {
-                    throw AppLLMError.clientError("LLM client not initialized")
-                }
                 
                 // Build message content
                 var contentParts: [AppLLMMessageContentPart] = []
@@ -267,7 +273,7 @@ class LLMRequestService: @unchecked Sendable {
                 )
                 
                 // Execute query
-                let response = try await client.executeQuery(query)
+                let response = try await provider.executeQuery(query)
                 
                 // Extract response content
                 let responseText: String
@@ -302,7 +308,7 @@ class LLMRequestService: @unchecked Sendable {
         promptText: String,
         base64Image: String?,
         responseType: T.Type,
-        jsonSchema: String? = nil,  // Make this optional
+        jsonSchema: String? = nil,
         requestID: UUID = UUID(),
         onComplete: @escaping (Result<ResponsesAPIResponse, Error>) -> Void
     ) {
@@ -310,11 +316,15 @@ class LLMRequestService: @unchecked Sendable {
         
         Task {
             do {
-                // Initialize client if needed
-                if appLLMClient == nil {
+                // Initialize provider if needed
+                if baseLLMProvider == nil {
                     await MainActor.run {
                         initialize()
                     }
+                }
+                
+                guard let provider = baseLLMProvider else {
+                    throw AppLLMError.clientError("OpenRouter provider not initialized")
                 }
                 
                 let selectedModel = OpenAIModelFetcher.getPreferredModelString()
@@ -322,19 +332,6 @@ class LLMRequestService: @unchecked Sendable {
                     selectedModel: selectedModel,
                     wantsImage: base64Image != nil
                 )
-                if appLLMClient == nil || selectedModel != currentModel {
-                    await MainActor.run {
-                        let provider = AIModels.providerForModel(currentModel)
-                        Logger.debug("🔄 Updating client for model: \(currentModel) (Provider: \(provider))")
-                        let appState = AppState()
-                        self.appLLMClient = AppLLMClientFactory.createClient(for: provider, appState: appState)
-                    }
-                }
-
-                let clientOptional = await MainActor.run { self.appLLMClient }
-                guard let client = clientOptional else {
-                    throw AppLLMError.clientError("LLM client not initialized")
-                }
                 
                 // Build message content
                 var contentParts: [AppLLMMessageContentPart] = []
@@ -356,11 +353,11 @@ class LLMRequestService: @unchecked Sendable {
                     modelIdentifier: currentModel,
                     temperature: 1.0,
                     responseType: responseType,
-                    jsonSchema: jsonSchema  // Can be nil - let the system infer from responseType
+                    jsonSchema: jsonSchema
                 )
                 
                 // Execute query
-                let response = try await client.executeQuery(query)
+                let response = try await provider.executeQuery(query)
                 
                 // Extract response content
                 let responseText: String
@@ -403,14 +400,14 @@ class LLMRequestService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        // Initialize client if needed
-        if appLLMClient == nil {
+        // Initialize provider if needed
+        if baseLLMProvider == nil {
             initialize()
         }
         
-        guard let client = appLLMClient else {
+        guard let provider = baseLLMProvider else {
             onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, 
-                                      userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
+                                      userInfo: [NSLocalizedDescriptionKey: "OpenRouter provider not initialized"])))
             return
         }
         
@@ -473,7 +470,7 @@ class LLMRequestService: @unchecked Sendable {
         Task {
             do {
                 // Execute query
-                let response = try await client.executeQuery(query)
+                let response = try await provider.executeQuery(query)
                 
                 guard self.currentRequestID == requestID else { return }
                 
@@ -492,14 +489,15 @@ class LLMRequestService: @unchecked Sendable {
                 // Save assistant response to context
                 await MainActor.run {
                     ConversationContextManager.shared.addMessage(assistantMessage.toChatMessage(), to: context)
+                    onProgress(responseText)
+                    onComplete(.success(responseText))
                 }
-                
-                onProgress(responseText)
-                onComplete(.success(responseText))
             } catch {
                 guard self.currentRequestID == requestID else { return }
-                Logger.debug("Error in sendResumeConversationRequest: \(error.localizedDescription)")
-                onComplete(.failure(error))
+                await MainActor.run {
+                    Logger.debug("Error in sendResumeConversationRequest: \(error.localizedDescription)")
+                    onComplete(.failure(error))
+                }
             }
         }
     }
@@ -515,14 +513,14 @@ class LLMRequestService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        // Initialize client if needed
-        if appLLMClient == nil {
+        // Initialize provider if needed
+        if baseLLMProvider == nil {
             initialize()
         }
         
-        guard let client = appLLMClient else {
+        guard let provider = baseLLMProvider else {
             onComplete(.failure(NSError(domain: "LLMRequestService", code: 1000, 
-                                      userInfo: [NSLocalizedDescriptionKey: "LLM client not initialized"])))
+                                      userInfo: [NSLocalizedDescriptionKey: "OpenRouter provider not initialized"])))
             return
         }
         
@@ -585,7 +583,7 @@ class LLMRequestService: @unchecked Sendable {
         Task {
             do {
                 // Execute query
-                let response = try await client.executeQuery(query)
+                let response = try await provider.executeQuery(query)
                 
                 guard self.currentRequestID == requestID else { return }
                 
@@ -604,14 +602,15 @@ class LLMRequestService: @unchecked Sendable {
                 // Save assistant response to context
                 await MainActor.run {
                     ConversationContextManager.shared.addMessage(assistantMessage.toChatMessage(), to: context)
+                    onProgress(responseText)
+                    onComplete(.success(responseText))
                 }
-                
-                onProgress(responseText)
-                onComplete(.success(responseText))
             } catch {
                 guard self.currentRequestID == requestID else { return }
-                Logger.debug("Error in sendCoverLetterConversationRequest: \(error.localizedDescription)")
-                onComplete(.failure(error))
+                await MainActor.run {
+                    Logger.debug("Error in sendCoverLetterConversationRequest: \(error.localizedDescription)")
+                    onComplete(.failure(error))
+                }
             }
         }
     }

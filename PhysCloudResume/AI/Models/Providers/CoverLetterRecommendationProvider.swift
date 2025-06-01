@@ -13,7 +13,7 @@ import SwiftUI
 
 /// Provider for selecting the best cover letter among existing ones
 @Observable
-final class CoverLetterRecommendationProvider: BaseLLMProvider {
+final class CoverLetterRecommendationProvider {
     /// System prompt for FPTP cover letter evaluation
     let systemPrompt = """
     You are an expert career advisor and professional writer specializing in evaluating cover letters. Your task is to analyze a list of cover letters for a specific job application and select the one which you believe has the best chance of securing the applicant an interview for this job opening. You will be provided with job details, several cover letter drafts, and writing samples that represent the candidate's preferred style.
@@ -63,6 +63,14 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
     - If multiple letters meet the criteria equally, select the one with the most precise alignment to job requirements.
     """
 
+    // MARK: - Properties
+    
+    /// The base LLM provider with OpenRouter client
+    private let baseLLMProvider: BaseLLMProvider
+    
+    /// The model ID to use for requests
+    private let modelId: String
+    
     private let jobApp: JobApp
     private let writingSamples: String
     
@@ -154,26 +162,20 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
         }
     }
 
-    /// Initialize with app state to create appropriate client
+    /// Initialize with app state and model ID
     /// - Parameters:
     ///   - appState: The application state
     ///   - jobApp: The job application containing cover letters
     ///   - writingSamples: Writing samples for style reference
-    init(appState: AppState, jobApp: JobApp, writingSamples: String) {
+    ///   - modelId: The OpenRouter model ID to use
+    init(appState: AppState, jobApp: JobApp, writingSamples: String, modelId: String) {
+        self.baseLLMProvider = BaseLLMProvider(appState: appState)
+        self.modelId = modelId
         self.jobApp = jobApp
         self.writingSamples = writingSamples
-        super.init(appState: appState)
-    }
-
-    /// Initialize with a specific LLM client
-    /// - Parameters:
-    ///   - client: An LLM client conforming to AppLLMClientProtocol
-    ///   - jobApp: The job application containing cover letters
-    ///   - writingSamples: Writing samples for style reference
-    init(client: AppLLMClientProtocol, jobApp: JobApp, writingSamples: String) {
-        self.jobApp = jobApp
-        self.writingSamples = writingSamples
-        super.init(client: client)
+        
+        // Log which model we're using
+        Logger.debug("🚀 CoverLetterRecommendationProvider initialized with OpenRouter model: \(modelId)")
     }
 
 
@@ -253,37 +255,35 @@ final class CoverLetterRecommendationProvider: BaseLLMProvider {
         let fullPromptDebug = "VOTING SCHEME: \(votingScheme.rawValue)\n\nSYSTEM PROMPT:\n\n\(selectedSystemPrompt)\n\nUSER PROMPT:\n\n\(prompt)\n\nJOB DESCRIPTION:\n\n\(jobApp.jobDescription)"
         writeDebugToFile(fullPromptDebug)
 
-        // Initialize a conversation with the system prompt and user prompt
-        _ = initializeConversation(systemPrompt: selectedSystemPrompt, userPrompt: prompt)
+        // Get model identifier - use override if provided, or use the instance modelId
+        let modelIdentifier = overrideModel ?? modelId
 
-        // Get model identifier - use override if provided
-        let modelIdentifier = overrideModel ?? OpenAIModelFetcher.getPreferredModelString()
-
-        // Ensure we have an appState for client creation
-        if self.appState == nil {
-            // Create a temporary app state if we don't have one
-            self.appState = AppState()
-            self.appState?.settings.preferredLLMProvider = AIModels.providerFor(modelName: modelIdentifier)
-        }
+        // Create messages for the query
+        let messages: [AppLLMMessage] = [
+            AppLLMMessage(role: .system, text: selectedSystemPrompt),
+            AppLLMMessage(role: .user, text: prompt)
+        ]
 
         do {
+            Logger.info("🎯 Executing cover letter recommendation with OpenRouter model: \(modelIdentifier)")
+            
             // Create query for structured output
             let query = AppLLMQuery(
-                messages: conversationHistory,
+                messages: messages,
                 modelIdentifier: modelIdentifier,
                 responseType: BestCoverLetterResponse.self
             )
             
-            // Execute query using executeQueryWithTimeout which will update the client as needed
-            let response = try await executeQueryWithTimeout(query)
+            // Execute query using baseLLMProvider
+            let response = try await baseLLMProvider.executeQuery(query)
             
             // Process structured response using BaseLLMProvider's method
-            return try processStructuredResponse(response, as: BestCoverLetterResponse.self)
+            return try baseLLMProvider.processStructuredResponse(response, as: BestCoverLetterResponse.self)
         } catch {
             // Log error and rethrow
             let generalErrorDebug = "\n\nGENERAL API ERROR:\n\(error.localizedDescription)"
             writeDebugToFile(fullPromptDebug + generalErrorDebug)
-            errorMessage = error.localizedDescription
+            Logger.error("Cover letter recommendation error: \(error.localizedDescription)")
             throw error
         }
     }

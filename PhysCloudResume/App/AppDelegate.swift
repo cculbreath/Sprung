@@ -107,7 +107,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let appState = self.appState {
                 hostingView = NSHostingView(rootView: AnyView(settingsView
                     .environment(appState)
-                    .environmentObject(appState.modelService)
                 ))
             } else {
                 // Fallback if appState is not available

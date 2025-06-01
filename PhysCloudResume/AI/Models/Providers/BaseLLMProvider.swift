@@ -134,13 +134,13 @@ class BaseLLMProvider {
         let openAIMessages = try convertToOpenAIMessages(query.messages)
         
         // Check if model supports structured output
-        let model = appState?.openRouterService.findModel(id: query.modelIdentifier)
+        let model = await appState?.openRouterService.findModel(id: query.modelIdentifier)
         let supportsStructuredOutput = model?.supportsStructuredOutput ?? false
         
         // Build parameters
         var parameters = ChatCompletionParameters(
             messages: openAIMessages,
-            model: .init(rawValue: query.modelIdentifier)
+            model: .custom(query.modelIdentifier)
         )
         
         if let temperature = query.temperature {
@@ -161,19 +161,19 @@ class BaseLLMProvider {
             // Add system prompt for non-structured output models
             let fallbackPrompt = createFallbackStructuredPrompt(for: query.desiredResponseType!)
             parameters.messages.insert(
-                .init(role: .system, content: fallbackPrompt),
+                ChatCompletionParameters.Message(role: .system, content: .text(fallbackPrompt)),
                 at: 0
             )
         }
         
         // Execute the request
-        let response = try await client.startChatCompletion(parameters: parameters)
+        let response = try await client.startChat(parameters: parameters)
         
         // Process response
-        if let content = response.choices.first?.message.content {
+        if let content = response.choices?.first?.message?.content {
             if query.desiredResponseType != nil {
                 // Return as structured data for JSON decoding
-                guard let data = content.data(using: .utf8) else {
+                guard let data = content.data(using: String.Encoding.utf8) else {
                     throw AppLLMError.decodingError("Could not convert response to UTF-8 data")
                 }
                 return .structured(data)
@@ -198,18 +198,22 @@ class BaseLLMProvider {
             // Handle multimodal content
             if appMessage.contentParts.count == 1, case .text(let text) = appMessage.contentParts[0] {
                 // Simple text message
-                return ChatCompletionParameters.Message(role: role, content: text)
+                return ChatCompletionParameters.Message(role: role, content: .text(text))
             } else {
                 // Multimodal message with text and/or images
-                let content = appMessage.contentParts.compactMap { part -> ChatCompletionParameters.Message.Content? in
+                let content = appMessage.contentParts.compactMap { part -> ChatCompletionParameters.Message.ContentType.MessageContent? in
                     switch part {
                     case .text(let text):
-                        return .text(text)
+                        return ChatCompletionParameters.Message.ContentType.MessageContent.text(text)
                     case .imageUrl(let base64Data, let mimeType):
-                        return .imageUrl(.init(url: "data:\(mimeType);base64,\(base64Data)"))
+                        let dataUrl = "data:\(mimeType);base64,\(base64Data)"
+                        if let url = URL(string: dataUrl) {
+                            return ChatCompletionParameters.Message.ContentType.MessageContent.imageUrl(.init(url: url))
+                        }
+                        return nil
                     }
                 }
-                return ChatCompletionParameters.Message(role: role, content: content)
+                return ChatCompletionParameters.Message(role: role, content: .contentArray(content))
             }
         }
     }

@@ -12,7 +12,9 @@ extension AppState {
         get { UserDefaults.standard.string(forKey: "openRouterApiKey") ?? "" }
         set { 
             UserDefaults.standard.set(newValue, forKey: "openRouterApiKey")
-            openRouterService.configure(apiKey: newValue)
+            Task { @MainActor in
+                openRouterService.configure(apiKey: newValue)
+            }
         }
     }
     

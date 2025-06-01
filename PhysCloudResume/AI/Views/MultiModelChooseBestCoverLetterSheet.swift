@@ -58,14 +58,11 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         }
         .frame(width: 600, height: 700)
         .onAppear {
-            // Check if we need to auto-fetch models on appear
-            let needsFetching = modelService.fetchStatus.values.allSatisfy { status in
-                if case .notStarted = status { return true }
-                return false
-            }
-            
-            if needsFetching {
-                fetchModels()
+            // Fetch OpenRouter models if we don't have any and have a valid API key
+            if appState.hasValidOpenRouterKey && openRouterService.availableModels.isEmpty {
+                Task {
+                    await openRouterService.fetchModels()
+                }
             }
         }
     }
@@ -107,7 +104,6 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                 selectedModels: $selectedModels,
                 sanitizeModelNames: false  // Keep raw model names for better distinction
             )
-            .environmentObject(modelService)
         }
     }
     
@@ -265,20 +261,12 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     }
     
     private func fetchModels() {
-        Logger.debug("🔄 Auto-fetching models on sheet appear")
+        Logger.debug("🔄 Auto-fetching OpenRouter models on sheet appear")
         
-        // Fetch models for each provider that has an API key
-        let keysToCheck = [
-            ("openAiApiKey", AIModels.Provider.openai),
-            ("claudeApiKey", AIModels.Provider.claude),
-            ("grokApiKey", AIModels.Provider.grok),
-            ("geminiApiKey", AIModels.Provider.gemini)
-        ]
-        
-        for (keyName, provider) in keysToCheck {
-            if let apiKey = UserDefaults.standard.string(forKey: keyName), 
-               apiKey != "none" && !apiKey.isEmpty {
-                modelService.fetchModelsForProvider(provider: provider, apiKey: apiKey)
+        // Fetch OpenRouter models if we have a valid API key
+        if appState.hasValidOpenRouterKey {
+            Task {
+                await openRouterService.fetchModels()
             }
         }
     }
@@ -399,7 +387,8 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                         let provider = CoverLetterRecommendationProvider(
                             appState: tempAppState,
                             jobApp: jobApp,
-                            writingSamples: writingSamples
+                            writingSamples: writingSamples,
+                            modelId: model
                         )
                         
                         // Set the override model to ensure this provider uses the correct model
@@ -561,11 +550,8 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         }
         
         do {
-            // Create a provider using o4-mini
-            let provider = BaseLLMProvider(client: AppLLMClientFactory.createClientForModel(
-                model: AIModels.o4_mini,
-                appState: appState
-            ))
+            // Create a provider using OpenRouter with o4-mini
+            let provider = BaseLLMProvider(appState: appState)
             
             // Initialize conversation
             _ = provider.initializeConversation(
