@@ -59,40 +59,7 @@ struct BuildToolbar: ToolbarContent {
         if let selApp = jobAppStore.selectedApp {
             ToolbarItemGroup(placement: .primaryAction) {
                 HStack(spacing: 8) {
-                    // Add Model Picker for non-listing tabs
-                    if selectedTab != .listing {
-                        HStack(spacing: 8) {
-                            ModelPickerView(
-                                selectedModel: .init(
-                                    get: { UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o_latest },
-                                    set: { newValue in 
-                                        isUpdatingModel = true
-                                        UserDefaults.standard.set(newValue, forKey: "preferredLLMModel")
-                                        // Update the LLM client for the new model
-                                        Task { @MainActor in
-                                            LLMRequestService.shared.updateClientForCurrentModel()
-                                            // Add a small delay to show the loading indicator
-                                            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-                                            isUpdatingModel = false
-                                        }
-                                    }
-                                ),
-                                showRefreshButton: false,
-                                useModelSelection: true  // Use user's model selection preferences
-                            )
-                            .environmentObject(ModelService.shared)
-                            .environment(appState)
-                            .frame(minWidth: 150, maxWidth: 250)
-                            .disabled(isUpdatingModel)
-                            
-                            // Show loading indicator when updating model
-                            if isUpdatingModel {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .help("Updating model...")
-                            }
-                        }
-                    }
+                    // No global model picker - use context-specific pickers instead
                     
                     // Tab-specific content
                     tabSpecificContentInline(for: selApp)

@@ -22,8 +22,11 @@ import SwiftUI
 
     IMPORTANT: Output ONLY the JSON object with the fields "recommendedJobId" and "reason". Do not include any additional commentary, explanation, or text outside the JSON.
     """
-    // The unified AppLLM client
-    private let appLLMClient: AppLLMClientProtocol
+    // The base LLM provider with OpenRouter client
+    private let baseLLMProvider: BaseLLMProvider
+    
+    // Model to use for recommendations
+    private let modelId: String
 
     var jobApps: [JobApp] = []
     var resume: Resume?
@@ -43,31 +46,20 @@ import SwiftUI
 
     // MARK: - Initialization
 
-    /// Initialize with app state to create appropriate client
+    /// Initialize with app state and specific model
     /// - Parameters:
     ///   - appState: The application state
     ///   - jobApps: List of job applications
     ///   - resume: The resume to use
-    ///   - specificModel: Optional specific model to use (overrides UserDefaults)
-    init(appState: AppState, jobApps: [JobApp], resume: Resume?, specificModel: String? = nil) {
-        let modelIdentifier = specificModel ?? OpenAIModelFetcher.getPreferredModelString()
-        self.appLLMClient = AppLLMClientFactory.createClientForModel(model: modelIdentifier, appState: appState)
+    ///   - modelId: The OpenRouter model ID to use
+    init(appState: AppState, jobApps: [JobApp], resume: Resume?, modelId: String) {
+        self.baseLLMProvider = BaseLLMProvider(appState: appState)
+        self.modelId = modelId
         self.jobApps = jobApps
         self.resume = resume
         
         // Log which model we're using
-        Logger.debug("🚀 JobRecommendationProvider initialized with model: \(modelIdentifier)")
-    }
-
-    /// Direct initializer with LLM client
-    /// - Parameters:
-    ///   - client: An LLM client conforming to AppLLMClientProtocol
-    ///   - jobApps: List of job applications
-    ///   - resume: The resume to use
-    convenience init(client: AppLLMClientProtocol, jobApps: [JobApp], resume: Resume?) {
-        // Create an app state and delegate to the designated initializer
-        let appState = AppState()
-        self.init(appState: appState, jobApps: jobApps, resume: resume)
+        Logger.debug("🚀 JobRecommendationProvider initialized with OpenRouter model: \(modelId)")
     }
 
     /// Writes debug content to a file in the Downloads folder if enabled
@@ -116,24 +108,17 @@ import SwiftUI
             AppLLMMessage(role: .user, text: prompt)
         ]
 
-        // No need to read from UserDefaults again - we'll use the same model that was
-        // used to initialize the adapter to prevent model mismatch
-        let modelIdentifier = (appLLMClient as? BaseSwiftOpenAIAdapter)?.config.model ?? OpenAIModelFetcher.getPreferredModelString()
-        Logger.info("Using model: \(modelIdentifier) for job recommendation")
-
-        // Log detailed model information for debugging
-        Logger.info("🎯 Executing job recommendation with model: \(modelIdentifier)")
-        Logger.info("🔍 Provider type: \(AIModels.providerForModel(modelIdentifier))")
+        Logger.info("🎯 Executing job recommendation with OpenRouter model: \(modelId)")
 
         let query = AppLLMQuery(
             messages: messages,
-            modelIdentifier: modelIdentifier,
+            modelIdentifier: modelId,
             responseType: JobRecommendation.self
         )
 
         // Attempt to get the structured response
         do {
-            let response = try await appLLMClient.executeQuery(query)
+            let response = try await baseLLMProvider.executeQuery(query)
             let decoder = JSONDecoder()
             
             switch response {
