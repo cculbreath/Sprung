@@ -27,7 +27,9 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     @State private var isGeneratingSummary = false
     @State private var selectedVotingScheme: VotingScheme = .firstPastThePost
     
-    @EnvironmentObject private var modelService: ModelService
+    private var openRouterService: OpenRouterService {
+        appState.openRouterService
+    }
     
     @Binding var coverLetter: CoverLetter
     

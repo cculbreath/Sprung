@@ -39,8 +39,7 @@ struct APIKeysSettingsView: View {
     // Action to trigger model fetch when keys change
     var onOpenAIKeyUpdate: () -> Void = {} // Callback
     
-    // Shared model service for API validation
-    private let modelService = ModelService()
+    // Note: API validation can be implemented per-service as needed
     
     // Initialize LLMRequestService to update client when keys change
     private func updateLLMClient() {
