@@ -32,16 +32,17 @@ struct GenerateCoverLetterButton: View {
                     isNewConversation: true // Explicitly start a new conversation
                 )
             } label: {
-                Image("ai-squiggle")
+                Image(systemName: "wand.and.stars")
                     .font(.system(size: 18, weight: .regular))
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .help("Generate new Cover Letter")
         } else {
-            ProgressView()
-                .scaleEffect(0.75, anchor: .center)
-                .frame(width: 28, height: 28)
+            Image(systemName: "wand.and.rays")
+                .font(.system(size: 18, weight: .regular))
+                .frame(width: 32, height: 32)
+                .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
         }
     }
 }

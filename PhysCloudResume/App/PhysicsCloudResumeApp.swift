@@ -96,7 +96,8 @@ extension EnvironmentValues {
     var appState: AppState {
         get { 
             guard let state = self[AppStateKey.self] else {
-                fatalError("AppState not found in environment. Make sure to provide it via .environment(appState)")
+                // This should not happen in normal operation since AppState is provided at root
+                fatalError("AppState not found in environment. Check that .environment(appState) is provided at the app root level.")
             }
             return state
         }

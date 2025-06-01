@@ -13,7 +13,6 @@ struct CoverLetterView: View {
     @Environment(AppState.self) private var appState: AppState
 
     @Binding var buttons: CoverLetterButtons
-    @State private var selectedInspectorTab: InspectorTab = .references // State to manage selected tab
 
     var body: some View {
         contentView()
@@ -37,28 +36,6 @@ struct CoverLetterView: View {
                     buttons: $buttons
                 )
             }
-            .inspector(isPresented: $buttons.showInspector) {
-                if coverLetterStore.cL != nil {
-                    VStack(alignment: .leading) {
-                        Picker("", selection: $selectedInspectorTab) {
-                            Text("References").tag(InspectorTab.references)
-                            Text("Revisions").tag(InspectorTab.revisions)
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-
-                        switch selectedInspectorTab {
-                        case .references:
-                            CoverRefView()
-                        case .revisions:
-                            CoverRevisionsView(buttons: $buttons)
-                        }
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding()
-                } else {
-                    EmptyView()
-                }
-            }
         } else {
             Text(jobAppStore.selectedApp?.selectedRes == nil ? "job app nil" : "No nil fail")
                 .onAppear {
@@ -69,11 +46,6 @@ struct CoverLetterView: View {
     }
 }
 
-// Enum to manage the tab selection
-enum InspectorTab {
-    case references
-    case revisions
-}
 
 struct CoverLetterContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore

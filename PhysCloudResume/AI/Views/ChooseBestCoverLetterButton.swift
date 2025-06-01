@@ -18,9 +18,10 @@ struct ChooseBestCoverLetterButton: View {
 
     var body: some View {
         if buttons.chooseBestRequested {
-            ProgressView()
-                .scaleEffect(0.75, anchor: .center)
+            Image(systemName: "wand.and.rays")
+                .font(.system(size: 18, weight: .regular))
                 .frame(width: 32, height: 32)
+                .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
         } else {
             Button(action: {
                 if isOptionPressed {
@@ -31,9 +32,9 @@ struct ChooseBestCoverLetterButton: View {
             }) {
                 Group {
                     if isOptionPressed {
-                        Image("custom.medal.square.stack")
+                        Image(systemName: "medal.star.fill")
                     } else {
-                        Image(systemName: "medal")
+                        Image(systemName: "medal.star")
                     }
                 }
                 .font(.system(size: 18, weight: .regular))

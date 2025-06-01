@@ -74,8 +74,12 @@ struct AiFunctionView: View {
                         ttsVoice: $ttsVoice
                     )
                 } else if isLoadingQuery {
-                    ProgressView("Preparing...")
-                        .frame(width: 100, height: 30)
+                    HStack {
+                        Image(systemName: "wand.and.rays")
+                            .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
+                        Text("Preparing...")
+                    }
+                    .frame(width: 100, height: 30)
                 } else {
                     // Show the ai-squiggle button that responds to option-click
                     Button(action: { 
@@ -87,7 +91,7 @@ struct AiFunctionView: View {
                         }
                         loadQuery() 
                     }) {
-                        Image(isOptionPressed ? "ai-squiggle.badge.questionmark" : "ai-squiggle")
+                        Image(systemName: isOptionPressed ? "wand.and.stars.inverse" : "wand.and.stars")
                             .renderingMode(.template)
                             .foregroundColor(.secondary)
                     }
