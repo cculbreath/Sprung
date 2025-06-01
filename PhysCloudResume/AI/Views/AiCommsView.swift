@@ -557,18 +557,16 @@ struct AiCommsView: View {
                     }
                 }
                 
-                // If the model selection has changed, create a new client for the correct provider
+                // If the model selection has changed, update the provider
                 if modelString != chatProvider.lastModelUsed {
-                    let providerType = AIModels.providerForModel(modelString)
-                    Logger.debug("Switching to \(providerType) client for model: \(modelString)")
-                    let newClient = AppLLMClientFactory.createClientForModel(model: modelString, appState: appState)
+                    Logger.debug("Switching to OpenRouter model: \(modelString)")
                     let messages = chatProvider.genericMessages
                     
                     // Clear the previous revision state before creating new provider
                     // This prevents the onChange handler from triggering with stale empty data
                     let oldRevArray = chatProvider.lastRevNodeArray
                     
-                    chatProvider = ResumeChatProvider(client: newClient)
+                    chatProvider = ResumeChatProvider(appState: appState)
                     chatProvider.genericMessages = messages
                     chatProvider.lastModelUsed = modelString
                     

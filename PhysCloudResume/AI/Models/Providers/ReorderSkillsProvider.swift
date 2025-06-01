@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 @Observable class ReorderSkillsProvider {
     // MARK: - Properties
@@ -19,28 +20,31 @@ import Foundation
     IMPORTANT: Output ONLY the JSON object with the "reordered_skills_and_expertise" array. Do not include any additional commentary, explanation, or text outside the JSON.
     """
 
-    // The unified AppLLM client
-    private let appLLMClient: AppLLMClientProtocol
+    // The base LLM provider with OpenRouter client
+    private let baseLLMProvider: BaseLLMProvider
+    
+    // Model to use for skill reordering
+    private let modelId: String
     
     var resume: Resume
     var jobDescription: String
 
     // MARK: - Initialization
 
-    /// Initialize with app state to create appropriate client
+    /// Initialize with app state and specific model
     /// - Parameters:
     ///   - appState: The application state
     ///   - resume: The resume containing skills to reorder
     ///   - jobDescription: The job description to match against
-    ///   - specificModel: Optional specific model to use (overrides UserDefaults)
-    init(appState: AppState, resume: Resume, jobDescription: String, specificModel: String? = nil) {
-        let modelIdentifier = specificModel ?? OpenAIModelFetcher.getPreferredModelString()
-        self.appLLMClient = AppLLMClientFactory.createClientForModel(model: modelIdentifier, appState: appState)
+    ///   - modelId: The OpenRouter model ID to use
+    init(appState: AppState, resume: Resume, jobDescription: String, modelId: String) {
+        self.baseLLMProvider = BaseLLMProvider(appState: appState)
+        self.modelId = modelId
         self.resume = resume
         self.jobDescription = jobDescription
         
         // Log which model we're using
-        Logger.debug("🚀 ReorderSkillsProvider initialized with model: \(modelIdentifier)")
+        Logger.debug("🚀 ReorderSkillsProvider initialized with OpenRouter model: \(modelId)")
     }
 
     /// Writes debug content to a file in the Downloads folder if enabled
@@ -81,23 +85,17 @@ import Foundation
             AppLLMMessage(role: .user, text: prompt)
         ]
 
-        // Get the model identifier from the client
-        let modelIdentifier = (appLLMClient as? BaseSwiftOpenAIAdapter)?.config.model ?? OpenAIModelFetcher.getPreferredModelString()
-        Logger.info("Using model: \(modelIdentifier) for skill reordering")
-
-        // Log detailed model information for debugging
-        Logger.info("🎯 Executing skill reordering with model: \(modelIdentifier)")
-        Logger.info("🔍 Provider type: \(AIModels.providerForModel(modelIdentifier))")
+        Logger.info("🎯 Executing skill reordering with OpenRouter model: \(modelId)")
 
         let query = AppLLMQuery(
             messages: messages,
-            modelIdentifier: modelIdentifier,
+            modelIdentifier: modelId,
             responseType: ReorderSkillsResponse.self
         )
 
         // Attempt to get the structured response
         do {
-            let response = try await appLLMClient.executeQuery(query)
+            let response = try await baseLLMProvider.executeQuery(query)
             let decoder = JSONDecoder()
             
             switch response {
