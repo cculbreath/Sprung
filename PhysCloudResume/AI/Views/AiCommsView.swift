@@ -38,19 +38,14 @@ struct AiCommsView: View {
     @Binding var ttsEnabled: Bool
     @Binding var ttsVoice: String
 
-    // Store reference to unified LLM client for AI operations
-    private let client: AppLLMClientProtocol
-
     init(
-        client: AppLLMClientProtocol,
         query: ResumeApiQuery,
         res: Binding<Resume?>,
         ttsEnabled: Binding<Bool> = .constant(false),
         ttsVoice: Binding<String> = .constant("nova")
     ) {
-        // Initialize with unified LLM client
-        _chatProvider = State(initialValue: ResumeChatProvider(client: client))
-        self.client = client
+        // ResumeChatProvider will be initialized in onAppear with proper AppState
+        _chatProvider = State(initialValue: ResumeChatProvider(appState: AppState()))
         _q = State(initialValue: query)
         _myRes = res
         _ttsEnabled = ttsEnabled
