@@ -378,9 +378,10 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                         let modelProvider = AIModels.providerFor(modelName: sanitizedModel)
                         
                         // Create a new app state instance for this specific request
-                        let tempAppState = AppState()
-                        await MainActor.run {
-                            tempAppState.settings.preferredLLMProvider = modelProvider
+                        let tempAppState = await MainActor.run {
+                            let state = AppState()
+                            state.settings.preferredLLMProvider = modelProvider
+                            return state
                         }
                         
                         // Create provider with the specific model

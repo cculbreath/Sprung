@@ -9,6 +9,7 @@ import Observation
 import SwiftUI
 
 @Observable
+@MainActor
 class AppState {
     var showNewAppSheet: Bool = false
     var showSlidingList: Bool = false
@@ -22,28 +23,8 @@ class AppState {
     // Import job apps sheet
     var showImportJobAppsSheet: Bool = false
     
-    // OpenRouter service - initialized lazily to avoid main actor issues
-    private var _openRouterService: OpenRouterService?
-    
-    var openRouterService: OpenRouterService {
-        if let service = _openRouterService {
-            return service
-        } else {
-            // Initialize on main actor if needed
-            if Thread.isMainThread {
-                let service = OpenRouterService.shared
-                _openRouterService = service
-                return service
-            } else {
-                // For non-main thread access, we need to dispatch to main
-                return DispatchQueue.main.sync {
-                    let service = OpenRouterService.shared
-                    _openRouterService = service
-                    return service
-                }
-            }
-        }
-    }
+    // OpenRouter service
+    let openRouterService = OpenRouterService.shared
     
     // Selected OpenRouter models storage
     var selectedOpenRouterModels: Set<String> = Set() {
@@ -75,12 +56,7 @@ class AppState {
     }
     
     private func configureOpenRouterService() {
-        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
-        if !apiKey.isEmpty {
-            Task { @MainActor in
-                openRouterService.configure(apiKey: apiKey)
-            }
-        }
+        // OpenRouterService now accesses the API key directly via @AppStorage
+        // No explicit configuration needed
     }
-    
 }

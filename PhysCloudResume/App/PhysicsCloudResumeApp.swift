@@ -89,12 +89,17 @@ struct PhysicsCloudResumeApp: App {
 
 // Environment key for accessing AppState
 private struct AppStateKey: EnvironmentKey {
-    static let defaultValue = AppState()
+    static let defaultValue: AppState? = nil
 }
 
 extension EnvironmentValues {
     var appState: AppState {
-        get { self[AppStateKey.self] }
+        get { 
+            guard let state = self[AppStateKey.self] else {
+                fatalError("AppState not found in environment. Make sure to provide it via .environment(appState)")
+            }
+            return state
+        }
         set { self[AppStateKey.self] = newValue }
     }
 }
