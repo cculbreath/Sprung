@@ -22,36 +22,42 @@ class AppState {
     // Import job apps sheet
     var showImportJobAppsSheet: Bool = false
     
-    // AI model service
-    let modelService = ModelService()
+    // OpenRouter service
+    let openRouterService = OpenRouterService.shared
     
-    // Selected models storage - directly observable with @Observable
-    var selectedModels: Set<String> = Set() {
+    // Selected OpenRouter models storage
+    var selectedOpenRouterModels: Set<String> = Set() {
         didSet {
-            // Save to UserDefaults when changed
             do {
-                let data = try JSONEncoder().encode(selectedModels)
-                UserDefaults.standard.set(data, forKey: "selectedModelsData")
+                let data = try JSONEncoder().encode(selectedOpenRouterModels)
+                UserDefaults.standard.set(data, forKey: "selectedOpenRouterModels")
             } catch {
-                print("Failed to encode selected models: \(error)")
+                print("Failed to encode selected OpenRouter models: \(error)")
             }
         }
     }
     
     init() {
-        // Load saved models on init
-        loadSelectedModels()
+        loadSelectedOpenRouterModels()
+        configureOpenRouterService()
     }
     
-    private func loadSelectedModels() {
-        let data = UserDefaults.standard.data(forKey: "selectedModelsData") ?? Data()
+    private func loadSelectedOpenRouterModels() {
+        let data = UserDefaults.standard.data(forKey: "selectedOpenRouterModels") ?? Data()
         if !data.isEmpty {
             do {
-                selectedModels = try JSONDecoder().decode(Set<String>.self, from: data)
+                selectedOpenRouterModels = try JSONDecoder().decode(Set<String>.self, from: data)
             } catch {
-                print("Failed to decode selected models: \(error)")
-                selectedModels = Set()
+                print("Failed to decode selected OpenRouter models: \(error)")
+                selectedOpenRouterModels = Set()
             }
+        }
+    }
+    
+    private func configureOpenRouterService() {
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        if !apiKey.isEmpty {
+            openRouterService.configure(apiKey: apiKey)
         }
     }
     

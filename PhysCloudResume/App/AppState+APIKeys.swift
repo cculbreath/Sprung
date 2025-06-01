@@ -7,8 +7,25 @@
 
 import Foundation
 
-/// Extension to AppState to provide API key management
 extension AppState {
-    // API key management is now handled directly through UserDefaults
-    // in the AppState properties: openAiKey, claudeApiKey, geminiApiKey, grokApiKey
+    var openRouterApiKey: String {
+        get { UserDefaults.standard.string(forKey: "openRouterApiKey") ?? "" }
+        set { 
+            UserDefaults.standard.set(newValue, forKey: "openRouterApiKey")
+            openRouterService.configure(apiKey: newValue)
+        }
+    }
+    
+    var openAiApiKey: String {
+        get { UserDefaults.standard.string(forKey: "openAiApiKey") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "openAiApiKey") }
+    }
+    
+    var hasValidOpenRouterKey: Bool {
+        !openRouterApiKey.isEmpty
+    }
+    
+    var hasValidOpenAiKey: Bool {
+        !openAiApiKey.isEmpty
+    }
 }
