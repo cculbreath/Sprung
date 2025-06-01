@@ -244,7 +244,7 @@ struct AiCommsView: View {
                             }
                             chatAction()
                         }) {
-                            Image(isOptionPressed ? "ai-squiggle.badge.questionmark" : "ai-squiggle")
+                            Image(systemName: isOptionPressed ? "wand.and.stars.inverse" : "wand.and.stars")
                                 .font(.system(size: 20, weight: .regular))
                         }
                         .help(isOptionPressed ? "Option-click to revise with clarifying questions" : "Create new Résumé")
@@ -262,11 +262,13 @@ struct AiCommsView: View {
                             }
                         }
                     } else {
-                        Image("ai-squiggle.slash").font(.system(size: 20, weight: .regular)).help("Select fields for ai update")
+                        Image(systemName: "wand.and.stars").font(.system(size: 20, weight: .regular)).help("Select fields for AI update")
                     }
                 } else {
                     VStack(spacing: 4) {
-                        ProgressView().scaleEffect(0.75, anchor: .center)
+                        Image(systemName: "wand.and.rays")
+                            .font(.system(size: 20, weight: .regular))
+                            .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
                         if isRetrying {
                             Text("Retrying request...")
                                 .font(.caption)

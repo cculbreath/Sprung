@@ -28,10 +28,10 @@ struct RecommendJobButton: View {
         Button(action: { showModelPicker = true }) {
             HStack {
                 if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .scaleEffect(0.7)
+                    Image(systemName: "wand.and.rays")
+                        .font(.system(size: 12))
                         .frame(width: 16, height: 16)
+                        .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
                 } else {
                     Image(systemName: "medal.star")
                         .foregroundColor(.primary)

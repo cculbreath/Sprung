@@ -14,7 +14,7 @@ struct TabWrapperView: View {
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
     @State private var refPopup: Bool = false
-    @State private var coverLetterButtons: CoverLetterButtons = .init(showInspector: true, runRequested: false)
+    @State private var coverLetterButtons: CoverLetterButtons = .init(runRequested: false)
     @State private var resumeButtons: ResumeButtons = .init(
         showResumeInspector: false, aiRunning: false, showResumeReviewSheet: false
     )
@@ -137,7 +137,6 @@ struct SaveButtons {
 }
 
 struct CoverLetterButtons {
-    var showInspector: Bool = false
     var runRequested: Bool = false
     /// Indicates a choose-best operation is in flight
     var chooseBestRequested: Bool = false

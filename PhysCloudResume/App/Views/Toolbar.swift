@@ -123,12 +123,6 @@ struct BuildToolbar: ToolbarContent {
             }
             .help("Generate cover letters with multiple models")
 
-            Button(action: {
-                buttons.wrappedValue.showInspector.toggle()
-            }) {
-                Label("Toggle Inspector", systemImage: "sidebar.right")
-            }
-            .help("Toggle Inspector Panel")
         }
     }
 
