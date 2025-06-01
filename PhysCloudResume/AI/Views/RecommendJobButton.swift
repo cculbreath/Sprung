@@ -17,13 +17,15 @@ struct ErrorMessageWrapper: Identifiable {
 
 struct RecommendJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
 
     @State private var isLoading = false
     @State private var errorWrapper: ErrorMessageWrapper? = nil
+    @State private var showModelPicker = false
+    @State private var selectedModel = ""
 
     var body: some View {
-        Button(action: recommendBestJob) {
+        Button(action: { showModelPicker = true }) {
             HStack {
                 if isLoading {
                     ProgressView()
@@ -31,7 +33,7 @@ struct RecommendJobButton: View {
                         .scaleEffect(0.7)
                         .frame(width: 16, height: 16)
                 } else {
-                    Image(systemName: "sparkles.rectangle.stack")
+                    Image(systemName: "medal.star")
                         .foregroundColor(.primary)
                 }
                 Text("Find Best Match")
@@ -50,6 +52,40 @@ struct RecommendJobButton: View {
                 message: Text(wrapper.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .sheet(isPresented: $showModelPicker) {
+            NavigationStack {
+                VStack(spacing: 20) {
+                    Text("Choose Model for Job Recommendation")
+                        .font(.headline)
+                        .padding(.top)
+                    
+                    ModelPickerView(
+                        selectedModel: $selectedModel,
+                        title: "AI Model",
+                        useModelSelection: true
+                    )
+                    .environment(appState)
+                    
+                    HStack(spacing: 12) {
+                        Button("Cancel") {
+                            showModelPicker = false
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button("Recommend") {
+                            showModelPicker = false
+                            recommendBestJob()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(selectedModel.isEmpty)
+                    }
+                    
+                    Spacer()
+                }
+                .padding()
+                .frame(width: 400, height: 250)
+            }
         }
     }
 
@@ -77,7 +113,8 @@ struct RecommendJobButton: View {
                 let provider = JobRecommendationProvider(
                     appState: appState,
                     jobApps: jobAppStore.jobApps,
-                    resume: selectedResume
+                    resume: selectedResume,
+                    modelId: selectedModel
                 )
 
                 let (jobId, reason) = try await provider.fetchRecommendation()
