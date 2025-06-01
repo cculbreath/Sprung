@@ -136,19 +136,17 @@ class OpenAITTSProvider {
             // Use a placeholder client that will return errors instead of crashing
             ttsClient = PlaceholderTTSClient(errorMessage: "TTS service unavailable - invalid OpenAI API key")
         } else {
-            // Create a client through the factory
-            Logger.debug("🔑 Creating TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")
-            _ = LLMProviderConfig.forOpenAI(apiKey: apiKey)
-            let appState = AppState() // Create a new AppState instance
-            let client = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
+            // Create a direct OpenAI client for TTS (not OpenRouter)
+            Logger.debug("🔑 Creating dedicated OpenAI TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")
+            let openAIClient = OpenRouterClientFactory.createTTSClient(openAiApiKey: apiKey)
             
             // Check if the client supports TTS
-            if let ttsCapableClient = client as? TTSCapable {
+            if let ttsCapableClient = openAIClient as? TTSCapable {
                 ttsClient = ttsCapableClient
-                Logger.debug("✅ TTS client created successfully, type: \(type(of: ttsCapableClient))")
+                Logger.debug("✅ OpenAI TTS client created successfully, type: \(type(of: ttsCapableClient))")
             } else {
                 // Fall back to placeholder if TTS not supported by this client
-                Logger.warning("⚠️ Client does not support TTS - using placeholder, client type: \(type(of: client))")
+                Logger.warning("⚠️ OpenAI client does not support TTS - using placeholder, client type: \(type(of: openAIClient))")
                 ttsClient = PlaceholderTTSClient(errorMessage: "TTS not supported by this provider")
             }
         }
