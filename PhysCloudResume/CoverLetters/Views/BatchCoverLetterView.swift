@@ -40,17 +40,11 @@ struct BatchCoverLetterView: View {
         .padding()
         .frame(width: 500, height: 600)
         .onAppear {
-            // Set default revision model to the preferred model
-            revisionModel = OpenAIModelFetcher.getPreferredModelString()
-            
-            // Check if we need to auto-fetch models on appear (exact same logic as ModelPickerView)
-            let needsFetching = modelService.fetchStatus.values.allSatisfy { status in
-                if case .notStarted = status { return true }
-                return false
-            }
-            
-            if needsFetching {
-                fetchModels()
+            // Fetch OpenRouter models if we don't have any and have a valid API key
+            if appState.hasValidOpenRouterKey && openRouterService.availableModels.isEmpty {
+                Task {
+                    await openRouterService.fetchModels()
+                }
             }
         }
     }
@@ -89,8 +83,38 @@ struct BatchCoverLetterView: View {
     
     private var modelSelectionBox: some View {
         GroupBox("Select Models") {
-            ModelCheckboxListView(selectedModels: $selectedModels)
-                .environmentObject(modelService)
+            VStack(alignment: .leading, spacing: 8) {
+                let availableModels = appState.selectedOpenRouterModels.isEmpty ? 
+                    openRouterService.availableModels.map(\.id) : 
+                    Array(appState.selectedOpenRouterModels)
+                
+                if availableModels.isEmpty {
+                    Text("No models available - Configure OpenRouter in Settings")
+                        .foregroundColor(.secondary)
+                        .italic()
+                } else {
+                    ForEach(availableModels, id: \.self) { modelId in
+                        HStack {
+                            Toggle(isOn: Binding(
+                                get: { selectedModels.contains(modelId) },
+                                set: { isSelected in
+                                    if isSelected {
+                                        selectedModels.insert(modelId)
+                                    } else {
+                                        selectedModels.remove(modelId)
+                                    }
+                                }
+                            )) {
+                                if let model = openRouterService.findModel(id: modelId) {
+                                    Text(model.displayName)
+                                } else {
+                                    Text(modelId)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -134,7 +158,7 @@ struct BatchCoverLetterView: View {
                         
                         // Standard model picker
                         ModelPickerView(selectedModel: $revisionModel, showRefreshButton: false)
-                            .environmentObject(modelService)
+                            .environment(appState)
                     }
                 }
             }
@@ -306,15 +330,10 @@ struct BatchCoverLetterView: View {
     private func fetchModels() {
         Logger.debug("Fetching all model lists")
         
-        // Get API keys from UserDefaults
-        let apiKeys = [
-            AIModels.Provider.openai: UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none",
-            AIModels.Provider.claude: UserDefaults.standard.string(forKey: "claudeApiKey") ?? "none",
-            AIModels.Provider.grok: UserDefaults.standard.string(forKey: "grokApiKey") ?? "none",
-            AIModels.Provider.gemini: UserDefaults.standard.string(forKey: "geminiApiKey") ?? "none"
-        ]
-        
-        modelService.fetchAllModels(apiKeys: apiKeys)
+        // Fetch OpenRouter models
+        Task {
+            await openRouterService.fetchModels()
+        }
     }
     
     private func startBatchGeneration() {
