@@ -15,6 +15,9 @@ struct ModelPickerView: View {
     /// The model service for fetching available models
     @EnvironmentObject private var modelService: ModelService
     
+    /// Access to app state for selected models
+    @Environment(AppState.self) private var appState
+    
     /// Optional filter to restrict which providers are shown
     var providerFilter: [String]? = nil
     
@@ -24,22 +27,34 @@ struct ModelPickerView: View {
     /// Controls whether to show the refresh button
     var showRefreshButton: Bool = true
     
+    /// Whether to respect user's model selection preferences (requires AppState)
+    var useModelSelection: Bool = true
+    
+    /// API keys for filtering available providers
+    @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
+    @AppStorage("claudeApiKey") private var claudeApiKey: String = "none"
+    @AppStorage("grokApiKey") private var grokApiKey: String = "none"
+    @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
+    
     /// Initializes a new model picker view
     /// - Parameters:
     ///   - selectedModel: Binding to the selected model
     ///   - providerFilter: Optional array of provider names to include (nil = all providers)
     ///   - title: Optional title for the picker
     ///   - showRefreshButton: Whether to show the refresh button
+    ///   - useModelSelection: Whether to respect user's model selection preferences
     init(
         selectedModel: Binding<String>,
         providerFilter: [String]? = nil,
         title: String? = nil,
-        showRefreshButton: Bool = true
+        showRefreshButton: Bool = true,
+        useModelSelection: Bool = true
     ) {
         self._selectedModel = selectedModel
         self.providerFilter = providerFilter
         self.title = title
         self.showRefreshButton = showRefreshButton
+        self.useModelSelection = useModelSelection
     }
     
     var body: some View {
@@ -60,29 +75,7 @@ struct ModelPickerView: View {
             
             // Picker with all models grouped by provider
             Picker("Model", selection: $selectedModel) {
-                // Get all available models
-                let allModels = modelService.getAllModels()
-                
-                // Filter providers if requested
-                let providers = providerFilter ?? [
-                    AIModels.Provider.openai,
-                    AIModels.Provider.claude,
-                    AIModels.Provider.grok,
-                    AIModels.Provider.gemini
-                ]
-                
-                // Group models by provider
-                ForEach(providers, id: \.self) { provider in
-                    if let models = allModels[provider], !models.isEmpty {
-                        Section(header: Text(provider)) {
-                            ForEach(models, id: \.self) { model in
-                                let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
-                                Text(formatModelName(sanitizedModel))
-                                    .tag(sanitizedModel)
-                            }
-                        }
-                    }
-                }
+                pickerContent
             }
             .pickerStyle(.menu)
         }
@@ -97,6 +90,69 @@ struct ModelPickerView: View {
                 fetchModels()
             }
         }
+    }
+    
+    private var modelsDict: [String: [String]] {
+        if useModelSelection {
+            return modelService.getSelectedModels(selectedModels: appState.selectedModels)
+        } else {
+            return modelService.getAllModels()
+        }
+    }
+    
+    @ViewBuilder
+    private var pickerContent: some View {
+        // Get available providers based on API keys
+        let availableProviders = getAvailableProviders()
+        
+        // Apply provider filter if specified, otherwise use available providers
+        let providers = providerFilter != nil ? 
+            providerFilter!.filter { availableProviders.contains($0) } : 
+            availableProviders
+        
+        // Check if any models are available
+        let hasAnyModels = providers.contains { provider in
+            if let models = modelsDict[provider], !models.isEmpty {
+                return true
+            }
+            return false
+        }
+        
+        if !hasAnyModels {
+            Text(useModelSelection ? "No models selected - Configure in Settings" : "No models available")
+                .foregroundColor(.secondary)
+                .tag("")
+        } else {
+            // Group models by provider
+            ForEach(providers, id: \.self) { provider in
+                if let models = modelsDict[provider], !models.isEmpty {
+                    Section(header: Text(provider)) {
+                        ForEach(models, id: \.self) { model in
+                            let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
+                            Text(formatModelName(sanitizedModel))
+                                .tag(sanitizedModel)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func getAvailableProviders() -> [String] {
+        var providers: [String] = []
+        if openAiApiKey != "none" && !openAiApiKey.isEmpty {
+            providers.append(AIModels.Provider.openai)
+        }
+        if claudeApiKey != "none" && !claudeApiKey.isEmpty {
+            providers.append(AIModels.Provider.claude)
+        }
+        if grokApiKey != "none" && !grokApiKey.isEmpty {
+            providers.append(AIModels.Provider.grok)
+        }
+        if geminiApiKey != "none" && !geminiApiKey.isEmpty {
+            providers.append(AIModels.Provider.gemini)
+        }
+        return providers
     }
     
     /// Formats a model name for display

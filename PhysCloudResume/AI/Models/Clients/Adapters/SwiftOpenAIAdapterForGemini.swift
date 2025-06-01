@@ -249,9 +249,13 @@ class SwiftOpenAIAdapterForGemini: BaseSwiftOpenAIAdapter {
                 case .responseUnsuccessful(let description, let statusCode):
                     Logger.error("🌟 Gemini API HTTP \(statusCode): \(description)")
                     
-                    // Special handling for 400 errors to help diagnose the issue
+                    // Special handling for different HTTP status codes
                     if statusCode == 400 {
                         throw AppLLMError.clientError("Gemini API HTTP 400: \(description). This may be due to incorrect model format or unsupported features.")
+                    } else if statusCode == 429 {
+                        // Rate limit error - suggest retry after delay
+                        Logger.warning("🌟 Gemini API rate limit exceeded - request too frequent")
+                        throw AppLLMError.rateLimited(retryAfter: 30) // Suggest 30 second retry
                     }
                     
                     throw AppLLMError.clientError("Gemini API HTTP \(statusCode): \(description)")

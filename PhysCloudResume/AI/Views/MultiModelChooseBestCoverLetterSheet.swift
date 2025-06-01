@@ -17,6 +17,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     @State private var selectedModels: Set<String> = []
     @State private var isProcessing = false
     @State private var voteTally: [UUID: Int] = [:]
+    @State private var scoreTally: [UUID: Int] = [:]
     @State private var modelReasonings: [(model: String, response: BestCoverLetterResponse)] = []
     @State private var errorMessage: String?
     @State private var progress: Double = 0
@@ -24,6 +25,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     @State private var completedOperations: Int = 0
     @State private var reasoningSummary: String?
     @State private var isGeneratingSummary = false
+    @State private var selectedVotingScheme: VotingScheme = .firstPastThePost
     
     @EnvironmentObject private var modelService: ModelService
     
@@ -33,11 +35,12 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         ScrollView {
             VStack(spacing: 20) {
                 headerSection
+                votingSchemeSection
                 modelSelectionSection
                 if isProcessing {
                     progressSection
                 }
-                if !voteTally.isEmpty {
+                if !voteTally.isEmpty || !scoreTally.isEmpty {
                     resultsSection
                 }
                 if !modelReasonings.isEmpty || reasoningSummary != nil {
@@ -77,53 +80,32 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         }
     }
     
-    private var modelSelectionSection: some View {
-        GroupBox("Select Models") {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    let allModels = modelService.getAllModels()
-                    let providers = [
-                        AIModels.Provider.openai,
-                        AIModels.Provider.claude,
-                        AIModels.Provider.grok,
-                        AIModels.Provider.gemini
-                    ]
-                    
-                    ForEach(providers, id: \.self) { provider in
-                        if let models = allModels[provider], !models.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(provider)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textCase(.uppercase)
-                                
-                                ForEach(models, id: \.self) { model in
-                                    HStack {
-                                        Toggle(isOn: Binding(
-                                            get: { selectedModels.contains(model) },
-                                            set: { isSelected in
-                                                if isSelected {
-                                                    selectedModels.insert(model)
-                                                } else {
-                                                    selectedModels.remove(model)
-                                                }
-                                            }
-                                        )) {
-                                            // Display raw model name for better distinction
-                                            Text(model)
-                                                .font(.system(.body))
-                                        }
-                                        .toggleStyle(CheckboxToggleStyle())
-                                    }
-                                }
-                            }
-                            .padding(.bottom, 8)
-                        }
+    private var votingSchemeSection: some View {
+        GroupBox("Voting Method") {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("Voting Scheme", selection: $selectedVotingScheme) {
+                    ForEach(VotingScheme.allCases, id: \.self) { scheme in
+                        Text(scheme.rawValue)
+                            .tag(scheme)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .pickerStyle(SegmentedPickerStyle())
+                
+                Text(selectedVotingScheme.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .frame(maxHeight: 200)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    
+    private var modelSelectionSection: some View {
+        GroupBox("Select Models") {
+            ModelCheckboxListView(
+                selectedModels: $selectedModels,
+                sanitizeModelNames: false  // Keep raw model names for better distinction
+            )
+            .environmentObject(modelService)
         }
     }
     
@@ -139,7 +121,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     }
     
     private var resultsSection: some View {
-        GroupBox("Vote Tally") {
+        GroupBox(selectedVotingScheme == .firstPastThePost ? "Vote Tally" : "Score Tally") {
             if let jobApp = jobAppStore.selectedApp {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(jobApp.coverLetters.sorted(by: { $0.sequencedName < $1.sequencedName }), id: \.id) { letter in
@@ -147,9 +129,29 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                             Text(letter.sequencedName)
                                 .fontWeight(getWinningLetter()?.id == letter.id ? .bold : .regular)
                             Spacer()
-                            Text("\(voteTally[letter.id] ?? 0) votes")
-                                .foregroundColor(getWinningLetter()?.id == letter.id ? .green : .primary)
+                            if selectedVotingScheme == .firstPastThePost {
+                                Text("\(voteTally[letter.id] ?? 0) votes")
+                                    .foregroundColor(getWinningLetter()?.id == letter.id ? .green : .primary)
+                            } else {
+                                Text("\(scoreTally[letter.id] ?? 0) points")
+                                    .foregroundColor(getWinningLetter()?.id == letter.id ? .green : .primary)
+                            }
                         }
+                    }
+                    
+                    // Delete 0-vote letters button
+                    if hasZeroVoteLetters() {
+                        Divider()
+                            .padding(.vertical, 4)
+                        
+                        Button(action: deleteZeroVoteLetters) {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Delete letters with 0 \(selectedVotingScheme == .firstPastThePost ? "votes" : "points")")
+                            }
+                            .foregroundColor(.red)
+                        }
+                        .buttonStyle(.bordered)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -184,9 +186,25 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                                     .fontWeight(.semibold)
                                     .foregroundColor(.secondary)
                                 
-                                Text("Selected: \(getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown")")
-                                    .font(.caption)
-                                    .fontWeight(.medium)
+                                if selectedVotingScheme == .firstPastThePost {
+                                    Text("Selected: \(getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown")")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                } else if let scoreAllocations = reasoning.response.scoreAllocations {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Score Allocations:")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                        ForEach(scoreAllocations, id: \.letterUuid) { allocation in
+                                            HStack {
+                                                Text("\(getLetterName(for: allocation.letterUuid) ?? "Unknown"):")
+                                                Text("\(allocation.score) pts")
+                                                    .fontWeight(.semibold)
+                                            }
+                                            .font(.caption2)
+                                        }
+                                    }
+                                }
                                 
                                 // Replace UUIDs with letter names in the verdict text
                                 Text(replaceUUIDsWithLetterNames(in: reasoning.response.verdict))
@@ -289,17 +307,62 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     private func getWinningLetter() -> CoverLetter? {
         guard let jobApp = jobAppStore.selectedApp else { return nil }
         
-        let maxVotes = voteTally.values.max() ?? 0
-        guard maxVotes > 0 else { return nil }
+        if selectedVotingScheme == .firstPastThePost {
+            let maxVotes = voteTally.values.max() ?? 0
+            guard maxVotes > 0 else { return nil }
+            
+            let winningIds = voteTally.filter { $0.value == maxVotes }.map { $0.key }
+            return jobApp.coverLetters.first { winningIds.contains($0.id) }
+        } else {
+            let maxScore = scoreTally.values.max() ?? 0
+            guard maxScore > 0 else { return nil }
+            
+            let winningIds = scoreTally.filter { $0.value == maxScore }.map { $0.key }
+            return jobApp.coverLetters.first { winningIds.contains($0.id) }
+        }
+    }
+    
+    private func hasZeroVoteLetters() -> Bool {
+        guard let jobApp = jobAppStore.selectedApp else { return false }
         
-        let winningIds = voteTally.filter { $0.value == maxVotes }.map { $0.key }
-        return jobApp.coverLetters.first { winningIds.contains($0.id) }
+        return jobApp.coverLetters.contains { letter in
+            if selectedVotingScheme == .firstPastThePost {
+                return (voteTally[letter.id] ?? 0) == 0
+            } else {
+                return (scoreTally[letter.id] ?? 0) == 0
+            }
+        }
+    }
+    
+    private func deleteZeroVoteLetters() {
+        guard let jobApp = jobAppStore.selectedApp else { return }
+        
+        let lettersToDelete = jobApp.coverLetters.filter { letter in
+            if selectedVotingScheme == .firstPastThePost {
+                return (voteTally[letter.id] ?? 0) == 0
+            } else {
+                return (scoreTally[letter.id] ?? 0) == 0
+            }
+        }
+        
+        for letter in lettersToDelete {
+            coverLetterStore.deleteLetter(letter)
+            // Remove from tallies
+            voteTally.removeValue(forKey: letter.id)
+            scoreTally.removeValue(forKey: letter.id)
+        }
+        
+        // If the selected cover letter was deleted, select the winning letter
+        if lettersToDelete.contains(where: { $0.id == jobApp.selectedCover?.id }) {
+            jobApp.selectedCover = getWinningLetter()
+        }
     }
     
     private func performMultiModelSelection() async {
         isProcessing = true
         errorMessage = nil
         voteTally = [:]
+        scoreTally = [:]
         modelReasonings = []
         totalOperations = selectedModels.count
         completedOperations = 0
@@ -313,6 +376,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         
         let writingSamples = coverLetter.writingSamplesString
         
+        let currentVotingScheme = selectedVotingScheme
         await withTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in
             for model in selectedModels {
                 group.addTask {
@@ -325,7 +389,9 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                         
                         // Create a new app state instance for this specific request
                         let tempAppState = AppState()
-                        tempAppState.settings.preferredLLMProvider = modelProvider
+                        await MainActor.run {
+                            tempAppState.settings.preferredLLMProvider = modelProvider
+                        }
                         
                         // Create provider with the specific model
                         let provider = CoverLetterRecommendationProvider(
@@ -336,6 +402,9 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                         
                         // Set the override model to ensure this provider uses the correct model
                         provider.overrideModel = sanitizedModel
+                        
+                        // Set the voting scheme
+                        provider.votingScheme = currentVotingScheme
                         
                         let response = try await provider.fetchBestCoverLetter()
                         
@@ -356,9 +425,27 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                         // Add to reasonings
                         modelReasonings.append((model: model, response: response))
                         
-                        // Update vote tally
-                        if let uuid = UUID(uuidString: response.bestLetterUuid) {
-                            voteTally[uuid, default: 0] += 1
+                        if selectedVotingScheme == .firstPastThePost {
+                            // Update vote tally for FPTP
+                            if let uuid = UUID(uuidString: response.bestLetterUuid) {
+                                voteTally[uuid, default: 0] += 1
+                            }
+                        } else {
+                            // Update score tally for score voting
+                            if let scoreAllocations = response.scoreAllocations {
+                                // Validate that total allocation is exactly 20
+                                let totalAllocated = scoreAllocations.reduce(0) { $0 + $1.score }
+                                if totalAllocated != 20 {
+                                    Logger.debug("⚠️ Model \(model) allocated \(totalAllocated) points instead of 20!")
+                                }
+                                
+                                for allocation in scoreAllocations {
+                                    if let uuid = UUID(uuidString: allocation.letterUuid) {
+                                        scoreTally[uuid, default: 0] += allocation.score
+                                        Logger.debug("📊 Model \(model) allocated \(allocation.score) points to \(getLetterName(for: allocation.letterUuid) ?? allocation.letterUuid)")
+                                    }
+                                }
+                            }
                         }
                         
                     case .failure(let error):
@@ -370,6 +457,30 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         
         await MainActor.run {
             isProcessing = false
+            
+            // Persist vote/score data to cover letters and mark as assessed
+            for letter in jobApp.coverLetters {
+                if selectedVotingScheme == .firstPastThePost {
+                    letter.voteCount = voteTally[letter.id] ?? 0
+                    letter.scoreCount = 0 // Reset score count when doing FPTP
+                } else {
+                    letter.scoreCount = scoreTally[letter.id] ?? 0
+                    letter.voteCount = 0 // Reset vote count when doing score voting
+                }
+                letter.hasBeenAssessed = true
+            }
+            
+            // Log final tallies for debugging
+            if selectedVotingScheme == .scoreVoting {
+                Logger.debug("📊 Final Score Tally:")
+                for (letterId, score) in scoreTally {
+                    if let letter = jobApp.coverLetters.first(where: { $0.id == letterId }) {
+                        Logger.debug("  - \(letter.sequencedName): \(score) points")
+                    }
+                }
+                let totalPoints = scoreTally.values.reduce(0, +)
+                Logger.debug("  Total points allocated: \(totalPoints) (should be \(selectedModels.count * 20))")
+            }
             
             // Generate summary of reasonings if we have any
             if !modelReasonings.isEmpty {
@@ -396,7 +507,13 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         
         // Build the prompt for summary generation
         var summaryPrompt = "You are analyzing the reasoning from multiple AI models that evaluated cover letters for a \(jobApp.jobPosition) position at \(jobApp.companyName). "
-        summaryPrompt += "Each model voted for their preferred cover letter and provided reasoning. "
+        
+        if selectedVotingScheme == .firstPastThePost {
+            summaryPrompt += "Each model voted for their single preferred cover letter using a first-past-the-post voting system. "
+        } else {
+            summaryPrompt += "Each model allocated 20 points among all cover letters using a score voting system. "
+        }
+        
         summaryPrompt += "Please provide a comprehensive summary that:\n"
         summaryPrompt += "1. Identifies key themes and criteria the models used\n"
         summaryPrompt += "2. Highlights areas of agreement and disagreement\n"
@@ -407,16 +524,37 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         // Add all model reasonings with their votes
         for reasoning in modelReasonings {
             let letterName = getLetterName(for: reasoning.response.bestLetterUuid) ?? "Unknown Letter"
-            summaryPrompt += "**\(reasoning.model)** voted for '\(letterName)':\n"
+            
+            if selectedVotingScheme == .firstPastThePost {
+                summaryPrompt += "**\(reasoning.model)** voted for '\(letterName)':\n"
+            } else {
+                summaryPrompt += "**\(reasoning.model)** score allocations:\n"
+                if let scoreAllocations = reasoning.response.scoreAllocations {
+                    for allocation in scoreAllocations {
+                        if let letter = jobApp.coverLetters.first(where: { $0.id.uuidString == allocation.letterUuid }) {
+                            summaryPrompt += "- \(letter.sequencedName): \(allocation.score) points\n"
+                        }
+                    }
+                }
+            }
             // Replace UUIDs in verdict before adding to summary prompt
             summaryPrompt += "\(replaceUUIDsWithLetterNames(in: reasoning.response.verdict))\n\n"
         }
         
-        // Add vote tally
-        summaryPrompt += "Final vote tally:\n"
-        for (letterId, votes) in voteTally {
-            if let letter = jobApp.coverLetters.first(where: { $0.id == letterId }) {
-                summaryPrompt += "- \(letter.sequencedName): \(votes) vote(s)\n"
+        // Add final tally
+        if selectedVotingScheme == .firstPastThePost {
+            summaryPrompt += "Final vote tally:\n"
+            for (letterId, votes) in voteTally {
+                if let letter = jobApp.coverLetters.first(where: { $0.id == letterId }) {
+                    summaryPrompt += "- \(letter.sequencedName): \(votes) vote(s)\n"
+                }
+            }
+        } else {
+            summaryPrompt += "Final score tally:\n"
+            for (letterId, score) in scoreTally {
+                if let letter = jobApp.coverLetters.first(where: { $0.id == letterId }) {
+                    summaryPrompt += "- \(letter.sequencedName): \(score) points\n"
+                }
             }
         }
         

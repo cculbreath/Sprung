@@ -138,7 +138,7 @@ class OpenAITTSProvider {
         } else {
             // Create a client through the factory
             Logger.debug("🔑 Creating TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")
-            let config = LLMProviderConfig.forOpenAI(apiKey: apiKey)
+            _ = LLMProviderConfig.forOpenAI(apiKey: apiKey)
             let appState = AppState() // Create a new AppState instance
             let client = AppLLMClientFactory.createClient(for: AIModels.Provider.openai, appState: appState)
             

@@ -112,7 +112,8 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
         if query.messages.isEmpty {
             Logger.error("⚠️ Query messages array is empty!")
         }
-        let swiftMessages = MessageConverter.swiftOpenAIMessagesFrom(appMessages: query.messages)
+        
+        var swiftMessages = MessageConverter.swiftOpenAIMessagesFrom(appMessages: query.messages)
         Logger.debug("🔄 Converted to \(swiftMessages.count) SwiftOpenAI messages")
         
         // Use the config model if specified, otherwise use the query model
@@ -120,6 +121,13 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
         
         // CRITICAL FIX: Validate model and provider compatibility
         validateModelProviderCompatibility(modelId: modelId, providerType: config.providerType)
+        
+        // Special handling for o1 models which don't support system messages
+        let isO1Model = isReasoningModel(modelId)
+        if isO1Model {
+            Logger.debug("🧠 Detected o1 reasoning model: \(modelId) - applying special handling")
+            swiftMessages = handleO1ModelMessages(swiftMessages, desiredResponseType: query.desiredResponseType)
+        }
         
         // Create model from identifier
         let model = SwiftOpenAI.Model.from(modelId)
@@ -133,13 +141,19 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
             jsonSchema: query.jsonSchema
         )
         
-        // Build chat completion parameters
+        // Build chat completion parameters with conditional temperature for o1 models
+        let temperatureValue = isO1Model ? nil : query.temperature
+        if isO1Model && query.temperature != nil {
+            Logger.debug("🧠 Excluding temperature parameter for o1 model (not supported)")
+        }
+        
         var parameters = ChatCompletionParameters(
             messages: swiftMessages,
             model: model,
             responseFormat: swiftResponseFormat,
-            temperature: query.temperature
+            temperature: temperatureValue
         )
+        
         
         // For reasoning models, apply appropriate reasoning effort parameters
         // Different models support different reasoning parameters
@@ -147,23 +161,25 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
         
         // Only apply reasoning_effort to models that support it
         // This is a critical fix to prevent 400 errors
-        if idLower.contains("o3") {
+        if !isO1Model && idLower.contains("o3") {
             // OpenAI 'o3' models support reasoning_effort
             parameters.reasoningEffort = "medium"
         } else if idLower.contains("grok-3-mini") {
             // Grok-3-mini supports reasoning with high effort
             parameters.reasoningEffort = "high"
-        } else if idLower.contains("gemini") {
-            // Gemini models (especially 2.5 and newer) support reasoning
+        } else if idLower.contains("gemini") && !idLower.contains("pro") {
+            // Gemini models support reasoning_effort, but NOT the "pro" variants
             parameters.reasoningEffort = "medium"
         }
         // Do NOT apply reasoning_effort to:
+        // - o1 and o1-mini models (they handle reasoning automatically)
         // - o4 models (they don't support it yet)
         // - gpt-4.1, gpt-4o models
         // - claude models
+        // - gemini "pro" models (they don't support this parameter)
         
-        // Special treatment for structured outputs with newer models
-        if query.desiredResponseType != nil && (idLower.contains("gpt-4") || idLower.contains("o4") || idLower.contains("o1")) {
+        // Special treatment for structured outputs with newer models (but not o1 models which handle this differently)
+        if !isO1Model && query.desiredResponseType != nil && (idLower.contains("gpt-4") || idLower.contains("o4")) {
             // Enhance system message to enforce JSON output format if possible
             if let firstMessage = swiftMessages.first, 
                let roleString = String(describing: firstMessage.role).components(separatedBy: ".").last,
@@ -195,6 +211,142 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
         return parameters
     }
     
+    /// Determines if a model is an o1-series reasoning model that has special requirements
+    /// - Parameter modelId: The model identifier to check
+    /// - Returns: True if this is an o1 or o1-mini model
+    private func isReasoningModel(_ modelId: String) -> Bool {
+        let modelLower = modelId.lowercased()
+        return modelLower.contains("o1") && !modelLower.contains("o3") && !modelLower.contains("o4")
+    }
+    
+    /// Handles message conversion for o1 models which don't support system messages
+    /// - Parameters:
+    ///   - messages: Original SwiftOpenAI messages
+    ///   - desiredResponseType: The desired response type for structured output (if any)
+    /// - Returns: Modified messages with system content moved to user messages
+    private func handleO1ModelMessages(_ messages: [ChatCompletionParameters.Message], desiredResponseType: Any.Type?) -> [ChatCompletionParameters.Message] {
+        guard !messages.isEmpty else { return messages }
+        
+        var modifiedMessages: [ChatCompletionParameters.Message] = []
+        var systemContent: String = ""
+        
+        // Extract all system messages and collect their content
+        for message in messages {
+            let roleString = String(describing: message.role)
+            if roleString.hasSuffix(".system") {
+                // Extract text content from system message
+                if case let .text(text) = message.content {
+                    if !systemContent.isEmpty {
+                        systemContent += "\n\n"
+                    }
+                    systemContent += text
+                }
+            } else {
+                modifiedMessages.append(message)
+            }
+        }
+        
+        // If we found system content, prepend it to the first user message
+        if !systemContent.isEmpty && !modifiedMessages.isEmpty {
+            // Find the first user message
+            for (index, message) in modifiedMessages.enumerated() {
+                let roleString = String(describing: message.role)
+                if roleString.hasSuffix(".user") {
+                    // Extract existing user content
+                    var existingContent = ""
+                    if case let .text(text) = message.content {
+                        existingContent = text
+                    } else if case let .contentArray(contents) = message.content {
+                        // For multimodal messages, extract text parts
+                        let textParts = contents.compactMap { content in
+                            if case let .text(text) = content {
+                                return text
+                            }
+                            return nil
+                        }
+                        existingContent = textParts.joined(separator: "\n")
+                    }
+                    
+                    // Create new content with system instructions prepended
+                    var newContent = systemContent
+                    
+                    // Add structured output instructions if needed
+                    if let responseType = desiredResponseType {
+                        let typeName = String(describing: responseType).components(separatedBy: ".").last ?? "Object"
+                        let structuredInstructions = "\n\nIMPORTANT: Your response MUST be valid JSON conforming to the \(typeName) schema. Output ONLY the JSON object with no additional text, comments, or explanation."
+                        newContent += structuredInstructions
+                    }
+                    
+                    // Add existing user content if any
+                    if !existingContent.isEmpty {
+                        newContent += "\n\n" + existingContent
+                    }
+                    
+                    // Create new message with combined content
+                    modifiedMessages[index] = ChatCompletionParameters.Message(
+                        role: .user,
+                        content: .text(newContent)
+                    )
+                    
+                    Logger.debug("🔄 Moved system message content to first user message for o1 model")
+                    break
+                }
+            }
+            
+            // If no user message was found, create one with the system content
+            if modifiedMessages.allSatisfy({ message in
+                let roleString = String(describing: message.role)
+                return !roleString.hasSuffix(".user")
+            }) {
+                var userContent = systemContent
+                
+                // Add structured output instructions if needed
+                if let responseType = desiredResponseType {
+                    let typeName = String(describing: responseType).components(separatedBy: ".").last ?? "Object"
+                    let structuredInstructions = "\n\nIMPORTANT: Your response MUST be valid JSON conforming to the \(typeName) schema. Output ONLY the JSON object with no additional text, comments, or explanation."
+                    userContent += structuredInstructions
+                }
+                
+                let userMessage = ChatCompletionParameters.Message(
+                    role: .user,
+                    content: .text(userContent)
+                )
+                modifiedMessages.insert(userMessage, at: 0)
+                Logger.debug("🔄 Created new user message with system content for o1 model")
+            }
+        }
+        
+        // If no system content but we need structured output, add instructions to first user message
+        if systemContent.isEmpty && desiredResponseType != nil && !modifiedMessages.isEmpty {
+            for (index, message) in modifiedMessages.enumerated() {
+                let roleString = String(describing: message.role)
+                if roleString.hasSuffix(".user") {
+                    // Extract existing user content
+                    var existingContent = ""
+                    if case let .text(text) = message.content {
+                        existingContent = text
+                    }
+                    
+                    // Add structured output instructions
+                    let typeName = String(describing: desiredResponseType!).components(separatedBy: ".").last ?? "Object"
+                    let structuredInstructions = "IMPORTANT: Your response MUST be valid JSON conforming to the \(typeName) schema. Output ONLY the JSON object with no additional text, comments, or explanation."
+                    
+                    let newContent = structuredInstructions + (existingContent.isEmpty ? "" : "\n\n" + existingContent)
+                    
+                    modifiedMessages[index] = ChatCompletionParameters.Message(
+                        role: .user,
+                        content: .text(newContent)
+                    )
+                    
+                    Logger.debug("🔄 Added structured output instructions to first user message for o1 model")
+                    break
+                }
+            }
+        }
+        
+        return modifiedMessages
+    }
+    
     /// Validates that the model and provider are compatible
     /// - Parameters:
     ///   - modelId: The model identifier
@@ -206,7 +358,7 @@ class BaseSwiftOpenAIAdapter: AppLLMClientProtocol {
         // Check model name to determine expected provider
         if modelLower.contains("claude") {
             expectedProvider = AIModels.Provider.claude
-        } else if modelLower.contains("gpt") || modelLower.contains("o3") || modelLower.contains("o4") {
+        } else if modelLower.contains("gpt") || modelLower.contains("o1") || modelLower.contains("o3") || modelLower.contains("o4") {
             expectedProvider = AIModels.Provider.openai
         } else if modelLower.contains("grok") {
             expectedProvider = AIModels.Provider.grok

@@ -78,11 +78,6 @@ struct ResumeDetailView: View {
     
     /// Safely gets a TreeNode property, returning nil if the node data is corrupted
     private func safeGetNodeProperty<T>(_ getter: () -> T) -> T? {
-        do {
-            return getter()
-        } catch {
-            Logger.warning("⚠️ TreeNode data access failed: \(error)")
-            return nil
-        }
+        return getter()
     }
 }

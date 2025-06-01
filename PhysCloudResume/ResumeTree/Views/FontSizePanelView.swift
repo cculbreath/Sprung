@@ -29,7 +29,7 @@ struct FontSizePanelView: View {
                 // Safely access fontSizeNodes to avoid CoreData faulting issues
                 if let resume = jobAppStore.selectedApp?.selectedRes {
                     // Try to access fontSizeNodes with error handling
-                    let nodes = (try? resume.fontSizeNodes.sorted { $0.index < $1.index }) ?? []
+                    let nodes = resume.fontSizeNodes.sorted { $0.index < $1.index }
                     ForEach(nodes, id: \.id) { node in
                         FontNodeView(node: node)
                     }

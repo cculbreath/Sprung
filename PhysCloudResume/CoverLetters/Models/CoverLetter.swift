@@ -1,6 +1,13 @@
 import Foundation
 import SwiftData
 
+/// Assessment data for multi-model cover letter evaluation
+struct AssessmentData: Codable {
+    var voteCount: Int = 0
+    var scoreCount: Int = 0
+    var hasBeenAssessed: Bool = false
+}
+
 @Model
 class CoverLetter: Identifiable, Hashable {
     var jobApp: JobApp? = nil
@@ -29,6 +36,9 @@ class CoverLetter: Identifiable, Hashable {
     var encodedMessageHistory: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none
     var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zissner
+    
+    /// Multi-model assessment data (stored as encoded data to avoid schema changes)
+    var encodedAssessmentData: Data? // Stores AssessmentData as JSON
     var modDate: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -65,6 +75,55 @@ class CoverLetter: Identifiable, Hashable {
             } catch {
                 Logger.debug("Failed to encode messageHistory: \(error.localizedDescription)")
             }
+        }
+    }
+    
+    /// Multi-model assessment data computed properties
+    var assessmentData: AssessmentData {
+        get {
+            guard let data = encodedAssessmentData else {
+                return AssessmentData()
+            }
+            do {
+                return try JSONDecoder().decode(AssessmentData.self, from: data)
+            } catch {
+                Logger.debug("Failed to decode assessmentData: \(error.localizedDescription)")
+                return AssessmentData()
+            }
+        }
+        set {
+            do {
+                encodedAssessmentData = try JSONEncoder().encode(newValue)
+            } catch {
+                Logger.debug("Failed to encode assessmentData: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    var voteCount: Int {
+        get { assessmentData.voteCount }
+        set { 
+            var data = assessmentData
+            data.voteCount = newValue
+            assessmentData = data
+        }
+    }
+    
+    var scoreCount: Int {
+        get { assessmentData.scoreCount }
+        set { 
+            var data = assessmentData
+            data.scoreCount = newValue
+            assessmentData = data
+        }
+    }
+    
+    var hasBeenAssessed: Bool {
+        get { assessmentData.hasBeenAssessed }
+        set { 
+            var data = assessmentData
+            data.hasBeenAssessed = newValue
+            assessmentData = data
         }
     }
 
@@ -149,26 +208,18 @@ class CoverLetter: Identifiable, Hashable {
         guard let jobApp = jobApp else { return "A" }
 
         // Get all used option letters, including from deleted letters
-        let usedLetters = jobApp.coverLetters.compactMap { letter -> String in
+        let usedLetters = Set(jobApp.coverLetters.compactMap { letter -> String in
             return letter.optionLetter
-        }.filter { !$0.isEmpty }
+        }.filter { !$0.isEmpty })
 
-        // Start with 'A'
-        let alphabetStart = Character("A").asciiValue ?? 65
-        var letterValue: UInt8 = alphabetStart
-
-        // Find the first unused letter
+        // Start with position 1 (A) and increment until we find an unused letter
+        var position = 1
         while true {
-            let currentLetter = String(Character(UnicodeScalar(letterValue)))
+            let currentLetter = CoverLetter.letterLabel(for: position)
             if !usedLetters.contains(currentLetter) {
                 return currentLetter
             }
-            letterValue += 1
-
-            // Extremely unlikely, but in case we run past Z, start with AA
-            if letterValue > Character("Z").asciiValue ?? 90 {
-                return "AA"
-            }
+            position += 1
         }
     }
 

@@ -60,8 +60,22 @@ struct AiCommsView: View {
     var body: some View {
         execQuery
             .onAppear {
-                // Update chatProvider with actual appState
-                chatProvider = ResumeChatProvider(appState: appState)
+                // Only update chatProvider if we don't have one with proper appState
+                // This prevents unnecessary recreation that could trigger empty state
+                if chatProvider.appState == nil {
+                    Logger.debug("Updating chatProvider with appState on appear")
+                    let currentMessages = chatProvider.genericMessages
+                    let currentRevArray = chatProvider.lastRevNodeArray
+                    chatProvider = ResumeChatProvider(appState: appState)
+                    
+                    // Restore state if we had any
+                    if !currentMessages.isEmpty {
+                        chatProvider.genericMessages = currentMessages
+                    }
+                    if !currentRevArray.isEmpty {
+                        chatProvider.lastRevNodeArray = currentRevArray
+                    }
+                }
             }
             .sheet(isPresented: $sheetOn) {} content: {
                 if sheetOn {
@@ -98,6 +112,13 @@ struct AiCommsView: View {
             }
             .onChange(of: chatProvider.lastRevNodeArray) { _, newValue in
                 Logger.debug("\nReceived \(newValue.count) revision nodes from AI")
+                
+                // Ignore empty arrays when not loading to prevent race conditions
+                // This happens when a new chatProvider is created and resets to empty array
+                if newValue.isEmpty && !isLoading {
+                    Logger.debug("Ignoring empty revision array when not loading (likely from provider reset)")
+                    return
+                }
 
                 // Create a mutable copy of the array that we can filter
                 var processedRevisions = newValue
@@ -139,11 +160,11 @@ struct AiCommsView: View {
                 // Reset arrays - IMPORTANT: this prevents accumulation of nodes
                 fbnodes = []
 
-                sheetOn = true
-                revisions = validatedRevisions
-                
-                // Check if revisions array is not empty before accessing the first element
-                if !revisions.isEmpty {
+                // Only show the sheet if we have valid revisions
+                // This prevents showing empty state when ResumeChatProvider is recreated
+                if !validatedRevisions.isEmpty {
+                    sheetOn = true
+                    revisions = validatedRevisions
                     currentRevNode = revisions[0]
                     currentFeedbackNode = FeedbackNode(
                         id: currentRevNode!.id,
@@ -155,9 +176,12 @@ struct AiCommsView: View {
                     )
                 } else {
                     // Handle the case when no revisions are available
+                    // Don't show the sheet for empty revisions
+                    sheetOn = false
+                    revisions = []
                     currentRevNode = nil
                     currentFeedbackNode = nil
-                    Logger.debug("No valid revision nodes available")
+                    Logger.debug("No valid revision nodes available - not showing review sheet")
                 }
                 aiResub = false
                 fbnodes = []
@@ -282,20 +306,50 @@ struct AiCommsView: View {
 
             // First pass: validate and update existing revisions
             for (index, item) in validRevs.enumerated() {
-                // Check by ID first
-                if let matchedNode = updateNodes.first(where: { $0["id"] as? String == item.id }) {
-                    // If we have a match but empty oldValue, populate it based on isTitleNode
-                    if validRevs[index].oldValue.isEmpty {
-                        // For title nodes, use the name property
-                        let isTitleNode = matchedNode["isTitleNode"] as? Bool ?? false
-                        if isTitleNode {
-                            validRevs[index].oldValue = matchedNode["name"] as? String ?? ""
-                        } else {
-                            validRevs[index].oldValue = matchedNode["value"] as? String ?? ""
+                // Check by ID first - but handle case where same ID has both title and value entries
+                let nodesWithSameId = updateNodes.filter { $0["id"] as? String == item.id }
+                
+                if !nodesWithSameId.isEmpty {
+                    var matchedNode: [String: Any]?
+                    
+                    // If there are multiple nodes with the same ID, try to match by content
+                    if nodesWithSameId.count > 1 {
+                        // Try to match by the oldValue in the AI response
+                        if !item.oldValue.isEmpty {
+                            matchedNode = nodesWithSameId.first { node in
+                                let nodeValue = node["value"] as? String ?? ""
+                                let nodeName = node["name"] as? String ?? ""
+                                return nodeValue == item.oldValue || nodeName == item.oldValue
+                            }
                         }
-                        validRevs[index].isTitleNode = isTitleNode
+                        
+                        // If no content match, prefer title nodes for ambiguous matches
+                        if matchedNode == nil {
+                            matchedNode = nodesWithSameId.first { node in
+                                node["isTitleNode"] as? Bool == true
+                            } ?? nodesWithSameId.first
+                        }
+                    } else {
+                        matchedNode = nodesWithSameId.first
                     }
-                    continue
+                    
+                    if let matchedNode = matchedNode {
+                        // If we have a match but empty oldValue, populate it based on isTitleNode
+                        if validRevs[index].oldValue.isEmpty {
+                            // For title nodes, use the name property
+                            let isTitleNode = matchedNode["isTitleNode"] as? Bool ?? false
+                            if isTitleNode {
+                                validRevs[index].oldValue = matchedNode["name"] as? String ?? ""
+                            } else {
+                                validRevs[index].oldValue = matchedNode["value"] as? String ?? ""
+                            }
+                            validRevs[index].isTitleNode = isTitleNode
+                        } else {
+                            // Even if oldValue is not empty, ensure isTitleNode is set correctly
+                            validRevs[index].isTitleNode = matchedNode["isTitleNode"] as? Bool ?? false
+                        }
+                        continue
+                    }
                 } else if let matchedByValue = updateNodes.first(where: { $0["value"] as? String == item.oldValue }), let id = matchedByValue["id"] as? String {
                     // Update revision's ID if matched by value
                     validRevs[index].id = id
@@ -368,7 +422,7 @@ struct AiCommsView: View {
                 // Process answers and get revisions
                 // Note: The conversation context was already cleared when the button was clicked,
                 // so this continues with the fresh conversation that includes the clarifying questions
-                let revisionsContainer = try await chatProvider.processAnswersAndGenerateRevisions(
+                _ = try await chatProvider.processAnswersAndGenerateRevisions(
                     answers: answers,
                     resumeQuery: q
                 )
@@ -405,8 +459,14 @@ struct AiCommsView: View {
                         myRes.clearConversationContext()
                     }
                     
-                    // Also clear the chat provider's conversation history to ensure clean start
-                    chatProvider.conversationHistory = []
+                    // Reset the chat provider completely for a fresh start
+                    chatProvider.resetForNewConversation()
+                    
+                    // Clear UI state to prevent stale data issues
+                    revisions = []
+                    currentRevNode = nil
+                    currentFeedbackNode = nil
+                    fbnodes = []
                     
                     // Check if we're in clarifying questions mode
                     if q.queryMode == .withClarifyingQuestions && !isWaitingForAnswers {
@@ -472,7 +532,7 @@ struct AiCommsView: View {
                 let modelString = OpenAIModelFetcher.getPreferredModelString()
                 
                 // Get API key
-                let openAiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
+                _ = UserDefaults.standard.string(forKey: "openAiApiKey") ?? "none"
                 
                 // Important check: Verify that we actually have messages to send
                 if chatProvider.genericMessages.isEmpty {
@@ -508,9 +568,24 @@ struct AiCommsView: View {
                     Logger.debug("Switching to \(providerType) client for model: \(modelString)")
                     let newClient = AppLLMClientFactory.createClientForModel(model: modelString, appState: appState)
                     let messages = chatProvider.genericMessages
+                    
+                    // Clear the previous revision state before creating new provider
+                    // This prevents the onChange handler from triggering with stale empty data
+                    let oldRevArray = chatProvider.lastRevNodeArray
+                    
                     chatProvider = ResumeChatProvider(client: newClient)
                     chatProvider.genericMessages = messages
                     chatProvider.lastModelUsed = modelString
+                    
+                    // If we had previous revision data and this is a new conversation,
+                    // ensure UI state is properly reset
+                    if !hasRevisions && !oldRevArray.isEmpty {
+                        Logger.debug("Clearing previous revision state for new conversation")
+                        revisions = []
+                        currentRevNode = nil
+                        currentFeedbackNode = nil
+                        fbnodes = []
+                    }
                 }
                 
                 // Execute the API call with our new Responses API method

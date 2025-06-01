@@ -48,7 +48,7 @@ struct AiFunctionView: View {
 
         // Initialize LLM client based on the preferred model
         let preferredModel = OpenAIModelFetcher.getPreferredModelString()
-        let provider = AIModels.providerForModel(preferredModel)
+        _ = AIModels.providerForModel(preferredModel)
         _llmClient = State(initialValue: AppLLMClientFactory.createClientForModel(
             model: preferredModel,
             appState: AppState()

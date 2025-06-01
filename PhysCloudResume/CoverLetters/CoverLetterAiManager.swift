@@ -429,10 +429,10 @@ struct CoverLetterAiManager: View {
                         Selected "\(best.sequencedName)" as best cover letter.
 
                         Analysis:
-                        \(result.strengthAndVoiceAnalysis)
+                        \(replaceUUIDsWithLetterNames(in: result.strengthAndVoiceAnalysis, for: jobApp))
 
                         Reason:
-                        \(result.verdict)
+                        \(replaceUUIDsWithLetterNames(in: result.verdict, for: jobApp))
                         """
                         errorWrapper = ErrorMessageWrapper(message: message)
                         Logger.debug("[CoverLetterAiManager] Best letter selected: \(best.sequencedName)")
@@ -454,5 +454,20 @@ struct CoverLetterAiManager: View {
                 }
             }
         }
+    }
+    
+    /// Replaces all UUID references in text with their corresponding letter names
+    private func replaceUUIDsWithLetterNames(in text: String, for jobApp: JobApp) -> String {
+        var result = text
+        
+        // Replace each cover letter's UUID with its name
+        for letter in jobApp.coverLetters {
+            let uuidString = letter.id.uuidString
+            if result.contains(uuidString) {
+                result = result.replacingOccurrences(of: uuidString, with: letter.sequencedName)
+            }
+        }
+        
+        return result
     }
 }

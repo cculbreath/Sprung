@@ -24,25 +24,6 @@ struct CoverLetterView: View {
                     .environment(coverLetterStore)
                     .environmentObject(ModelService.shared)
             }
-            .toolbar {
-                ToolbarItemGroup(placement: .automatic) {
-                    CoverLetterAiViewProvider.shared.getView(buttons: $buttons, refresh: .constant(false))
-                    
-                    Button(action: {
-                        buttons.showBatchGeneration = true
-                    }) {
-                        Label("Batch Generate", systemImage: "square.stack.3d.up.fill")
-                    }
-                    .help("Generate cover letters with multiple models")
-
-                    Button(action: {
-                        buttons.showInspector.toggle()
-                    }) {
-                        Label("Toggle Inspector", systemImage: "sidebar.right")
-                    }
-                    .help("Toggle Inspector Panel")
-                }
-            }
     }
 
     @ViewBuilder
@@ -115,7 +96,7 @@ struct CoverLetterContentView: View {
                 // Picker, delete and edit controls
                 HStack {
                     CoverLetterPicker(
-                        coverLetters: bindApp.coverLetters.sorted(by: { $0.moddedDate < $1.moddedDate }),
+                        coverLetters: bindApp.coverLetters,
                         selection: $bindApp.selectedCover,
                         includeNoneOption: false,
                         label: ""

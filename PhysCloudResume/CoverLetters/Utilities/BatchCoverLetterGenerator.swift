@@ -57,7 +57,7 @@ class BatchCoverLetterGenerator {
         await withTaskGroup(of: GenerationResult.self) { group in
             // First, generate base cover letters for each model
             for model in models {
-                group.addTask { [weak self] in
+                group.addTask { @MainActor [weak self] in
                     guard let self = self else { 
                         return GenerationResult(success: false, error: "Self was deallocated")
                     }
@@ -156,7 +156,7 @@ class BatchCoverLetterGenerator {
             for letter in existingLetters {
                 // For each revision type
                 for revision in revisions {
-                    group.addTask { [weak self] in
+                    group.addTask { @MainActor [weak self] in
                         guard let self = self else { 
                             return GenerationResult(success: false, error: "Self was deallocated")
                         }
@@ -198,6 +198,7 @@ class BatchCoverLetterGenerator {
     }
     
     /// Generates a single cover letter with specified model
+    @MainActor
     private func generateSingleCoverLetter(
         baseCoverLetter: CoverLetter,
         resume: Resume,
@@ -225,8 +226,8 @@ class BatchCoverLetterGenerator {
         // Set up mode
         let mode: CoverAiMode = revision != nil ? .rewrite : .generate
         
-        // Prepare messages using the base letter's data
-        let systemMessage = buildSystemMessage(for: model)
+        // Check if this is an o1 model that doesn't support system messages
+        let isO1Model = isReasoningModel(model)
         
         // Create a temporary letter object just for prompt generation (not persisted)
         let tempLetter = CoverLetter(
@@ -244,8 +245,21 @@ class BatchCoverLetterGenerator {
             mode: mode
         )
         
-        // Initialize conversation
-        _ = provider.initializeConversation(systemPrompt: systemMessage, userPrompt: userMessage)
+        // Initialize conversation differently for o1 models
+        if isO1Model {
+            // For o1 models, manually build conversation history without system message
+            let systemMessage = buildSystemMessage(for: model)
+            let combinedMessage = systemMessage + "\n\n" + userMessage
+            
+            // Clear conversation history and add only user message
+            provider.conversationHistory = []
+            provider.conversationHistory.append(AppLLMMessage(role: .user, text: combinedMessage))
+            Logger.debug("🧠 Built conversation history for o1 model without system message: \(model)")
+        } else {
+            // For other models, use normal system/user message separation
+            let systemMessage = buildSystemMessage(for: model)
+            _ = provider.initializeConversation(systemPrompt: systemMessage, userPrompt: userMessage)
+        }
         
         // Create and execute query
         let query = AppLLMQuery(
@@ -320,6 +334,14 @@ class BatchCoverLetterGenerator {
     /// Cleans up any ungenerated draft letters in the store
     func cleanupUngeneratedDrafts() {
         coverLetterStore.deleteUngeneratedDrafts()
+    }
+    
+    /// Determines if a model is an o1-series reasoning model that has special requirements
+    /// - Parameter modelId: The model identifier to check
+    /// - Returns: True if this is an o1 or o1-mini model
+    private func isReasoningModel(_ modelId: String) -> Bool {
+        let modelLower = modelId.lowercased()
+        return modelLower.contains("o1") && !modelLower.contains("o3") && !modelLower.contains("o4")
     }
     
     /// Builds system message with model-specific adjustments

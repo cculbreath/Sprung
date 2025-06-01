@@ -11,6 +11,7 @@ import SwiftUI
 class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var applicantProfileWindow: NSWindow?
+    var appState: AppState?
 
     func applicationDidFinishLaunching(_: Notification) {
         // DEBUG: Remove existing SwiftData SQLite store files to avoid migration errors
@@ -100,13 +101,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func showSettingsWindow() {
         if settingsWindow == nil {
             let settingsView = SettingsView()
+            
+            // Create hosting view with proper environment objects
+            let hostingView: NSHostingView<AnyView>
+            if let appState = self.appState {
+                hostingView = NSHostingView(rootView: AnyView(settingsView
+                    .environment(appState)
+                    .environmentObject(appState.modelService)
+                ))
+            } else {
+                // Fallback if appState is not available
+                hostingView = NSHostingView(rootView: AnyView(settingsView))
+            }
+            
             settingsWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
                 styleMask: [.titled, .closable],
                 backing: .buffered, defer: false
             )
             settingsWindow?.title = "Settings"
-            settingsWindow?.contentView = NSHostingView(rootView: settingsView)
+            settingsWindow?.contentView = hostingView
             settingsWindow?.isReleasedWhenClosed = false
 
             // Center the window on the screen
