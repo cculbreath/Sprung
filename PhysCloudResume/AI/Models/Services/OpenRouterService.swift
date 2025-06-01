@@ -1,5 +1,6 @@
 import Foundation
 import SwiftOpenAI
+import SwiftUI
 import os.log
 import Observation
 

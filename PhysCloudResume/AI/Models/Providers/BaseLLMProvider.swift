@@ -53,8 +53,10 @@ class BaseLLMProvider {
     /// - Parameter appState: The application state
     init(appState: AppState) {
         self.appState = appState
-        if !appState.openRouterApiKey.isEmpty {
-            self.openRouterClient = OpenRouterClientFactory.createClient(apiKey: appState.openRouterApiKey)
+        // Get API key from UserDefaults directly to avoid @AppStorage conflicts
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        if !apiKey.isEmpty {
+            self.openRouterClient = OpenRouterClientFactory.createClient(apiKey: apiKey)
         }
     }
     
@@ -103,9 +105,11 @@ class BaseLLMProvider {
     /// Updates the OpenRouter client if needed
     /// - Parameter appState: The current application state
     func updateClientIfNeeded(appState: AppState) {
+        // Get API key from UserDefaults directly to avoid @AppStorage conflicts
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
         // Only update if we don't have a client or the API key changed
-        if openRouterClient == nil && !appState.openRouterApiKey.isEmpty {
-            self.openRouterClient = OpenRouterClientFactory.createClient(apiKey: appState.openRouterApiKey)
+        if openRouterClient == nil && !apiKey.isEmpty {
+            self.openRouterClient = OpenRouterClientFactory.createClient(apiKey: apiKey)
             self.appState = appState
         }
     }

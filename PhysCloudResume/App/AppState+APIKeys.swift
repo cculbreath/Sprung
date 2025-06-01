@@ -8,26 +8,13 @@
 import Foundation
 
 extension AppState {
-    var openRouterApiKey: String {
-        get { UserDefaults.standard.string(forKey: "openRouterApiKey") ?? "" }
-        set { 
-            UserDefaults.standard.set(newValue, forKey: "openRouterApiKey")
-            Task { @MainActor in
-                openRouterService.configure(apiKey: newValue)
-            }
-        }
-    }
-    
-    var openAiApiKey: String {
-        get { UserDefaults.standard.string(forKey: "openAiApiKey") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "openAiApiKey") }
-    }
-    
     var hasValidOpenRouterKey: Bool {
-        !openRouterApiKey.isEmpty
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        return !apiKey.isEmpty
     }
     
     var hasValidOpenAiKey: Bool {
-        !openAiApiKey.isEmpty
+        let apiKey = UserDefaults.standard.string(forKey: "openAiApiKey") ?? ""
+        return !apiKey.isEmpty
     }
 }

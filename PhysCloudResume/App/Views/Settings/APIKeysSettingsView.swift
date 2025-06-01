@@ -38,6 +38,9 @@ struct APIKeysSettingsView: View {
     
     // Environment
     @Environment(\.appState) private var appState
+    
+    // App Storage for API keys
+    @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
 
     // Action to trigger model fetch when keys change
     var onOpenAIKeyUpdate: () -> Void = {} // Callback
@@ -51,7 +54,7 @@ struct APIKeysSettingsView: View {
             LLMRequestService.shared.updateClientForCurrentModel()
             
             // Fetch OpenRouter models if the OpenRouter API key was changed
-            if !appState.openRouterApiKey.isEmpty {
+            if !openRouterApiKey.isEmpty {
                 Task {
                     await appState.openRouterService.fetchModels()
                 }

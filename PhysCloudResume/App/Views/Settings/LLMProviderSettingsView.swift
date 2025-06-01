@@ -10,8 +10,8 @@ import SwiftUI
 struct LLMProviderSettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var showModelSelectionSheet = false
-    @State private var openRouterApiKey = ""
-    @State private var openAiApiKey = ""
+    @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
+    @AppStorage("openAiApiKey") private var openAiApiKey: String = ""
     
     private var openRouterService: OpenRouterService {
         appState.openRouterService
@@ -50,7 +50,6 @@ struct LLMProviderSettingsView: View {
                 SecureField("OpenRouter API Key", text: $openRouterApiKey)
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: openRouterApiKey) { _, newValue in
-                        appState.openRouterApiKey = newValue
                         if !newValue.isEmpty {
                             Task {
                                 await openRouterService.fetchModels()
@@ -91,9 +90,6 @@ struct LLMProviderSettingsView: View {
                 
                 SecureField("OpenAI API Key", text: $openAiApiKey)
                     .textFieldStyle(.roundedBorder)
-                    .onChange(of: openAiApiKey) { _, newValue in
-                        appState.openAiApiKey = newValue
-                    }
                 
                 Text("Required for text-to-speech functionality")
                     .font(.caption)
@@ -150,10 +146,7 @@ struct LLMProviderSettingsView: View {
             }
         }
         .onAppear {
-            openRouterApiKey = appState.openRouterApiKey
-            openAiApiKey = appState.openAiApiKey
-            
-            if appState.hasValidOpenRouterKey && openRouterService.availableModels.isEmpty {
+            if !openRouterApiKey.isEmpty && openRouterService.availableModels.isEmpty {
                 Task {
                     await openRouterService.fetchModels()
                 }
