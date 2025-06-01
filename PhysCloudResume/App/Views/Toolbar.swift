@@ -21,6 +21,7 @@ func buildToolbar(
 
 struct BuildToolbar: ToolbarContent {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(AppState.self) private var appState: AppState
     // @Environment(ResStore.self) private var resStore: ResStore // Not directly used here
     // @Environment(ResRefStore.self) private var resRefStore: ResRefStore // Not directly used here
 
@@ -32,6 +33,7 @@ struct BuildToolbar: ToolbarContent {
     @Binding var refresh: Bool // Keep this if other parts of the toolbar use it
 
     @State private var showApplicationReviewSheetInToolbar: Bool = false
+    @State private var isUpdatingModel: Bool = false
 
     // AppStorage for API keys to enable/disable model fetching
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
@@ -50,23 +52,51 @@ struct BuildToolbar: ToolbarContent {
     // MARK: - Main Body
 
     var body: some ToolbarContent {
-        Group {
-            // Always include these base items
-            baseToolbarItems
+        // Always include these base items
+        baseToolbarItems
 
-            // Add OpenAI Model Picker here, visible for relevant tabs
-            // This will be the first item on the right due to order of definition for .primaryAction
-            if selectedTab != .listing && openAiApiKey != "none" {
-                ToolbarItemGroup(placement: .primaryAction) { // Changed to .primaryAction
-                    OpenAIModelSettingsView() // Directly embed the view
-                        .frame(minWidth: 150, maxWidth: 250) // Adjust frame for toolbar
+        // Consolidate all trailing items into a single group to ensure proper right-edge positioning
+        if let selApp = jobAppStore.selectedApp {
+            ToolbarItemGroup(placement: .primaryAction) {
+                HStack(spacing: 8) {
+                    // Add Model Picker for non-listing tabs
+                    if selectedTab != .listing {
+                        HStack(spacing: 8) {
+                            ModelPickerView(
+                                selectedModel: .init(
+                                    get: { UserDefaults.standard.string(forKey: "preferredLLMModel") ?? AIModels.gpt4o_latest },
+                                    set: { newValue in 
+                                        isUpdatingModel = true
+                                        UserDefaults.standard.set(newValue, forKey: "preferredLLMModel")
+                                        // Update the LLM client for the new model
+                                        Task { @MainActor in
+                                            LLMRequestService.shared.updateClientForCurrentModel()
+                                            // Add a small delay to show the loading indicator
+                                            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                                            isUpdatingModel = false
+                                        }
+                                    }
+                                ),
+                                showRefreshButton: false,
+                                useModelSelection: true  // Use user's model selection preferences
+                            )
+                            .environmentObject(ModelService.shared)
+                            .environment(appState)
+                            .frame(minWidth: 150, maxWidth: 250)
+                            .disabled(isUpdatingModel)
+                            
+                            // Show loading indicator when updating model
+                            if isUpdatingModel {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .help("Updating model...")
+                            }
+                        }
+                    }
+                    
+                    // Tab-specific content
+                    tabSpecificContentInline(for: selApp)
                 }
-            }
-
-            // Conditionally include content based on app state and tab
-            // These will appear to the right of the Model Picker
-            if let selApp = jobAppStore.selectedApp {
-                tabSpecificContent(for: selApp)
             }
         }
     }
@@ -85,46 +115,53 @@ struct BuildToolbar: ToolbarContent {
     }
 
     // MARK: - Tab-specific Content
-
-    @ToolbarContentBuilder
-    private func tabSpecificContent(for selApp: JobApp) -> some ToolbarContent {
-        // These items will be added after the OpenAIModelSettingsView for relevant tabs
-        listingToolbarItem(for: selApp)
-        resumeToolbarItem(for: selApp)
-        coverLetterToolbarItem(for: selApp)
-        submitAppToolbarItem(for: selApp)
-    }
-
-    @ToolbarContentBuilder
-    private func listingToolbarItem(for _: JobApp) -> some ToolbarContent {
-        if selectedTab == .listing {
-            ToolbarItem(placement: .primaryAction) {
-                Group {
-                    if listingButtons.edit {
-                        saveButton()
-                    } else {
-                        toggleEditButton()
-                    }
-                }
+    
+    @ViewBuilder
+    private func tabSpecificContentInline(for selApp: JobApp) -> some View {
+        // Return appropriate content based on selected tab
+        switch selectedTab {
+        case .listing:
+            if listingButtons.edit {
+                saveButton()
+            } else {
+                toggleEditButton()
             }
+        case .resume:
+            if selApp.hasAnyRes {
+                resumeToolbarContent(
+                    buttons: $resumeButtons,
+                    selectedResume: selectedResumeBinding
+                )
+            }
+        case .coverLetter:
+            coverLetterToolbarContent(buttons: $letterButtons)
+        case .submitApp:
+            applicationReviewButton(for: selApp)
+        case .none:
+            EmptyView()
         }
     }
 
-    @ToolbarContentBuilder
-    private func resumeToolbarItem(for selApp: JobApp) -> some ToolbarContent {
-        if selectedTab == .resume {
-            ToolbarItem(placement: .primaryAction) {
-                Group {
-                    if selApp.hasAnyRes {
-                        resumeToolbarContent(
-                            buttons: $resumeButtons,
-                            selectedResume: selectedResumeBinding
-                        )
-                    } else {
-                        EmptyView()
-                    }
-                }
+    // This function builds the content for the cover letter tab's toolbar item group
+    func coverLetterToolbarContent(buttons: Binding<CoverLetterButtons>) -> some View {
+        HStack(spacing: 8) {
+            // Get the existing view from our provider - this avoids creating it during rendering
+            CoverLetterAiViewProvider.shared.getView(buttons: buttons, refresh: .constant(false))
+            
+            // Batch generation button
+            Button(action: {
+                buttons.wrappedValue.showBatchGeneration = true
+            }) {
+                Label("Batch Generate", systemImage: "square.stack.3d.up.fill")
             }
+            .help("Generate cover letters with multiple models")
+
+            Button(action: {
+                buttons.wrappedValue.showInspector.toggle()
+            }) {
+                Label("Toggle Inspector", systemImage: "sidebar.right")
+            }
+            .help("Toggle Inspector Panel")
         }
     }
 
@@ -160,31 +197,6 @@ struct BuildToolbar: ToolbarContent {
         }
     }
 
-    @ToolbarContentBuilder
-    private func coverLetterToolbarItem(for selApp: JobApp) -> some ToolbarContent {
-        if selectedTab == .coverLetter {
-            if selApp.selectedCover != nil {
-                // CoverLetterToolbar is now shown as an overlay in CoverLetterView
-                // so we don't need to show it in the window toolbar
-                ToolbarItem(placement: .primaryAction) {
-                    EmptyView()
-                }
-            } else {
-                ToolbarItem(placement: .primaryAction) {
-                    EmptyView()
-                }
-            }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func submitAppToolbarItem(for selApp: JobApp) -> some ToolbarContent {
-        if selectedTab == .submitApp {
-            ToolbarItem(placement: .primaryAction) {
-                applicationReviewButton(for: selApp)
-            }
-        }
-    }
 
     // Helper function to simplify the application review button logic
     private func applicationReviewButton(for selApp: JobApp) -> some View {

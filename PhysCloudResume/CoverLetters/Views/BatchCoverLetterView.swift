@@ -87,52 +87,8 @@ struct BatchCoverLetterView: View {
     
     private var modelSelectionBox: some View {
         GroupBox("Select Models") {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    let allModels = modelService.getAllModels()
-                    let providers = [
-                        AIModels.Provider.openai,
-                        AIModels.Provider.claude,
-                        AIModels.Provider.grok,
-                        AIModels.Provider.gemini
-                    ]
-                    
-                    ForEach(providers, id: \.self) { provider in
-                        if let models = allModels[provider], !models.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(provider)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textCase(.uppercase)
-                                
-                                ForEach(models, id: \.self) { model in
-                                    let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
-                                    HStack {
-                                        Toggle(isOn: Binding(
-                                            get: { selectedModels.contains(sanitizedModel) },
-                                            set: { isSelected in
-                                                if isSelected {
-                                                    selectedModels.insert(sanitizedModel)
-                                                } else {
-                                                    selectedModels.remove(sanitizedModel)
-                                                }
-                                            }
-                                        )) {
-                                            // Display raw model name for better distinction
-                                            Text(model)
-                                                .font(.system(.body))
-                                        }
-                                        .toggleStyle(CheckboxToggleStyle())
-                                    }
-                                }
-                            }
-                            .padding(.bottom, 8)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 200)
+            ModelCheckboxListView(selectedModels: $selectedModels)
+                .environmentObject(modelService)
         }
     }
     
@@ -163,34 +119,21 @@ struct BatchCoverLetterView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             
-            // Model picker for revisions (using same logic as ModelPickerView)
+            // Model picker for revisions
             if !selectedRevisions.isEmpty {
                 GroupBox("Revision Model") {
-                    let allModels = modelService.getAllModels()
-                    let providers = [
-                        AIModels.Provider.openai,
-                        AIModels.Provider.claude,
-                        AIModels.Provider.grok,
-                        AIModels.Provider.gemini
-                    ]
-                    
-                    Picker("Select model for revisions", selection: $revisionModel) {
-                        Text("Select a model").tag("")
-                        Text("Same as generating model").tag("SAME_AS_GENERATING")
-                        
-                        ForEach(providers, id: \.self) { provider in
-                            if let models = allModels[provider], !models.isEmpty {
-                                Section(header: Text(provider)) {
-                                    ForEach(models, id: \.self) { model in
-                                        let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
-                                        // Display raw model name for better distinction
-                                        Text(model).tag(sanitizedModel)
-                                    }
-                                }
-                            }
+                    VStack(alignment: .leading) {
+                        // Add special option for "Same as generating model"
+                        Picker("", selection: $revisionModel) {
+                            Text("Same as generating model").tag("SAME_AS_GENERATING")
                         }
+                        .pickerStyle(.radioGroup)
+                        .padding(.bottom, 4)
+                        
+                        // Standard model picker
+                        ModelPickerView(selectedModel: $revisionModel, showRefreshButton: false)
+                            .environmentObject(modelService)
                     }
-                    .pickerStyle(DefaultPickerStyle())
                 }
             }
         }
@@ -269,7 +212,7 @@ struct BatchCoverLetterView: View {
             
             // Model picker for revisions (using same logic as ModelPickerView)
             GroupBox("Revision Model") {
-                let allModels = modelService.getAllModels()
+                let allModels = modelService.getSelectedModels(selectedModels: appState.selectedModels)
                 let providers = [
                     AIModels.Provider.openai,
                     AIModels.Provider.claude,

@@ -20,6 +20,11 @@ struct AIModels {
     static let gpt_4o_mini_tts = "gpt-4o-mini-tts" // TTS model
     static let gpt4o_2024_08_06 = "gpt-4o-2024-08-06" // August 2024 update
     
+    // OpenAI reasoning models
+    static let o1 = "o1"
+    static let o1_mini = "o1-mini"
+    static let o1_preview = "o1-preview"
+    
     // Anthropic Claude models
     static let claude_3_opus = "claude-3-opus-20240229"
     static let claude_3_sonnet = "claude-3-sonnet-20240229"
@@ -56,7 +61,7 @@ struct AIModels {
         }
         
         // More precise model family detection
-        if modelLower.contains("gpt") || modelLower.contains("dalle") || modelLower.starts(with: "o3") || modelLower.starts(with: "o4") {
+        if modelLower.contains("gpt") || modelLower.contains("dalle") || modelLower.starts(with: "o1") || modelLower.starts(with: "o3") || modelLower.starts(with: "o4") {
             return Provider.openai
         } else if modelLower.contains("claude") {
             return Provider.claude
@@ -85,6 +90,17 @@ struct AIModels {
         let components = modelName.split(separator: "-")
         
         // Handle different model naming patterns
+        
+        // Handle o1 models first (before general GPT handling)
+        if modelName.lowercased().starts(with: "o1") {
+            if modelName.lowercased().contains("mini") {
+                return "o1-mini"
+            } else if modelName.lowercased().contains("preview") {
+                return "o1-preview"
+            } else {
+                return "o1"
+            }
+        }
         
         // Handle o3 models first (before general GPT handling)
         if modelName.lowercased().starts(with: "o3") {
@@ -185,7 +201,10 @@ extension AIModels {
             gpt4o,
             o4_mini,
             gpt4o_mini,
-            gpt4o_latest
+            gpt4o_latest,
+            o1,
+            o1_mini,
+            o1_preview
         ]
     }
     
@@ -217,7 +236,7 @@ extension AIModels {
     
     // Validate if a model is available
     static func isModelAvailable(_ modelName: String, appState: AppState) -> Bool {
-        let provider = providerForModel(modelName)
+        _ = providerForModel(modelName)
         // This checks if we have an API key for the provider
         return true // Change this to actual key check
     }

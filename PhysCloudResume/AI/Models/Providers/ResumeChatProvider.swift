@@ -30,6 +30,17 @@ final class ResumeChatProvider: BaseLLMProvider {
 
     // MARK: - Resume-specific Methods
     
+    /// Resets the provider state for a fresh conversation
+    /// This should be called when starting a new revision workflow to prevent stale state
+    func resetForNewConversation() {
+        Logger.debug("Resetting ResumeChatProvider state for new conversation")
+        lastRevNodeArray = []
+        lastClarifyingQuestions = []
+        conversationHistory = []
+        genericMessages = []
+        errorMessage = ""
+    }
+    
     /// System prompt for clarifying questions mode
     private let clarifyingQuestionsSystemPrompt = """
     You are a helpful resume assistant. The user has requested an enhanced revision process where you may ask clarifying questions before proposing modifications.
@@ -526,7 +537,7 @@ final class ResumeChatProvider: BaseLLMProvider {
         conversationHistory.append(AppLLMMessage(role: .user, text: answersText))
         
         // Now request revisions with the additional context
-        let revisionsPrompt = await resumeQuery.wholeResumeQueryString()
+        _ = await resumeQuery.wholeResumeQueryString()
         conversationHistory.append(AppLLMMessage(role: .user, text: "Now please provide your resume revision suggestions based on all the information provided."))
         
         // Get model identifier

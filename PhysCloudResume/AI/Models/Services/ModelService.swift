@@ -173,13 +173,13 @@ class ModelService: ObservableObject, @unchecked Sendable {
                     DispatchQueue.main.async {
                         switch provider {
                         case AIModels.Provider.openai:
-                            self.openAIModels = ModelFilters.filterOpenAIModels(models)
+                            self.openAIModels = models
                         case AIModels.Provider.claude:
-                            self.claudeModels = ModelFilters.filterClaudeModels(models)
+                            self.claudeModels = models
                         case AIModels.Provider.grok:
-                            self.grokModels = ModelFilters.filterGrokModels(models)
+                            self.grokModels = models
                         case AIModels.Provider.gemini:
-                            self.geminiModels = ModelFilters.filterGeminiModels(models)
+                            self.geminiModels = models
                         default:
                             break
                         }
@@ -214,17 +214,13 @@ class ModelService: ObservableObject, @unchecked Sendable {
                 DispatchQueue.main.async {
                     switch provider {
                     case AIModels.Provider.openai:
-                        // Apply filtering to OpenAI models
-                        self.openAIModels = ModelFilters.filterOpenAIModels(models)
+                        self.openAIModels = models
                     case AIModels.Provider.claude:
-                        // Apply filtering to Claude models
-                        self.claudeModels = ModelFilters.filterClaudeModels(models)
+                        self.claudeModels = models
                     case AIModels.Provider.grok:
-                        // Apply filtering to Grok models
-                        self.grokModels = ModelFilters.filterGrokModels(models)
+                        self.grokModels = models
                     case AIModels.Provider.gemini:
-                        // Apply filtering to Gemini models
-                        self.geminiModels = ModelFilters.filterGeminiModels(models)
+                        self.geminiModels = models
                     default:
                         break
                     }
@@ -304,6 +300,7 @@ class ModelService: ObservableObject, @unchecked Sendable {
         ]
     }
     
+    
     /// Gets all available models as a flat array
     /// - Returns: Array of all model identifiers
     func getAllAvailableModels() async -> [String] {
@@ -318,6 +315,38 @@ class ModelService: ObservableObject, @unchecked Sendable {
         
         // Convert to array and sort
         return Array(uniqueModels).sorted()
+    }
+    
+    /// Gets selected models based on user preferences
+    /// - Parameter selectedModels: Set of selected model identifiers in "provider:model" format
+    /// - Returns: Dictionary mapping provider names to arrays of selected model names
+    func getSelectedModels(selectedModels: Set<String>) -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        
+        // Initialize empty arrays for each provider
+        result[AIModels.Provider.openai] = []
+        result[AIModels.Provider.claude] = []
+        result[AIModels.Provider.grok] = []
+        result[AIModels.Provider.gemini] = []
+        
+        // Get all models (now unfiltered)
+        let allModels = getAllModels()
+        
+        // Filter models based on selection
+        for (provider, models) in allModels {
+            var selectedProviderModels: [String] = []
+            
+            for model in models {
+                let modelId = "\(provider):\(model)"
+                if selectedModels.contains(modelId) {
+                    selectedProviderModels.append(model)
+                }
+            }
+            
+            result[provider] = selectedProviderModels
+        }
+        
+        return result
     }
     
     // MARK: - Private Methods
@@ -703,20 +732,8 @@ class ModelService: ObservableObject, @unchecked Sendable {
                     .map { $0.id }
                     .sorted()
                 
-                // Filter models based on provider
-                if provider == AIModels.Provider.grok {
-                    // For Grok return only Grok specific models
-                    return modelIds.filter { $0.lowercased().contains("grok") }
-                } else {
-                    // For OpenAI we now return the full list of model identifiers and let
-                    // `ModelFilters.filterOpenAIModels(_:)` handle the heavy-lifting of
-                    // selecting the representative chat models that should be surfaced in
-                    // the UI.  This keeps the logic in a single place and ensures that new
-                    // OpenAI base models (e.g. `o3`, `o3-mini`, `o4-mini`, future
-                    // `gpt-5`, etc.) are not accidentally discarded by an overly strict
-                    // pre-filter here.
-                    return modelIds
-                }
+                // Return all models without any filtering
+                return modelIds
             }
         } catch {
             Logger.debug("❌ Failed to parse standard model response: \(error.localizedDescription)")

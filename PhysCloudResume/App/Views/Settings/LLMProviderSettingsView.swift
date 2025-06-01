@@ -17,6 +17,12 @@ struct LLMProviderSettingsView: View {
     // Fetch status of models to show accurate API key status
     @ObservedObject private var modelService = ModelService()
     
+    // Access to app state
+    @Environment(AppState.self) private var appState
+    
+    // State for showing model selection sheet
+    @State private var showModelSelectionSheet = false
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("AI Provider API Keys")
@@ -58,9 +64,28 @@ struct LLMProviderSettingsView: View {
                     apiKey: geminiApiKey
                 )
                 
-                // Refresh button for validation
+                // Action buttons
                 HStack {
+                    // Choose Models button - only show if at least one provider has valid API key
+                    if hasAnyValidApiKey() {
+                        Button(action: {
+                            showModelSelectionSheet = true
+                        }) {
+                            HStack {
+                                Image(systemName: "checklist")
+                                Text("Choose Models...")
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(4)
+                    }
+                    
                     Spacer()
+                    
+                    // Refresh button for validation
                     Button(action: {
                         // Re-validate all API keys
                         let apiKeys = [
@@ -109,6 +134,37 @@ struct LLMProviderSettingsView: View {
             ]
             modelService.fetchAllModels(apiKeys: apiKeys)
         }
+        .sheet(isPresented: $showModelSelectionSheet) {
+            ModelSelectionSheet()
+                .environmentObject(modelService)
+                .environment(appState)
+        }
+    }
+    
+    // Check if any provider has a valid API key
+    private func hasAnyValidApiKey() -> Bool {
+        let providers = [
+            (AIModels.Provider.openai, openAiApiKey),
+            (AIModels.Provider.claude, claudeApiKey),
+            (AIModels.Provider.grok, grokApiKey),
+            (AIModels.Provider.gemini, geminiApiKey)
+        ]
+        
+        for (provider, apiKey) in providers {
+            // Check if key is present and has valid format
+            if apiKey != "none" && !apiKey.isEmpty {
+                if APIKeyValidator.validateAPIKey(apiKey, for: provider) != nil {
+                    // Also check if the fetch was successful
+                    if let fetchStatus = modelService.fetchStatus[provider] {
+                        if case .success = fetchStatus {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        
+        return false
     }
     
     // Reusable provider status row with validity checking
@@ -136,7 +192,7 @@ struct LLMProviderSettingsView: View {
                 .foregroundColor(.red)
         }
         // Check if the key format is valid
-        else if ModelFilters.validateAPIKey(apiKey, for: provider) == nil {
+        else if APIKeyValidator.validateAPIKey(apiKey, for: provider) == nil {
             HStack {
                 Circle()
                     .fill(Color.orange)

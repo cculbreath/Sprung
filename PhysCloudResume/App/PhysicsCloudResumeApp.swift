@@ -18,12 +18,23 @@ struct PhysicsCloudResumeApp: App {
     init() {
         // Create the model container first
         do {
-            let container = try ModelContainer(
-                for: Schema(SchemaV2.models),
-                migrationPlan: PhysCloudResumeMigrationPlan.self
+            // Try with current models directly
+            let container = try ModelContainer(for: 
+                JobApp.self,
+                Resume.self,
+                ResRef.self,
+                TreeNode.self,
+                FontSizeNode.self,
+                CoverLetter.self,
+                MessageParams.self,
+                CoverRef.self,
+                ApplicantProfile.self,
+                ResModel.self,
+                ConversationContext.self,
+                ConversationMessage.self
             )
             self.modelContainer = container
-            Logger.debug("✅ ModelContainer created with migration plan")
+            Logger.debug("✅ ModelContainer created with current models")
         } catch {
             Logger.error("❌ Failed to create ModelContainer: \(error)")
             fatalError("Failed to create ModelContainer: \(error)")
@@ -38,6 +49,10 @@ struct PhysicsCloudResumeApp: App {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization
                 .environment(appState)
                 .environmentObject(appState.modelService)
+                .onAppear {
+                    // Pass appState to AppDelegate so it can use it for settings window
+                    appDelegate.appState = appState
+                }
         }
         .modelContainer(modelContainer)
         .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))

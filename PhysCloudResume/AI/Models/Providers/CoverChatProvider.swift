@@ -135,6 +135,14 @@ final class CoverChatProvider: BaseLLMProvider {
         // Use the base class implementation
         return super.addAssistantMessage(text)
     }
+    
+    /// Determines if a model is an o1-series reasoning model that has special requirements
+    /// - Parameter modelId: The model identifier to check
+    /// - Returns: True if this is an o1 or o1-mini model
+    private func isReasoningModel(_ modelId: String) -> Bool {
+        let modelLower = modelId.lowercased()
+        return modelLower.contains("o1") && !modelLower.contains("o3") && !modelLower.contains("o4")
+    }
 
     /// Calls the LLM API to generate a cover letter
     /// - Parameters:
@@ -198,7 +206,19 @@ final class CoverChatProvider: BaseLLMProvider {
         
         // Initialize or continue conversation using BaseLLMProvider methods
         if isNewConversation {
-            _ = initializeConversation(systemPrompt: systemMessage, userPrompt: userMessage)
+            // Check if this is an o1 model that doesn't support system messages
+            let isO1Model = isReasoningModel(modelString)
+            
+            if isO1Model {
+                // For o1 models, manually build conversation history without system message
+                let combinedMessage = systemMessage + "\n\n" + userMessage
+                conversationHistory = []
+                conversationHistory.append(AppLLMMessage(role: .user, text: combinedMessage))
+                Logger.debug("🧠 Built conversation history for o1 model without system message: \(modelString)")
+            } else {
+                // For other models, use normal system/user message separation
+                _ = initializeConversation(systemPrompt: systemMessage, userPrompt: userMessage)
+            }
             Logger.debug("📝 Initialized conversation with \(conversationHistory.count) messages")
         } else {
             _ = addUserMessage(userMessage)

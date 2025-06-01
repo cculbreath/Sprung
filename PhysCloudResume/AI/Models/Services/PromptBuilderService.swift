@@ -120,7 +120,7 @@ class PromptBuilderService {
 
         The current skills and expertise content is provided as a JSON array of nodes:
 
-        \(skillsJsonString)
+        \(skillsJsonString)\(mergeInstructions)
 
         Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. For each skill in your response, provide 'id', 'new_title' (if changed), 'new_description' (if changed), 'original_title', and 'original_description'. If you don't change a title or description, omit the corresponding 'new_' field.
         """
@@ -210,7 +210,7 @@ class PromptBuilderService {
 
         The current skills and expertise content is provided as a JSON array of nodes:
 
-        \(skillsJsonString)
+        \(skillsJsonString)\(mergeInstructions)
 
         Respond *only* with a JSON object adhering to the schema provided in the API request's 'response_format.schema' parameter. For each skill in your response, provide 'id', 'new_title' (if changed), 'new_description' (if changed), 'original_title', and 'original_description'. If you don't change a title or description, omit the corresponding 'new_' field.
         """

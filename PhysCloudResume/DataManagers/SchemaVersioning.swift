@@ -30,7 +30,7 @@ enum SchemaV1: VersionedSchema {
     }
 }
 
-// MARK: - Schema V2 (Current Schema - Added Conversation Models)
+// MARK: - Schema V2 (Added Conversation Models)
 enum SchemaV2: VersionedSchema {
     static var versionIdentifier = Schema.Version(2, 0, 0)
     

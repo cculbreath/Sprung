@@ -134,9 +134,9 @@ class BaseLLMProvider {
     /// Execute a query with a timeout
     /// - Parameters:
     ///   - query: The query to execute
-    ///   - timeout: Timeout in seconds (default: 60)
+    ///   - timeout: Timeout in seconds (default: 180)
     /// - Returns: The response from the LLM
-    func executeQueryWithTimeout(_ query: AppLLMQuery, timeout: TimeInterval = 60) async throws -> AppLLMResponse {
+    func executeQueryWithTimeout(_ query: AppLLMQuery, timeout: TimeInterval = 180) async throws -> AppLLMResponse {
         // Update the client if needed based on the model in the query
         if let appState = self.appState, query.modelIdentifier != lastModelUsed {
             self.appLLMClient = AppLLMClientFactory.createClientForModel(model: query.modelIdentifier, appState: appState)
@@ -229,47 +229,39 @@ class BaseLLMProvider {
         
         // Try to parse as a raw array of revisions
         if dataString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[") {
-            do {
-                let decoder = JSONDecoder()
-                if let data = dataString.data(using: .utf8) {
-                    // Try to decode directly as array of ProposedRevisionNode
-                    if let revisionsArray = try? decoder.decode([ProposedRevisionNode].self, from: data) {
-                        Logger.debug("✅ Parsed direct array format with \(revisionsArray.count) revisions")
-                        return RevisionsContainer(revArray: revisionsArray)
+            let decoder = JSONDecoder()
+            if let data = dataString.data(using: .utf8) {
+                // Try to decode directly as array of ProposedRevisionNode
+                if let revisionsArray = try? decoder.decode([ProposedRevisionNode].self, from: data) {
+                    Logger.debug("✅ Parsed direct array format with \(revisionsArray.count) revisions")
+                    return RevisionsContainer(revArray: revisionsArray)
+                }
+                
+                // Alternative format with slightly different keys
+                if let alternativeArray = try? JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] {
+                    var nodes: [ProposedRevisionNode] = []
+                    
+                    for item in alternativeArray {
+                        // Create node using the dictionary initializer
+                        let node = ProposedRevisionNode(from: item)
+                        nodes.append(node)
                     }
                     
-                    // Alternative format with slightly different keys
-                    if let alternativeArray = try? JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] {
-                        var nodes: [ProposedRevisionNode] = []
-                        
-                        for item in alternativeArray {
-                            // Create node using the dictionary initializer
-                            let node = ProposedRevisionNode(from: item)
-                            nodes.append(node)
-                        }
-                        
-                        if !nodes.isEmpty {
-                            Logger.debug("✅ Mapped alternative array format with \(nodes.count) revisions")
-                            return RevisionsContainer(revArray: nodes)
-                        }
+                    if !nodes.isEmpty {
+                        Logger.debug("✅ Mapped alternative array format with \(nodes.count) revisions")
+                        return RevisionsContainer(revArray: nodes)
                     }
                 }
-            } catch {
-                Logger.error("❌ Failed to parse direct array format: \(error.localizedDescription)")
             }
         }
         
         // Try to parse as revisions container directly
-        do {
-            let decoder = JSONDecoder()
-            if let data = dataString.data(using: .utf8) {
-                if let container = try? decoder.decode(RevisionsContainer.self, from: data) {
-                    Logger.debug("✅ Successfully parsed RevisionsContainer directly")
-                    return container
-                }
+        let decoder = JSONDecoder()
+        if let data = dataString.data(using: .utf8) {
+            if let container = try? decoder.decode(RevisionsContainer.self, from: data) {
+                Logger.debug("✅ Successfully parsed RevisionsContainer directly")
+                return container
             }
-        } catch {
-            Logger.error("❌ Failed to parse direct RevisionsContainer format: \(error.localizedDescription)")
         }
         
         // Try to parse with wrapper fields
@@ -297,15 +289,11 @@ class BaseLLMProvider {
             .replacingOccurrences(of: "\"reason\"", with: "\"why\"")
 
         // Try to parse the normalized string
-        do {
-            let decoder = JSONDecoder()
-            if let data = normalizedString.data(using: .utf8) {
-                if let container = try? decoder.decode(RevisionsContainer.self, from: data) {
-                    return container
-                }
+        let normalizedDecoder = JSONDecoder()
+        if let data = normalizedString.data(using: .utf8) {
+            if let container = try? normalizedDecoder.decode(RevisionsContainer.self, from: data) {
+                return container
             }
-        } catch {
-            Logger.error("❌ Failed to parse normalized RevisionsContainer: \(error.localizedDescription)")
         }
         
         // If the model returned a response intended for another purpose, create an empty container

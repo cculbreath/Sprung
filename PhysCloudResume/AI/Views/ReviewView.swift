@@ -24,7 +24,7 @@ struct ReviewView: View {
     @State var isCommenting: Bool = false
     @State var isMoreCommenting: Bool = false
 
-    // Helper to supply original text especially for title nodes where oldValue may be empty
+    // Helper to supply original text based on the node's isTitleNode property
     private func originalText(for node: ProposedRevisionNode) -> String {
         let trimmedOld = node.oldValue.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -32,21 +32,19 @@ struct ReviewView: View {
             return trimmedOld
         }
 
-        // Fallback to updateNodes for original value if available
-        if let dict = updateNodes.first(where: {
-            ($0["id"] as? String) == node.id &&
-                ($0["isTitleNode"] as? Bool) == node.isTitleNode
-        }), let fallback = (dict["value"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-        !fallback.isEmpty {
-            return fallback
-        }
-        // Fallback for title nodes: derive from treePath last component
-        if node.isTitleNode {
-            let parts = node.treePath.split(separator: ">").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            if let last = parts.last, !last.isEmpty {
-                return last
+        // Find the matching node in updateNodes by ID and isTitleNode flag
+        if let dict = updateNodes.first(where: { 
+            ($0["id"] as? String) == node.id && 
+            ($0["isTitleNode"] as? Bool) == node.isTitleNode 
+        }) {
+            // For title nodes, use the "name" field; for content nodes, use the "value" field
+            let fieldToUse = node.isTitleNode ? (dict["name"] as? String) : (dict["value"] as? String)
+            if let fieldValue = fieldToUse?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !fieldValue.isEmpty {
+                return fieldValue
             }
         }
+        
         return "(no text)"
     }
 

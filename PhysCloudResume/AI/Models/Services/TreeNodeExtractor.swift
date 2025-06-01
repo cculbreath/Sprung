@@ -142,7 +142,10 @@ class TreeNodeExtractor {
 
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: exportableSkills, options: [.prettyPrinted])
-            return String(data: jsonData, encoding: .utf8)
+            let jsonString = String(data: jsonData, encoding: .utf8)
+            Logger.debug("🔍 extractSkillsForFixOverflow: Generated JSON with \(exportableSkills.count) skills")
+            Logger.debug("🔍 extractSkillsForFixOverflow: Sample skill structure: \(exportableSkills.first ?? [:])")
+            return jsonString
         } catch {
             Logger.debug("Error serializing skills to JSON: \(error)")
             return nil

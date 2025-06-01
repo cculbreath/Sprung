@@ -23,198 +23,187 @@ struct ResumeExportView: View {
     @State private var toastMessage: String = ""
     @State private var toastTimer: Timer? = nil
 
-    // Application review sheet control
-
     var body: some View {
         // Only show if we actually have a selected JobApp in the store
         if let jobApp = jobAppStore.selectedApp {
-            VStack(alignment: .leading, spacing: 20) {
-                // MARK: - Resume Section
-
-                // Add a GroupBox to show the current resume and cover letter
-                GroupBox(label: Text("Export Documents").fontWeight(.medium)) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Job information
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Position:")
-                                    .fontWeight(.semibold)
-                                    .frame(width: 80, alignment: .leading)
-                                Text(jobApp.jobPosition)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            HStack {
-                                Text("Company:")
-                                    .fontWeight(.semibold)
-                                    .frame(width: 80, alignment: .leading)
-                                Text(jobApp.companyName)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        Divider()
-
-                        // Documents being exported
-                        HStack(alignment: .top, spacing: 16) {
-                            // Resume information
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Resume:")
-                                    .fontWeight(.semibold)
+            VStack(alignment: .leading, spacing: 0) {
+                // MARK: - Header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Export Documents")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    
+                    Text("\(jobApp.jobPosition) at \(jobApp.companyName)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                Form {
+                    // MARK: - Document Status
+                    Section {
+                        HStack {
+                            Image(systemName: "doc.text")
+                                .foregroundColor(jobApp.selectedRes != nil ? .green : .secondary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Resume")
+                                    .fontWeight(.medium)
                                 if let resume = jobApp.selectedRes {
-                                    Text("Created at \(resume.createdDateString)")
+                                    Text("Created \(resume.createdDateString)")
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
-                                        .font(.callout)
                                 } else {
-                                    Text("None selected")
+                                    Text("Not selected")
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
-                                        .font(.callout)
-                                        .italic()
                                 }
                             }
-
                             Spacer()
-
-                            // Cover Letter information if available
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Cover Letter:")
-                                    .fontWeight(.semibold)
-                                if let coverLetter = jobApp.selectedCover {
-                                    Text(coverLetter.sequencedName)
+                            Text(jobApp.selectedRes != nil ? "Ready" : "—")
+                                .font(.caption)
+                                .foregroundColor(jobApp.selectedRes != nil ? .green : .secondary)
+                                .fontWeight(.medium)
+                        }
+                        
+                        HStack {
+                            Image(systemName: "doc.text.fill")
+                                .foregroundColor(jobApp.selectedCover != nil ? .green : .secondary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Cover Letter")
+                                    .fontWeight(.medium)
+                                if let cover = jobApp.selectedCover {
+                                    Text(cover.sequencedName)
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
-                                        .font(.callout)
                                 } else {
-                                    Text("None selected")
+                                    Text("Not selected")
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
-                                        .font(.callout)
-                                        .italic()
                                 }
                             }
+                            Spacer()
+                            Text(jobApp.selectedCover != nil ? "Ready" : "—")
+                                .font(.caption)
+                                .foregroundColor(jobApp.selectedCover != nil ? .green : .secondary)
+                                .fontWeight(.medium)
+                        }
+                    } header: {
+                        Text("Documents")
+                    }
+                    
+                    // MARK: - Actions
+                    if let primaryURL = getPrimaryApplyURL(for: jobApp) {
+                        Section {
+                            HStack {
+                                Button(!jobApp.jobApplyLink.isEmpty ? "Apply Now" : "View Job Posting") {
+                                    if let url = URL(string: primaryURL) {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                Spacer()
+                            }
+                        } header: {
+                            Text("Application")
                         }
                     }
-                    .padding(.vertical, 4)
-                }
-
-                // Resume export buttons
-                GroupBox(label: Text("Resume Export").fontWeight(.medium)) {
-                    HStack(spacing: 15) {
+                    
+                    // MARK: - Resume Export
+                    Section {
                         Button("Export PDF") {
                             exportResumePDF()
                         }
                         .disabled(jobApp.selectedRes == nil)
-
+                        
                         Button("Export Text") {
                             exportResumeText()
                         }
                         .disabled(jobApp.selectedRes == nil)
-
+                        
                         Button("Export JSON") {
                             exportResumeJSON()
                         }
                         .disabled(jobApp.selectedRes == nil)
+                    } header: {
+                        Text("Resume Export")
                     }
-                    .padding(.vertical, 4)
-                }
-
-                // Cover letter export buttons
-                GroupBox(label: Text("Cover Letter Export").fontWeight(.medium)) {
-                    HStack(spacing: 15) {
+                    
+                    // MARK: - Cover Letter Export
+                    Section {
                         Button("Export PDF") {
                             exportCoverLetterPDF()
                         }
                         .disabled(jobApp.selectedCover == nil)
-
+                        
                         Button("Export Text") {
                             exportCoverLetterText()
                         }
                         .disabled(jobApp.selectedCover == nil)
-
-                        Button("Export All Cover Letters") {
+                        
+                        Button("Export All Options") {
                             exportAllCoverLetters()
                         }
                         .disabled(jobApp.coverLetters.isEmpty)
+                    } header: {
+                        Text("Cover Letter Export")
                     }
-                    .padding(.vertical, 4)
-                }
-
-                // Application packet export button
-                GroupBox(label: Text("Application Packet").fontWeight(.medium)) {
-                    Button("Export Complete Application (Resume + Cover Letter)") {
-                        exportApplicationPacket()
+                    
+                    // MARK: - Complete Application
+                    Section {
+                        HStack {
+                            Button("Export Complete Application") {
+                                exportApplicationPacket()
+                            }
+                            .disabled(jobApp.selectedRes == nil || jobApp.selectedCover == nil)
+                            Spacer()
+                        }
+                    } header: {
+                        Text("Application Packet")
+                    } footer: {
+                        Text("Combines resume and cover letter into a single PDF")
                     }
-                    .disabled(jobApp.selectedRes == nil || jobApp.selectedCover == nil)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 4)
-                }
-
-                Divider()
-
-                // MARK: - Status Section
-
-                Text("Application Status")
-                    .font(.headline)
-
-                Picker("", selection: $selectedStatus) {
-                    ForEach(Statuses.allCases, id: \.self) { status in
-                        Text(status.rawValue).tag(status)
+                    
+                    // MARK: - Status
+                    Section {
+                        Picker("Status", selection: $selectedStatus) {
+                            ForEach(Statuses.allCases, id: \.self) { status in
+                                Text(status.rawValue).tag(status)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: selectedStatus) { _, newStatus in
+                            jobAppStore.updateJobAppStatus(jobApp, to: newStatus)
+                        }
+                    } header: {
+                        Text("Application Status")
+                    }
+                    
+                    // MARK: - Notes
+                    Section {
+                        TextEditor(text: $notes)
+                            .frame(minHeight: 60)
+                            .onChange(of: notes) { _, newValue in
+                                let updated = jobApp
+                                updated.notes = newValue
+                                jobAppStore.updateJobApp(updated)
+                            }
+                    } header: {
+                        Text("Notes")
                     }
                 }
-                .pickerStyle(.segmented)
-                .onChange(of: selectedStatus) { _, newStatus in
-                    // Call store method instead of mutating jobApp directly
-                    jobAppStore.updateJobAppStatus(jobApp, to: newStatus)
-                }
-
-                // MARK: - Notes
-
-                Text("Notes")
-                    .font(.headline)
-                TextEditor(text: $notes)
-                    .onChange(of: notes) { _, newValue in
-                        // Build an updated copy of jobApp, then call store method
-                        let updated = jobApp
-                        updated.notes = newValue
-                        jobAppStore.updateJobApp(updated)
-                    }
+                .formStyle(.grouped)
             }
-            .padding()
-            .frame(maxHeight: .infinity, alignment: .top)
             .onAppear {
-                // Sync local state from the store's selectedApp
                 selectedStatus = jobApp.status
                 notes = jobApp.notes
             }
             .overlay(
-                // Toast notification overlay
-                ZStack {
-                    if showToast {
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text(toastMessage)
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                Spacer()
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(NSColor.windowBackgroundColor))
-                                    .shadow(color: Color.black.opacity(0.2), radius: 5, x: 0, y: 2)
-                            )
-                            .padding(.horizontal)
-                            .padding(.bottom, 20)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
-                        .zIndex(1)
-                        .animation(.easeInOut, value: showToast)
-                    }
-                }
+                MacOSToastOverlay(showToast: showToast, message: toastMessage)
             )
         } else {
-            // If there's no selected jobApp
             EmptyView()
         }
     }
@@ -535,5 +524,52 @@ struct ResumeExportView: View {
         }
 
         return combinedText
+    }
+    
+    // MARK: - Helper Functions
+    
+    /// Returns the primary URL for applying to the job (apply URL if available, otherwise posting URL)
+    private func getPrimaryApplyURL(for jobApp: JobApp) -> String? {
+        if !jobApp.jobApplyLink.isEmpty {
+            return jobApp.jobApplyLink
+        } else if !jobApp.postingURL.isEmpty {
+            return jobApp.postingURL
+        }
+        return nil
+    }
+}
+
+// MARK: - Supporting Views
+
+struct MacOSToastOverlay: View {
+    let showToast: Bool
+    let message: String
+    
+    var body: some View {
+        ZStack {
+            if showToast {
+                VStack {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.subheadline)
+                        Text(message)
+                            .font(.subheadline)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(.regularMaterial)
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .zIndex(1)
+                .animation(.easeInOut(duration: 0.3), value: showToast)
+            }
+        }
     }
 }

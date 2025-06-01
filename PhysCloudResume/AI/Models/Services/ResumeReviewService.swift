@@ -139,6 +139,10 @@ class ResumeReviewService: @unchecked Sendable {
             // Standard approach for other models (OpenAI, Claude, Gemini)
             let prompt = PromptBuilderService.shared.buildFixFitsPrompt(skillsJsonString: skillsJsonString, allowEntityMerge: allowEntityMerge)
             
+            Logger.debug("🔍 sendFixFitsRequest - Skills JSON being sent to LLM:")
+            Logger.debug("🔍 \(skillsJsonString.prefix(500))...")
+            Logger.debug("🔍 sendFixFitsRequest - Using prompt with allowEntityMerge: \(allowEntityMerge)")
+            
             LLMRequestService.shared.sendStructuredMixedRequest(
                 promptText: prompt,
                 base64Image: base64Image,

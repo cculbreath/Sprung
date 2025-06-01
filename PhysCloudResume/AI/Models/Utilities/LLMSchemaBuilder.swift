@@ -226,7 +226,8 @@ class LLMSchemaBuilder {
     /// Creates a JSONSchema for FixFitsResponseContainer type
     /// - Returns: A JSONSchema for FixFitsResponseContainer
     private static func createFixFitsResponseContainerSchema() -> SwiftOpenAI.JSONSchema {
-        return SwiftOpenAI.JSONSchema(
+        Logger.debug("🔍 Creating FixFitsResponseContainer schema")
+        let schema = SwiftOpenAI.JSONSchema(
             type: .object,
             properties: [
                 "revised_skills_and_expertise": SwiftOpenAI.JSONSchema(
@@ -237,33 +238,60 @@ class LLMSchemaBuilder {
                         properties: [
                             "id": SwiftOpenAI.JSONSchema(
                                 type: .string,
-                                description: "The original ID of the TreeNode for the skill."
+                                description: "The original ID of the skill node."
                             ),
-                            "newValue": SwiftOpenAI.JSONSchema(
+                            "new_title": SwiftOpenAI.JSONSchema(
                                 type: .string,
-                                description: "The revised content for the skill/expertise item. If no change, this should be the same as originalValue."
+                                description: "The revised title for the skill item. Omit if unchanged."
                             ),
-                            "originalValue": SwiftOpenAI.JSONSchema(
+                            "new_description": SwiftOpenAI.JSONSchema(
                                 type: .string,
-                                description: "The original content of the skill/expertise item (echoed back)."
+                                description: "The revised description for the skill item. Omit if unchanged."
                             ),
-                            "treePath": SwiftOpenAI.JSONSchema(
+                            "original_title": SwiftOpenAI.JSONSchema(
                                 type: .string,
-                                description: "The original treePath of the skill TreeNode (echoed back)."
+                                description: "The original title of the skill item (echoed back)."
                             ),
-                            "isTitleNode": SwiftOpenAI.JSONSchema(
-                                type: .boolean,
-                                description: "Indicates if this skill entry is a title/heading (echoed back)."
+                            "original_description": SwiftOpenAI.JSONSchema(
+                                type: .string,
+                                description: "The original description of the skill item (echoed back)."
                             )
                         ],
-                        required: ["id", "newValue", "originalValue", "treePath", "isTitleNode"],
-                        additionalProperties: false
+                        required: ["id", "original_title", "original_description"]
                     )
+                ),
+                "merge_operation": SwiftOpenAI.JSONSchema(
+                    type: .object,
+                    description: "Optional merge operation if two skill entries should be combined.",
+                    properties: [
+                        "skill_to_keep_id": SwiftOpenAI.JSONSchema(
+                            type: .string,
+                            description: "The ID of the skill entry to keep."
+                        ),
+                        "skill_to_delete_id": SwiftOpenAI.JSONSchema(
+                            type: .string,
+                            description: "The ID of the skill entry to delete."
+                        ),
+                        "merged_title": SwiftOpenAI.JSONSchema(
+                            type: .string,
+                            description: "The combined skill title."
+                        ),
+                        "merged_description": SwiftOpenAI.JSONSchema(
+                            type: .string,
+                            description: "The combined skill description."
+                        ),
+                        "merge_reason": SwiftOpenAI.JSONSchema(
+                            type: .string,
+                            description: "Brief explanation of why these entries were merged."
+                        )
+                    ],
+                    required: ["skill_to_keep_id", "skill_to_delete_id", "merged_title", "merged_description", "merge_reason"]
                 )
             ],
-            required: ["revised_skills_and_expertise"],
-            additionalProperties: false
+            required: ["revised_skills_and_expertise"]
         )
+        Logger.debug("🔍 FixFitsResponseContainer schema created with title/description fields")
+        return schema
     }
     
     /// Creates a JSONSchema for ContentsFitResponse type
@@ -421,7 +449,7 @@ class LLMSchemaBuilder {
             return .jsonSchema(
                 SwiftOpenAI.JSONSchemaResponseFormat(
                     name: typeName,
-                    strict: true,
+                    strict: false,
                     schema: schema
                 )
             )
@@ -434,7 +462,7 @@ class LLMSchemaBuilder {
             return .jsonSchema(
                 SwiftOpenAI.JSONSchemaResponseFormat(
                     name: typeName,
-                    strict: true,
+                    strict: false,
                     schema: schema
                 )
             )

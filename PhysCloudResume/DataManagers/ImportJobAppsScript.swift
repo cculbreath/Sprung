@@ -138,6 +138,7 @@ class ImportJobAppsScript {
     }
     
     /// Import that attempts to fetch fresh data from URLs using UI code paths
+    @MainActor
     static func quickImportByURL(from fileURL: URL, jobAppStore: JobAppStore) async throws -> Int {
         Logger.debug("⚡ Import with fresh data fetch...")
         
@@ -257,6 +258,7 @@ class ImportJobAppsScript {
     }
     
     /// Fetch LinkedIn job using Proxycurl API
+    @MainActor
     private static func fetchLinkedInWithProxycurl(url: URL, jobAppStore: JobAppStore, apiKey: String) async -> JobApp? {
         let baseURL = "https://nubela.co/proxycurl/api/linkedin/job"
         var components = URLComponents(string: baseURL)
@@ -276,13 +278,11 @@ class ImportJobAppsScript {
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 200 {
                     // Parse the response
-                    return await MainActor.run {
-                        JobApp.parseProxycurlJobApp(
-                            jobAppStore: jobAppStore,
-                            jsonData: data,
-                            postingUrl: url.absoluteString
-                        )
-                    }
+                    return JobApp.parseProxycurlJobApp(
+                        jobAppStore: jobAppStore,
+                        jsonData: data,
+                        postingUrl: url.absoluteString
+                    )
                 } else if httpResponse.statusCode == 404 {
                     Logger.debug("❌ Job listing not found (404)")
                     return nil
