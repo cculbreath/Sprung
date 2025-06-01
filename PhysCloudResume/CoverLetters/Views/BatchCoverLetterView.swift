@@ -23,8 +23,10 @@ struct BatchCoverLetterView: View {
     @State private var completedOperations: Int = 0
     @State private var errorMessage: String?
     
-    // Get model service for fetching available models
-    @EnvironmentObject private var modelService: ModelService
+    // Access OpenRouter service for model selection
+    private var openRouterService: OpenRouterService {
+        appState.openRouterService
+    }
     
     let availableRevisions: [CoverLetterPrompts.EditorPrompts] = [.improve, .zissner, .mimic]
     
@@ -210,33 +212,14 @@ struct BatchCoverLetterView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             
-            // Model picker for revisions (using same logic as ModelPickerView)
+            // Model picker for revisions using OpenRouter
             GroupBox("Revision Model") {
-                let allModels = modelService.getSelectedModels(selectedModels: appState.selectedModels)
-                let providers = [
-                    AIModels.Provider.openai,
-                    AIModels.Provider.claude,
-                    AIModels.Provider.grok,
-                    AIModels.Provider.gemini
-                ]
-                
-                Picker("Select model for revisions", selection: $revisionModel) {
-                    Text("Select a model").tag("")
-                    Text("Same as generating model").tag("SAME_AS_GENERATING")
-                    
-                    ForEach(providers, id: \.self) { provider in
-                        if let models = allModels[provider], !models.isEmpty {
-                            Section(header: Text(provider)) {
-                                ForEach(models, id: \.self) { model in
-                                    let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
-                                    // Display raw model name for better distinction
-                                    Text(model).tag(sanitizedModel)
-                                }
-                            }
-                        }
-                    }
-                }
-                .pickerStyle(DefaultPickerStyle())
+                ModelPickerView(
+                    selectedModel: $revisionModel,
+                    title: "Select Model for Revisions",
+                    useModelSelection: true
+                )
+                .environment(appState)
             }
         }
     }
