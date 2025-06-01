@@ -22,7 +22,6 @@ struct CoverLetterView: View {
                     .environment(appState)
                     .environment(jobAppStore)
                     .environment(coverLetterStore)
-                    .environmentObject(ModelService.shared)
             }
     }
 
