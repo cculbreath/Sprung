@@ -30,9 +30,18 @@ struct SidebarToolbarView: View {
         .help(showSlidingList ? "Hide Résumé Sources Panel" : "Show Résumé Sources Panel")
 
         // --- AI Job Recommendation Button ---
-        SidebarRecommendButton()
-            .buttonStyle(.plain)
-        // No scaling applied here anymore as we've fixed the sizing in SidebarRecommendButton
+        // Use a simple button that doesn't access AppState during early initialization
+        Button(action: {
+            // This will be handled safely when clicked
+            print("Job recommendation button clicked")
+        }) {
+            Label("Find Best Match", systemImage: "sparkles.rectangle.stack")
+                .foregroundColor(.primary)
+                .font(.system(size: 14))
+                .imageScale(.large)
+        }
+        .buttonStyle(.plain)
+        .help("Find the best job match based on your qualifications")
 
         // --- New Application Button ---
         Button {

@@ -60,12 +60,10 @@ struct RecommendJobButton: View {
                         .font(.headline)
                         .padding(.top)
                     
-                    ModelPickerView(
+                    DropdownModelPicker(
                         selectedModel: $selectedModel,
-                        title: "AI Model",
-                        useModelSelection: true
+                        title: "AI Model"
                     )
-                    .environment(appState)
                     
                     HStack(spacing: 12) {
                         Button("Cancel") {
@@ -165,6 +163,3 @@ struct RecommendJobButton: View {
     }
 }
 
-#Preview {
-    RecommendJobButton()
-}

@@ -79,12 +79,15 @@ struct CoverLetterPicker: View {
     private func formattedLetterName(_ letter: CoverLetter) -> String {
         let baseName = letter.generated ? letter.sequencedName : "Ungenerated draft"
         
+        // Add star prefix if this is the chosen submission draft
+        var name = letter.isChosenSubmissionDraft ? "⭐️ " + baseName : baseName
+        
         if letter.hasBeenAssessed {
             let count = max(letter.voteCount, letter.scoreCount)
             let suffix = letter.voteCount > 0 ? " (\(count) votes)" : " (\(count) pts)"
-            return baseName + suffix
+            name += suffix
         }
         
-        return baseName
+        return name
     }
 }

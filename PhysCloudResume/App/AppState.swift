@@ -56,7 +56,13 @@ class AppState {
     }
     
     private func configureOpenRouterService() {
-        // OpenRouterService now accesses the API key directly via @AppStorage
-        // No explicit configuration needed
+        let openRouterApiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        if !openRouterApiKey.isEmpty {
+            openRouterService.configure(apiKey: openRouterApiKey)
+        }
+    }
+    
+    func reconfigureOpenRouterService() {
+        configureOpenRouterService()
     }
 }

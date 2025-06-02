@@ -43,6 +43,7 @@ struct SidebarRecommendButton: View {
     }
 
     private func recommendBestJob() {
+        
         // Track if we're using the fallback mechanism
         let isUsingFallbackResume: Bool
         let resumeForRecommendation: Resume?
@@ -76,6 +77,7 @@ struct SidebarRecommendButton: View {
 
         Task {
             do {
+                
                 let provider = JobRecommendationProvider(
                     appState: appState,
                     jobApps: jobAppStore.jobApps,
