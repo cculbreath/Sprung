@@ -54,6 +54,7 @@ struct CoverLetterContentView: View {
     @Binding var buttons: CoverLetterButtons
     @State private var isHoveringDelete = false
     @State private var isHoveringEdit = false
+    @State private var isHoveringStar = false
 
     var body: some View {
         @Bindable var coverLetterStore = coverLetterStore
@@ -111,6 +112,26 @@ struct CoverLetterContentView: View {
                     .buttonStyle(PlainButtonStyle())
                     .onHover { hovering in isHoveringEdit = hovering }
                     .disabled(!buttons.canEdit)
+                    
+                    // Star toggle button for chosen submission draft
+                    Button(action: { toggleChosenSubmissionDraft() }) {
+                        HStack {
+                            Image(systemName: cL.isChosenSubmissionDraft ? "star.fill" : "star")
+                                .foregroundColor(isHoveringStar ? .yellow : (cL.isChosenSubmissionDraft ? .yellow : .secondary))
+                                .font(.system(size: 14))
+                            Text(cL.isChosenSubmissionDraft ? "Chosen" : "Mark as Chosen")
+                                .font(.caption)
+                                .foregroundColor(isHoveringStar ? .primary : .secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(isHoveringStar ? Color.white.opacity(0.4) : Color.clear)
+                        .cornerRadius(10)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .onHover { hovering in isHoveringStar = hovering }
+                    .disabled(!cL.generated)
+                    .help("Mark this cover letter as your chosen submission draft")
 
                     if buttons.runRequested {
                         ProgressView()
@@ -190,6 +211,19 @@ struct CoverLetterContentView: View {
         } else {
             // If no letters remain, create a new blank one
             coverLetterStore.createBlank(jobApp: jobApp)
+        }
+    }
+    
+    /// Toggles the chosen submission draft status
+    private func toggleChosenSubmissionDraft() {
+        guard let selectedCover = jobApp.selectedCover else { return }
+        
+        if selectedCover.isChosenSubmissionDraft {
+            // Just clear the flag
+            selectedCover.isChosenSubmissionDraft = false
+        } else {
+            // Mark as chosen (this will clear others)
+            selectedCover.markAsChosenSubmissionDraft()
         }
     }
 }

@@ -37,6 +37,9 @@ class CoverLetter: Identifiable, Hashable {
     var currentMode: CoverAiMode? = CoverAiMode.none
     var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zissner
     
+    /// Indicates this is the chosen submission draft (star indicator)
+    var isChosenSubmissionDraft: Bool = false
+    
     /// Multi-model assessment data (stored as encoded data to avoid schema changes)
     var encodedAssessmentData: Data? // Stores AssessmentData as JSON
     var modDate: String {
@@ -243,6 +246,21 @@ class CoverLetter: Identifiable, Hashable {
             // No prefix found, set the name directly
             name = newContent
         }
+    }
+    
+    /// Marks this cover letter as the chosen submission draft, clearing the flag from all others
+    func markAsChosenSubmissionDraft() {
+        guard let jobApp = jobApp else { return }
+        
+        // Clear the flag from all other cover letters for this job
+        for letter in jobApp.coverLetters {
+            if letter.id != self.id {
+                letter.isChosenSubmissionDraft = false
+            }
+        }
+        
+        // Set this one as chosen
+        self.isChosenSubmissionDraft = true
     }
 }
 

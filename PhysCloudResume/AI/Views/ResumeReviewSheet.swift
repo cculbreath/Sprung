@@ -177,13 +177,12 @@ struct ResumeReviewSheet: View {
                     }
                     
                     // AI Model Selection
-                    GroupBox(label: Text("AI Model").fontWeight(.medium)) {
-                        ModelPickerView(
-                            selectedModel: $preferredLLMModel,
-                            title: nil
-                        )
-                        .padding(.vertical, 4)
-                    }
+                    // Use vision capability filter for Fix Overflow since it requires image analysis
+                    DropdownModelPicker(
+                        selectedModel: $preferredLLMModel,
+                        requiredCapability: selectedReviewType == .fixOverflow ? .vision : nil,
+                        title: "AI Model"
+                    )
 
                     // Content area (GroupBox with contentView)
                     GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {

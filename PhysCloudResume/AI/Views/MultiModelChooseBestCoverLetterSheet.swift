@@ -99,12 +99,10 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     }
     
     private var modelSelectionSection: some View {
-        GroupBox("Select Models") {
-            ModelCheckboxListView(
-                selectedModels: $selectedModels,
-                sanitizeModelNames: false  // Keep raw model names for better distinction
-            )
-        }
+        CheckboxModelPicker(
+            selectedModels: $selectedModels,
+            title: "Select Models"
+        )
     }
     
     private var progressSection: some View {

@@ -16,10 +16,10 @@ class DatabaseSchemaFixer {
         
         Logger.debug("🔧 Starting database schema fix for: \(dbPath)")
         
-        // Backup the database first
-        try backupDatabase(at: dbPath)
+        // Check if schema fixes are actually needed before backing up
+        var needsFixing = false
         
-        // Open SQLite connection
+        // Quick check to see if fixes are needed
         var db: OpaquePointer?
         let result = sqlite3_open(dbPath, &db)
         
@@ -32,11 +32,85 @@ class DatabaseSchemaFixer {
             sqlite3_close(db)
         }
         
+        // Check if any fixes are needed
+        needsFixing = try checkIfFixesNeeded(db: db)
+        
+        if !needsFixing {
+            Logger.debug("✅ Database schema is up to date, no fixes needed")
+            return
+        }
+        
+        Logger.info("🔧 Database schema fixes needed, creating backup...")
+        // Only backup if we actually need to make changes
+        try backupDatabase(at: dbPath)
+        
+        
         try fixTreeNodeSchema(db: db)
         try fixResumeSchema(db: db)
         try fixResRefRelationshipSchema(db: db)
         
         Logger.debug("✅ Database schema fix completed")
+    }
+    
+    /// Checks if any schema fixes are needed without making changes
+    private static func checkIfFixesNeeded(db: OpaquePointer?) throws -> Bool {
+        var needsFixing = false
+        
+        // Check TreeNode schema
+        let checkChildrenColumn = "PRAGMA table_info(ZTREENODE);"
+        var hasChildrenColumn = false
+        
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, checkChildrenColumn, -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let columnName = String(cString: sqlite3_column_text(stmt, 1))
+                if columnName == "Z12CHILDREN" {
+                    hasChildrenColumn = true
+                    break
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        
+        if !hasChildrenColumn {
+            needsFixing = true
+        }
+        
+        // Check Resume schema
+        let checkFontColumn = "PRAGMA table_info(ZRESUME);"
+        var hasFontColumn = false
+        
+        if sqlite3_prepare_v2(db, checkFontColumn, -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let columnName = String(cString: sqlite3_column_text(stmt, 1))
+                if columnName == "Z11FONTSIZENODES" {
+                    hasFontColumn = true
+                    break
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        
+        if !hasFontColumn {
+            needsFixing = true
+        }
+        
+        // Check for join table
+        let checkJoinTable = "SELECT name FROM sqlite_master WHERE type='table' AND name='Z_10ENABLEDRESUMES';"
+        var hasJoinTable = false
+        
+        if sqlite3_prepare_v2(db, checkJoinTable, -1, &stmt, nil) == SQLITE_OK {
+            if sqlite3_step(stmt) == SQLITE_ROW {
+                hasJoinTable = true
+            }
+        }
+        sqlite3_finalize(stmt)
+        
+        if !hasJoinTable {
+            needsFixing = true
+        }
+        
+        return needsFixing
     }
     
     private static func backupDatabase(at path: String) throws {

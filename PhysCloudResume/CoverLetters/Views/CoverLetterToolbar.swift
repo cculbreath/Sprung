@@ -45,7 +45,27 @@ func CoverLetterToolbar(
                 Label("Batch Generate", systemImage: "square.stack.3d.up.fill")
             }
             .help("Generate cover letters with multiple models")
+            
+            // Cover Letter References button
+            CoverLetterReferencesButton()
 
+        }
+    }
+}
+
+/// Button that shows cover letter references in a popover
+struct CoverLetterReferencesButton: View {
+    @State private var showReferences = false
+    
+    var body: some View {
+        Button(action: {
+            showReferences.toggle()
+        }) {
+            Label("References", systemImage: "doc.text.magnifyingglass")
+        }
+        .help("Manage cover letter references")
+        .popover(isPresented: $showReferences) {
+            CoverLetterRefManagementView()
         }
     }
 }

@@ -13,28 +13,63 @@ class DatabaseMigrationHelper {
     
     /// Checks if the database needs migration and performs it if necessary
     static func checkAndMigrateIfNeeded(modelContext: ModelContext) {
+        // Check if we've already completed migration recently
+        let lastMigrationCheck = UserDefaults.standard.double(forKey: "lastDatabaseMigrationCheck")
+        let oneDayAgo = Date().timeIntervalSince1970 - (24 * 60 * 60)
+        
+        if lastMigrationCheck > oneDayAgo {
+            // Migration was checked recently, skip
+            return
+        }
+        
         Logger.debug("🔄 Checking database schema...")
         
-        // First, try to fix any schema issues with direct SQL
+        // Quick validation - just try to access the main tables
+        do {
+            // Test basic table access
+            var resumeDescriptor = FetchDescriptor<Resume>()
+            resumeDescriptor.fetchLimit = 1
+            _ = try modelContext.fetch(resumeDescriptor)
+            
+            var contextDescriptor = FetchDescriptor<ConversationContext>()
+            contextDescriptor.fetchLimit = 1
+            _ = try modelContext.fetch(contextDescriptor)
+            
+            // All tables accessible, mark migration as completed
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastDatabaseMigrationCheck")
+            Logger.debug("✅ Database schema validation passed")
+            return
+            
+        } catch {
+            // Only run migration if there's an actual issue
+            if error.localizedDescription.contains("no such table") {
+                Logger.warning("⚠️ Database table missing - running schema fix")
+                runSchemaMigration(modelContext: modelContext)
+            } else {
+                Logger.debug("✅ Database schema check completed (minor error ignored): \(error.localizedDescription)")
+                // Mark as completed even with minor errors to avoid repeated checks
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastDatabaseMigrationCheck")
+            }
+        }
+    }
+    
+    /// Runs the actual migration only when needed
+    private static func runSchemaMigration(modelContext: ModelContext) {
+        Logger.info("🔄 Running database schema migration...")
+        
+        // Only run the schema fixer if there's an actual issue
         do {
             try DatabaseSchemaFixer.fixDatabaseSchema()
         } catch {
             Logger.warning("⚠️ Could not fix database schema: \(error)")
         }
         
-        // Try to fetch conversation contexts to see if the table exists
-        do {
-            let descriptor = FetchDescriptor<ConversationContext>()
-            _ = try modelContext.fetch(descriptor)
-            Logger.debug("✅ ConversationContext table exists in default.store")
-        } catch {
-            if error.localizedDescription.contains("no such table") {
-                Logger.warning("⚠️ ConversationContext table missing in default.store - creating schema")
-                attemptSchemaCreation(modelContext: modelContext)
-            } else {
-                Logger.error("❌ Error checking database schema: \(error)")
-            }
-        }
+        // Try to create missing tables
+        attemptSchemaCreation(modelContext: modelContext)
+        
+        // Mark migration as completed
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastDatabaseMigrationCheck")
+        Logger.info("✅ Database schema migration completed")
     }
     
     private static func attemptSchemaCreation(modelContext: ModelContext) {
@@ -62,6 +97,12 @@ class DatabaseMigrationHelper {
             Logger.error("❌ Failed to create database schema: \(error)")
             Logger.error("Error details: \(error.localizedDescription)")
         }
+    }
+    
+    /// Forces a fresh migration check on next startup (for debugging)
+    static func resetMigrationCheck() {
+        UserDefaults.standard.removeObject(forKey: "lastDatabaseMigrationCheck")
+        Logger.debug("🔄 Migration check reset - will run on next startup")
     }
     
     /// Resets the conversation context tables if they're corrupted

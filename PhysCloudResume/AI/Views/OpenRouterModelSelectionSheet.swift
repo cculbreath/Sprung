@@ -2,22 +2,48 @@ import SwiftUI
 
 struct OpenRouterModelSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
+    @Environment(\.appState) private var appState
     
     @State private var searchText = ""
-    @State private var selectedCapability: ModelCapability?
+    @State private var selectedProvider: String?
     @State private var showOnlySelected = false
+    @State private var isSearchCollapsed = true
+    
+    // Capability filters
+    @State private var filterStructuredOutput = false
+    @State private var filterVision = false
+    @State private var filterReasoning = false
+    @State private var filterTextOnly = false
     
     private var openRouterService: OpenRouterService {
         appState.openRouterService
     }
     
+    private var availableProviders: [String] {
+        let providers = Set(openRouterService.availableModels.map { $0.providerName })
+        return Array(providers).sorted()
+    }
+    
     private var filteredModels: [OpenRouterModel] {
         var models = openRouterService.availableModels
         
-        // Filter by capability if selected
-        if let capability = selectedCapability {
-            models = openRouterService.getModelsWithCapability(capability)
+        // Filter by provider if selected
+        if let provider = selectedProvider {
+            models = models.filter { $0.providerName == provider }
+        }
+        
+        // Filter by capabilities
+        if filterStructuredOutput {
+            models = models.filter { $0.supportsStructuredOutput }
+        }
+        if filterVision {
+            models = models.filter { $0.supportsImages }
+        }
+        if filterReasoning {
+            models = models.filter { $0.supportsReasoning }
+        }
+        if filterTextOnly {
+            models = models.filter { $0.isTextToText && !$0.supportsImages }
         }
         
         // Filter by search text
@@ -42,48 +68,96 @@ struct OpenRouterModelSelectionSheet: View {
             VStack(spacing: 0) {
                 // Header with controls
                 VStack(spacing: 12) {
-                    // Search bar
+                    // Top row: Search and provider filter
                     HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        TextField("Search models...", text: $searchText)
-                            .textFieldStyle(.plain)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(8)
-                    
-                    // Filter controls
-                    HStack {
-                        // Capability filter
+                        // Collapsible search
+                        if !isSearchCollapsed {
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.secondary)
+                                TextField("Search models...", text: $searchText)
+                                    .textFieldStyle(.plain)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color(.controlBackgroundColor))
+                            .cornerRadius(6)
+                            .transition(.opacity)
+                        }
+                        
+                        Button {
+                            withAnimation {
+                                isSearchCollapsed.toggle()
+                                if isSearchCollapsed {
+                                    searchText = ""
+                                }
+                            }
+                        } label: {
+                            Image(systemName: isSearchCollapsed ? "magnifyingglass" : "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        
+                        Spacer()
+                        
+                        // Provider filter
                         Menu {
-                            Button("All Models") {
-                                selectedCapability = nil
+                            Button("All Providers") {
+                                selectedProvider = nil
                             }
                             
                             Divider()
                             
-                            ForEach(ModelCapability.allCases, id: \.self) { capability in
-                                Button {
-                                    selectedCapability = capability
-                                } label: {
-                                    HStack {
-                                        Image(systemName: capability.icon)
-                                        Text(capability.displayName)
-                                    }
+                            ForEach(availableProviders, id: \.self) { provider in
+                                Button(provider) {
+                                    selectedProvider = provider
                                 }
                             }
                         } label: {
                             HStack {
-                                Image(systemName: selectedCapability?.icon ?? "line.3.horizontal.decrease.circle")
-                                Text(selectedCapability?.displayName ?? "All Capabilities")
+                                Image(systemName: "building.2")
+                                Text(selectedProvider ?? "All Providers")
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color(.controlBackgroundColor))
                             .cornerRadius(6)
                         }
+                    }
+                    
+                    // Capability filters
+                    HStack {
+                        Toggle(isOn: $filterStructuredOutput) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "list.bullet.rectangle")
+                                Text("Structured")
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        
+                        Toggle(isOn: $filterVision) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "eye")
+                                Text("Vision")
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        
+                        Toggle(isOn: $filterReasoning) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "brain")
+                                Text("Reasoning")
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        
+                        Toggle(isOn: $filterTextOnly) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "text.alignleft")
+                                Text("Text Only")
+                            }
+                        }
+                        .toggleStyle(.checkbox)
                         
                         Spacer()
                         
@@ -92,13 +166,26 @@ struct OpenRouterModelSelectionSheet: View {
                             .toggleStyle(.switch)
                     }
                     
-                    // Selection summary
+                    // Selection summary and refresh
                     HStack {
                         Text("\(filteredModels.count) models")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
                         Spacer()
+                        
+                        // Refresh button as circle arrow
+                        Button {
+                            Task {
+                                await openRouterService.fetchModels()
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(openRouterService.isLoading)
                         
                         Text("\(appState.selectedOpenRouterModels.count) selected")
                             .font(.caption)
@@ -148,7 +235,8 @@ struct OpenRouterModelSelectionSheet: View {
                         ForEach(filteredModels) { model in
                             OpenRouterModelRow(
                                 model: model,
-                                isSelected: appState.selectedOpenRouterModels.contains(model.id)
+                                isSelected: appState.selectedOpenRouterModels.contains(model.id),
+                                pricingThresholds: openRouterService.pricingThresholds
                             ) { isSelected in
                                 if isSelected {
                                     appState.selectedOpenRouterModels.insert(model.id)
@@ -164,19 +252,35 @@ struct OpenRouterModelSelectionSheet: View {
             .navigationTitle("Choose Models")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Save") {
+                        // Models are already saved to selectedOpenRouterModels via binding
                         dismiss()
                     }
                 }
             }
         }
-        .frame(width: 800, height: 600)
+        .frame(width: 900, height: 650)
+        .onAppear {
+            // Auto-populate models when opening
+            if openRouterService.availableModels.isEmpty {
+                Task {
+                    await openRouterService.fetchModels()
+                }
+            }
+        }
     }
 }
 
 struct OpenRouterModelRow: View {
     let model: OpenRouterModel
     let isSelected: Bool
+    let pricingThresholds: [Double]
     let onToggle: (Bool) -> Void
     
     var body: some View {
@@ -192,17 +296,31 @@ struct OpenRouterModelRow: View {
             .buttonStyle(.plain)
             
             // Model info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(model.displayName)
                         .font(.headline)
-                        .lineLimit(1)
+                        .lineLimit(2)
                     
                     Spacer()
                     
-                    Text(model.costDescription)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    // Cost level with warning
+                    HStack(spacing: 4) {
+                        if model.isHighCostModel {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.caption)
+                        }
+                        
+                        Text(model.costLevelDescription(using: pricingThresholds))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(model.costLevel(using: pricingThresholds) >= 4 ? .orange : .secondary)
+                        
+                        Text(model.costDescription)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
                 Text(model.id)
@@ -214,23 +332,31 @@ struct OpenRouterModelRow: View {
                     Text(description)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
                 }
                 
-                // Capabilities
-                HStack(spacing: 8) {
-                    if model.supportsStructuredOutput {
-                        CapabilityTag(icon: "list.bullet.rectangle", text: "Structured")
-                    }
+                // Capabilities with lit/dim indicators
+                HStack(spacing: 12) {
+                    CapabilityIndicator(
+                        icon: "list.bullet.rectangle", 
+                        isSupported: model.supportsStructuredOutput
+                    )
                     
-                    if model.supportsImages {
-                        CapabilityTag(icon: "eye", text: "Vision")
-                    }
+                    CapabilityIndicator(
+                        icon: "eye", 
+                        isSupported: model.supportsImages
+                    )
                     
-                    if model.supportsReasoning {
-                        CapabilityTag(icon: "brain", text: "Reasoning")
-                    }
+                    CapabilityIndicator(
+                        icon: "brain", 
+                        isSupported: model.supportsReasoning
+                    )
+                    
+                    CapabilityIndicator(
+                        icon: "text.alignleft", 
+                        isSupported: model.isTextToText
+                    )
                     
                     Spacer()
                     
@@ -251,6 +377,18 @@ struct OpenRouterModelRow: View {
         .onTapGesture {
             onToggle(!isSelected)
         }
+    }
+}
+
+struct CapabilityIndicator: View {
+    let icon: String
+    let isSupported: Bool
+    
+    var body: some View {
+        Image(systemName: icon)
+            .font(.caption)
+            .foregroundColor(isSupported ? .accentColor : .secondary)
+            .opacity(isSupported ? 1.0 : 0.3)
     }
 }
 

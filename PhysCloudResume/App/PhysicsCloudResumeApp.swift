@@ -87,20 +87,34 @@ struct PhysicsCloudResumeApp: App {
     }
 }
 
-// Environment key for accessing AppState
-private struct AppStateKey: EnvironmentKey {
+// Environment key for accessing AppState  
+struct AppStateKey: EnvironmentKey {
     static let defaultValue: AppState? = nil
 }
 
 extension EnvironmentValues {
     var appState: AppState {
         get { 
-            guard let state = self[AppStateKey.self] else {
-                // This should not happen in normal operation since AppState is provided at root
-                fatalError("AppState not found in environment. Check that .environment(appState) is provided at the app root level.")
+            // During early initialization (like window restoration), return a temporary AppState
+            // that won't cause crashes but also won't interfere with the real one
+            guard let appState = self[AppStateKey.self] else {
+                // Use temporary fallback silently during early initialization
+                return MainActor.assumeIsolated {
+                    return TemporaryAppState.instance
+                }
             }
-            return state
+            return appState
         }
         set { self[AppStateKey.self] = newValue }
     }
+}
+
+// Temporary AppState for early initialization
+@MainActor
+private class TemporaryAppState {
+    static let instance: AppState = {
+        // This creates a temporary AppState that's only used during early initialization
+        // It will be replaced by the real AppState once the environment is properly set up
+        return AppState()
+    }()
 }

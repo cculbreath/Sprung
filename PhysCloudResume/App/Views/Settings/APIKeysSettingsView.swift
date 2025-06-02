@@ -12,25 +12,21 @@ struct APIKeysSettingsView: View {
     @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
     @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
     @AppStorage("proxycurlApiKey") private var proxycurlApiKey: String = "none"
-    @AppStorage("claudeApiKey") private var claudeApiKey: String = "none"
-    @AppStorage("grokApiKey") private var grokApiKey: String = "none"
-    @AppStorage("geminiApiKey") private var geminiApiKey: String = "none"
+    @AppStorage("openAiTTSApiKey") private var openAiTTSApiKey: String = "none"
 
     // State for managing editing mode for each key
     @State private var isEditingScrapingDog = false
     @State private var isEditingOpenAI = false
     @State private var isEditingProxycurl = false
-    @State private var isEditingClaude = false
-    @State private var isEditingGrok = false
-    @State private var isEditingGemini = false
+    @State private var isEditingOpenAITTS = false
+    @State private var isEditingOpenRouter = false
 
     // State for holding the edited value temporarily
     @State private var editedScrapingDogApiKey = ""
     @State private var editedOpenAiApiKey = ""
     @State private var editedProxycurlApiKey = ""
-    @State private var editedClaudeApiKey = ""
-    @State private var editedGrokApiKey = ""
-    @State private var editedGeminiApiKey = ""
+    @State private var editedOpenAiTTSApiKey = ""
+    @State private var editedOpenRouterApiKey = ""
 
     // State for hover effects on save/cancel buttons
     @State private var isHoveringCheckmark = false
@@ -41,6 +37,9 @@ struct APIKeysSettingsView: View {
     
     // App Storage for API keys
     @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
+    
+    // State for managing the Choose Models sheet
+    @State private var showModelSelectionSheet = false
 
     // Action to trigger model fetch when keys change
     var onOpenAIKeyUpdate: () -> Void = {} // Callback
@@ -69,6 +68,30 @@ struct APIKeysSettingsView: View {
                 .padding(.bottom, 5)
 
             VStack(spacing: 0) {
+                // OpenRouter API Key Row
+                apiKeyRow(
+                    label: "OpenRouter",
+                    icon: "globe",
+                    value: $openRouterApiKey,
+                    isEditing: $isEditingOpenRouter,
+                    editedValue: $editedOpenRouterApiKey,
+                    isHoveringCheckmark: $isHoveringCheckmark,
+                    isHoveringXmark: $isHoveringXmark,
+                    onSave: {
+                        // Reconfigure the OpenRouter service with the new API key
+                        appState.reconfigureOpenRouterService()
+                        
+                        if !openRouterApiKey.isEmpty {
+                            Task {
+                                await appState.openRouterService.fetchModels()
+                            }
+                        }
+                        updateLLMClient()
+                    }
+                )
+                
+                Divider()
+                
                 // Scraping Dog API Key Row
                 apiKeyRow(
                     label: "Scraping Dog",
@@ -79,59 +102,26 @@ struct APIKeysSettingsView: View {
                     isHoveringCheckmark: $isHoveringCheckmark,
                     isHoveringXmark: $isHoveringXmark
                 )
+                
                 Divider()
-                // OpenAI API Key Row
+                
+                // OpenAI TTS API Key Row
                 apiKeyRow(
-                    label: "OpenAI",
-                    icon: "sparkles", // Changed icon for OpenAI
-                    value: $openAiApiKey,
-                    isEditing: $isEditingOpenAI,
-                    editedValue: $editedOpenAiApiKey,
+                    label: "OpenAI TTS",
+                    icon: "speaker.wave.2",
+                    value: $openAiTTSApiKey,
+                    isEditing: $isEditingOpenAITTS,
+                    editedValue: $editedOpenAiTTSApiKey,
                     isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark,
-                    onSave: onOpenAIKeyUpdate // Trigger model fetch on save
+                    isHoveringXmark: $isHoveringXmark
                 )
+                
                 Divider()
-                // Claude API Key Row
-                apiKeyRow(
-                    label: "Claude",
-                    icon: "brain", // Icon for Anthropic Claude
-                    value: $claudeApiKey,
-                    isEditing: $isEditingClaude,
-                    editedValue: $editedClaudeApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark,
-                    onSave: onOpenAIKeyUpdate // Trigger model fetch on save
-                )
-                Divider()
-                // Grok API Key Row
-                apiKeyRow(
-                    label: "Grok",
-                    icon: "bolt.fill", // Icon for xAI Grok
-                    value: $grokApiKey,
-                    isEditing: $isEditingGrok,
-                    editedValue: $editedGrokApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark,
-                    onSave: onOpenAIKeyUpdate // Trigger model fetch on save
-                )
-                Divider()
-                // Gemini API Key Row
-                apiKeyRow(
-                    label: "Gemini",
-                    icon: "star.fill", // Icon for Google Gemini
-                    value: $geminiApiKey,
-                    isEditing: $isEditingGemini,
-                    editedValue: $editedGeminiApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark,
-                    onSave: onOpenAIKeyUpdate // Trigger model fetch on save
-                )
-                Divider()
+                
                 // Proxycurl API Key Row
                 apiKeyRow(
                     label: "Proxycurl",
-                    icon: "link.circle.fill", // Changed icon for Proxycurl
+                    icon: "link.circle.fill",
                     value: $proxycurlApiKey,
                     isEditing: $isEditingProxycurl,
                     editedValue: $editedProxycurlApiKey,
@@ -146,6 +136,65 @@ struct APIKeysSettingsView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.gray.opacity(0.7), lineWidth: 1)
             )
+        }
+        
+        // LLM Model Selection Section
+        VStack(alignment: .leading, spacing: 10) {
+            Text("LLM Model Selection")
+                .font(.headline)
+                .padding(.bottom, 5)
+            
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Configure which AI models are available for use")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                }
+                
+                HStack {
+                    Button("Choose Models...") {
+                        // Ensure OpenRouter service is configured before showing the sheet
+                        appState.reconfigureOpenRouterService()
+                        showModelSelectionSheet = true
+                    }
+                    .disabled(openRouterApiKey.isEmpty)
+                    
+                    Spacer()
+                    
+                    if !openRouterApiKey.isEmpty {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(.green)
+                                .frame(width: 8, height: 8)
+                            Text("\(appState.openRouterService.availableModels.count) available, \(appState.selectedOpenRouterModels.count) selected")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 8, height: 8)
+                            Text("OpenRouter API key required")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .padding(10)
+            .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+            )
+        }
+        .sheet(isPresented: $showModelSelectionSheet) {
+            OpenRouterModelSelectionSheet()
+                .environment(appState)
         }
     }
 

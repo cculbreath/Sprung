@@ -4,10 +4,10 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     let id: String
     let name: String
     let description: String?
-    let contextLength: Int
-    let architecture: Architecture
-    let pricing: Pricing
-    let supportedParameters: [String]
+    let contextLength: Int?
+    let architecture: Architecture?
+    let pricing: Pricing?
+    let supportedParameters: [String]?
     let created: TimeInterval?
     
     struct Architecture: Codable, Hashable {
@@ -27,10 +27,10 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     }
     
     struct Pricing: Codable, Hashable {
-        let prompt: String
-        let completion: String
-        let request: String
-        let image: String
+        let prompt: String?
+        let completion: String?
+        let request: String?
+        let image: String?
         let webSearch: String?
         let internalReasoning: String?
         
@@ -41,11 +41,13 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
         }
         
         var promptCostPer1M: Double {
-            Double(prompt) ?? 0.0
+            guard let prompt = prompt else { return 0.0 }
+            return Double(prompt) ?? 0.0
         }
         
         var completionCostPer1M: Double {
-            Double(completion) ?? 0.0
+            guard let completion = completion else { return 0.0 }
+            return Double(completion) ?? 0.0
         }
     }
     
@@ -58,20 +60,20 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
 
 extension OpenRouterModel {
     var supportsStructuredOutput: Bool {
-        supportedParameters.contains("response_format")
+        supportedParameters?.contains("response_format") ?? false
     }
     
     var supportsImages: Bool {
-        architecture.inputModalities.contains("image")
+        architecture?.inputModalities.contains("image") ?? false
     }
     
     var supportsReasoning: Bool {
-        supportedParameters.contains("reasoning") || 
-        supportedParameters.contains("include_reasoning")
+        guard let params = supportedParameters else { return false }
+        return params.contains("reasoning") || params.contains("include_reasoning")
     }
     
     var isTextToText: Bool {
-        architecture.modality == "text->text"
+        architecture?.modality == "text->text"
     }
     
     var displayName: String {
@@ -89,6 +91,10 @@ extension OpenRouterModel {
     }
     
     var costDescription: String {
+        guard let pricing = pricing else {
+            return "Pricing unavailable"
+        }
+        
         let promptCost = pricing.promptCostPer1M
         let completionCost = pricing.completionCostPer1M
         
@@ -96,7 +102,48 @@ extension OpenRouterModel {
             return "Free"
         }
         
-        return String(format: "$%.4f/$%.4f per 1M tokens", promptCost, completionCost)
+        return String(format: "$%.6f/$%.6f per 1M tokens", promptCost, completionCost)
+    }
+    
+    func costLevel(using thresholds: [Double] = [0.0, 0.5, 2.0, 10.0, 50.0]) -> Int {
+        guard let pricing = pricing else { return 0 }
+        
+        let promptCost = pricing.promptCostPer1M
+        let completionCost = pricing.completionCostPer1M
+        let avgCost = (promptCost + completionCost) / 2.0
+        
+        if avgCost == 0 { return 0 } // Free
+        
+        // Use provided thresholds for dynamic calculation
+        for (index, threshold) in thresholds.enumerated().dropFirst() {
+            if avgCost <= threshold {
+                return index
+            }
+        }
+        
+        return thresholds.count // Highest tier
+    }
+    
+    func costLevelDescription(using thresholds: [Double] = [0.0, 0.5, 2.0, 10.0, 50.0]) -> String {
+        let level = costLevel(using: thresholds)
+        switch level {
+        case 0: return "Free"
+        case 1: return "$"
+        case 2: return "$$"
+        case 3: return "$$$"
+        case 4: return "$$$$"
+        case 5: return "$$$$$"
+        default: return "?"
+        }
+    }
+    
+    var isHighCostModel: Bool {
+        guard let pricing = pricing else { return false }
+        
+        let promptCost = pricing.promptCostPer1M
+        // Check if 50k tokens would cost more than $0.50
+        let costFor50kTokens = (promptCost * 50.0) / 1000.0
+        return costFor50kTokens > 0.5
     }
 }
 

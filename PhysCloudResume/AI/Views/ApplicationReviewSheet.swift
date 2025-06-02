@@ -117,14 +117,11 @@ struct ApplicationReviewSheet: View {
                 customOptionsView
             }
             
-            // AI Model Selection
-            GroupBox(label: Text("AI Model").fontWeight(.medium)) {
-                ModelPickerView(
-                    selectedModel: $preferredLLMModel,
-                    title: nil
-                )
-                .padding(.vertical, 4)
-            }
+                    // AI Model Selection
+                    DropdownModelPicker(
+                        selectedModel: $preferredLLMModel,
+                        title: "AI Model"
+                    )
 
                     // Response area
                     GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
@@ -163,7 +160,7 @@ struct ApplicationReviewSheet: View {
     }
 
     // Persisted preferred model across the app
-    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
+    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = ""
 
     // MARK: - Custom Options View
 

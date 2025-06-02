@@ -39,7 +39,7 @@ This document outlines the complete migration from provider-specific LLM clients
 
 ## Implementation Plan
 
-### Phase 1: Core OpenRouter Infrastructure
+### Phase 1: Core OpenRouter Infrastructure [complete]
 
 #### 1.1 OpenRouter Model Structure
 Create new model representation for OpenRouter API response:
@@ -93,7 +93,7 @@ Reduce API key management to essentials:
 @AppStorage("selectedOpenRouterModels") var selectedOpenRouterModels: Set<String> = []
 ```
 
-### Phase 2: Client Architecture Overhaul
+### Phase 2: Client Architecture Overhaul [complete?]
 
 #### 2.1 Unified Client Factory
 Replace complex `AppLLMClientFactory` with simple OpenRouter client:
@@ -122,7 +122,7 @@ Simplify all LLM providers to use single OpenRouter client:
 - Implement per-model structured output detection
 - Add fallback system prompts for non-structured output models
 
-### Phase 3: UI/UX Modernization
+### Phase 3: UI/UX Modernization [incomplete]
 
 #### 3.1 Enhanced Model Selection Interface
 Update settings to display OpenRouter models with capability indicators:
@@ -161,11 +161,12 @@ Redesign cover letter management:
 - Integrate into both single and batch cover letter views
 - Remove dependency on separate inspector interface
 
-### Phase 4: Enhanced Features
+### Phase 4: Enhanced Features [not started?]
 
 #### 4.1 Local Cover Letter Selection
 Replace global `selectedCoverLetter` with local chosen draft system:
 - Add `isChosenSubmissionDraft: Bool` property to `CoverLetter` model
+- Add button to toggle ⭐️ to cover letter tab (or light up icon button to cover letter tab)
 - Display ⭐️ indicator for chosen submission drafts
 - Ensure only one draft per job application can be marked as chosen
 - Update all cover letter pickers to show star indicators
@@ -178,9 +179,13 @@ Add efficiency improvements to tree node management:
 
 #### 4.3 UI Polish and Clarity
 Visual improvements for better user experience:
-- Change recommend job button to medal.star system icon
-- Ensure clear visual distinction between job and cover letter recommendation buttons
+- Change recommend job button to medal.star system icon [This change was innapropriately applied to recommend cover letter]
 - Maintain consistent iconography throughout the application
+
+#### 4.4 Breakout Toolbar Buttons
+- Previous implementation changed the visability of toolbar buttons depending on active tab. Instead put buttons into a disabled state when unavailable.
+- Previous implementation used option + click for alternate operations. Instead, let's give each operation its own button. 
+- Toolbar Buttons (icon): Show Sidebar (system default icon) Show Sources (newspaper icon) Recommend Job Application (medal.star) New Job Application (note.text.badge.plus) {Status Badge | Two Line Job Title and Company | Spacer} Create New Resume Revisions (wand.and.sparkles and wand.and.rays with .variableColor.iterative.dimInactiveLayers.nonReversing animation when LLM op is busy) Create Resume Revisions with Clarifying Questions (custom.wand.and.sparkles.badge.questionmark and custom.wand.and.rays.inverse.badge.questionmark with .variableColor.iterative.dimInactiveLayers.nonReversing animation when LLM op is busy) Resume Review Sheet (character.magnify) Generate Cover Letter (custom.append.page.badge.plus) Batch Cover Letter Ops (square.stack.3d.up.fill) Choose Best Cover Letter (medal) Multi-model Choose Best Cover Letter (custom.medal.square.stack) Read Cover Letter (current speaker TTS icon implementation) Review Application (mail.and.text.magnifyingglass) Show Resume Inspector (system default)
 
 ### Phase 5: TTS Functionality Preservation
 

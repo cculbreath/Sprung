@@ -82,40 +82,10 @@ struct BatchCoverLetterView: View {
     }
     
     private var modelSelectionBox: some View {
-        GroupBox("Select Models") {
-            VStack(alignment: .leading, spacing: 8) {
-                let availableModels = appState.selectedOpenRouterModels.isEmpty ? 
-                    openRouterService.availableModels.map(\.id) : 
-                    Array(appState.selectedOpenRouterModels)
-                
-                if availableModels.isEmpty {
-                    Text("No models available - Configure OpenRouter in Settings")
-                        .foregroundColor(.secondary)
-                        .italic()
-                } else {
-                    ForEach(availableModels, id: \.self) { modelId in
-                        HStack {
-                            Toggle(isOn: Binding(
-                                get: { selectedModels.contains(modelId) },
-                                set: { isSelected in
-                                    if isSelected {
-                                        selectedModels.insert(modelId)
-                                    } else {
-                                        selectedModels.remove(modelId)
-                                    }
-                                }
-                            )) {
-                                if let model = openRouterService.findModel(id: modelId) {
-                                    Text(model.displayName)
-                                } else {
-                                    Text(modelId)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        CheckboxModelPicker(
+            selectedModels: $selectedModels,
+            title: "Select Models"
+        )
     }
     
     private var revisionsBox: some View {
@@ -157,8 +127,11 @@ struct BatchCoverLetterView: View {
                         .padding(.bottom, 4)
                         
                         // Standard model picker
-                        ModelPickerView(selectedModel: $revisionModel, showRefreshButton: false)
-                            .environment(appState)
+                        DropdownModelPicker(
+                            selectedModel: $revisionModel,
+                            title: "Select Revision Model",
+                            showInGroupBox: false
+                        )
                     }
                 }
             }
@@ -183,7 +156,7 @@ struct BatchCoverLetterView: View {
                                                     // use it as the default revision model
                                                     if selectedLetters.count == 1, 
                                                        let model = letter.generationModel,
-                                                       revisionModel.isEmpty || revisionModel == OpenAIModelFetcher.getPreferredModelString() {
+                                                       revisionModel.isEmpty {
                                                         revisionModel = model
                                                     }
                                                 } else {
@@ -197,7 +170,7 @@ struct BatchCoverLetterView: View {
                                                 HStack {
                                                     Text("Modified: \(letter.moddedDate.formatted())")
                                                     if let model = letter.generationModel {
-                                                        Text("• \(AIModels.friendlyModelName(for: model) ?? model)")
+                                                        Text("• \(openRouterService.friendlyModelName(for: model))")
                                                     }
                                                 }
                                                 .font(.caption)
@@ -237,14 +210,10 @@ struct BatchCoverLetterView: View {
             }
             
             // Model picker for revisions using OpenRouter
-            GroupBox("Revision Model") {
-                ModelPickerView(
-                    selectedModel: $revisionModel,
-                    title: "Select Model for Revisions",
-                    useModelSelection: true
-                )
-                .environment(appState)
-            }
+            DropdownModelPicker(
+                selectedModel: $revisionModel,
+                title: "Revision Model"
+            )
         }
     }
     
@@ -322,19 +291,10 @@ struct BatchCoverLetterView: View {
         } else if revisionModel.isEmpty {
             return "Not selected"
         } else {
-            return AIModels.friendlyModelName(for: revisionModel) ?? revisionModel
+            return openRouterService.friendlyModelName(for: revisionModel)
         }
     }
     
-    /// Fetches all models from enabled providers (exact same logic as ModelPickerView)
-    private func fetchModels() {
-        Logger.debug("Fetching all model lists")
-        
-        // Fetch OpenRouter models
-        Task {
-            await openRouterService.fetchModels()
-        }
-    }
     
     private func startBatchGeneration() {
         guard let app = jobAppStore.selectedApp else { return }
@@ -426,16 +386,3 @@ struct BatchCoverLetterView: View {
     }
 }
 
-// Checkbox toggle style
-struct CheckboxToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack {
-            Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
-                .foregroundColor(configuration.isOn ? .accentColor : .secondary)
-                .onTapGesture {
-                    configuration.isOn.toggle()
-                }
-            configuration.label
-        }
-    }
-}

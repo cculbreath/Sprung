@@ -70,7 +70,7 @@ struct TabWrapperView: View {
 
             }.id($tabRefresh.wrappedValue)
                 .toolbar {
-                    buildToolbar(
+                    buildUnifiedToolbar(
                         selectedTab: $selectedTab,
                         listingButtons: $listingButtons,
                         letterButtons: $coverLetterButtons,
