@@ -9,14 +9,26 @@ func buildUnifiedToolbar(
     listingButtons: Binding<SaveButtons>,
     letterButtons: Binding<CoverLetterButtons>,
     resumeButtons: Binding<ResumeButtons>,
-    refresh: Binding<Bool>
+    refresh: Binding<Bool>,
+    showApplicationReviewSheet: Binding<Bool>,
+    showResumeReviewSheet: Binding<Bool>,
+    showClarifyingQuestionsSheet: Binding<Bool>,
+    showChooseBestCoverLetterSheet: Binding<Bool>,
+    showMultiModelChooseBestSheet: Binding<Bool>,
+    clarifyingQuestions: Binding<[ClarifyingQuestion]>
 ) -> some ToolbarContent {
     UnifiedToolbar(
         selectedTab: selectedTab,
         listingButtons: listingButtons,
         letterButtons: letterButtons,
         resumeButtons: resumeButtons,
-        refresh: refresh
+        refresh: refresh,
+        showApplicationReviewSheet: showApplicationReviewSheet,
+        showResumeReviewSheet: showResumeReviewSheet,
+        showClarifyingQuestionsSheet: showClarifyingQuestionsSheet,
+        showChooseBestCoverLetterSheet: showChooseBestCoverLetterSheet,
+        showMultiModelChooseBestSheet: showMultiModelChooseBestSheet,
+        clarifyingQuestions: clarifyingQuestions
     )
 }
 
@@ -30,18 +42,15 @@ struct UnifiedToolbar: ToolbarContent {
     @Binding var letterButtons: CoverLetterButtons
     @Binding var resumeButtons: ResumeButtons
     @Binding var refresh: Bool
+    @Binding var showApplicationReviewSheet: Bool
+    @Binding var showResumeReviewSheet: Bool
+    @Binding var showClarifyingQuestionsSheet: Bool
+    @Binding var showChooseBestCoverLetterSheet: Bool
+    @Binding var showMultiModelChooseBestSheet: Bool
+    @Binding var clarifyingQuestions: [ClarifyingQuestion]
     
-    @State private var showNewAppSheet = false
-    @State private var showApplicationReviewSheet = false
-    @State private var showResumeReviewSheet = false
-    @State private var showClarifyingQuestionsSheet = false
-    @State private var showChooseBestCoverLetterSheet = false
-    @State private var showMultiModelChooseBestSheet = false
     @State private var isGeneratingResume = false
     @State private var isGeneratingCoverLetter = false
-    @State private var clarifyingQuestions: [ClarifyingQuestion] = []
-    
-    @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
     
     private var selectedResumeBinding: Binding<Resume?> {
         Binding<Resume?>(
@@ -55,210 +64,297 @@ struct UnifiedToolbar: ToolbarContent {
     }
     
     var body: some ToolbarContent {
-        // Left side - Navigation items (sidebar handled automatically by NavigationSplitView)
-        
+        // ───── Left edge items ─────
         if let selApp = jobAppStore.selectedApp {
             ToolbarItem(placement: .navigation) { 
                 selApp.statusTag 
             }
             
             ToolbarItem(placement: .navigation) {
-                VStack(alignment: .leading) {
-                    Text(selApp.jobPosition).font(.headline).lineLimit(1)
-                    Text(selApp.companyName).font(.caption).lineLimit(1)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(selApp.jobPosition)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 250, alignment: .leading)
+                    Text(selApp.companyName)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 250, alignment: .leading)
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         
-        // Center spacer
-        ToolbarItem(placement: .principal) { 
-            Spacer() 
-        }
-        
-        // Right side - All action buttons  
-        ToolbarItemGroup(placement: .primaryAction) {
-            HStack(spacing: 8) {
-                // Show Sources
-                Button(action: {
-                    // TODO: Implement show sources functionality
-                }) {
-                    Image(systemName: "newspaper")
+        // ───── Resume Operations cluster ─────
+        ToolbarItemGroup {
+            resumeButton("Customize", "wand.and.sparkles", action: {
+                if let resume = selectedResumeBinding.wrappedValue {
+                    isGeneratingResume = true
                 }
-                .help("Show Sources")
-                
-                // Job Management
-                RecommendJobButton()
-                
-                Button(action: {
-                    showNewAppSheet = true
-                }) {
-                    Image(systemName: "note.text.badge.plus")
-                }
-                .help("New Job Application")
-                .sheet(isPresented: $showNewAppSheet) {
-                    NewAppSheetView(isPresented: $showNewAppSheet)
-                        .environment(jobAppStore)
-                }
-                
-                Divider()
-                
-                // Resume Operations
-                Button(action: {
-                    if let resume = selectedResumeBinding.wrappedValue {
-                        isGeneratingResume = true
-                        // Trigger AI resume generation
-                    }
-                }) {
-                    if isGeneratingResume {
-                        Image(systemName: "wand.and.rays")
-                            .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
-                    } else {
-                        Image(systemName: "wand.and.sparkles")
-                    }
-                }
-                .help("Create Resume Revisions")
-                .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
-                
-                Button(action: {
-                    clarifyingQuestions = []
-                    showClarifyingQuestionsSheet = true
-                }) {
+            }, disabled: selectedResumeBinding.wrappedValue?.rootNode == nil, 
+            help: "Create Resume Revisions")
+            
+            Spacer().frame(width: 16)
+            
+            Button(action: {
+                clarifyingQuestions = []
+                showClarifyingQuestionsSheet = true
+            }) {
+                VStack(spacing: 3) {
                     if isGeneratingResume {
                         Image("custom.wand.and.rays.inverse.badge.questionmark")
-                            .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                            .font(.system(size: 18))
+                            .frame(height: 20)
                     } else {
                         Image("custom.wand.and.sparkles.badge.questionmark")
+                            .font(.system(size: 18))
+                            .frame(height: 20)
                     }
+                    Text("Clarify & Customize")
+                        .font(.system(size: 11))
+                        .frame(height: 14)
                 }
-                .help("Create Resume Revisions with Clarifying Questions")
-                .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
-                .sheet(isPresented: $showClarifyingQuestionsSheet) {
-                    ClarifyingQuestionsSheet(
-                        questions: clarifyingQuestions,
-                        isPresented: $showClarifyingQuestionsSheet,
-                        onSubmit: { answers in
-                            showClarifyingQuestionsSheet = false
-                        }
-                    )
-                }
-                
-                Button(action: {
-                    showResumeReviewSheet = true
-                }) {
-                    Image(systemName: "character.magnify")
-                }
-                .help("AI Resume Review")
-                .disabled(selectedResumeBinding.wrappedValue == nil)
-                .sheet(isPresented: $showResumeReviewSheet) {
-                    ResumeReviewSheet(selectedResume: selectedResumeBinding)
-                }
-                
-                Divider()
-                
-                // Cover Letter Operations
-                Button(action: {
-                    if let cL = coverLetterStore.cL {
-                        isGeneratingCoverLetter = true
-                        let newCL = coverLetterStore.createDuplicate(letter: cL)
-                        newCL.currentMode = .generate
-                        coverLetterStore.cL = newCL
+                .frame(minWidth: 60, minHeight: 50)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .help("Create Resume Revisions with Clarifying Questions")
+            .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
+            .sheet(isPresented: $showClarifyingQuestionsSheet) {
+                ClarifyingQuestionsSheet(
+                    questions: clarifyingQuestions,
+                    isPresented: $showClarifyingQuestionsSheet,
+                    onSubmit: { answers in
+                        showClarifyingQuestionsSheet = false
                     }
-                }) {
+                )
+            }
+            
+            Spacer().frame(width: 16)
+            
+            resumeButton("Optimize", "character.magnify", action: {
+                showResumeReviewSheet = true
+            }, disabled: selectedResumeBinding.wrappedValue == nil,
+            help: "AI Resume Review")
+        }
+        
+        // ───── Cover Letter Operations cluster ─────
+        ToolbarItemGroup {
+            Button(action: {
+                if let cL = coverLetterStore.cL {
+                    isGeneratingCoverLetter = true
+                    let newCL = coverLetterStore.createDuplicate(letter: cL)
+                    newCL.currentMode = .generate
+                    coverLetterStore.cL = newCL
+                }
+            }) {
+                VStack(spacing: 3) {
                     Image("custom.append.page.badge.plus")
+                        .font(.system(size: 18))
+                        .frame(height: 20)
+                    Text("Cover Letter")
+                        .font(.system(size: 11))
+                        .frame(height: 14)
                 }
-                .help("Generate Cover Letter")
-                .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-                
-                Button(action: {
-                    letterButtons.showBatchGeneration = true
-                }) {
-                    Image(systemName: "square.stack.3d.up.fill")
-                }
-                .help("Batch Cover Letter Operations")
-                .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-                
-                Button(action: {
-                    showChooseBestCoverLetterSheet = true
-                }) {
-                    Image(systemName: "medal")
-                }
-                .help("Choose Best Cover Letter")
-                .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
-                .sheet(isPresented: $showChooseBestCoverLetterSheet) {
-                    if let jobApp = jobAppStore.selectedApp {
-                        ChooseBestCoverLetterSheet(jobApp: jobApp)
-                    }
-                }
-                
-                Button(action: {
-                    showMultiModelChooseBestSheet = true
-                }) {
+                .frame(minWidth: 60, minHeight: 50)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .help("Generate Cover Letter")
+            .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+            
+            Spacer().frame(width: 16)
+            
+            coverLetterButton("Batch Letter", "square.stack.3d.up.fill", action: {
+                letterButtons.showBatchGeneration = true
+            }, disabled: jobAppStore.selectedApp?.selectedRes == nil,
+            help: "Batch Cover Letter Operations")
+            
+            Spacer().frame(width: 16)
+            
+            coverLetterButton("Best Letter", "medal", action: {
+                showChooseBestCoverLetterSheet = true
+            }, disabled: (jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2,
+            help: "Choose Best Cover Letter")
+            
+            Spacer().frame(width: 16)
+            
+            Button(action: {
+                showMultiModelChooseBestSheet = true
+            }) {
+                VStack(spacing: 3) {
                     Image("custom.medal.square.stack")
+                        .font(.system(size: 18))
+                        .frame(height: 20)
+                    Text("Committee")
+                        .font(.system(size: 11))
+                        .frame(height: 14)
                 }
-                .help("Multi-model Choose Best Cover Letter")
-                .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
-                .sheet(isPresented: $showMultiModelChooseBestSheet) {
-                    if let jobApp = jobAppStore.selectedApp,
-                       let currentCoverLetter = coverLetterStore.cL {
-                        MultiModelChooseBestCoverLetterSheet(coverLetter: .constant(currentCoverLetter))
-                    }
-                }
-                
+                .frame(minWidth: 60, minHeight: 50)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .help("Multi-model Choose Best Cover Letter")
+            .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
+        }
+        
+        // Flexible space pushes the rest to the right
+        ToolbarItem { Spacer() }
+        
+        // ───── Right-hand cluster ─────
+        if UserDefaults.standard.bool(forKey: "ttsEnabled") {
+            ToolbarItemGroup(placement: .primaryAction) {
                 TTSButton()
                     .disabled(coverLetterStore.cL?.generated != true)
                 
-                Divider()
+                Spacer().frame(width: 16)
                 
-                // Application Review
-                Button(action: {
+                sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
                     showApplicationReviewSheet = true
-                }) {
-                    Image(systemName: "mail.and.text.magnifyingglass")
-                }
-                .help("Review Application")
-                .disabled(
-                    jobAppStore.selectedApp?.selectedRes == nil ||
-                    jobAppStore.selectedApp?.selectedCover == nil ||
-                    jobAppStore.selectedApp?.selectedCover?.generated != true
-                )
-                .sheet(isPresented: $showApplicationReviewSheet) {
-                    if let selApp = jobAppStore.selectedApp,
-                       let currentResume = selApp.selectedRes,
-                       let currentCoverLetter = selApp.selectedCover,
-                       currentCoverLetter.generated {
-                        ApplicationReviewSheet(
-                            jobApp: selApp,
-                            resume: currentResume,
-                            availableCoverLetters: selApp.coverLetters.filter { $0.generated }.sorted { $0.moddedDate > $1.moddedDate }
-                        )
-                    }
-                }
+                }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
+                           jobAppStore.selectedApp?.selectedCover == nil ||
+                           jobAppStore.selectedApp?.selectedCover?.generated != true,
+                help: "Review Application")
                 
-                Button(action: {
+                Spacer().frame(width: 16)
+                
+                sidebarButton("Inspector", "sidebar.right", action: {
                     resumeButtons.showResumeInspector.toggle()
-                }) {
-                    Image(systemName: "sidebar.right")
-                }
-                .help("Show Resume Inspector")
-                .disabled(selectedTab != .resume)
+                }, disabled: selectedTab != .resume,
+                help: "Show Resume Inspector")
+            }
+        } else {
+            ToolbarItemGroup(placement: .primaryAction) {
+                sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
+                    showApplicationReviewSheet = true
+                }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
+                           jobAppStore.selectedApp?.selectedCover == nil ||
+                           jobAppStore.selectedApp?.selectedCover?.generated != true,
+                help: "Review Application")
+                
+                Spacer().frame(width: 16)
+                
+                sidebarButton("Inspector", "sidebar.right", action: {
+                    resumeButtons.showResumeInspector.toggle()
+                }, disabled: selectedTab != .resume,
+                help: "Show Resume Inspector")
             }
         }
     }
+    
+    // Helper functions for consistent button styling
+    @ViewBuilder
+    private func resumeButton(_ title: String,
+                              _ systemName: String,
+                              action: @escaping () -> Void,
+                              disabled: Bool = false,
+                              help: String) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                if isGeneratingResume && (title == "Customize") {
+                    Image(systemName: "wand.and.rays")
+                        .font(.system(size: 18))
+                        .frame(height: 20)
+                        .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                } else {
+                    Image(systemName: systemName)
+                        .font(.system(size: 18))
+                        .frame(height: 20)
+                }
+                Text(title)
+                    .font(.system(size: 11))
+                    .frame(height: 14)
+            }
+            .frame(minWidth: 60, minHeight: 50)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .disabled(disabled)
+    }
+    
+    @ViewBuilder
+    private func coverLetterButton(_ title: String,
+                                   _ systemName: String,
+                                   action: @escaping () -> Void,
+                                   disabled: Bool = false,
+                                   help: String) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: systemName)
+                    .font(.system(size: 18))
+                    .frame(height: 20)
+                Text(title)
+                    .font(.system(size: 11))
+                    .frame(height: 14)
+            }
+            .frame(minWidth: 60, minHeight: 50)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .disabled(disabled)
+    }
+    
+    @ViewBuilder
+    private func actionButton(_ title: String,
+                              _ systemName: String,
+                              action: @escaping () -> Void,
+                              disabled: Bool = false,
+                              help: String) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title2)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .disabled(disabled)
+    }
+    
+    @ViewBuilder
+    private func sidebarButton(_ title: String,
+                               _ systemName: String,
+                               action: @escaping () -> Void,
+                               disabled: Bool = false,
+                               help: String) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: systemName)
+                    .font(.system(size: 18))
+                    .frame(height: 20)
+                Text(title)
+                    .font(.system(size: 11))
+                    .frame(height: 14)
+            }
+            .frame(minWidth: 60, minHeight: 50)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .disabled(disabled)
+    }
 }
 
-// TTS Button extracted from existing implementation
+// TTS Button
 struct TTSButton: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
     
     var body: some View {
         if ttsEnabled {
-            // Implementation would come from existing TTS button
             Button(action: {
                 // TTS action
             }) {
-                Image(systemName: "speaker.wave.2")
+                VStack(spacing: 3) {
+                    Image(systemName: "speaker.wave.2")
+                        .font(.system(size: 18))
+                        .frame(height: 20)
+                    Text("Read Aloud")
+                        .font(.system(size: 11))
+                        .frame(height: 14)
+                }
+                .frame(minWidth: 60, minHeight: 50)
             }
+            .buttonStyle(.plain)
             .help("Read Cover Letter")
         }
     }

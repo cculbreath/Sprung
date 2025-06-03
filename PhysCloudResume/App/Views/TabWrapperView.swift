@@ -20,6 +20,14 @@ struct TabWrapperView: View {
     )
     @State private var hasVisitedResumeTab: Bool = false
     @Binding var tabRefresh: Bool
+    
+    // Sheet states for unified toolbar
+    @State private var showApplicationReviewSheet = false
+    @State private var showResumeReviewSheet = false
+    @State private var showClarifyingQuestionsSheet = false
+    @State private var showChooseBestCoverLetterSheet = false
+    @State private var showMultiModelChooseBestSheet = false
+    @State private var clarifyingQuestions: [ClarifyingQuestion] = []
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
@@ -75,9 +83,16 @@ struct TabWrapperView: View {
                         listingButtons: $listingButtons,
                         letterButtons: $coverLetterButtons,
                         resumeButtons: $resumeButtons,
-                        refresh: $tabRefresh
+                        refresh: $tabRefresh,
+                        showApplicationReviewSheet: $showApplicationReviewSheet,
+                        showResumeReviewSheet: $showResumeReviewSheet,
+                        showClarifyingQuestionsSheet: $showClarifyingQuestionsSheet,
+                        showChooseBestCoverLetterSheet: $showChooseBestCoverLetterSheet,
+                        showMultiModelChooseBestSheet: $showMultiModelChooseBestSheet,
+                        clarifyingQuestions: $clarifyingQuestions
                     )
                 }
+                .toolbarBackground(.visible, for: .windowToolbar)
 
                 .onChange(of: jobAppStore.selectedApp) { _, _ in
                     updateMyLetter()
@@ -100,6 +115,43 @@ struct TabWrapperView: View {
                 .sheet(isPresented: $refPopup) {
                     ResRefView()
                         .padding()
+                }
+                .sheet(isPresented: $showResumeReviewSheet) {
+                    if let selectedResume = jobAppStore.selectedApp?.selectedRes {
+                        ResumeReviewSheet(selectedResume: .constant(selectedResume))
+                    }
+                }
+                .sheet(isPresented: $showClarifyingQuestionsSheet) {
+                    ClarifyingQuestionsSheet(
+                        questions: clarifyingQuestions,
+                        isPresented: $showClarifyingQuestionsSheet,
+                        onSubmit: { answers in
+                            showClarifyingQuestionsSheet = false
+                        }
+                    )
+                }
+                .sheet(isPresented: $showChooseBestCoverLetterSheet) {
+                    if let jobApp = jobAppStore.selectedApp {
+                        ChooseBestCoverLetterSheet(jobApp: jobApp)
+                    }
+                }
+                .sheet(isPresented: $showMultiModelChooseBestSheet) {
+                    if let jobApp = jobAppStore.selectedApp,
+                       let currentCoverLetter = coverLetterStore.cL {
+                        MultiModelChooseBestCoverLetterSheet(coverLetter: .constant(currentCoverLetter))
+                    }
+                }
+                .sheet(isPresented: $showApplicationReviewSheet) {
+                    if let selApp = jobAppStore.selectedApp,
+                       let currentResume = selApp.selectedRes,
+                       let currentCoverLetter = selApp.selectedCover,
+                       currentCoverLetter.generated {
+                        ApplicationReviewSheet(
+                            jobApp: selApp,
+                            resume: currentResume,
+                            availableCoverLetters: selApp.coverLetters.filter { $0.generated }.sorted { $0.moddedDate > $1.moddedDate }
+                        )
+                    }
                 }
                 .onAppear {
                     updateMyLetter()

@@ -45,7 +45,7 @@ struct PhysicsCloudResumeApp: App {
     }
 
     var body: some Scene {
-        Window("Physics Cloud Résumé", id: "myApp") {
+        Window("", id: "myApp") {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization
                 .environment(appState)
                 .onAppear {
@@ -54,7 +54,7 @@ struct PhysicsCloudResumeApp: App {
                 }
         }
         .modelContainer(modelContainer)
-        .windowToolbarStyle(UnifiedWindowToolbarStyle(showsTitle: false))
+        .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {

@@ -32,11 +32,6 @@ struct JobAppDetailView: View {
                     ApplySection(buttons: $buttons)
                 }
                 .padding(.horizontal).padding(.vertical)
-                .navigationTitle(
-                    buttons.edit
-                        ? "Editing \(form.jobPosition) at \(form.companyName)"
-                        : "\(selectedApp.jobPosition) at \(selectedApp.companyName)"
-                )
                 .onChange(of: buttons.edit) { _, newValue in
                     if newValue {
                         jobAppStore.editWithForm()

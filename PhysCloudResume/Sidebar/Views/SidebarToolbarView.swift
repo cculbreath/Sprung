@@ -8,52 +8,35 @@ struct SidebarToolbarView: View {
     @Binding var showNewAppSheet: Bool
 
     var body: some View {
-        // No HStack - just build the toolbar content directly
-        Spacer() // Push buttons to the right
-
-        // --- Show/Hide Sources Button ---
-        Button {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
-                showSlidingList.toggle()
+        // Push buttons to the right
+        Spacer()
+        
+        HStack(spacing: 16) {
+            // --- Show Sources Button ---
+            Button {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
+                    showSlidingList.toggle()
+                }
+            } label: {
+                Image(systemName: "newspaper")
+                    .font(.system(size: 18))
+                    .foregroundColor(showSlidingList ? .accentColor : .primary)
             }
-        } label: {
-            Label(
-                showSlidingList ? "Hide Sources" : "Show Sources",
-                systemImage: "append.page"
-            )
-            .foregroundColor(showSlidingList ? .accentColor : .secondary)
-            .font(.system(size: 14))
-            .imageScale(.large)
-        }
-        .buttonStyle(.plain)
-        .labelStyle(.iconOnly)
-        .help(showSlidingList ? "Hide Résumé Sources Panel" : "Show Résumé Sources Panel")
+            .buttonStyle(.plain)
+            .help("Show Sources")
 
-        // --- AI Job Recommendation Button ---
-        // Use a simple button that doesn't access AppState during early initialization
-        Button(action: {
-            // This will be handled safely when clicked
-            print("Job recommendation button clicked")
-        }) {
-            Label("Find Best Match", systemImage: "sparkles.rectangle.stack")
-                .foregroundColor(.primary)
-                .font(.system(size: 14))
-                .imageScale(.large)
-        }
-        .buttonStyle(.plain)
-        .help("Find the best job match based on your qualifications")
+            // --- AI Job Recommendation Button ---
+            RecommendJobButton()
 
-        // --- New Application Button ---
-        Button {
-            showNewAppSheet = true
-        } label: {
-            Label("New Application", systemImage: "plus.square.on.square")
-                .foregroundColor(.secondary)
-                .font(.system(size: 14))
-                .imageScale(.large)
+            // --- New Application Button ---
+            Button {
+                showNewAppSheet = true
+            } label: {
+                Image(systemName: "note.text.badge.plus")
+                    .font(.system(size: 18))
+            }
+            .buttonStyle(.plain)
+            .help("New Job Application")
         }
-        .buttonStyle(.plain)
-        .labelStyle(.iconOnly)
-        .help("Add New Job Application")
     }
 }

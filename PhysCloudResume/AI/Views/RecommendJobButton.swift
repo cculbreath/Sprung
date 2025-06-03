@@ -15,6 +15,29 @@ struct ErrorMessageWrapper: Identifiable {
     let message: String
 }
 
+// Custom button style matching sidebar appearance with text labels
+struct RecommendButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+    
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 2) {
+            configuration.label
+        }
+        .foregroundColor(configuration.isPressed ? .accentColor : (isHovering ? .primary : .secondary))
+        .frame(minWidth: 60)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(configuration.isPressed ? Color.gray.opacity(0.2) : (isHovering ? Color.gray.opacity(0.1) : Color.clear))
+        )
+        .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
 struct RecommendJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(AppState.self) private var appState
@@ -26,24 +49,16 @@ struct RecommendJobButton: View {
 
     var body: some View {
         Button(action: { showModelPicker = true }) {
-            HStack {
-                if isLoading {
-                    Image(systemName: "wand.and.rays")
-                        .font(.system(size: 12))
-                        .frame(width: 16, height: 16)
-                        .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
-                } else {
-                    Image(systemName: "medal.star")
-                        .foregroundColor(.primary)
-                }
-                Text("Find Best Match")
-                    .font(.system(size: 12))
+            if isLoading {
+                Image(systemName: "wand.and.rays")
+                    .font(.system(size: 18))
+                    .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
+            } else {
+                Image(systemName: "medal.star")
+                    .font(.system(size: 18))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(6)
         }
+        .buttonStyle(.plain)
         .disabled(isLoading)
         .help("Find the best job match based on your qualifications")
         .alert(item: $errorWrapper) { wrapper in
