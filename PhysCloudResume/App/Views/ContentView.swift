@@ -48,8 +48,7 @@ struct ContentView: View {
                 if let selApp = jobAppStore.selectedApp {
                     // Embed TabWrapperView directly
                     TabWrapperView(selectedTab: $selectedTab, tabRefresh: $tabRefresh)
-                        // Apply navigationTitle here based on selected App
-                        .navigationTitle("\(selApp.jobPosition) at \(selApp.companyName)")
+                        .navigationTitle(" ")
                 } else {
                     // Placeholder when no job application is selected
                     Text("Select a Job Application")
