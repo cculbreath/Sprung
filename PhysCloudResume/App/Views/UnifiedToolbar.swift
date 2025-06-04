@@ -51,8 +51,11 @@ struct UnifiedToolbar: ToolbarContent {
 
     @State private var isGeneratingResume = false
     @State private var isGeneratingCoverLetter = false
+    @State private var isGeneratingQuestions = false
+
     @State private var showClarifyingQuestionsModelSheet = false
     @State private var selectedClarifyingQuestionsModel = ""
+    @State private var clarifyingQuestionsChatProvider: ResumeChatProvider?
 
     private var selectedResumeBinding: Binding<Resume?> {
         Binding<Resume?>(
@@ -65,6 +68,44 @@ struct UnifiedToolbar: ToolbarContent {
         )
     }
 
+    /// Processes clarifying question answers and generates resume revisions
+    /// This continues the multi-turn conversation that was started when questions were generated
+    @MainActor
+    private func processClarifyingQuestionsAnswers(answers: [QuestionAnswer]) async {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes else {
+            return
+        }
+        
+        do {
+            // Use the same chat provider instance that generated the questions
+            // This maintains the conversation context
+            guard let chatProvider = clarifyingQuestionsChatProvider else {
+                print("Error: No chat provider available for processing answers")
+                return
+            }
+            
+            let resumeQuery = ResumeApiQuery(resume: resume)
+            resumeQuery.queryMode = .withClarifyingQuestions
+            
+            // Process answers and continue the conversation to get revisions
+            _ = try await chatProvider.processAnswersAndGenerateRevisions(
+                answers: answers,
+                resumeQuery: resumeQuery,
+                modelId: selectedClarifyingQuestionsModel
+            )
+            
+            // The revisions are now in chatProvider.lastRevNodeArray
+            // We need to trigger the resume revision UI to show them
+            // TODO: This should integrate with the existing revision workflow
+            print("Generated revisions available in chatProvider.lastRevNodeArray")
+            
+        } catch {
+            // Handle error - could show an alert
+            print("Error processing clarifying questions answers: \(error)")
+        }
+    }
+
     /// Starts the clarifying questions workflow with the selected model
     @MainActor
     private func startClarifyingQuestionsWorkflow(modelId: String) async {
@@ -74,7 +115,10 @@ struct UnifiedToolbar: ToolbarContent {
         }
         
         do {
+            // Create and store the chat provider to maintain conversation context
             let chatProvider = ResumeChatProvider(appState: appState)
+            clarifyingQuestionsChatProvider = chatProvider
+            
             let questions = try await chatProvider.startClarifyingQuestionsWorkflow(
                 resume: resume,
                 jobApp: jobApp,
@@ -90,7 +134,8 @@ struct UnifiedToolbar: ToolbarContent {
             // Set the questions and show the sheet
             clarifyingQuestions = questions
             showClarifyingQuestionsSheet = true
-            
+            isGeneratingQuestions = false
+
         } catch {
             // Handle error - could show an alert
             print("Error starting clarifying questions workflow: \(error)")
@@ -137,10 +182,10 @@ struct UnifiedToolbar: ToolbarContent {
                         showClarifyingQuestionsModelSheet = true
                     }) {
                         VStack(spacing: 3) {
-                            if isGeneratingResume {
+                            if isGeneratingQuestions {
                                 Image("custom.wand.and.rays.inverse.badge.questionmark")
                                     .font(.system(size: 18))
-                                    .frame(height: 20)
+                                    .frame(height: 20).symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
                             } else {
                                 Image("custom.wand.and.sparkles.badge.questionmark")
                                     .font(.system(size: 18))
@@ -162,7 +207,8 @@ struct UnifiedToolbar: ToolbarContent {
                             onModelSelected: { modelId in
                                 selectedClarifyingQuestionsModel = modelId
                                 showClarifyingQuestionsModelSheet = false
-                                
+                                isGeneratingQuestions = true
+
                                 // Start clarifying questions workflow with selected model
                                 Task {
                                     await startClarifyingQuestionsWorkflow(modelId: modelId)
@@ -176,7 +222,9 @@ struct UnifiedToolbar: ToolbarContent {
                             isPresented: $showClarifyingQuestionsSheet,
                             onSubmit: { answers in
                                 showClarifyingQuestionsSheet = false
-                                // TODO: Process answers with selectedClarifyingQuestionsModel
+                                Task {
+                                    await processClarifyingQuestionsAnswers(answers: answers)
+                                }
                             }
                         )
                     }
