@@ -36,10 +36,13 @@ struct ContentView: View {
             )
             .frame(minWidth: 220, maxWidth: .infinity) // Keep min width for sidebar
             .toolbar {
-                SidebarToolbarView(
-                    showSlidingList: $showSlidingList,
-                    showNewAppSheet: $showNewAppSheet
-                )
+                // Only show toolbar when sidebar is visible
+                if sidebarVisibility != .detailOnly {
+                    SidebarToolbarView(
+                        showSlidingList: $showSlidingList,
+                        showNewAppSheet: $showNewAppSheet
+                    )
+                }
             }
 
         } detail: {
@@ -48,7 +51,7 @@ struct ContentView: View {
                 if let selApp = jobAppStore.selectedApp {
                     // Embed TabWrapperView directly
                     TabWrapperView(selectedTab: $selectedTab, tabRefresh: $tabRefresh)
-                        .navigationTitle(" ")
+//                        .navigationTitle(" ")
                 } else {
                     // Placeholder when no job application is selected
                     Text("Select a Job Application")

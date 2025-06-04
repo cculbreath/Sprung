@@ -35,7 +35,7 @@ extension SwiftOpenAI.Model {
         // GPT-4o variants
         case AIModels.gpt4o, "gpt-4o":
             return .gpt4o
-        case AIModels.o4_mini, AIModels.gpt4o_mini:
+        case AIModels.o4_mini, AIModels.gpt4o_mini, "openai/gpt-4o-mini":
             return .gpt4omini
         case AIModels.gpt4o_latest, "gpt-4o-2024-05-13":
             return .gpt4o20240513

@@ -449,7 +449,7 @@ class LLMSchemaBuilder {
             return .jsonSchema(
                 SwiftOpenAI.JSONSchemaResponseFormat(
                     name: typeName,
-                    strict: false,
+                    strict: true,
                     schema: schema
                 )
             )
@@ -462,7 +462,7 @@ class LLMSchemaBuilder {
             return .jsonSchema(
                 SwiftOpenAI.JSONSchemaResponseFormat(
                     name: typeName,
-                    strict: false,
+                    strict: true,
                     schema: schema
                 )
             )

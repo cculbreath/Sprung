@@ -58,8 +58,6 @@ import SwiftUI
         self.jobApps = jobApps
         self.resume = resume
         
-        // Log which model we're using
-        Logger.debug("🚀 JobRecommendationProvider initialized with OpenRouter model: \(modelId)")
     }
 
     /// Writes debug content to a file in the Downloads folder if enabled
@@ -108,7 +106,6 @@ import SwiftUI
             AppLLMMessage(role: .user, text: prompt)
         ]
 
-        Logger.info("🎯 Executing job recommendation with OpenRouter model: \(modelId)")
 
         let query = AppLLMQuery(
             messages: messages,
