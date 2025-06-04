@@ -480,7 +480,8 @@ struct AiCommsView: View {
                         // Request clarifying questions first
                         Logger.debug("Requesting clarifying questions from AI")
                         
-                        if let questionsRequest = try await chatProvider.requestClarifyingQuestions(resumeQuery: q) {
+                        let modelId = OpenAIModelFetcher.getPreferredModelString()
+                        if let questionsRequest = try await chatProvider.requestClarifyingQuestions(resumeQuery: q, modelId: modelId) {
                             if questionsRequest.proceedWithRevisions || questionsRequest.questions.isEmpty {
                                 // LLM decided no questions needed, proceed directly to revisions
                                 Logger.debug("AI opted to proceed without clarifying questions")

@@ -440,10 +440,35 @@ final class ResumeChatProvider: BaseLLMProvider {
     
     // MARK: - Clarifying Questions Methods
     
+    /// Starts the clarifying questions workflow from the toolbar
+    /// - Parameters:
+    ///   - resume: The resume to customize
+    ///   - jobApp: The job application context
+    ///   - modelId: The specific model ID to use
+    /// - Returns: The clarifying questions to show the user
+    func startClarifyingQuestionsWorkflow(resume: Resume, jobApp: JobApp, modelId: String) async throws -> [ClarifyingQuestion] {
+        // Create a resume query for the clarifying questions
+        let resumeQuery = ResumeApiQuery(resume: resume)
+        resumeQuery.queryMode = .withClarifyingQuestions
+        
+        // Request clarifying questions
+        if let questionsRequest = try await requestClarifyingQuestions(resumeQuery: resumeQuery, modelId: modelId) {
+            if questionsRequest.proceedWithRevisions || questionsRequest.questions.isEmpty {
+                // LLM decided no questions needed - could return empty array or throw specific error
+                return []
+            } else {
+                return questionsRequest.questions
+            }
+        }
+        
+        return []
+    }
+    
     /// Request clarifying questions from the LLM
     /// - Parameter resumeQuery: The resume query containing the context
+    /// - Parameter modelId: The specific model ID to use for generating questions
     /// - Returns: The clarifying questions request or nil if proceeding without questions
-    func requestClarifyingQuestions(resumeQuery: ResumeApiQuery) async throws -> ClarifyingQuestionsRequest? {
+    func requestClarifyingQuestions(resumeQuery: ResumeApiQuery, modelId: String) async throws -> ClarifyingQuestionsRequest? {
         // Clear previous error message
         errorMessage = ""
         
@@ -456,8 +481,8 @@ final class ResumeChatProvider: BaseLLMProvider {
             AppLLMMessage(role: .user, text: userPrompt)
         ]
         
-        // Get model identifier
-        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        // Use the specified model identifier
+        let modelIdentifier = modelId
         
         // Create query for structured output
         let query = AppLLMQuery(
