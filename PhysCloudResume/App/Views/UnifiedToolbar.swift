@@ -51,6 +51,8 @@ struct UnifiedToolbar: ToolbarContent {
 
     @State private var isGeneratingResume = false
     @State private var isGeneratingCoverLetter = false
+    @State private var showClarifyingQuestionsModelSheet = false
+    @State private var selectedClarifyingQuestionsModel = ""
 
     private var selectedResumeBinding: Binding<Resume?> {
         Binding<Resume?>(
@@ -61,6 +63,38 @@ struct UnifiedToolbar: ToolbarContent {
                 }
             }
         )
+    }
+
+    /// Starts the clarifying questions workflow with the selected model
+    @MainActor
+    private func startClarifyingQuestionsWorkflow(modelId: String) async {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes else {
+            return
+        }
+        
+        do {
+            let chatProvider = ResumeChatProvider(appState: appState)
+            let questions = try await chatProvider.startClarifyingQuestionsWorkflow(
+                resume: resume,
+                jobApp: jobApp,
+                modelId: modelId
+            )
+            
+            if questions.isEmpty {
+                // No questions needed, could show an alert or proceed directly
+                // For now, we'll just not show the sheet
+                return
+            }
+            
+            // Set the questions and show the sheet
+            clarifyingQuestions = questions
+            showClarifyingQuestionsSheet = true
+            
+        } catch {
+            // Handle error - could show an alert
+            print("Error starting clarifying questions workflow: \(error)")
+        }
     }
 
     var body: some ToolbarContent {
@@ -100,7 +134,7 @@ struct UnifiedToolbar: ToolbarContent {
 
                     Button(action: {
                         clarifyingQuestions = []
-                        showClarifyingQuestionsSheet = true
+                        showClarifyingQuestionsModelSheet = true
                     }) {
                         VStack(spacing: 3) {
                             if isGeneratingResume {
@@ -122,12 +156,27 @@ struct UnifiedToolbar: ToolbarContent {
                     .buttonStyle(.plain)
                     .help("Create Resume Revisions with Clarifying Questions")
                     .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
+                    .sheet(isPresented: $showClarifyingQuestionsModelSheet) {
+                        ClarifyingQuestionsModelSheet(
+                            isPresented: $showClarifyingQuestionsModelSheet,
+                            onModelSelected: { modelId in
+                                selectedClarifyingQuestionsModel = modelId
+                                showClarifyingQuestionsModelSheet = false
+                                
+                                // Start clarifying questions workflow with selected model
+                                Task {
+                                    await startClarifyingQuestionsWorkflow(modelId: modelId)
+                                }
+                            }
+                        )
+                    }
                     .sheet(isPresented: $showClarifyingQuestionsSheet) {
                         ClarifyingQuestionsSheet(
                             questions: clarifyingQuestions,
                             isPresented: $showClarifyingQuestionsSheet,
                             onSubmit: { answers in
                                 showClarifyingQuestionsSheet = false
+                                // TODO: Process answers with selectedClarifyingQuestionsModel
                             }
                         )
                     }
