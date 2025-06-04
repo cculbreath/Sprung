@@ -14,7 +14,7 @@ import SwiftUI
 struct AIModels {
     // OpenAI models (only keeping the ones that are used)
     static let gpt4o = "gpt-4o"
-    static let o4_mini = "o4-mini"
+    static let o4_mini = "gpt-4o-mini"  // Corrected model name
     static let gpt4o_mini = "gpt-4o-mini"
     static let gpt4o_latest = "gpt-4o-2024-05-13"  // Latest version
     static let gpt_4o_mini_tts = "gpt-4o-mini-tts" // TTS model
@@ -199,8 +199,7 @@ extension AIModels {
     static func discoverOpenAIModels() -> [String] {
         return [
             gpt4o,
-            o4_mini,
-            gpt4o_mini,
+            gpt4o_mini,  // Use the correct constant
             gpt4o_latest,
             o1,
             o1_mini,

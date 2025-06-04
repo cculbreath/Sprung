@@ -137,9 +137,11 @@ class BaseLLMProvider {
         // Convert AppLLMMessage to SwiftOpenAI format
         let openAIMessages = try convertToOpenAIMessages(query.messages)
         
+        
         // Check if model supports structured output
         let model = await appState?.openRouterService.findModel(id: query.modelIdentifier)
         let supportsStructuredOutput = model?.supportsStructuredOutput ?? false
+        
         
         // Build parameters
         var parameters = ChatCompletionParameters(
@@ -161,6 +163,7 @@ class BaseLLMProvider {
             } else {
                 parameters.responseFormat = LLMSchemaBuilder.createResponseFormat(for: responseType)
             }
+            
         } else if query.desiredResponseType != nil && !supportsStructuredOutput {
             // Add system prompt for non-structured output models
             let fallbackPrompt = createFallbackStructuredPrompt(for: query.desiredResponseType!)
@@ -171,21 +174,31 @@ class BaseLLMProvider {
         }
         
         // Execute the request
-        let response = try await client.startChat(parameters: parameters)
-        
-        // Process response
-        if let content = response.choices?.first?.message?.content {
-            if query.desiredResponseType != nil {
-                // Return as structured data for JSON decoding
-                guard let data = content.data(using: String.Encoding.utf8) else {
-                    throw AppLLMError.decodingError("Could not convert response to UTF-8 data")
+        do {
+            let response = try await client.startChat(parameters: parameters)
+            
+            // Process response
+            if let content = response.choices?.first?.message?.content {
+                
+                if query.desiredResponseType != nil {
+                    // Return as structured data for JSON decoding
+                    guard let data = content.data(using: String.Encoding.utf8) else {
+                        throw AppLLMError.decodingError("Could not convert response to UTF-8 data")
+                    }
+                    return .structured(data)
+                } else {
+                    return .text(content)
                 }
-                return .structured(data)
             } else {
-                return .text(content)
+                throw AppLLMError.unexpectedResponseFormat
             }
-        } else {
-            throw AppLLMError.unexpectedResponseFormat
+        } catch {
+            // Log the actual error from the API
+            Logger.error("🚨 API call failed with error: \(error)")
+            if let apiError = error as? APIError {
+                Logger.error("🚨 API Error details: \(apiError.displayDescription)")
+            }
+            throw error
         }
     }
     
@@ -246,7 +259,6 @@ class BaseLLMProvider {
     func executeQueryWithTimeout(_ query: AppLLMQuery, timeout: TimeInterval = 180) async throws -> AppLLMResponse {
         // Update the last model used for tracking
         lastModelUsed = query.modelIdentifier
-        Logger.debug("Executing query with model: \(query.modelIdentifier)")
         
         // Use a task with timeout to handle API timeouts gracefully
         return try await withUnsafeThrowingContinuation { (continuation: UnsafeContinuation<AppLLMResponse, Error>) in
