@@ -425,9 +425,11 @@ struct AiCommsView: View {
                 // Process answers and get revisions
                 // Note: The conversation context was already cleared when the button was clicked,
                 // so this continues with the fresh conversation that includes the clarifying questions
+                let modelId = OpenAIModelFetcher.getPreferredModelString()
                 _ = try await chatProvider.processAnswersAndGenerateRevisions(
                     answers: answers,
-                    resumeQuery: q
+                    resumeQuery: q,
+                    modelId: modelId
                 )
                 
                 // The revisions are already set in chatProvider.lastRevNodeArray
