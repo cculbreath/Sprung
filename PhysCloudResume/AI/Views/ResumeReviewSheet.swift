@@ -619,25 +619,6 @@ struct ResumeReviewSheet: View {
             return
         }
 
-        // We don't need to extract skills here now since sendReorderSkillsRequest does it internally
-        // This ensures we use the simplified skill extraction specific to reordering
-        let skillsJson = TreeNodeExtractor.shared.extractSkillsForReordering(resume: resume)
-        guard let skillsJson = skillsJson else {
-            fixOverflowError = "Error extracting skills from resume."
-            Logger.debug("ReorderSkills: Failed to extract skills from resume")
-            isProcessingFixOverflow = false
-            return
-        }
-        
-        Logger.debug("ReorderSkills: Successfully extracted skills JSON: \(skillsJson.prefix(100))...")
-
-        if skillsJson == "[]" {
-            fixOverflowStatusMessage = "No 'Skills and Expertise' items found to reorder or section is empty."
-            Logger.debug("ReorderSkills: No skills items found to reorder")
-            isProcessingFixOverflow = false
-            return
-        }
-
         fixOverflowStatusMessage = "Asking AI to analyze and reorder skills for the target job position..."
 
         // Send request to LLM to reorder skills
@@ -749,7 +730,7 @@ struct ResumeReviewSheet: View {
         fixOverflowStatusMessage = reasonsText
         
         // Apply the reordering to the actual tree nodes
-        let success = TreeNodeExtractor.shared.applyReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise)
+        let success = reviewService?.applySkillReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise) ?? false
         
         if success {
             // Re-render the resume with the new order

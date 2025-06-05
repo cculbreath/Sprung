@@ -265,18 +265,25 @@ class ResumeReviewService: @unchecked Sendable {
         }
     }
     
-    /// Extracts skills and expertise nodes from a resume for LLM processing
-    /// - Parameter resume: The resume to extract skills from
-    /// - Returns: A JSON string representing the skills and expertise
-    func extractSkillsForLLM(resume: Resume) -> String? {
-        return TreeNodeExtractor.shared.extractSkillsForLLM(resume: resume)
-    }
-    
     /// Extracts skills for fix overflow operation with bundled title/description
     /// - Parameter resume: The resume to extract skills from
     /// - Returns: A JSON string representing the bundled skills
     func extractSkillsForFixOverflow(resume: Resume) -> String? {
-        return TreeNodeExtractor.shared.extractSkillsForFixOverflow(resume: resume)
+        guard let rootNode = resume.rootNode else {
+            Logger.debug("Error: Resume has no rootNode for skills extraction")
+            return nil
+        }
+
+        // Find the skills section
+        guard let skillsSection = rootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        }) else {
+            Logger.debug("Error: 'Skills and Expertise' section not found")
+            return nil
+        }
+
+        // Extract skills as a simple JSON structure
+        return skillsSection.toJSONString()
     }
     
     /// Sends a request to reorder skills based on job relevance
@@ -346,5 +353,47 @@ class ResumeReviewService: @unchecked Sendable {
         }
         
         return nil
+    }
+    
+    /// Apply skill reordering to the resume's tree structure
+    @MainActor
+    func applySkillReordering(resume: Resume, reorderedNodes: [ReorderedSkillNode]) -> Bool {
+        guard let rootNode = resume.rootNode else {
+            Logger.error("Cannot apply skill reordering: resume has no root node")
+            return false
+        }
+        
+        // Find the skills section
+        guard let skillsSection = rootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        }) else {
+            Logger.error("Cannot apply skill reordering: skills section not found")
+            return false
+        }
+        
+        // Get all skill nodes as a mutable array
+        guard var skillNodes = skillsSection.children else {
+            Logger.error("Cannot apply skill reordering: skills section has no children")
+            return false
+        }
+        
+        // Create a map of reordered positions
+        var newPositions: [String: Int] = [:]
+        for reorderedNode in reorderedNodes {
+            newPositions[reorderedNode.id] = reorderedNode.newPosition
+        }
+        
+        // Sort skill nodes according to new positions
+        skillNodes.sort { node1, node2 in
+            let pos1 = newPositions[node1.id] ?? Int.max
+            let pos2 = newPositions[node2.id] ?? Int.max
+            return pos1 < pos2
+        }
+        
+        // Update the skills section with reordered children
+        skillsSection.children = skillNodes
+        
+        Logger.debug("✅ Successfully applied skill reordering: \(reorderedNodes.count) skills reordered")
+        return true
     }
 }
