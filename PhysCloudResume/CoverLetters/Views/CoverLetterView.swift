@@ -12,10 +12,14 @@ struct CoverLetterView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(AppState.self) private var appState: AppState
-
+    
+    @Binding var showCoverLetterInspector: Bool
 
     var body: some View {
         contentView()
+            .inspector(isPresented: $showCoverLetterInspector) {
+                CoverLetterInspectorView()
+            }
     }
 
     @ViewBuilder

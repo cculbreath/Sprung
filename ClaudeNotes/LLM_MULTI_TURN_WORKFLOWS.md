@@ -223,7 +223,7 @@ feedbackNode.processAction(userSelectedAction)
 
 #### Parallel Processing:
 - Each selected model evaluates all cover letters simultaneously
-- Uses `CoverLetterRecommendationProvider` with model-specific configuration
+- ✅ **Uses `LLMService.executeParallelStructured()`** instead of legacy provider
 
 #### FPTP Prompt:
 ```
@@ -257,6 +257,7 @@ Return: {scoreAllocations: [{letterUuid: 'uuid', score: number}], verdict: 'reas
   - Generate New: Create letters from multiple models
   - Revise Existing: Apply revisions to existing letters
 - **Revision Options**: improve, zissner, mimic
+- ✅ **Uses CoverLetterService** instead of CoverChatProvider
 
 ### Prompt Structure & Conversation Flow
 
@@ -352,6 +353,23 @@ await withTaskGroup(of: GenerationResult.self) { group in
 - **✅ Progress Display**: Shows revision progress and status messages
 - **✅ ViewModel Integration**: Calls ResumeReviseViewModel methods and displays results
 - **✅ Error Handling**: Presents user-friendly error messages via ViewModel
+
+### ✅ CoverLetterService Architecture (IMPLEMENTED)
+
+✅ **COMPLETED:** Cover letter operations have been unified into CoverLetterService with LLMService integration:
+
+**✅ CoverLetterService Responsibilities (IMPLEMENTED):**
+- **✅ Generation & Revision**: Uses LLMService for all cover letter operations
+- **✅ Conversation Management**: UUID-based tracking for multi-turn conversations
+- **✅ Prompt Centralization**: Integrates with CoverLetterQuery for unified prompt management
+- **✅ Store Integration**: Works with CoverLetterStore for persistence
+- **✅ Inspector Support**: Powers CoverLetterInspectorView revision operations
+
+**✅ CoverLetterInspectorView Implementation (IMPLEMENTED):**
+- **✅ Two-Tab Structure**: Sources tab (references) + Revisions tab (AI operations)
+- **✅ Model Selection**: Integrated with DropdownModelPicker for revision operations
+- **✅ All Revision Types**: Improve, Zissner, Mimic, Custom prompts functional
+- **✅ State Management**: Uses AppSheets pattern for inspector visibility
 
 ### **Start with Fix Overflow Workflow** 
 This workflow is the most complex and demonstrates all key patterns:

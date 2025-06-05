@@ -13,7 +13,7 @@ struct ResumeReviewSheet: View {
 
     @Binding var selectedResume: Resume?
     // Use the existing reviewService, it now has the new methods
-    private let reviewService = ResumeReviewService()
+    @State private var reviewService: ResumeReviewService?
 
     @State private var selectedReviewType: ResumeReviewType = .assessQuality
     @State private var customOptions = CustomReviewOptions() // For .custom type
@@ -198,7 +198,7 @@ struct ResumeReviewSheet: View {
             HStack {
                 if isProcessingGeneral || isProcessingFixOverflow {
                     Button("Stop") {
-                        reviewService.cancelRequest() // General cancel
+                        reviewService?.cancelRequest() // General cancel
                         isProcessingGeneral = false
                         isProcessingFixOverflow = false
                         fixOverflowStatusMessage = "Optimization stopped by user."
@@ -234,7 +234,8 @@ struct ResumeReviewSheet: View {
         .frame(width: 600, height: 500, alignment: .topLeading) // Original fixed sheet size
         .onAppear {
             // Initialize services and reset state
-            reviewService.initialize()
+            reviewService = ResumeReviewService(llmService: LLMService.shared)
+            reviewService?.initialize()
             fixOverflowChangeMessage = ""
         }
     }
@@ -296,9 +297,10 @@ struct ResumeReviewSheet: View {
         } else {
             isProcessingGeneral = true
             reviewResponseText = "Submitting request..."
-            reviewService.sendReviewRequest(
+            reviewService?.sendReviewRequest(
                 reviewType: selectedReviewType,
                 resume: resume,
+                modelId: selectedModel,
                 customOptions: selectedReviewType == .custom ? customOptions : nil,
                 onProgress: { contentChunk in
                     DispatchQueue.main.async {
@@ -389,7 +391,7 @@ struct ResumeReviewSheet: View {
             }
             Logger.debug("FixOverflow: Successfully converted PDF to image")
 
-            guard let skillsJsonString = reviewService.extractSkillsForFixOverflow(resume: resume) else {
+            guard let skillsJsonString = reviewService?.extractSkillsForFixOverflow(resume: resume) else {
                 fixOverflowError = "Error extracting skills from resume (Iteration \(loopCount))."
                 Logger.debug("FixOverflow: Failed to extract skills from resume in iteration \(loopCount)")
                 break
@@ -406,11 +408,12 @@ struct ResumeReviewSheet: View {
             fixOverflowStatusMessage = "Iteration \(loopCount): Asking AI to revise skills..."
 
             let fixFitsResult: Result<FixFitsResponseContainer, Error> = await withCheckedContinuation { continuation in
-                reviewService.sendFixFitsRequest(
+                reviewService?.sendFixFitsRequest(
                     resume: resume,
                     skillsJsonString: skillsJsonString,
                     base64Image: currentImageBase64,
                     overflowLineCount: currentOverflowLineCount,
+                    modelId: selectedModel,
                     allowEntityMerge: allowEntityMerge
                 ) { result in
                     continuation.resume(returning: result)
@@ -536,9 +539,10 @@ struct ResumeReviewSheet: View {
             Logger.debug("FixOverflow: About to send contentsFit request in iteration \(loopCount)")
             let contentsFitResult: Result<ContentsFitResponse, Error> = await withCheckedContinuation { continuation in
                 Logger.debug("FixOverflow: Inside continuation for contentsFit request")
-                reviewService.sendContentsFitRequest(
+                reviewService?.sendContentsFitRequest(
                     resume: resume,
-                    base64Image: updatedImageBase64
+                    base64Image: updatedImageBase64,
+                    modelId: selectedModel
                 ) { result in
                     Logger.debug("FixOverflow: Received contentsFit response: \(result)")
                     continuation.resume(returning: result)
@@ -638,7 +642,7 @@ struct ResumeReviewSheet: View {
 
         // Send request to LLM to reorder skills
         let reorderResult: Result<ReorderSkillsResponseContainer, Error> = await withCheckedContinuation { continuation in
-            reviewService.sendReorderSkillsRequest(
+            reviewService?.sendReorderSkillsRequest(
                 resume: resume,
                 appState: appState,
                 modelId: selectedModel,

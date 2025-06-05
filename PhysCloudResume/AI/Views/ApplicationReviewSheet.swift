@@ -276,6 +276,7 @@ struct ApplicationReviewSheet: View {
                 jobApp: jobApp,
                 resume: resume,
                 coverLetter: coverLetterToUse,
+                modelId: selectedModel,
                 customOptions: selectedType == .custom ? customOptions : nil,
                 onProgress: { chunk in
                     Logger.debug("📝 [ApplicationReviewSheet] Progress callback - chunk length: \(chunk.count)")

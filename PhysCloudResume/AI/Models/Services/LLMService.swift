@@ -310,6 +310,71 @@ class LLMService {
         return (conversationId: conversationId, response: responseText)
     }
     
+    /// Start a new conversation with structured output
+    /// - Parameters:
+    ///   - systemPrompt: Optional system prompt to initialize the conversation
+    ///   - userMessage: The first user message
+    ///   - modelId: The model identifier to use
+    ///   - responseType: The expected response type
+    ///   - temperature: Optional temperature setting
+    /// - Returns: Tuple containing the conversation ID and parsed structured response
+    func startConversationStructured<T: Codable>(
+        systemPrompt: String? = nil,
+        userMessage: String,
+        modelId: String,
+        responseType: T.Type,
+        temperature: Double? = nil
+    ) async throws -> (conversationId: UUID, response: T) {
+        try ensureInitialized()
+        
+        guard let conversationManager = conversationManager else {
+            throw AppLLMError.clientError("Conversation manager not available")
+        }
+        
+        let requestId = UUID()
+        currentRequestIDs.insert(requestId)
+        defer { currentRequestIDs.remove(requestId) }
+        
+        // Validate model
+        try validateModel(modelId: modelId, for: [.structuredOutput])
+        
+        // Create conversation
+        let conversationId = UUID()
+        
+        // Build messages
+        var messages: [AppLLMMessage] = []
+        
+        // Add system prompt if provided
+        if let systemPrompt = systemPrompt {
+            messages.append(AppLLMMessage(role: .system, text: systemPrompt))
+        }
+        
+        // Add user message
+        messages.append(AppLLMMessage(role: .user, text: userMessage))
+        
+        // Create structured query
+        let query = AppLLMQuery(
+            messages: messages,
+            modelIdentifier: modelId,
+            temperature: temperature ?? defaultTemperature,
+            responseType: responseType
+        )
+        
+        // Execute request
+        let structuredResponse = try await executeWithRetry(query: query, requestId: requestId) { response in
+            try self.parseStructuredResponse(response, as: responseType)
+        }
+        
+        // Add assistant response to messages (convert structured back to text for conversation history)
+        let responseText = try String(data: JSONEncoder().encode(structuredResponse), encoding: .utf8) ?? "[Structured Response]"
+        messages.append(AppLLMMessage(role: .assistant, text: responseText))
+        
+        // Store conversation
+        conversationManager.storeConversation(id: conversationId, messages: messages)
+        
+        return (conversationId: conversationId, response: structuredResponse)
+    }
+    
     /// Continue an existing conversation
     /// - Parameters:
     ///   - userMessage: The user's message

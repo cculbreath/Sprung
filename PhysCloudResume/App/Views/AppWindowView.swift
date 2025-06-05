@@ -53,7 +53,7 @@ struct AppWindowView: View {
                         }
                         .tag(TabList.resume)
 
-                    CoverLetterView()
+                    CoverLetterView(showCoverLetterInspector: $sheets.showCoverLetterInspector)
                         .tabItem {
                             Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
                         }
@@ -85,7 +85,6 @@ struct AppWindowView: View {
                     )
                 }
                 .toolbarBackground(.visible, for: .windowToolbar)
-
                 .onChange(of: jobAppStore.selectedApp) { _, _ in
                     updateMyLetter()
                 }

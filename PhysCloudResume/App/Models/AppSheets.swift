@@ -17,4 +17,5 @@ struct AppSheets {
     
     // UI state that was previously in ResumeButtons
     var showResumeInspector = false
+    var showCoverLetterInspector = false
 }

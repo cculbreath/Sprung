@@ -84,34 +84,19 @@ struct UnifiedToolbar: ToolbarContent {
                 return
             }
             
-            // Process answers and generate revisions
-            let revisions = try await clarifyingViewModel.processAnswersAndGenerateRevisions(
-                answers: answers,
-                resume: resume,
-                modelId: selectedClarifyingQuestionsModel
-            )
-            
-            // Hand off revisions to ResumeReviseViewModel for UI display
             guard let resumeViewModel = resumeReviseViewModel else {
-                Logger.error("ResumeReviseViewModel not available")
+                Logger.error("ResumeReviseViewModel not available for handoff")
                 return
             }
             
-            // Set up revisions in the ResumeReviseViewModel and show UI
-            resumeViewModel.resumeRevisions = revisions
-            resumeViewModel.feedbackNodes = []
-            resumeViewModel.feedbackIndex = 0
+            // Process answers and hand off conversation
+            try await clarifyingViewModel.processAnswersAndHandoffConversation(
+                answers: answers,
+                resume: resume,
+                resumeReviseViewModel: resumeViewModel
+            )
             
-            // Set up the first revision for review
-            if !revisions.isEmpty {
-                resumeViewModel.currentRevisionNode = revisions[0]
-                resumeViewModel.currentFeedbackNode = revisions[0].createFeedbackNode()
-            }
-            
-            // Show the revision review UI
-            resumeViewModel.showResumeRevisionSheet = true
-            
-            Logger.debug("✅ Clarifying questions processed, \\(revisions.count) revisions handed off to ResumeReviseViewModel")
+            Logger.debug("✅ Clarifying questions processed and handed off to ResumeReviseViewModel")
             
         } catch {
             Logger.error("Error processing clarifying questions answers: \\(error.localizedDescription)")
@@ -135,13 +120,9 @@ struct UnifiedToolbar: ToolbarContent {
                 return
             }
             
-            // Create query for revision workflow
-            let query = ResumeApiQuery(resume: resume)
-            
-            // Start revision workflow and handle UI - ResumeReviseViewModel manages everything
-            try await viewModel.startRevisionWorkflowAndShowUI(
+            // Start fresh revision workflow - ResumeReviseViewModel manages everything
+            try await viewModel.startFreshRevisionWorkflow(
                 resume: resume,
-                query: query,
                 modelId: modelId
             )
             
@@ -231,28 +212,55 @@ struct UnifiedToolbar: ToolbarContent {
         }
     }
 
+    /// Generates a cover letter with the selected model
+    @MainActor
+    private func generateCoverLetter(modelId: String) async {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes else {
+            isGeneratingCoverLetter = false
+            return
+        }
+        
+        do {
+            // Delegate to CoverLetterService for all business logic
+            try await CoverLetterService.shared.generateNewCoverLetter(
+                jobApp: jobApp,
+                resume: resume,
+                modelId: modelId,
+                coverLetterStore: coverLetterStore
+            )
+            
+            isGeneratingCoverLetter = false
+            
+        } catch {
+            Logger.error("Error generating cover letter: \(error.localizedDescription)")
+            isGeneratingCoverLetter = false
+            // TODO: Show error alert to user
+        }
+    }
+
     var body: some ToolbarContent {
         // ───── Left edge: Title and Status ─────
-        ToolbarItemGroup(placement: .navigation) {
-            if let selApp = jobAppStore.selectedApp {
-                HStack(spacing: 12) {
-                    // Status tag
-                    selApp.statusTag
-
-                    // Title with better space management
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(selApp.jobPosition)
-                            .font(.headline)
-                            .lineLimit(1)
-                            .frame(maxWidth: 500, alignment: .leading)
-                        Text(selApp.companyName)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .frame(maxWidth: 500, alignment: .leading)
-                    }
-                }
-            }
-        }
+//        ToolbarItemGroup(placement: .navigation) {
+//            if let selApp = jobAppStore.selectedApp {
+//                HStack(spacing: 12) {
+//                    // Status tag
+//                    selApp.statusTag
+//
+//                    // Title with better space management
+//                    VStack(alignment: .leading, spacing: 1) {
+//                        Text(selApp.jobPosition)
+//                            .font(.headline)
+//                            .lineLimit(1)
+//                            .frame(maxWidth: 500, alignment: .leading)
+//                        Text(selApp.companyName)
+//                            .font(.caption)
+//                            .lineLimit(1)
+//                            .frame(maxWidth: 500, alignment: .leading)
+//                    }
+//                }
+//            }
+//        }
 
         // ───── Center: All main buttons ─────
         ToolbarItemGroup(placement: .principal) {
@@ -344,9 +352,16 @@ struct UnifiedToolbar: ToolbarContent {
                         showCoverLetterModelSheet = true
                     }) {
                         VStack(spacing: 3) {
-                            Image("custom.append.page.badge.plus")
-                                .font(.system(size: 18))
-                                .frame(height: 20)
+                            if isGeneratingCoverLetter {
+                                Image("custom.append.page.badge.plus")
+                                    .font(.system(size: 18))
+                                    .frame(height: 20)
+                                    .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                            } else {
+                                Image("custom.append.page.badge.plus")
+                                    .font(.system(size: 18))
+                                    .frame(height: 20)
+                            }
                             Text("Cover Letter")
                                 .font(.system(size: 11))
                                 .frame(height: 14)
@@ -364,16 +379,13 @@ struct UnifiedToolbar: ToolbarContent {
                             isPresented: $showCoverLetterModelSheet,
                             onModelSelected: { modelId in
                                 selectedCoverLetterModel = modelId
-                                // Create the cover letter with the selected model
-                                if let cL = coverLetterStore.cL {
-                                    isGeneratingCoverLetter = true
-                                    let newCL = coverLetterStore.createDuplicate(letter: cL)
-                                    newCL.currentMode = .generate
-                                    coverLetterStore.cL = newCL
-                                    // Store the selected model for the cover letter generation
-                                    // The actual generation will use this model
-                                }
                                 showCoverLetterModelSheet = false
+                                isGeneratingCoverLetter = true
+                                
+                                // Generate cover letter with the selected model
+                                Task {
+                                    await generateCoverLetter(modelId: modelId)
+                                }
                             }
                         )
                     }
@@ -493,9 +505,17 @@ struct UnifiedToolbar: ToolbarContent {
         // ───── Right edge: Inspector only ─────
         ToolbarItem(placement: .primaryAction) {
             sidebarButton("Inspector", "sidebar.right", action: {
-                sheets.showResumeInspector.toggle()
-            }, disabled: selectedTab != .resume,
-                          help: "Show Resume Inspector")
+                switch selectedTab {
+                case .resume:
+                    sheets.showResumeInspector.toggle()
+                case .coverLetter:
+                    sheets.showCoverLetterInspector.toggle()
+                default:
+                    break // No inspector for other tabs
+                }
+            }, disabled: selectedTab != .resume && selectedTab != .coverLetter,
+                          help: selectedTab == .resume ? "Show Resume Inspector" : 
+                                selectedTab == .coverLetter ? "Show Cover Letter Inspector" : "Inspector")
         }
     }
 

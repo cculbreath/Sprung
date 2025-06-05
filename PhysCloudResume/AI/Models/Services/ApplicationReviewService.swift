@@ -11,20 +11,35 @@ import AppKit
 import SwiftUI
 
 /// Service responsible for sending application packet reviews (cover letter + resume)
+@MainActor
 class ApplicationReviewService: @unchecked Sendable {
+    // MARK: - Properties
+    
+    /// The LLM service for AI operations
+    private let llmService: LLMService
+    
+    /// The query service for prompts
+    private let query = ApplicationReviewQuery()
+    
+    /// The current request ID for tracking active requests
     private var currentRequestID: UUID?
     
-    // MARK: - Init
+    // MARK: - Initialization
     
-    @MainActor
+    /// Initialize with LLM service
+    init(llmService: LLMService = LLMService.shared) {
+        self.llmService = llmService
+    }
+    
+    /// Initialize the LLM client
     func initialize() {
-        LLMRequestService.shared.initialize()
+        // No longer needed - LLMService manages its own initialization
+        Logger.debug("ApplicationReviewService: Initialization delegated to LLMService")
     }
 
-    // MARK: - Using ImageConversionService for image conversion
-
-    // MARK: - Prompt building
-
+    // MARK: - Deprecated Legacy Methods (kept for compatibility)
+    
+    /// Legacy method kept for compatibility - delegates to ApplicationReviewQuery
     func buildPrompt(
         reviewType: ApplicationReviewType,
         jobApp: JobApp,
@@ -33,113 +48,7 @@ class ApplicationReviewService: @unchecked Sendable {
         includeImage: Bool,
         customOptions: CustomApplicationReviewOptions? = nil
     ) -> String {
-        var prompt = reviewType.promptTemplate()
-
-        // Handle custom build if necessary
-        if reviewType == .custom, let opt = customOptions {
-            prompt = buildCustomPrompt(options: opt)
-        }
-
-        prompt = prompt.replacingOccurrences(of: "{jobPosition}", with: jobApp.jobPosition)
-        prompt = prompt.replacingOccurrences(of: "{companyName}", with: jobApp.companyName)
-        prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
-
-        // Cover letter text replacement.
-        let coverText = coverLetter?.content ?? ""
-        prompt = prompt.replacingOccurrences(of: "{coverLetterText}", with: coverText)
-
-        // Resume text
-        prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resume.textRes == "" ? resume.model?.renderedResumeText ?? "" : resume.textRes)
-
-        // Background docs placeholder
-        let bgDocs = resume.enabledSources.map { "\($0.name):\n\($0.content)\n\n" }.joined()
-        prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: bgDocs)
-
-        // Include image sentence
-        prompt = prompt.replacingOccurrences(of: "{includeImage}", with: includeImage ? "I've also attached an image so you can assess its overall professionalism and design." : "")
-
-        return prompt
-    }
-
-    private func buildCustomPrompt(options: CustomApplicationReviewOptions) -> String {
-        var segments: [String] = []
-
-        Logger.debug("🔧 [ApplicationReview] Building custom prompt")
-        Logger.debug("🔧 [ApplicationReview] Include cover letter: \(options.includeCoverLetter)")
-        Logger.debug("🔧 [ApplicationReview] Include resume text: \(options.includeResumeText)")
-        Logger.debug("🔧 [ApplicationReview] Include resume image: \(options.includeResumeImage)")
-        Logger.debug("🔧 [ApplicationReview] Include background docs: \(options.includeBackgroundDocs)")
-        Logger.debug("🔧 [ApplicationReview] Custom prompt length: \(options.customPrompt.count)")
-
-        if options.includeCoverLetter {
-            segments.append("""
-            Cover Letter
-            ------------
-            {coverLetterText}
-            """)
-        }
-
-        if options.includeResumeText {
-            segments.append("""
-            Resume
-            ------
-            {resumeText}
-            """)
-        }
-
-        if options.includeResumeImage {
-            segments.append("{includeImage}")
-        }
-
-        if options.includeBackgroundDocs {
-            segments.append("""
-            Background Docs
-            ---------------
-            {backgroundDocs}
-            """)
-        }
-
-        // Add custom prompt or a default if empty
-        let finalPrompt = options.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if finalPrompt.isEmpty {
-            Logger.warning("🔧 [ApplicationReview] Custom prompt is empty, using default")
-            segments.append("Please review the above materials and provide your analysis.")
-        } else {
-            segments.append(finalPrompt)
-        }
-        
-        let result = segments.joined(separator: "\n\n")
-        Logger.debug("🔧 [ApplicationReview] Custom prompt built, total length: \(result.count)")
-        return result
-    }
-
-    // MARK: - LLM Request (non-image handled by client, image via raw call)
-
-    @MainActor
-    func sendReviewRequest(
-        reviewType: ApplicationReviewType,
-        jobApp: JobApp,
-        resume: Resume,
-        coverLetter: CoverLetter?,
-        customOptions: CustomApplicationReviewOptions? = nil,
-        onProgress: @escaping (String) -> Void,
-        onComplete: @escaping (Result<String, Error>) -> Void
-    ) {
-        // Check if model supports images
-        let supportsImages = LLMRequestService.shared.checkIfModelSupportsImages()
-        var imageBase64: String?
-        
-        if supportsImages,
-           reviewType != .custom || (customOptions?.includeResumeImage ?? false),
-           let pdfData = resume.pdfData
-        {
-            imageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: pdfData)
-        }
-
-        let includeImage = imageBase64 != nil
-
-        // Build the prompt
-        let prompt = buildPrompt(
+        return query.buildReviewPrompt(
             reviewType: reviewType,
             jobApp: jobApp,
             resume: resume,
@@ -147,58 +56,100 @@ class ApplicationReviewService: @unchecked Sendable {
             includeImage: includeImage,
             customOptions: customOptions
         )
+    }
+
+    // MARK: - LLM Request (non-image handled by client, image via raw call)
+
+    func sendReviewRequest(
+        reviewType: ApplicationReviewType,
+        jobApp: JobApp,
+        resume: Resume,
+        coverLetter: CoverLetter?,
+        modelId: String,
+        customOptions: CustomApplicationReviewOptions? = nil,
+        onProgress: @escaping (String) -> Void,
+        onComplete: @escaping (Result<String, Error>) -> Void
+    ) {
+        // Determine if we should include image based on review type and options
+        let shouldIncludeImage = (reviewType != .custom) || (customOptions?.includeResumeImage ?? false)
+        var imageData: [Data] = []
+        
+        if shouldIncludeImage, let pdfData = resume.pdfData {
+            imageData = [pdfData]
+        }
+
+        // Build the prompt using ApplicationReviewQuery
+        let fullPrompt = query.systemPrompt() + "\n\n" + query.buildReviewPrompt(
+            reviewType: reviewType,
+            jobApp: jobApp,
+            resume: resume,
+            coverLetter: coverLetter,
+            includeImage: !imageData.isEmpty,
+            customOptions: customOptions
+        )
 
         let requestID = UUID()
         currentRequestID = requestID
         
-        // Add system prompt to the beginning
-        let fullPrompt = "You are an expert recruiter reviewing job application packets.\n\n" + prompt
+        Logger.debug("📤 [ApplicationReview] Starting review request")
+        Logger.debug("📤 [ApplicationReview] Review type: \(reviewType.rawValue)")
+        Logger.debug("📤 [ApplicationReview] Model: \(modelId)")
+        Logger.debug("📤 [ApplicationReview] Prompt length: \(fullPrompt.count) characters")
+        Logger.debug("📤 [ApplicationReview] Image included: \(!imageData.isEmpty)")
 
-        if includeImage, let img = imageBase64 {
-            // Image request requires mixed request handling
-            Logger.debug("📸 [ApplicationReview] Using image-based request path")
-            LLMRequestService.shared.sendMixedRequest(
-                promptText: fullPrompt,
-                base64Image: img,
-                requestID: requestID
-            ) { result in
-                switch result {
-                case .success(let responseWrapper):
-                    Logger.debug("📥 [ApplicationReview] Received response")
-                    Logger.debug("📥 [ApplicationReview] Response length: \(responseWrapper.content.count) characters")
-                    onProgress(responseWrapper.content)
-                    onComplete(.success("Done"))
-                case .failure(let error):
-                    Logger.error("x [ApplicationReview] Error: \(error)")
-                    onComplete(.failure(error))
+        Task {
+            do {
+                let response: String
+                
+                if !imageData.isEmpty {
+                    // Image request requires multimodal handling
+                    Logger.debug("📸 [ApplicationReview] Using image-based request path")
+                    response = try await llmService.executeWithImages(
+                        prompt: fullPrompt,
+                        modelId: modelId,
+                        images: imageData
+                    )
+                } else {
+                    // Text-only request
+                    Logger.debug("📤 [ApplicationReview] Sending text-only request")
+                    response = try await llmService.execute(
+                        prompt: fullPrompt,
+                        modelId: modelId
+                    )
                 }
+                
+                // Check if request was cancelled
+                guard currentRequestID == requestID else {
+                    Logger.debug("📤 [ApplicationReview] Request cancelled")
+                    return
+                }
+                
+                Logger.debug("📥 [ApplicationReview] Review complete")
+                Logger.debug("📥 [ApplicationReview] Response length: \(response.count) characters")
+                
+                // Stream the response for UI consistency
+                onProgress(response)
+                onComplete(.success("Done"))
+                
+            } catch {
+                // Check if request was cancelled
+                guard currentRequestID == requestID else {
+                    Logger.debug("📤 [ApplicationReview] Request cancelled during error handling")
+                    return
+                }
+                
+                Logger.error("❌ [ApplicationReview] Error: \(error)")
+                onComplete(.failure(error))
             }
-        } else {
-            // Text-only request
-            Logger.debug("📤 [ApplicationReview] Sending text-only request")
-            Logger.debug("📤 [ApplicationReview] Review type: \(reviewType.rawValue)")
-            Logger.debug("📤 [ApplicationReview] Prompt length: \(prompt.count) characters")
-            
-            LLMRequestService.shared.sendTextRequest(
-                promptText: fullPrompt,
-                model: OpenAIModelFetcher.getPreferredModelString(),
-                onProgress: onProgress,
-                onComplete: { result in
-                    switch result {
-                    case .success(_):
-                        Logger.debug("📥 [ApplicationReview] Review complete")
-                        onComplete(.success("Done"))
-                    case .failure(let error):
-                        Logger.error("x [ApplicationReview] Error: \(error)")
-                        onComplete(.failure(error))
-                    }
-                }
-            )
         }
     }
 
-    // Cancel
-    func cancelRequest() { 
-        currentRequestID = nil 
+    /// Cancel the current request
+    func cancelRequest() {
+        if let requestID = currentRequestID {
+            llmService.cancelAllRequests()
+            Logger.debug("🚫 [ApplicationReview] Cancelled request: \(requestID)")
+        }
+        currentRequestID = nil
     }
 }

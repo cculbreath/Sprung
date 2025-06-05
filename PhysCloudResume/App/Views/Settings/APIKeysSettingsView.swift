@@ -46,11 +46,11 @@ struct APIKeysSettingsView: View {
     
     // Note: API validation can be implemented per-service as needed
     
-    // Initialize LLMRequestService to update client when keys change
+    // Update LLM client when keys change
     private func updateLLMClient() {
         Task { @MainActor in
-            // This will initialize the appropriate client based on current model and available API keys
-            LLMRequestService.shared.updateClientForCurrentModel()
+            // Reinitialize the LLM service with updated API keys
+            LLMService.shared.initialize(appState: appState)
             
             // Fetch OpenRouter models if the OpenRouter API key was changed
             if !openRouterApiKey.isEmpty {
