@@ -90,7 +90,7 @@ struct SidebarRecommendButton: View {
 
         Task {
             do {
-                let service = JobRecommendationService()
+                let service = JobRecommendationService(llmService: LLMService.shared)
                 
                 let (jobId, reason) = try await service.fetchRecommendation(
                     jobApps: jobAppStore.jobApps,

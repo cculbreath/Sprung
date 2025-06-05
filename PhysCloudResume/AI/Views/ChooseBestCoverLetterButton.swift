@@ -8,27 +8,30 @@
 import SwiftUI
 
 /// Button for choosing the best cover letter via AI recommendation.
+/// NOTE: This component may be legacy - choose best functionality moved to UnifiedToolbar
 struct ChooseBestCoverLetterButton: View {
     @Binding var cL: CoverLetter
-    @Binding var buttons: CoverLetterButtons
     let action: () -> Void
     let multiModelAction: () -> Void
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @State private var isOptionPressed = false
+    @State private var isProcessing = false
 
     var body: some View {
-        if buttons.chooseBestRequested {
+        if isProcessing {
             Image(systemName: "wand.and.rays")
                 .font(.system(size: 18, weight: .regular))
                 .frame(width: 32, height: 32)
                 .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
         } else {
             Button(action: {
+                isProcessing = true
                 if isOptionPressed {
                     multiModelAction()
                 } else {
                     action()
                 }
+                // Note: Caller should reset isProcessing when done
             }) {
                 Group {
                     if isOptionPressed {

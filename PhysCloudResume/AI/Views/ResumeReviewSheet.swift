@@ -34,9 +34,9 @@ struct ResumeReviewSheet: View {
 
     // AppStorage for max iterations
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
-    // Persisted preferred LLM model across the app
-    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = AIModels.gpt4o_latest
-    // Persisted preferred model across the app
+    
+    // Model selection state
+    @State private var selectedModel: String = ""
     
     // State for entity merge option
     @State private var allowEntityMerge: Bool = false
@@ -179,7 +179,7 @@ struct ResumeReviewSheet: View {
                     // AI Model Selection
                     // Use vision capability filter for Fix Overflow since it requires image analysis
                     DropdownModelPicker(
-                        selectedModel: $preferredLLMModel,
+                        selectedModel: $selectedModel,
                         requiredCapability: selectedReviewType == .fixOverflow ? .vision : nil,
                         title: "AI Model"
                     )
@@ -641,7 +641,7 @@ struct ResumeReviewSheet: View {
             reviewService.sendReorderSkillsRequest(
                 resume: resume,
                 appState: appState,
-                modelId: preferredLLMModel,
+                modelId: selectedModel,
                 onComplete: { result in
                     continuation.resume(returning: result)
                 }

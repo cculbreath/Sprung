@@ -6,8 +6,15 @@ OVERVIEW
 --------
 
 This document analyzes all LLM operations in the PhysCloudResume codebase to 
-design a unified, clean architecture. The app is currently migrating from 
-multiple LLM services to a unified OpenRouter-based system.
+design a unified, clean architecture. The app has successfully completed Phase 2.2 
+of migration to a unified OpenRouter-based system with clean ViewModel architecture.
+
+**Phase 2.2 Highlights:**
+- Clean ViewModel architecture with ResumeReviseViewModel and ClarifyingQuestionsViewModel
+- Symmetric prompt architecture with all prompts centralized in ResumeQuery
+- Enhanced node classes with encapsulated business logic
+- Unified model selection component (ModelSelectionSheet)
+- Removal of deprecated legacy code (AiCommsView, AiFunctionView, old Toolbar)
 
 
 CURRENT LLM OPERATION TYPES
@@ -71,10 +78,10 @@ CURRENT LLM OPERATION TYPES
 ┌─────────────────────────────┬──────────────────────────────┬─────────────┬──────────┬─────────────┬────────────────────────────┬──────────────────────────────────────┐
 │ Operation                   │ File                         │ Context     │ Schema   │ Image Input │ Schema Type                │ ModelPicker Location                 │
 ├─────────────────────────────┼──────────────────────────────┼─────────────┼──────────┼─────────────┼────────────────────────────┼──────────────────────────────────────┤
-│ Resume Revision Analysis    │ ResumeReviseService.swift    │ Multi-turn  │ * Yes    │ x No        │ RevisionsContainer         │ UnifiedToolbar "Customize" button    │
-│ Resume Chat                 │ ResumeChatProvider.swift     │ Multi-turn  │ x No     │ x No        │ Plain text                 │ UnifiedToolbar (BROKEN, needs impl.) │
-│ Clarifying Questions        │ ResumeReviseService.swift    │ One-shot    │ * Yes    │ x No        │ ClarifyingQuestionsRequest │ UnifiedToolbar "Clarify & Customize" │
-│ Skill Reordering            │ ReorderSkillsProvider.swift  │ One-shot    │ * Yes    │ x No        │ ReorderSkillsResponse      │ ResumeReviewSheet:181 (Dropdown)     │
+│ Resume Revision Analysis    │ ResumeReviseViewModel.swift  │ Multi-turn  │ * Yes    │ x No        │ RevisionsContainer         │ UnifiedToolbar "Customize" button    │
+│ Resume Chat                 │ ResumeChatProvider.swift     │ Multi-turn  │ x No     │ x No        │ Plain text                 │ UnifiedToolbar (DEPRECATED)          │
+│ Clarifying Questions        │ ClarifyingQuestionsVM.swift  │ One-shot    │ * Yes    │ x No        │ ClarifyingQuestionsRequest │ UnifiedToolbar "Clarify & Customize" │
+│ Skill Reordering            │ SkillReorderService.swift    │ One-shot    │ * Yes    │ x No        │ ReorderSkillsResponse      │ ResumeReviewSheet:181 (Dropdown)     │
 └─────────────────────────────┴──────────────────────────────┴─────────────┴──────────┴─────────────┴────────────────────────────┴──────────────────────────────────────┘
 ```
 
@@ -98,7 +105,7 @@ CURRENT LLM OPERATION TYPES
 ┌─────────────────────────────┬─────────────────────────────────┬─────────────┬──────────┬─────────────┬────────────────────┬──────────────────────────────────────┐
 │ Operation                   │ File                            │ Context     │ Schema   │ Image Input │ Schema Type        │ ModelPicker Location                 │
 ├─────────────────────────────┼─────────────────────────────────┼─────────────┼──────────┼─────────────┼────────────────────┼──────────────────────────────────────┤
-│ Job Recommendation          │ JobRecommendationProvider.swift │ One-shot    │ * Yes    │ x No        │ JobRecommendation  │ RecommendJobButton (needs Dropdown) │
+│ Job Recommendation          │ JobRecommendationService.swift  │ One-shot    │ * Yes    │ x No        │ JobRecommendation  │ RecommendJobButton (DropdownPicker)  │
 └─────────────────────────────┴─────────────────────────────────┴─────────────┴──────────┴─────────────┴────────────────────┴──────────────────────────────────────┘
 ```
 
@@ -108,11 +115,11 @@ CURRENT LLM OPERATION TYPES
 ┌─────────────────────────────┬──────────────────────────┬─────────────┬──────────┬─────────────┬───────────────┬──────────────────────────────────────┐
 │ Operation                   │ File                     │ Context     │ Schema   │ Image Input │ Schema Type   │ ModelPicker Location                 │
 ├─────────────────────────────┼──────────────────────────┼─────────────┼──────────┼─────────────┼───────────────┼──────────────────────────────────────┤
-│ Text Request                │ LLMRequestService.swift  │ One-shot    │ x No     │ x No        │ Plain text    │ Via provider-specific pickers        │
-│ Mixed Request               │ LLMRequestService.swift  │ One-shot    │ x No     │ * Yes       │ Plain text    │ Via provider-specific pickers        │
-│ Structured Mixed            │ LLMRequestService.swift  │ One-shot    │ * Yes    │ * Yes       │ Configurable  │ Via provider-specific pickers        │
-│ Resume Conversation         │ LLMRequestService.swift  │ Multi-turn  │ x No     │ x No        │ Plain text    │ Via provider-specific pickers        │
-│ Cover Letter Conversation   │ LLMRequestService.swift  │ Multi-turn  │ x No     │ x No        │ Plain text    │ Via provider-specific pickers        │
+│ Text Request                │ LLMService.swift         │ One-shot    │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
+│ Mixed Request               │ LLMService.swift         │ One-shot    │ x No     │ * Yes       │ Plain text    │ Via ModelSelectionSheet              │
+│ Structured Mixed            │ LLMService.swift         │ One-shot    │ * Yes    │ * Yes       │ Configurable  │ Via ModelSelectionSheet              │
+│ Resume Conversation         │ LLMService.swift         │ Multi-turn  │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
+│ Cover Letter Conversation   │ LLMService.swift         │ Multi-turn  │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
 └─────────────────────────────┴──────────────────────────┴─────────────┴──────────┴─────────────┴───────────────┴──────────────────────────────────────┘
 
 ### **Review Services**
@@ -172,6 +179,14 @@ The app provides two reusable model picker components:
 - **Usage Locations**:
   - `MultiModelChooseBestCoverLetterSheet:102` - For multi-model cover letter voting
   - `BatchCoverLetterView:85` - For selecting multiple models for batch generation
+
+#### **3. ModelSelectionSheet** (`ModelSelectionSheet.swift`) **NEW in Phase 2.2** ✅
+- **Purpose**: Unified single model selection component for all LLM operations
+- **Style**: Sheet presentation with model filtering and selection
+- **Usage Pattern**: Generic component that takes capability filter and returns selected model ID
+- **Usage Locations**:
+  - UnifiedToolbar buttons (Customize, Clarify & Customize)
+  - All single-model LLM operations requiring model selection
 
 ### **Model Selection Storage and Persistence**
 
@@ -461,51 +476,65 @@ class ModelCapabilityManager {
 
 ### **4. Migration Plan**
 
-#### **Phase 1: Create Core Services** 🚨 **START HERE**
-- **PRIORITY**: Implement `LLMService` class and `ResumeReviseService` for clean separation
+#### **✅ Phase 1: Create Core Services** (COMPLETED)
+- **COMPLETED**: Implement `LLMService` class and `ResumeReviseViewModel` for clean separation
 - **Key Dependencies**: 
   - `AppState.selectedOpenRouterModels` (already exists)
   - `OpenRouterService` (already exists)
   - `DropdownModelPicker` and `CheckboxModelPicker` (already exist)
-- **Implementation Order**:
-  1. Create `LLMService.swift` with basic LLM operations
-  2. Create `ResumeReviseService.swift` for revision workflow business logic
-  3. Implement `ConversationManager` for context handling
-  4. Add `ModelCapabilityManager` for dynamic capability detection
-  5. Implement core operations: `execute()`, `executeStructured()`, `continueConversation()`
-- **Critical Note**: Do NOT implement toolbar buttons until this phase is complete
+- **Implementation Order** ✅:
+  1. ✅ Create `LLMService.swift` with basic LLM operations
+  2. ✅ Create `ResumeReviseViewModel.swift` for revision workflow business logic
+  3. ✅ Implement `ConversationManager` for context handling
+  4. ✅ Add `ModelCapabilityManager` for dynamic capability detection
+  5. ✅ Implement core operations: `execute()`, `executeStructured()`, `continueConversation()`
 
-#### **Phase 2: Migrate High-Level Operations**
-- **Start With**: Simple one-shot operations (easier to test)
-  - Job recommendations (`JobRecommendationProvider`)
-  - Skill reordering (`ReorderSkillsProvider`)
-- **Then**: Multi-turn operations
-  - Resume revisions (`ResumeChatProvider`)
-  - Cover letter generation (`CoverChatProvider`)
-- **Finally**: Complex workflows
+#### **✅ Phase 2.1: Simple One-Shot Operations** (COMPLETED)
+- **✅ Start With**: Simple one-shot operations (easier to test)
+  - ✅ Job recommendations (`JobRecommendationService`)
+  - ✅ Skill reordering (`SkillReorderService`)
+
+#### **✅ Phase 2.2: Multi-Turn Operations & Architecture Cleanup** (COMPLETED)
+- **✅ Multi-turn operations**:
+  - ✅ Resume revisions (ResumeReviseViewModel)
+  - ✅ Clarifying questions workflow (ClarifyingQuestionsViewModel)
+- **✅ Architecture improvements**:
+  - ✅ Enhanced node classes with business logic
+  - ✅ Unified model selection (ModelSelectionSheet)
+  - ✅ Clean ViewModel separation of concerns
+  - ✅ Removal of deprecated legacy code
+
+#### **⏳ Phase 2.3: Cover Letter Migration** (NEXT)
+- **⏳ Cover letter operations**:
+  - Cover letter generation (CoverChatProvider → LLMService)
+  - Cover letter revision (CoverChatProvider → LLMService)
+- **⏳ Complex workflows**:
   - Fix overflow (multimodal + iterative)
   - Multi-model voting systems
 
-#### **Phase 3: Implement Missing UI Components**
-- **UnifiedToolbar Integration**: 
-  - **CRITICAL**: Every toolbar button MUST have model selection capability
-  - Add DropdownModelPicker to Generate and Clarify & Generate buttons
-  - Connect buttons to `LLMService` operations (many are currently non-functional)
-  - Verify Cover Letter toolbar buttons are properly wired to LLM operations
-  - Remove legacy AiCommsView dependencies
-- **Missing Model Pickers**: 
+#### **Phase 3: Remaining UI Components**
+- **⏳ UnifiedToolbar Integration**: 
+  - **PARTIAL**: Model selection added to some buttons, need completion
+  - ✅ ModelSelectionSheet unified component created
+  - ⏳ Add model selection to remaining buttons
+  - ⏳ Verify Cover Letter toolbar buttons are properly wired to LLM operations
+- **⏳ Missing Model Pickers**: 
   - Cover Letter Chat UI
-  - RecommendJobButton dropdown
-- **Toolbar Button Audit**: 
+  - Complete RecommendJobButton integration 
+- **⏳ Toolbar Button Audit**: 
   - Ensure ALL buttons that trigger LLM operations have model selection
   - Test that button actions are connected to actual LLM services
-  - Add model picker integration where missing
 
-#### **Phase 4: Remove Legacy Code**
-- Remove `LLMRequestService` redundancy
-- Consolidate provider classes
-- Clean up `BaseLLMProvider` if no longer needed
-- **DEPRECATED**: Remove `AiCommsView` (legacy from old toolbar workflow, replaced by UnifiedToolbar → ResumeReviseService → ReviewView)
+#### **Phase 4: Legacy Code Cleanup**
+- **✅ COMPLETED Phase 2.2 Cleanup**:
+  - ✅ Removed `AiCommsView` (legacy revision workflow UI)
+  - ✅ Removed `AiFunctionView` (legacy wrapper)
+  - ✅ Removed old `Toolbar.swift` (replaced by UnifiedToolbar)
+  - ✅ Removed `ReviewView.swift` (renamed to RevisionReviewView)
+- **⏳ Remaining Cleanup**:
+  - Remove `LLMRequestService` redundancy
+  - Remove `ResumeChatProvider` after migration complete
+  - Clean up `BaseLLMProvider` if no longer needed
 
 #### **Phase 5: Polish & Optimization**
 - Add comprehensive error handling
@@ -554,14 +583,14 @@ The unified `LLMService` provides a **clean abstraction layer** that isolates Op
 ┌────────────────────────────────────────────────────┬─────────────────────────────────────┬─────────────────────────┐
 │ Current Operation                                  │ New Method                          │ Notes                   │
 ├────────────────────────────────────────────────────┼─────────────────────────────────────┼─────────────────────────┤
-│ ResumeChatProvider.startNewResumeConversation()    │ startConversation()                 │ Multi-turn text         │
-│ ResumeChatProvider.continueResumeConversation()    │ continueConversation()              │ Multi-turn text         │
-│ ResumeChatProvider.processResumeInteraction()      │ continueConversationStructured()    │ Multi-turn + schema     │
-│ ResumeChatProvider.requestClarifyingQuestions()    │ executeStructured()                 │ One-shot + schema       │
+│ ResumeReviseViewModel.startRevisionWorkflow()      │ startConversation()                 │ Multi-turn text         │
+│ ResumeReviseViewModel.processFeedbackAndRevise()   │ continueConversationStructured()    │ Multi-turn + schema     │
+│ ClarifyingQuestionsViewModel.startWorkflow()       │ executeStructured()                 │ One-shot + schema       │
+│ ClarifyingQuestionsViewModel.processAnswers()      │ continueConversationStructured()    │ Multi-turn + schema     │
 │ CoverChatProvider.coverChatAction()                │ continueConversation()              │ Multi-turn text         │
 │ CoverLetterRecommendationProvider.multiModelVote() │ executeStructured() (parallel)      │ Parallel one-shot+schema│
-│ ReorderSkillsProvider.fetchReorderedSkills()       │ executeStructured()                 │ One-shot + schema       │
-│ JobRecommendationProvider.fetchRecommendation()    │ executeStructured()                 │ One-shot + schema       │
+│ SkillReorderService.fetchReorderedSkills()         │ executeStructured()                 │ One-shot + schema       │
+│ JobRecommendationService.fetchRecommendation()     │ executeStructured()                 │ One-shot + schema       │
 │ LLMRequestService.sendTextRequest()                │ execute()                           │ One-shot text           │
 │ LLMRequestService.sendMixedRequest()               │ executeWithImages()                 │ Text + image → text     │
 │ LLMRequestService.sendStructuredMixedRequest()     │ executeStructuredWithImages()       │ Text + image → JSON     │
@@ -599,10 +628,10 @@ This unified architecture will eliminate redundancy, improve maintainability, an
 - Validation and node ID matching
 - State persistence across revision rounds
 
-**UnifiedToolbar**: Direct workflow integration (replaces AiCommsView)
-- **"Customize" button**: Model picker → ResumeReviseService.startRevisionWorkflow() → ReviewView
-- **"Clarify & Customize" button**: Model picker → ClarifyingQuestionsSheet → ResumeReviseService workflow → ReviewView
-- **Pattern**: UnifiedToolbar button → Model selection popup → LLM operation → ReviewView (no intermediate UI coordinator needed)
+**UnifiedToolbar**: Direct workflow integration (replaces AiCommsView) ✅
+- **"Customize" button**: ModelSelectionSheet → ResumeReviseViewModel.startRevisionWorkflow() → RevisionReviewView ✅
+- **"Clarify & Customize" button**: ModelSelectionSheet → ClarifyingQuestionsViewModel → ResumeReviseViewModel workflow → RevisionReviewView ✅
+- **Pattern**: UnifiedToolbar button → ModelSelectionSheet → LLM operation → RevisionReviewView (clean architecture achieved) ✅
 
 ### **Important Patterns to Preserve**
 1. **Two-Stage Model Filtering**: Global user selection + operation-specific capabilities

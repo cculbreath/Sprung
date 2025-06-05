@@ -24,7 +24,7 @@ class JobRecommendationService {
     IMPORTANT: Output ONLY the JSON object with the fields "recommendedJobId" and "reason". Do not include any additional commentary, explanation, or text outside the JSON.
     """
     
-    init(llmService: LLMService = LLMService.shared) {
+    init(llmService: LLMService) {
         self.llmService = llmService
     }
     

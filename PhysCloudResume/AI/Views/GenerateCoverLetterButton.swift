@@ -10,13 +10,13 @@ import SwiftUI
 /// Button for generating or regenerating a cover letter via AI.
 struct GenerateCoverLetterButton: View {
     @Binding var cL: CoverLetter
-    @Binding var buttons: CoverLetterButtons
     let chatProvider: CoverChatProvider
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @State private var isProcessing = false
 
     var body: some View {
-        if !buttons.runRequested {
+        if !isProcessing {
             Button {
                 // Always create a new cover letter for every LLM request
                 let newCL = coverLetterStore.createDuplicate(letter: cL)
@@ -24,13 +24,14 @@ struct GenerateCoverLetterButton: View {
                 newCL.currentMode = .generate
                 // Update the current letter reference
                 cL = newCL
+                isProcessing = true
                 chatProvider.coverChatAction(
                     res: jobAppStore.selectedApp?.selectedRes,
                     jobAppStore: jobAppStore,
                     chatProvider: chatProvider,
-                    buttons: $buttons,
                     isNewConversation: true // Explicitly start a new conversation
                 )
+                // Note: caller should reset isProcessing when done
             } label: {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 18, weight: .regular))

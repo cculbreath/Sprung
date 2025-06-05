@@ -24,7 +24,7 @@ class SkillReorderService {
     IMPORTANT: Output ONLY the JSON object with the "reordered_skills_and_expertise" array. Do not include any additional commentary, explanation, or text outside the JSON.
     """
     
-    init(llmService: LLMService = LLMService.shared) {
+    init(llmService: LLMService) {
         self.llmService = llmService
     }
     

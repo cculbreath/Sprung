@@ -13,7 +13,7 @@ struct ResumeSplitView: View {
     
     @Binding var isWide: Bool
     @Binding var tab: TabList
-    @Binding var resumeButtons: ResumeButtons
+    @Binding var showResumeInspector: Bool
     @Binding var refresh: Bool
     
     @State private var showCreateResumeSheet = false
@@ -48,7 +48,7 @@ struct ResumeSplitView: View {
                         )
                         .id(selRes.id) // Force view recreation when selected resume changes
                         .layoutPriority(1) // Less priority, but still resizable
-                }.inspector(isPresented: $resumeButtons.showResumeInspector) {
+                }.inspector(isPresented: $showResumeInspector) {
                     ResumeInspectorView(refresh: $refresh)
                 }
             } else {
