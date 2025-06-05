@@ -50,8 +50,8 @@ class SkillReorderService {
         // Validate model capabilities
         try llmService.validateModel(modelId: modelId, for: [])
         
-        // Extract skills JSON using existing TreeNodeExtractor
-        guard let skillsJsonString = TreeNodeExtractor.shared.extractSkillsForReordering(resume: resume) else {
+        // Extract skills JSON from resume tree
+        guard let skillsJsonString = extractSkillsForReordering(resume: resume) else {
             throw SkillReorderError.skillExtractionFailed
         }
         
@@ -93,6 +93,42 @@ class SkillReorderService {
         
         Logger.debug("✅ Skill reordering successful: \(reorderedNodes.count) skills reordered")
         return reorderedNodes
+    }
+    
+    // MARK: - Skills Extraction
+    
+    /// Extract skills from resume for reordering
+    private func extractSkillsForReordering(resume: Resume) -> String? {
+        // First, ensure the resume has a rootNode.
+        guard let actualRootNode = resume.rootNode else {
+            Logger.debug("Error: Resume has no rootNode.")
+            return nil
+        }
+
+        // Attempt to find the "Skills and Expertise" section node.
+        var skillsSectionNode: TreeNode? = actualRootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        })
+
+        // If not found with primary names, try the fallback key.
+        if skillsSectionNode == nil {
+            skillsSectionNode = actualRootNode.children?.first(where: { $0.name == "skills-and-expertise" })
+        }
+
+        // If still not found after both attempts, print an error and return nil.
+        guard let finalSkillsSectionNode = skillsSectionNode else {
+            Logger.debug("Error: 'Skills and Expertise' section node not found in the resume under rootNode.")
+            return nil
+        }
+
+        // Extract the tree structure as JSON
+        do {
+            let jsonData = try JSONEncoder().encode(finalSkillsSectionNode)
+            return String(data: jsonData, encoding: .utf8)
+        } catch {
+            Logger.error("Failed to encode skills section to JSON: \(error)")
+            return nil
+        }
     }
     
     // MARK: - Private Helpers
