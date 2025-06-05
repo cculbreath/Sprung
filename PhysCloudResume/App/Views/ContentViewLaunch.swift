@@ -5,6 +5,7 @@ import SwiftData
 
 struct ContentViewLaunch: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
 
     // Create DragInfo instance here
     @State private var dragInfo = DragInfo() // Use @State for Observable objects owned by the view
@@ -31,8 +32,8 @@ struct ContentViewLaunch: View {
                 // Check and migrate database if needed
                 DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
                 
-                // Initialize ConversationContextManager with ModelContext
-                ConversationContextManager.shared.setModelContext(modelContext)
+                // Initialize LLMService with ModelContext
+                LLMService.shared.initialize(appState: appState, modelContext: modelContext)
             }
         // Note: AppState is already injected via .environment(appState) in PhysicsCloudResumeApp
     }

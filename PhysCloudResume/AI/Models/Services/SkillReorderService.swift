@@ -121,14 +121,8 @@ class SkillReorderService {
             return nil
         }
 
-        // Extract the tree structure as JSON
-        do {
-            let jsonData = try JSONEncoder().encode(finalSkillsSectionNode)
-            return String(data: jsonData, encoding: .utf8)
-        } catch {
-            Logger.error("Failed to encode skills section to JSON: \(error)")
-            return nil
-        }
+        // Extract the tree structure as JSON using TreeNode extension
+        return finalSkillsSectionNode.toJSONString()
     }
     
     // MARK: - Private Helpers

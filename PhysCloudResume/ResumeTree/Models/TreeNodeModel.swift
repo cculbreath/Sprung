@@ -200,3 +200,35 @@ enum LeafStatus: String, Codable, Hashable {
         return pathComponents.joined(separator: " > ")
     }
 }
+
+// MARK: - JSON Conversion Extension
+extension TreeNode {
+    /// Convert TreeNode to JSON string representation
+    func toJSONString() -> String? {
+        do {
+            let nodeDict = toDictionary()
+            let jsonData = try JSONSerialization.data(withJSONObject: nodeDict, options: [.prettyPrinted])
+            return String(data: jsonData, encoding: .utf8)
+        } catch {
+            Logger.error("Failed to convert TreeNode to JSON: \(error)")
+            return nil
+        }
+    }
+    
+    /// Convert TreeNode to dictionary for JSON serialization
+    private func toDictionary() -> [String: Any] {
+        var dict: [String: Any] = [
+            "id": id,
+            "name": name,
+            "value": value,
+            "includeInEditor": includeInEditor,
+            "myIndex": myIndex
+        ]
+        
+        if let children = children, !children.isEmpty {
+            dict["children"] = children.map { $0.toDictionary() }
+        }
+        
+        return dict
+    }
+}
