@@ -9,6 +9,73 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Cover Letter Response Types
+
+/// Voting scheme for multi-model selection
+enum VotingScheme: String, CaseIterable {
+    case firstPastThePost = "First Past The Post"
+    case scoreVoting = "Score Voting (20 points)"
+    
+    var description: String {
+        switch self {
+        case .firstPastThePost:
+            return "Each model votes for one favorite letter"
+        case .scoreVoting:
+            return "Each model allocates 20 points among all letters"
+        }
+    }
+}
+
+/// Score allocation for a single cover letter in score voting
+struct CoverLetterScore: Codable {
+    let letterUuid: String
+    let score: Int
+    let reasoning: String
+}
+
+/// Response schema for best cover letter selection
+struct BestCoverLetterResponse: Codable, StructuredOutput {
+    let strengthAndVoiceAnalysis: String
+    let bestLetterUuid: String
+    let verdict: String
+    
+    // Optional: Used only for score voting
+    let scoreAllocations: [CoverLetterScore]?
+    
+    // Implement validate for StructuredOutput
+    func validate() -> Bool {
+        // Check if we have non-empty values
+        let baseValidation = !strengthAndVoiceAnalysis.isEmpty &&
+               !bestLetterUuid.isEmpty &&
+               !verdict.isEmpty
+        
+        // If scoreAllocations exist, validate them
+        if let scores = scoreAllocations {
+            let totalScore = scores.reduce(0) { $0 + $1.score }
+            // Score voting should allocate exactly 20 points
+            return baseValidation && totalScore == 20 && scores.allSatisfy { $0.score >= 0 }
+        }
+        
+        return baseValidation
+    }
+    
+    // Backward compatibility initializer for FPTP voting
+    init(strengthAndVoiceAnalysis: String, bestLetterUuid: String, verdict: String) {
+        self.strengthAndVoiceAnalysis = strengthAndVoiceAnalysis
+        self.bestLetterUuid = bestLetterUuid
+        self.verdict = verdict
+        self.scoreAllocations = nil
+    }
+    
+    // Full initializer including score allocations
+    init(strengthAndVoiceAnalysis: String, bestLetterUuid: String, verdict: String, scoreAllocations: [CoverLetterScore]?) {
+        self.strengthAndVoiceAnalysis = strengthAndVoiceAnalysis
+        self.bestLetterUuid = bestLetterUuid
+        self.verdict = verdict
+        self.scoreAllocations = scoreAllocations
+    }
+}
+
 @Observable class CoverLetterQuery {
     // MARK: - Properties
     
@@ -143,7 +210,7 @@ import SwiftUI
     
     /// System prompt for cover letter generation
     func systemPrompt(for modelId: String) -> String {
-        var systemPrompt = CoverLetterPrompts.systemMessage.content
+        var systemPrompt = CoverLetterPrompts.systemMessage.textContent
         
         // Model-specific formatting instructions
         if modelId.lowercased().contains("gemini") {

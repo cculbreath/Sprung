@@ -14,7 +14,7 @@ enum CoverAiMode: String, Codable {
 }
 
 enum CoverLetterPrompts {
-    static var systemMessage = ChatMessage(
+    static var systemMessage = LLMMessage.text(
         role: .system,
         content: "You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. Your task is to create an extraordinarily well-written and memorable cover letter for a job application, based on the job listing and resume provided below. The cover letter should be in plain text with no commentary or annotations. IMPORTANT: Return ONLY the body content of the letter - do not include date, address, salutation (like 'Dear Hiring Manager'), signature, name, or contact information. Your response should start immediately with the first paragraph of the letter body and end with the final paragraph. The letter should use block-format paragraphs with no indentation, and just a single new line at the end of each paragraph. Do not add a blank line between paragraphs."
     )

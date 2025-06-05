@@ -20,7 +20,7 @@ class BaseLLMProvider {
     var messages: [String] = []
     
     // Conversation history
-    var conversationHistory: [AppLLMMessage] = []
+    var conversationHistory: [LLMMessage] = []
     
     // Error handling
     var errorMessage: String = ""
@@ -28,24 +28,6 @@ class BaseLLMProvider {
     // Track the last model used to know when to switch clients
     var lastModelUsed: String = ""
     
-    // MARK: - Actor to safely coordinate continuations
-    
-    /// Actor to safely coordinate continuations and prevent multiple resumes
-    private actor ContinuationCoordinator {
-        private var hasResumed = false
-
-        func resumeWithValue(_ value: AppLLMResponse, continuation: UnsafeContinuation<AppLLMResponse, Error>) {
-            guard !hasResumed else { return }
-            hasResumed = true
-            continuation.resume(returning: value)
-        }
-
-        func resumeWithError(_ error: Error, continuation: UnsafeContinuation<AppLLMResponse, Error>) {
-            guard !hasResumed else { return }
-            hasResumed = true
-            continuation.resume(throwing: error)
-        }
-    }
     
     // MARK: - Initializers
     
@@ -73,34 +55,19 @@ class BaseLLMProvider {
     ///   - systemPrompt: The system prompt to use
     ///   - userPrompt: The initial user prompt
     /// - Returns: The conversation history after initialization
-    func initializeConversation(systemPrompt: String, userPrompt: String) -> [AppLLMMessage] {
+    func initializeConversation(systemPrompt: String, userPrompt: String) -> [LLMMessage] {
         // Clear existing conversation history
         conversationHistory = []
         
         // Add system message
-        conversationHistory.append(AppLLMMessage(role: .system, text: systemPrompt))
+        conversationHistory.append(LLMMessage.text(role: .system, content: systemPrompt))
         
         // Add user message
-        conversationHistory.append(AppLLMMessage(role: .user, text: userPrompt))
+        conversationHistory.append(LLMMessage.text(role: .user, content: userPrompt))
         
         return conversationHistory
     }
     
-    /// Add a user message to the conversation history
-    /// - Parameter text: The user message text
-    /// - Returns: The updated conversation history
-    func addUserMessage(_ text: String) -> [AppLLMMessage] {
-        conversationHistory.append(AppLLMMessage(role: .user, text: text))
-        return conversationHistory
-    }
-    
-    /// Add an assistant message to the conversation history
-    /// - Parameter text: The assistant message text
-    /// - Returns: The updated conversation history
-    func addAssistantMessage(_ text: String) -> [AppLLMMessage] {
-        conversationHistory.append(AppLLMMessage(role: .assistant, text: text))
-        return conversationHistory
-    }
     
     /// Updates the OpenRouter client if needed
     /// - Parameter appState: The current application state

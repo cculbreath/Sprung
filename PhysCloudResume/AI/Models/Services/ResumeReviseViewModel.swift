@@ -105,7 +105,7 @@ class ResumeReviseViewModel {
             let query = ResumeApiQuery(resume: resume)
             
             // Start conversation with system prompt and user query
-            let systemPrompt = query.genericSystemMessage.content
+            let systemPrompt = query.genericSystemMessage.textContent
             let userPrompt = await query.wholeResumeQueryString()
             
             // Start conversation and get revisions
@@ -219,7 +219,7 @@ class ResumeReviseViewModel {
         try llmService.validateModel(modelId: modelId, for: [])
         
         // Create clarifying questions prompt using the generic system message
-        let systemPrompt = query.genericSystemMessage.content
+        let systemPrompt = query.genericSystemMessage.textContent
         let userContext = await query.wholeResumeQueryString()
         
         // Request clarifying questions
