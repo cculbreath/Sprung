@@ -10,6 +10,7 @@ import SwiftUI
 struct TabWrapperView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+    @Environment(\.appState) private var appState: AppState
 
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
@@ -28,6 +29,9 @@ struct TabWrapperView: View {
     @State private var showChooseBestCoverLetterSheet = false
     @State private var showMultiModelChooseBestSheet = false
     @State private var clarifyingQuestions: [ClarifyingQuestion] = []
+    
+    // Revision workflow - managed by ResumeReviseViewModel
+    @State private var resumeReviseViewModel: ResumeReviseViewModel?
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
@@ -89,7 +93,8 @@ struct TabWrapperView: View {
                         showClarifyingQuestionsSheet: $showClarifyingQuestionsSheet,
                         showChooseBestCoverLetterSheet: $showChooseBestCoverLetterSheet,
                         showMultiModelChooseBestSheet: $showMultiModelChooseBestSheet,
-                        clarifyingQuestions: $clarifyingQuestions
+                        clarifyingQuestions: $clarifyingQuestions,
+                        resumeReviseViewModel: resumeReviseViewModel
                     )
                 }
                 .toolbarBackground(.visible, for: .windowToolbar)
@@ -100,6 +105,12 @@ struct TabWrapperView: View {
                 .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
                 }
                 .onChange(of: $tabRefresh.wrappedValue) { _, newvalue in Logger.debug("Tab is is now + \(newvalue ? "true" : "false")") }
+                .onAppear {
+                    // Initialize ResumeReviseViewModel when view appears
+                    if resumeReviseViewModel == nil {
+                        resumeReviseViewModel = ResumeReviseViewModel(llmService: LLMService.shared, appState: appState)
+                    }
+                }
                 .onChange(of: selectedTab) { _, newTab in
                     // Track when the user switches to the resume tab
                     if newTab == .resume {
@@ -119,6 +130,19 @@ struct TabWrapperView: View {
                 .sheet(isPresented: $showResumeReviewSheet) {
                     if let selectedResume = jobAppStore.selectedApp?.selectedRes {
                         ResumeReviewSheet(selectedResume: .constant(selectedResume))
+                    }
+                }
+                .sheet(isPresented: Binding(
+                    get: { resumeReviseViewModel?.showResumeRevisionSheet ?? false },
+                    set: { resumeReviseViewModel?.showResumeRevisionSheet = $0 }
+                )) {
+                    if let selectedResume = jobAppStore.selectedApp?.selectedRes,
+                       let viewModel = resumeReviseViewModel {
+                        RevisionReviewView(
+                            viewModel: viewModel,
+                            resume: .constant(selectedResume)
+                        )
+                        .frame(minWidth: 650)
                     }
                 }
                 .sheet(isPresented: $showClarifyingQuestionsSheet) {

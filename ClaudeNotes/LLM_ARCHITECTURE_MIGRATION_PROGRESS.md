@@ -6,7 +6,7 @@ This document tracks the progress of the unified LLM architecture refactoring fo
 
 **Goal**: Replace fragmented LLM services with unified, maintainable system with full provider abstraction
 
-**Current Status**: Phase 1 Complete ✅
+**Current Status**: Phase 2.2 Complete ✅ - Major Architectural Cleanup
 
 ## Phase Progress
 
@@ -52,11 +52,21 @@ This document tracks the progress of the unified LLM architecture refactoring fo
 - ✅ **Compilation Success**: Both LLMService and ResumeReviseService compile cleanly
 - ✅ **Type Integration**: Fixed duplicate type definitions, using existing types from AITypes.swift and ResumeUpdateNode.swift
 
-### 🔄 Phase 2: Migrate High-Level Operations (NEXT)
+### ✅ Phase 2.1: Simple One-Shot Operations (COMPLETED - June 4, 2025)
 
-#### Simple One-Shot Operations
-- ⏳ Job recommendations (JobRecommendationProvider → LLMService)
-- ⏳ Skill reordering (ReorderSkillsProvider → LLMService)
+#### Job Recommendations Migration ✅
+- ✅ **Created**: `JobRecommendationService.swift` - Clean LLMService integration 
+- ✅ **Updated**: `RecommendJobButton.swift` - DropdownModelPicker integration
+- ✅ **Updated**: `SidebarRecommendButton.swift` - Model selection UI added
+- ✅ **Removed**: `JobRecommendationProvider.swift` - Legacy provider deleted
+
+#### Skill Reordering Migration ✅
+- ✅ **Created**: `SkillReorderService.swift` - Clean LLMService integration
+- ✅ **Updated**: `ResumeReviewService.swift` - Uses new service instead of legacy provider
+- ✅ **Updated**: `ResumeReviewSheet.swift` - Passes model selection to new service
+- ✅ **Removed**: `ReorderSkillsProvider.swift` - Legacy provider deleted
+
+### 🔄 Phase 2.2: Multi-Turn Operations (NEXT)
 
 #### Multi-Turn Operations  
 - ⏳ Resume revisions (ResumeChatProvider → ResumeReviseService)
@@ -104,6 +114,38 @@ This document tracks the progress of the unified LLM architecture refactoring fo
 - ⏳ Add operation timeout management
 - ⏳ Add request/response logging  
 - ⏳ Add performance monitoring
+
+---
+
+## Phase 2.2 Architectural Summary (COMPLETED - June 4, 2025)
+
+### Major Achievements ✅
+
+#### 1. **Clean ViewModel Architecture**
+- **ResumeReviseViewModel**: Pure ViewModel pattern, UI state management only
+- **ClarifyingQuestionsViewModel**: Focused on questions workflow, clean handoff
+- **Business logic moved to enhanced node classes**: Better encapsulation
+
+#### 2. **Symmetric Prompt Architecture** 
+- **ResumeQuery centralization**: All prompts in one place
+- **Consistent context**: Full ResumeApiQuery context across all workflows
+- **Maintainable**: Single source of truth for prompt logic
+
+#### 3. **Slim, Focused Views**
+- **RevisionReviewView**: Pure UI, no business logic
+- **ModelSelectionSheet**: Unified component for all single-model operations
+- **TabWrapperView cleaned**: No mixed concerns
+
+#### 4. **Enhanced Node Classes**
+- **ProposedRevisionNode**: Self-contained helper methods
+- **FeedbackNode**: Business logic encapsulation  
+- **Collection extensions**: Workflow operations on arrays
+
+#### 5. **Legacy Code Removal**
+- **Deprecated views**: AiCommsView, AiFunctionView, old ReviewView, old Toolbar
+- **Clean architecture**: Proper separation of concerns throughout
+
+### Next Steps → Phase 2.3: Cover Letter Migration ⏳
 
 ## Implementation Notes
 
@@ -167,5 +209,5 @@ This document tracks the progress of the unified LLM architecture refactoring fo
 ---
 
 *Last Updated: June 4, 2025*
-*Phase 1 Complete: LLMService + ResumeReviseService implemented*
-*Next: Begin Phase 2 migration of existing operations*
+*Phase 2.1 Complete: Simple one-shot operations (JobRecommendation + SkillReorder) migrated*
+*Next: Begin Phase 2.2 migration of multi-turn operations*

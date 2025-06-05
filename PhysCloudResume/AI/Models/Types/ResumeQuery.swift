@@ -296,6 +296,44 @@ import SwiftUI
         return prompt
     }
 
+    /// Generate prompt for clarifying questions workflow
+    /// Returns the full resume context with clarifying questions instructions
+    @MainActor
+    func clarifyingQuestionsPrompt() async -> String {
+        // Get the full resume context
+        let fullResumeContext = await wholeResumeQueryString()
+        
+        // Add clarifying questions instruction
+        let clarifyingQuestionsInstruction = """
+        
+        ================================================================================
+        CLARIFYING QUESTIONS MODE
+        ================================================================================
+        
+        Before proposing revisions, you have two options:
+        
+        1. **Ask Clarifying Questions** (up to 3): If you need more information to provide better, more targeted revisions
+        2. **Proceed Directly**: If you have sufficient information to proceed with revisions
+        
+        Consider asking about:
+        - Specific skills or experiences to emphasize for this role
+        - Achievements that could be quantified or better highlighted  
+        - Technologies, methodologies, or certifications to prioritize
+        - Industry-specific terminology or focus areas
+        - Career trajectory or role-specific accomplishments
+        
+        If you choose to ask questions, they should be:
+        - Specific and actionable
+        - Focused on improving relevance to this particular job
+        - Designed to gather information not already clear from the resume and job listing
+        
+        Respond with either clarifying questions OR set proceedWithRevisions to true.
+        ================================================================================
+        """
+        
+        return fullResumeContext + clarifyingQuestionsInstruction
+    }
+
     // MARK: - Debugging Helper
 
     /// Saves the provided prompt text to the user's `Downloads` folder for debugging purposes.

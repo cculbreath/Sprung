@@ -39,36 +39,15 @@ struct SidebarRecommendButton: View {
             )
         }
         .sheet(isPresented: $showModelPicker) {
-            NavigationStack {
-                VStack(spacing: 20) {
-                    Text("Choose Model for Job Recommendation")
-                        .font(.headline)
-                        .padding(.top)
-                    
-                    DropdownModelPicker(
-                        selectedModel: $selectedModel,
-                        title: "AI Model"
-                    )
-                    
-                    HStack(spacing: 12) {
-                        Button("Cancel") {
-                            showModelPicker = false
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        Button("Recommend") {
-                            showModelPicker = false
-                            recommendBestJob()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(selectedModel.isEmpty)
-                    }
-                    
-                    Spacer()
+            ModelSelectionSheet(
+                title: "Choose Model for Job Recommendation", 
+                requiredCapability: .structuredOutput,
+                isPresented: $showModelPicker,
+                onModelSelected: { modelId in
+                    selectedModel = modelId
+                    recommendBestJob()
                 }
-                .padding()
-                .frame(width: 400, height: 250)
-            }
+            )
         }
     }
 

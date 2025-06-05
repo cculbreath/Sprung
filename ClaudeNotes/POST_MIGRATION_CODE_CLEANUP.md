@@ -18,6 +18,11 @@ Issue: Logic extracted to LLMService + ResumeReviseService
 File: PhysCloudResume/AI/Models/Providers/CoverChatProvider.swift
 Issue: Logic extracted to LLMService
 
+### Deprecated UI Components (After Migration Complete)
+File: PhysCloudResume/AI/Views/AiCommsView.swift
+Issue: Legacy view from old toolbar workflow - replaced by UnifiedToolbar → ResumeReviseService → ReviewView pattern
+Evidence: Has compilation errors from partial migration, marked for deprecation in architecture docs
+
 File: PhysCloudResume/AI/Models/Providers/ReorderSkillsProvider.swift
 Issue: Simple operation, use LLMService directly
 
