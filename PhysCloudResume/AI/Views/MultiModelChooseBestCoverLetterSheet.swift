@@ -364,85 +364,67 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         
         let writingSamples = coverLetter.writingSamplesString
         
-        let currentVotingScheme = selectedVotingScheme
-        await withTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in
-            for model in selectedModels {
-                group.addTask {
-                    do {
-                        // Sanitize the model name for API usage
-                        let sanitizedModel = OpenAIModelFetcher.sanitizeModelName(model)
-                        
-                        // Determine the provider for this model
-                        let modelProvider = AIModels.providerFor(modelName: sanitizedModel)
-                        
-                        // Create a new app state instance for this specific request
-                        let tempAppState = await MainActor.run {
-                            let state = AppState()
-                            state.settings.preferredLLMProvider = modelProvider
-                            return state
+        do {
+            // Create CoverLetterQuery for centralized prompt management
+            let query = CoverLetterQuery(
+                coverLetter: coverLetter,
+                resume: jobApp.selectedRes!,
+                jobApp: jobApp
+            )
+            
+            // Build the prompt for cover letter evaluation
+            let prompt = query.bestCoverLetterPrompt(
+                coverLetters: jobApp.coverLetters,
+                votingScheme: selectedVotingScheme
+            )
+            
+            // Use LLMService for parallel execution
+            let result = try await LLMService.shared.executeParallelStructured(
+                prompt: prompt,
+                modelIds: Array(selectedModels),
+                responseType: BestCoverLetterResponse.self
+            )
+            
+            await MainActor.run {
+                // Process the results
+                for (modelId, response) in result {
+                    completedOperations += 1
+                    progress = Double(completedOperations) / Double(totalOperations)
+                    
+                    // Add to reasonings
+                    modelReasonings.append((model: modelId, response: response))
+                    
+                    if selectedVotingScheme == .firstPastThePost {
+                        // Update vote tally for FPTP
+                        if let uuid = UUID(uuidString: response.bestLetterUuid) {
+                            voteTally[uuid, default: 0] += 1
                         }
-                        
-                        // Create provider with the specific model
-                        let provider = CoverLetterRecommendationProvider(
-                            appState: tempAppState,
-                            jobApp: jobApp,
-                            writingSamples: writingSamples,
-                            modelId: model
-                        )
-                        
-                        // Set the override model to ensure this provider uses the correct model
-                        provider.overrideModel = sanitizedModel
-                        
-                        // Set the voting scheme
-                        provider.votingScheme = currentVotingScheme
-                        
-                        let response = try await provider.fetchBestCoverLetter()
-                        
-                        return (model, .success(response))  // Return original model name for display
-                    } catch {
-                        return (model, .failure(error))
+                    } else {
+                        // Update score tally for score voting
+                        if let scoreAllocations = response.scoreAllocations {
+                            // Validate that total allocation is exactly 20
+                            let totalAllocated = scoreAllocations.reduce(0) { $0 + $1.score }
+                            if totalAllocated != 20 {
+                                Logger.debug("⚠️ Model \(modelId) allocated \(totalAllocated) points instead of 20!")
+                            }
+                            
+                            for allocation in scoreAllocations {
+                                if let uuid = UUID(uuidString: allocation.letterUuid) {
+                                    scoreTally[uuid, default: 0] += allocation.score
+                                    Logger.debug("📊 Model \(modelId) allocated \(allocation.score) points to \(getLetterName(for: allocation.letterUuid) ?? allocation.letterUuid)")
+                                }
+                            }
+                        }
                     }
                 }
             }
             
-            for await (model, result) in group {
-                await MainActor.run {
-                    completedOperations += 1
-                    progress = Double(completedOperations) / Double(totalOperations)
-                    
-                    switch result {
-                    case .success(let response):
-                        // Add to reasonings
-                        modelReasonings.append((model: model, response: response))
-                        
-                        if selectedVotingScheme == .firstPastThePost {
-                            // Update vote tally for FPTP
-                            if let uuid = UUID(uuidString: response.bestLetterUuid) {
-                                voteTally[uuid, default: 0] += 1
-                            }
-                        } else {
-                            // Update score tally for score voting
-                            if let scoreAllocations = response.scoreAllocations {
-                                // Validate that total allocation is exactly 20
-                                let totalAllocated = scoreAllocations.reduce(0) { $0 + $1.score }
-                                if totalAllocated != 20 {
-                                    Logger.debug("⚠️ Model \(model) allocated \(totalAllocated) points instead of 20!")
-                                }
-                                
-                                for allocation in scoreAllocations {
-                                    if let uuid = UUID(uuidString: allocation.letterUuid) {
-                                        scoreTally[uuid, default: 0] += allocation.score
-                                        Logger.debug("📊 Model \(model) allocated \(allocation.score) points to \(getLetterName(for: allocation.letterUuid) ?? allocation.letterUuid)")
-                                    }
-                                }
-                            }
-                        }
-                        
-                    case .failure(let error):
-                        Logger.debug("Error from model \(model): \(error.localizedDescription)")
-                    }
-                }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Multi-model selection failed: \(error.localizedDescription)"
+                isProcessing = false
             }
+            return
         }
         
         await MainActor.run {

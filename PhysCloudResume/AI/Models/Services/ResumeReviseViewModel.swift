@@ -83,14 +83,12 @@ class ResumeReviseViewModel {
     
     // MARK: - Public Interface
     
-    /// Start a new revision workflow and show the review UI
+    /// Start a fresh revision workflow (without clarifying questions)
     /// - Parameters:
     ///   - resume: The resume to revise
-    ///   - query: The revision query containing prompts and context
     ///   - modelId: The model to use for revisions
-    func startRevisionWorkflowAndShowUI(
+    func startFreshRevisionWorkflow(
         resume: Resume,
-        query: ResumeApiQuery,
         modelId: String
     ) async throws {
         
@@ -102,65 +100,102 @@ class ResumeReviseViewModel {
         aiResubmit = false
         isProcessingRevisions = true
         
-        // Generate revisions using existing startRevisionWorkflow
-        let revisions = try await startRevisionWorkflow(
-            resume: resume,
-            query: query,
-            modelId: modelId
-        )
+        do {
+            // Create query for revision workflow
+            let query = ResumeApiQuery(resume: resume)
+            
+            // Start conversation with system prompt and user query
+            let systemPrompt = query.genericSystemMessage.content
+            let userPrompt = await query.wholeResumeQueryString()
+            
+            // Start conversation and get revisions
+            let (conversationId, _) = try await llmService.startConversation(
+                systemPrompt: systemPrompt,
+                userMessage: userPrompt,
+                modelId: modelId
+            )
+            
+            self.currentConversationId = conversationId
+            
+            // Request structured revision output
+            let revisions = try await llmService.continueConversationStructured(
+                userMessage: "Please provide the revision suggestions in the specified JSON format.",
+                modelId: modelId,
+                conversationId: conversationId,
+                responseType: RevisionsContainer.self
+            )
+            
+            // Validate and process the revisions
+            let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
+            
+            // Set up the UI state for revision review
+            await setupRevisionsForReview(validatedRevisions)
+            
+        } catch {
+            isProcessingRevisions = false
+            throw error
+        }
+    }
+    
+    /// Continue an existing conversation and generate revisions
+    /// This is used when ClarifyingQuestionsViewModel hands off the conversation
+    /// - Parameters:
+    ///   - conversationId: The existing conversation ID from ClarifyingQuestionsViewModel
+    ///   - resume: The resume being revised
+    ///   - modelId: The model to continue with
+    func continueConversationAndGenerateRevisions(
+        conversationId: UUID,
+        resume: Resume,
+        modelId: String
+    ) async throws {
+        // Store the conversation context
+        currentConversationId = conversationId
+        isProcessingRevisions = true
         
-        // Set up UI state for ReviewView
+        do {
+            // Continue the conversation to request revisions
+            // The background docs and Q&A are already in the conversation history
+            let revisions = try await llmService.continueConversationStructured(
+                userMessage: "Based on our discussion, please provide revision suggestions for the resume in the specified JSON format.",
+                modelId: modelId,
+                conversationId: conversationId,
+                responseType: RevisionsContainer.self
+            )
+            
+            // Process and validate revisions
+            let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
+            
+            // Set up the UI state for revision review
+            await setupRevisionsForReview(validatedRevisions)
+            
+            Logger.debug("✅ Conversation handoff complete: \(validatedRevisions.count) revisions ready for review")
+            
+        } catch {
+            Logger.error("Error continuing conversation for revisions: \(error.localizedDescription)")
+            isProcessingRevisions = false
+            throw error
+        }
+    }
+    
+    
+    /// Set up revisions for UI review
+    /// - Parameter revisions: The validated revisions to review
+    @MainActor
+    private func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async {
+        // Set up revisions in the UI state
         resumeRevisions = revisions
+        feedbackNodes = []
+        feedbackIndex = 0
         
         // Set up the first revision for review
         if !revisions.isEmpty {
             currentRevisionNode = revisions[0]
-            currentFeedbackNode = FeedbackNode(
-                id: revisions[0].id,
-                originalValue: revisions[0].oldValue,
-                proposedRevision: revisions[0].newValue,
-                actionRequested: .unevaluated,
-                reviewerComments: "",
-                isTitleNode: revisions[0].isTitleNode
-            )
+            currentFeedbackNode = revisions[0].createFeedbackNode()
         }
         
-        isProcessingRevisions = false
+        // Show the revision review UI
         showResumeRevisionSheet = true
-    }
-    
-    /// Original workflow method (kept for compatibility)
-    func startRevisionWorkflow(
-        resume: Resume,
-        query: ResumeApiQuery,
-        modelId: String
-    ) async throws -> [ProposedRevisionNode] {
-        
-        // Start conversation with system prompt and user query
-        let systemPrompt = query.genericSystemMessage.content
-        let userPrompt = await query.wholeResumeQueryString()
-        
-        // Start conversation and get revisions
-        let (conversationId, _) = try await llmService.startConversation(
-            systemPrompt: systemPrompt,
-            userMessage: userPrompt,
-            modelId: modelId
-        )
-        
-        self.currentConversationId = conversationId
-        
-        // Request structured revision output
-        let revisions = try await llmService.continueConversationStructured(
-            userMessage: "Please provide the revision suggestions in the specified JSON format.",
-            modelId: modelId,
-            conversationId: conversationId,
-            responseType: RevisionsContainer.self
-        )
-        
-        // Validate and process the revisions
-        let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
-        
-        return validatedRevisions
+        isProcessingRevisions = false
     }
     
     

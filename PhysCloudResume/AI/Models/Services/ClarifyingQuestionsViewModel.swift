@@ -23,6 +23,7 @@ class ClarifyingQuestionsViewModel {
     var questions: [ClarifyingQuestion] = []
     var showQuestionsSheet: Bool = false
     var currentConversationId: UUID?
+    var currentModelId: String? // Track the model used for conversation continuity
     
     // MARK: - Error Handling
     var lastError: String?
@@ -50,14 +51,31 @@ class ClarifyingQuestionsViewModel {
         lastError = nil
         
         do {
+            // Store the model for conversation continuity
+            currentModelId = modelId
+            
             // Create the query for clarifying questions
             let query = ResumeApiQuery(resume: resume)
             
-            // Generate clarifying questions using ResumeApiQuery prompt
-            let fullPrompt = await query.clarifyingQuestionsPrompt()
-            let questionsRequest = try await llmService.executeStructured(
-                prompt: fullPrompt,
+            // Start a new conversation with background docs and clarifying questions request
+            let systemPrompt = query.genericSystemMessage.content
+            let userPrompt = await query.clarifyingQuestionsPrompt()
+            
+            // Start conversation
+            let (conversationId, _) = try await llmService.startConversation(
+                systemPrompt: systemPrompt,
+                userMessage: userPrompt,
+                modelId: modelId
+            )
+            
+            // Store the conversation ID and get structured response
+            currentConversationId = conversationId
+            
+            // Request clarifying questions in structured format
+            let questionsRequest = try await llmService.continueConversationStructured(
+                userMessage: "Please provide clarifying questions in the specified JSON format.",
                 modelId: modelId,
+                conversationId: conversationId,
                 responseType: ClarifyingQuestionsRequest.self
             )
             
@@ -83,41 +101,72 @@ class ClarifyingQuestionsViewModel {
         }
     }
     
-    /// Process user answers and generate revisions, then hand off to ResumeReviseViewModel
+    /// Process user answers and hand off conversation to ResumeReviseViewModel
     /// - Parameters:
     ///   - answers: User answers to the clarifying questions
-    ///   - resumeReviseViewModel: The ViewModel to receive the revisions
-    ///   - modelId: The model to use for revision generation
-    /// - Returns: The generated revisions for handoff
-    func processAnswersAndGenerateRevisions(
+    ///   - resume: The resume being revised
+    ///   - resumeReviseViewModel: The ViewModel to receive the conversation handoff
+    func processAnswersAndHandoffConversation(
         answers: [QuestionAnswer],
         resume: Resume,
-        modelId: String
-    ) async throws -> [ProposedRevisionNode] {
+        resumeReviseViewModel: ResumeReviseViewModel
+    ) async throws {
         
         guard let conversationId = currentConversationId else {
-            // Start new conversation if we don't have one
-            return try await startConversationWithAnswers(
-                answers: answers,
-                resume: resume,
-                modelId: modelId
-            )
+            throw ClarifyingQuestionsError.noActiveConversation
         }
         
-        // Continue existing conversation with answers
+        // Add the user's answers to the conversation without generating revisions yet
         let answerPrompt = createAnswerPrompt(answers: answers)
         
-        let revisionsContainer = try await llmService.continueConversationStructured(
+        // Just add the answers to the conversation - don't generate revisions here
+        let _ = try await llmService.continueConversation(
             userMessage: answerPrompt,
-            modelId: modelId,
-            conversationId: conversationId,
-            responseType: RevisionsContainer.self
+            modelId: currentModelId ?? "gpt-4o", // Use the model from the original workflow
+            conversationId: conversationId
         )
         
-        Logger.debug("✅ Generated \(revisionsContainer.revArray.count) revisions from clarifying questions")
+        Logger.debug("✅ User answers added to conversation \(conversationId)")
         
-        // Return revisions for ResumeReviseViewModel to handle
-        return revisionsContainer.revArray
+        // Hand off the conversation to ResumeReviseViewModel - it will generate revisions
+        await handoffConversationToResumeReviseViewModel(
+            resumeReviseViewModel: resumeReviseViewModel,
+            conversationId: conversationId,
+            resume: resume
+        )
+    }
+    
+    // MARK: - ResumeReviseViewModel Handoff
+    
+    /// Hand off conversation context to ResumeReviseViewModel for revision generation
+    /// This is the core handoff method mentioned in LLM_MULTI_TURN_WORKFLOWS.md
+    /// - Parameters:
+    ///   - resumeReviseViewModel: The ViewModel to receive the conversation handoff
+    ///   - conversationId: The conversation ID with established Q&A context
+    ///   - resume: The resume being revised
+    @MainActor
+    private func handoffConversationToResumeReviseViewModel(
+        resumeReviseViewModel: ResumeReviseViewModel,
+        conversationId: UUID,
+        resume: Resume
+    ) async {
+        Logger.debug("🔄 Handing off conversation \(conversationId) to ResumeReviseViewModel")
+        
+        do {
+            // Pass conversation context - ResumeReviseViewModel will generate revisions
+            // using the existing conversation thread (no duplicate background docs needed)
+            try await resumeReviseViewModel.continueConversationAndGenerateRevisions(
+                conversationId: conversationId,
+                resume: resume,
+                modelId: currentModelId ?? "gpt-4o"
+            )
+            
+            Logger.debug("✅ Conversation handoff complete - ResumeReviseViewModel is managing the workflow")
+            
+        } catch {
+            Logger.error("Error in conversation handoff: \(error.localizedDescription)")
+            // Handle error appropriately - perhaps show an error to the user
+        }
     }
     
     // MARK: - Private Helpers
@@ -154,12 +203,9 @@ class ClarifyingQuestionsViewModel {
         
         self.currentConversationId = conversationId
         
-        // Now continue with answers
-        return try await processAnswersAndGenerateRevisions(
-            answers: answers,
-            resume: resume,
-            modelId: modelId
-        )
+        // Now continue with answers - this is a recursive call but now we need resumeReviseViewModel
+        // This path shouldn't be used in normal flow since we should have a conversationId
+        throw ClarifyingQuestionsError.noActiveConversation
     }
     
     
@@ -185,5 +231,17 @@ class ClarifyingQuestionsViewModel {
         lastError = nil
         showError = false
         isGeneratingQuestions = false
+    }
+}
+
+// MARK: - Error Types
+enum ClarifyingQuestionsError: LocalizedError {
+    case noActiveConversation
+    
+    var errorDescription: String? {
+        switch self {
+        case .noActiveConversation:
+            return "No active conversation to continue with answers"
+        }
     }
 }

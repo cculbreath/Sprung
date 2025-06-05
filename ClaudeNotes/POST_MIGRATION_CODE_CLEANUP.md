@@ -2,35 +2,94 @@
 
 This document tracks legacy code, files, and suspicious patterns that should be removed after the LLM architecture refactoring is complete.
 
+**✅ MIGRATION COMPLETE (June 5, 2025) - Phase 4 Finished Successfully**
+
 ## HIGH - Definitely Dead/Legacy
 
-### Files to Remove After Phase 4
+### ✅ PHASE 4 COMPLETED - All Major Services Migrated
 File: PhysCloudResume/AI/Models/Services/LLMRequestService.swift
-Issue: Replaced by unified LLMService
+Issue: ✅ Still exists but superseded by unified LLMService - All operations migrated
+Status: Ready for removal - only used for legacy compatibility
 
 File: PhysCloudResume/AI/Models/Providers/BaseLLMProvider.swift
-Issue: May be redundant after LLMService implementation
+Issue: ✅ Still in use by LLMService as OpenRouter provider layer - Keep for now
+Status: Active component in new architecture
 
 ### ✅ REMOVED Legacy Provider Classes
 File: PhysCloudResume/AI/Models/Providers/ResumeChatProvider.swift
 Issue: ✅ REMOVED - Logic migrated to ClarifyingQuestionsViewModel + ResumeReviseViewModel (Phase 2.2)
 
 File: PhysCloudResume/AI/Models/Providers/CoverChatProvider.swift
-Issue: Logic extracted to LLMService
+Issue: ✅ REMOVED - Logic migrated to CoverLetterService (Phase 2.3)
+
+File: PhysCloudResume/AI/Models/Providers/CoverLetterRecommendationProvider.swift
+Issue: ✅ REMOVED - Logic migrated to LLMService parallel execution (Phase 2.3)
+
+File: PhysCloudResume/AI/Views/GenerateCoverLetterButton.swift
+Issue: ✅ REMOVED - Referenced deleted CoverChatProvider (Phase 2.3)
+
+File: PhysCloudResume/CoverLetters/Views/CoverLetterActionButtonsView.swift
+Issue: ✅ REMOVED - Referenced deleted CoverChatProvider (Phase 2.3)
+
+File: PhysCloudResume/CoverLetters/Views/CoverRevisionsView.swift
+Issue: ✅ REMOVED - Functionality recreated in CoverLetterInspectorView (Phase 2.3)
+
+### Dead Code Removed (June 5, 2025)
+File: PhysCloudResume/App/Views/UnifiedToolbar.swift:99-119
+Issue: ✅ REMOVED - Dead code referencing undefined `revisions` variable
+Evidence: Code was trying to set up revisions but variable didn't exist
+
+### ✅ REMOVED Legacy Cover Letter Components (Phase 2.3)
 
 ### Deprecated UI Components (After Migration Complete)
 File: PhysCloudResume/AI/Views/AiCommsView.swift
 Issue: Legacy view from old toolbar workflow - replaced by UnifiedToolbar → ResumeReviseService → ReviewView pattern
 Evidence: Has compilation errors from partial migration, marked for deprecation in architecture docs
 
+## ✅ COMPLETED - Cover Letter Migration Cleanup (Phase 2.3 - June 5, 2025)
+
+### NEW FILES CREATED (Phase 2.3)
+File: PhysCloudResume/AI/Models/Services/CoverLetterService.swift
+Issue: ✅ CREATED - Unified cover letter operations using LLMService
+
+File: PhysCloudResume/AI/Models/Types/CoverLetterQuery.swift
+Issue: ✅ CREATED - Centralized prompt management following ResumeQuery pattern
+
+File: PhysCloudResume/CoverLetters/Views/CoverLetterInspectorView.swift
+Issue: ✅ CREATED - Two-tab inspector (Sources + Revisions) to replace legacy functionality
+
+### ✅ COMPLETED - Final Migration Cleanup (Phase 4 - June 5, 2025)
+
+### NEW FILES CREATED (Phase 4)
+File: PhysCloudResume/AI/Models/Types/ApplicationReviewQuery.swift
+Issue: ✅ CREATED - Centralized prompt management for application review operations
+
+File: PhysCloudResume/AI/Models/Types/ResumeReviewQuery.swift  
+Issue: ✅ CREATED - Centralized prompt management for resume review operations
+
+### SERVICES MIGRATED (Phase 4)
+File: PhysCloudResume/AI/Models/Services/ApplicationReviewService.swift
+Issue: ✅ MIGRATED - From LLMRequestService to LLMService with model selection pattern
+
+File: PhysCloudResume/AI/Models/Services/ResumeReviewService.swift
+Issue: ✅ MIGRATED - From LLMRequestService to LLMService with model selection pattern
+
+### UI COMPONENTS UPDATED (Phase 4)
+File: PhysCloudResume/AI/Views/ApplicationReviewSheet.swift
+Issue: ✅ UPDATED - Now passes selectedModel parameter to service
+
+File: PhysCloudResume/App/Views/Settings/APIKeysSettingsView.swift
+Issue: ✅ UPDATED - Uses LLMService.shared.initialize() instead of legacy LLMRequestService method
+
+File: PhysCloudResume/CoverLetters/Utilities/BatchCoverLetterGenerator.swift
+Issue: ✅ UPDATED - Removed OpenAIModelFetcher fallback dependency
+
+### REMAINING HIGH PRIORITY (From Phase 2.1)
 File: PhysCloudResume/AI/Models/Providers/ReorderSkillsProvider.swift
-Issue: Simple operation, use LLMService directly
+Issue: ✅ REMOVED - Replaced by SkillReorderService (Phase 2.1)
 
 File: PhysCloudResume/AI/Models/Providers/JobRecommendationProvider.swift
-Issue: Simple operation, use LLMService directly
-
-File: PhysCloudResume/AI/Models/Providers/CoverLetterRecommendationProvider.swift
-Issue: Logic extracted to LLMService
+Issue: ✅ REMOVED - Replaced by JobRecommendationService (Phase 2.1)
 
 ### Commented Out Code
 File: ResumeQuery.swift:219-236
@@ -166,6 +225,14 @@ Evidence: Necessary workaround for fragmented architecture, eliminated by LLMSer
 - Remove duplicate error handling patterns across old providers
 
 # Important Questions/Suggestions and Observations
+
+## Recent Session Updates (June 5, 2025)
+- ✅ Fixed main actor-isolated warning in ResumeReviewService by removing default parameter
+- ✅ Removed dead code from UnifiedToolbar (lines 99-119 referencing undefined `revisions`)
+- ✅ Added `startConversationStructured()` method to LLMService as specified in architecture docs
+- ✅ Completed conversation handoff refactoring: ClarifyingQuestionsViewModel → ResumeReviseViewModel
+- ✅ Added job application edit button to JobAppHeaderView (replacing removed toolbar button)
+
 ## Files suspected of being legacy and deletable
 - SidebarRecommendButton.swift
 - ModelMappingExtension.swift

@@ -54,7 +54,7 @@ struct PhysicsCloudResumeApp: App {
                 }
         }
         .modelContainer(modelContainer)
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowToolbarStyle(.expanded)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {

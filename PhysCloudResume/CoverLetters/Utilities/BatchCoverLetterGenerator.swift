@@ -165,7 +165,7 @@ class BatchCoverLetterGenerator {
                             // Handle "same as generating model" option
                             let modelToUse: String
                             if revisionModel == "SAME_AS_GENERATING" {
-                                modelToUse = letter.generationModel ?? OpenAIModelFetcher.getPreferredModelString()
+                                modelToUse = letter.generationModel ?? ""
                             } else {
                                 modelToUse = revisionModel
                             }
@@ -205,8 +205,7 @@ class BatchCoverLetterGenerator {
         model: String,
         revision: CoverLetterPrompts.EditorPrompts?
     ) async throws -> CoverLetter {
-        // Create provider with app state
-        let provider = CoverChatProvider(appState: appState)
+        // Use CoverLetterService instead of CoverChatProvider
         
         // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model
@@ -220,97 +219,51 @@ class BatchCoverLetterGenerator {
         // Set up mode
         let mode: CoverAiMode = revision != nil ? .rewrite : .generate
         
-        // Check if this is an o1 model that doesn't support system messages
-        let isO1Model = isReasoningModel(model)
-        
-        // Create a temporary letter object just for prompt generation (not persisted)
-        let tempLetter = CoverLetter(
-            enabledRefs: baseCoverLetter.enabledRefs,
-            jobApp: baseCoverLetter.jobApp
-        )
-        tempLetter.includeResumeRefs = baseCoverLetter.includeResumeRefs
-        tempLetter.content = baseCoverLetter.content
-        tempLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zissner
-        tempLetter.currentMode = mode
-        
-        let userMessage = CoverLetterPrompts.generate(
-            coverLetter: tempLetter,
-            resume: resume,
-            mode: mode
-        )
-        
-        // Initialize conversation differently for o1 models
-        if isO1Model {
-            // For o1 models, manually build conversation history without system message
-            let systemMessage = buildSystemMessage(for: model)
-            let combinedMessage = systemMessage + "\n\n" + userMessage
-            
-            // Clear conversation history and add only user message
-            provider.conversationHistory = []
-            provider.conversationHistory.append(AppLLMMessage(role: .user, text: combinedMessage))
-            Logger.debug("🧠 Built conversation history for o1 model without system message: \(model)")
-        } else {
-            // For other models, use normal system/user message separation
-            let systemMessage = buildSystemMessage(for: model)
-            _ = provider.initializeConversation(systemPrompt: systemMessage, userPrompt: userMessage)
-        }
-        
-        // Create and execute query
-        let query = AppLLMQuery(
-            messages: provider.conversationHistory,
-            modelIdentifier: model,
-            temperature: 1.0
-        )
-        
-        // Execute the API call - MUST succeed before creating the cover letter
-        let response = try await provider.executeQuery(query)
-        
-        // Extract content from response
-        let responseText: String
-        switch response {
-        case .text(let text):
-            responseText = provider.extractCoverLetterContent(from: text)
-        case .structured(let data):
-            if let text = String(data: data, encoding: .utf8) {
-                responseText = provider.extractCoverLetterContent(from: text)
-            } else {
-                responseText = ""
-            }
-        }
-        
-        // Validate that the response is not empty BEFORE creating the letter
-        guard !responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
-        }
-        
-        // Create a new cover letter object WITHOUT persisting it yet
+        // Create a new cover letter object for generation
         let newLetter = CoverLetter(
             enabledRefs: baseCoverLetter.enabledRefs,
             jobApp: baseCoverLetter.jobApp
         )
         newLetter.includeResumeRefs = baseCoverLetter.includeResumeRefs
-        newLetter.content = responseText
-        newLetter.generated = true  // Mark as generated since we have content
-        newLetter.moddedDate = Date()
-        newLetter.generationModel = model
-        newLetter.encodedMessageHistory = baseCoverLetter.encodedMessageHistory
+        newLetter.content = baseCoverLetter.content
         newLetter.currentMode = mode
         newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zissner
+        
+        // Generate content using CoverLetterService
+        let responseText: String
+        if let revision = revision {
+            // This is a revision
+            responseText = try await CoverLetterService.shared.reviseCoverLetter(
+                coverLetter: newLetter,
+                resume: resume,
+                modelId: model,
+                feedback: "",
+                editorPrompt: revision
+            )
+        } else {
+            // This is a new generation
+            responseText = try await CoverLetterService.shared.generateCoverLetter(
+                coverLetter: newLetter,
+                resume: resume,
+                modelId: model,
+                includeResumeRefs: newLetter.includeResumeRefs
+            )
+        }
+        
+        // Validate that the response is not empty
+        guard !responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
+        }
+        
+        // Update the letter with the response (CoverLetterService already did this, but ensure it's complete)
+        newLetter.content = responseText
+        newLetter.generated = true
+        newLetter.moddedDate = Date()
+        newLetter.generationModel = model
         
         // Get next available option letter BEFORE adding to job app
         let nextOptionLetter = newLetter.getNextOptionLetter()
         newLetter.name = "Option \(nextOptionLetter): \(letterName)"
-        
-        // Store conversation history
-        newLetter.messageHistory = provider.conversationHistory.map { appMessage in
-            MessageParams(
-                content: appMessage.contentParts.compactMap { 
-                    if case let .text(content) = $0 { return content } 
-                    return nil 
-                }.joined(), 
-                role: mapRole(appMessage.role)
-            )
-        }
         
         // Only persist the letter after it's fully populated
         if let jobApp = baseCoverLetter.jobApp {
@@ -328,38 +281,6 @@ class BatchCoverLetterGenerator {
     /// Cleans up any ungenerated draft letters in the store
     func cleanupUngeneratedDrafts() {
         coverLetterStore.deleteUngeneratedDrafts()
-    }
-    
-    /// Determines if a model is an o1-series reasoning model that has special requirements
-    /// - Parameter modelId: The model identifier to check
-    /// - Returns: True if this is an o1 or o1-mini model
-    private func isReasoningModel(_ modelId: String) -> Bool {
-        let modelLower = modelId.lowercased()
-        return modelLower.contains("o1") && !modelLower.contains("o3") && !modelLower.contains("o4")
-    }
-    
-    /// Builds system message with model-specific adjustments
-    private func buildSystemMessage(for model: String) -> String {
-        var systemMessage = CoverLetterPrompts.systemMessage.content
-        
-        // Model-specific formatting instructions
-        if model.lowercased().contains("gemini") {
-            systemMessage += " Do not format your response as JSON. Return the cover letter text directly without any JSON wrapping or structure."
-        } else if model.lowercased().contains("claude") {
-            // Claude tends to return JSON even when not asked, so be very explicit
-            systemMessage += "\n\nIMPORTANT: Return ONLY the plain text body of the cover letter. Do NOT include JSON formatting, do NOT include 'Dear Hiring Manager' or any salutation, do NOT include any closing or signature. Start directly with the first paragraph of the letter body and end with the last paragraph. No JSON, no formatting, just the plain text paragraphs."
-        }
-        
-        return systemMessage
-    }
-    
-    /// Maps AppLLMMessage.Role to MessageParams.MessageRole
-    private func mapRole(_ role: AppLLMMessage.Role) -> MessageParams.MessageRole {
-        switch role {
-        case .system: return .system
-        case .user: return .user
-        case .assistant: return .assistant
-        }
     }
 }
 
