@@ -94,7 +94,7 @@ class DatabaseMigrationHelper {
             try modelContext.save()
             Logger.debug("🧹 Cleaned up dummy objects")
         } catch {
-            Logger.error("❌ Failed to create database schema: \(error)")
+            Logger.error("x Failed to create database schema: \(error)")
             Logger.error("Error details: \(error.localizedDescription)")
         }
     }
@@ -125,7 +125,7 @@ class DatabaseMigrationHelper {
             try modelContext.save()
             Logger.debug("✅ Conversation tables reset successfully")
         } catch {
-            Logger.error("❌ Failed to reset conversation tables: \(error)")
+            Logger.error("x Failed to reset conversation tables: \(error)")
         }
     }
 }

@@ -641,6 +641,7 @@ struct ResumeReviewSheet: View {
             reviewService.sendReorderSkillsRequest(
                 resume: resume,
                 appState: appState,
+                modelId: preferredLLMModel,
                 onComplete: { result in
                     continuation.resume(returning: result)
                 }

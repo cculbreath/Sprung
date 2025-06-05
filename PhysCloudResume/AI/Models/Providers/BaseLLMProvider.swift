@@ -446,7 +446,7 @@ class BaseLLMProvider {
                 }
             }
         } catch {
-            Logger.error("❌ Failed to extract JSON for key \(key): \(error.localizedDescription)")
+            Logger.error("x Failed to extract JSON for key \(key): \(error.localizedDescription)")
         }
         return nil
     }

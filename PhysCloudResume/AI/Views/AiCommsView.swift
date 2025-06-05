@@ -427,9 +427,10 @@ struct AiCommsView: View {
                 // Note: The conversation context was already cleared when the button was clicked,
                 // so this continues with the fresh conversation that includes the clarifying questions
                 // Use the same model that was used to generate the questions
-                _ = try await chatProvider.processAnswersAndGenerateRevisions(
+                guard let resume = myRes else { return }
+                await chatProvider.processAnswersAndContinueConversation(
                     answers: answers,
-                    resumeQuery: q,
+                    resume: resume,
                     modelId: clarifyingQuestionsModelId
                 )
                 
@@ -544,14 +545,14 @@ struct AiCommsView: View {
                 
                 // Important check: Verify that we actually have messages to send
                 if chatProvider.genericMessages.isEmpty {
-                    Logger.debug("❌ CRITICAL ERROR: No messages to send to LLM! Attempting to recover...")
+                    Logger.debug("x CRITICAL ERROR: No messages to send to LLM! Attempting to recover...")
                     
                     // Try to reconstruct the messages
                     let systemMessage = q.genericSystemMessage
                     let userContent = !hasRevisions ? await q.wholeResumeQueryString() : await q.revisionPrompt(fbnodes)
                     
                     if userContent.isEmpty {
-                        Logger.debug("❌ Failed to recover: User content is empty")
+                        Logger.debug("x Failed to recover: User content is empty")
                         throw NSError(domain: "AiCommsError", code: 1001, 
                             userInfo: [NSLocalizedDescriptionKey: "Failed to generate prompt content"])
                     } else {

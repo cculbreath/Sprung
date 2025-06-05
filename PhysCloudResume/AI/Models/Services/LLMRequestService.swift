@@ -45,7 +45,7 @@ class LLMRequestService: @unchecked Sendable {
             baseLLMProvider = BaseLLMProvider(appState: state)
             Logger.debug("✅ Initialized OpenRouter provider for model: \(currentModel)")
         } else {
-            Logger.error("❌ Failed to initialize OpenRouter provider")
+            Logger.error("x Failed to initialize OpenRouter provider")
         }
     }
     

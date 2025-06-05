@@ -1,0 +1,171 @@
+# LLM Architecture Migration Progress
+
+This document tracks the progress of the unified LLM architecture refactoring for PhysCloudResume.
+
+## Migration Overview
+
+**Goal**: Replace fragmented LLM services with unified, maintainable system with full provider abstraction
+
+**Current Status**: Phase 1 Complete ✅
+
+## Phase Progress
+
+### ✅ Phase 1: Create Core Services (COMPLETED - June 4, 2025)
+
+#### LLMService Implementation ✅
+- **File**: `PhysCloudResume/AI/Models/Services/LLMService.swift`
+- **Status**: First-draft complete and architecture compliant
+- **Features Implemented**:
+  - ✅ `execute()` - Basic text requests
+  - ✅ `executeWithImages()` - Multimodal requests  
+  - ✅ `executeStructured()` - JSON schema responses
+  - ✅ `executeStructuredWithImages()` - Multimodal + JSON
+  - ✅ `startConversation()` / `continueConversation()` - Multi-turn conversations
+  - ✅ `continueConversationStructured()` - Multi-turn + JSON
+  - ✅ `executeParallelStructured()` - Multi-model operations
+  - ✅ Model capability detection and validation
+  - ✅ Conversation context management via ConversationManager
+  - ✅ Error retry logic with exponential backoff
+  - ✅ Structured output with JSON fallback parsing
+
+#### ResumeReviseService Implementation ✅
+- **File**: `PhysCloudResume/AI/Models/Services/ResumeReviseService.swift`
+- **Status**: Complete business logic extraction from AiCommsView
+- **Features Implemented**:
+  - ✅ `startRevisionWorkflow()` - Initial revision generation
+  - ✅ `processFeedbackAndRevise()` - Human-in-the-loop iteration
+  - ✅ `requestClarifyingQuestions()` - Clarifying questions workflow
+  - ✅ `applyAcceptedChanges()` - Resume tree operations
+  - ✅ Revision state management across feedback rounds
+  - ✅ Node validation and ID matching (extracted from AiCommsView)
+  - ✅ Feedback processing and filtering for AI resubmission
+  - ✅ Progress tracking and error handling
+  - ✅ Support types: RevisionProgress, RevisionError, response containers
+
+#### Architecture Validation ✅
+- ✅ @MainActor for UI thread safety
+- ✅ Two-stage model filtering (global + capability-specific)
+- ✅ Provider abstraction layer (OpenRouter encapsulated)
+- ✅ Conversation context persistence
+- ✅ Model capability system integration
+- ✅ Clean separation of business logic from UI
+- ✅ **Compilation Success**: Both LLMService and ResumeReviseService compile cleanly
+- ✅ **Type Integration**: Fixed duplicate type definitions, using existing types from AITypes.swift and ResumeUpdateNode.swift
+
+### 🔄 Phase 2: Migrate High-Level Operations (NEXT)
+
+#### Simple One-Shot Operations
+- ⏳ Job recommendations (JobRecommendationProvider → LLMService)
+- ⏳ Skill reordering (ReorderSkillsProvider → LLMService)
+
+#### Multi-Turn Operations  
+- ⏳ Resume revisions (ResumeChatProvider → ResumeReviseService)
+- ⏳ Cover letter generation (CoverChatProvider → LLMService)
+
+#### Complex Workflows
+- ⏳ Fix overflow (multimodal + iterative)
+- ⏳ Multi-model voting systems
+
+### 📋 Phase 3: Implement Missing UI Components (PLANNED)
+
+#### UnifiedToolbar Integration
+- ⏳ **CRITICAL**: Add DropdownModelPicker to Generate and Clarify & Generate buttons
+- ⏳ Connect buttons to LLMService operations (many currently non-functional)
+- ⏳ Verify Cover Letter toolbar buttons are properly wired
+- ⏳ Remove legacy AiCommsView dependencies
+
+#### Missing Model Pickers
+- ⏳ Cover Letter Chat UI needs DropdownModelPicker
+- ⏳ RecommendJobButton needs DropdownModelPicker  
+
+#### Toolbar Button Audit
+- ⏳ Ensure ALL buttons that trigger LLM operations have model selection
+- ⏳ Test button actions are connected to actual LLM services
+- ⏳ Add model picker integration where missing
+
+### 🗑️ Phase 4: Remove Legacy Code (PLANNED)
+
+#### Provider Classes to Remove
+- ⏳ Remove LLMRequestService redundancy
+- ⏳ Remove ResumeChatProvider (logic moved to ResumeReviseService)
+- ⏳ Remove CoverChatProvider, ReorderSkillsProvider, JobRecommendationProvider
+- ⏳ Remove CoverLetterRecommendationProvider
+- ⏳ Clean up BaseLLMProvider if no longer needed
+- ⏳ Refactor AiCommsView to pure UI coordinator
+
+#### Legacy Code Cleanup
+- ⏳ Remove complex provider reset workarounds
+- ⏳ Remove duplicate conversation managers
+- ⏳ Remove legacy message conversion utilities
+
+### 🔧 Phase 5: Polish & Optimization (PLANNED)
+
+- ⏳ Add comprehensive error handling
+- ⏳ Add operation timeout management
+- ⏳ Add request/response logging  
+- ⏳ Add performance monitoring
+
+## Implementation Notes
+
+### Key Architecture Decisions Made
+1. **LLMService as Singleton**: `LLMService.shared` pattern for global access
+2. **Conversation IDs**: UUID-based tracking across app lifecycle
+3. **Error Recovery**: Exponential backoff for network failures
+4. **Model Capability Integration**: Uses existing OpenRouterService capability flags
+5. **State Management**: @Observable pattern for SwiftUI integration
+
+### Critical Files Modified/Created
+- ✅ **Created**: `LLMService.swift` (720 lines) - Core LLM operations
+- ✅ **Created**: `ResumeReviseService.swift` (400+ lines) - Revision workflow business logic
+- ✅ **Updated**: `POST_MIGRATION_CODE_CLEANUP.md` - Legacy code tracking
+
+### Legacy Code Identified for Removal
+- **AiCommsView.swift**: 400+ lines of complex logic ready for extraction
+  - Lines 292-417: validateRevs function (125 lines)
+  - Lines 109-184: revision processing logic (75 lines)  
+  - Lines 419-447: clarifying questions handler (28 lines)
+  - Lines 451-630: chatAction method (179 lines)
+  - Lines 58-75, 574-596: provider reset workarounds
+
+### Testing Strategy
+- **Manual UI Testing**: No unit tests, verify through UI interactions
+- **Incremental Integration**: Test each operation as migrated
+- **Existing Functionality**: Ensure all current features continue working
+- **Model Selection**: Verify DropdownModelPicker and CheckboxModelPicker integration
+
+## Next Actions
+
+### Immediate (Phase 2 Start)
+1. **Test LLMService**: Create simple test integration to verify basic operations
+2. **Migrate Job Recommendations**: Replace JobRecommendationProvider with LLMService
+3. **Migrate Skill Reordering**: Replace ReorderSkillsProvider with LLMService
+4. **Begin AiCommsView Integration**: Start replacing chatAction with ResumeReviseService calls
+
+### Dependencies Ready
+- ✅ AppState.selectedOpenRouterModels (model selection)
+- ✅ OpenRouterService (API integration)
+- ✅ DropdownModelPicker and CheckboxModelPicker (UI components)
+- ✅ Existing response types (RevisionsContainer, etc.)
+
+### Critical Success Factors
+- **Preserve Functionality**: All existing workflows must continue working
+- **Model Selection**: Every LLM operation must have proper model picker UI
+- **Human-in-the-Loop**: Revision workflow UX must be preserved
+- **Error Handling**: Robust fallbacks and user-friendly error messages
+- **Performance**: Maintain or improve response times
+
+## Architecture Benefits Achieved
+
+1. **Single Responsibility**: Each operation type has one clear implementation ✅
+2. **Type Safety**: Structured responses are type-safe with compile-time checking ✅
+3. **Provider Independence**: Clean abstraction allows easy migration from OpenRouter ✅
+4. **Conversation Management**: Centralized, efficient context handling ✅
+5. **Error Consistency**: All operations use same retry and error logic ✅
+6. **Maintainability**: Model capabilities managed in one place ✅
+7. **Scalability**: Easy to add new operation types ✅
+
+---
+
+*Last Updated: June 4, 2025*
+*Phase 1 Complete: LLMService + ResumeReviseService implemented*
+*Next: Begin Phase 2 migration of existing operations*

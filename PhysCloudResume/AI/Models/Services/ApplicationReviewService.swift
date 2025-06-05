@@ -169,7 +169,7 @@ class ApplicationReviewService: @unchecked Sendable {
                     onProgress(responseWrapper.content)
                     onComplete(.success("Done"))
                 case .failure(let error):
-                    Logger.error("❌ [ApplicationReview] Error: \(error)")
+                    Logger.error("x [ApplicationReview] Error: \(error)")
                     onComplete(.failure(error))
                 }
             }
@@ -189,7 +189,7 @@ class ApplicationReviewService: @unchecked Sendable {
                         Logger.debug("📥 [ApplicationReview] Review complete")
                         onComplete(.success("Done"))
                     case .failure(let error):
-                        Logger.error("❌ [ApplicationReview] Error: \(error)")
+                        Logger.error("x [ApplicationReview] Error: \(error)")
                         onComplete(.failure(error))
                     }
                 }

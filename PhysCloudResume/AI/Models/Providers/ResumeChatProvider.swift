@@ -72,11 +72,13 @@ final class ResumeChatProvider: BaseLLMProvider {
     ///   - newUserInput: Optional new user input (if not an initial query)
     ///   - isInitialQuery: Whether this is the first query in a conversation
     ///   - resumeDataForPrompt: The resume data for the prompt (required for initial query)
+    ///   - modelId: The specific model ID to use for the interaction
     /// - Returns: The revisions container with suggested changes
     func processResumeInteraction(
         newUserInput: String?,
         isInitialQuery: Bool,
-        resumeDataForPrompt: String
+        resumeDataForPrompt: String,
+        modelId: String
     ) async throws -> RevisionsContainer {
         // Clear previous error message before starting
         errorMessage = ""
@@ -93,8 +95,8 @@ final class ResumeChatProvider: BaseLLMProvider {
             conversationHistory.append(AppLLMMessage(role: .user, text: userInput))
         }
         
-        // Get model identifier
-        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
+        // Use the specified model identifier
+        let modelIdentifier = modelId
         
         // Create query for structured output
         let query = AppLLMQuery(
@@ -304,7 +306,8 @@ final class ResumeChatProvider: BaseLLMProvider {
         _ = try await processResumeInteraction(
             newUserInput: userInput,
             isInitialQuery: isInitialQuery,
-            resumeDataForPrompt: resumeData
+            resumeDataForPrompt: resumeData,
+            modelId: "gpt-4o" // TODO: Remove this when migrating to ResumeReviseService
         )
     }
 
@@ -313,12 +316,14 @@ final class ResumeChatProvider: BaseLLMProvider {
     /// Starts a new conversation for resume analysis
     /// - Parameters:
     ///   - resume: The resume to analyze
+    ///   - modelId: The specific model ID to use for the analysis
     ///   - customInstructions: Optional custom instructions for the analysis
     ///   - onProgress: Progress callback for streaming responses
     ///   - onComplete: Completion callback with result
     @MainActor
     func startNewResumeConversation(
         resume: Resume,
+        modelId: String,
         customInstructions: String = "",
         onProgress: @escaping (String) -> Void = { _ in },
         onComplete: @escaping (Result<String, Error>) -> Void = { _ in }
@@ -340,8 +345,8 @@ final class ResumeChatProvider: BaseLLMProvider {
         // Initialize conversation
         _ = initializeConversation(systemPrompt: systemPrompt, userPrompt: userMessage)
         
-        // Get current model
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        // Use the specified model
+        let modelString = modelId
         
         // Update client if needed
         updateClientIfNeeded(appState: AppState())
@@ -385,20 +390,22 @@ final class ResumeChatProvider: BaseLLMProvider {
     /// - Parameters:
     ///   - resume: The resume being discussed
     ///   - userMessage: The user's message to continue the conversation
+    ///   - modelId: The specific model ID to use for the conversation
     ///   - onProgress: Progress callback for streaming responses
     ///   - onComplete: Completion callback with result
     @MainActor
     func continueResumeConversation(
         resume: Resume,
         userMessage: String,
+        modelId: String,
         onProgress: @escaping (String) -> Void = { _ in },
         onComplete: @escaping (Result<String, Error>) -> Void = { _ in }
     ) {
         // Add user message to conversation history
         _ = addUserMessage(userMessage)
         
-        // Get current model
-        let modelString = OpenAIModelFetcher.getPreferredModelString()
+        // Use the specified model
+        let modelString = modelId
         
         // Update client if needed
         updateClientIfNeeded(appState: AppState())
@@ -539,15 +546,16 @@ final class ResumeChatProvider: BaseLLMProvider {
         """
     }
     
-    /// Process answers to clarifying questions and continue with revisions
+    /// Process answers to clarifying questions and continue with revisions using existing conversation flow
     /// - Parameters:
-    ///   - answers: The user's answers to the clarifying questions
-    ///   - resumeQuery: The original resume query
-    /// - Returns: The revisions container with suggested changes
-    func processAnswersAndGenerateRevisions(
+    ///   - answers: The user's answers to the clarifying questions  
+    ///   - resume: The resume being worked on
+    ///   - modelId: The specific model ID to use for generating revisions
+    func processAnswersAndContinueConversation(
         answers: [QuestionAnswer],
-        resumeQuery: ResumeApiQuery
-    ) async throws -> RevisionsContainer {
+        resume: Resume,
+        modelId: String
+    ) async {
         // Build a summary of Q&A for the conversation
         var answersText = "Here are the answers to your clarifying questions:\n\n"
         
@@ -558,30 +566,13 @@ final class ResumeChatProvider: BaseLLMProvider {
             }
         }
         
-        // Add the answers to conversation history
-        conversationHistory.append(AppLLMMessage(role: .user, text: answersText))
+        answersText += "\nNow please provide your resume revision suggestions based on all the information provided."
         
-        // Now request revisions with the additional context
-        _ = await resumeQuery.wholeResumeQueryString()
-        conversationHistory.append(AppLLMMessage(role: .user, text: "Now please provide your resume revision suggestions based on all the information provided."))
-        
-        // Get model identifier
-        let modelIdentifier = OpenAIModelFetcher.getPreferredModelString()
-        
-        // Create query for structured output (revisions)
-        let query = AppLLMQuery(
-            messages: conversationHistory,
-            modelIdentifier: modelIdentifier,
-            responseType: RevisionsContainer.self
+        // Use existing conversation continuation method (DRY principle)
+        await continueResumeConversation(
+            resume: resume,
+            userMessage: answersText,
+            modelId: modelId
         )
-        
-        // Execute and process the response
-        let response = try await executeQueryWithTimeout(query)
-        let revisions = try processStructuredResponse(response, as: RevisionsContainer.self)
-        
-        // Update lastRevNodeArray
-        lastRevNodeArray = revisions.revArray
-        
-        return revisions
     }
 }
