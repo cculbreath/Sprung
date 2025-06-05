@@ -24,7 +24,7 @@ class DatabaseSchemaFixer {
         let result = sqlite3_open(dbPath, &db)
         
         guard result == SQLITE_OK else {
-            Logger.error("❌ Failed to open database: \(String(cString: sqlite3_errmsg(db)))")
+            Logger.error("x Failed to open database: \(String(cString: sqlite3_errmsg(db)))")
             throw DatabaseSchemaFixerError.cannotOpenDatabase
         }
         
@@ -237,7 +237,7 @@ class DatabaseSchemaFixer {
             
             if sqlite3_exec(db, createJoinTable, nil, nil, nil) != SQLITE_OK {
                 let errorMsg = String(cString: sqlite3_errmsg(db))
-                Logger.error("❌ Failed to create Z_10ENABLEDRESUMES table: \(errorMsg)")
+                Logger.error("x Failed to create Z_10ENABLEDRESUMES table: \(errorMsg)")
                 
                 // Try an alternative naming convention that SwiftData might use
                 let alternativeCreateTable = """

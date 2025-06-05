@@ -123,14 +123,13 @@ struct RecommendJobButton: View {
 
         Task {
             do {
-                let provider = JobRecommendationProvider(
-                    appState: appState,
+                let service = JobRecommendationService()
+                
+                let (jobId, reason) = try await service.fetchRecommendation(
                     jobApps: jobAppStore.jobApps,
                     resume: selectedResume,
                     modelId: selectedModel
                 )
-
-                let (jobId, reason) = try await provider.fetchRecommendation()
 
                 await MainActor.run {
                     // Find the job with the recommended ID

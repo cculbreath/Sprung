@@ -36,7 +36,7 @@ struct PhysicsCloudResumeApp: App {
             self.modelContainer = container
             Logger.debug("✅ ModelContainer created with current models")
         } catch {
-            Logger.error("❌ Failed to create ModelContainer: \(error)")
+            Logger.error("x Failed to create ModelContainer: \(error)")
             fatalError("Failed to create ModelContainer: \(error)")
         }
         

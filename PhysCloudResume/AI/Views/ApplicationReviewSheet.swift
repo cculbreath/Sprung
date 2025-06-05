@@ -294,7 +294,7 @@ struct ApplicationReviewSheet: View {
                         self.isProcessing = false
                         if case let .failure(err) = result { 
                             self.errorMessage = err.localizedDescription
-                            Logger.error("❌ [ApplicationReviewSheet] Error: \(err)")
+                            Logger.error("x [ApplicationReviewSheet] Error: \(err)")
                         } else {
                             Logger.debug("✅ [ApplicationReviewSheet] Success")
                             Logger.debug("✅ [ApplicationReviewSheet] Final responseText: \(self.responseText.prefix(100))...")

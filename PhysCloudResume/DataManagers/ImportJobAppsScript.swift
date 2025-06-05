@@ -57,7 +57,7 @@ class ImportJobAppsScript {
                 try await Task.sleep(nanoseconds: 10_000_000) // 10ms
                 
             } catch {
-                Logger.error("❌ Error importing JobApp: \(error)")
+                Logger.error("x Error importing JobApp: \(error)")
             }
         }
         
@@ -284,15 +284,15 @@ class ImportJobAppsScript {
                         postingUrl: url.absoluteString
                     )
                 } else if httpResponse.statusCode == 404 {
-                    Logger.debug("❌ Job listing not found (404)")
+                    Logger.debug("x Job listing not found (404)")
                     return nil
                 } else {
-                    Logger.debug("❌ Proxycurl error: HTTP \(httpResponse.statusCode)")
+                    Logger.debug("x Proxycurl error: HTTP \(httpResponse.statusCode)")
                     return nil
                 }
             }
         } catch {
-            Logger.debug("❌ Proxycurl request failed: \(error)")
+            Logger.debug("x Proxycurl request failed: \(error)")
         }
         
         return nil

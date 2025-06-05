@@ -344,7 +344,7 @@ class TreeNodeExtractor {
                                 try modelContext.save()
                                 Logger.debug("✅ Successfully saved subcategory reordering")
                             } catch {
-                                Logger.debug("❌ Error saving model context after reordering sub-nodes: \(error)")
+                                Logger.debug("x Error saving model context after reordering sub-nodes: \(error)")
                                 return false
                             }
                         } else {

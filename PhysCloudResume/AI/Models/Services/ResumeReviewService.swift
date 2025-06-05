@@ -407,11 +407,13 @@ class ResumeReviewService: @unchecked Sendable {
     /// - Parameters:
     ///   - resume: The resume containing the skills
     ///   - appState: The application state for creating the LLM client
+    ///   - modelId: The model to use for skill reordering
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendReorderSkillsRequest(
         resume: Resume,
         appState: AppState,
+        modelId: String,
         onComplete: @escaping (Result<ReorderSkillsResponseContainer, Error>) -> Void
     ) {
         guard let jobApp = resume.jobApp else {
@@ -419,22 +421,22 @@ class ResumeReviewService: @unchecked Sendable {
             return
         }
         
-        Logger.debug("ResumeReviewService: sendReorderSkillsRequest called (using new unified provider)")
+        Logger.debug("ResumeReviewService: sendReorderSkillsRequest called (using new SkillReorderService)")
         
         Task { @MainActor in
             do {
-                let provider = ReorderSkillsProvider(
-                    appState: appState,
+                let service = SkillReorderService()
+                
+                let reorderedNodes = try await service.fetchReorderedSkills(
                     resume: resume,
                     jobDescription: jobApp.jobDescription,
-                    modelId: OpenAIModelFetcher.getPreferredModelString()
+                    modelId: modelId
                 )
                 
-                let reorderedNodes = try await provider.fetchReorderedSkills()
                 let responseContainer = ReorderSkillsResponseContainer(reorderedSkillsAndExpertise: reorderedNodes)
                 onComplete(.success(responseContainer))
             } catch {
-                Logger.error("ReorderSkillsProvider error: \(error.localizedDescription)")
+                Logger.error("SkillReorderService error: \(error.localizedDescription)")
                 onComplete(.failure(error))
             }
         }

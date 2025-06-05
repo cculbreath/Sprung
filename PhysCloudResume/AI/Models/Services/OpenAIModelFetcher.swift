@@ -153,7 +153,7 @@ class OpenAIModelFetcher {
             Logger.debug("✅ Fetched \(chatModels.count) OpenAI models")
             return chatModels
         } catch {
-            Logger.error("❌ Failed to fetch OpenAI models: \(error.localizedDescription)")
+            Logger.error("x Failed to fetch OpenAI models: \(error.localizedDescription)")
             return []
         }
     }
@@ -199,7 +199,7 @@ class OpenAIModelFetcher {
             Logger.debug("✅ Fetched \(claudeModels.count) Claude models")
             return claudeModels
         } catch {
-            Logger.error("❌ Failed to fetch Claude models: \(error.localizedDescription)")
+            Logger.error("x Failed to fetch Claude models: \(error.localizedDescription)")
             return []
         }
     }
@@ -236,7 +236,7 @@ class OpenAIModelFetcher {
             Logger.debug("✅ Fetched \(grokModels.count) Grok models")
             return grokModels
         } catch {
-            Logger.error("❌ Failed to fetch Grok models: \(error.localizedDescription)")
+            Logger.error("x Failed to fetch Grok models: \(error.localizedDescription)")
             return []
         }
     }
@@ -246,12 +246,12 @@ class OpenAIModelFetcher {
         // Google's API for listing models
         // Need to ensure API key is properly encoded in URL
         guard let encodedApiKey = apiKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            Logger.error("❌ Failed to encode Gemini API key for URL")
+            Logger.error("x Failed to encode Gemini API key for URL")
             return []
         }
         
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1/models?key=\(encodedApiKey)") else {
-            Logger.error("❌ Failed to create URL for Gemini API")
+            Logger.error("x Failed to create URL for Gemini API")
             return []
         }
         
@@ -293,7 +293,7 @@ class OpenAIModelFetcher {
             Logger.debug("✅ Fetched \(geminiModels.count) Gemini models")
             return geminiModels
         } catch {
-            Logger.error("❌ Failed to fetch Gemini models: \(error.localizedDescription)")
+            Logger.error("x Failed to fetch Gemini models: \(error.localizedDescription)")
             return []
         }
     }

@@ -12,9 +12,11 @@ struct SidebarRecommendButton: View {
     @Environment(\.appState) private var appState
     @State private var isLoading = false
     @State private var errorWrapper: ErrorMessageWrapper? = nil
+    @State private var showModelPicker = false
+    @State private var selectedModel = ""
 
     var body: some View {
-        Button(action: recommendBestJob) {
+        Button(action: { showModelPicker = true }) {
             if isLoading {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle())
@@ -35,6 +37,38 @@ struct SidebarRecommendButton: View {
                 message: Text(wrapper.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .sheet(isPresented: $showModelPicker) {
+            NavigationStack {
+                VStack(spacing: 20) {
+                    Text("Choose Model for Job Recommendation")
+                        .font(.headline)
+                        .padding(.top)
+                    
+                    DropdownModelPicker(
+                        selectedModel: $selectedModel,
+                        title: "AI Model"
+                    )
+                    
+                    HStack(spacing: 12) {
+                        Button("Cancel") {
+                            showModelPicker = false
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        Button("Recommend") {
+                            showModelPicker = false
+                            recommendBestJob()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(selectedModel.isEmpty)
+                    }
+                    
+                    Spacer()
+                }
+                .padding()
+                .frame(width: 400, height: 250)
+            }
         }
     }
 
@@ -77,15 +111,13 @@ struct SidebarRecommendButton: View {
 
         Task {
             do {
+                let service = JobRecommendationService()
                 
-                let provider = JobRecommendationProvider(
-                    appState: appState,
+                let (jobId, reason) = try await service.fetchRecommendation(
                     jobApps: jobAppStore.jobApps,
                     resume: resumeToUse,
-                    modelId: OpenAIModelFetcher.getPreferredModelString()
+                    modelId: selectedModel
                 )
-
-                let (jobId, reason) = try await provider.fetchRecommendation()
 
                 await MainActor.run {
                     // Find the job with the recommended ID

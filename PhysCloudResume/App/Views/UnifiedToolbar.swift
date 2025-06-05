@@ -85,13 +85,10 @@ struct UnifiedToolbar: ToolbarContent {
                 return
             }
             
-            let resumeQuery = ResumeApiQuery(resume: resume)
-            resumeQuery.queryMode = .withClarifyingQuestions
-            
-            // Process answers and continue the conversation to get revisions
-            _ = try await chatProvider.processAnswersAndGenerateRevisions(
+            // Process answers and continue the conversation using existing DRY method
+            await chatProvider.processAnswersAndContinueConversation(
                 answers: answers,
-                resumeQuery: resumeQuery,
+                resume: resume,
                 modelId: selectedClarifyingQuestionsModel
             )
             

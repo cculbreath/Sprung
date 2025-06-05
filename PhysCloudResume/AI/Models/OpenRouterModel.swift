@@ -60,7 +60,8 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
 
 extension OpenRouterModel {
     var supportsStructuredOutput: Bool {
-        supportedParameters?.contains("response_format") ?? false
+        guard let params = supportedParameters else { return false }
+        return params.contains("structured_outputs") || params.contains("response_format")
     }
     
     var supportsImages: Bool {
