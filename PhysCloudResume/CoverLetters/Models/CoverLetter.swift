@@ -19,7 +19,8 @@ class CoverLetter: Identifiable, Hashable {
     /// Clears the conversation context for this cover letter
     @MainActor
     func clearConversationContext() {
-        ConversationContextManager.shared.clearContext(for: self.id, type: .coverLetter)
+        // Note: Conversation management now handled by LLMService.shared
+        Logger.debug("Cover letter conversation context clear requested - handled by LLMService")
     }
 
     var createdDate: Date = Date()

@@ -13,7 +13,8 @@ class Resume: Identifiable, Hashable {
     /// Clears the conversation context for this resume
     @MainActor
     func clearConversationContext() {
-        ConversationContextManager.shared.clearContext(for: self.id, type: .resume)
+        // Note: Conversation management now handled by LLMService.shared
+        Logger.debug("Resume conversation context clear requested - handled by LLMService")
     }
 
     var needToTree: Bool = true

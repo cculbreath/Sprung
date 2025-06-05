@@ -16,15 +16,6 @@ import SwiftUI
 // This line is commented out since we now have a better implementation in StructuredOutput.swift
 // protocol StructuredOutput: Codable {}
 
-/// Response from an OpenAI Responses API request
-struct ResponsesAPIResponse: Codable, Equatable {
-    /// The unique ID of the response (used for continuation)
-    let id: String
-    /// The content of the response
-    let content: String
-    /// The model used for the response
-    let model: String
-}
 
 /// Voting scheme for multi-model selection
 enum VotingScheme: String, CaseIterable {
