@@ -71,9 +71,9 @@ CURRENT LLM OPERATION TYPES
 ┌─────────────────────────────┬──────────────────────────────┬─────────────┬──────────┬─────────────┬────────────────────────────┬──────────────────────────────────────┐
 │ Operation                   │ File                         │ Context     │ Schema   │ Image Input │ Schema Type                │ ModelPicker Location                 │
 ├─────────────────────────────┼──────────────────────────────┼─────────────┼──────────┼─────────────┼────────────────────────────┼──────────────────────────────────────┤
-│ Resume Revision Analysis    │ ResumeChatProvider.swift     │ Multi-turn  │ * Yes    │ x No        │ RevisionsContainer         │ UnifiedToolbar (BROKEN, needs impl.) │
+│ Resume Revision Analysis    │ ResumeReviseService.swift    │ Multi-turn  │ * Yes    │ x No        │ RevisionsContainer         │ UnifiedToolbar "Customize" button    │
 │ Resume Chat                 │ ResumeChatProvider.swift     │ Multi-turn  │ x No     │ x No        │ Plain text                 │ UnifiedToolbar (BROKEN, needs impl.) │
-│ Clarifying Questions        │ ResumeChatProvider.swift     │ One-shot    │ * Yes    │ x No        │ ClarifyingQuestionsRequest │ ClarifyingQuestionsModelSheet:46     │
+│ Clarifying Questions        │ ResumeReviseService.swift    │ One-shot    │ * Yes    │ x No        │ ClarifyingQuestionsRequest │ UnifiedToolbar "Clarify & Customize" │
 │ Skill Reordering            │ ReorderSkillsProvider.swift  │ One-shot    │ * Yes    │ x No        │ ReorderSkillsResponse      │ ResumeReviewSheet:181 (Dropdown)     │
 └─────────────────────────────┴──────────────────────────────┴─────────────┴──────────┴─────────────┴────────────────────────────┴──────────────────────────────────────┘
 ```
@@ -222,8 +222,7 @@ Models have capability flags stored in `OpenRouterModel`:
 #### **Missing Model Pickers**
 Several operations currently lack dedicated model pickers and need implementation:
 - **Cover Letter Chat UI**: Needs DropdownModelPicker for cover letter generation/revision
-- **RecommendJobButton**: Needs DropdownModelPicker for job recommendation operations
-- **AiCommsView**: Has built-in model selection for resume chat operations
+- **UnifiedToolbar "Customize" button**: Needs DropdownModelPicker implementation (follows JobRecommendationButton pattern)
 
 #### **TTS Voice Selection**
 TTS operations use a different system:
@@ -506,7 +505,7 @@ class ModelCapabilityManager {
 - Remove `LLMRequestService` redundancy
 - Consolidate provider classes
 - Clean up `BaseLLMProvider` if no longer needed
-- Refactor `AiCommsView` to use `ResumeReviseService` (keep as clean UI coordinator)
+- **DEPRECATED**: Remove `AiCommsView` (legacy from old toolbar workflow, replaced by UnifiedToolbar → ResumeReviseService → ReviewView)
 
 #### **Phase 5: Polish & Optimization**
 - Add comprehensive error handling
@@ -600,11 +599,10 @@ This unified architecture will eliminate redundancy, improve maintainability, an
 - Validation and node ID matching
 - State persistence across revision rounds
 
-**AiCommsView**: Becomes a clean UI coordinator
-- Manages UI state and user interactions
-- Calls ResumeReviseService methods
-- Displays results and handles UI updates
-- Much smaller and focused on presentation logic
+**UnifiedToolbar**: Direct workflow integration (replaces AiCommsView)
+- **"Customize" button**: Model picker → ResumeReviseService.startRevisionWorkflow() → ReviewView
+- **"Clarify & Customize" button**: Model picker → ClarifyingQuestionsSheet → ResumeReviseService workflow → ReviewView
+- **Pattern**: UnifiedToolbar button → Model selection popup → LLM operation → ReviewView (no intermediate UI coordinator needed)
 
 ### **Important Patterns to Preserve**
 1. **Two-Stage Model Filtering**: Global user selection + operation-specific capabilities

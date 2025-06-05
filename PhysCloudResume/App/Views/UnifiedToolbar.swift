@@ -15,7 +15,8 @@ func buildUnifiedToolbar(
     showClarifyingQuestionsSheet: Binding<Bool>,
     showChooseBestCoverLetterSheet: Binding<Bool>,
     showMultiModelChooseBestSheet: Binding<Bool>,
-    clarifyingQuestions: Binding<[ClarifyingQuestion]>
+    clarifyingQuestions: Binding<[ClarifyingQuestion]>,
+    resumeReviseViewModel: ResumeReviseViewModel?
 ) -> some ToolbarContent {
     UnifiedToolbar(
         selectedTab: selectedTab,
@@ -28,7 +29,8 @@ func buildUnifiedToolbar(
         showClarifyingQuestionsSheet: showClarifyingQuestionsSheet,
         showChooseBestCoverLetterSheet: showChooseBestCoverLetterSheet,
         showMultiModelChooseBestSheet: showMultiModelChooseBestSheet,
-        clarifyingQuestions: clarifyingQuestions
+        clarifyingQuestions: clarifyingQuestions,
+        resumeReviseViewModel: resumeReviseViewModel
     )
 }
 
@@ -48,6 +50,7 @@ struct UnifiedToolbar: ToolbarContent {
     @Binding var showChooseBestCoverLetterSheet: Bool
     @Binding var showMultiModelChooseBestSheet: Bool
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
+    var resumeReviseViewModel: ResumeReviseViewModel?
 
     @State private var isGeneratingResume = false
     @State private var isGeneratingCoverLetter = false
@@ -56,6 +59,9 @@ struct UnifiedToolbar: ToolbarContent {
     @State private var showClarifyingQuestionsModelSheet = false
     @State private var selectedClarifyingQuestionsModel = ""
     @State private var clarifyingQuestionsChatProvider: ResumeChatProvider?
+    
+    @State private var showCustomizeModelSheet = false
+    @State private var selectedCustomizeModel = ""
 
     private var selectedResumeBinding: Binding<Resume?> {
         Binding<Resume?>(
@@ -100,6 +106,41 @@ struct UnifiedToolbar: ToolbarContent {
         } catch {
             // Handle error - could show an alert
             print("Error processing clarifying questions answers: \(error)")
+        }
+    }
+
+    /// Starts the resume customization workflow with the selected model
+    @MainActor 
+    private func startCustomizeWorkflow(modelId: String) async {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes else {
+            isGeneratingResume = false
+            return
+        }
+        
+        do {
+            // Use the ResumeReviseViewModel passed from TabWrapperView
+            guard let viewModel = resumeReviseViewModel else {
+                Logger.error("ResumeReviseViewModel not available")
+                isGeneratingResume = false
+                return
+            }
+            
+            // Create query for revision workflow
+            let query = ResumeApiQuery(resume: resume)
+            
+            // Start revision workflow and handle UI - ResumeReviseViewModel manages everything
+            try await viewModel.startRevisionWorkflowAndShowUI(
+                resume: resume,
+                query: query,
+                modelId: modelId
+            )
+            
+            isGeneratingResume = false
+            
+        } catch {
+            Logger.error("Error in customize workflow: \(error.localizedDescription)")
+            isGeneratingResume = false
         }
     }
 
@@ -168,9 +209,7 @@ struct UnifiedToolbar: ToolbarContent {
                 // Resume Operations cluster
                 HStack(spacing: 12) {
                     resumeButton("Customize", "wand.and.sparkles", action: {
-                        if let resume = selectedResumeBinding.wrappedValue {
-                            isGeneratingResume = true
-                        }
+                        showCustomizeModelSheet = true
                     }, disabled: selectedResumeBinding.wrappedValue?.rootNode == nil,
                                  help: "Create Resume Revisions")
 
@@ -199,16 +238,29 @@ struct UnifiedToolbar: ToolbarContent {
                     .help("Create Resume Revisions with Clarifying Questions")
                     .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
                     .sheet(isPresented: $showClarifyingQuestionsModelSheet) {
-                        ClarifyingQuestionsModelSheet(
+                        ModelSelectionSheet(
+                            title: "Choose Model for Clarifying Questions",
+                            requiredCapability: .structuredOutput,
                             isPresented: $showClarifyingQuestionsModelSheet,
                             onModelSelected: { modelId in
                                 selectedClarifyingQuestionsModel = modelId
-                                showClarifyingQuestionsModelSheet = false
                                 isGeneratingQuestions = true
-
-                                // Start clarifying questions workflow with selected model
                                 Task {
                                     await startClarifyingQuestionsWorkflow(modelId: modelId)
+                                }
+                            }
+                        )
+                    }
+                    .sheet(isPresented: $showCustomizeModelSheet) {
+                        ModelSelectionSheet(
+                            title: "Choose Model for Resume Customization",
+                            requiredCapability: .structuredOutput,
+                            isPresented: $showCustomizeModelSheet,
+                            onModelSelected: { modelId in
+                                selectedCustomizeModel = modelId
+                                isGeneratingResume = true
+                                Task {
+                                    await startCustomizeWorkflow(modelId: modelId)
                                 }
                             }
                         )

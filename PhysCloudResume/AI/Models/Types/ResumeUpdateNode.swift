@@ -26,6 +26,43 @@ struct ProposedRevisionNode: Codable, Equatable {
     // Default initializer
     init() {}
     
+    /// Get the original text for this revision node, with fallback logic
+    /// Moved from ReviewView for better encapsulation
+    func originalText(using updateNodes: [[String: Any]]) -> String {
+        let trimmedOld = oldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmedOld.isEmpty {
+            return trimmedOld
+        }
+
+        // Find the matching node in updateNodes by ID and isTitleNode flag
+        if let dict = updateNodes.first(where: { 
+            ($0["id"] as? String) == id && 
+            ($0["isTitleNode"] as? Bool) == isTitleNode 
+        }) {
+            // For title nodes, use the "name" field; for content nodes, use the "value" field
+            let fieldToUse = isTitleNode ? (dict["name"] as? String) : (dict["value"] as? String)
+            if let fieldValue = fieldToUse?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !fieldValue.isEmpty {
+                return fieldValue
+            }
+        }
+        
+        return "(no text)"
+    }
+    
+    /// Create a FeedbackNode from this ProposedRevisionNode
+    func createFeedbackNode() -> FeedbackNode {
+        return FeedbackNode(
+            id: id,
+            originalValue: oldValue,
+            proposedRevision: newValue,
+            actionRequested: .unevaluated,
+            reviewerComments: "",
+            isTitleNode: isTitleNode
+        )
+    }
+    
     // Dictionary initializer for creating from [String: Any]
     init(from dict: [String: Any]) {
         // Map common keys with fallbacks
@@ -169,6 +206,7 @@ enum PostReviewAction: String, Codable {
     var actionRequested: PostReviewAction = .unevaluated
     var reviewerComments: String = ""
     var isTitleNode: Bool = false
+    
     init(
         id: String = "",
         originalValue: String = "",
@@ -183,6 +221,53 @@ enum PostReviewAction: String, Codable {
         self.actionRequested = actionRequested
         self.reviewerComments = reviewerComments
         self.isTitleNode = isTitleNode
+    }
+    
+    /// Check if this feedback node requires AI resubmission
+    var requiresAIResubmission: Bool {
+        let aiActions: Set<PostReviewAction> = [
+            .revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment
+        ]
+        return aiActions.contains(actionRequested)
+    }
+    
+    /// Check if this feedback node should be applied to the resume
+    var shouldBeApplied: Bool {
+        return actionRequested == .accepted || actionRequested == .acceptedWithChanges
+    }
+    
+    /// Apply this feedback node's changes to a resume tree node
+    func applyToResume(_ resume: Resume) {
+        guard shouldBeApplied else { return }
+        
+        if let treeNode = resume.nodes.first(where: { $0.id == id }) {
+            // Apply the change based on whether it's a title node or value node
+            if isTitleNode {
+                treeNode.name = proposedRevision
+                treeNode.isTitleNode = true
+            } else {
+                treeNode.value = proposedRevision
+            }
+            Logger.debug("✅ Applied change to node \(id): \(actionRequested.rawValue)")
+        } else {
+            Logger.debug("⚠️ Could not find TreeNode with ID: \(id) to apply changes")
+        }
+    }
+    
+    /// Handle the action for saveAndNext workflow
+    func processAction(_ action: PostReviewAction) {
+        self.actionRequested = action
+        
+        switch action {
+        case .restored:
+            self.proposedRevision = self.originalValue
+        case .acceptedWithChanges:
+            // proposedRevision should already be set by user editing
+            break
+        default:
+            // For other actions, proposedRevision stays as is
+            break
+        }
     }
 }
 
@@ -219,5 +304,86 @@ func fbToJson(_ feedbackNodes: [FeedbackNode]) -> String? {
         }
     } catch {
         return nil
+    }
+}
+
+// MARK: - Collection Extensions for Review Workflow Logic
+
+extension Array where Element == FeedbackNode {
+    
+    /// Apply all accepted changes to the resume
+    /// Moved from ReviewView for better encapsulation
+    func applyAcceptedChanges(to resume: Resume) {
+        Logger.debug("✅ Applying accepted changes to resume")
+        
+        let acceptedNodes = filter { $0.shouldBeApplied }
+        for node in acceptedNodes {
+            node.applyToResume(resume)
+        }
+        
+        // Trigger PDF refresh
+        resume.debounceExport()
+        Logger.debug("✅ Applied \(acceptedNodes.count) accepted changes")
+    }
+    
+    /// Get nodes that require AI resubmission
+    var nodesRequiringAIResubmission: [FeedbackNode] {
+        return filter { $0.requiresAIResubmission }
+    }
+    
+    /// Log feedback statistics (moved from ReviewView)
+    func logFeedbackStatistics() {
+        Logger.debug("\n===== FEEDBACK NODE STATISTICS =====")
+        Logger.debug("Total feedback nodes: \(count)")
+
+        let acceptedCount = filter { $0.actionRequested == .accepted }.count
+        let acceptedWithChangesCount = filter { $0.actionRequested == .acceptedWithChanges }.count
+        let noChangeCount = filter { $0.actionRequested == .noChange }.count
+        let restoredCount = filter { $0.actionRequested == .restored }.count
+        let reviseCount = filter { $0.actionRequested == .revise }.count
+        let rewriteNoCommentCount = filter { $0.actionRequested == .rewriteNoComment }.count
+        let mandatedChangeCount = filter { $0.actionRequested == .mandatedChange }.count
+        let mandatedChangeNoCommentCount = filter { $0.actionRequested == .mandatedChangeNoComment }.count
+
+        Logger.debug("Accepted: \(acceptedCount)")
+        Logger.debug("Accepted with changes: \(acceptedWithChangesCount)")
+        Logger.debug("No change needed: \(noChangeCount)")
+        Logger.debug("Restored to original: \(restoredCount)")
+        Logger.debug("Revise (with comments): \(reviseCount)")
+        Logger.debug("Rewrite (no comments): \(rewriteNoCommentCount)")
+        Logger.debug("Mandated change (with comments): \(mandatedChangeCount)")
+        Logger.debug("Mandated change (no comments): \(mandatedChangeNoCommentCount)")
+        Logger.debug("==================================\n")
+    }
+    
+    /// Log resubmission summary (moved from ReviewView)
+    func logResubmissionSummary() {
+        Logger.debug("\n===== SUBMITTING REVISION REQUEST =====")
+        Logger.debug("Number of nodes to revise: \(count)")
+
+        // Count by feedback type
+        let typeCount = reduce(into: [PostReviewAction: Int]()) { counts, node in
+            counts[node.actionRequested, default: 0] += 1
+        }
+
+        for (action, count) in typeCount.sorted(by: { $0.value > $1.value }) {
+            Logger.debug("  - \(action.rawValue): \(count) nodes")
+        }
+
+        // List node IDs being submitted
+        let nodeIds = map { $0.id }.joined(separator: ", ")
+        Logger.debug("Node IDs: \(nodeIds)")
+        Logger.debug("========================================\n")
+        
+        // Log individual nodes
+        for (index, node) in enumerated() {
+            Logger.debug("Node \(index + 1)/\(count) for revision:")
+            Logger.debug("  - ID: \(node.id)")
+            Logger.debug("  - Action: \(node.actionRequested.rawValue)")
+            Logger.debug("  - Original: \(node.originalValue.prefix(30))\(node.originalValue.count > 30 ? "..." : "")")
+            if !node.reviewerComments.isEmpty {
+                Logger.debug("  - Comments: \(node.reviewerComments.prefix(50))\(node.reviewerComments.count > 50 ? "..." : "")")
+            }
+        }
     }
 }
