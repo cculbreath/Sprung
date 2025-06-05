@@ -49,6 +49,13 @@
 
 This document analyzes the UX and LLM prompt workflows for multi-turn operations in the PhysCloudResume application.
 
+**✅ Phase 2.2 Update:** The major revision workflow has been successfully migrated from legacy AiCommsView to the new architecture:
+- **ResumeReviseViewModel**: Clean ViewModel handling UI state and workflow orchestration
+- **ClarifyingQuestionsViewModel**: Focused ViewModel for clarifying questions workflow  
+- **Enhanced Node Classes**: Business logic moved to ProposedRevisionNode and FeedbackNode
+- **LLMService Integration**: All LLM operations now use unified service layer
+- **ModelSelectionSheet**: Unified model picker component for all single-model operations
+
 ## 1. Fix Overflow / Does Content Fit Workflow
 
 ### UI Flow
@@ -104,29 +111,34 @@ This document analyzes the UX and LLM prompt workflows for multi-turn operations
 
 ## 2. Generate Resume Revisions / Submit Feedback Workflow
 
-### UI Flow
-- **Entry Points**: **CURRENTLY BROKEN** - UnifiedToolbar migration incomplete
-  - **Generate Button**: Non-functioning button in UnifiedToolbar (needs implementation)
-  - **Clarify & Generate Button**: Non-functioning button in UnifiedToolbar (needs implementation)
-  - **Legacy Option+Click**: Being eliminated in favor of separate buttons
-- **Model Selection**: **MISSING** - Needs DropdownModelPicker implementation before LLM operations begin
-  - Should be accessed via model selector sheet or modal attached to toolbar buttons
-  - Currently uses `OpenAIModelFetcher.getPreferredModelString()` without user choice
-- **Current Recommendation**: Wait for LLM refactoring (Phase 1-2) before implementing toolbar functionality
-- **Clarifying Questions** (Optional, Clarify & Generate button only):
-  - System analyzes resume and job context  
-  - May ask up to 3 clarifying questions
-  - User answers via ClarifyingQuestionsSheet
-- **Revision Generation**: Based on context + answers (if any)
+### UI Flow ✅ **PHASE 2.2 COMPLETED**
+- **Entry Points**: ✅ **UnifiedToolbar integration complete**
+  - **"Customize" Button**: ✅ Working with ModelSelectionSheet → ResumeReviseViewModel workflow
+  - **"Clarify & Customize" Button**: ✅ Working with ClarifyingQuestionsViewModel → ResumeReviseViewModel workflow
+  - **Legacy AiCommsView**: ✅ Removed and replaced with clean architecture
+- **Model Selection**: ✅ **ModelSelectionSheet implemented**
+  - ✅ Unified model selection component with capability filtering
+  - ✅ Integrated with both toolbar buttons
+  - ✅ Two-stage filtering: global selection + operation-specific capabilities
+- **✅ Current State**: LLM refactoring Phase 2.2 complete, toolbar fully functional
+- **Clarifying Questions** (Optional, "Clarify & Customize" button):
+  - ✅ ClarifyingQuestionsViewModel handles workflow
+  - ✅ System analyzes resume and job context  
+  - ✅ May ask up to 3 clarifying questions via ClarifyingQuestionsSheet
+  - ✅ Clean handoff to ResumeReviseViewModel for revision generation
+- **Revision Generation**: ✅ ResumeReviseViewModel orchestrates revision workflow
 
 ### Prompt Structure & Conversation Flow
 
-#### Phase 1: Clarifying Questions (if enabled)
+#### Phase 1: Clarifying Questions (if enabled) ✅ **MIGRATED TO ClarifyingQuestionsViewModel**
 ```swift
-conversationHistory = [
-    AppLLMMessage(role: .system, text: clarifyingQuestionsSystemPrompt),
-    AppLLMMessage(role: .user, text: resumeContext)
-]
+// New architecture: ClarifyingQuestionsViewModel
+let fullPrompt = await query.clarifyingQuestionsPrompt()
+let questionsRequest = try await llmService.executeStructured(
+    prompt: fullPrompt,
+    modelId: modelId,
+    responseType: ClarifyingQuestionsRequest.self
+)
 ```
 
 LLM responds with:
@@ -143,14 +155,15 @@ LLM responds with:
 }
 ```
 
-#### Phase 2: Process Answers & Generate Revisions
-- Appends Q&A summary to conversation
-- Requests revision suggestions
-- Returns `RevisionsContainer` with array of `ProposedRevisionNode`
+#### Phase 2: Process Answers & Generate Revisions ✅ **MIGRATED TO ResumeReviseViewModel**
+- ✅ Clean handoff from ClarifyingQuestionsViewModel to ResumeReviseViewModel
+- ✅ Appends Q&A summary to conversation via LLMService
+- ✅ Requests revision suggestions using continueConversationStructured()
+- ✅ Returns `RevisionsContainer` with array of `ProposedRevisionNode`
 
-#### Phase 3: Iterative Revision Review Loop
-**Entry Point**: ReviewView.swift - User review interface for AI revisions
-**Iterative Process**: Multi-round feedback and refinement cycle
+#### Phase 3: Iterative Revision Review Loop ✅ **MIGRATED TO ENHANCED NODE CLASSES**
+**Entry Point**: ✅ RevisionReviewView.swift - Pure UI view with ViewModel delegation
+**Iterative Process**: ✅ Multi-round feedback and refinement cycle managed by ResumeReviseViewModel
 
 ##### Step 1: Review Individual Revisions
 - **UI Flow**: User reviews each `ProposedRevisionNode` individually
@@ -163,44 +176,39 @@ LLM responds with:
   - **Mandated Change**: Force change with comments (`.mandatedChange`)
   - **No Change**: Accept original as appropriate (`.noChange`)
 
-##### Step 2: Feedback Collection & State Management
+##### Step 2: Feedback Collection & State Management ✅ **ENHANCED NODE CLASSES**
 ```swift
-// Each user decision creates a FeedbackNode
-FeedbackNode(
-    id: revisionNode.id,
-    originalValue: revisionNode.oldValue,
-    proposedRevision: revisionNode.newValue,
-    actionRequested: userSelectedAction,
-    reviewerComments: userComments,
-    isTitleNode: revisionNode.isTitleNode
-)
+// Enhanced FeedbackNode with business logic methods
+let feedbackNode = currentRevisionNode.createFeedbackNode()
+feedbackNode.processAction(userSelectedAction)
 ```
 
-##### Step 3: Intelligent Feedback Processing
-- **Apply Accepted Changes**: Immediately update resume tree nodes
-- **Filter AI-Required Actions**: Extract nodes needing `.revise`, `.mandatedChange`, `.rewriteNoComment`, `.mandatedChangeNoComment`
-- **Iterative Resubmission**: Only send rejected nodes back to AI for revision
+##### Step 3: Intelligent Feedback Processing ✅ **COLLECTION EXTENSIONS**
+- **✅ Apply Accepted Changes**: `feedbackNodes.applyAcceptedChanges(to: resume)`
+- **✅ Filter AI-Required Actions**: `feedbackNodes.nodesRequiringAIResubmission`
+- **✅ Iterative Resubmission**: Only send rejected nodes back to AI for revision
+- **✅ Enhanced Logging**: `feedbackNodes.logFeedbackStatistics()`, `logResubmissionSummary()`
 
-##### Step 4: AI Resubmission Loop (AiCommsView.swift)
-- **Context Preservation**: Maintain conversation history across revision rounds
-- **Focused Revision**: AI only revises nodes that were rejected with feedback
-- **State Synchronization**: 
-  - `aiResub` flag triggers resubmission workflow
-  - PDF re-rendering ensures current state for AI analysis
-  - Safety timeouts prevent infinite loops
+##### Step 4: AI Resubmission Loop ✅ **RESUMEREVISEVIEWMODEL**
+- **✅ Context Preservation**: Maintain conversation history via LLMService
+- **✅ Focused Revision**: AI only revises nodes requiring resubmission
+- **✅ State Synchronization**: 
+  - `aiResubmit` flag triggers resubmission workflow in ViewModel
+  - PDF re-rendering via `resume.ensureFreshRenderedText()`
+  - Clean workflow orchestration without mixed concerns
 
-##### Step 5: Validation & Node Matching
-- **Node Validation**: Ensure AI-returned revisions match existing resume nodes
-- **ID Matching**: Cross-reference revision IDs with current tree structure
-- **Content Validation**: Verify oldValue matches current node content
-- **Tree Path Fallback**: Use tree structure for orphaned revisions
+##### Step 5: Validation & Node Matching ✅ **RESUMEREVISEVIEWMODEL**
+- **✅ Node Validation**: Enhanced `validateRevisions()` method
+- **✅ ID Matching**: Cross-reference revision IDs with current tree structure
+- **✅ Content Validation**: Verify oldValue matches current node content
+- **✅ Tree Path Fallback**: Use tree structure for orphaned revisions
 
-### Response Handling
-- **Structured Output**: JSON with revision nodes
-- **Conversation State**: Maintains full conversation history across all revision rounds
-- **Fallback Parsing**: Multiple strategies for extracting revisions from response
-- **Node Filtering**: Remove revisions for deleted/non-existent nodes between rounds
-- **State Recovery**: Handle provider resets and maintain UI state consistency
+### Response Handling ✅ **LLMSERVICE INTEGRATION**
+- **✅ Structured Output**: JSON with revision nodes via LLMService
+- **✅ Conversation State**: LLMService maintains conversation history with UUID tracking
+- **✅ Fallback Parsing**: Enhanced JSON parsing strategies in LLMService
+- **✅ Node Filtering**: ResumeReviseViewModel `validateRevisions()` removes non-existent nodes
+- **✅ State Recovery**: Clean ViewModel architecture eliminates provider reset issues
 
 ## 3. Multi-Model Cover Letter Recommendation Workflow
 
@@ -327,23 +335,23 @@ await withTaskGroup(of: GenerationResult.self) { group in
 
 ## 🚨 IMPLEMENTATION GUIDANCE FOR REFACTORING
 
-### **ResumeReviseService Architecture**
+### **✅ ResumeReviseViewModel Architecture (IMPLEMENTED)**
 
-The complex revision workflow logic currently embedded in AiCommsView.swift should be extracted into a dedicated service:
+✅ **COMPLETED:** The complex revision workflow logic has been successfully extracted from AiCommsView.swift into a clean ViewModel architecture:
 
-**ResumeReviseService Responsibilities:**
-- **Revision State Management**: Track revision nodes and their states across feedback rounds
-- **Feedback Processing**: Process user feedback arrays and determine which nodes need AI resubmission
-- **Tree Node Operations**: Apply accepted changes to resume tree structure
-- **Validation Logic**: Ensure revision node IDs match current tree state  
-- **Conversation Coordination**: Work with LLMService to manage multi-turn revision conversations
-- **State Persistence**: Maintain revision context across UI state changes
+**✅ ResumeReviseViewModel Responsibilities (IMPLEMENTED):**
+- **✅ Revision State Management**: Track revision nodes and their states across feedback rounds
+- **✅ Feedback Processing**: Process user feedback arrays and determine which nodes need AI resubmission
+- **✅ Tree Node Operations**: Apply accepted changes to resume tree structure via enhanced node classes
+- **✅ Validation Logic**: Enhanced `validateRevisions()` ensures revision node IDs match current tree state  
+- **✅ Conversation Coordination**: Works with LLMService to manage multi-turn revision conversations
+- **✅ State Persistence**: Maintains revision context across UI state changes
 
-**AiCommsView Refactored Role:**
-- **UI Coordination**: Handle user interactions and display updates
-- **Progress Display**: Show revision progress and status messages
-- **Service Integration**: Call ResumeReviseService methods and display results
-- **Error Handling**: Present user-friendly error messages and recovery options
+**✅ RevisionReviewView Refactored Role (IMPLEMENTED):**
+- **✅ Pure UI View**: Clean SwiftUI view with ViewModel delegation
+- **✅ Progress Display**: Shows revision progress and status messages
+- **✅ ViewModel Integration**: Calls ResumeReviseViewModel methods and displays results
+- **✅ Error Handling**: Presents user-friendly error messages via ViewModel
 
 ### **Start with Fix Overflow Workflow** 
 This workflow is the most complex and demonstrates all key patterns:

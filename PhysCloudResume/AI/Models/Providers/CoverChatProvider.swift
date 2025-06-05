@@ -154,7 +154,6 @@ final class CoverChatProvider: BaseLLMProvider {
         res: Resume?,
         jobAppStore: JobAppStore,
         chatProvider _: CoverChatProvider, // chatProvider is self, no need to pass
-        buttons: Binding<CoverLetterButtons>,
         isNewConversation: Bool = true
     ) {
         guard let app = jobAppStore.selectedApp else { return }
@@ -170,7 +169,7 @@ final class CoverChatProvider: BaseLLMProvider {
             letter = newLetter
         }
 
-        buttons.wrappedValue.runRequested = true
+        // Note: Legacy buttons removed - processing state managed by caller
 
         if isNewConversation {
             // Clear conversation context and reset our history synchronously
@@ -260,12 +259,10 @@ final class CoverChatProvider: BaseLLMProvider {
                 processResults(
                     newMessage: responseText,
                     coverLetter: letter,
-                    buttons: buttons,
                     model: modelString,
                     isRevision: !isNewConversation // Revision if continuing conversation
                 )
             } catch {
-                buttons.wrappedValue.runRequested = false
                 self.errorMessage = "Error: \(error.localizedDescription)"
             }
         }
@@ -423,7 +420,6 @@ final class CoverChatProvider: BaseLLMProvider {
     private func processResults(
         newMessage: String,
         coverLetter: CoverLetter,
-        buttons: Binding<CoverLetterButtons>,
         model: String? = nil,
         isRevision: Bool // True if this is a revision of an existing letter
     ) {
@@ -476,8 +472,7 @@ final class CoverChatProvider: BaseLLMProvider {
             coverLetter.name = "Option \(optionLetter): \(nameSuffix)"
         }
 
-        // Update UI state
-        buttons.wrappedValue.runRequested = false
+        // Note: Legacy button state removed - processing state managed by caller
         
         // Convert conversation history to MessageParams for storage
         coverLetter.messageHistory = conversationHistory.map { appMessage in
@@ -507,14 +502,13 @@ final class CoverChatProvider: BaseLLMProvider {
         res _: Resume?,
         jobAppStore: JobAppStore,
         chatProvider _: CoverChatProvider,
-        buttons: Binding<CoverLetterButtons>,
         customFeedback: Binding<String>,
         isNewConversation: Bool = false
     ) {
         guard let app = jobAppStore.selectedApp else { return }
         guard let letter = app.selectedCover else { return }
 
-        buttons.wrappedValue.runRequested = true
+        // Note: Legacy buttons removed - processing state managed by caller
 
         if isNewConversation { // Should generally be false for revisions
             // Clear conversation context synchronously
@@ -602,12 +596,10 @@ final class CoverChatProvider: BaseLLMProvider {
                 processResults(
                     newMessage: responseText,
                     coverLetter: letter,
-                    buttons: buttons,
                     model: modelString,
                     isRevision: true // Revisions are always true here
                 )
             } catch {
-                buttons.wrappedValue.runRequested = false
                 self.errorMessage = "Error: \(error.localizedDescription)"
             }
         }

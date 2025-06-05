@@ -49,8 +49,8 @@ struct ContentView: View {
             // --- Detail Column ---
             VStack(alignment: .leading) {
                 if let selApp = jobAppStore.selectedApp {
-                    // Embed TabWrapperView directly
-                    TabWrapperView(selectedTab: $selectedTab, tabRefresh: $tabRefresh)
+                    // Embed AppWindowView directly
+                    AppWindowView(selectedTab: $selectedTab, tabRefresh: $tabRefresh)
 //                        .navigationTitle(" ")
                 } else {
                     // Placeholder when no job application is selected
@@ -67,7 +67,7 @@ struct ContentView: View {
                 }
                 .edgesIgnoringSafeArea(.top) // Allow divider to touch the top edge
             )
-            // Note: The main application toolbar is attached within TabWrapperView
+            // Note: The main application toolbar is attached within AppWindowView
         }
         .sheet(isPresented: $showNewAppSheet) {
             // NewAppSheetView still presented from ContentView

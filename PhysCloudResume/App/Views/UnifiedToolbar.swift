@@ -2,33 +2,22 @@
 import SwiftUI
 import AppKit
 
+
 /// Unified toolbar with all buttons visible, using disabled state instead of hiding
 @ToolbarContentBuilder
 func buildUnifiedToolbar(
     selectedTab: Binding<TabList>,
     listingButtons: Binding<SaveButtons>,
-    letterButtons: Binding<CoverLetterButtons>,
-    resumeButtons: Binding<ResumeButtons>,
     refresh: Binding<Bool>,
-    showApplicationReviewSheet: Binding<Bool>,
-    showResumeReviewSheet: Binding<Bool>,
-    showClarifyingQuestionsSheet: Binding<Bool>,
-    showChooseBestCoverLetterSheet: Binding<Bool>,
-    showMultiModelChooseBestSheet: Binding<Bool>,
+    sheets: Binding<AppSheets>,
     clarifyingQuestions: Binding<[ClarifyingQuestion]>,
     resumeReviseViewModel: ResumeReviseViewModel?
 ) -> some ToolbarContent {
     UnifiedToolbar(
         selectedTab: selectedTab,
         listingButtons: listingButtons,
-        letterButtons: letterButtons,
-        resumeButtons: resumeButtons,
         refresh: refresh,
-        showApplicationReviewSheet: showApplicationReviewSheet,
-        showResumeReviewSheet: showResumeReviewSheet,
-        showClarifyingQuestionsSheet: showClarifyingQuestionsSheet,
-        showChooseBestCoverLetterSheet: showChooseBestCoverLetterSheet,
-        showMultiModelChooseBestSheet: showMultiModelChooseBestSheet,
+        sheets: sheets,
         clarifyingQuestions: clarifyingQuestions,
         resumeReviseViewModel: resumeReviseViewModel
     )
@@ -41,14 +30,8 @@ struct UnifiedToolbar: ToolbarContent {
 
     @Binding var selectedTab: TabList
     @Binding var listingButtons: SaveButtons
-    @Binding var letterButtons: CoverLetterButtons
-    @Binding var resumeButtons: ResumeButtons
     @Binding var refresh: Bool
-    @Binding var showApplicationReviewSheet: Bool
-    @Binding var showResumeReviewSheet: Bool
-    @Binding var showClarifyingQuestionsSheet: Bool
-    @Binding var showChooseBestCoverLetterSheet: Bool
-    @Binding var showMultiModelChooseBestSheet: Bool
+    @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     var resumeReviseViewModel: ResumeReviseViewModel?
 
@@ -58,10 +41,21 @@ struct UnifiedToolbar: ToolbarContent {
 
     @State private var showClarifyingQuestionsModelSheet = false
     @State private var selectedClarifyingQuestionsModel = ""
-    @State private var clarifyingQuestionsChatProvider: ResumeChatProvider?
+    @State private var clarifyingQuestionsViewModel: ClarifyingQuestionsViewModel?
     
     @State private var showCustomizeModelSheet = false
     @State private var selectedCustomizeModel = ""
+    
+    
+    @State private var showCoverLetterModelSheet = false
+    @State private var selectedCoverLetterModel = ""
+    
+    @State private var showBestLetterModelSheet = false
+    @State private var selectedBestLetterModel = ""
+    @State private var isProcessingBestLetter = false
+    @State private var showBestLetterAlert = false
+    @State private var bestLetterResult: BestCoverLetterResponse?
+    
 
     private var selectedResumeBinding: Binding<Resume?> {
         Binding<Resume?>(
@@ -75,7 +69,7 @@ struct UnifiedToolbar: ToolbarContent {
     }
 
     /// Processes clarifying question answers and generates resume revisions
-    /// This continues the multi-turn conversation that was started when questions were generated
+    /// This continues the multi-turn conversation and hands off to ResumeReviseViewModel
     @MainActor
     private func processClarifyingQuestionsAnswers(answers: [QuestionAnswer]) async {
         guard let jobApp = jobAppStore.selectedApp,
@@ -84,28 +78,43 @@ struct UnifiedToolbar: ToolbarContent {
         }
         
         do {
-            // Use the same chat provider instance that generated the questions
-            // This maintains the conversation context
-            guard let chatProvider = clarifyingQuestionsChatProvider else {
-                print("Error: No chat provider available for processing answers")
+            // Use the clarifying questions ViewModel to process answers
+            guard let clarifyingViewModel = clarifyingQuestionsViewModel else {
+                Logger.error("ClarifyingQuestionsViewModel not available for processing answers")
                 return
             }
             
-            // Process answers and continue the conversation using existing DRY method
-            await chatProvider.processAnswersAndContinueConversation(
+            // Process answers and generate revisions
+            let revisions = try await clarifyingViewModel.processAnswersAndGenerateRevisions(
                 answers: answers,
                 resume: resume,
                 modelId: selectedClarifyingQuestionsModel
             )
             
-            // The revisions are now in chatProvider.lastRevNodeArray
-            // We need to trigger the resume revision UI to show them
-            // TODO: This should integrate with the existing revision workflow
-            print("Generated revisions available in chatProvider.lastRevNodeArray")
+            // Hand off revisions to ResumeReviseViewModel for UI display
+            guard let resumeViewModel = resumeReviseViewModel else {
+                Logger.error("ResumeReviseViewModel not available")
+                return
+            }
+            
+            // Set up revisions in the ResumeReviseViewModel and show UI
+            resumeViewModel.resumeRevisions = revisions
+            resumeViewModel.feedbackNodes = []
+            resumeViewModel.feedbackIndex = 0
+            
+            // Set up the first revision for review
+            if !revisions.isEmpty {
+                resumeViewModel.currentRevisionNode = revisions[0]
+                resumeViewModel.currentFeedbackNode = revisions[0].createFeedbackNode()
+            }
+            
+            // Show the revision review UI
+            resumeViewModel.showResumeRevisionSheet = true
+            
+            Logger.debug("✅ Clarifying questions processed, \\(revisions.count) revisions handed off to ResumeReviseViewModel")
             
         } catch {
-            // Handle error - could show an alert
-            print("Error processing clarifying questions answers: \(error)")
+            Logger.error("Error processing clarifying questions answers: \\(error.localizedDescription)")
         }
     }
 
@@ -144,39 +153,81 @@ struct UnifiedToolbar: ToolbarContent {
         }
     }
 
+    /// Starts the best cover letter selection with the selected model
+    @MainActor
+    private func startBestLetterSelection(modelId: String) async {
+        guard let jobApp = jobAppStore.selectedApp else {
+            isProcessingBestLetter = false
+            return
+        }
+        
+        do {
+            let service = BestCoverLetterService(llmService: LLMService.shared)
+            let result = try await service.selectBestCoverLetter(
+                jobApp: jobApp, 
+                modelId: modelId
+            )
+            
+            isProcessingBestLetter = false
+            bestLetterResult = result
+            showBestLetterAlert = true
+            
+            Logger.debug("✅ Best cover letter selection completed: \(result.bestLetterUuid)")
+            
+        } catch {
+            isProcessingBestLetter = false
+            Logger.error("Error in best letter selection: \(error.localizedDescription)")
+            
+            // Show error in alert
+            bestLetterResult = BestCoverLetterResponse(
+                strengthAndVoiceAnalysis: "Error occurred during selection",
+                bestLetterUuid: "",
+                verdict: "Selection failed: \(error.localizedDescription)"
+            )
+            showBestLetterAlert = true
+        }
+    }
+
     /// Starts the clarifying questions workflow with the selected model
     @MainActor
     private func startClarifyingQuestionsWorkflow(modelId: String) async {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes else {
+            isGeneratingQuestions = false
             return
         }
         
         do {
-            // Create and store the chat provider to maintain conversation context
-            let chatProvider = ResumeChatProvider(appState: appState)
-            clarifyingQuestionsChatProvider = chatProvider
+            // Create and store the ClarifyingQuestionsViewModel
+            let clarifyingViewModel = ClarifyingQuestionsViewModel(
+                llmService: LLMService.shared,
+                appState: appState
+            )
+            clarifyingQuestionsViewModel = clarifyingViewModel
             
-            let questions = try await chatProvider.startClarifyingQuestionsWorkflow(
+            // Start the clarifying questions workflow
+            try await clarifyingViewModel.startClarifyingQuestionsWorkflow(
                 resume: resume,
                 jobApp: jobApp,
                 modelId: modelId
             )
             
-            if questions.isEmpty {
-                // No questions needed, could show an alert or proceed directly
-                // For now, we'll just not show the sheet
+            // Check if questions were generated
+            if clarifyingViewModel.questions.isEmpty {
+                // No questions needed - AI opted to proceed directly to revisions
+                Logger.debug("AI opted to proceed without clarifying questions")
+                isGeneratingQuestions = false
                 return
             }
             
             // Set the questions and show the sheet
-            clarifyingQuestions = questions
-            showClarifyingQuestionsSheet = true
+            clarifyingQuestions = clarifyingViewModel.questions
+            sheets.showClarifyingQuestions = true
             isGeneratingQuestions = false
 
         } catch {
-            // Handle error - could show an alert
-            print("Error starting clarifying questions workflow: \(error)")
+            Logger.error("Error starting clarifying questions workflow: \(error.localizedDescription)")
+            isGeneratingQuestions = false
         }
     }
 
@@ -265,12 +316,12 @@ struct UnifiedToolbar: ToolbarContent {
                             }
                         )
                     }
-                    .sheet(isPresented: $showClarifyingQuestionsSheet) {
+                    .sheet(isPresented: $sheets.showClarifyingQuestions) {
                         ClarifyingQuestionsSheet(
                             questions: clarifyingQuestions,
-                            isPresented: $showClarifyingQuestionsSheet,
+                            isPresented: $sheets.showClarifyingQuestions,
                             onSubmit: { answers in
-                                showClarifyingQuestionsSheet = false
+                                sheets.showClarifyingQuestions = false
                                 Task {
                                     await processClarifyingQuestionsAnswers(answers: answers)
                                 }
@@ -279,7 +330,7 @@ struct UnifiedToolbar: ToolbarContent {
                     }
 
                     resumeButton("Optimize", "character.magnify", action: {
-                        showResumeReviewSheet = true
+                        sheets.showResumeReview = true
                     }, disabled: selectedResumeBinding.wrappedValue == nil,
                                  help: "AI Resume Review")
                 }
@@ -290,12 +341,7 @@ struct UnifiedToolbar: ToolbarContent {
                 // Cover Letter Operations cluster
                 HStack(spacing: 12) {
                     Button(action: {
-                        if let cL = coverLetterStore.cL {
-                            isGeneratingCoverLetter = true
-                            let newCL = coverLetterStore.createDuplicate(letter: cL)
-                            newCL.currentMode = .generate
-                            coverLetterStore.cL = newCL
-                        }
+                        showCoverLetterModelSheet = true
                     }) {
                         VStack(spacing: 3) {
                             Image("custom.append.page.badge.plus")
@@ -311,19 +357,92 @@ struct UnifiedToolbar: ToolbarContent {
                     .buttonStyle(.plain)
                     .help("Generate Cover Letter")
                     .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+                    .sheet(isPresented: $showCoverLetterModelSheet) {
+                        ModelSelectionSheet(
+                            title: "Choose Model for Cover Letter Generation",
+                            requiredCapability: nil, // Cover letter generation can work with any model
+                            isPresented: $showCoverLetterModelSheet,
+                            onModelSelected: { modelId in
+                                selectedCoverLetterModel = modelId
+                                // Create the cover letter with the selected model
+                                if let cL = coverLetterStore.cL {
+                                    isGeneratingCoverLetter = true
+                                    let newCL = coverLetterStore.createDuplicate(letter: cL)
+                                    newCL.currentMode = .generate
+                                    coverLetterStore.cL = newCL
+                                    // Store the selected model for the cover letter generation
+                                    // The actual generation will use this model
+                                }
+                                showCoverLetterModelSheet = false
+                            }
+                        )
+                    }
 
                     coverLetterButton("Batch Letter", "square.stack.3d.up.fill", action: {
-                        letterButtons.showBatchGeneration = true
+                        sheets.showBatchCoverLetter = true
                     }, disabled: jobAppStore.selectedApp?.selectedRes == nil,
                                       help: "Batch Cover Letter Operations")
 
-                    coverLetterButton("Best Letter", "medal", action: {
-                        showChooseBestCoverLetterSheet = true
-                    }, disabled: (jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2,
-                                      help: "Choose Best Cover Letter")
+                    Button(action: {
+                        showBestLetterModelSheet = true
+                    }) {
+                        VStack(spacing: 3) {
+                            if isProcessingBestLetter {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 18))
+                                    .frame(height: 20)
+                                    .symbolEffect(.rotate, options: .repeating)
+                            } else {
+                                Image(systemName: "medal")
+                                    .font(.system(size: 18))
+                                    .frame(height: 20)
+                            }
+                            Text("Best Letter")
+                                .font(.system(size: 11))
+                                .frame(height: 14)
+                        }
+                        .frame(minWidth: 60, minHeight: 50)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Choose Best Cover Letter")
+                    .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
+                    .sheet(isPresented: $showBestLetterModelSheet) {
+                        ModelSelectionSheet(
+                            title: "Choose Model for Best Cover Letter Selection",
+                            requiredCapability: .structuredOutput, // Needs structured output for JSON response
+                            isPresented: $showBestLetterModelSheet,
+                            onModelSelected: { modelId in
+                                selectedBestLetterModel = modelId
+                                showBestLetterModelSheet = false
+                                isProcessingBestLetter = true
+                                
+                                // Start processing with the selected model
+                                Task {
+                                    await startBestLetterSelection(modelId: modelId)
+                                }
+                            }
+                        )
+                    }
+                    .alert("Best Cover Letter Selection", isPresented: $showBestLetterAlert) {
+                        Button("OK") {
+                            // Update the selected cover letter if we have a valid result
+                            if let result = bestLetterResult,
+                               let uuid = UUID(uuidString: result.bestLetterUuid),
+                               let jobApp = jobAppStore.selectedApp,
+                               let selectedLetter = jobApp.coverLetters.first(where: { $0.id == uuid }) {
+                                jobApp.selectedCover = selectedLetter
+                                Logger.debug("📝 Updated selected cover letter to: \(selectedLetter.sequencedName)")
+                            }
+                        }
+                    } message: {
+                        if let result = bestLetterResult {
+                            Text("Analysis: \(result.strengthAndVoiceAnalysis)\n\nVerdict: \(result.verdict)")
+                        }
+                    }
 
                     Button(action: {
-                        showMultiModelChooseBestSheet = true
+                        sheets.showMultiModelChooseBest = true
                     }) {
                         VStack(spacing: 3) {
                             Image("custom.medal.square.stack")
@@ -351,7 +470,7 @@ struct UnifiedToolbar: ToolbarContent {
                             .disabled(coverLetterStore.cL?.generated != true)
 
                         sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
-                            showApplicationReviewSheet = true
+                            sheets.showApplicationReview = true
                         }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
                                       jobAppStore.selectedApp?.selectedCover == nil ||
                                       jobAppStore.selectedApp?.selectedCover?.generated != true,
@@ -362,7 +481,7 @@ struct UnifiedToolbar: ToolbarContent {
                         .frame(height: 30)
 
                     sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
-                        showApplicationReviewSheet = true
+                        sheets.showApplicationReview = true
                     }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
                                   jobAppStore.selectedApp?.selectedCover == nil ||
                                   jobAppStore.selectedApp?.selectedCover?.generated != true,
@@ -374,7 +493,7 @@ struct UnifiedToolbar: ToolbarContent {
         // ───── Right edge: Inspector only ─────
         ToolbarItem(placement: .primaryAction) {
             sidebarButton("Inspector", "sidebar.right", action: {
-                resumeButtons.showResumeInspector.toggle()
+                sheets.showResumeInspector.toggle()
             }, disabled: selectedTab != .resume,
                           help: "Show Resume Inspector")
         }
@@ -497,23 +616,3 @@ struct TTSButton: View {
 }
 
 // Placeholder for Choose Best Cover Letter Sheet
-struct ChooseBestCoverLetterSheet: View {
-    let jobApp: JobApp
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack {
-            Text("Choose Best Cover Letter")
-                .font(.title2)
-                .padding()
-
-            // Implementation would include model selection and processing
-
-            Button("Close") {
-                dismiss()
-            }
-            .padding()
-        }
-        .frame(width: 600, height: 400)
-    }
-}

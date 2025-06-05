@@ -119,7 +119,7 @@ struct ApplicationReviewSheet: View {
             
                     // AI Model Selection
                     DropdownModelPicker(
-                        selectedModel: $preferredLLMModel,
+                        selectedModel: $selectedModel,
                         title: "AI Model"
                     )
 
@@ -159,8 +159,8 @@ struct ApplicationReviewSheet: View {
         .frame(minHeight: 600, maxHeight: 800)
     }
 
-    // Persisted preferred model across the app
-    @AppStorage("preferredLLMModel") private var preferredLLMModel: String = ""
+    // Model selection state
+    @State private var selectedModel: String = ""
 
     // MARK: - Custom Options View
 

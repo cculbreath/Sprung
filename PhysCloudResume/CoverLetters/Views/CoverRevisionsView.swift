@@ -7,12 +7,12 @@
 
 import SwiftUI
 
+/// Legacy view - may be unused
 struct CoverRevisionsView: View {
-    @Binding var buttons: CoverLetterButtons
     @Environment(\.appState) private var appState
 
     var body: some View {
-        RevisionsViewContent(appState: appState, buttons: $buttons)
+        RevisionsViewContent(appState: appState)
             .onAppear { Logger.debug("Ai Cover Letterv2") }
     }
 }
@@ -22,18 +22,13 @@ struct RevisionsViewContent: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @State var tempMode: CoverLetterPrompts.EditorPrompts = .zissner
     @State private var customFeedback: String = ""
-    @Binding var buttons: CoverLetterButtons
     let appState: AppState
 
     // Use @Bindable for chatProvider
     @Bindable var chatProvider: CoverChatProvider
 
-    init(
-        appState: AppState,
-        buttons: Binding<CoverLetterButtons>
-    ) {
+    init(appState: AppState) {
         self.appState = appState
-        _buttons = buttons
         chatProvider = CoverChatProvider(appState: appState)
     }
 
@@ -55,13 +50,12 @@ struct RevisionsViewContent: View {
                     .padding()
             }
 
-            if !$buttons.wrappedValue.runRequested {
+            if true { // Legacy button check removed
                 Button((tempMode == .custom) ? "Revise" : "Rewrite") {
                     rewriteBut(
                         coverLetterStore: coverLetterStore,
                         jobAppStore: jobAppStore,
                         chatProvider: chatProvider,
-                        buttons: $buttons,
                         customFeedback: $customFeedback
                     )
                 }
@@ -76,7 +70,6 @@ struct RevisionsViewContent: View {
         coverLetterStore: CoverLetterStore,
         jobAppStore: JobAppStore,
         chatProvider: CoverChatProvider,
-        buttons: Binding<CoverLetterButtons>,
         customFeedback: Binding<String>
     ) {
         guard let currentResume = jobAppStore.selectedApp?.selectedRes else {
@@ -105,7 +98,6 @@ struct RevisionsViewContent: View {
             res: currentResume, // Already safely unwrapped earlier
             jobAppStore: jobAppStore,
             chatProvider: chatProvider,
-            buttons: buttons,
             customFeedback: customFeedback
         )
     }

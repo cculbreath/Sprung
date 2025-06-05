@@ -11,9 +11,9 @@ Issue: Replaced by unified LLMService
 File: PhysCloudResume/AI/Models/Providers/BaseLLMProvider.swift
 Issue: May be redundant after LLMService implementation
 
-### Legacy Provider Classes (After Phase 2-4)
+### ✅ REMOVED Legacy Provider Classes
 File: PhysCloudResume/AI/Models/Providers/ResumeChatProvider.swift
-Issue: Logic extracted to LLMService + ResumeReviseService
+Issue: ✅ REMOVED - Logic migrated to ClarifyingQuestionsViewModel + ResumeReviseViewModel (Phase 2.2)
 
 File: PhysCloudResume/AI/Models/Providers/CoverChatProvider.swift
 Issue: Logic extracted to LLMService
@@ -164,3 +164,28 @@ Evidence: Necessary workaround for fragmented architecture, eliminated by LLMSer
 - Remove hardcoded model capability detection in favor of OpenRouterModel properties
 - Consolidate conversation management to single system
 - Remove duplicate error handling patterns across old providers
+
+# Important Questions/Suggestions and Observations
+## Files suspected of being legacy and deletable
+- SidebarRecommendButton.swift
+- ModelMappingExtension.swift
+- StringModelExtension.swift
+- BaseLLMProvider.swift
+- CoverChatProvider.swift
+- CoverLetterRecommendationProvider.swift
+- LLMRequestService.swift
+- OpenAIModelFetcher.swift
+- APIKeyValidator.swift
+
+
+## Files that have a bad name or file system location
+- PromptBuilderService.swift
+- TreeNodeExtractor.swift
+
+## Questions
+- Why ResponseTypes folder and Types folder in ./AI/models? I'm pretty sure the purpose of most of these is to defined json response schema, but there's some odd balls and old code mixed in
+- Is MessageConverter.swift used?
+- Is LLMSchemaBuider.swift used?
+
+
+

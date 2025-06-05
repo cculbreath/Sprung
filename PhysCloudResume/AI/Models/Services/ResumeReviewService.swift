@@ -9,8 +9,16 @@ import SwiftUI
 class ResumeReviewService: @unchecked Sendable {
     // MARK: - Properties
     
+    /// The LLM service for AI operations
+    private let llmService: LLMService
+    
     /// The current request ID for tracking active requests
     private var currentRequestID: UUID?
+    
+    /// Initialize with LLM service
+    init(llmService: LLMService = LLMService.shared) {
+        self.llmService = llmService
+    }
     
     // MARK: - Initialization
     
@@ -425,7 +433,7 @@ class ResumeReviewService: @unchecked Sendable {
         
         Task { @MainActor in
             do {
-                let service = SkillReorderService()
+                let service = SkillReorderService(llmService: llmService)
                 
                 let reorderedNodes = try await service.fetchReorderedSkills(
                     resume: resume,

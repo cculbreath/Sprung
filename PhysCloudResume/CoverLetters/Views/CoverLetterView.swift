@@ -3,6 +3,7 @@
 //  PhysCloudResume
 //
 //  Created by Christopher Culbreath on 9/12/24.
+//  Simplified after removing legacy button management
 //
 
 import SwiftUI
@@ -12,16 +13,9 @@ struct CoverLetterView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(AppState.self) private var appState: AppState
 
-    @Binding var buttons: CoverLetterButtons
 
     var body: some View {
         contentView()
-            .sheet(isPresented: $buttons.showBatchGeneration) {
-                BatchCoverLetterView()
-                    .environment(appState)
-                    .environment(jobAppStore)
-                    .environment(coverLetterStore)
-            }
     }
 
     @ViewBuilder
@@ -32,8 +26,7 @@ struct CoverLetterView: View {
         if let jobApp = jobAppStore.selectedApp {
             VStack {
                 CoverLetterContentView(
-                    jobApp: jobApp,
-                    buttons: $buttons
+                    jobApp: jobApp
                 )
             }
         } else {
@@ -51,7 +44,10 @@ struct CoverLetterContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Bindable var jobApp: JobApp
-    @Binding var buttons: CoverLetterButtons
+    
+    // Local state instead of legacy button state
+    @State private var isEditing = false
+    @State private var canEdit = true
     @State private var isHoveringDelete = false
     @State private var isHoveringEdit = false
     @State private var isHoveringStar = false
@@ -95,12 +91,12 @@ struct CoverLetterContentView: View {
                     .onHover { hovering in isHoveringDelete = hovering }
 
                     // Edit/Preview toggle Button
-                    Button(action: { buttons.isEditing.toggle() }) {
+                    Button(action: { isEditing.toggle() }) {
                         HStack {
-                            Image(systemName: buttons.isEditing ? "doc.text.viewfinder" : "pencil")
+                            Image(systemName: isEditing ? "doc.text.viewfinder" : "pencil")
                                 .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
                                 .font(.system(size: 14))
-                            Text(buttons.isEditing ? "Preview" : "Edit")
+                            Text(isEditing ? "Preview" : "Edit")
                                 .font(.caption)
                                 .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
                         }
@@ -111,7 +107,7 @@ struct CoverLetterContentView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .onHover { hovering in isHoveringEdit = hovering }
-                    .disabled(!buttons.canEdit)
+                    .disabled(!canEdit)
                     
                     // Star toggle button for chosen submission draft
                     Button(action: { toggleChosenSubmissionDraft() }) {
@@ -133,14 +129,10 @@ struct CoverLetterContentView: View {
                     .disabled(!cL.generated)
                     .help("Mark this cover letter as your chosen submission draft")
 
-                    if buttons.runRequested {
-                        ProgressView()
-                    } else {
-                        EmptyView()
-                    }
+                    // Legacy progress indicator removed - progress now handled by UnifiedToolbar
                 }
                 // Toggle between editing raw content and PDF preview
-                if buttons.isEditing {
+                if isEditing {
                     Text("Editing - Last modified \(cL.modDate)")
                         .font(.caption)
                         .padding(.horizontal)

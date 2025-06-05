@@ -21,9 +21,6 @@ struct CoverLetterActionButtonsView: View {
     /// The cover letter being operated on
     @Binding var coverLetter: CoverLetter
 
-    /// Button states for the cover letter actions
-    @Binding var buttons: CoverLetterButtons
-
     /// Provider for chat-based cover letter generation
     let chatProvider: CoverChatProvider
 
@@ -61,14 +58,12 @@ struct CoverLetterActionButtonsView: View {
                 // Button to generate a new cover letter
                 GenerateCoverLetterButton(
                     cL: $coverLetter,
-                    buttons: $buttons,
                     chatProvider: chatProvider
                 )
 
                 // Button to select the best cover letter
                 ChooseBestCoverLetterButton(
                     cL: $coverLetter,
-                    buttons: $buttons,
                     action: chooseBestAction,
                     multiModelAction: multiModelChooseBestAction
                 )
@@ -76,7 +71,6 @@ struct CoverLetterActionButtonsView: View {
                 // Button for text-to-speech functionality
                 TTSCoverLetterButton(
                     cL: $coverLetter,
-                    buttons: $buttons,
                     ttsEnabled: $ttsEnabled,
                     ttsVoice: $ttsVoice,
                     isSpeaking: $isSpeaking,

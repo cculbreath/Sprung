@@ -97,11 +97,11 @@ This document tracks the progress of the unified LLM architecture refactoring fo
 
 #### Provider Classes to Remove
 - ⏳ Remove LLMRequestService redundancy
-- ⏳ Remove ResumeChatProvider (logic moved to ResumeReviseService)
+- ✅ Remove ResumeChatProvider (logic migrated to ClarifyingQuestionsViewModel + ResumeReviseViewModel)
 - ⏳ Remove CoverChatProvider, ReorderSkillsProvider, JobRecommendationProvider
 - ⏳ Remove CoverLetterRecommendationProvider
 - ⏳ Clean up BaseLLMProvider if no longer needed
-- ⏳ Refactor AiCommsView to pure UI coordinator
+- ✅ Refactor AiCommsView to pure UI coordinator (COMPLETED - removed AiCommsView entirely)
 
 #### Legacy Code Cleanup
 - ⏳ Remove complex provider reset workarounds

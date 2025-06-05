@@ -14,9 +14,6 @@ struct TTSCoverLetterButton: View {
     /// The cover letter to speak
     @Binding var cL: CoverLetter
 
-    /// Cover letter button states
-    @Binding var buttons: CoverLetterButtons
-
     /// Whether TTS is enabled in user settings
     @Binding var ttsEnabled: Bool
 
@@ -77,7 +74,7 @@ struct TTSCoverLetterButton: View {
             }
             .buttonStyle(.plain)
             .help(helpText)
-            .disabled(buttons.runRequested || buttons.chooseBestRequested)
+            .disabled(false) // Note: Legacy button state removed
             .onChange(of: isBuffering) { _, newValue in
 //                Logger.debug("[TTSCoverLetterButton] Buffering state changed to \(newValue)")
             }

@@ -1,13 +1,14 @@
 //
-//  TabWrapperView.swift
+//  AppWindowView.swift
 //  PhysCloudResume
 //
 //  Created by Christopher Culbreath on 9/1/24.
+//  Renamed from TabWrapperView to better reflect responsibility
 //
 
 import SwiftUI
 
-struct TabWrapperView: View {
+struct AppWindowView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(\.appState) private var appState: AppState
@@ -15,19 +16,11 @@ struct TabWrapperView: View {
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
     @State private var refPopup: Bool = false
-    @State private var coverLetterButtons: CoverLetterButtons = .init(runRequested: false)
-    @State private var resumeButtons: ResumeButtons = .init(
-        showResumeInspector: false, aiRunning: false, showResumeReviewSheet: false
-    )
     @State private var hasVisitedResumeTab: Bool = false
     @Binding var tabRefresh: Bool
     
-    // Sheet states for unified toolbar
-    @State private var showApplicationReviewSheet = false
-    @State private var showResumeReviewSheet = false
-    @State private var showClarifyingQuestionsSheet = false
-    @State private var showChooseBestCoverLetterSheet = false
-    @State private var showMultiModelChooseBestSheet = false
+    // Centralized sheet state management for all app windows/modals
+    @State private var sheets = AppSheets()
     @State private var clarifyingQuestions: [ClarifyingQuestion] = []
     
     // Revision workflow - managed by ResumeReviseViewModel
@@ -52,7 +45,7 @@ struct TabWrapperView: View {
                     ResumeSplitView(
                         isWide: .constant(true), // You may want to make this configurable
                         tab: $selectedTab,
-                        resumeButtons: $resumeButtons,
+                        showResumeInspector: $sheets.showResumeInspector,
                         refresh: $tabRefresh
                     )
                         .tabItem {
@@ -60,7 +53,7 @@ struct TabWrapperView: View {
                         }
                         .tag(TabList.resume)
 
-                    CoverLetterView(buttons: $coverLetterButtons)
+                    CoverLetterView()
                         .tabItem {
                             Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
                         }
@@ -85,14 +78,8 @@ struct TabWrapperView: View {
                     buildUnifiedToolbar(
                         selectedTab: $selectedTab,
                         listingButtons: $listingButtons,
-                        letterButtons: $coverLetterButtons,
-                        resumeButtons: $resumeButtons,
                         refresh: $tabRefresh,
-                        showApplicationReviewSheet: $showApplicationReviewSheet,
-                        showResumeReviewSheet: $showResumeReviewSheet,
-                        showClarifyingQuestionsSheet: $showClarifyingQuestionsSheet,
-                        showChooseBestCoverLetterSheet: $showChooseBestCoverLetterSheet,
-                        showMultiModelChooseBestSheet: $showMultiModelChooseBestSheet,
+                        sheets: $sheets,
                         clarifyingQuestions: $clarifyingQuestions,
                         resumeReviseViewModel: resumeReviseViewModel
                     )
@@ -116,7 +103,7 @@ struct TabWrapperView: View {
                     if newTab == .resume {
                         if !hasVisitedResumeTab {
                             // First visit to resume tab after launch - inspector should be hidden
-                            resumeButtons.showResumeInspector = false
+                            sheets.showResumeInspector = false
                             hasVisitedResumeTab = true
                         }
                         // After first visit, we don't change the inspector state here
@@ -127,7 +114,7 @@ struct TabWrapperView: View {
                     ResRefView()
                         .padding()
                 }
-                .sheet(isPresented: $showResumeReviewSheet) {
+                .sheet(isPresented: $sheets.showResumeReview) {
                     if let selectedResume = jobAppStore.selectedApp?.selectedRes {
                         ResumeReviewSheet(selectedResume: .constant(selectedResume))
                     }
@@ -145,27 +132,22 @@ struct TabWrapperView: View {
                         .frame(minWidth: 650)
                     }
                 }
-                .sheet(isPresented: $showClarifyingQuestionsSheet) {
+                .sheet(isPresented: $sheets.showClarifyingQuestions) {
                     ClarifyingQuestionsSheet(
                         questions: clarifyingQuestions,
-                        isPresented: $showClarifyingQuestionsSheet,
+                        isPresented: $sheets.showClarifyingQuestions,
                         onSubmit: { answers in
-                            showClarifyingQuestionsSheet = false
+                            sheets.showClarifyingQuestions = false
                         }
                     )
                 }
-                .sheet(isPresented: $showChooseBestCoverLetterSheet) {
-                    if let jobApp = jobAppStore.selectedApp {
-                        ChooseBestCoverLetterSheet(jobApp: jobApp)
-                    }
-                }
-                .sheet(isPresented: $showMultiModelChooseBestSheet) {
+                .sheet(isPresented: $sheets.showMultiModelChooseBest) {
                     if let jobApp = jobAppStore.selectedApp,
                        let currentCoverLetter = coverLetterStore.cL {
                         MultiModelChooseBestCoverLetterSheet(coverLetter: .constant(currentCoverLetter))
                     }
                 }
-                .sheet(isPresented: $showApplicationReviewSheet) {
+                .sheet(isPresented: $sheets.showApplicationReview) {
                     if let selApp = jobAppStore.selectedApp,
                        let currentResume = selApp.selectedRes,
                        let currentCoverLetter = selApp.selectedCover,
@@ -176,6 +158,12 @@ struct TabWrapperView: View {
                             availableCoverLetters: selApp.coverLetters.filter { $0.generated }.sorted { $0.moddedDate > $1.moddedDate }
                         )
                     }
+                }
+                .sheet(isPresented: $sheets.showBatchCoverLetter) {
+                    BatchCoverLetterView()
+                        .environment(appState)
+                        .environment(jobAppStore)
+                        .environment(coverLetterStore)
                 }
                 .onAppear {
                     updateMyLetter()
@@ -195,13 +183,9 @@ struct TabWrapperView: View {
                 letter = coverLetterStore.create(jobApp: selectedApp)
             }
             coverLetterStore.cL = letter
-            // Reset editing state and allow editing regardless of generation status
-            coverLetterButtons.isEditing = false
-            coverLetterButtons.canEdit = true
+            // Note: Individual views now manage their own editing state
         } else {
             coverLetterStore.cL = nil
-            coverLetterButtons.isEditing = false
-            coverLetterButtons.canEdit = false
         }
     }
 }
@@ -212,20 +196,4 @@ struct SaveButtons {
     var cancel: Bool = false
 }
 
-struct CoverLetterButtons {
-    var runRequested: Bool = false
-    /// Indicates a choose-best operation is in flight
-    var chooseBestRequested: Bool = false
-    /// Toggle between editing raw text and previewing PDF
-    var isEditing: Bool = false
-    /// Whether the current cover letter is editable (i.e., already generated)
-    var canEdit: Bool = true
-    /// Show batch generation sheet
-    var showBatchGeneration: Bool = false
-}
 
-struct ResumeButtons {
-    var showResumeInspector: Bool = false
-    var aiRunning: Bool = false
-    var showResumeReviewSheet: Bool = false
-}
