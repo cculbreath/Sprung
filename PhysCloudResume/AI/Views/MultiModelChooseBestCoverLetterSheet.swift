@@ -531,32 +531,15 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         }
         
         do {
-            // Create a provider using OpenRouter with o4-mini
-            let provider = BaseLLMProvider(appState: appState)
+            // Use LLMService for summary generation
+            let llmService = LLMService.shared
             
-            // Initialize conversation
-            _ = provider.initializeConversation(
+            let summaryText = try await llmService.execute(
+                prompt: summaryPrompt,
                 systemPrompt: "You are an expert at analyzing and summarizing AI model reasoning. Provide clear, insightful summaries that help users understand the decision-making process.",
-                userPrompt: summaryPrompt
-            )
-            
-            // Execute query
-            let query = AppLLMQuery(
-                messages: provider.conversationHistory,
-                modelIdentifier: AIModels.o4_mini,
+                modelId: AIModels.o4_mini,
                 temperature: 0.7
             )
-            
-            let response = try await provider.executeQuery(query)
-            
-            // Extract text from response
-            let summaryText: String
-            switch response {
-            case .text(let text):
-                summaryText = text
-            case .structured(let data):
-                summaryText = String(data: data, encoding: .utf8) ?? "Failed to decode summary"
-            }
             
             await MainActor.run {
                 self.reasoningSummary = summaryText

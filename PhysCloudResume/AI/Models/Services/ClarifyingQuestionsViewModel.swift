@@ -58,7 +58,7 @@ class ClarifyingQuestionsViewModel {
             let query = ResumeApiQuery(resume: resume)
             
             // Start a new conversation with background docs and clarifying questions request
-            let systemPrompt = query.genericSystemMessage.content
+            let systemPrompt = query.genericSystemMessage.textContent
             let userPrompt = await query.clarifyingQuestionsPrompt()
             
             // Start conversation
@@ -191,7 +191,7 @@ class ClarifyingQuestionsViewModel {
         
         // Create initial conversation with system prompt
         let query = ResumeApiQuery(resume: resume)
-        let systemPrompt = query.genericSystemMessage.content
+        let systemPrompt = query.genericSystemMessage.textContent
         let initialUserMessage = await query.wholeResumeQueryString()
         
         // Start conversation
