@@ -131,17 +131,8 @@ struct AppWindowView: View {
                         .frame(minWidth: 650)
                     }
                 }
-                .sheet(isPresented: $sheets.showClarifyingQuestions) {
-                    ClarifyingQuestionsSheet(
-                        questions: clarifyingQuestions,
-                        isPresented: $sheets.showClarifyingQuestions,
-                        onSubmit: { answers in
-                            sheets.showClarifyingQuestions = false
-                        }
-                    )
-                }
                 .sheet(isPresented: $sheets.showMultiModelChooseBest) {
-                    if let jobApp = jobAppStore.selectedApp,
+                    if jobAppStore.selectedApp != nil,
                        let currentCoverLetter = coverLetterStore.cL {
                         MultiModelChooseBestCoverLetterSheet(coverLetter: .constant(currentCoverLetter))
                     }

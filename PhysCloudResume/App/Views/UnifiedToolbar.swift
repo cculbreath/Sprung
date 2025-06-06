@@ -201,14 +201,10 @@ struct UnifiedToolbar: ToolbarContent {
             
             // Check if questions were generated
             if !clarifyingViewModel.questions.isEmpty {
-                // Questions were generated - update state and show the sheet
+                // Questions were generated - show the sheet
                 Logger.debug("Showing \(clarifyingViewModel.questions.count) clarifying questions")
                 clarifyingQuestions = clarifyingViewModel.questions
-                
-                // Add a small delay to ensure state update completes before showing sheet
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    sheets.showClarifyingQuestions = true
-                }
+                sheets.showClarifyingQuestions = true
             } else {
                 // No questions needed - AI opted to proceed directly to revisions
                 Logger.debug("AI opted to proceed without clarifying questions")
