@@ -76,12 +76,6 @@ struct AIModels {
         return Provider.openai // Default to OpenAI for unknown models
     }
     
-    /// Get the provider for a given model name
-    /// - Parameter modelName: The model name
-    /// - Returns: The provider identifier
-    static func providerFor(modelName: String) -> String {
-        return providerForModel(modelName)
-    }
     
     /// Returns a friendly, human-readable name for a model
     /// - Parameter modelName: The raw model name
@@ -192,63 +186,3 @@ struct AIModels {
     }
     }
 
-/// Enum for AI provider types
-// Model Discovery and Validation Extension
-extension AIModels {
-    // Static methods to discover available models for each provider
-    static func discoverOpenAIModels() -> [String] {
-        return [
-            gpt4o,
-            gpt4o_mini,  // Use the correct constant
-            gpt4o_latest,
-            o1,
-            o1_mini,
-            o1_preview
-        ]
-    }
-    
-    static func discoverClaudeModels() -> [String] {
-        return [
-            claude_3_opus,
-            claude_3_sonnet,
-            claude_3_haiku,
-            claude_3_5_haiku
-        ]
-    }
-    
-    static func discoverGrokModels() -> [String] {
-        return [
-            grok_1,
-            grok_1_5,
-            grok_1_5_mini
-        ]
-    }
-    
-    static func discoverGeminiModels() -> [String] {
-        return [
-            gemini_2_5_flash_preview,
-            gemini_2_0_flash,
-            gemini_pro,
-            gemini_1_5_flash
-        ]
-    }
-    
-    // Validate if a model is available
-    static func isModelAvailable(_ modelName: String, appState: AppState) -> Bool {
-        _ = providerForModel(modelName)
-        // This checks if we have an API key for the provider
-        return true // Change this to actual key check
-    }
-    
-    // Convenience method to get available models
-    static func getAvailableModels(appState: AppState) -> [String] {
-        let allModels = discoverOpenAIModels() + 
-                        discoverClaudeModels() + 
-                        discoverGrokModels() + 
-                        discoverGeminiModels()
-        
-        return allModels.filter { modelName in
-            isModelAvailable(modelName, appState: appState)
-        }
-    }
-}
