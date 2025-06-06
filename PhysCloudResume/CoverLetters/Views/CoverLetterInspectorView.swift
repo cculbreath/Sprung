@@ -159,6 +159,7 @@ struct CoverLetterRevisionsView: View {
             ModelSelectionSheet(
                 title: "Choose Model for Revision",
                 requiredCapability: nil, // Cover letter revision can work with any model
+                operationKey: "cover_letter_revision",
                 isPresented: $showModelSelection,
                 onModelSelected: { modelId in
                     selectedModelId = modelId

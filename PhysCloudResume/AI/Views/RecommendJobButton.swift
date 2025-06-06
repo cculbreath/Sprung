@@ -72,6 +72,7 @@ struct RecommendJobButton: View {
             ModelSelectionSheet(
                 title: "Choose Model for Job Recommendation",
                 requiredCapability: .structuredOutput,
+                operationKey: "job_recommendation",
                 isPresented: $showModelPicker,
                 onModelSelected: { modelId in
                     selectedModel = modelId
