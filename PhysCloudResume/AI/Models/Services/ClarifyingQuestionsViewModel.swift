@@ -21,7 +21,6 @@ class ClarifyingQuestionsViewModel {
     // MARK: - UI State
     var isGeneratingQuestions: Bool = false
     var questions: [ClarifyingQuestion] = []
-    var showQuestionsSheet: Bool = false
     var currentConversationId: UUID?
     var currentModelId: String? // Track the model used for conversation continuity
     
@@ -85,10 +84,9 @@ class ClarifyingQuestionsViewModel {
                 Logger.debug("AI opted to proceed without clarifying questions")
                 await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
             } else {
-                // Show questions to user
+                // Store questions for UI
                 Logger.debug("Generated \(questionsRequest.questions.count) clarifying questions")
                 questions = questionsRequest.questions
-                showQuestionsSheet = true
             }
             
             isGeneratingQuestions = false

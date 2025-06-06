@@ -200,16 +200,16 @@ struct UnifiedToolbar: ToolbarContent {
             )
             
             // Check if questions were generated
-            if clarifyingViewModel.questions.isEmpty {
+            if !clarifyingViewModel.questions.isEmpty {
+                // Questions were generated - show the sheet
+                Logger.debug("Showing \(clarifyingViewModel.questions.count) clarifying questions")
+                clarifyingQuestions = clarifyingViewModel.questions
+                sheets.showClarifyingQuestions = true
+            } else {
                 // No questions needed - AI opted to proceed directly to revisions
                 Logger.debug("AI opted to proceed without clarifying questions")
-                isGeneratingQuestions = false
-                return
             }
             
-            // Set the questions and show the sheet
-            clarifyingQuestions = clarifyingViewModel.questions
-            sheets.showClarifyingQuestions = true
             isGeneratingQuestions = false
 
         } catch {
