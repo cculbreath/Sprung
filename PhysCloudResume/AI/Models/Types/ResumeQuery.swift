@@ -19,54 +19,108 @@ import SwiftUI
     /// The mode for this query (normal or with clarifying questions)
     var queryMode: ResumeQueryMode = .normal
 
-    // JSON Schema for revisions (used to be JSONSchemaResponseFormat from SwiftOpenAI)
-    static let revNodeArraySchemaString = """
-    {
-        "type": "object",
-        "properties": {
-            "revArray": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "string",
-                            "description": "The identifier for the node provided in the original EditableNode"
-                        },
-                        "oldValue": {
-                            "type": "string",
-                            "description": "The original value before revision provided in the original EditableNode"
-                        },
-                        "newValue": {
-                            "type": "string",
-                            "description": "The proposed new value after revision"
-                        },
-                        "valueChanged": {
-                            "type": "boolean",
-                            "description": "Indicates if the value is changed by the proposed revision."
-                        },
-                        "why": {
-                            "type": "string",
-                            "description": "Explanation for the proposed revision. Leave blank if the reason is trivial or obvious."
-                        },
-                        "isTitleNode": {
-                            "type": "boolean",
-                            "description": "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
-                        },
-                        "treePath": {
-                            "type": "string",
-                            "description": "The hierarchical path to the node (e.g., 'Resume > Experience > Bullet 1'). Return exactly the same value you received; do NOT modify it."
-                        }
-                    },
-                    "required": ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"],
-                    "additionalProperties": false
-                }
-            }
-        },
-        "required": ["revArray"],
-        "additionalProperties": false
-    }
-    """
+    // Native SwiftOpenAI JSON Schema for revisions
+    static let revNodeArraySchema: JSONSchema = {
+        // Define the revision node schema
+        let revisionNodeSchema = JSONSchema(
+            type: .object,
+            properties: [
+                "id": JSONSchema(
+                    type: .string,
+                    description: "The identifier for the node provided in the original EditableNode"
+                ),
+                "oldValue": JSONSchema(
+                    type: .string,
+                    description: "The original value before revision provided in the original EditableNode"
+                ),
+                "newValue": JSONSchema(
+                    type: .string,
+                    description: "The proposed new value after revision"
+                ),
+                "valueChanged": JSONSchema(
+                    type: .boolean,
+                    description: "Indicates if the value is changed by the proposed revision"
+                ),
+                "why": JSONSchema(
+                    type: .string,
+                    description: "Explanation for the proposed revision. Leave blank if the reason is trivial or obvious"
+                ),
+                "isTitleNode": JSONSchema(
+                    type: .boolean,
+                    description: "Indicates whether the node shall be rendered as a title node. This value should not be modified from the value provided in the original EditableNode"
+                ),
+                "treePath": JSONSchema(
+                    type: .string,
+                    description: "The hierarchical path to the node (e.g., 'Resume > Experience > Bullet 1'). Return exactly the same value you received; do NOT modify it"
+                )
+            ],
+            required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"],
+            additionalProperties: false
+        )
+        
+        // Define the RevArray schema
+        let revArraySchema = JSONSchema(
+            type: .array,
+            description: "IMPORTANT: Use exactly 'RevArray' as the property name (capital R)",
+            items: revisionNodeSchema
+        )
+        
+        // Define the root schema
+        return JSONSchema(
+            type: .object,
+            properties: [
+                "RevArray": revArraySchema
+            ],
+            required: ["RevArray"],
+            additionalProperties: false
+        )
+    }()
+    
+    // Native SwiftOpenAI JSON Schema for clarifying questions
+    static let clarifyingQuestionsSchema: JSONSchema = {
+        // Define the clarifying question schema
+        let questionSchema = JSONSchema(
+            type: .object,
+            properties: [
+                "id": JSONSchema(
+                    type: .string,
+                    description: "A unique identifier for the question (e.g., 'q1', 'q2', 'q3')"
+                ),
+                "question": JSONSchema(
+                    type: .string,
+                    description: "The clarifying question to ask the user"
+                ),
+                "context": JSONSchema(
+                    type: .string,
+                    description: "Context explaining why this question is being asked and how it will help improve the resume"
+                )
+            ],
+            required: ["id", "question", "context"],
+            additionalProperties: false
+        )
+        
+        // Define the questions array
+        let questionsArraySchema = JSONSchema(
+            type: .array,
+            description: "Array of clarifying questions to ask the user (maximum 3 questions)",
+            items: questionSchema,
+            maxItems: 3
+        )
+        
+        // Define the root schema
+        return JSONSchema(
+            type: .object,
+            properties: [
+                "questions": questionsArraySchema,
+                "proceedWithRevisions": JSONSchema(
+                    type: .boolean,
+                    description: "Set to true if you have sufficient information to proceed with revisions without asking questions, false if you need to ask clarifying questions"
+                )
+            ],
+            required: ["questions", "proceedWithRevisions"],
+            additionalProperties: false
+        )
+    }()
 
     /// System prompt using the native SwiftOpenAI message format
     let genericSystemMessage = LLMMessage.text(
