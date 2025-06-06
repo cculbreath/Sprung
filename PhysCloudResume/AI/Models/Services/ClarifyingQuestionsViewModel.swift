@@ -71,12 +71,13 @@ class ClarifyingQuestionsViewModel {
             // Store the conversation ID and get structured response
             currentConversationId = conversationId
             
-            // Request clarifying questions in structured format
+            // Request clarifying questions in structured format with schema enforcement
             let questionsRequest = try await llmService.continueConversationStructured(
                 userMessage: "Please provide clarifying questions in the specified JSON format.",
                 modelId: modelId,
                 conversationId: conversationId,
-                responseType: ClarifyingQuestionsRequest.self
+                responseType: ClarifyingQuestionsRequest.self,
+                jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
             )
             
             if questionsRequest.proceedWithRevisions || questionsRequest.questions.isEmpty {
