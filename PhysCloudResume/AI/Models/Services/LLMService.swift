@@ -8,6 +8,36 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import SwiftOpenAI
+
+// MARK: - LLM Error Types
+
+enum LLMError: LocalizedError {
+    case clientError(String)
+    case decodingFailed(Error)
+    case unexpectedResponseFormat
+    case rateLimited(retryAfter: TimeInterval?)
+    case timeout
+    
+    var errorDescription: String? {
+        switch self {
+        case .clientError(let message):
+            return message
+        case .decodingFailed(let error):
+            return "Failed to decode response: \(error.localizedDescription)"
+        case .unexpectedResponseFormat:
+            return "Unexpected response format from LLM"
+        case .rateLimited(let retryAfter):
+            if let retryAfter = retryAfter {
+                return "Rate limited. Retry after \(retryAfter) seconds"
+            } else {
+                return "Rate limited"
+            }
+        case .timeout:
+            return "Request timed out"
+        }
+    }
+}
 
 /// Unified LLM service that provides a clean abstraction layer for all LLM operations
 /// Supports text-only, multimodal, structured output, and conversational requests
@@ -19,7 +49,7 @@ class LLMService {
     
     // Dependencies
     private var appState: AppState?
-    private var baseLLMProvider: BaseLLMProvider?
+    private var openRouterClient: OpenAIService?
     private var conversationManager: ConversationManager?
     
     // Request management
@@ -38,19 +68,33 @@ class LLMService {
     /// Initialize the service with AppState and conversation manager
     func initialize(appState: AppState, modelContext: ModelContext? = nil) {
         self.appState = appState
-        self.baseLLMProvider = BaseLLMProvider(appState: appState)
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        if !apiKey.isEmpty {
+            self.openRouterClient = OpenAIServiceFactory.service(
+                apiKey: apiKey,
+                overrideBaseURL: "https://openrouter.ai/api/v1"
+            )
+        }
         self.conversationManager = ConversationManager(modelContext: modelContext)
         
-        Logger.debug("🔄 LLMService initialized with OpenRouter provider")
+        Logger.debug("🔄 LLMService initialized with OpenRouter client")
     }
     
     private func ensureInitialized() throws {
-        guard let appState = appState else {
-            throw AppLLMError.clientError("LLMService not initialized - call initialize() first")
+        guard appState != nil else {
+            throw LLMError.clientError("LLMService not initialized - call initialize() first")
         }
         
-        if baseLLMProvider == nil {
-            baseLLMProvider = BaseLLMProvider(appState: appState)
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        if openRouterClient == nil && !apiKey.isEmpty {
+            openRouterClient = OpenAIServiceFactory.service(
+                apiKey: apiKey,
+                overrideBaseURL: "https://openrouter.ai/api/v1"
+            )
+        }
+        
+        guard openRouterClient != nil else {
+            throw LLMError.clientError("OpenRouter API key not configured")
         }
         
         if conversationManager == nil {
@@ -81,23 +125,21 @@ class LLMService {
         try validateModel(modelId: modelId, for: [])
         
         // Create message
-        let message = AppLLMMessage(role: .user, text: prompt)
+        let message = LLMMessage.text(role: .user, content: prompt)
         
-        // Create query
-        let query = AppLLMQuery(
+        // Create parameters
+        let parameters = ChatCompletionParameters(
             messages: [message],
-            modelIdentifier: modelId,
+            model: .custom(modelId),
             temperature: temperature ?? defaultTemperature
         )
         
         // Execute with retry logic
-        return try await executeWithRetry(query: query, requestId: requestId) { response in
-            switch response {
-            case .text(let text):
-                return text
-            case .structured(let data):
-                return String(data: data, encoding: .utf8) ?? ""
+        return try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
+            guard let content = response.choices?.first?.message?.content else {
+                throw LLMError.unexpectedResponseFormat
             }
+            return content
         }
     }
     
@@ -124,32 +166,37 @@ class LLMService {
         try validateModel(modelId: modelId, for: [.vision])
         
         // Build content parts
-        var contentParts: [AppLLMMessageContentPart] = [.text(prompt)]
+        var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
+            .text(prompt)
+        ]
         
         // Add images
         for imageData in images {
             let base64Image = imageData.base64EncodedString()
-            contentParts.append(.imageUrl(base64Data: base64Image, mimeType: "image/png"))
+            let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
+            let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
+            contentParts.append(.imageUrl(imageDetail))
         }
         
         // Create message
-        let message = AppLLMMessage(role: .user, contentParts: contentParts)
+        let message = ChatCompletionParameters.Message(
+            role: .user,
+            content: .contentArray(contentParts)
+        )
         
-        // Create query
-        let query = AppLLMQuery(
+        // Create parameters
+        let parameters = ChatCompletionParameters(
             messages: [message],
-            modelIdentifier: modelId,
+            model: .custom(modelId),
             temperature: temperature ?? defaultTemperature
         )
         
         // Execute with retry logic
-        return try await executeWithRetry(query: query, requestId: requestId) { response in
-            switch response {
-            case .text(let text):
-                return text
-            case .structured(let data):
-                return String(data: data, encoding: .utf8) ?? ""
+        return try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
+            guard let content = response.choices?.first?.message?.content else {
+                throw LLMError.unexpectedResponseFormat
             }
+            return content
         }
     }
     
@@ -176,18 +223,18 @@ class LLMService {
         try validateModel(modelId: modelId, for: [])
         
         // Create message
-        let message = AppLLMMessage(role: .user, text: prompt)
+        let message = LLMMessage.text(role: .user, content: prompt)
         
-        // Create structured query
-        let query = AppLLMQuery(
+        // Create parameters with response format
+        let parameters = ChatCompletionParameters(
             messages: [message],
-            modelIdentifier: modelId,
-            temperature: temperature ?? defaultTemperature,
-            responseType: responseType
+            model: .custom(modelId),
+            responseFormat: .jsonObject,
+            temperature: temperature ?? defaultTemperature
         )
         
         // Execute with retry logic
-        return try await executeWithRetry(query: query, requestId: requestId) { response in
+        return try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
             try self.parseStructuredResponse(response, as: responseType)
         }
     }
@@ -217,27 +264,34 @@ class LLMService {
         try validateModel(modelId: modelId, for: [.vision])
         
         // Build content parts
-        var contentParts: [AppLLMMessageContentPart] = [.text(prompt)]
+        var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
+            .text(prompt)
+        ]
         
         // Add images
         for imageData in images {
             let base64Image = imageData.base64EncodedString()
-            contentParts.append(.imageUrl(base64Data: base64Image, mimeType: "image/png"))
+            let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
+            let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
+            contentParts.append(.imageUrl(imageDetail))
         }
         
         // Create message
-        let message = AppLLMMessage(role: .user, contentParts: contentParts)
+        let message = ChatCompletionParameters.Message(
+            role: .user,
+            content: .contentArray(contentParts)
+        )
         
-        // Create structured query
-        let query = AppLLMQuery(
+        // Create parameters with response format
+        let parameters = ChatCompletionParameters(
             messages: [message],
-            modelIdentifier: modelId,
-            temperature: temperature ?? defaultTemperature,
-            responseType: responseType
+            model: .custom(modelId),
+            responseFormat: .jsonObject,
+            temperature: temperature ?? defaultTemperature
         )
         
         // Execute with retry logic
-        return try await executeWithRetry(query: query, requestId: requestId) { response in
+        return try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
             try self.parseStructuredResponse(response, as: responseType)
         }
     }
@@ -260,7 +314,7 @@ class LLMService {
         try ensureInitialized()
         
         guard let conversationManager = conversationManager else {
-            throw AppLLMError.clientError("Conversation manager not available")
+            throw LLMError.clientError("Conversation manager not available")
         }
         
         let requestId = UUID()
@@ -274,35 +328,33 @@ class LLMService {
         let conversationId = UUID()
         
         // Build messages
-        var messages: [AppLLMMessage] = []
+        var messages: [LLMMessage] = []
         
         // Add system prompt if provided
         if let systemPrompt = systemPrompt {
-            messages.append(AppLLMMessage(role: .system, text: systemPrompt))
+            messages.append(LLMMessage.text(role: .system, content: systemPrompt))
         }
         
         // Add user message
-        messages.append(AppLLMMessage(role: .user, text: userMessage))
+        messages.append(LLMMessage.text(role: .user, content: userMessage))
         
-        // Create query
-        let query = AppLLMQuery(
+        // Create parameters
+        let parameters = ChatCompletionParameters(
             messages: messages,
-            modelIdentifier: modelId,
+            model: .custom(modelId),
             temperature: temperature ?? defaultTemperature
         )
         
         // Execute request
-        let responseText = try await executeWithRetry(query: query, requestId: requestId) { response in
-            switch response {
-            case .text(let text):
-                return text
-            case .structured(let data):
-                return String(data: data, encoding: .utf8) ?? ""
+        let responseText = try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
+            guard let content = response.choices?.first?.message?.content else {
+                throw LLMError.unexpectedResponseFormat
             }
+            return content
         }
         
         // Add assistant response to messages
-        messages.append(AppLLMMessage(role: .assistant, text: responseText))
+        messages.append(LLMMessage.text(role: .assistant, content: responseText))
         
         // Store conversation
         conversationManager.storeConversation(id: conversationId, messages: messages)
@@ -328,7 +380,7 @@ class LLMService {
         try ensureInitialized()
         
         guard let conversationManager = conversationManager else {
-            throw AppLLMError.clientError("Conversation manager not available")
+            throw LLMError.clientError("Conversation manager not available")
         }
         
         let requestId = UUID()
@@ -342,32 +394,32 @@ class LLMService {
         let conversationId = UUID()
         
         // Build messages
-        var messages: [AppLLMMessage] = []
+        var messages: [LLMMessage] = []
         
         // Add system prompt if provided
         if let systemPrompt = systemPrompt {
-            messages.append(AppLLMMessage(role: .system, text: systemPrompt))
+            messages.append(LLMMessage.text(role: .system, content: systemPrompt))
         }
         
         // Add user message
-        messages.append(AppLLMMessage(role: .user, text: userMessage))
+        messages.append(LLMMessage.text(role: .user, content: userMessage))
         
-        // Create structured query
-        let query = AppLLMQuery(
+        // Create parameters with response format
+        let parameters = ChatCompletionParameters(
             messages: messages,
-            modelIdentifier: modelId,
-            temperature: temperature ?? defaultTemperature,
-            responseType: responseType
+            model: .custom(modelId),
+            responseFormat: .jsonObject,
+            temperature: temperature ?? defaultTemperature
         )
         
         // Execute request
-        let structuredResponse = try await executeWithRetry(query: query, requestId: requestId) { response in
+        let structuredResponse = try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
             try self.parseStructuredResponse(response, as: responseType)
         }
         
         // Add assistant response to messages (convert structured back to text for conversation history)
         let responseText = try String(data: JSONEncoder().encode(structuredResponse), encoding: .utf8) ?? "[Structured Response]"
-        messages.append(AppLLMMessage(role: .assistant, text: responseText))
+        messages.append(LLMMessage.text(role: .assistant, content: responseText))
         
         // Store conversation
         conversationManager.storeConversation(id: conversationId, messages: messages)
@@ -393,7 +445,7 @@ class LLMService {
         try ensureInitialized()
         
         guard let conversationManager = conversationManager else {
-            throw AppLLMError.clientError("Conversation manager not available")
+            throw LLMError.clientError("Conversation manager not available")
         }
         
         let requestId = UUID()
@@ -408,37 +460,47 @@ class LLMService {
         var messages = conversationManager.getConversation(id: conversationId)
         
         // Build user message content
-        var contentParts: [AppLLMMessageContentPart] = [.text(userMessage)]
-        
-        // Add images if provided
-        for imageData in images {
-            let base64Image = imageData.base64EncodedString()
-            contentParts.append(.imageUrl(base64Data: base64Image, mimeType: "image/png"))
+        if images.isEmpty {
+            // Simple text message
+            messages.append(LLMMessage.text(role: .user, content: userMessage))
+        } else {
+            // Message with images
+            var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
+                .text(userMessage)
+            ]
+            
+            // Add images
+            for imageData in images {
+                let base64Image = imageData.base64EncodedString()
+                let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
+                let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
+                contentParts.append(.imageUrl(imageDetail))
+            }
+            
+            let userMessage = ChatCompletionParameters.Message(
+                role: .user,
+                content: .contentArray(contentParts)
+            )
+            messages.append(userMessage)
         }
         
-        // Add user message
-        let userAppMessage = AppLLMMessage(role: .user, contentParts: contentParts)
-        messages.append(userAppMessage)
-        
-        // Create query
-        let query = AppLLMQuery(
+        // Create parameters
+        let parameters = ChatCompletionParameters(
             messages: messages,
-            modelIdentifier: modelId,
+            model: .custom(modelId),
             temperature: temperature ?? defaultTemperature
         )
         
         // Execute request
-        let responseText = try await executeWithRetry(query: query, requestId: requestId) { response in
-            switch response {
-            case .text(let text):
-                return text
-            case .structured(let data):
-                return String(data: data, encoding: .utf8) ?? ""
+        let responseText = try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
+            guard let content = response.choices?.first?.message?.content else {
+                throw LLMError.unexpectedResponseFormat
             }
+            return content
         }
         
         // Add assistant response
-        messages.append(AppLLMMessage(role: .assistant, text: responseText))
+        messages.append(LLMMessage.text(role: .assistant, content: responseText))
         
         // Update conversation
         conversationManager.storeConversation(id: conversationId, messages: messages)
@@ -466,7 +528,7 @@ class LLMService {
         try ensureInitialized()
         
         guard let conversationManager = conversationManager else {
-            throw AppLLMError.clientError("Conversation manager not available")
+            throw LLMError.clientError("Conversation manager not available")
         }
         
         let requestId = UUID()
@@ -481,28 +543,40 @@ class LLMService {
         var messages = conversationManager.getConversation(id: conversationId)
         
         // Build user message content
-        var contentParts: [AppLLMMessageContentPart] = [.text(userMessage)]
-        
-        // Add images if provided
-        for imageData in images {
-            let base64Image = imageData.base64EncodedString()
-            contentParts.append(.imageUrl(base64Data: base64Image, mimeType: "image/png"))
+        if images.isEmpty {
+            // Simple text message
+            messages.append(LLMMessage.text(role: .user, content: userMessage))
+        } else {
+            // Message with images
+            var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
+                .text(userMessage)
+            ]
+            
+            // Add images
+            for imageData in images {
+                let base64Image = imageData.base64EncodedString()
+                let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
+                let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
+                contentParts.append(.imageUrl(imageDetail))
+            }
+            
+            let userMessage = ChatCompletionParameters.Message(
+                role: .user,
+                content: .contentArray(contentParts)
+            )
+            messages.append(userMessage)
         }
         
-        // Add user message
-        let userAppMessage = AppLLMMessage(role: .user, contentParts: contentParts)
-        messages.append(userAppMessage)
-        
-        // Create structured query
-        let query = AppLLMQuery(
+        // Create parameters with response format
+        let parameters = ChatCompletionParameters(
             messages: messages,
-            modelIdentifier: modelId,
-            temperature: temperature ?? defaultTemperature,
-            responseType: responseType
+            model: .custom(modelId),
+            responseFormat: .jsonObject,
+            temperature: temperature ?? defaultTemperature
         )
         
         // Execute request
-        let result = try await executeWithRetry(query: query, requestId: requestId) { response in
+        let result = try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
             try self.parseStructuredResponse(response, as: responseType)
         }
         
@@ -513,7 +587,7 @@ class LLMService {
         } else {
             responseText = "Structured response"
         }
-        messages.append(AppLLMMessage(role: .assistant, text: responseText))
+        messages.append(LLMMessage.text(role: .assistant, content: responseText))
         
         // Update conversation
         conversationManager.storeConversation(id: conversationId, messages: messages)
@@ -588,15 +662,15 @@ class LLMService {
     /// - Parameters:
     ///   - modelId: The model ID to validate
     ///   - capabilities: Required capabilities
-    /// - Throws: AppLLMError if model is invalid or lacks capabilities
+    /// - Throws: LLMError if model is invalid or lacks capabilities
     func validateModel(modelId: String, for capabilities: [ModelCapability]) throws {
         guard let appState = appState else {
-            throw AppLLMError.clientError("LLMService not properly initialized")
+            throw LLMError.clientError("LLMService not properly initialized")
         }
         
         // Check if model exists in available models
         guard let model = appState.openRouterService.findModel(id: modelId) else {
-            throw AppLLMError.clientError("Model '\(modelId)' not found")
+            throw LLMError.clientError("Model '\(modelId)' not found")
         }
         
         // Check required capabilities
@@ -614,7 +688,7 @@ class LLMService {
             }
             
             if !hasCapability {
-                throw AppLLMError.clientError("Model '\(modelId)' does not support \(capability.displayName)")
+                throw LLMError.clientError("Model '\(modelId)' does not support \(capability.displayName)")
             }
         }
     }
@@ -630,7 +704,7 @@ class LLMService {
     /// Get conversation messages
     /// - Parameter conversationId: The conversation ID
     /// - Returns: Array of messages in the conversation
-    func getConversationMessages(id conversationId: UUID) -> [AppLLMMessage] {
+    func getConversationMessages(id conversationId: UUID) -> [LLMMessage] {
         return conversationManager?.getConversation(id: conversationId) ?? []
     }
     
@@ -638,13 +712,13 @@ class LLMService {
     
     /// Execute query with retry logic and exponential backoff
     private func executeWithRetry<T>(
-        query: AppLLMQuery,
+        parameters: ChatCompletionParameters,
         requestId: UUID,
         maxRetries: Int? = nil,
-        transform: @escaping (AppLLMResponse) throws -> T
+        transform: @escaping (LLMResponse) throws -> T
     ) async throws -> T {
-        guard let provider = baseLLMProvider else {
-            throw AppLLMError.clientError("LLM provider not available")
+        guard let client = openRouterClient else {
+            throw LLMError.clientError("OpenRouter client not available")
         }
         
         let retries = maxRetries ?? defaultMaxRetries
@@ -653,19 +727,19 @@ class LLMService {
         for attempt in 0...retries {
             // Check if request was cancelled
             guard currentRequestIDs.contains(requestId) else {
-                throw AppLLMError.clientError("Request was cancelled")
+                throw LLMError.clientError("Request was cancelled")
             }
             
             do {
-                let response = try await provider.executeQuery(query)
+                let response = try await client.startChat(parameters: parameters)
                 return try transform(response)
             } catch {
                 lastError = error
                 
                 // Don't retry on certain errors
-                if let appError = error as? AppLLMError {
+                if let appError = error as? LLMError {
                     switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .decodingError:
+                    case .decodingFailed, .unexpectedResponseFormat, .clientError:
                         throw appError
                     case .rateLimited(let retryAfter):
                         if let delay = retryAfter, attempt < retries {
@@ -698,29 +772,17 @@ class LLMService {
         }
         
         // All retries exhausted
-        throw lastError ?? AppLLMError.clientError("Maximum retries exceeded")
+        throw lastError ?? LLMError.clientError("Maximum retries exceeded")
     }
     
     /// Parse structured response with fallback strategies
-    private func parseStructuredResponse<T: Codable>(_ response: AppLLMResponse, as type: T.Type) throws -> T {
-        switch response {
-        case .structured(let data):
-            // Primary: Try direct decoding of structured data
-            do {
-                return try JSONDecoder().decode(type, from: data)
-            } catch {
-                Logger.debug("⚠️ Structured data decoding failed, trying text extraction")
-                // Fallback: Try extracting JSON from text
-                if let textResponse = String(data: data, encoding: .utf8) {
-                    return try parseJSONFromText(textResponse, as: type)
-                }
-                throw AppLLMError.decodingFailed(error)
-            }
-            
-        case .text(let text):
-            // Fallback: Extract JSON from text response
-            return try parseJSONFromText(text, as: type)
+    private func parseStructuredResponse<T: Codable>(_ response: LLMResponse, as type: T.Type) throws -> T {
+        guard let content = response.choices?.first?.message?.content else {
+            throw LLMError.unexpectedResponseFormat
         }
+        
+        // Try to parse JSON from the response content
+        return try parseJSONFromText(content, as: type)
     }
     
     /// Extract and parse JSON from text response
@@ -748,7 +810,7 @@ class LLMService {
             }
         }
         
-        throw AppLLMError.unexpectedResponseFormat
+        throw LLMError.unexpectedResponseFormat
     }
     
     /// Cancel all current requests
@@ -763,19 +825,19 @@ class LLMService {
 /// Simple conversation manager for maintaining conversation state
 @MainActor
 private class ConversationManager {
-    private var conversations: [UUID: [AppLLMMessage]] = [:]
+    private var conversations: [UUID: [LLMMessage]] = [:]
     private var modelContext: ModelContext?
     
     init(modelContext: ModelContext?) {
         self.modelContext = modelContext
     }
     
-    func storeConversation(id: UUID, messages: [AppLLMMessage]) {
+    func storeConversation(id: UUID, messages: [LLMMessage]) {
         conversations[id] = messages
         // TODO: Implement SwiftData persistence if needed
     }
     
-    func getConversation(id: UUID) -> [AppLLMMessage] {
+    func getConversation(id: UUID) -> [LLMMessage] {
         return conversations[id] ?? []
     }
     
