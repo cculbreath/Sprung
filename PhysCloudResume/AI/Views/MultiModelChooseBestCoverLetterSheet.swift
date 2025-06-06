@@ -362,7 +362,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             return
         }
         
-        let writingSamples = coverLetter.writingSamplesString
+        _ = coverLetter.writingSamplesString
         
         do {
             // Create CoverLetterQuery for centralized prompt management
@@ -534,9 +534,10 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             // Use LLMService for summary generation
             let llmService = LLMService.shared
             
-            let summaryText = try await llmService.execute(
-                prompt: summaryPrompt,
+            // Create a conversation with system prompt
+            let (_, summaryText) = try await llmService.startConversation(
                 systemPrompt: "You are an expert at analyzing and summarizing AI model reasoning. Provide clear, insightful summaries that help users understand the decision-making process.",
+                userMessage: summaryPrompt,
                 modelId: AIModels.o4_mini,
                 temperature: 0.7
             )
