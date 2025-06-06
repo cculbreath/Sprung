@@ -293,6 +293,7 @@ struct UnifiedToolbar: ToolbarContent {
                         ModelSelectionSheet(
                             title: "Choose Model for Clarifying Questions",
                             requiredCapability: .structuredOutput,
+                            operationKey: "clarifying_questions",
                             isPresented: $showClarifyingQuestionsModelSheet,
                             onModelSelected: { modelId in
                                 selectedClarifyingQuestionsModel = modelId
@@ -307,6 +308,7 @@ struct UnifiedToolbar: ToolbarContent {
                         ModelSelectionSheet(
                             title: "Choose Model for Resume Customization",
                             requiredCapability: .structuredOutput,
+                            operationKey: "resume_customize",
                             isPresented: $showCustomizeModelSheet,
                             onModelSelected: { modelId in
                                 selectedCustomizeModel = modelId
@@ -369,6 +371,7 @@ struct UnifiedToolbar: ToolbarContent {
                         ModelSelectionSheet(
                             title: "Choose Model for Cover Letter Generation",
                             requiredCapability: nil, // Cover letter generation can work with any model
+                            operationKey: "cover_letter",
                             isPresented: $showCoverLetterModelSheet,
                             onModelSelected: { modelId in
                                 selectedCoverLetterModel = modelId
@@ -416,6 +419,7 @@ struct UnifiedToolbar: ToolbarContent {
                         ModelSelectionSheet(
                             title: "Choose Model for Best Cover Letter Selection",
                             requiredCapability: .structuredOutput, // Needs structured output for JSON response
+                            operationKey: "best_letter",
                             isPresented: $showBestLetterModelSheet,
                             onModelSelected: { modelId in
                                 selectedBestLetterModel = modelId
@@ -619,6 +623,7 @@ struct UnifiedToolbar: ToolbarContent {
             ModelSelectionSheet(
                 title: "Choose Model for Job Recommendation",
                 requiredCapability: .structuredOutput,
+                operationKey: "best_job",
                 isPresented: $showBestJobModelSheet,
                 onModelSelected: { modelId in
                     selectedBestJobModel = modelId
