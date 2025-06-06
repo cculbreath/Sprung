@@ -239,7 +239,8 @@ class LLMService {
         prompt: String,
         modelId: String,
         responseType: T.Type,
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil
     ) async throws -> T {
         try ensureInitialized()
         
@@ -254,12 +255,30 @@ class LLMService {
         let message = LLMMessage.text(role: .user, content: prompt)
         
         // Create parameters with response format
-        let parameters = ChatCompletionParameters(
-            messages: [message],
-            model: .custom(modelId),
-            responseFormat: .jsonObject,
-            temperature: temperature ?? defaultTemperature
-        )
+        let parameters: ChatCompletionParameters
+        if let schema = jsonSchema {
+            let responseFormatSchema = JSONSchemaResponseFormat(
+                name: String(describing: responseType).lowercased(),
+                strict: true,
+                schema: schema
+            )
+            Logger.debug("📝 Using structured output with JSON Schema enforcement")
+            parameters = ChatCompletionParameters(
+                messages: [message],
+                model: .custom(modelId),
+                responseFormat: .jsonSchema(responseFormatSchema),
+                temperature: temperature ?? defaultTemperature
+            )
+        } else {
+            // Fallback to basic JSON object mode
+            Logger.debug("📝 Using basic JSON object mode (no schema enforcement)")
+            parameters = ChatCompletionParameters(
+                messages: [message],
+                model: .custom(modelId),
+                responseFormat: .jsonObject,
+                temperature: temperature ?? defaultTemperature
+            )
+        }
         
         // Execute with retry logic
         return try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
@@ -486,7 +505,8 @@ class LLMService {
         conversationId: UUID,
         responseType: T.Type,
         images: [Data] = [],
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil
     ) async throws -> T {
         try ensureInitialized()
         
@@ -531,12 +551,30 @@ class LLMService {
         }
         
         // Create parameters with response format
-        let parameters = ChatCompletionParameters(
-            messages: messages,
-            model: .custom(modelId),
-            responseFormat: .jsonObject,
-            temperature: temperature ?? defaultTemperature
-        )
+        let parameters: ChatCompletionParameters
+        if let schema = jsonSchema {
+            let responseFormatSchema = JSONSchemaResponseFormat(
+                name: String(describing: responseType).lowercased(),
+                strict: true,
+                schema: schema
+            )
+            Logger.debug("📝 Conversation using structured output with JSON Schema enforcement")
+            parameters = ChatCompletionParameters(
+                messages: messages,
+                model: .custom(modelId),
+                responseFormat: .jsonSchema(responseFormatSchema),
+                temperature: temperature ?? defaultTemperature
+            )
+        } else {
+            // Fallback to basic JSON object mode
+            Logger.debug("📝 Conversation using basic JSON object mode (no schema enforcement)")
+            parameters = ChatCompletionParameters(
+                messages: messages,
+                model: .custom(modelId),
+                responseFormat: .jsonObject,
+                temperature: temperature ?? defaultTemperature
+            )
+        }
         
         // Execute request
         let result = try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
@@ -731,29 +769,49 @@ class LLMService {
     
     /// Extract and parse JSON from text response
     private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
-        // Try to find JSON in the text
+        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(200))...")
+        
+        // First try direct parsing if the entire text is JSON
+        if let jsonData = text.data(using: .utf8) {
+            do {
+                let result = try JSONDecoder().decode(type, from: jsonData)
+                Logger.debug("✅ Direct JSON parsing successful")
+                return result
+            } catch {
+                Logger.debug("❌ Direct JSON parsing failed: \(error)")
+            }
+        }
+        
+        // Try to find JSON blocks in the text using improved patterns
         let jsonPatterns = [
-            #"\{[\s\S]*\}"#,  // Object
-            #"\[[\s\S]*\]"#   // Array
+            #"\{(?:[^{}]|{[^{}]*})*\}"#,  // Non-greedy object matching
+            #"\[(?:[^\[\]]|\[[^\[\]]*\])*\]"#,  // Non-greedy array matching
+            #"\{[\s\S]*?\}"#,  // Minimal object matching
+            #"\[[\s\S]*?\]"#   // Minimal array matching
         ]
         
         for pattern in jsonPatterns {
-            if let regex = try? NSRegularExpression(pattern: pattern),
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
                let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                let jsonRange = Range(match.range, in: text) {
                 
                 let jsonString = String(text[jsonRange])
+                Logger.debug("🔍 Trying JSON string: \(jsonString.prefix(100))...")
+                
                 if let jsonData = jsonString.data(using: .utf8) {
                     do {
-                        return try JSONDecoder().decode(type, from: jsonData)
+                        let result = try JSONDecoder().decode(type, from: jsonData)
+                        Logger.debug("✅ JSON parsing successful with pattern: \(pattern)")
+                        return result
                     } catch {
-                        Logger.debug("⚠️ JSON parsing failed for pattern: \(pattern)")
+                        Logger.debug("⚠️ JSON parsing failed for pattern \(pattern): \(error)")
                         continue
                     }
                 }
             }
         }
         
+        Logger.error("❌ All JSON parsing attempts failed")
         throw LLMError.unexpectedResponseFormat
     }
     

@@ -36,6 +36,7 @@ class ResumeReviseViewModel {
     
     // MARK: - Business Logic State
     private var currentConversationId: UUID?
+    private var currentModelId: String?
     private(set) var isProcessingRevisions: Bool = false
     
     // AI Resubmission handling (from AiCommsView)
@@ -116,13 +117,15 @@ class ResumeReviseViewModel {
             )
             
             self.currentConversationId = conversationId
+            self.currentModelId = modelId
             
-            // Request structured revision output
+            // Request structured revision output with schema enforcement
             let revisions = try await llmService.continueConversationStructured(
                 userMessage: "Please provide the revision suggestions in the specified JSON format.",
                 modelId: modelId,
                 conversationId: conversationId,
-                responseType: RevisionsContainer.self
+                responseType: RevisionsContainer.self,
+                jsonSchema: ResumeApiQuery.revNodeArraySchema
             )
             
             // Validate and process the revisions
@@ -150,16 +153,18 @@ class ResumeReviseViewModel {
     ) async throws {
         // Store the conversation context
         currentConversationId = conversationId
+        currentModelId = modelId
         isProcessingRevisions = true
         
         do {
-            // Continue the conversation to request revisions
+            // Continue the conversation to request revisions with schema enforcement
             // The background docs and Q&A are already in the conversation history
             let revisions = try await llmService.continueConversationStructured(
                 userMessage: "Based on our discussion, please provide revision suggestions for the resume in the specified JSON format.",
                 modelId: modelId,
                 conversationId: conversationId,
-                responseType: RevisionsContainer.self
+                responseType: RevisionsContainer.self,
+                jsonSchema: ResumeApiQuery.revNodeArraySchema
             )
             
             // Process and validate revisions
@@ -321,8 +326,8 @@ class ResumeReviseViewModel {
                 try await resume.ensureFreshRenderedText()
                 Logger.debug("PDF rendering complete for AI resubmission")
                 
-                // The aiResubmit = true state will trigger the actual LLM call
-                // through the existing workflow in UnifiedToolbar
+                // Actually perform the AI resubmission
+                await performAIResubmission(with: resume)
                 
             } catch {
                 Logger.debug("Error rendering resume for AI resubmission: \(error)")
@@ -333,9 +338,183 @@ class ResumeReviseViewModel {
         }
     }
     
+    /// Perform the actual AI resubmission with feedback nodes requiring revision
+    @MainActor
+    private func performAIResubmission(with resume: Resume) async {
+        guard let conversationId = currentConversationId else {
+            Logger.error("No conversation ID available for AI resubmission")
+            aiResubmit = false
+            return
+        }
+        
+        // Use the same model as the original conversation
+        guard let modelId = currentModelId else {
+            Logger.error("No model available for AI resubmission")
+            aiResubmit = false
+            return
+        }
+        
+        do {
+            // Create revision prompt from feedback nodes requiring resubmission
+            let nodesToResubmit = feedbackNodes.filter { node in
+                let aiActions: Set<PostReviewAction> = [.revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment]
+                return aiActions.contains(node.actionRequested)
+            }
+            
+            Logger.debug("🔄 Resubmitting \(nodesToResubmit.count) nodes to AI")
+            
+            let revisionPrompt = createRevisionPrompt(feedbackNodes: nodesToResubmit)
+            
+            // Continue the conversation with revision feedback and get new revisions
+            let revisions = try await llmService.continueConversationStructured(
+                userMessage: revisionPrompt,
+                modelId: modelId,
+                conversationId: conversationId,
+                responseType: RevisionsContainer.self,
+                jsonSchema: ResumeApiQuery.revNodeArraySchema
+            )
+            
+            // Validate and process the new revisions
+            let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
+            
+            // Replace the old revisions with new ones and restart the review
+            resumeRevisions = validatedRevisions
+            feedbackNodes = [] // Clear old feedback
+            feedbackIndex = 0
+            
+            // Set up the first revision for review
+            if !validatedRevisions.isEmpty {
+                currentRevisionNode = validatedRevisions[0]
+                currentFeedbackNode = validatedRevisions[0].createFeedbackNode()
+            }
+            
+            // Clear loading state
+            aiResubmit = false
+            
+            Logger.debug("✅ AI resubmission complete: \(validatedRevisions.count) new revisions ready for review")
+            
+        } catch {
+            Logger.error("Error in AI resubmission: \(error.localizedDescription)")
+            aiResubmit = false
+        }
+    }
+    
     /// Initialize updateNodes for the review workflow
     func initializeUpdateNodes(for resume: Resume) {
         updateNodes = resume.getUpdatableNodes()
+    }
+    
+    /// Navigate to previous revision node
+    func navigateToPrevious() {
+        guard feedbackIndex > 0 else { return }
+        
+        feedbackIndex -= 1
+        currentRevisionNode = resumeRevisions[feedbackIndex]
+        
+        // Restore or create feedback node for this revision
+        if feedbackIndex < feedbackNodes.count {
+            currentFeedbackNode = feedbackNodes[feedbackIndex]
+            // Restore UI state based on saved feedback
+            restoreUIStateFromFeedbackNode(feedbackNodes[feedbackIndex])
+        } else {
+            currentFeedbackNode = currentRevisionNode?.createFeedbackNode()
+            // Reset UI state for new feedback
+            resetUIState()
+        }
+        
+        Logger.debug("Navigated to previous revision: \(feedbackIndex + 1)/\(resumeRevisions.count)")
+    }
+    
+    /// Navigate to next revision node
+    func navigateToNext() {
+        guard feedbackIndex < resumeRevisions.count - 1 else { return }
+        
+        // Save current feedback node if it exists and isn't already saved
+        if let currentFeedbackNode = currentFeedbackNode, feedbackIndex >= feedbackNodes.count {
+            feedbackNodes.append(currentFeedbackNode)
+        }
+        
+        feedbackIndex += 1
+        currentRevisionNode = resumeRevisions[feedbackIndex]
+        
+        // Restore or create feedback node for this revision
+        if feedbackIndex < feedbackNodes.count {
+            currentFeedbackNode = feedbackNodes[feedbackIndex]
+            // Restore UI state based on saved feedback
+            restoreUIStateFromFeedbackNode(feedbackNodes[feedbackIndex])
+        } else {
+            currentFeedbackNode = currentRevisionNode?.createFeedbackNode()
+            // Reset UI state for new feedback
+            resetUIState()
+        }
+        
+        Logger.debug("Navigated to next revision: \(feedbackIndex + 1)/\(resumeRevisions.count)")
+    }
+    
+    /// Restore UI state from a saved feedback node
+    private func restoreUIStateFromFeedbackNode(_ feedbackNode: FeedbackNode) {
+        // Check if this node had commenting active based on action taken
+        let commentingActions: Set<PostReviewAction> = [.revise, .mandatedChange]
+        let moreCommentingActions: Set<PostReviewAction> = [.mandatedChangeNoComment]
+        
+        if commentingActions.contains(feedbackNode.actionRequested) && !feedbackNode.reviewerComments.isEmpty {
+            isCommenting = true
+            isMoreCommenting = false
+        } else if moreCommentingActions.contains(feedbackNode.actionRequested) && !feedbackNode.reviewerComments.isEmpty {
+            isCommenting = false
+            isMoreCommenting = true
+        } else {
+            isCommenting = false
+            isMoreCommenting = false
+        }
+        
+        // Always reset editing state when navigating
+        isEditingResponse = false
+    }
+    
+    /// Check if a node was accepted (for button illumination)
+    func isNodeAccepted(_ feedbackNode: FeedbackNode?) -> Bool {
+        guard let feedbackNode = feedbackNode else { return false }
+        let acceptedActions: Set<PostReviewAction> = [.accepted, .acceptedWithChanges, .noChange]
+        return acceptedActions.contains(feedbackNode.actionRequested)
+    }
+    
+    /// Check if a node was rejected with comments (for thumbs down illumination)
+    func isNodeRejectedWithComments(_ feedbackNode: FeedbackNode?) -> Bool {
+        guard let feedbackNode = feedbackNode else { return false }
+        return feedbackNode.actionRequested == .revise
+    }
+    
+    /// Check if a node was rejected without comments (for trash button illumination)
+    func isNodeRejectedWithoutComments(_ feedbackNode: FeedbackNode?) -> Bool {
+        guard let feedbackNode = feedbackNode else { return false }
+        return feedbackNode.actionRequested == .rewriteNoComment
+    }
+    
+    /// Check if a node was restored to original (for restore button illumination)
+    func isNodeRestored(_ feedbackNode: FeedbackNode?) -> Bool {
+        guard let feedbackNode = feedbackNode else { return false }
+        return feedbackNode.actionRequested == .restored
+    }
+    
+    /// Check if a node was edited (for edit button illumination)
+    func isNodeEdited(_ feedbackNode: FeedbackNode?) -> Bool {
+        guard let feedbackNode = feedbackNode else { return false }
+        return feedbackNode.actionRequested == .acceptedWithChanges
+    }
+    
+    /// Check if a node had change requested (for unchanged values - pencil button illumination)
+    func isChangeRequested(_ feedbackNode: FeedbackNode?) -> Bool {
+        guard let feedbackNode = feedbackNode else { return false }
+        let changeRequestedActions: Set<PostReviewAction> = [.mandatedChange, .mandatedChangeNoComment]
+        return changeRequestedActions.contains(feedbackNode.actionRequested)
+    }
+    
+    /// Reset UI state for new/fresh feedback nodes
+    private func resetUIState() {
+        isCommenting = false
+        isMoreCommenting = false
+        isEditingResponse = false
     }
     
     
@@ -348,6 +527,7 @@ class ResumeReviseViewModel {
         }
         
         currentConversationId = nil
+        currentModelId = nil
         retryCount = 0
         lastError = nil
         isProcessingRevisions = false
@@ -518,51 +698,7 @@ class ResumeReviseViewModel {
 
 // MARK: - Supporting Types
 
-enum RevisionProgress {
-    case idle
-    case generatingRevisions
-    case awaitingUserReview
-    case processingFeedback
-    case completed
-    case error(String)
-    
-    var description: String {
-        switch self {
-        case .idle:
-            return "Ready"
-        case .generatingRevisions:
-            return "Generating revisions..."
-        case .awaitingUserReview:
-            return "Awaiting user review"
-        case .processingFeedback:
-            return "Processing feedback..."
-        case .completed:
-            return "Completed"
-        case .error(let message):
-            return "Error: \(message)"
-        }
-    }
-}
 
-enum RevisionError: LocalizedError {
-    case noActiveConversation
-    case maxRevisionsExceeded
-    case invalidRevisionData
-    case modelValidationFailed
-    
-    var errorDescription: String? {
-        switch self {
-        case .noActiveConversation:
-            return "No active revision conversation found"
-        case .maxRevisionsExceeded:
-            return "Maximum number of revision rounds exceeded"
-        case .invalidRevisionData:
-            return "Invalid revision data received from AI"
-        case .modelValidationFailed:
-            return "Selected model does not support required capabilities"
-        }
-    }
-}
 
 // MARK: - Note: Using existing types from AITypes.swift and ResumeUpdateNode.swift
 // - RevisionsContainer (with revArray property)

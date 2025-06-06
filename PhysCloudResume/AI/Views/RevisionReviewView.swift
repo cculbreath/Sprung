@@ -35,7 +35,13 @@ struct RevisionReviewView: View {
                             // Header
                             RevisionReviewHeader(
                                 currentIndex: viewModel.feedbackIndex,
-                                totalCount: viewModel.resumeRevisions.count
+                                totalCount: viewModel.resumeRevisions.count,
+                                onPrevious: viewModel.feedbackIndex > 0 ? {
+                                    viewModel.navigateToPrevious()
+                                } : nil,
+                                onNext: viewModel.feedbackIndex < viewModel.resumeRevisions.count - 1 ? {
+                                    viewModel.navigateToNext()
+                                } : nil
                             )
                             
                             // Content panels
@@ -132,6 +138,8 @@ struct RevisionReviewView: View {
 struct RevisionReviewHeader: View {
     let currentIndex: Int
     let totalCount: Int
+    let onPrevious: (() -> Void)?
+    let onNext: (() -> Void)?
     
     var body: some View {
         VStack(spacing: 4) {
@@ -163,6 +171,26 @@ struct RevisionReviewHeader: View {
             Text("Reviewing \(currentIndex + 1) of \(totalCount)")
                 .font(.caption2)
                 .fontWeight(.light)
+            
+            // Navigation controls
+            HStack(spacing: 20) {
+                Button(action: { onPrevious?() }) {
+                    Image(systemName: "chevron.left.circle")
+                        .font(.title2)
+                        .foregroundColor(onPrevious != nil ? .blue : .gray)
+                }
+                .disabled(onPrevious == nil)
+                .help("Previous revision")
+                
+                Button(action: { onNext?() }) {
+                    Image(systemName: "chevron.right.circle")
+                        .font(.title2)
+                        .foregroundColor(onNext != nil ? .blue : .gray)
+                }
+                .disabled(onNext == nil)
+                .help("Next revision")
+            }
+            .padding(.top, 8)
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, 60)
@@ -180,34 +208,28 @@ struct RevisionComparisonPanels: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
-            HStack(alignment: .top) {
-                // Original text panel
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Original Text")
-                        .font(.system(.headline, weight: .semibold))
-                    Text(revisionNode.originalText(using: updateNodes))
-                        .font(.system(.headline, weight: .light))
-                        .foregroundStyle(.secondary)
-                        .padding()
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(8)
-                }
-                
-                Spacer()
-                
-                // Proposed revision panel
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Proposed Revision")
-                        .font(.system(.headline, weight: .semibold))
-                    
-                    if isEditingResponse {
-                        TextEditor(text: $feedbackNode.proposedRevision)
+            if revisionNode.valueChanged {
+                // Show comparison for changed values
+                HStack(alignment: .top) {
+                    // Original text panel
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Original Text")
+                            .font(.system(.headline, weight: .semibold))
+                        Text(revisionNode.originalText(using: updateNodes))
                             .font(.system(.headline, weight: .light))
-                            .padding(8)
+                            .foregroundStyle(.secondary)
+                            .padding()
                             .background(Color(.controlBackgroundColor))
                             .cornerRadius(8)
-                            .frame(minHeight: 60)
-                    } else {
+                    }
+                    
+                    Spacer()
+                    
+                    // Proposed revision panel
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Proposed Revision")
+                            .font(.system(.headline, weight: .semibold))
+                        
                         Text(feedbackNode.proposedRevision)
                             .font(.system(.headline, weight: .light))
                             .foregroundStyle(.primary)
@@ -216,10 +238,54 @@ struct RevisionComparisonPanels: View {
                             .cornerRadius(8)
                     }
                 }
+            } else {
+                // Show single panel for unchanged values - centered
+                VStack(alignment: .center, spacing: 12) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.title2)
+                        Text("No Changes Proposed")
+                            .font(.system(.title2, weight: .semibold))
+                    }
+                    
+                    VStack(alignment: .center, spacing: 8) {
+                        Text("Current Value")
+                            .font(.system(.headline, weight: .semibold))
+                        Text(revisionNode.originalText(using: updateNodes))
+                            .font(.system(.headline, weight: .light))
+                            .foregroundStyle(.primary)
+                            .padding()
+                            .background(Color(.controlBackgroundColor))
+                            .cornerRadius(8)
+                            .frame(maxWidth: 400)
+                    }
+                    
+                    if !revisionNode.why.isEmpty {
+                        VStack(alignment: .center, spacing: 8) {
+                            Text("AI Analysis")
+                                .font(.system(.subheadline, weight: .semibold))
+                            Text(revisionNode.why)
+                                .font(.system(.subheadline, weight: .light))
+                                .foregroundStyle(.secondary)
+                                .padding()
+                                .background(Color(.controlBackgroundColor))
+                                .cornerRadius(8)
+                                .frame(maxWidth: 400)
+                        }
+                    } else {
+                        Text("AI determined this value doesn't need changes for the target job.")
+                            .font(.system(.subheadline))
+                            .foregroundStyle(.secondary)
+                            .italic()
+                            .frame(maxWidth: 400)
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
             
-            // Reasoning section
-            if !revisionNode.why.isEmpty {
+            // Reasoning section for changed values
+            if revisionNode.valueChanged && !revisionNode.why.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("AI Reasoning")
                         .font(.system(.headline, weight: .semibold))
@@ -229,20 +295,6 @@ struct RevisionComparisonPanels: View {
                         .padding()
                         .background(Color(.controlBackgroundColor))
                         .cornerRadius(8)
-                }
-            }
-            
-            // Comments section
-            if isCommenting || isMoreCommenting {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Your Comments")
-                        .font(.system(.headline, weight: .semibold))
-                    TextEditor(text: $feedbackNode.reviewerComments)
-                        .font(.system(.subheadline))
-                        .padding(8)
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(8)
-                        .frame(minHeight: 80)
                 }
             }
         }
@@ -258,54 +310,178 @@ struct RevisionActionButtons: View {
     let resume: Resume
     
     var body: some View {
-        VStack(spacing: 12) {
-            // Primary action buttons
-            HStack(spacing: 12) {
-                Button("Accept") {
-                    viewModel.saveAndNext(response: PostReviewAction.accepted, resume: resume)
-                }
-                .buttonStyle(.borderedProminent)
+        VStack(spacing: 20) {
+            if currentRevNode?.valueChanged == true {
+                Text("Accept proposed revision?")
+                    .padding()
+                    .font(.title2)
                 
-                Button("Accept with Changes") {
-                    viewModel.saveAndNext(response: PostReviewAction.acceptedWithChanges, resume: resume)
+                HStack(spacing: 25) {
+                    // Buttons for when there's a proposed change
+                    ImageButton(
+                        systemName: "hand.thumbsdown.circle",
+                        activeColor: Color.purple,
+                        isActive: viewModel.isCommenting || viewModel.isNodeRejectedWithComments(viewModel.currentFeedbackNode),
+                        action: { 
+                            viewModel.isCommenting = true
+                        }
+                    )
+                    .help("Reject Revision with comment.")
+                    
+                    ImageButton(
+                        systemName: "trash.circle",
+                        activeColor: Color.red,
+                        isActive: viewModel.isNodeRejectedWithoutComments(viewModel.currentFeedbackNode),
+                        action: {
+                            viewModel.saveAndNext(response: .rewriteNoComment, resume: resume)
+                        }
+                    )
+                    .help("Try again. Reject Revision without comment.")
+                    
+                    ImageButton(
+                        name: "ai-rejected", 
+                        imageSize: 43, 
+                        activeColor: Color.indigo,
+                        isActive: viewModel.isNodeRestored(viewModel.currentFeedbackNode),
+                        action: { 
+                            viewModel.saveAndNext(response: .restored, resume: resume)
+                        }
+                    )
+                    .help("Restore Original")
+                    
+                    ImageButton(
+                        systemName: "pencil.circle",
+                        isActive: viewModel.isEditingResponse || viewModel.isNodeEdited(viewModel.currentFeedbackNode),
+                        action: { 
+                            viewModel.isEditingResponse.toggle()
+                        }
+                    )
+                    .help("Edit Response")
+                    
+                    // Accept button
+                    ImageButton(
+                        systemName: "hand.thumbsup.circle",
+                        activeColor: Color.green,
+                        isActive: viewModel.isNodeAccepted(viewModel.currentFeedbackNode),
+                        action: {
+                            viewModel.saveAndNext(response: .accepted, resume: resume)
+                        }
+                    )
+                    .help("Accept this revision")
                 }
-                .buttonStyle(.bordered)
-                .disabled(!viewModel.isEditingResponse)
+            } else {
+                // Interface for unchanged values - matching the style of changed values
+                Text("Keep current value or request a change?")
+                    .padding()
+                    .font(.title2)
                 
-                Button("Restore Original") {
-                    viewModel.saveAndNext(response: PostReviewAction.restored, resume: resume)
+                HStack(spacing: 25) {
+                    // Request change button (left side, matching reject position)
+                    ImageButton(
+                        systemName: "pencil.circle",
+                        activeColor: Color.blue,
+                        isActive: viewModel.isMoreCommenting || viewModel.isChangeRequested(viewModel.currentFeedbackNode),
+                        action: { 
+                            viewModel.isMoreCommenting = true
+                        }
+                    )
+                    .help("Request change")
+                    
+                    // Keep as-is button (right side, matching accept position)
+                    ImageButton(
+                        systemName: "checkmark.circle",
+                        activeColor: Color.green,
+                        isActive: viewModel.isNodeAccepted(viewModel.currentFeedbackNode),
+                        action: {
+                            viewModel.saveAndNext(response: .noChange, resume: resume)
+                        }
+                    )
+                    .help("Keep as is")
                 }
-                .buttonStyle(.bordered)
             }
             
-            // Secondary action buttons
-            HStack(spacing: 12) {
-                Button("Ask AI to Revise") {
-                    viewModel.isCommenting = true
-                    viewModel.saveAndNext(response: PostReviewAction.revise, resume: resume)
+            // Editing interface when in edit mode
+            if viewModel.isEditingResponse, let currentFeedbackNode = viewModel.currentFeedbackNode {
+                HStack(spacing: 10) {
+                    TextEditor(text: Binding(
+                        get: { currentFeedbackNode.proposedRevision },
+                        set: { newValue in
+                            currentFeedbackNode.proposedRevision = newValue
+                        }
+                    ))
+                    .font(.system(.body))
+                    .frame(minHeight: 60)
+                    .background(Color(.controlBackgroundColor))
+                    .cornerRadius(8)
+                    
+                    VStack(spacing: 8) {
+                        ImageButton(
+                            systemName: "checkmark.circle",
+                            imageSize: 20,
+                            activeColor: Color.green,
+                            action: {
+                                viewModel.saveAndNext(response: .acceptedWithChanges, resume: resume)
+                            }
+                        )
+                        
+                        ImageButton(
+                            systemName: "x.circle",
+                            imageSize: 20,
+                            activeColor: Color.red,
+                            action: {
+                                viewModel.isEditingResponse = false
+                            }
+                        )
+                    }
                 }
-                .buttonStyle(.bordered)
-                
-                Button("Reject & Request Rewrite") {
-                    viewModel.saveAndNext(response: PostReviewAction.rewriteNoComment, resume: resume)
-                }
-                .buttonStyle(.bordered)
+                .padding()
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(12)
             }
             
-            // Edit toggles
-            HStack(spacing: 12) {
-                Button(viewModel.isEditingResponse ? "Done Editing" : "Edit Response") {
-                    viewModel.isEditingResponse.toggle()
+            // Commenting interface
+            if viewModel.isCommenting || viewModel.isMoreCommenting,
+               let currentFeedbackNode = viewModel.currentFeedbackNode {
+                VStack(spacing: 8) {
+                    Text("Add your comments for the AI:")
+                        .font(.headline)
+                    
+                    TextEditor(text: Binding(
+                        get: { currentFeedbackNode.reviewerComments },
+                        set: { newValue in
+                            currentFeedbackNode.reviewerComments = newValue
+                        }
+                    ))
+                    .font(.system(.body))
+                    .frame(minHeight: 80)
+                    .background(Color(.controlBackgroundColor))
+                    .cornerRadius(8)
+                    
+                    HStack(spacing: 12) {
+                        Button("Submit with Comments") {
+                            let response: PostReviewAction = viewModel.isCommenting ? .revise : .mandatedChange
+                            viewModel.isCommenting = false
+                            viewModel.isMoreCommenting = false
+                            viewModel.saveAndNext(response: response, resume: resume)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        
+                        Button("Cancel") {
+                            viewModel.isCommenting = false
+                            viewModel.isMoreCommenting = false
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
-                .buttonStyle(.borderless)
-                
-                Button(viewModel.isCommenting ? "Done Commenting" : "Add Comments") {
-                    viewModel.isCommenting.toggle()
-                }
-                .buttonStyle(.borderless)
+                .padding()
+                .background(Color(.windowBackgroundColor))
+                .cornerRadius(12)
             }
-            .font(.caption)
         }
         .padding()
+    }
+    
+    private var currentRevNode: ProposedRevisionNode? {
+        viewModel.currentRevisionNode
     }
 }

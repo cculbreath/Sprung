@@ -25,9 +25,6 @@ struct SidebarToolbarView: View {
             .buttonStyle(.plain)
             .help("Show Sources")
 
-            // --- AI Job Recommendation Button ---
-            RecommendJobButton()
-
             // --- New Application Button ---
             Button {
                 showNewAppSheet = true

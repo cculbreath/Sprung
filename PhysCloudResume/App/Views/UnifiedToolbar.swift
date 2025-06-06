@@ -56,6 +56,12 @@ struct UnifiedToolbar: ToolbarContent {
     @State private var showBestLetterAlert = false
     @State private var bestLetterResult: BestCoverLetterResponse?
     
+    @State private var showBestJobModelSheet = false
+    @State private var selectedBestJobModel = ""
+    @State private var isProcessingBestJob = false
+    @State private var showBestJobAlert = false
+    @State private var bestJobResult: String?
+    
 
     private var selectedResumeBinding: Binding<Resume?> {
         Binding<Resume?>(
@@ -240,27 +246,10 @@ struct UnifiedToolbar: ToolbarContent {
     }
 
     var body: some ToolbarContent {
-        // ───── Left edge: Title and Status ─────
-//        ToolbarItemGroup(placement: .navigation) {
-//            if let selApp = jobAppStore.selectedApp {
-//                HStack(spacing: 12) {
-//                    // Status tag
-//                    selApp.statusTag
-//
-//                    // Title with better space management
-//                    VStack(alignment: .leading, spacing: 1) {
-//                        Text(selApp.jobPosition)
-//                            .font(.headline)
-//                            .lineLimit(1)
-//                            .frame(maxWidth: 500, alignment: .leading)
-//                        Text(selApp.companyName)
-//                            .font(.caption)
-//                            .lineLimit(1)
-//                            .frame(maxWidth: 500, alignment: .leading)
-//                    }
-//                }
-//            }
-//        }
+        // ───── Left edge: Best Job button ─────
+        ToolbarItem(placement: .navigation) {
+            bestJobButton()
+        }
 
         // ───── Center: All main buttons ─────
         ToolbarItemGroup(placement: .principal) {
@@ -268,11 +257,13 @@ struct UnifiedToolbar: ToolbarContent {
                 // Resume Operations cluster
                 HStack(spacing: 12) {
                     resumeButton("Customize", "wand.and.sparkles", action: {
+                        selectedTab = .resume
                         showCustomizeModelSheet = true
                     }, disabled: selectedResumeBinding.wrappedValue?.rootNode == nil,
                                  help: "Create Resume Revisions")
 
                     Button(action: {
+                        selectedTab = .resume
                         clarifyingQuestions = []
                         showClarifyingQuestionsModelSheet = true
                     }) {
@@ -280,7 +271,9 @@ struct UnifiedToolbar: ToolbarContent {
                             if isGeneratingQuestions {
                                 Image("custom.wand.and.rays.inverse.badge.questionmark")
                                     .font(.system(size: 18))
-                                    .frame(height: 20).symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                                    .frame(height: 20)
+                                    .foregroundColor(.pink)
+                                    .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
                             } else {
                                 Image("custom.wand.and.sparkles.badge.questionmark")
                                     .font(.system(size: 18))
@@ -533,6 +526,8 @@ struct UnifiedToolbar: ToolbarContent {
                         .font(.system(size: 18))
                         .frame(height: 20)
                         .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                        .foregroundColor(.blue)
+                        .fontWeight(.bold)
                 } else {
                     Image(systemName: systemName)
                         .font(.system(size: 18))
@@ -571,20 +566,6 @@ struct UnifiedToolbar: ToolbarContent {
         .disabled(disabled)
     }
 
-    @ViewBuilder
-    private func actionButton(_ title: String,
-                              _ systemName: String,
-                              action: @escaping () -> Void,
-                              disabled: Bool = false,
-                              help: String) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.title2)
-        }
-        .buttonStyle(.plain)
-        .help(help)
-        .disabled(disabled)
-    }
 
     @ViewBuilder
     private func sidebarButton(_ title: String,
@@ -606,6 +587,104 @@ struct UnifiedToolbar: ToolbarContent {
         .buttonStyle(.plain)
         .help(help)
         .disabled(disabled)
+    }
+
+    @ViewBuilder
+    private func bestJobButton() -> some View {
+        Button(action: {
+            showBestJobModelSheet = true
+        }) {
+            VStack(spacing: 3) {
+                if isProcessingBestJob {
+                    Image(systemName: "wand.and.rays")
+                        .font(.system(size: 18))
+                        .frame(height: 20)
+                        .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
+                } else {
+                    Image(systemName: "medal.star")
+                        .font(.system(size: 18))
+                        .frame(height: 20)
+                }
+                Text("Best Job")
+                    .font(.system(size: 11))
+                    .frame(height: 14)
+            }
+            .frame(minWidth: 60, minHeight: 50)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .help("Find the best job match based on your qualifications")
+        .disabled(isProcessingBestJob || jobAppStore.selectedApp?.selectedRes == nil)
+        .sheet(isPresented: $showBestJobModelSheet) {
+            ModelSelectionSheet(
+                title: "Choose Model for Job Recommendation",
+                requiredCapability: .structuredOutput,
+                isPresented: $showBestJobModelSheet,
+                onModelSelected: { modelId in
+                    selectedBestJobModel = modelId
+                    showBestJobModelSheet = false
+                    isProcessingBestJob = true
+                    
+                    Task {
+                        await startBestJobRecommendation(modelId: modelId)
+                    }
+                }
+            )
+        }
+        .alert("Job Recommendation", isPresented: $showBestJobAlert) {
+            Button("OK") {
+                bestJobResult = nil
+            }
+        } message: {
+            if let result = bestJobResult {
+                Text(result)
+            }
+        }
+    }
+
+    /// Starts the best job recommendation with the selected model
+    @MainActor
+    private func startBestJobRecommendation(modelId: String) async {
+        guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
+            isProcessingBestJob = false
+            bestJobResult = "Please select a resume first"
+            showBestJobAlert = true
+            return
+        }
+
+        do {
+            let service = JobRecommendationService(llmService: LLMService.shared)
+            
+            let (jobId, reason) = try await service.fetchRecommendation(
+                jobApps: jobAppStore.jobApps,
+                resume: selectedResume,
+                modelId: modelId
+            )
+
+            // Find the job with the recommended ID
+            if let recommendedJob = jobAppStore.jobApps.first(where: { $0.id == jobId }) {
+                // Set as selected job
+                jobAppStore.selectedApp = recommendedJob
+
+                // Store the recommended job ID for highlighting
+                appState.recommendedJobId = jobId
+
+                // Show recommendation in alert
+                bestJobResult = "Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)"
+                showBestJobAlert = true
+            } else {
+                bestJobResult = "Recommended job not found"
+                showBestJobAlert = true
+            }
+
+            isProcessingBestJob = false
+            
+        } catch {
+            Logger.error("JobRecommendation Error: \(error)")
+            bestJobResult = "Error: \(error.localizedDescription)"
+            showBestJobAlert = true
+            isProcessingBestJob = false
+        }
     }
 }
 
