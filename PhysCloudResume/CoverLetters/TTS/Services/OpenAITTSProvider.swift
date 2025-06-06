@@ -138,7 +138,7 @@ class OpenAITTSProvider {
         } else {
             // Create a direct OpenAI client for TTS (not OpenRouter)
             Logger.debug("🔑 Creating dedicated OpenAI TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")
-            let openAIClient = OpenRouterClientFactory.createTTSClient(openAiApiKey: apiKey)
+            let openAIClient = OpenAIServiceFactory.service(apiKey: apiKey)
             
             // Check if the client supports TTS
             if let ttsCapableClient = openAIClient as? TTSCapable {
