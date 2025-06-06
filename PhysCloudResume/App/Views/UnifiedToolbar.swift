@@ -107,6 +107,9 @@ struct UnifiedToolbar: ToolbarContent {
         } catch {
             Logger.error("Error processing clarifying questions answers: \\(error.localizedDescription)")
         }
+        
+        // Clear busy state when processing completes (success or error)
+        isGeneratingQuestions = false
     }
 
     /// Starts the resume customization workflow with the selected model
@@ -326,6 +329,7 @@ struct UnifiedToolbar: ToolbarContent {
                             isPresented: $sheets.showClarifyingQuestions,
                             onSubmit: { answers in
                                 sheets.showClarifyingQuestions = false
+                                isGeneratingQuestions = true
                                 Task {
                                     await processClarifyingQuestionsAnswers(answers: answers)
                                 }
