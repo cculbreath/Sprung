@@ -103,8 +103,7 @@ import SwiftUI
         let questionsArraySchema = JSONSchema(
             type: .array,
             description: "Array of clarifying questions to ask the user (maximum 3 questions)",
-            items: questionSchema,
-            maxItems: 3
+            items: questionSchema
         )
         
         // Define the root schema
