@@ -225,7 +225,6 @@ class ClarifyingQuestionsViewModel {
     /// Reset workflow state
     func resetWorkflow() {
         questions = []
-        showQuestionsSheet = false
         currentConversationId = nil
         lastError = nil
         showError = false
