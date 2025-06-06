@@ -34,6 +34,9 @@ struct ContentViewLaunch: View {
                 
                 // Initialize LLMService with ModelContext
                 LLMService.shared.initialize(appState: appState, modelContext: modelContext)
+                
+                // Force reconfiguration to ensure API key is picked up
+                LLMService.shared.reconfigureClient()
             }
         // Note: AppState is already injected via .environment(appState) in PhysicsCloudResumeApp
     }

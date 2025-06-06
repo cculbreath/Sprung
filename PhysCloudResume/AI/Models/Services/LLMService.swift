@@ -54,7 +54,6 @@ class LLMService {
     
     // Request management
     private var currentRequestIDs: Set<UUID> = []
-    private let requestQueue = DispatchQueue(label: "com.physcloudresume.llmservice", qos: .userInitiated)
     
     // Configuration
     private let defaultTemperature: Double = 1.0
@@ -68,16 +67,48 @@ class LLMService {
     /// Initialize the service with AppState and conversation manager
     func initialize(appState: AppState, modelContext: ModelContext? = nil) {
         self.appState = appState
-        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
-        if !apiKey.isEmpty {
-            self.openRouterClient = OpenAIServiceFactory.service(
-                apiKey: apiKey,
-                overrideBaseURL: "https://openrouter.ai/api/v1"
-            )
-        }
         self.conversationManager = ConversationManager(modelContext: modelContext)
         
+        // Configure client with current API key
+        reconfigureClient()
+        
         Logger.debug("🔄 LLMService initialized with OpenRouter client")
+    }
+    
+    /// Reconfigure the OpenRouter client with the current API key from UserDefaults
+    func reconfigureClient() {
+        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        Logger.debug("🔑 LLMService API key length: \(apiKey.count) chars")
+        if !apiKey.isEmpty {
+            // Log first/last 4 chars for debugging (same as SettingsView does)
+            let maskedKey = apiKey.count > 8 ? 
+                "\(apiKey.prefix(4))...\(apiKey.suffix(4))" : 
+                "***masked***"
+            Logger.debug("🔑 Using API key: \(maskedKey)")
+            
+            Logger.debug("🔧 Creating OpenRouter client with baseURL: https://openrouter.ai")
+            self.openRouterClient = OpenAIServiceFactory.service(
+                apiKey: apiKey,
+                overrideBaseURL: "https://openrouter.ai",
+                proxyPath: "api",
+                overrideVersion: "v1",
+                extraHeaders: [
+                    "HTTP-Referer": "https://github.com/cculbreath/PhysCloudResume",
+                    "X-Title": "Physics Cloud Resume"
+                ],
+                debugEnabled: true
+            )
+            Logger.debug("🔄 LLMService reconfigured OpenRouter client with key")
+            Logger.debug("🌐 Expected URL: https://openrouter.ai/api/v1/chat/completions")
+            
+            // Debug the actual client configuration
+            if let client = self.openRouterClient {
+                Logger.debug("✅ OpenRouter client created: \(type(of: client))")
+            }
+        } else {
+            self.openRouterClient = nil
+            Logger.debug("🔴 No OpenRouter API key available, client cleared")
+        }
     }
     
     private func ensureInitialized() throws {
@@ -85,12 +116,9 @@ class LLMService {
             throw LLMError.clientError("LLMService not initialized - call initialize() first")
         }
         
-        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
-        if openRouterClient == nil && !apiKey.isEmpty {
-            openRouterClient = OpenAIServiceFactory.service(
-                apiKey: apiKey,
-                overrideBaseURL: "https://openrouter.ai/api/v1"
-            )
+        // Ensure client is configured with current API key
+        if openRouterClient == nil {
+            reconfigureClient()
         }
         
         guard openRouterClient != nil else {
@@ -362,71 +390,6 @@ class LLMService {
         return (conversationId: conversationId, response: responseText)
     }
     
-    /// Start a new conversation with structured output
-    /// - Parameters:
-    ///   - systemPrompt: Optional system prompt to initialize the conversation
-    ///   - userMessage: The first user message
-    ///   - modelId: The model identifier to use
-    ///   - responseType: The expected response type
-    ///   - temperature: Optional temperature setting
-    /// - Returns: Tuple containing the conversation ID and parsed structured response
-    func startConversationStructured<T: Codable>(
-        systemPrompt: String? = nil,
-        userMessage: String,
-        modelId: String,
-        responseType: T.Type,
-        temperature: Double? = nil
-    ) async throws -> (conversationId: UUID, response: T) {
-        try ensureInitialized()
-        
-        guard let conversationManager = conversationManager else {
-            throw LLMError.clientError("Conversation manager not available")
-        }
-        
-        let requestId = UUID()
-        currentRequestIDs.insert(requestId)
-        defer { currentRequestIDs.remove(requestId) }
-        
-        // Validate model
-        try validateModel(modelId: modelId, for: [.structuredOutput])
-        
-        // Create conversation
-        let conversationId = UUID()
-        
-        // Build messages
-        var messages: [LLMMessage] = []
-        
-        // Add system prompt if provided
-        if let systemPrompt = systemPrompt {
-            messages.append(LLMMessage.text(role: .system, content: systemPrompt))
-        }
-        
-        // Add user message
-        messages.append(LLMMessage.text(role: .user, content: userMessage))
-        
-        // Create parameters with response format
-        let parameters = ChatCompletionParameters(
-            messages: messages,
-            model: .custom(modelId),
-            responseFormat: .jsonObject,
-            temperature: temperature ?? defaultTemperature
-        )
-        
-        // Execute request
-        let structuredResponse = try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
-            try self.parseStructuredResponse(response, as: responseType)
-        }
-        
-        // Add assistant response to messages (convert structured back to text for conversation history)
-        let responseText = try String(data: JSONEncoder().encode(structuredResponse), encoding: .utf8) ?? "[Structured Response]"
-        messages.append(LLMMessage.text(role: .assistant, content: responseText))
-        
-        // Store conversation
-        conversationManager.storeConversation(id: conversationId, messages: messages)
-        
-        return (conversationId: conversationId, response: structuredResponse)
-    }
-    
     /// Continue an existing conversation
     /// - Parameters:
     ///   - userMessage: The user's message
@@ -639,25 +602,6 @@ class LLMService {
     
     // MARK: - Model Management
     
-    /// Get available models with optional capability filtering
-    /// - Parameter capability: Optional capability to filter by
-    /// - Returns: Array of model IDs
-    func getAvailableModels(capability: ModelCapability? = nil) -> [String] {
-        guard let appState = appState else { return [] }
-        
-        // Start with user-selected models
-        let selectedModels = Array(appState.selectedOpenRouterModels)
-        
-        // Filter by capability if specified
-        if let capability = capability {
-            let capableModels = appState.openRouterService.getModelsWithCapability(capability)
-            let capableModelIds = Set(capableModels.map { $0.id })
-            return selectedModels.filter { capableModelIds.contains($0) }
-        }
-        
-        return selectedModels
-    }
-    
     /// Validate that a model exists and has required capabilities
     /// - Parameters:
     ///   - modelId: The model ID to validate
@@ -701,13 +645,6 @@ class LLMService {
         conversationManager?.clearConversation(id: conversationId)
     }
     
-    /// Get conversation messages
-    /// - Parameter conversationId: The conversation ID
-    /// - Returns: Array of messages in the conversation
-    func getConversationMessages(id conversationId: UUID) -> [LLMMessage] {
-        return conversationManager?.getConversation(id: conversationId) ?? []
-    }
-    
     // MARK: - Private Helpers
     
     /// Execute query with retry logic and exponential backoff
@@ -731,10 +668,17 @@ class LLMService {
             }
             
             do {
+                Logger.debug("🌐 Making request with model: \(parameters.model)")
                 let response = try await client.startChat(parameters: parameters)
                 return try transform(response)
             } catch {
                 lastError = error
+                Logger.debug("❌ Request failed with error: \(error)")
+                
+                // Log more details for SwiftOpenAI APIErrors
+                if let apiError = error as? SwiftOpenAI.APIError {
+                    Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)")
+                }
                 
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {

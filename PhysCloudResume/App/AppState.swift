@@ -64,5 +64,7 @@ class AppState {
     
     func reconfigureOpenRouterService() {
         configureOpenRouterService()
+        // Also reconfigure LLMService to use the updated API key
+        LLMService.shared.reconfigureClient()
     }
 }
