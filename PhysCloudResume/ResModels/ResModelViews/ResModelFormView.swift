@@ -20,6 +20,13 @@ struct ResModelFormView: View {
     @State private var formResumeText: String = ""
     @State private var formName: String = ""
     @State private var selectedStyle: String = "Typewriter" // initial fallback
+    
+    // Template customization state
+    @State private var useNativeGeneration: Bool = true
+    @State private var customTemplateHTML: String = ""
+    @State private var customTemplateText: String = ""
+    @State private var templateName: String = ""
+    @State private var showAdvancedTemplates: Bool = false
 
     // Using AppStorage to persist the available styles (as a comma-separated string)
     @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
@@ -103,6 +110,47 @@ struct ResModelFormView: View {
                         Spacer()
                     }
                     .padding(.horizontal)
+                    
+                    // Template Settings Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Template Settings")
+                                .font(.headline)
+                            Spacer()
+                            Button(action: { showAdvancedTemplates.toggle() }) {
+                                Image(systemName: showAdvancedTemplates ? "chevron.down" : "chevron.right")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        
+                        Toggle("Use Native PDF Generation", isOn: $useNativeGeneration)
+                            .help("Generate PDFs locally instead of using API")
+                        
+                        if showAdvancedTemplates {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Custom Template Name (optional)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                TextField("Template name", text: $templateName)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                
+                                Text("Custom HTML Template (optional)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                CustomTextEditor(sourceContent: $customTemplateHTML)
+                                    .frame(height: 100)
+                                
+                                Text("Custom Text Template (optional)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                CustomTextEditor(sourceContent: $customTemplateText)
+                                    .frame(height: 80)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
                     // Delete Button (if editing)
                 }
                 .padding(.vertical)
@@ -158,6 +206,10 @@ struct ResModelFormView: View {
             formJson = resModel.json
             formResumeText = resModel.renderedResumeText
             selectedStyle = resModel.style
+            useNativeGeneration = resModel.useNativeGeneration
+            customTemplateHTML = resModel.customTemplateHTML ?? ""
+            customTemplateText = resModel.customTemplateText ?? ""
+            templateName = resModel.templateName ?? ""
         }
     }
 
@@ -171,6 +223,10 @@ struct ResModelFormView: View {
             updatedResModel.json = formJson
             updatedResModel.style = selectedStyle
             updatedResModel.renderedResumeText = formResumeText
+            updatedResModel.useNativeGeneration = useNativeGeneration
+            updatedResModel.customTemplateHTML = customTemplateHTML.isEmpty ? nil : customTemplateHTML
+            updatedResModel.customTemplateText = customTemplateText.isEmpty ? nil : customTemplateText
+            updatedResModel.templateName = templateName.isEmpty ? nil : templateName
             resModelStore.updateResModel(updatedResModel)
         } else {
             let newResModel = ResModel(
@@ -179,6 +235,10 @@ struct ResModelFormView: View {
                 renderedResumeText: formResumeText,
                 style: selectedStyle
             )
+            newResModel.useNativeGeneration = useNativeGeneration
+            newResModel.customTemplateHTML = customTemplateHTML.isEmpty ? nil : customTemplateHTML
+            newResModel.customTemplateText = customTemplateText.isEmpty ? nil : customTemplateText
+            newResModel.templateName = templateName.isEmpty ? nil : templateName
             resModelStore.addResModel(newResModel)
         }
 

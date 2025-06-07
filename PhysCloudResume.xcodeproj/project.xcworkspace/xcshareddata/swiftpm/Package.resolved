@@ -1,6 +1,15 @@
 {
-  "originHash" : "54bd3854c0f71b453a2db0d162a0d8e666e15106771b4febd9c69e8b6e9756db",
+  "originHash" : "f1fcf80b6caaf0ed0b923069804e33e203c0acde349083d81bf81f9f5176c68d",
   "pins" : [
+    {
+      "identity" : "grmustache.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRMustache.swift.git",
+      "state" : {
+        "revision" : "811326995377af216b970ae3afb0645ca94986c8",
+        "version" : "6.0.0"
+      }
+    },
     {
       "identity" : "swift-chunked-audio-player",
       "kind" : "remoteSourceControl",

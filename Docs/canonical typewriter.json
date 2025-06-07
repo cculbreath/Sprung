@@ -48,41 +48,20 @@
         "Engaged students with original and memorable lab exercises and in-class demonstrations",
         "Piloted a summer research program investigating twist disclinations in nematic liquid crystals"
       ]
-    },
-    "MacSuperstore": {
-      "employer": "MacSuperstore",
-      "location": "San Luis Obispo, CA",
-      "position": "Senior Technician",
-      "start": "2005-03",
-      "end": "2008-06",
-      "highlights": [
-        "Earned certification as an Apple Desktop and Portable Repair Technician",
-        "Highest scoring participant in Apple Online Training for 2007 among all US resellers",
-        "Performed front counter troubleshooting, diagnosis, while-you-wait and full-service repairs",
-        "Performed hardware and software repairs on Apple desktops, portables, and iPods",
-        "Earned highest metrics in efficiency, productivity, and repair quality, doubling the number of completed repairs per technician"
-      ]
-    },
-    "Iconic Photography": {
-      "employer": "Iconic Photography",
-      "location": "Kent, Ohio",
-      "position": "Owner, Photographer, Client Satisfaction Expert",
-      "start": "2011-03",
-      "end": "2015-01"
     }
   },
   "summary": " Experienced Engineer with a PhD in Chemical Physics, offering a unique combination of expertise in materials science, electrical engineering, and electromechanical systems. Proficient in integrating electronics with mechanical systems, fostering innovation and tackling complex engineering challenges through first-principles thinking. Seeking to collaborate with talented colleagues on projects that advance robotics technology and exceed expectations.",
-  "projects-and-hobbies": {
-    "projects-and-hobbies · 1": {
+  "projectsAndHobbies": {
+    "projectsAndHobbies · 1": {
       "title": "Software Development"
     },
-    "projects-and-hobbies · 2": {
+    "projectsAndHobbies · 2": {
       "title": "Precision Machining"
     },
-    "projects-and-hobbies · 3": {
+    "projectsAndHobbies · 3": {
       "title": "Electronics Projects"
     },
-    "projects-and-hobbies · 4": {
+    "projectsAndHobbies · 4": {
       "title": "Photography & Print"
     }
   },
@@ -102,52 +81,52 @@
       "end": "2006"
     }
   },
-  "font-sizes": {
+  "fontSizes": {
     "projects": "9.5pt",
-    "website-box": "11.0pt",
+    "websiteBox": "11.0pt",
     "objective": "11.0pt",
-    "graduation-date": "13.0pt",
-    "skill-descriptions": "10.0pt",
-    "section-title": "15.0pt",
-    "skill-names": "13.0pt",
-    "degree-names": "13.0pt",
+    "graduationDate": "13.0pt",
+    "skillDescriptions": "10.0pt",
+    "sectionTitle": "15.0pt",
+    "skillNames": "13.0pt",
+    "degreeNames": "13.0pt",
     "schools": "12.0pt",
     "name": "43.5pt",
-    "employment-highlights": "9.0pt",
-    "job-titles": "16.0pt",
-    "employer-name": "13.0pt",
-    "employment-dates": "11.0pt",
-    "box-titles": "22.0pt"
+    "employmentHighlights": "9.0pt",
+    "jobTitles": "16.0pt",
+    "employerName": "13.0pt",
+    "employmentDates": "11.0pt",
+    "boxTitles": "22.0pt"
   },
   "meta": {
     "format": "FRESH@0.6.0",
     "version": "0.1.0"
   },
-  "keys-in-editor": [
-    "projects-and-hobbies",
+  "keysInEditor": [
+    "projectsAndHobbies",
     "employment",
     "education",
     "more",
-    "skills-and-expertise",
+    "skillsAndExpertise",
     "summary",
-    "section-labels",
-    "job-titles",
-    "more-info"
+    "sectionLabels",
+    "jobTitles",
+    "moreInfo"
   ],
-  "section-labels": {
+  "sectionLabels": {
     "languages": "Languages and Frameworks",
     "hobbies": "Projects",
-    "skills-and-expertise": "Skills and Expertise",
+    "skillsAndExpertise": "Skills and Expertise",
     "publications": "Publications",
-    "more-info": "More Info",
+    "moreInfo": "More Info",
     "summary": "Objective",
     "education": "Education",
     "employment": "Work Experience",
-    "projects-highlights": "Projects",
-    "job-titles": "Job Titles",
-    "section-labels": "Section Labels"
+    "projectsHighlights": "Projects",
+    "jobTitles": "Job Titles",
+    "sectionLabels": "Section Labels"
   },
-  "skills-and-expertise": [
+  "skillsAndExpertise": [
     {
       "title": "Prototyping & Fabrication",
       "description": "CNC machining, 3D printing, CAD & CAM programming"
@@ -177,7 +156,7 @@
       "description": "Materials science, instrumentation, optics, technical communication"
     }
   ],
-  "projects-highlights": [
+  "projectsHighlights": [
     {
       "name": "Drumline Robot",
       "description": "Designing an ODrive-powered robotic percussion system with brushless motors and real-time control (in progress)."
@@ -217,81 +196,15 @@
         "Jonathan V. Selinger",
         "Robin L. B. Selinger"
       ]
-    },
-    "Molecular Crystals and Liquid Crystals · 2017": {
-      "year": "2017",
-      "journal": "Molecular Crystals and Liquid Crystals",
-      "issue": "1",
-      "volume": "646",
-      "publisher": "Taylor & Francis",
-      "doi": "10.1080/15421406.2017.1287486",
-      "pages": "214-219",
-      "authors": [
-        "Joseph Angelo",
-        "Christopher Culbreath",
-        "Hiroshi Yokoyama"
-      ],
-      "url": "https://doi.org/10.1080/15421406.2017.1287486",
-      "eprint": "https://doi.org/10.1080/15421406.2017.1287486",
-      "title": "Breaking planar liquid crystal anchoring to form controllable twist disclination loops",
-      "type": "article"
-    },
-    "Applied Physics Express · 2015": {
-      "title": "Switchable liquid-crystal phase-shift mask for super-resolution photolithography based on Pancharatnam-Berry phase",
-      "volume": "8",
-      "journal": "Applied Physics Express",
-      "issue": "11",
-      "year": "2015",
-      "url": "https://ui.adsabs.harvard.edu/abs/2015APExp…8k6501G",
-      "type": "article",
-      "adsnote": "Provided by the SAO/NASA Astrophysics Data System",
-      "month": "Nov",
-      "pages": "116501",
-      "doi": "10.7567/APEX.8.116501",
-      "authors": [
-        "Nikolaus Glazar",
-        "Christopher Culbreath",
-        "Yannian Li",
-        "Hiroshi Yokoyama"
-      ]
-    },
-    "Kent State University · 2015": {
-      "type": "dissertation",
-      "title": "Artificial Microscopic Structures in Nematic Liquid Crystals Created by Patterned Photoalignment and Controlled Confinement: Instrumentation, Fabrication, and Characterization",
-      "journal": "Kent State University",
-      "authors": [
-        "Christopher Culbreath"
-      ],
-      "year": "2015"
-    },
-    "Review of Scientific Instruments · 2011": {
-      "pages": "126107",
-      "year": "2011",
-      "abstract": "We present a fully automated maskless exposure system for the fabrication of microscopic orientational surface alignment patterns. The maskless system allows us to fabricate arbitrary surface patterns over a 2 mm × 2 mm area with a resolution of 2.2 μm. A confocal autofocus system ensures accurate and repeatable focus. Microscopic orientational surface patterns have been demonstrated to exhibit a variety of novel functionalities, such as surface alignment multi-stability.",
-      "authors": [
-        "Christopher Culbreath",
-        "Nikolaus Glazar",
-        "Hiroshi Yokoyama"
-      ],
-      "journal": "Review of Scientific Instruments",
-      "month": "Dec",
-      "type": "article",
-      "doi": "10.1063/1.3669528",
-      "eprint": "https://pubs.aip.org/aip/rsi/article-pdf/doi/10.1063/1.3669528/8827560/126107_1_online.pdf",
-      "title": "Automated maskless micro-multidomain photoalignment",
-      "issue": "12",
-      "volume": "82",
-      "issn": "0034-6748",
-      "url": "https://doi.org/10.1063/1.3669528"
     }
   },
-  "job-titles": [
+  "jobTitles": [
     "Physicist",
     "Educator",
     "Programmer",
     "Machinist"
   ],
-  "more-info": "For Project photos, Research Papers, and more, <a href=\"https://culbreath.net\" style=\"font-weight: bold; color: black; text-decoration: none;\">visit culbreath.net↪︎</a>",
+  "moreInfo": "For Project photos, Research Papers, and more, <a href=\"https://culbreath.net\" style=\"font-weight: bold; color: black; text-decoration: none;\">visit culbreath.net↪︎</a>",
   "languages": [
     "PHP",
     "JavaScript",

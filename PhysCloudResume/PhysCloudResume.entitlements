@@ -12,7 +12,5 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
-	<true/>
 </dict>
 </plist>
