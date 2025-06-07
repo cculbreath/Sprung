@@ -1,3 +1,0 @@
-error: Unknown option '--targets'
-Usage: periphery scan [<options>] [<build-arguments> ...]
-  See 'periphery scan --help' for more information.
