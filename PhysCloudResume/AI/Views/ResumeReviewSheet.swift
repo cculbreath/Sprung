@@ -35,8 +35,8 @@ struct ResumeReviewSheet: View {
     // AppStorage for max iterations
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     
-    // Model selection state
-    @State private var selectedModel: String = ""
+    // Model selection state with persistence
+    @AppStorage("resumeReviewSelectedModel") private var selectedModel: String = ""
     
     // State for entity merge option
     @State private var allowEntityMerge: Bool = false
@@ -187,7 +187,7 @@ struct ResumeReviewSheet: View {
                     // Content area (GroupBox with contentView)
                     GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
                         contentView // This already handles its internal scrolling for MarkdownView
-                            .frame(minHeight: 200, idealHeight: 300, maxHeight: .infinity) // Allow it to expand
+                            .frame(minHeight: 200, idealHeight: 280, maxHeight: 320) // Constrained max height for better layout
                     }
                 }
                 .padding(.horizontal) // Padding for the scrollable content
@@ -231,7 +231,7 @@ struct ResumeReviewSheet: View {
             .padding(.top, 8) // Add some space above the button bar
             .background(Color(NSColor.windowBackgroundColor).opacity(0.8)) // Optional: background for button bar
         }
-        .frame(width: 600, height: 500, alignment: .topLeading) // Original fixed sheet size
+        .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
         .onAppear {
             // Initialize services and reset state
             reviewService = ResumeReviewService(llmService: LLMService.shared)

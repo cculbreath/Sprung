@@ -115,18 +115,6 @@ final class OpenRouterService {
         isLoading = false
     }
     
-    func getModelsWithCapability(_ capability: ModelCapability) -> [OpenRouterModel] {
-        switch capability {
-        case .structuredOutput:
-            return availableModels.filter { $0.supportsStructuredOutput }
-        case .vision:
-            return availableModels.filter { $0.supportsImages }
-        case .reasoning:
-            return availableModels.filter { $0.supportsReasoning }
-        case .textOnly:
-            return availableModels.filter { $0.isTextToText && !$0.supportsImages }
-        }
-    }
     
     func findModel(id: String) -> OpenRouterModel? {
         availableModels.first { $0.id == id }
@@ -243,14 +231,6 @@ enum ModelCapability: CaseIterable {
         }
     }
     
-    var icon: String {
-        switch self {
-        case .structuredOutput: return "list.bullet.rectangle"
-        case .vision: return "eye"
-        case .reasoning: return "brain"
-        case .textOnly: return "text.alignleft"
-        }
-    }
 }
 
 enum OpenRouterError: Error, LocalizedError {

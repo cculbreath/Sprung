@@ -16,8 +16,8 @@ struct JobAppDetailView: View {
 
     var body: some View {
         ScrollView {
-            let form = jobAppStore.form
-            if let selectedApp = jobAppStore.selectedApp {
+            let _ = jobAppStore.form
+            if jobAppStore.selectedApp != nil {
                 VStack {
                     HeaderView(
                         showingDeleteConfirmation: $showingDeleteConfirmation, buttons: $buttons, tab: $tab

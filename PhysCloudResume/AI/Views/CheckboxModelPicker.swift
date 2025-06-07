@@ -121,28 +121,55 @@ struct CheckboxModelPicker: View {
                 ForEach(sortedProviders, id: \.self) { provider in
                     if let models = groupedModels[provider] {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(provider)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.top, sortedProviders.first == provider ? 0 : 4)
+                            HStack {
+                                Text(provider)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                // Provider-level selection buttons
+                                HStack(spacing: 8) {
+                                    Button("All") {
+                                        let providerModels = models.map { $0.id }
+                                        selectedModels.formUnion(providerModels)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                                    
+                                    Button("None") {
+                                        let providerModels = Set(models.map { $0.id })
+                                        selectedModels.subtract(providerModels)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                                }
+                            }
+                            .padding(.top, sortedProviders.first == provider ? 0 : 4)
                             
                             ForEach(models.sorted { $0.displayName < $1.displayName }) { model in
-                                HStack {
-                                    Toggle(isOn: Binding(
-                                        get: { selectedModels.contains(model.id) },
-                                        set: { isSelected in
-                                            if isSelected {
-                                                selectedModels.insert(model.id)
-                                            } else {
-                                                selectedModels.remove(model.id)
-                                            }
-                                        }
-                                    )) {
+                                Button(action: {
+                                    if selectedModels.contains(model.id) {
+                                        selectedModels.remove(model.id)
+                                    } else {
+                                        selectedModels.insert(model.id)
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: selectedModels.contains(model.id) ? "checkmark.circle.fill" : "checkmark.circle")
+                                            .foregroundColor(selectedModels.contains(model.id) ? .green : .secondary)
+                                            .font(.system(size: 16))
+                                        
                                         Text(formatModelName(model))
                                             .font(.system(.body))
+                                            .foregroundColor(.primary)
+                                        
+                                        Spacer()
                                     }
-                                    .toggleStyle(CheckboxToggleStyle())
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }

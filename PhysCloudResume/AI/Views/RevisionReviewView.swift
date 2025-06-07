@@ -23,7 +23,14 @@ struct RevisionReviewView: View {
                 // Loading state during AI resubmission
                 VStack {
                     Text("Submitting Feedback to AI").padding()
-                    ProgressView().padding()
+                    Image(systemName: "wand.and.rays")
+                        .font(.system(size: 32))
+                        .frame(height: 35)
+                        .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                        .foregroundColor(.blue)
+                        .fontWeight(.bold)
+                        .padding()
+                        .padding(.bottom)
                 }
             } else {
                 // Main review interface

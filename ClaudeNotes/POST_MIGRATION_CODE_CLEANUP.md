@@ -216,6 +216,73 @@ File: AiCommsView.swift:574-596
 Issue: Manual provider recreation and state preservation
 Evidence: Necessary workaround for fragmented architecture, eliminated by LLMService
 
+## PERIPHERY SCAN RESULTS (June 5, 2025)
+
+### HIGH - Definitely Dead Code (Identified by Periphery)
+
+**AI Services - Unused Properties and Functions:**
+- LLMService.swift:57 - Property 'requestQueue' is unused
+- LLMService.swift:373 - Function 'startConversationStructured()' is unused  
+- LLMService.swift:645 - Function 'getAvailableModels(capability:)' is unused
+- LLMService.swift:700,844 - Function 'clearConversation(id:)' is unused (duplicate)
+- LLMService.swift:707 - Function 'getConversationMessages(id:)' is unused
+
+**Conversation Models - Unused Types:**
+- ConversationModels.swift:53 - Property 'llmMessage' is unused
+- ConversationTypes.swift:15,18 - Typealias 'LLMMessage', 'LLMResponse' unused
+- ConversationTypes.swift:33 - Function 'textWithImage()' is unused
+
+**OpenRouter Model - Unused Properties:**
+- OpenRouterModel.swift:89 - Property 'modelName' is unused
+- OpenRouterService.swift:118 - Function 'getModelsWithCapability()' is unused
+- OpenRouterService.swift:246 - Property 'icon' is unused
+
+**Legacy AI Model Constants (All Unused):**
+- AIModels.swift:16-43 - All model constant properties unused (gpt4o, claude_3_opus, etc.)
+
+**ResumeRevise ViewModel - Unused Methods:**
+- ResumeReviseViewModel.swift:47,50 - Properties 'maxRetries', 'revisionTimeout' unused
+- ResumeReviseViewModel.swift:72 - Function 'handleAIResubmitChange()' unused
+- ResumeReviseViewModel.swift:210-521 - Multiple unused methods and enums
+
+**Service Methods - Unused Functions:**
+- ApplicationReviewService.swift:35,43 - Functions 'initialize()', 'buildPrompt()' unused
+- CoverLetterService.swift:23 - Property 'errorMessage' unused
+- CoverLetterService.swift:199 - Function 'clearConversationContext()' unused
+
+### MEDIUM - App State and Settings Cleanup
+
+**Settings Management:**
+- AppState+Settings.swift:13,26 - Class 'SettingsManager' and property 'settings' unused
+- AppState+APIKeys.swift:16 - Property 'hasValidOpenAiKey' unused
+
+**API Keys Settings:**
+- APIKeysSettingsView.swift:13,19,26 - Multiple OpenAI key properties unused
+
+**Toolbar and UI:**
+- UnifiedToolbar.swift:575 - Function 'actionButton()' unused
+- UnifiedToolbar.swift:614 - Property 'coverLetterStore' unused
+
+### LOW - Cover Letter and Resume Models
+
+**Cover Letter Models:**
+- CoverLetter.swift:21,63 - Functions and properties related to conversation context unused
+- CoverLetter.swift:274 - Initializer 'init(content:role:)' unused
+
+**Resume Models:**
+- Resume.swift:15 - Function 'clearConversationContext()' unused
+- Resume.swift:111 - Function 'generateQuery()' unused
+
+**PDF ViewModels:**
+- ResumePDFViewModel.swift:20,25 - Initializer and update function unused
+
+### EXCLUDED FROM CLEANUP - TTS Code (Per User Request)
+**TTS Components - LEAVE ALONE:**
+- All TTSAudioStreamer.swift unused properties/methods - DO NOT TOUCH
+- All OpenAITTSProvider.swift unused functions - DO NOT TOUCH  
+- All TTSViewModel.swift unused methods - DO NOT TOUCH
+- All TTSTypes.swift unused protocols - DO NOT TOUCH
+
 ## Action Items for Future
 - Audit all files importing removed provider classes
 - Check for unused imports of legacy SwiftOpenAI types
@@ -223,6 +290,8 @@ Evidence: Necessary workaround for fragmented architecture, eliminated by LLMSer
 - Remove hardcoded model capability detection in favor of OpenRouterModel properties
 - Consolidate conversation management to single system
 - Remove duplicate error handling patterns across old providers
+- **PRIORITY**: Clean up 100+ unused properties and functions identified by periphery scan
+- **AVOID**: Any TTS-related code cleanup (keep it functional as-is)
 
 # Important Questions/Suggestions and Observations
 
