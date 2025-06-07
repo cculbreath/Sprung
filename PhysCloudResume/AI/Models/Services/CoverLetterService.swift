@@ -19,8 +19,6 @@ class CoverLetterService: ObservableObject {
     /// Conversation tracking
     private var conversations: [UUID: UUID] = [:] // coverLetterId -> conversationId
     
-    /// Error state
-    @Published var errorMessage: String?
     
     // MARK: - Initialization
     
@@ -194,12 +192,6 @@ class CoverLetterService: ObservableObject {
     
     // MARK: - Conversation Management
     
-    /// Clear conversation context for a cover letter
-    /// - Parameter coverLetter: The cover letter to clear context for
-    func clearConversationContext(for coverLetter: CoverLetter) {
-        conversations.removeValue(forKey: coverLetter.id)
-        coverLetter.clearConversationContext()
-    }
     
     // MARK: - Helper Methods
     

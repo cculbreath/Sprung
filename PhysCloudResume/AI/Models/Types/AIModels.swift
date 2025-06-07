@@ -10,37 +10,8 @@ import PDFKit
 import AppKit
 import SwiftUI
 
-/// Constants for AI model identifiers
+/// Utilities for AI model management and display
 struct AIModels {
-    // OpenAI models (only keeping the ones that are used)
-    static let gpt4o = "gpt-4o"
-    static let o4_mini = "gpt-4o-mini"  // Corrected model name
-    static let gpt4o_mini = "gpt-4o-mini"
-    static let gpt4o_latest = "gpt-4o-2024-05-13"  // Latest version
-    static let gpt_4o_mini_tts = "gpt-4o-mini-tts" // TTS model
-    static let gpt4o_2024_08_06 = "gpt-4o-2024-08-06" // August 2024 update
-    
-    // OpenAI reasoning models
-    static let o1 = "o1"
-    static let o1_mini = "o1-mini"
-    static let o1_preview = "o1-preview"
-    
-    // Anthropic Claude models
-    static let claude_3_opus = "claude-3-opus-20240229"
-    static let claude_3_sonnet = "claude-3-sonnet-20240229"
-    static let claude_3_haiku = "claude-3-haiku-20240307"
-    static let claude_3_5_haiku = "claude-3-5-haiku-latest"
-    
-    // xAI Grok models
-    static let grok_1 = "grok-1"
-    static let grok_1_5_mini = "grok-1.5-mini"
-    static let grok_1_5 = "grok-1.5"
-    
-    // Google Gemini models
-    static let gemini_2_5_flash_preview = "gemini-2.5-flash-preview-05-20"
-    static let gemini_2_0_flash = "gemini-2.0-flash"
-    static let gemini_pro = "gemini-pro"
-    static let gemini_1_5_flash = "gemini-1.5-flash"
     
     // Model provider prefixes for displaying and identifying models
     struct Provider {

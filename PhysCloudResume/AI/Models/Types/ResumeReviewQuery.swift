@@ -235,12 +235,12 @@ import Foundation
         You must respond with a valid JSON object:
         {
           "contentsFit": true_or_false,
-          "overflowLineCount": number_of_overflowing_lines
+          "overflow_line_count": number_of_overflowing_lines
         }
         
         - Set contentsFit to true if all content fits properly within the section boundaries
         - Set contentsFit to false if there appears to be text overflow or cut-off content
-        - Set overflowLineCount to the estimated number of lines that are overflowing (0 if content fits)
+        - Set overflow_line_count to the estimated number of lines that are overflowing (0 if content fits)
         - Do not include any text outside the JSON object
         """
     }

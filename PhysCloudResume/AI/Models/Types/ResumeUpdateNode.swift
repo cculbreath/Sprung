@@ -30,8 +30,12 @@ struct ProposedRevisionNode: Codable, Equatable {
     /// Moved from ReviewView for better encapsulation
     func originalText(using updateNodes: [[String: Any]]) -> String {
         let trimmedOld = oldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Debug logging to help diagnose the issue
+        Logger.debug("🔍 ProposedRevisionNode.originalText - ID: \(id), isTitleNode: \(isTitleNode), oldValue: '\(oldValue)'")
 
         if !trimmedOld.isEmpty {
+            Logger.debug("✅ Using oldValue: '\(trimmedOld)'")
             return trimmedOld
         }
 
@@ -40,14 +44,26 @@ struct ProposedRevisionNode: Codable, Equatable {
             ($0["id"] as? String) == id && 
             ($0["isTitleNode"] as? Bool) == isTitleNode 
         }) {
-            // For title nodes, use the "name" field; for content nodes, use the "value" field
-            let fieldToUse = isTitleNode ? (dict["name"] as? String) : (dict["value"] as? String)
-            if let fieldValue = fieldToUse?.trimmingCharacters(in: .whitespacesAndNewlines),
+            Logger.debug("🎯 Found matching updateNode: \(dict)")
+            // Always use the "value" field from updateNodes - this contains the correct content
+            // whether it's a title node (name) or content node (value)
+            if let fieldValue = (dict["value"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                !fieldValue.isEmpty {
+                Logger.debug("✅ Using updateNode value: '\(fieldValue)'")
                 return fieldValue
+            }
+        } else {
+            Logger.debug("❌ No matching updateNode found for ID: \(id), isTitleNode: \(isTitleNode)")
+            // List all available updateNodes for debugging
+            for (index, node) in updateNodes.enumerated() {
+                let nodeId = node["id"] as? String ?? "nil"
+                let nodeIsTitleNode = node["isTitleNode"] as? Bool ?? false
+                let nodeValue = node["value"] as? String ?? "nil"
+                Logger.debug("  updateNode[\(index)]: id=\(nodeId), isTitleNode=\(nodeIsTitleNode), value='\(nodeValue.prefix(50))...'")
             }
         }
         
+        Logger.debug("⚠️ Fallback to '(no text)'")
         return "(no text)"
     }
     
@@ -165,6 +181,34 @@ struct ProposedRevisionNode: Codable, Equatable {
 
 struct RevisionsContainer: Codable, StructuredOutput {
     var revArray: [ProposedRevisionNode]
+    
+    /// Custom coding keys to handle case variations from different LLM responses
+    enum CodingKeys: String, CodingKey {
+        case revArray = "revArray"
+        case RevArray = "RevArray"  // Handle uppercase variant
+    }
+    
+    /// Custom decoder to handle both revArray and RevArray keys
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Try lowercase first, then uppercase
+        if let array = try? container.decode([ProposedRevisionNode].self, forKey: .revArray) {
+            self.revArray = array
+        } else if let array = try? container.decode([ProposedRevisionNode].self, forKey: .RevArray) {
+            self.revArray = array
+        } else {
+            throw DecodingError.keyNotFound(CodingKeys.revArray, 
+                DecodingError.Context(codingPath: decoder.codingPath, 
+                                    debugDescription: "Neither 'revArray' nor 'RevArray' found in response"))
+        }
+    }
+    
+    /// Custom encoder to always use lowercase revArray
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(revArray, forKey: .revArray)
+    }
     
     /// Validate the revisions container
     /// - Returns: True if valid, false otherwise

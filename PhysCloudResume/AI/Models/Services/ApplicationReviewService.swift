@@ -27,36 +27,18 @@ class ApplicationReviewService: @unchecked Sendable {
     // MARK: - Initialization
     
     /// Initialize with LLM service
-    init(llmService: LLMService = LLMService.shared) {
+    init(llmService: LLMService) {
         self.llmService = llmService
     }
     
-    /// Initialize the LLM client
-    func initialize() {
-        // No longer needed - LLMService manages its own initialization
-        Logger.debug("ApplicationReviewService: Initialization delegated to LLMService")
+    /// Convenience initializer that uses the shared LLM service
+    @MainActor
+    convenience init() {
+        self.init(llmService: LLMService.shared)
     }
-
-    // MARK: - Deprecated Legacy Methods (kept for compatibility)
     
-    /// Legacy method kept for compatibility - delegates to ApplicationReviewQuery
-    func buildPrompt(
-        reviewType: ApplicationReviewType,
-        jobApp: JobApp,
-        resume: Resume,
-        coverLetter: CoverLetter?,
-        includeImage: Bool,
-        customOptions: CustomApplicationReviewOptions? = nil
-    ) -> String {
-        return query.buildReviewPrompt(
-            reviewType: reviewType,
-            jobApp: jobApp,
-            resume: resume,
-            coverLetter: coverLetter,
-            includeImage: includeImage,
-            customOptions: customOptions
-        )
-    }
+
+    // MARK: - Core Review Operations
 
     // MARK: - LLM Request (non-image handled by client, image via raw call)
 

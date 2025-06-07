@@ -392,24 +392,6 @@ struct CapabilityIndicator: View {
     }
 }
 
-struct CapabilityTag: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption2)
-            Text(text)
-                .font(.caption2)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Color.accentColor.opacity(0.1))
-        .foregroundColor(.accentColor)
-        .cornerRadius(4)
-    }
-}
 
 #Preview {
     OpenRouterModelSelectionSheet()

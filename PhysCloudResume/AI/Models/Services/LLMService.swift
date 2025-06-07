@@ -638,6 +638,122 @@ class LLMService {
         return results
     }
     
+    /// Execute request across multiple models in parallel with flexible JSON handling
+    /// Uses structured output when available, falls back to prompt-based JSON guidance
+    /// - Parameters:
+    ///   - prompt: The text prompt
+    ///   - modelIds: Array of model identifiers to use
+    ///   - responseType: The expected response type
+    ///   - temperature: Optional temperature setting
+    ///   - jsonSchema: Optional JSON schema for models that support structured output
+    /// - Returns: Dictionary mapping model IDs to their responses
+    func executeParallelFlexibleJSON<T: Codable>(
+        prompt: String,
+        modelIds: [String],
+        responseType: T.Type,
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> [String: T] {
+        try ensureInitialized()
+        
+        var results: [String: T] = [:]
+        
+        // Execute in parallel using TaskGroup
+        try await withThrowingTaskGroup(of: (String, T).self) { group in
+            for modelId in modelIds {
+                group.addTask {
+                    let result = try await self.executeFlexibleJSON(
+                        prompt: prompt,
+                        modelId: modelId,
+                        responseType: responseType,
+                        temperature: temperature,
+                        jsonSchema: jsonSchema
+                    )
+                    return (modelId, result)
+                }
+            }
+            
+            // Collect results
+            for try await (modelId, result) in group {
+                results[modelId] = result
+            }
+        }
+        
+        return results
+    }
+    
+    /// Request with flexible JSON output - uses structured output when available, basic JSON mode otherwise
+    /// - Parameters:
+    ///   - prompt: The text prompt (should already include JSON formatting instructions if needed)
+    ///   - modelId: The model identifier
+    ///   - responseType: The expected response type
+    ///   - temperature: Optional temperature setting
+    ///   - jsonSchema: Optional JSON schema for models that support structured output
+    /// - Returns: The parsed response
+    func executeFlexibleJSON<T: Codable>(
+        prompt: String,
+        modelId: String,
+        responseType: T.Type,
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> T {
+        try ensureInitialized()
+        
+        let requestId = UUID()
+        currentRequestIDs.insert(requestId)
+        defer { currentRequestIDs.remove(requestId) }
+        
+        // Validate model exists
+        try validateModel(modelId: modelId, for: [])
+        
+        // Check if model supports structured output
+        let model = appState?.openRouterService.findModel(id: modelId)
+        let supportsStructuredOutput = model?.supportsStructuredOutput ?? false
+        
+        let message = LLMMessage.text(role: .user, content: prompt)
+        let parameters: ChatCompletionParameters
+        
+        if supportsStructuredOutput {
+            if let schema = jsonSchema {
+                // Use full structured output with JSON schema enforcement
+                let responseFormatSchema = JSONSchemaResponseFormat(
+                    name: String(describing: responseType).lowercased(),
+                    strict: true,
+                    schema: schema
+                )
+                Logger.debug("📝 Using structured output with JSON Schema enforcement for model: \(modelId)")
+                parameters = ChatCompletionParameters(
+                    messages: [message],
+                    model: .custom(modelId),
+                    responseFormat: .jsonSchema(responseFormatSchema),
+                    temperature: temperature ?? defaultTemperature
+                )
+            } else {
+                // Use basic JSON object format (still structured but no schema)
+                Logger.debug("📝 Using structured output with JSON object mode for model: \(modelId)")
+                parameters = ChatCompletionParameters(
+                    messages: [message],
+                    model: .custom(modelId),
+                    responseFormat: .jsonObject,
+                    temperature: temperature ?? defaultTemperature
+                )
+            }
+        } else {
+            // Use basic mode - rely on prompt instructions for JSON formatting
+            Logger.debug("📝 Using basic mode with prompt-based JSON for model: \(modelId)")
+            parameters = ChatCompletionParameters(
+                messages: [message],
+                model: .custom(modelId),
+                temperature: temperature ?? defaultTemperature
+            )
+        }
+        
+        // Execute with retry logic and flexible parsing
+        return try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
+            try self.parseFlexibleJSONResponse(response, as: responseType)
+        }
+    }
+    
     // MARK: - Model Management
     
     /// Validate that a model exists and has required capabilities
@@ -767,6 +883,18 @@ class LLMService {
         return try parseJSONFromText(content, as: type)
     }
     
+    /// Parse flexible JSON response with enhanced error handling and recovery strategies
+    private func parseFlexibleJSONResponse<T: Codable>(_ response: LLMResponse, as type: T.Type) throws -> T {
+        guard let content = response.choices?.first?.message?.content else {
+            throw LLMError.unexpectedResponseFormat
+        }
+        
+        Logger.debug("🔍 Parsing flexible JSON response (\(content.count) chars): \(content.prefix(200))...")
+        
+        // Try to parse JSON from the response content with enhanced fallback strategies
+        return try parseJSONFromTextFlexible(content, as: type)
+    }
+    
     /// Extract and parse JSON from text response
     private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
         Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(200))...")
@@ -813,6 +941,98 @@ class LLMService {
         
         Logger.error("❌ All JSON parsing attempts failed")
         throw LLMError.unexpectedResponseFormat
+    }
+    
+    /// Enhanced JSON parsing with additional fallback strategies for flexible responses
+    private func parseJSONFromTextFlexible<T: Codable>(_ text: String, as type: T.Type) throws -> T {
+        Logger.debug("🔍 Attempting flexible JSON parsing from text: \(text.prefix(200))...")
+        
+        // First try the standard parsing approach
+        do {
+            return try parseJSONFromText(text, as: type)
+        } catch {
+            Logger.debug("🔄 Standard parsing failed, trying enhanced strategies...")
+        }
+        
+        // Enhanced cleanup strategies for models that include extra text
+        let cleanupStrategies = [
+            // Remove common markdown code block formatting
+            { (text: String) -> String in
+                text.replacingOccurrences(of: "```json", with: "")
+                    .replacingOccurrences(of: "```", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            },
+            // Remove text before and after JSON by finding the longest valid JSON
+            { (text: String) -> String in
+                // Find all potential JSON objects/arrays and try the largest one
+                let patterns = [
+                    #"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"#,  // Nested object matching
+                    #"\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\]"#  // Nested array matching
+                ]
+                
+                var candidates: [(String, Int)] = []
+                for pattern in patterns {
+                    if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) {
+                        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+                        for match in matches {
+                            if let range = Range(match.range, in: text) {
+                                let candidate = String(text[range])
+                                candidates.append((candidate, candidate.count))
+                            }
+                        }
+                    }
+                }
+                
+                // Return the longest candidate, or original text if none found
+                return candidates.max(by: { $0.1 < $1.1 })?.0 ?? text
+            },
+            // Remove leading/trailing text by finding balanced braces
+            { (text: String) -> String in
+                var startIndex: String.Index?
+                var endIndex: String.Index?
+                var braceCount = 0
+                
+                for (index, char) in text.enumerated() {
+                    let stringIndex = text.index(text.startIndex, offsetBy: index)
+                    if char == "{" {
+                        if startIndex == nil {
+                            startIndex = stringIndex
+                        }
+                        braceCount += 1
+                    } else if char == "}" {
+                        braceCount -= 1
+                        if braceCount == 0 && startIndex != nil {
+                            endIndex = text.index(after: stringIndex)
+                            break
+                        }
+                    }
+                }
+                
+                if let start = startIndex, let end = endIndex {
+                    return String(text[start..<end])
+                }
+                return text
+            }
+        ]
+        
+        // Try each cleanup strategy
+        for (index, strategy) in cleanupStrategies.enumerated() {
+            let cleanedText = strategy(text)
+            if cleanedText != text {
+                Logger.debug("🧹 Trying cleanup strategy \(index + 1): \(cleanedText.prefix(100))...")
+                do {
+                    let result = try parseJSONFromText(cleanedText, as: type)
+                    Logger.debug("✅ Flexible parsing successful with strategy \(index + 1)")
+                    return result
+                } catch {
+                    Logger.debug("⚠️ Cleanup strategy \(index + 1) failed: \(error)")
+                    continue
+                }
+            }
+        }
+        
+        Logger.error("❌ All flexible parsing strategies failed")
+        throw LLMError.decodingFailed(NSError(domain: "FlexibleJSONParsing", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not extract valid JSON from response"]))
     }
     
     /// Cancel all current requests

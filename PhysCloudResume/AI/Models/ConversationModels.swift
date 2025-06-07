@@ -7,9 +7,9 @@
 
 import SwiftData
 import Foundation
-import SwiftOpenAI
 
 // MARK: - SwiftData Models for Conversational AI Context
+// Note: Type aliases for SwiftOpenAI types are defined in ConversationTypes.swift
 
 @Model
 class ConversationContext {
@@ -49,15 +49,6 @@ class ConversationMessage {
         self.timestamp = Date()
     }
     
-    // Convert to LLMMessage for API calls
-    var llmMessage: LLMMessage {
-        let messageRole = ChatCompletionParameters.Message.Role(rawValue: role) ?? .user
-        if let imageData = imageData {
-            return LLMMessage.textWithImage(role: messageRole, text: content, imageData: imageData)
-        } else {
-            return LLMMessage.text(role: messageRole, content: content)
-        }
-    }
 }
 
 // MARK: - Supporting Types

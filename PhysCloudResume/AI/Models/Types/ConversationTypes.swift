@@ -14,8 +14,14 @@ import SwiftOpenAI
 /// Use SwiftOpenAI's native message type throughout the application
 public typealias LLMMessage = ChatCompletionParameters.Message
 
-/// Use SwiftOpenAI's native response type throughout the application
+/// Use SwiftOpenAI's native response type throughout the application  
 public typealias LLMResponse = ChatCompletionObject
+
+/// JSON Schema types for structured outputs
+public typealias JSONSchema = SwiftOpenAI.JSONSchema
+public typealias JSONSchemaResponseFormat = SwiftOpenAI.JSONSchemaResponseFormat
+public typealias ChatCompletionParameters = SwiftOpenAI.ChatCompletionParameters
+
 
 // MARK: - Convenience Extensions for LLMMessage
 
@@ -29,24 +35,6 @@ extension ChatCompletionParameters.Message {
         )
     }
     
-    /// Create a message with text and image
-    public static func textWithImage(
-        role: Role, 
-        text: String, 
-        imageData: String, 
-        mimeType: String = "image/png"
-    ) -> ChatCompletionParameters.Message {
-        let imageURL = URL(string: "data:\(mimeType);base64,\(imageData)")!
-        let textContent = ChatCompletionParameters.Message.ContentType.MessageContent.text(text)
-        let imageContent = ChatCompletionParameters.Message.ContentType.MessageContent.imageUrl(
-            ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
-        )
-        
-        return ChatCompletionParameters.Message(
-            role: role,
-            content: .contentArray([textContent, imageContent])
-        )
-    }
     
     /// Get text content from message (helper for existing code compatibility)
     public var textContent: String {

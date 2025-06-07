@@ -48,7 +48,7 @@ struct ContentView: View {
         } detail: {
             // --- Detail Column ---
             VStack(alignment: .leading) {
-                if let selApp = jobAppStore.selectedApp {
+                if jobAppStore.selectedApp != nil {
                     // Embed AppWindowView directly
                     AppWindowView(selectedTab: $selectedTab, tabRefresh: $tabRefresh)
 //                        .navigationTitle(" ")

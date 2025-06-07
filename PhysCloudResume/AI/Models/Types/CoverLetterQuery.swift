@@ -386,6 +386,67 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
         return prompt
     }
     
+    /// Get JSON schema for the specified voting scheme
+    static func getJSONSchema(for votingScheme: VotingScheme) -> JSONSchema? {
+        if votingScheme == .firstPastThePost {
+            // FPTP schema
+            return JSONSchema(
+                type: .object,
+                properties: [
+                    "strengthAndVoiceAnalysis": JSONSchema(
+                        type: .string,
+                        description: "Brief summary ranking/assessment of each letter's strength and voice"
+                    ),
+                    "bestLetterUuid": JSONSchema(
+                        type: .string,
+                        description: "UUID of the selected best cover letter"
+                    ),
+                    "verdict": JSONSchema(
+                        type: .string,
+                        description: "Reason for the ultimate choice"
+                    )
+                ],
+                required: ["strengthAndVoiceAnalysis", "bestLetterUuid", "verdict"],
+                additionalProperties: false
+            )
+        } else {
+            // Score voting schema
+            return JSONSchema(
+                type: .object,
+                properties: [
+                    "strengthAndVoiceAnalysis": JSONSchema(
+                        type: .string,
+                        description: "Brief assessment of each letter's strengths"
+                    ),
+                    "scoreAllocations": JSONSchema(
+                        type: .array,
+                        items: JSONSchema(
+                            type: .object,
+                            properties: [
+                                "letterUuid": JSONSchema(
+                                    type: .string,
+                                    description: "UUID of the cover letter"
+                                ),
+                                "score": JSONSchema(
+                                    type: .integer,
+                                    description: "Points allocated to this letter (total must equal 20)"
+                                )
+                            ],
+                            required: ["letterUuid", "score"],
+                            additionalProperties: false
+                        )
+                    ),
+                    "verdict": JSONSchema(
+                        type: .string,
+                        description: "Explanation of point allocation"
+                    )
+                ],
+                required: ["strengthAndVoiceAnalysis", "scoreAllocations", "verdict"],
+                additionalProperties: false
+            )
+        }
+    }
+    
     // MARK: - Debugging Helper
     
     /// Saves the provided prompt text to the user's `Downloads` folder for debugging purposes.

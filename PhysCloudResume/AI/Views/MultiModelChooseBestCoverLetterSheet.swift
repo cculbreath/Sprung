@@ -378,11 +378,12 @@ struct MultiModelChooseBestCoverLetterSheet: View {
                 votingScheme: selectedVotingScheme
             )
             
-            // Use LLMService for parallel execution
-            let result = try await LLMService.shared.executeParallelStructured(
+            // Use LLMService for parallel execution with flexible JSON handling
+            let result = try await LLMService.shared.executeParallelFlexibleJSON(
                 prompt: prompt,
                 modelIds: Array(selectedModels),
-                responseType: BestCoverLetterResponse.self
+                responseType: BestCoverLetterResponse.self,
+                jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
             )
             
             await MainActor.run {
@@ -538,7 +539,7 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             let (_, summaryText) = try await llmService.startConversation(
                 systemPrompt: "You are an expert at analyzing and summarizing AI model reasoning. Provide clear, insightful summaries that help users understand the decision-making process.",
                 userMessage: summaryPrompt,
-                modelId: AIModels.o4_mini,
+                modelId: "openai/gpt-4o-mini",
                 temperature: 0.7
             )
             

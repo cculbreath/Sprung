@@ -31,14 +31,25 @@ struct BatchCoverLetterView: View {
     let availableRevisions: [CoverLetterPrompts.EditorPrompts] = [.improve, .zissner, .mimic]
     
     var body: some View {
-        VStack(spacing: 20) {
-            headerSection
-            modeSelector
-            contentSection
+        VStack(spacing: 0) {
+            // Scrollable content area
+            ScrollView {
+                VStack(spacing: 20) {
+                    headerSection
+                    modeSelector
+                    contentSection
+                }
+                .padding()
+                .padding(.bottom, 8) // Extra space before action section
+            }
+            
+            // Fixed action section at bottom
+            Divider()
             actionSection
+                .padding()
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.8))
         }
-        .padding()
-        .frame(width: 500, height: 600)
+        .frame(width: 550, height: 600)
         .onAppear {
             // Fetch OpenRouter models if we don't have any and have a valid API key
             if appState.hasValidOpenRouterKey && openRouterService.availableModels.isEmpty {
