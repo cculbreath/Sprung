@@ -63,7 +63,7 @@ struct CoverLetterRevisionsView: View {
                 .padding(.horizontal)
             
             if let coverLetter = coverLetterStore.cL,
-               let resume = jobAppStore.selectedApp?.selectedRes {
+               let _ = jobAppStore.selectedApp?.selectedRes {
                 
                 VStack(alignment: .leading, spacing: 12) {
                     // Revision mode picker

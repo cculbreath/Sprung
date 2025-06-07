@@ -158,7 +158,7 @@ class Resume: Identifiable, Hashable {
                 Task { @MainActor in // Ensure export service call and property updates are on MainActor
                     do {
                         // This now calls the async version of export which updates pdfData and textRes
-                        try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
+                        try await ResumeExportService().export(jsonURL: jsonFile, for: self)
                     } catch {
                         Logger.debug("Error during debounced export: \(error)")
                     }
@@ -196,7 +196,7 @@ class Resume: Identifiable, Hashable {
         // The ApiResumeExportService().export function is already async
         // and should update self.pdfData and self.textRes upon completion.
         do {
-            try await ApiResumeExportService().export(jsonURL: jsonFile, for: self)
+            try await ResumeExportService().export(jsonURL: jsonFile, for: self)
             Logger.debug("ensureFreshRenderedText: Successfully exported and updated resume data.")
             Logger.debug(textRes)
         } catch {

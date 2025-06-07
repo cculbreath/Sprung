@@ -18,6 +18,12 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
     var renderedResumeText: String
     var style: String
     var includeFonts: Bool = false
+    
+    // Template customization
+    var useNativeGeneration: Bool = true
+    var customTemplateHTML: String?
+    var customTemplateText: String?
+    var templateName: String? // Custom template name if using custom templates
 
     // Override the initializer to set the type to '.jsonSource'
     init(
@@ -45,6 +51,10 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
         case renderedResumeText
         case style
         case includeFonts
+        case useNativeGeneration
+        case customTemplateHTML
+        case customTemplateText
+        case templateName
     }
 
     required init(from decoder: Decoder) throws {
@@ -56,6 +66,10 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
         renderedResumeText = try container.decode(String.self, forKey: .renderedResumeText)
         style = try container.decode(String.self, forKey: .style)
         includeFonts = try container.decode(Bool.self, forKey: .includeFonts)
+        useNativeGeneration = try container.decodeIfPresent(Bool.self, forKey: .useNativeGeneration) ?? true
+        customTemplateHTML = try container.decodeIfPresent(String.self, forKey: .customTemplateHTML)
+        customTemplateText = try container.decodeIfPresent(String.self, forKey: .customTemplateText)
+        templateName = try container.decodeIfPresent(String.self, forKey: .templateName)
         resumes = []
     }
 
@@ -68,5 +82,9 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
         try container.encode(renderedResumeText, forKey: .renderedResumeText)
         try container.encode(style, forKey: .style)
         try container.encode(includeFonts, forKey: .includeFonts)
+        try container.encode(useNativeGeneration, forKey: .useNativeGeneration)
+        try container.encodeIfPresent(customTemplateHTML, forKey: .customTemplateHTML)
+        try container.encodeIfPresent(customTemplateText, forKey: .customTemplateText)
+        try container.encodeIfPresent(templateName, forKey: .templateName)
     }
 }

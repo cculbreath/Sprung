@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		573467692DF42865008DED68 /* Mustache in Frameworks */ = {isa = PBXBuildFile; productRef = 573467682DF42865008DED68 /* Mustache */; };
 		574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 574223A92DD9392200EF672C /* ChunkedAudioPlayer */; };
 		57DAC2742DDA558300B511B5 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57DAC2732DDA558300B511B5 /* SwiftOpenAI */; };
 		57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1C2DBA323F000F1A48 /* SwiftyJSON */; };
@@ -51,6 +52,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				573467692DF42865008DED68 /* Mustache in Frameworks */,
 				57DC509F2DBA3B68000F1A48 /* OrderedCollections in Frameworks */,
 				57DAC2742DDA558300B511B5 /* SwiftOpenAI in Frameworks */,
 				57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */,
@@ -142,6 +144,7 @@
 				574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */,
 				57DAC2722DDA558300B511B5 /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 				57306AF32DDE57980053246D /* XCRemoteSwiftPackageReference "ViewInspector" */,
+				573467672DF42865008DED68 /* XCRemoteSwiftPackageReference "GRMustache.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
@@ -399,6 +402,14 @@
 				minimumVersion = 0.10.1;
 			};
 		};
+		573467672DF42865008DED68 /* XCRemoteSwiftPackageReference "GRMustache.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRMustache.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
 		574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/cculbreath/swift-chunked-audio-player";
@@ -442,6 +453,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		573467682DF42865008DED68 /* Mustache */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 573467672DF42865008DED68 /* XCRemoteSwiftPackageReference "GRMustache.swift" */;
+			productName = Mustache;
+		};
 		574223A92DD9392200EF672C /* ChunkedAudioPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 574223A82DD9392200EF672C /* XCRemoteSwiftPackageReference "swift-chunked-audio-player" */;

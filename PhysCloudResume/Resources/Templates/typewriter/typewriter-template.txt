@@ -1,0 +1,38 @@
+{{{centeredName}}}
+
+{{{centeredJobTitles}}}
+
+{{{centeredContact}}}
+
+{{{wrappedSummary}}}
+
+{{{sectionLine_skillsAndExpertise}}}
+
+{{{skillsAndExpertiseFormatted}}}
+
+{{{sectionLine_employment}}}
+
+{{#employment}}
+{{{employmentFormatted}}}
+{{{position}}}
+{{#highlights}}
+{{#.}}
+  • {{.}}
+{{/.}}
+{{/highlights}}
+
+{{/employment}}
+
+{{{sectionLine_education}}}
+
+{{#education}}
+    {{end}} | {{title}}
+         | {{institution}}
+
+{{/education}}
+
+{{{sectionLine_hobbies}}}
+
+{{{projectsHighlightsFormatted}}}
+
+{{{footerTextFormatted}}}
