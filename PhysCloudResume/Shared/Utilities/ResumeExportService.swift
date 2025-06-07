@@ -19,6 +19,11 @@ struct ApiResumeExportService {
         guard let style = resume.model?.style else { throw ExportError.missingStyle }
 
         let fileData = try Data(contentsOf: jsonURL)
+        
+        // Debug logging
+        if let jsonString = String(data: fileData, encoding: .utf8) {
+            Logger.debug("Sending JSON to API (first 500 chars): \(String(jsonString.prefix(500)))")
+        }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -45,7 +50,25 @@ struct ApiResumeExportService {
 
         request.httpBody = body
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        // Check for HTTP errors first
+        if let httpResponse = response as? HTTPURLResponse {
+            Logger.debug("API Response Status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode != 200 {
+                if let responseString = String(data: data, encoding: .utf8) {
+                    Logger.debug("API Error Response: \(responseString)")
+                }
+                throw ExportError.serverError(statusCode: httpResponse.statusCode)
+            }
+        }
+        
+        // Debug logging for successful responses
+        if let responseString = String(data: data, encoding: .utf8) {
+            Logger.debug("API Response Body: \(responseString)")
+        }
+        
         guard
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
             let pdfUrl = json["pdfUrl"] as? String
@@ -79,8 +102,20 @@ struct ApiResumeExportService {
         resume.pdfData = data
     }
 
-    enum ExportError: Error {
+    enum ExportError: LocalizedError {
         case missingStyle
         case invalidResponse
+        case serverError(statusCode: Int)
+        
+        var errorDescription: String? {
+            switch self {
+            case .missingStyle:
+                return "Resume style is not configured"
+            case .invalidResponse:
+                return "Invalid response from server"
+            case .serverError(let statusCode):
+                return "Server error: HTTP \(statusCode)"
+            }
+        }
     }
 }
