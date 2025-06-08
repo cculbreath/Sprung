@@ -13,18 +13,24 @@ struct NodeWithChildrenView: View {
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
 
     var body: some View {
-        VStack(alignment: .leading) {
-            // Header combines the chevron, title, add button, and status badge.
-            NodeHeaderView(
-                node: node,
-                addChildAction: { vm.addChild(to: node) }
-            )
+        DraggableNodeWrapper(node: node, siblings: getSiblings()) {
+            VStack(alignment: .leading) {
+                // Header combines the chevron, title, add button, and status badge.
+                NodeHeaderView(
+                    node: node,
+                    addChildAction: { vm.addChild(to: node) }
+                )
 
-            // Show child nodes when expanded.
-            if vm.isExpanded(node) {
-                // one stable array identity -> zero diff-engine churn
-                NodeChildrenListView(children: node.orderedChildren)
+                // Show child nodes when expanded.
+                if vm.isExpanded(node) {
+                    // one stable array identity -> zero diff-engine churn
+                    NodeChildrenListView(children: node.orderedChildren)
+                }
             }
         }
+    }
+    
+    private func getSiblings() -> [TreeNode] {
+        return node.parent?.orderedChildren ?? []
     }
 }

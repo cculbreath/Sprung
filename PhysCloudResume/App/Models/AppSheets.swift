@@ -14,6 +14,7 @@ struct AppSheets {
     var showChooseBestCoverLetter = false
     var showMultiModelChooseBest = false
     var showBatchCoverLetter = false
+    var showNewJobApp = false
     
     // UI state that was previously in ResumeButtons
     var showResumeInspector = false

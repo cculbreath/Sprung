@@ -81,7 +81,8 @@ struct AppWindowView: View {
                         refresh: $tabRefresh,
                         sheets: $sheets,
                         clarifyingQuestions: $clarifyingQuestions,
-                        resumeReviseViewModel: resumeReviseViewModel
+                        resumeReviseViewModel: resumeReviseViewModel,
+                        showNewAppSheet: $sheets.showNewJobApp
                     )
                 }
                 .toolbarBackground(.visible, for: .windowToolbar)
@@ -136,6 +137,13 @@ struct AppWindowView: View {
                        let currentCoverLetter = coverLetterStore.cL {
                         MultiModelChooseBestCoverLetterSheet(coverLetter: .constant(currentCoverLetter))
                     }
+                }
+                .sheet(isPresented: $sheets.showNewJobApp) {
+                    NewAppSheetView(
+                        scrapingDogApiKey: appState.scrapingDogApiKey ?? "",
+                        isPresented: $sheets.showNewJobApp
+                    )
+                    .environment(jobAppStore)
                 }
                 .sheet(isPresented: $sheets.showApplicationReview) {
                     if let selApp = jobAppStore.selectedApp,

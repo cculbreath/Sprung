@@ -20,9 +20,6 @@ struct SidebarView: View {
     // State for the sliding list visibility
     @Binding var showSlidingList: Bool
 
-    // State passed from ContentView for the sheet
-    @Binding var showNewAppSheet: Bool
-
     var body: some View {
         VStack(spacing: 0) {
             // --- Main Content ---

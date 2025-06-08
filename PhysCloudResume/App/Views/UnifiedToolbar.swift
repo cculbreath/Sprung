@@ -11,7 +11,8 @@ func buildUnifiedToolbar(
     refresh: Binding<Bool>,
     sheets: Binding<AppSheets>,
     clarifyingQuestions: Binding<[ClarifyingQuestion]>,
-    resumeReviseViewModel: ResumeReviseViewModel?
+    resumeReviseViewModel: ResumeReviseViewModel?,
+    showNewAppSheet: Binding<Bool>
 ) -> some ToolbarContent {
     UnifiedToolbar(
         selectedTab: selectedTab,
@@ -19,7 +20,8 @@ func buildUnifiedToolbar(
         refresh: refresh,
         sheets: sheets,
         clarifyingQuestions: clarifyingQuestions,
-        resumeReviseViewModel: resumeReviseViewModel
+        resumeReviseViewModel: resumeReviseViewModel,
+        showNewAppSheet: showNewAppSheet
     )
 }
 
@@ -34,6 +36,7 @@ struct UnifiedToolbar: ToolbarContent {
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     var resumeReviseViewModel: ResumeReviseViewModel?
+    @Binding var showNewAppSheet: Bool
 
     @State private var isGeneratingResume = false
     @State private var isGeneratingCoverLetter = false
@@ -249,13 +252,19 @@ struct UnifiedToolbar: ToolbarContent {
     }
 
     var body: some ToolbarContent {
-        // ───── Left edge: Best Job button ─────
-        ToolbarItem(placement: .navigation) {
-            bestJobButton()
+        // ───── Left edge: Navigation buttons ─────
+        Group {
+            ToolbarItem(placement: .navigation) {
+                newJobAppButton()
+            }
+            
+            ToolbarItem(placement: .navigation) {
+                bestJobButton()
+            }
         }
 
         // ───── Center: All main buttons ─────
-        ToolbarItemGroup(placement: .principal) {
+        ToolbarItem(placement: .principal) {
             HStack(spacing: 20) {
                 // Resume Operations cluster
                 HStack(spacing: 12) {
@@ -596,6 +605,26 @@ struct UnifiedToolbar: ToolbarContent {
         .buttonStyle(.plain)
         .help(help)
         .disabled(disabled)
+    }
+
+    @ViewBuilder
+    private func newJobAppButton() -> some View {
+        Button(action: {
+            showNewAppSheet = true
+        }) {
+            VStack(spacing: 3) {
+                Image(systemName: "note.text.badge.plus")
+                    .font(.system(size: 18))
+                    .frame(height: 20)
+                Text("New App")
+                    .font(.system(size: 11))
+                    .frame(height: 14)
+            }
+            .frame(minWidth: 60, minHeight: 50)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .help("Create New Job Application")
     }
 
     @ViewBuilder

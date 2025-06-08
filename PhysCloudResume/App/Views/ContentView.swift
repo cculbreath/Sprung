@@ -12,7 +12,6 @@ struct ContentView: View {
 
     // States managed by ContentView
     @State var tabRefresh: Bool = false
-    @State var showNewAppSheet: Bool = false
     @State var showSlidingList: Bool = false
     @State var selectedTab: TabList = .listing
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
@@ -31,16 +30,14 @@ struct ContentView: View {
             SidebarView(
                 tabRefresh: $tabRefresh,
                 selectedApp: $jobAppStore.selectedApp, // Pass selection binding
-                showSlidingList: $showSlidingList, // Pass sliding list state
-                showNewAppSheet: $showNewAppSheet // Pass sheet state down
+                showSlidingList: $showSlidingList // Pass sliding list state
             )
             .frame(minWidth: 220, maxWidth: .infinity) // Keep min width for sidebar
             .toolbar {
                 // Only show toolbar when sidebar is visible
                 if sidebarVisibility != .detailOnly {
                     SidebarToolbarView(
-                        showSlidingList: $showSlidingList,
-                        showNewAppSheet: $showNewAppSheet
+                        showSlidingList: $showSlidingList
                     )
                 }
             }
@@ -68,14 +65,6 @@ struct ContentView: View {
                 .edgesIgnoringSafeArea(.top) // Allow divider to touch the top edge
             )
             // Note: The main application toolbar is attached within AppWindowView
-        }
-        .sheet(isPresented: $showNewAppSheet) {
-            // NewAppSheetView still presented from ContentView
-            NewAppSheetView(
-                scrapingDogApiKey: scrapingDogApiKey,
-                isPresented: $showNewAppSheet
-            )
-            .environment(jobAppStore)
         }
         .sheet(isPresented: $showImportSheet) {
             ImportJobAppsFromURLsView()
