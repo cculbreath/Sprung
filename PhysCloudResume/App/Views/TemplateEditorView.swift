@@ -628,14 +628,15 @@ struct TemplateEditorView: View {
         // Only generate live preview when editing the current template
         isGeneratingLivePreview = true
         
+        // Auto-save template changes and use normal export flow
+        if hasChanges {
+            saveTemplate()
+        }
+        
         do {
-            let generator = NativePDFGenerator()
-            // User is editing the template that the resume uses, so preview with custom content
-            let pdfData = try await generator.generatePDFFromCustomTemplate(
-                for: resume,
-                customHTML: templateContent
-            )
-            previewPDFData = pdfData
+            // Use the normal TreeNode→JSON→export flow for consistency
+            try await resume.ensureFreshRenderedText()
+            previewPDFData = resume.pdfData
         } catch {
             // Don't show error for live preview, just log it
             Logger.error("Live preview generation failed: \(error)")
