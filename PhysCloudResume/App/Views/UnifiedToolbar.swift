@@ -253,14 +253,12 @@ struct UnifiedToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         // ───── Left edge: Navigation buttons ─────
-        Group {
-            ToolbarItem(placement: .navigation) {
-                newJobAppButton()
-            }
-            
-            ToolbarItem(placement: .navigation) {
-                bestJobButton()
-            }
+        ToolbarItem(placement: .navigation) {
+            newJobAppButton()
+        }
+        
+        ToolbarItem(placement: .navigation) {
+            bestJobButton()
         }
 
         // ───── Center: All main buttons ─────
