@@ -89,6 +89,10 @@ struct ContentView: View {
                 appState.showImportJobAppsSheet = false
             }
         }
+        .onChange(of: jobAppStore.selectedApp) { _, newValue in
+            // Sync selected app to AppState for template editor
+            appState.selectedJobApp = newValue
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowImportJobApps"))) { _ in
             Logger.debug("🟢 ContentView received ShowImportJobApps notification")
             showImportSheet = true

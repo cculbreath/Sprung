@@ -13,6 +13,7 @@ import Combine
 
 struct TemplateEditorView: View {
     @Query private var resumes: [Resume]
+    @Environment(\.appState) private var appState
     
     @State private var selectedTemplate: String = "archer"
     @State private var selectedFormat: String = "pdf"
@@ -41,6 +42,20 @@ struct TemplateEditorView: View {
     @State private var availableTemplates: [String] = []
     
     let formats = ["pdf", "txt"]
+    
+    private var selectedResume: Resume? {
+        appState.selectedResume
+    }
+    
+    private var hasSelectedResume: Bool {
+        selectedResume != nil
+    }
+    
+    private var isEditingCurrentTemplate: Bool {
+        guard let resume = selectedResume else { return false }
+        let resumeTemplate = resume.model?.templateName ?? resume.model?.style ?? "archer"
+        return selectedTemplate.lowercased() == resumeTemplate.lowercased() && selectedFormat == "pdf"
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -104,8 +119,8 @@ struct TemplateEditorView: View {
                 Button("Preview PDF") {
                     previewPDF()
                 }
-                .disabled(selectedFormat != "pdf" || isGeneratingPreview || resumes.isEmpty)
-                .help(resumes.isEmpty ? "No resumes available for preview" : "Generate and preview a PDF using the current template")
+                .disabled(selectedFormat != "pdf" || isGeneratingPreview || !hasSelectedResume)
+                .help(!hasSelectedResume ? "No resume selected in main window" : "Generate and preview a PDF using the current template")
             }
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
@@ -129,6 +144,16 @@ struct TemplateEditorView: View {
                     HStack {
                         Text("Preview")
                             .font(.headline)
+                        
+                        if isEditingCurrentTemplate {
+                            Text("(Live)")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        } else {
+                            Text("(Current Resume)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                         
                         Spacer()
                         
@@ -171,8 +196,12 @@ struct TemplateEditorView: View {
                             VStack {
                                 Text("PDF preview will appear here")
                                     .foregroundColor(.secondary)
-                                if resumes.isEmpty {
-                                    Text("Create a resume to enable preview")
+                                if !hasSelectedResume {
+                                    Text("Select a resume in the main window to enable preview")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Export the resume in the main window to see PDF")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -214,6 +243,12 @@ struct TemplateEditorView: View {
                 if selectedFormat == "pdf" {
                     generateInitialPreview()
                 }
+            }
+        }
+        .onChange(of: selectedResume?.id) {
+            // When the selected resume changes, update the preview
+            if selectedFormat == "pdf" {
+                generateInitialPreview()
             }
         }
         .alert("Unsaved Changes", isPresented: $showingSaveAlert) {
@@ -375,7 +410,7 @@ struct TemplateEditorView: View {
     
     @MainActor
     private func previewPDF() {
-        guard let firstResume = resumes.first else { return }
+        guard let resume = selectedResume else { return }
         
         // Auto-save if there are changes
         if hasChanges {
@@ -386,8 +421,20 @@ struct TemplateEditorView: View {
         
         Task {
             do {
-                let generator = NativePDFGenerator()
-                let pdfData = try await generator.generatePDF(for: firstResume, template: selectedTemplate, format: "html")
+                let pdfData: Data
+                
+                if isEditingCurrentTemplate && hasChanges {
+                    // User is editing the template that the resume uses, so preview with custom content
+                    let generator = NativePDFGenerator()
+                    pdfData = try await generator.generatePDFFromCustomTemplate(
+                        for: resume,
+                        customHTML: templateContent
+                    )
+                } else {
+                    // Use the same export logic as the normal flow
+                    try await resume.ensureFreshRenderedText()
+                    pdfData = resume.pdfData ?? Data()
+                }
                 
                 // Save to temp file and open
                 let tempURL = FileManager.default.temporaryDirectory
@@ -570,14 +617,22 @@ struct TemplateEditorView: View {
     
     @MainActor
     private func generateLivePreview() async {
-        guard let firstResume = resumes.first else { return }
+        guard let resume = selectedResume else { return }
         
+        // If we're not editing the current template, just show the existing PDF
+        if !isEditingCurrentTemplate || !hasChanges {
+            previewPDFData = resume.pdfData
+            return
+        }
+        
+        // Only generate live preview when editing the current template
         isGeneratingLivePreview = true
         
         do {
             let generator = NativePDFGenerator()
+            // User is editing the template that the resume uses, so preview with custom content
             let pdfData = try await generator.generatePDFFromCustomTemplate(
-                for: firstResume,
+                for: resume,
                 customHTML: templateContent
             )
             previewPDFData = pdfData
