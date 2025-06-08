@@ -152,7 +152,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         
         // Convert Resume to template context
         let rawContext = try createTemplateContext(from: resume)
-        let processedContext = preprocessContextForTemplate(rawContext)
+        let processedContext = preprocessContextForTemplate(rawContext, from: resume)
         
         // Fix font URLs for macOS system fonts and preprocess helpers
         let finalContent = preprocessTemplateForGRMustache(fixFontReferences(content))
@@ -242,7 +242,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         return scaled
     }
     
-    private func preprocessContextForTemplate(_ context: [String: Any]) -> [String: Any] {
+    private func preprocessContextForTemplate(_ context: [String: Any], from resume: Resume) -> [String: Any] {
         var processed = context
         
         // Apply nonBreakingSpaces to name
@@ -264,10 +264,10 @@ class NativePDFGenerator: NSObject, ObservableObject {
             processed["centeredJobTitles"] = TextFormatHelpers.wrapper(plainJobTitles, width: 80, centered: true)
         }
         
-        // Sort employment by end date (most recent first)
+        // Convert employment to array format while preserving TreeNode order
         if let employment = processed["employment"] as? [String: Any] {
-            let sortedEmployment = sortEmploymentByEndDate(employment)
-            processed["employment"] = sortedEmployment
+            let employmentArray = convertEmploymentToArrayWithSorting(employment, from: resume)
+            processed["employment"] = employmentArray
         }
         
         // Convert skills-and-expertise object to array format
@@ -373,7 +373,43 @@ class NativePDFGenerator: NSObject, ObservableObject {
         return processed
     }
     
-    private func sortEmploymentByEndDate(_ employment: [String: Any]) -> [[String: Any]] {
+    private func convertEmploymentToArrayWithSorting(_ employment: [String: Any], from resume: Resume) -> [[String: Any]] {
+        // Get employment nodes directly from TreeNode structure to preserve sort order
+        guard let rootNode = resume.rootNode,
+              let employmentSection = rootNode.children?.first(where: { $0.name == "employment" }),
+              let employmentNodes = employmentSection.children else {
+            // Fallback to original method if we can't access TreeNodes
+            return convertEmploymentToArray(employment)
+        }
+        
+        // Sort by TreeNode myIndex to preserve user's drag-and-drop ordering
+        let sortedNodes = employmentNodes.sorted { $0.myIndex < $1.myIndex }
+        
+        var employmentArray: [[String: Any]] = []
+        
+        for node in sortedNodes {
+            // Get the employer name from the TreeNode
+            let employer = node.name
+            
+            // Get the details from the parsed JSON data
+            if let details = employment[employer] as? [String: Any] {
+                var detailsDict = details
+                detailsDict["employer"] = employer
+                
+                // Add formatted employment line for text templates
+                let location = detailsDict["location"] as? String ?? ""
+                let start = detailsDict["start"] as? String ?? ""
+                let end = detailsDict["end"] as? String ?? ""
+                detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employer, location: location, start: start, end: end, width: 80)
+                
+                employmentArray.append(detailsDict)
+            }
+        }
+        
+        return employmentArray
+    }
+    
+    private func convertEmploymentToArray(_ employment: [String: Any]) -> [[String: Any]] {
         var employmentArray: [[String: Any]] = []
         
         for (employer, details) in employment {
@@ -388,18 +424,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
                 
                 employmentArray.append(detailsDict)
             }
-        }
-        
-        // Sort by end date (most recent first)
-        employmentArray.sort { emp1, emp2 in
-            let end1 = emp1["end"] as? String ?? ""
-            let end2 = emp2["end"] as? String ?? ""
-            
-            // Simple string comparison for now - "Present" should come first
-            if end1.lowercased() == "present" { return true }
-            if end2.lowercased() == "present" { return false }
-            
-            return end1 > end2
         }
         
         return employmentArray
