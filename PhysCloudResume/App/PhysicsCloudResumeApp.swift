@@ -49,8 +49,9 @@ struct PhysicsCloudResumeApp: App {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization
                 .environment(appState)
                 .onAppear {
-                    // Pass appState to AppDelegate so it can use it for settings window
+                    // Pass appState and modelContainer to AppDelegate so it can use them for windows
                     appDelegate.appState = appState
+                    appDelegate.modelContainer = modelContainer
                 }
         }
         .modelContainer(modelContainer)
@@ -68,6 +69,11 @@ struct PhysicsCloudResumeApp: App {
                     appDelegate.showApplicantProfileWindow()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+                
+                Button("Template Editor...") {
+                    appDelegate.showTemplateEditorWindow()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
             }
             
             CommandGroup(after: .importExport) {

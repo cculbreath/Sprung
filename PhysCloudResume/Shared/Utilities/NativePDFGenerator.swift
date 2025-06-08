@@ -81,10 +81,26 @@ class NativePDFGenerator: NSObject, ObservableObject {
         var templatePath: String?
         var templateContent: String?
         
+        // Strategy 0: Check Documents directory first for user modifications
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let userTemplatePath = documentsPath
+            .appendingPathComponent("PhysCloudResume")
+            .appendingPathComponent("Templates")
+            .appendingPathComponent(template)
+            .appendingPathComponent("\(resourceName).\(format)")
+        
+        if let content = try? String(contentsOf: userTemplatePath) {
+            templateContent = content
+            templatePath = userTemplatePath.path
+            Logger.debug("Using user-modified template from: \(userTemplatePath.path)")
+        }
+        
         // Strategy 1: Look in Templates/template subdirectory
-        templatePath = Bundle.main.path(forResource: resourceName, ofType: format, inDirectory: "Templates/\(template)")
-        if let path = templatePath {
-            templateContent = try? String(contentsOfFile: path, encoding: .utf8)
+        if templateContent == nil {
+            templatePath = Bundle.main.path(forResource: resourceName, ofType: format, inDirectory: "Templates/\(template)")
+            if let path = templatePath {
+                templateContent = try? String(contentsOfFile: path, encoding: .utf8)
+            }
         }
         
         // Strategy 2: Look directly in main bundle
@@ -109,6 +125,14 @@ class NativePDFGenerator: NSObject, ObservableObject {
                         break
                     }
                 }
+            }
+        }
+        
+        // Fallback to embedded templates
+        if templateContent == nil {
+            templateContent = BundledTemplates.getTemplate(name: template, format: format)
+            if templateContent != nil {
+                Logger.debug("Using embedded template for \(template).\(format)")
             }
         }
         

@@ -21,8 +21,6 @@ struct SettingsView: View {
                 // LLM Provider Info Section
                 LLMProviderSettingsView()
 
-                // Resume Styles Section
-                ResumeStylesSettingsView()
 
                 // Text-to-Speech Settings Section
                 TextToSpeechSettingsView()

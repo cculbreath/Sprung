@@ -7,11 +7,14 @@
 
 import Cocoa
 import SwiftUI
+import SwiftData
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var applicantProfileWindow: NSWindow?
+    var templateEditorWindow: NSWindow?
     var appState: AppState?
+    var modelContainer: ModelContainer?
 
     func applicationDidFinishLaunching(_: Notification) {
         // DEBUG: Remove existing SwiftData SQLite store files to avoid migration errors
@@ -96,6 +99,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         profileMenuItem.target = self
         appMenu.insertItem(profileMenuItem, at: aboutSeparatorIndex + 1)
+        
+        // Add Template Editor menu item
+        let templateMenuItem = NSMenuItem(
+            title: "Template Editor...",
+            action: #selector(showTemplateEditorWindow),
+            keyEquivalent: "T"
+        )
+        templateMenuItem.target = self
+        appMenu.insertItem(templateMenuItem, at: aboutSeparatorIndex + 2)
     }
 
     @objc func showSettingsWindow() {
@@ -169,5 +181,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func windowWillClose(_ notification: Notification) {
         if notification.object as? NSWindow == applicantProfileWindow {}
+    }
+    
+    @objc func showTemplateEditorWindow() {
+        // If window exists but was closed, reset it
+        if let window = templateEditorWindow, !window.isVisible {
+            templateEditorWindow = nil
+        }
+        
+        if templateEditorWindow == nil {
+            let editorView = TemplateEditorView()
+            let hostingView: NSHostingView<AnyView>
+            
+            if let modelContainer = self.modelContainer {
+                hostingView = NSHostingView(rootView: AnyView(editorView.modelContainer(modelContainer)))
+            } else {
+                hostingView = NSHostingView(rootView: AnyView(editorView))
+            }
+            
+            templateEditorWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered, defer: false
+            )
+            templateEditorWindow?.title = "Template Editor"
+            templateEditorWindow?.contentView = hostingView
+            templateEditorWindow?.isReleasedWhenClosed = false
+            templateEditorWindow?.center()
+            
+            // Set a minimum size for the window
+            templateEditorWindow?.minSize = NSSize(width: 800, height: 600)
+        }
+        
+        // Bring the window to the front
+        templateEditorWindow?.makeKeyAndOrderFront(nil)
+        
+        // Activate the app to ensure focus
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

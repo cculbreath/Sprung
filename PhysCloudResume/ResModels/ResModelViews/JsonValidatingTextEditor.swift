@@ -44,6 +44,14 @@ struct JsonValidatingTextEditor: NSViewRepresentable {
         // Enable editing
         textView.isEditable = true
         textView.isSelectable = true
+        
+        // Disable autocorrect and smart quotes for JSON editing
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextCompletionEnabled = false
+        textView.isContinuousSpellCheckingEnabled = false
 
         // Set up scroll view
         scrollView.documentView = textView
