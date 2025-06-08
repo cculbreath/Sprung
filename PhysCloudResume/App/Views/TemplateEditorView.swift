@@ -8,12 +8,14 @@
 import SwiftUI
 import SwiftData
 import AppKit
+import PDFKit
+import Combine
 
 struct TemplateEditorView: View {
     @Query private var resumes: [Resume]
     
     @State private var selectedTemplate: String = "archer"
-    @State private var selectedFormat: String = "html"
+    @State private var selectedFormat: String = "pdf"
     @State private var templateContent: String = ""
     @State private var hasChanges: Bool = false
     @State private var showingSaveAlert: Bool = false
@@ -23,11 +25,22 @@ struct TemplateEditorView: View {
     @State private var showingDeleteConfirmation: Bool = false
     @State private var newTemplateName: String = ""
     
+    // Live preview state
+    @State private var previewPDFData: Data?
+    @State private var debounceTimer: Timer?
+    @State private var isGeneratingLivePreview: Bool = false
+    
+    // Overlay state
+    @State private var showOverlay: Bool = false
+    @State private var overlayPDFData: Data?
+    @State private var overlayOpacity: Double = 0.75
+    @State private var showingOverlayPicker: Bool = false
+    
     // AppStorage for available templates (same as styles)
     @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableTemplates: [String] = []
     
-    let formats = ["html", "txt"]
+    let formats = ["pdf", "txt"]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -64,7 +77,7 @@ struct TemplateEditorView: View {
                     }
                 }
                 .pickerStyle(MenuPickerStyle())
-                .frame(width: 100)
+                .frame(width: 120)
                 
                 Spacer()
                 
@@ -76,16 +89,22 @@ struct TemplateEditorView: View {
                 .disabled(!hasChanges)
                 
                 // Save button
-                Button("Save") {
+                Button("Save & Close") {
                     saveTemplate()
+                    closeEditor()
                 }
                 .disabled(!hasChanges)
+                
+                // Cancel button
+                Button("Cancel") {
+                    closeEditor()
+                }
                 
                 // Preview button
                 Button("Preview PDF") {
                     previewPDF()
                 }
-                .disabled(selectedFormat != "html" || isGeneratingPreview || resumes.isEmpty)
+                .disabled(selectedFormat != "pdf" || isGeneratingPreview || resumes.isEmpty)
                 .help(resumes.isEmpty ? "No resumes available for preview" : "Generate and preview a PDF using the current template")
             }
             .padding()
@@ -93,33 +112,108 @@ struct TemplateEditorView: View {
             
             Divider()
             
-            // Template editor
-            ScrollView {
-                TextEditor(text: $templateContent)
-                    .font(.system(.body, design: .monospaced))
-                    .onChange(of: templateContent) { _ in
-                        hasChanges = true
+            // Main content area with split view
+            HSplitView {
+                // Template editor with find functionality
+                TemplateTextEditor(text: $templateContent) {
+                    hasChanges = true
+                    if selectedFormat == "pdf" {
+                        scheduleLivePreviewUpdate()
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(minWidth: 400)
+                
+                // PDF Preview
+                VStack(spacing: 0) {
+                    // Preview controls toolbar
+                    HStack {
+                        Text("Preview")
+                            .font(.headline)
+                        
+                        Spacer()
+                        
+                        // Overlay controls
+                        Toggle("Overlay", isOn: $showOverlay)
+                            .disabled(overlayPDFData == nil)
+                        
+                        if showOverlay && overlayPDFData != nil {
+                            Slider(value: $overlayOpacity, in: 0...1) {
+                                Text("Opacity")
+                            }
+                            .frame(width: 100)
+                        }
+                        
+                        Button("Select Overlay PDF") {
+                            showingOverlayPicker = true
+                        }
+                        .buttonStyle(.bordered)
+                        
+                        if isGeneratingLivePreview {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    
+                    Divider()
+                    
+                    // PDF viewer
+                    if selectedFormat == "pdf" {
+                        if let pdfData = previewPDFData {
+                            PDFPreviewView(
+                                pdfData: pdfData,
+                                overlayPDFData: showOverlay ? overlayPDFData : nil,
+                                overlayOpacity: overlayOpacity
+                            )
+                        } else {
+                            VStack {
+                                Text("PDF preview will appear here")
+                                    .foregroundColor(.secondary)
+                                if resumes.isEmpty {
+                                    Text("Create a resume to enable preview")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    } else {
+                        Text("PDF preview only available for HTML templates")
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .frame(minWidth: 400)
             }
         }
         .frame(minWidth: 800, minHeight: 600)
         .onAppear {
             loadAvailableTemplates()
             loadTemplate()
-        }
-        .onChange(of: selectedTemplate) { _ in
-            if hasChanges {
-                showingSaveAlert = true
-            } else {
-                loadTemplate()
+            if selectedFormat == "pdf" {
+                generateInitialPreview()
             }
         }
-        .onChange(of: selectedFormat) { _ in
+        .onChange(of: selectedTemplate) {
             if hasChanges {
                 showingSaveAlert = true
             } else {
                 loadTemplate()
+                if selectedFormat == "pdf" {
+                    generateInitialPreview()
+                }
+            }
+        }
+        .onChange(of: selectedFormat) {
+            if hasChanges {
+                showingSaveAlert = true
+            } else {
+                loadTemplate()
+                if selectedFormat == "pdf" {
+                    generateInitialPreview()
+                }
             }
         }
         .alert("Unsaved Changes", isPresented: $showingSaveAlert) {
@@ -164,10 +258,25 @@ struct TemplateEditorView: View {
         } message: {
             Text("Are you sure you want to delete the '\(selectedTemplate)' template? This cannot be undone.")
         }
+        .fileImporter(
+            isPresented: $showingOverlayPicker,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let files):
+                if let file = files.first {
+                    loadOverlayPDF(from: file)
+                }
+            case .failure(let error):
+                saveError = "Failed to load overlay PDF: \(error.localizedDescription)"
+            }
+        }
     }
     
     private func loadTemplate() {
         let resourceName = "\(selectedTemplate)-template"
+        let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
         
         // Try to load from Documents directory first (user modifications)
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -175,9 +284,9 @@ struct TemplateEditorView: View {
             .appendingPathComponent("PhysCloudResume")
             .appendingPathComponent("Templates")
             .appendingPathComponent(selectedTemplate)
-            .appendingPathComponent("\(resourceName).\(selectedFormat)")
+            .appendingPathComponent("\(resourceName).\(fileExtension)")
         
-        if let content = try? String(contentsOf: templatePath) {
+        if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
             templateContent = content
             hasChanges = false
             return
@@ -205,14 +314,14 @@ struct TemplateEditorView: View {
         var bundlePath: String?
         
         // Strategy 1: Resources/Templates subdirectory
-        bundlePath = Bundle.main.path(forResource: resourceName, ofType: selectedFormat, inDirectory: "Resources/Templates/\(selectedTemplate)")
+        bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Resources/Templates/\(selectedTemplate)")
         if bundlePath != nil {
             print("Found via Resources/Templates/\(selectedTemplate)")
         }
         
         // Strategy 2: Templates subdirectory
         if bundlePath == nil {
-            bundlePath = Bundle.main.path(forResource: resourceName, ofType: selectedFormat, inDirectory: "Templates/\(selectedTemplate)")
+            bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Templates/\(selectedTemplate)")
             if bundlePath != nil {
                 print("Found via Templates/\(selectedTemplate)")
             }
@@ -220,27 +329,28 @@ struct TemplateEditorView: View {
         
         // Strategy 3: Direct lookup
         if bundlePath == nil {
-            bundlePath = Bundle.main.path(forResource: resourceName, ofType: selectedFormat)
+            bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension)
             if bundlePath != nil {
                 print("Found via direct lookup")
             }
         }
         
         if let path = bundlePath,
-           let content = try? String(contentsOfFile: path) {
+           let content = try? String(contentsOfFile: path, encoding: .utf8) {
             templateContent = content
             hasChanges = false
-        } else if let embeddedContent = BundledTemplates.getTemplate(name: selectedTemplate, format: selectedFormat) {
+        } else if let embeddedContent = BundledTemplates.getTemplate(name: selectedTemplate, format: fileExtension) {
             templateContent = embeddedContent
             hasChanges = false
         } else {
-            templateContent = "// Template not found: \(resourceName).\(selectedFormat)\n// Bundle path: \(Bundle.main.bundlePath)\n// Resource path: \(Bundle.main.resourcePath ?? "nil")"
+            templateContent = "// Template not found: \(resourceName).\(fileExtension)\n// Bundle path: \(Bundle.main.bundlePath)\n// Resource path: \(Bundle.main.resourcePath ?? "nil")"
             hasChanges = false
         }
     }
     
     private func saveTemplate() {
         let resourceName = "\(selectedTemplate)-template"
+        let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
         
         // Save to Documents directory
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -254,7 +364,7 @@ struct TemplateEditorView: View {
             try FileManager.default.createDirectory(at: templateDir, withIntermediateDirectories: true)
             
             // Write file
-            let templatePath = templateDir.appendingPathComponent("\(resourceName).\(selectedFormat)")
+            let templatePath = templateDir.appendingPathComponent("\(resourceName).\(fileExtension)")
             try templateContent.write(to: templatePath, atomically: true, encoding: .utf8)
             
             hasChanges = false
@@ -266,9 +376,10 @@ struct TemplateEditorView: View {
     @MainActor
     private func previewPDF() {
         guard let firstResume = resumes.first else { return }
-        guard !hasChanges else {
-            saveError = "Please save your changes before previewing"
-            return
+        
+        // Auto-save if there are changes
+        if hasChanges {
+            saveTemplate()
         }
         
         isGeneratingPreview = true
@@ -336,7 +447,8 @@ struct TemplateEditorView: View {
         newTemplateName = ""
         
         // Create initial empty template content
-        templateContent = createEmptyTemplate(name: trimmedName, format: selectedFormat)
+        let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
+        templateContent = createEmptyTemplate(name: trimmedName, format: fileExtension)
         hasChanges = true
     }
     
@@ -425,6 +537,69 @@ struct TemplateEditorView: View {
 """
         default:
             return "// New \(name) template in \(format) format"
+        }
+    }
+    
+    private func closeEditor() {
+        // Close the template editor window
+        if let window = NSApplication.shared.windows.first(where: { $0.title == "Template Editor" }) {
+            window.close()
+        }
+    }
+    
+    // MARK: - Live Preview Methods
+    
+    private func scheduleLivePreviewUpdate() {
+        // Cancel existing timer
+        debounceTimer?.invalidate()
+        
+        // Schedule new update after 0.5 seconds
+        debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+            Task { @MainActor in
+                await generateLivePreview()
+            }
+        }
+    }
+    
+    @MainActor
+    private func generateInitialPreview() {
+        Task {
+            await generateLivePreview()
+        }
+    }
+    
+    @MainActor
+    private func generateLivePreview() async {
+        guard let firstResume = resumes.first else { return }
+        
+        isGeneratingLivePreview = true
+        
+        do {
+            let generator = NativePDFGenerator()
+            let pdfData = try await generator.generatePDFFromCustomTemplate(
+                for: firstResume,
+                customHTML: templateContent
+            )
+            previewPDFData = pdfData
+        } catch {
+            // Don't show error for live preview, just log it
+            Logger.error("Live preview generation failed: \(error)")
+        }
+        
+        isGeneratingLivePreview = false
+    }
+    
+    private func loadOverlayPDF(from url: URL) {
+        guard url.startAccessingSecurityScopedResource() else {
+            saveError = "Failed to access overlay PDF"
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+        
+        do {
+            overlayPDFData = try Data(contentsOf: url)
+        } catch {
+            saveError = "Failed to load overlay PDF: \(error.localizedDescription)"
         }
     }
 }

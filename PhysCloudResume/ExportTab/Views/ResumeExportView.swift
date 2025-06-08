@@ -297,10 +297,31 @@ struct ResumeExportView: View {
 
     private func exportResumePDF() {
         guard let jobApp = jobAppStore.selectedApp,
-              let resume = jobApp.selectedRes,
-              let pdfData = resume.pdfData
+              let resume = jobApp.selectedRes
         else {
             showToastNotification("No resume selected. Please select a resume first.")
+            return
+        }
+
+        // Show exporting status
+        showToastNotification("Generating fresh PDF...")
+        
+        // Trigger debounced export to ensure fresh PDF data before exporting
+        resume.debounceExport(
+            onStart: {
+                // Optional: Update UI to show export in progress
+            },
+            onFinish: { [self] in
+                DispatchQueue.main.async {
+                    self.performPDFExport(for: resume)
+                }
+            }
+        )
+    }
+    
+    private func performPDFExport(for resume: Resume) {
+        guard let pdfData = resume.pdfData else {
+            showToastNotification("Failed to generate PDF data. Please try again.")
             return
         }
 

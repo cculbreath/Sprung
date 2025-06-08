@@ -89,7 +89,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
             .appendingPathComponent(template)
             .appendingPathComponent("\(resourceName).\(format)")
         
-        if let content = try? String(contentsOf: userTemplatePath) {
+        if let content = try? String(contentsOf: userTemplatePath, encoding: .utf8) {
             templateContent = content
             templatePath = userTemplatePath.path
             Logger.debug("Using user-modified template from: \(userTemplatePath.path)")
