@@ -27,38 +27,38 @@ struct BundledTemplates {
     // Load from the actual files and embed them
     private static let archerHTMLTemplate: String = {
         if let path = Bundle.main.path(forResource: "archer-template", ofType: "html", inDirectory: "Resources/Templates/archer"),
-           let content = try? String(contentsOfFile: path) {
+           let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
         // Fallback: load from project directory during development
         let projectPath = "/Users/cculbreath/devlocal/codebase/PhysCloudResume/PhysCloudResume/Resources/Templates/archer/archer-template.html"
-        return (try? String(contentsOfFile: projectPath)) ?? "<!-- Archer HTML template not found -->"
+        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "<!-- Archer HTML template not found -->"
     }()
     
     private static let archerTextTemplate: String = {
         if let path = Bundle.main.path(forResource: "archer-template", ofType: "txt", inDirectory: "Resources/Templates/archer"),
-           let content = try? String(contentsOfFile: path) {
+           let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
         let projectPath = "/Users/cculbreath/devlocal/codebase/PhysCloudResume/PhysCloudResume/Resources/Templates/archer/archer-template.txt"
-        return (try? String(contentsOfFile: projectPath)) ?? "# Archer text template not found"
+        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "# Archer text template not found"
     }()
     
     private static let typewriterHTMLTemplate: String = {
         if let path = Bundle.main.path(forResource: "typewriter-template", ofType: "html", inDirectory: "Resources/Templates/typewriter"),
-           let content = try? String(contentsOfFile: path) {
+           let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
         let projectPath = "/Users/cculbreath/devlocal/codebase/PhysCloudResume/PhysCloudResume/Resources/Templates/typewriter/typewriter-template.html"
-        return (try? String(contentsOfFile: projectPath)) ?? "<!-- Typewriter HTML template not found -->"
+        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "<!-- Typewriter HTML template not found -->"
     }()
     
     private static let typewriterTextTemplate: String = {
         if let path = Bundle.main.path(forResource: "typewriter-template", ofType: "txt", inDirectory: "Resources/Templates/typewriter"),
-           let content = try? String(contentsOfFile: path) {
+           let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
         let projectPath = "/Users/cculbreath/devlocal/codebase/PhysCloudResume/PhysCloudResume/Resources/Templates/typewriter/typewriter-template.txt"
-        return (try? String(contentsOfFile: projectPath)) ?? "# Typewriter text template not found"
+        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "# Typewriter text template not found"
     }()
 }
