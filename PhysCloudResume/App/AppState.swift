@@ -23,6 +23,12 @@ class AppState {
     // Import job apps sheet
     var showImportJobAppsSheet: Bool = false
     
+    // Selected job app and resume for template editor
+    var selectedJobApp: JobApp?
+    var selectedResume: Resume? {
+        selectedJobApp?.selectedRes
+    }
+    
     // OpenRouter service
     let openRouterService = OpenRouterService.shared
     

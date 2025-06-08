@@ -193,7 +193,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let editorView = TemplateEditorView()
             let hostingView: NSHostingView<AnyView>
             
-            if let modelContainer = self.modelContainer {
+            if let modelContainer = self.modelContainer, let appState = self.appState {
+                hostingView = NSHostingView(rootView: AnyView(
+                    editorView
+                        .modelContainer(modelContainer)
+                        .environment(appState)
+                ))
+            } else if let modelContainer = self.modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(editorView.modelContainer(modelContainer)))
             } else {
                 hostingView = NSHostingView(rootView: AnyView(editorView))

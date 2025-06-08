@@ -14,84 +14,18 @@ struct PDFPreviewView: NSViewRepresentable {
     let overlayPDFData: Data?
     let overlayOpacity: Double
     
-    func makeNSView(context: Context) -> NSView {
-        let containerView = NSView()
-        containerView.wantsLayer = true
-        
-        // Main PDF view
-        let pdfView = PDFView()
-        pdfView.autoScales = true
-        pdfView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(pdfView)
-        
-        // Add constraints for main PDF view
-        NSLayoutConstraint.activate([
-            pdfView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            pdfView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            pdfView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            pdfView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
-        ])
-        
-        context.coordinator.pdfView = pdfView
-        context.coordinator.containerView = containerView
-        
-        return containerView
+    func makeNSView(context: Context) -> CustomPDFView {
+        let customPDFView = CustomPDFView()
+        context.coordinator.customPDFView = customPDFView
+        return customPDFView
     }
     
-    func updateNSView(_ nsView: NSView, context: Context) {
-        guard let pdfView = context.coordinator.pdfView,
-              let containerView = context.coordinator.containerView else { return }
-        
-        // Update main PDF
-        if let pdfDocument = PDFDocument(data: pdfData) {
-            pdfView.document = pdfDocument
-        }
-        
-        // Remove existing overlay if any
-        context.coordinator.overlayView?.removeFromSuperview()
-        context.coordinator.overlayView = nil
-        
-        // Add overlay if requested
-        if let overlayData = overlayPDFData,
-           let overlayDocument = PDFDocument(data: overlayData) {
-            
-            let overlayPDFView = PDFView()
-            overlayPDFView.autoScales = true
-            overlayPDFView.document = overlayDocument
-            overlayPDFView.translatesAutoresizingMaskIntoConstraints = false
-            overlayPDFView.wantsLayer = true
-            overlayPDFView.layer?.opacity = Float(overlayOpacity)
-            overlayPDFView.displayMode = .singlePage
-            overlayPDFView.backgroundColor = .clear
-            
-            // Make overlay non-interactive - allow mouse events to pass through
-            overlayPDFView.allowedTouchTypes = []
-            
-            // Sync zoom and page
-            overlayPDFView.scaleFactor = pdfView.scaleFactor
-            if let currentPage = pdfView.currentPage,
-               let pageIndex = pdfView.document?.index(for: currentPage),
-               let overlayPage = overlayDocument.page(at: pageIndex) {
-                overlayPDFView.go(to: overlayPage)
-            }
-            
-            containerView.addSubview(overlayPDFView, positioned: .above, relativeTo: pdfView)
-            
-            // Add constraints for overlay
-            NSLayoutConstraint.activate([
-                overlayPDFView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-                overlayPDFView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                overlayPDFView.topAnchor.constraint(equalTo: containerView.topAnchor),
-                overlayPDFView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
-            ])
-            
-            context.coordinator.overlayView = overlayPDFView
-            
-            // Set up synchronization
-            context.coordinator.setupSynchronization()
-        } else {
-            context.coordinator.teardownSynchronization()
-        }
+    func updateNSView(_ nsView: CustomPDFView, context: Context) {
+        nsView.updateContent(
+            mainPDFData: pdfData,
+            overlayPDFData: overlayPDFData,
+            overlayOpacity: overlayOpacity
+        )
     }
     
     func makeCoordinator() -> Coordinator {
@@ -99,54 +33,163 @@ struct PDFPreviewView: NSViewRepresentable {
     }
     
     class Coordinator: NSObject {
-        var pdfView: PDFView?
-        var overlayView: PDFView?
-        var containerView: NSView?
-        var notificationObservers: [Any] = []
+        var customPDFView: CustomPDFView?
+    }
+}
+
+// Custom PDFView that renders overlay as a layer
+class CustomPDFView: NSView {
+    private let pdfView: PDFView
+    private var overlayView: NSImageView?
+    private var overlayPage: PDFPage?
+    private var overlayOpacity: Double = 0.75
+    private var notificationObservers: [NSObjectProtocol] = []
+    
+    override init(frame frameRect: NSRect) {
+        pdfView = PDFView()
+        super.init(frame: frameRect)
+        setupView()
+    }
+    
+    required init?(coder: NSCoder) {
+        pdfView = PDFView()
+        super.init(coder: coder)
+        setupView()
+    }
+    
+    private func setupView() {
+        wantsLayer = true
         
-        func setupSynchronization() {
-            guard let mainView = pdfView, let _ = overlayView else { return }
+        // Configure PDF view
+        pdfView.autoScales = true
+        pdfView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(pdfView)
+        
+        // Constrain PDF view to fill the custom view
+        NSLayoutConstraint.activate([
+            pdfView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            pdfView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            pdfView.topAnchor.constraint(equalTo: topAnchor),
+            pdfView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+    
+    func updateContent(mainPDFData: Data, overlayPDFData: Data?, overlayOpacity: Double) {
+        // Update main PDF
+        if let mainDocument = PDFDocument(data: mainPDFData) {
+            pdfView.document = mainDocument
+        }
+        
+        // Remove existing overlay view and observers
+        overlayView?.removeFromSuperview()
+        overlayView = nil
+        
+        // Remove old notification observers
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationObservers.removeAll()
+        
+        // Add overlay if provided
+        if let overlayData = overlayPDFData,
+           let overlayDocument = PDFDocument(data: overlayData),
+           let page = overlayDocument.page(at: 0) {
             
-            // Remove existing observers
-            teardownSynchronization()
+            print("Creating overlay view for PDF with \(overlayDocument.pageCount) pages")
             
-            // Sync zoom changes
-            let zoomObserver = NotificationCenter.default.addObserver(
+            // Store overlay data
+            self.overlayPage = page
+            self.overlayOpacity = overlayOpacity
+            
+            // Create an NSImageView for the overlay
+            let imageView = NSImageView()
+            imageView.alphaValue = overlayOpacity
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            imageView.imageScaling = .scaleAxesIndependently // This is important for proper scaling
+            
+            // Add the overlay view above the PDF view
+            addSubview(imageView)
+            overlayView = imageView
+            
+            print("Added overlay view to custom view")
+            
+            // Update position and content immediately
+            updateOverlayPosition()
+            
+            // Listen for PDF view changes to update overlay position
+            let scaleObserver = NotificationCenter.default.addObserver(
                 forName: .PDFViewScaleChanged,
-                object: mainView,
+                object: pdfView,
                 queue: .main
             ) { [weak self] _ in
-                guard let self = self,
-                      let mainView = self.pdfView,
-                      let overlay = self.overlayView else { return }
-                overlay.scaleFactor = mainView.scaleFactor
+                self?.updateOverlayPosition()
             }
             
-            // Sync page changes
             let pageObserver = NotificationCenter.default.addObserver(
                 forName: .PDFViewPageChanged,
-                object: mainView,
+                object: pdfView,
                 queue: .main
             ) { [weak self] _ in
-                guard let self = self,
-                      let mainView = self.pdfView,
-                      let overlay = self.overlayView,
-                      let currentPage = mainView.currentPage,
-                      let pageIndex = mainView.document?.index(for: currentPage),
-                      let overlayPage = overlay.document?.page(at: pageIndex) else { return }
-                overlay.go(to: overlayPage)
+                self?.updateOverlayPosition()
             }
             
-            notificationObservers = [zoomObserver, pageObserver]
+            notificationObservers = [scaleObserver, pageObserver]
+        } else {
+            print("No overlay data provided or failed to create overlay document")
+        }
+    }
+    
+    private func updateOverlayPosition() {
+        guard let overlayImageView = overlayView,
+              let overlayPDFPage = overlayPage,
+              let currentPage = pdfView.currentPage else { 
+            print("updateOverlayPosition: missing overlay view, overlay page, or current page")
+            return 
         }
         
-        func teardownSynchronization() {
-            notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
-            notificationObservers.removeAll()
+        // Get the visible rect of the current page in the PDF view
+        let pageRect = pdfView.convert(currentPage.bounds(for: .mediaBox), from: currentPage)
+        print("updateOverlayPosition: pageRect in view coordinates: \(pageRect)")
+        print("updateOverlayPosition: pdfView bounds: \(pdfView.bounds)")
+        
+        // Convert page rect to custom view coordinates
+        let convertedRect = pdfView.convert(pageRect, to: self)
+        print("updateOverlayPosition: converted rect: \(convertedRect)")
+        
+        // Create overlay image at the exact size needed
+        let overlayImage = NSImage(size: convertedRect.size)
+        overlayImage.lockFocus()
+        
+        // Fill with debug color
+        NSColor.red.withAlphaComponent(0.3).setFill()
+        NSRect(origin: .zero, size: convertedRect.size).fill()
+        
+        // Get the PDF page bounds and calculate scaling
+        let pdfBounds = overlayPDFPage.bounds(for: .mediaBox)
+        let scaleX = convertedRect.width / pdfBounds.width
+        let scaleY = convertedRect.height / pdfBounds.height
+        
+        // Get the current graphics context and apply scaling
+        if let context = NSGraphicsContext.current?.cgContext {
+            context.saveGState()
+            context.scaleBy(x: scaleX, y: scaleY)
+            overlayPDFPage.draw(with: .mediaBox, to: context)
+            context.restoreGState()
         }
         
-        deinit {
-            teardownSynchronization()
-        }
+        overlayImage.unlockFocus()
+        
+        // Update the image view
+        overlayImageView.image = overlayImage
+        overlayImageView.frame = convertedRect
+        
+        print("updateOverlayPosition: set overlay frame to \(convertedRect) with image size \(overlayImage.size)")
+    }
+    
+    override func layout() {
+        super.layout()
+        updateOverlayPosition()
+    }
+    
+    deinit {
+        notificationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 }
