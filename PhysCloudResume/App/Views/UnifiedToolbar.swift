@@ -330,11 +330,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
             }
             
-            // TTS button (always present but conditionally visible)
-            ToolbarItem(id: "tts", placement: .secondaryAction, showsByDefault: false) {
-                TTSButton()
-                    .disabled(coverLetterStore.cL?.generated != true)
-            }
+            // TTS button removed temporarily - causes duplicate ID crashes during toolbar customization
             
             ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {
                 sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
@@ -744,21 +740,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     }
 }
 
-// TTS Button
-struct TTSButton: View {
-    @Environment(CoverLetterStore.self) private var coverLetterStore
-    @AppStorage("ttsEnabled") var ttsEnabled: Bool = false
-
-    var body: some View {
-        if ttsEnabled {
-            Button(action: {
-                // TTS action
-            }) {
-                Label("Read Aloud", systemImage: "speaker.wave.2")
-            }
-            .help("Read Cover Letter")
-        }
-    }
-}
+// TTS Button removed - was causing duplicate toolbar ID crashes
 
 // Placeholder for Choose Best Cover Letter Sheet
