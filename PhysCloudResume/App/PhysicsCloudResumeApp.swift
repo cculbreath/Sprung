@@ -9,6 +9,35 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+// MARK: - Menu Command Notifications
+extension Notification.Name {
+    // Job Application Commands
+    static let newJobApp = Notification.Name("newJobApp")
+    static let bestJob = Notification.Name("bestJob")
+    static let showSources = Notification.Name("showSources")
+    
+    // Resume Commands
+    static let customizeResume = Notification.Name("customizeResume")
+    static let clarifyCustomize = Notification.Name("clarifyCustomize")
+    static let optimizeResume = Notification.Name("optimizeResume")
+    static let showResumeInspector = Notification.Name("showResumeInspector")
+    
+    // Cover Letter Commands
+    static let generateCoverLetter = Notification.Name("generateCoverLetter")
+    static let batchCoverLetter = Notification.Name("batchCoverLetter")
+    static let bestCoverLetter = Notification.Name("bestCoverLetter")
+    static let committee = Notification.Name("committee")
+    static let showCoverLetterInspector = Notification.Name("showCoverLetterInspector")
+    
+    // Analysis Commands
+    static let analyzeApplication = Notification.Name("analyzeApplication")
+    
+    // Window Commands (for toolbar buttons)
+    static let showSettings = Notification.Name("showSettings")
+    static let showApplicantProfile = Notification.Name("showApplicantProfile")
+    static let showTemplateEditor = Notification.Name("showTemplateEditor")
+}
+
 @main
 struct PhysicsCloudResumeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -91,6 +120,95 @@ struct PhysicsCloudResumeApp: App {
                     NotificationCenter.default.post(name: NSNotification.Name("ShowImportJobApps"), object: nil)
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
+            }
+            
+            // Job Application Menu
+            CommandGroup(after: .newItem) {
+                Button("New Job Application") {
+                    NotificationCenter.default.post(name: .newJobApp, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                
+                Button("Best Job Match") {
+                    NotificationCenter.default.post(name: .bestJob, object: nil)
+                }
+                .keyboardShortcut("j", modifiers: [.command, .shift])
+                
+                Divider()
+                
+                Button("Show Sources") {
+                    NotificationCenter.default.post(name: .showSources, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+            }
+            
+            // Resume Menu
+            CommandGroup(before: .windowList) {
+                Menu("Resume") {
+                    Button("Customize Resume") {
+                        NotificationCenter.default.post(name: .customizeResume, object: nil)
+                    }
+                    .keyboardShortcut("r", modifiers: [.command])
+                    
+                    Button("Clarify & Customize") {
+                        NotificationCenter.default.post(name: .clarifyCustomize, object: nil)
+                    }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                    
+                    Button("Optimize Resume") {
+                        NotificationCenter.default.post(name: .optimizeResume, object: nil)
+                    }
+                    .keyboardShortcut("o", modifiers: [.command])
+                    
+                    Divider()
+                    
+                    Button("Show Resume Inspector") {
+                        NotificationCenter.default.post(name: .showResumeInspector, object: nil)
+                    }
+                    .keyboardShortcut("1", modifiers: [.command, .option])
+                }
+            }
+            
+            // Cover Letter Menu
+            CommandGroup(before: .windowList) {
+                Menu("Cover Letter") {
+                    Button("Generate Cover Letter") {
+                        NotificationCenter.default.post(name: .generateCoverLetter, object: nil)
+                    }
+                    .keyboardShortcut("l", modifiers: [.command])
+                    
+                    Button("Batch Cover Letters") {
+                        NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
+                    }
+                    .keyboardShortcut("b", modifiers: [.command])
+                    
+                    Button("Best Cover Letter") {
+                        NotificationCenter.default.post(name: .bestCoverLetter, object: nil)
+                    }
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+                    
+                    Button("Multi-Model Committee") {
+                        NotificationCenter.default.post(name: .committee, object: nil)
+                    }
+                    .keyboardShortcut("m", modifiers: [.command, .option])
+                    
+                    Divider()
+                    
+                    Button("Show Cover Letter Inspector") {
+                        NotificationCenter.default.post(name: .showCoverLetterInspector, object: nil)
+                    }
+                    .keyboardShortcut("2", modifiers: [.command, .option])
+                }
+            }
+            
+            // Analysis Menu
+            CommandGroup(before: .windowList) {
+                Menu("Analysis") {
+                    Button("Analyze Application") {
+                        NotificationCenter.default.post(name: .analyzeApplication, object: nil)
+                    }
+                    .keyboardShortcut("a", modifiers: [.command])
+                }
             }
         }
     }

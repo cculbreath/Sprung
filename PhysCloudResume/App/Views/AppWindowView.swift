@@ -28,6 +28,9 @@ struct AppWindowView: View {
     // Revision workflow - managed by ResumeReviseViewModel
     @State private var resumeReviseViewModel: ResumeReviseViewModel?
     
+    // Menu notification handler
+    @State private var menuHandler = MenuNotificationHandler()
+    
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
@@ -51,6 +54,14 @@ struct AppWindowView: View {
                 clarifyingQuestions: $clarifyingQuestions,
                 resumeReviseViewModel: resumeReviseViewModel,
                 showNewAppSheet: $sheets.showNewJobApp,
+                showSlidingList: $showSlidingList
+            )
+        }
+        .onAppear {
+            menuHandler.configure(
+                jobAppStore: jobAppStore,
+                sheets: $sheets,
+                selectedTab: $selectedTab,
                 showSlidingList: $showSlidingList
             )
         }
