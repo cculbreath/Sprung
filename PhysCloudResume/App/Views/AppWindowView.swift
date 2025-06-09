@@ -19,6 +19,7 @@ struct AppWindowView: View {
     @State private var refPopup: Bool = false
     @State private var hasVisitedResumeTab: Bool = false
     @Binding var tabRefresh: Bool
+    @Binding var showSlidingList: Bool
     
     // Centralized sheet state management for all app windows/modals
     @State private var sheets = AppSheets()
@@ -49,7 +50,8 @@ struct AppWindowView: View {
                 sheets: $sheets,
                 clarifyingQuestions: $clarifyingQuestions,
                 resumeReviseViewModel: resumeReviseViewModel,
-                showNewAppSheet: $sheets.showNewJobApp
+                showNewAppSheet: $sheets.showNewJobApp,
+                showSlidingList: $showSlidingList
             )
         }
         .modifier(AppWindowViewModifiers(

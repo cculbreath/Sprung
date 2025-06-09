@@ -47,7 +47,7 @@ struct ContentView: View {
             VStack(alignment: .leading) {
                 if jobAppStore.selectedApp != nil {
                     // Embed AppWindowView directly
-                    AppWindowView(selectedTab: $selectedTab, tabRefresh: $tabRefresh)
+                    AppWindowView(selectedTab: $selectedTab, tabRefresh: $tabRefresh, showSlidingList: $showSlidingList)
 //                        .navigationTitle(" ")
                 } else {
                     // Placeholder when no job application is selected

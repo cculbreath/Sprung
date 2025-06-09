@@ -577,6 +577,18 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     }
 
     @ViewBuilder
+    private func showSourcesButton() -> some View {
+        Button {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
+                showSlidingList.toggle()
+            }
+        } label: {
+            Label("Show Sources", systemImage: "newspaper")
+        }
+        .help("Show Sources")
+    }
+
+    @ViewBuilder
     private func bestJobButton() -> some View {
         Button(action: {
             showBestJobModelSheet = true
