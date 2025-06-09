@@ -373,18 +373,8 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 templateEditorButton()
             }
             
-            // Standard customizable toolbar items
-            ToolbarItem(id: "flexibleSpace", placement: .secondaryAction, showsByDefault: false) {
-                Spacer(minLength: 0)
-            }
-            
-            ToolbarItem(id: "space", placement: .secondaryAction, showsByDefault: false) {
-                Spacer(minLength: 32)
-            }
-            
-            ToolbarItem(id: "separator", placement: .secondaryAction, showsByDefault: false) {
-                Divider()
-            }
+            // Standard customizable toolbar items removed - they cause duplicate ID crashes during customization
+            // SwiftUI toolbar customization should provide these automatically
         }
     }
 
