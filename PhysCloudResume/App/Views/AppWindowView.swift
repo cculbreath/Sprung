@@ -27,11 +27,6 @@ struct AppWindowView: View {
     // Revision workflow - managed by ResumeReviseViewModel
     @State private var resumeReviseViewModel: ResumeReviseViewModel?
     
-    // State for AppKit toolbar coordination
-    @State private var showCustomizeModelSheet = false
-    @State private var showClarifyingQuestionsModelSheet = false
-    @State private var showCoverLetterModelSheet = false
-    @State private var showBestLetterModelSheet = false
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
@@ -46,6 +41,17 @@ struct AppWindowView: View {
             tabView
         }
         .id($tabRefresh.wrappedValue)
+        .toolbar {
+            buildUnifiedToolbar(
+                selectedTab: $selectedTab,
+                listingButtons: $listingButtons,
+                refresh: $tabRefresh,
+                sheets: $sheets,
+                clarifyingQuestions: $clarifyingQuestions,
+                resumeReviseViewModel: resumeReviseViewModel,
+                showNewAppSheet: $sheets.showNewJobApp
+            )
+        }
         .modifier(AppWindowViewModifiers(
             jobAppStore: jobAppStore,
             sheets: $sheets,
@@ -55,16 +61,7 @@ struct AppWindowView: View {
             appState: appState,
             selectedTab: $selectedTab,
             hasVisitedResumeTab: $hasVisitedResumeTab,
-            showCustomizeModelSheet: $showCustomizeModelSheet,
-            showClarifyingQuestionsModelSheet: $showClarifyingQuestionsModelSheet,
-            showCoverLetterModelSheet: $showCoverLetterModelSheet,
-            showBestLetterModelSheet: $showBestLetterModelSheet,
-            startCustomizeWorkflow: startCustomizeWorkflow,
-            startClarifyingQuestionsWorkflow: startClarifyingQuestionsWorkflow,
-            generateCoverLetter: generateCoverLetter,
-            startBestLetterSelection: startBestLetterSelection,
-            updateMyLetter: updateMyLetter,
-            setupToolbarNotificationHandlers: setupToolbarNotificationHandlers
+            updateMyLetter: updateMyLetter
         ))
     }
     
@@ -104,139 +101,6 @@ struct AppWindowView: View {
         .padding(.all)
     }
     
-    private func setupToolbarNotificationHandlers() {
-        // Legacy SwiftUI toolbar notifications
-        NotificationCenter.default.addObserver(
-            forName: .showCustomizeModelSheet,
-            object: nil,
-            queue: .main
-        ) { _ in
-            showCustomizeModelSheet = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .showClarifyingQuestionsModelSheet,
-            object: nil,
-            queue: .main
-        ) { _ in
-            showClarifyingQuestionsModelSheet = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .showCoverLetterModelSheet,
-            object: nil,
-            queue: .main
-        ) { _ in
-            showCoverLetterModelSheet = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .showBestLetterModelSheet,
-            object: nil,
-            queue: .main
-        ) { _ in
-            showBestLetterModelSheet = true
-        }
-        
-        // AppKit toolbar notifications
-        NotificationCenter.default.addObserver(
-            forName: .toolbarNewJobApp,
-            object: nil,
-            queue: .main
-        ) { _ in
-            sheets.showNewJobApp = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarBestJob,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // Trigger best job functionality
-            // This would need to be implemented properly
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarCustomize,
-            object: nil,
-            queue: .main
-        ) { _ in
-            selectedTab = .resume
-            showCustomizeModelSheet = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarClarifyCustomize,
-            object: nil,
-            queue: .main
-        ) { _ in
-            selectedTab = .resume
-            showClarifyingQuestionsModelSheet = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarOptimize,
-            object: nil,
-            queue: .main
-        ) { _ in
-            sheets.showResumeReview = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarCoverLetter,
-            object: nil,
-            queue: .main
-        ) { _ in
-            showCoverLetterModelSheet = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarBatchLetter,
-            object: nil,
-            queue: .main
-        ) { _ in
-            sheets.showBatchCoverLetter = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarBestLetter,
-            object: nil,
-            queue: .main
-        ) { _ in
-            showBestLetterModelSheet = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarCommittee,
-            object: nil,
-            queue: .main
-        ) { _ in
-            sheets.showMultiModelChooseBest = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarAnalyze,
-            object: nil,
-            queue: .main
-        ) { _ in
-            sheets.showApplicationReview = true
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .toolbarInspector,
-            object: nil,
-            queue: .main
-        ) { _ in
-            switch selectedTab {
-            case .resume:
-                sheets.showResumeInspector.toggle()
-            case .coverLetter:
-                sheets.showCoverLetterInspector.toggle()
-            default:
-                break
-            }
-        }
-    }
 
     // MARK: - Toolbar Action Methods
     
@@ -377,16 +241,7 @@ struct AppWindowViewModifiers: ViewModifier {
     let appState: AppState
     @Binding var selectedTab: TabList
     @Binding var hasVisitedResumeTab: Bool
-    @Binding var showCustomizeModelSheet: Bool
-    @Binding var showClarifyingQuestionsModelSheet: Bool
-    @Binding var showCoverLetterModelSheet: Bool
-    @Binding var showBestLetterModelSheet: Bool
-    let startCustomizeWorkflow: (String) async -> Void
-    let startClarifyingQuestionsWorkflow: (String) async -> Void
-    let generateCoverLetter: (String) async -> Void
-    let startBestLetterSelection: (String) async -> Void
     let updateMyLetter: () -> Void
-    let setupToolbarNotificationHandlers: () -> Void
     
     func body(content: Content) -> some View {
         let step1: some View = content
@@ -406,7 +261,6 @@ struct AppWindowViewModifiers: ViewModifier {
             .onAppear {
                 updateMyLetter()
                 hasVisitedResumeTab = false
-                setupToolbarNotificationHandlers()
             }
         
         let step2: some View = step1
@@ -465,95 +319,10 @@ struct AppWindowViewModifiers: ViewModifier {
                     .environment(jobAppStore)
                     .environment(coverLetterStore)
             }
-            .appKitToolbarModelSheets(
-                showCustomizeModelSheet: $showCustomizeModelSheet,
-                showClarifyingQuestionsModelSheet: $showClarifyingQuestionsModelSheet,
-                showCoverLetterModelSheet: $showCoverLetterModelSheet,
-                showBestLetterModelSheet: $showBestLetterModelSheet,
-                startCustomizeWorkflow: startCustomizeWorkflow,
-                startClarifyingQuestionsWorkflow: startClarifyingQuestionsWorkflow,
-                generateCoverLetter: generateCoverLetter,
-                startBestLetterSelection: startBestLetterSelection
-            )
         
         return step3
     }
 }
 
-// MARK: - Notification Extensions
-
-extension Notification.Name {
-    static let showCustomizeModelSheet = Notification.Name("showCustomizeModelSheet")
-    static let showClarifyingQuestionsModelSheet = Notification.Name("showClarifyingQuestionsModelSheet")
-    static let showCoverLetterModelSheet = Notification.Name("showCoverLetterModelSheet")
-    static let showBestLetterModelSheet = Notification.Name("showBestLetterModelSheet")
-}
-
-extension View {
-    func appKitToolbarModelSheets(
-        showCustomizeModelSheet: Binding<Bool>,
-        showClarifyingQuestionsModelSheet: Binding<Bool>,
-        showCoverLetterModelSheet: Binding<Bool>,
-        showBestLetterModelSheet: Binding<Bool>,
-        startCustomizeWorkflow: @escaping (String) async -> Void,
-        startClarifyingQuestionsWorkflow: @escaping (String) async -> Void,
-        generateCoverLetter: @escaping (String) async -> Void,
-        startBestLetterSelection: @escaping (String) async -> Void
-    ) -> some View {
-        self
-            .sheet(isPresented: showCustomizeModelSheet) {
-                ModelSelectionSheet(
-                    title: "Choose Model for Resume Customization",
-                    requiredCapability: .structuredOutput,
-                    operationKey: "resume_customize",
-                    isPresented: showCustomizeModelSheet,
-                    onModelSelected: { modelId in
-                        Task {
-                            await startCustomizeWorkflow(modelId)
-                        }
-                    }
-                )
-            }
-            .sheet(isPresented: showClarifyingQuestionsModelSheet) {
-                ModelSelectionSheet(
-                    title: "Choose Model for Clarifying Questions",
-                    requiredCapability: .structuredOutput,
-                    operationKey: "clarifying_questions",
-                    isPresented: showClarifyingQuestionsModelSheet,
-                    onModelSelected: { modelId in
-                        Task {
-                            await startClarifyingQuestionsWorkflow(modelId)
-                        }
-                    }
-                )
-            }
-            .sheet(isPresented: showCoverLetterModelSheet) {
-                ModelSelectionSheet(
-                    title: "Choose Model for Cover Letter Generation",
-                    requiredCapability: nil,
-                    operationKey: "cover_letter",
-                    isPresented: showCoverLetterModelSheet,
-                    onModelSelected: { modelId in
-                        Task {
-                            await generateCoverLetter(modelId)
-                        }
-                    }
-                )
-            }
-            .sheet(isPresented: showBestLetterModelSheet) {
-                ModelSelectionSheet(
-                    title: "Choose Model for Best Cover Letter Selection",
-                    requiredCapability: .structuredOutput,
-                    operationKey: "best_letter",
-                    isPresented: showBestLetterModelSheet,
-                    onModelSelected: { modelId in
-                        Task {
-                            await startBestLetterSelection(modelId)
-                        }
-                    }
-                )
-            }
-    }
-}
 
 
