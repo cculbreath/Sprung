@@ -13,7 +13,7 @@ func buildUnifiedToolbar(
     clarifyingQuestions: Binding<[ClarifyingQuestion]>,
     resumeReviseViewModel: ResumeReviseViewModel?,
     showNewAppSheet: Binding<Bool>
-) -> some ToolbarContent {
+) -> some CustomizableToolbarContent {
     UnifiedToolbar(
         selectedTab: selectedTab,
         listingButtons: listingButtons,
@@ -25,7 +25,7 @@ func buildUnifiedToolbar(
     )
 }
 
-struct UnifiedToolbar: ToolbarContent {
+struct UnifiedToolbar: CustomizableToolbarContent {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(AppState.self) private var appState: AppState
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
@@ -251,268 +251,99 @@ struct UnifiedToolbar: ToolbarContent {
         }
     }
 
-    var body: some ToolbarContent {
-        // ───── Left edge: Navigation buttons ─────
-        ToolbarItem(placement: .navigation) {
-            newJobAppButton()
+    var body: some CustomizableToolbarContent {
+        Group {
+            navigationButtonsGroup
+            mainButtonsGroup
+            inspectorButtonGroup
         }
-        
-        ToolbarItem(placement: .navigation) {
-            bestJobButton()
-        }
-
-        // ───── Center: All main buttons ─────
-        ToolbarItem(placement: .principal) {
-            HStack(spacing: 20) {
-                // Resume Operations cluster
-                HStack(spacing: 12) {
-                    resumeButton("Customize", "wand.and.sparkles", action: {
-                        selectedTab = .resume
-                        showCustomizeModelSheet = true
-                    }, disabled: selectedResumeBinding.wrappedValue?.rootNode == nil,
-                                 help: "Create Resume Revisions")
-
-                    Button(action: {
-                        selectedTab = .resume
-                        clarifyingQuestions = []
-                        showClarifyingQuestionsModelSheet = true
-                    }) {
-                        VStack(spacing: 3) {
-                            if isGeneratingQuestions {
-                                Image("custom.wand.and.rays.inverse.badge.questionmark")
-                                    .font(.system(size: 18))
-                                    .frame(height: 20)
-                                    .foregroundColor(.pink)
-                                    .fontWeight(.bold)
-                                    .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
-                            } else {
-                                Image("custom.wand.and.sparkles.badge.questionmark")
-                                    .font(.system(size: 18))
-                                    .frame(height: 20)
-                            }
-                            Text("Clarify & Customize")
-                                .font(.system(size: 11))
-                                .frame(height: 14)
-                        }
-                        .frame(minWidth: 60, minHeight: 50)
-                        .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Create Resume Revisions with Clarifying Questions")
-                    .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
-                    .sheet(isPresented: $showClarifyingQuestionsModelSheet) {
-                        ModelSelectionSheet(
-                            title: "Choose Model for Clarifying Questions",
-                            requiredCapability: .structuredOutput,
-                            operationKey: "clarifying_questions",
-                            isPresented: $showClarifyingQuestionsModelSheet,
-                            onModelSelected: { modelId in
-                                selectedClarifyingQuestionsModel = modelId
-                                isGeneratingQuestions = true
-                                Task {
-                                    await startClarifyingQuestionsWorkflow(modelId: modelId)
-                                }
-                            }
-                        )
-                    }
-                    .sheet(isPresented: $showCustomizeModelSheet) {
-                        ModelSelectionSheet(
-                            title: "Choose Model for Resume Customization",
-                            requiredCapability: .structuredOutput,
-                            operationKey: "resume_customize",
-                            isPresented: $showCustomizeModelSheet,
-                            onModelSelected: { modelId in
-                                selectedCustomizeModel = modelId
-                                isGeneratingResume = true
-                                Task {
-                                    await startCustomizeWorkflow(modelId: modelId)
-                                }
-                            }
-                        )
-                    }
-                    .sheet(isPresented: $sheets.showClarifyingQuestions) {
-                        ClarifyingQuestionsSheet(
-                            questions: clarifyingQuestions,
-                            isPresented: $sheets.showClarifyingQuestions,
-                            onSubmit: { answers in
-                                sheets.showClarifyingQuestions = false
-                                isGeneratingQuestions = true
-                                Task {
-                                    await processClarifyingQuestionsAnswers(answers: answers)
-                                }
-                            }
-                        )
-                    }
-
-                    resumeButton("Optimize", "character.magnify", action: {
-                        sheets.showResumeReview = true
-                    }, disabled: selectedResumeBinding.wrappedValue == nil,
-                                 help: "AI Resume Review")
-                }
-
-                Divider()
-                    .frame(height: 30)
-
-                // Cover Letter Operations cluster
-                HStack(spacing: 12) {
-                    Button(action: {
-                        showCoverLetterModelSheet = true
-                    }) {
-                        VStack(spacing: 3) {
-                            if isGeneratingCoverLetter {
-                                Image("custom.append.page.badge.plus")
-                                    .font(.system(size: 18))
-                                    .frame(height: 20)
-                                    .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
-                            } else {
-                                Image("custom.append.page.badge.plus")
-                                    .font(.system(size: 18))
-                                    .frame(height: 20)
-                            }
-                            Text("Cover Letter")
-                                .font(.system(size: 11))
-                                .frame(height: 14)
-                        }
-                        .frame(minWidth: 60, minHeight: 50)
-                        .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Generate Cover Letter")
-                    .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-                    .sheet(isPresented: $showCoverLetterModelSheet) {
-                        ModelSelectionSheet(
-                            title: "Choose Model for Cover Letter Generation",
-                            requiredCapability: nil, // Cover letter generation can work with any model
-                            operationKey: "cover_letter",
-                            isPresented: $showCoverLetterModelSheet,
-                            onModelSelected: { modelId in
-                                selectedCoverLetterModel = modelId
-                                showCoverLetterModelSheet = false
-                                isGeneratingCoverLetter = true
-                                
-                                // Generate cover letter with the selected model
-                                Task {
-                                    await generateCoverLetter(modelId: modelId)
-                                }
-                            }
-                        )
-                    }
-
-                    coverLetterButton("Batch Letter", "square.stack.3d.up.fill", action: {
-                        sheets.showBatchCoverLetter = true
-                    }, disabled: jobAppStore.selectedApp?.selectedRes == nil,
-                                      help: "Batch Cover Letter Operations")
-
-                    Button(action: {
-                        showBestLetterModelSheet = true
-                    }) {
-                        VStack(spacing: 3) {
-                            if isProcessingBestLetter {
-                                Image(systemName: "gearshape")
-                                    .font(.system(size: 18))
-                                    .frame(height: 20)
-                                    .symbolEffect(.rotate, options: .repeating)
-                            } else {
-                                Image(systemName: "medal")
-                                    .font(.system(size: 18))
-                                    .frame(height: 20)
-                            }
-                            Text("Best Letter")
-                                .font(.system(size: 11))
-                                .frame(height: 14)
-                        }
-                        .frame(minWidth: 60, minHeight: 50)
-                        .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Choose Best Cover Letter")
-                    .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
-                    .sheet(isPresented: $showBestLetterModelSheet) {
-                        ModelSelectionSheet(
-                            title: "Choose Model for Best Cover Letter Selection",
-                            requiredCapability: .structuredOutput, // Needs structured output for JSON response
-                            operationKey: "best_letter",
-                            isPresented: $showBestLetterModelSheet,
-                            onModelSelected: { modelId in
-                                selectedBestLetterModel = modelId
-                                showBestLetterModelSheet = false
-                                isProcessingBestLetter = true
-                                
-                                // Start processing with the selected model
-                                Task {
-                                    await startBestLetterSelection(modelId: modelId)
-                                }
-                            }
-                        )
-                    }
-                    .alert("Best Cover Letter Selection", isPresented: $showBestLetterAlert) {
-                        Button("OK") {
-                            // Update the selected cover letter if we have a valid result
-                            if let result = bestLetterResult,
-                               let uuid = UUID(uuidString: result.bestLetterUuid),
-                               let jobApp = jobAppStore.selectedApp,
-                               let selectedLetter = jobApp.coverLetters.first(where: { $0.id == uuid }) {
-                                jobApp.selectedCover = selectedLetter
-                                Logger.debug("📝 Updated selected cover letter to: \(selectedLetter.sequencedName)")
-                            }
-                        }
-                    } message: {
-                        if let result = bestLetterResult {
-                            Text("Analysis: \(result.strengthAndVoiceAnalysis)\n\nVerdict: \(result.verdict)")
-                        }
-                    }
-
-                    Button(action: {
-                        sheets.showMultiModelChooseBest = true
-                    }) {
-                        VStack(spacing: 3) {
-                            Image("custom.medal.square.stack")
-                                .font(.system(size: 18))
-                                .frame(height: 20)
-                            Text("Committee")
-                                .font(.system(size: 11))
-                                .frame(height: 14)
-                        }
-                        .frame(minWidth: 60, minHeight: 50)
-                        .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Multi-model Choose Best Cover Letter")
-                    .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
-                }
-
-                // Additional buttons section
-                if UserDefaults.standard.bool(forKey: "ttsEnabled") {
-                    Divider()
-                        .frame(height: 30)
-
-                    HStack(spacing: 12) {
-                        TTSButton()
-                            .disabled(coverLetterStore.cL?.generated != true)
-
-                        sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
-                            sheets.showApplicationReview = true
-                        }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
-                                      jobAppStore.selectedApp?.selectedCover == nil ||
-                                      jobAppStore.selectedApp?.selectedCover?.generated != true,
-                                      help: "Review Application")
-                    }
-                } else {
-                    Divider()
-                        .frame(height: 30)
-
-                    sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
-                        sheets.showApplicationReview = true
-                    }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
-                                  jobAppStore.selectedApp?.selectedCover == nil ||
-                                  jobAppStore.selectedApp?.selectedCover?.generated != true,
-                                  help: "Review Application")
-                }
+    }
+    
+    private var navigationButtonsGroup: some CustomizableToolbarContent {
+        Group {
+            ToolbarItem(id: "newJobApp", placement: .primaryAction, showsByDefault: true) {
+                newJobAppButton()
+            }
+            
+            ToolbarItem(id: "bestJob", placement: .primaryAction, showsByDefault: true) {
+                bestJobButton()
             }
         }
-
-        // ───── Right edge: Inspector only ─────
-        ToolbarItem(placement: .primaryAction) {
+    }
+    
+    private var mainButtonsGroup: some CustomizableToolbarContent {
+        Group {
+            // Resume Operations
+            ToolbarItem(id: "customize", placement: .primaryAction, showsByDefault: true) {
+                resumeButton("Customize", "wand.and.sparkles", action: {
+                    selectedTab = .resume
+                    showCustomizeModelSheet = true
+                }, disabled: selectedResumeBinding.wrappedValue?.rootNode == nil,
+                             help: "Create Resume Revisions")
+            }
+            
+            ToolbarItem(id: "clarifyCustomize", placement: .primaryAction, showsByDefault: true) {
+                clarifyAndCustomizeButton()
+            }
+            
+            ToolbarItem(id: "optimize", placement: .primaryAction, showsByDefault: true) {
+                resumeButton("Optimize", "character.magnify", action: {
+                    sheets.showResumeReview = true
+                }, disabled: selectedResumeBinding.wrappedValue == nil,
+                             help: "AI Resume Review")
+            }
+            
+            // Cover Letter Operations
+            ToolbarItem(id: "coverLetter", placement: .primaryAction, showsByDefault: true) {
+                coverLetterGenerateButton()
+            }
+            
+            ToolbarItem(id: "batchLetter", placement: .primaryAction, showsByDefault: true) {
+                coverLetterButton("Batch Letter", "square.stack.3d.up.fill", action: {
+                    sheets.showBatchCoverLetter = true
+                }, disabled: jobAppStore.selectedApp?.selectedRes == nil,
+                              help: "Batch Cover Letter Operations")
+            }
+            
+            ToolbarItem(id: "bestLetter", placement: .primaryAction, showsByDefault: true) {
+                bestLetterButton()
+            }
+            
+            ToolbarItem(id: "committee", placement: .primaryAction, showsByDefault: true) {
+                Button(action: {
+                    sheets.showMultiModelChooseBest = true
+                }) {
+                    Label {
+                        Text("Committee")
+                    } icon: {
+                        Image("custom.medal.square.stack")
+                    }
+                }
+                .help("Multi-model Choose Best Cover Letter")
+                .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
+            }
+            
+            // Conditional TTS and Analyze buttons
+            if UserDefaults.standard.bool(forKey: "ttsEnabled") {
+                ToolbarItem(id: "tts", placement: .primaryAction, showsByDefault: false) {
+                    TTSButton()
+                        .disabled(coverLetterStore.cL?.generated != true)
+                }
+            }
+            
+            ToolbarItem(id: "analyze", placement: .primaryAction, showsByDefault: true) {
+                sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
+                    sheets.showApplicationReview = true
+                }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
+                              jobAppStore.selectedApp?.selectedCover == nil ||
+                              jobAppStore.selectedApp?.selectedCover?.generated != true,
+                              help: "Review Application")
+            }
+        }
+    }
+    
+    private var inspectorButtonGroup: some CustomizableToolbarContent {
+        ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
             sidebarButton("Inspector", "sidebar.right", action: {
                 switch selectedTab {
                 case .resume:
@@ -528,6 +359,160 @@ struct UnifiedToolbar: ToolbarContent {
         }
     }
 
+    @ViewBuilder
+    private func clarifyAndCustomizeButton() -> some View {
+        Button(action: {
+            selectedTab = .resume
+            clarifyingQuestions = []
+            showClarifyingQuestionsModelSheet = true
+        }) {
+            if isGeneratingQuestions {
+                Label {
+                    Text("Clarify & Customize")
+                } icon: {
+                    Image("custom.wand.and.rays.inverse.badge.questionmark")
+                        .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
+                }
+            } else {
+                Label {
+                    Text("Clarify & Customize")
+                } icon: {
+                    Image("custom.wand.and.sparkles.badge.questionmark")
+                }
+            }
+        }
+        .help("Create Resume Revisions with Clarifying Questions")
+        .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
+        .sheet(isPresented: $showClarifyingQuestionsModelSheet) {
+            ModelSelectionSheet(
+                title: "Choose Model for Clarifying Questions",
+                requiredCapability: .structuredOutput,
+                operationKey: "clarifying_questions",
+                isPresented: $showClarifyingQuestionsModelSheet,
+                onModelSelected: { modelId in
+                    selectedClarifyingQuestionsModel = modelId
+                    isGeneratingQuestions = true
+                    Task {
+                        await startClarifyingQuestionsWorkflow(modelId: modelId)
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showCustomizeModelSheet) {
+            ModelSelectionSheet(
+                title: "Choose Model for Resume Customization",
+                requiredCapability: .structuredOutput,
+                operationKey: "resume_customize",
+                isPresented: $showCustomizeModelSheet,
+                onModelSelected: { modelId in
+                    selectedCustomizeModel = modelId
+                    isGeneratingResume = true
+                    Task {
+                        await startCustomizeWorkflow(modelId: modelId)
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $sheets.showClarifyingQuestions) {
+            ClarifyingQuestionsSheet(
+                questions: clarifyingQuestions,
+                isPresented: $sheets.showClarifyingQuestions,
+                onSubmit: { answers in
+                    sheets.showClarifyingQuestions = false
+                    isGeneratingQuestions = true
+                    Task {
+                        await processClarifyingQuestionsAnswers(answers: answers)
+                    }
+                }
+            )
+        }
+    }
+    
+    @ViewBuilder
+    private func coverLetterGenerateButton() -> some View {
+        Button(action: {
+            showCoverLetterModelSheet = true
+        }) {
+            Label {
+                Text("Cover Letter")
+            } icon: {
+                if isGeneratingCoverLetter {
+                    Image("custom.append.page.badge.plus")
+                        .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                } else {
+                    Image("custom.append.page.badge.plus")
+                }
+            }
+        }
+        .help("Generate Cover Letter")
+        .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+        .sheet(isPresented: $showCoverLetterModelSheet) {
+            ModelSelectionSheet(
+                title: "Choose Model for Cover Letter Generation",
+                requiredCapability: nil,
+                operationKey: "cover_letter",
+                isPresented: $showCoverLetterModelSheet,
+                onModelSelected: { modelId in
+                    selectedCoverLetterModel = modelId
+                    showCoverLetterModelSheet = false
+                    isGeneratingCoverLetter = true
+                    
+                    Task {
+                        await generateCoverLetter(modelId: modelId)
+                    }
+                }
+            )
+        }
+    }
+    
+    @ViewBuilder
+    private func bestLetterButton() -> some View {
+        Button(action: {
+            showBestLetterModelSheet = true
+        }) {
+            if isProcessingBestLetter {
+                Label("Best Letter", systemImage: "gearshape")
+                    .symbolEffect(.rotate, options: .repeating)
+            } else {
+                Label("Best Letter", systemImage: "medal")
+            }
+        }
+        .help("Choose Best Cover Letter")
+        .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
+        .sheet(isPresented: $showBestLetterModelSheet) {
+            ModelSelectionSheet(
+                title: "Choose Model for Best Cover Letter Selection",
+                requiredCapability: .structuredOutput,
+                operationKey: "best_letter",
+                isPresented: $showBestLetterModelSheet,
+                onModelSelected: { modelId in
+                    selectedBestLetterModel = modelId
+                    showBestLetterModelSheet = false
+                    isProcessingBestLetter = true
+                    
+                    Task {
+                        await startBestLetterSelection(modelId: modelId)
+                    }
+                }
+            )
+        }
+        .alert("Best Cover Letter Selection", isPresented: $showBestLetterAlert) {
+            Button("OK") {
+                if let result = bestLetterResult,
+                   let uuid = UUID(uuidString: result.bestLetterUuid),
+                   let jobApp = jobAppStore.selectedApp,
+                   let selectedLetter = jobApp.coverLetters.first(where: { $0.id == uuid }) {
+                    jobApp.selectedCover = selectedLetter
+                    Logger.debug("📝 Updated selected cover letter to: \(selectedLetter.sequencedName)")
+                }
+            }
+        } message: {
+            if let result = bestLetterResult {
+                Text("Analysis: \(result.strengthAndVoiceAnalysis)\n\nVerdict: \(result.verdict)")
+            }
+        }
+    }
+
     // Helper functions for consistent button styling
     @ViewBuilder
     private func resumeButton(_ title: String,
@@ -536,26 +521,13 @@ struct UnifiedToolbar: ToolbarContent {
                               disabled: Bool = false,
                               help: String) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                if isGeneratingResume && (title == "Customize") {
-                    Image(systemName: "wand.and.rays")
-                        .font(.system(size: 18))
-                        .frame(height: 20)
-                        .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
-                        .foregroundColor(.blue)
-                        .fontWeight(.bold)
-                } else {
-                    Image(systemName: systemName)
-                        .font(.system(size: 18))
-                        .frame(height: 20)
-                }
-                Text(title)
-                    .font(.system(size: 11))
-                    .frame(height: 14)
+            if isGeneratingResume && (title == "Customize") {
+                Label(title, systemImage: "wand.and.rays")
+                    .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+            } else {
+                Label(title, systemImage: systemName)
             }
-            .frame(minWidth: 60, minHeight: 50)
         }
-        .buttonStyle(.plain)
         .help(help)
         .disabled(disabled)
     }
@@ -567,17 +539,8 @@ struct UnifiedToolbar: ToolbarContent {
                                    disabled: Bool = false,
                                    help: String) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                Image(systemName: systemName)
-                    .font(.system(size: 18))
-                    .frame(height: 20)
-                Text(title)
-                    .font(.system(size: 11))
-                    .frame(height: 14)
-            }
-            .frame(minWidth: 60, minHeight: 50)
+            Label(title, systemImage: systemName)
         }
-        .buttonStyle(.plain)
         .help(help)
         .disabled(disabled)
     }
@@ -590,17 +553,8 @@ struct UnifiedToolbar: ToolbarContent {
                                disabled: Bool = false,
                                help: String) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                Image(systemName: systemName)
-                    .font(.system(size: 18))
-                    .frame(height: 20)
-                Text(title)
-                    .font(.system(size: 11))
-                    .frame(height: 14)
-            }
-            .frame(minWidth: 60, minHeight: 50)
+            Label(title, systemImage: systemName)
         }
-        .buttonStyle(.plain)
         .help(help)
         .disabled(disabled)
     }
@@ -610,18 +564,8 @@ struct UnifiedToolbar: ToolbarContent {
         Button(action: {
             showNewAppSheet = true
         }) {
-            VStack(spacing: 3) {
-                Image(systemName: "note.text.badge.plus")
-                    .font(.system(size: 18))
-                    .frame(height: 20)
-                Text("New App")
-                    .font(.system(size: 11))
-                    .frame(height: 14)
-            }
-            .frame(minWidth: 60, minHeight: 50)
-            .padding(.vertical, 8)
+            Label("New App", systemImage: "note.text.badge.plus")
         }
-        .buttonStyle(.plain)
         .help("Create New Job Application")
     }
 
@@ -630,26 +574,13 @@ struct UnifiedToolbar: ToolbarContent {
         Button(action: {
             showBestJobModelSheet = true
         }) {
-            VStack(spacing: 3) {
-                if isProcessingBestJob {
-                    Image(systemName: "wand.and.rays")
-                        .font(.system(size: 18))
-                        .frame(height: 20)
-                        .foregroundColor(.pink).fontWeight(.bold)
-                        .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
-                } else {
-                    Image(systemName: "medal.star")
-                        .font(.system(size: 18))
-                        .frame(height: 20)
-                }
-                Text("Best Job")
-                    .font(.system(size: 11))
-                    .frame(height: 14)
+            if isProcessingBestJob {
+                Label("Best Job", systemImage: "wand.and.rays")
+                    .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
+            } else {
+                Label("Best Job", systemImage: "medal.star")
             }
-            .frame(minWidth: 60, minHeight: 50)
-            .padding(.vertical, 8)
         }
-        .buttonStyle(.plain)
         .help("Find the best job match based on your qualifications")
         .disabled(isProcessingBestJob || jobAppStore.selectedApp?.selectedRes == nil)
         .sheet(isPresented: $showBestJobModelSheet) {
@@ -719,7 +650,19 @@ struct UnifiedToolbar: ToolbarContent {
             
         } catch {
             Logger.error("JobRecommendation Error: \(error)")
-            bestJobResult = "Error: \(error.localizedDescription)"
+            
+            // Provide more specific error messages for common issues
+            if let llmError = error as? LLMError {
+                switch llmError {
+                case .unauthorized(let modelId):
+                    bestJobResult = "Access denied for model '\(modelId)'.\n\nThis model may require special authorization or billing setup. Try using a different model like GPT-4.1 instead."
+                default:
+                    bestJobResult = "Error: \(error.localizedDescription)"
+                }
+            } else {
+                bestJobResult = "Error: \(error.localizedDescription)"
+            }
+            
             showBestJobAlert = true
             isProcessingBestJob = false
         }
@@ -736,17 +679,8 @@ struct TTSButton: View {
             Button(action: {
                 // TTS action
             }) {
-                VStack(spacing: 3) {
-                    Image(systemName: "speaker.wave.2")
-                        .font(.system(size: 18))
-                        .frame(height: 20)
-                    Text("Read Aloud")
-                        .font(.system(size: 11))
-                        .frame(height: 14)
-                }
-                .frame(minWidth: 60, minHeight: 50)
+                Label("Read Aloud", systemImage: "speaker.wave.2")
             }
-            .buttonStyle(.plain)
             .help("Read Cover Letter")
         }
     }

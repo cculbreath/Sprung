@@ -28,6 +28,7 @@ struct ContentViewLaunch: View {
             .environment(coverRefStore)
             .environment(coverLetterStore)
             .environment(dragInfo) // Inject DragInfo here
+            .background(AppKitToolbarSetup())
             .onAppear {
                 // Check and migrate database if needed
                 DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)

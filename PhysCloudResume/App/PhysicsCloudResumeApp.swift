@@ -57,6 +57,9 @@ struct PhysicsCloudResumeApp: App {
         .modelContainer(modelContainer)
         .windowToolbarStyle(.expanded)
         .commands {
+            ToolbarCommands()
+        }
+        .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
                     appDelegate.showSettingsWindow()
