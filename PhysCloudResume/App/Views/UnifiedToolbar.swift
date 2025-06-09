@@ -12,7 +12,8 @@ func buildUnifiedToolbar(
     sheets: Binding<AppSheets>,
     clarifyingQuestions: Binding<[ClarifyingQuestion]>,
     resumeReviseViewModel: ResumeReviseViewModel?,
-    showNewAppSheet: Binding<Bool>
+    showNewAppSheet: Binding<Bool>,
+    showSlidingList: Binding<Bool>
 ) -> some CustomizableToolbarContent {
     UnifiedToolbar(
         selectedTab: selectedTab,
@@ -21,7 +22,8 @@ func buildUnifiedToolbar(
         sheets: sheets,
         clarifyingQuestions: clarifyingQuestions,
         resumeReviseViewModel: resumeReviseViewModel,
-        showNewAppSheet: showNewAppSheet
+        showNewAppSheet: showNewAppSheet,
+        showSlidingList: showSlidingList
     )
 }
 
@@ -37,6 +39,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     var resumeReviseViewModel: ResumeReviseViewModel?
     @Binding var showNewAppSheet: Bool
+    @Binding var showSlidingList: Bool
 
     @State private var isGeneratingResume = false
     @State private var isGeneratingCoverLetter = false
@@ -267,6 +270,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             
             ToolbarItem(id: "bestJob", placement: .primaryAction, showsByDefault: true) {
                 bestJobButton()
+            }
+            
+            ToolbarItem(id: "showSources", placement: .primaryAction, showsByDefault: true) {
+                showSourcesButton()
             }
         }
     }
