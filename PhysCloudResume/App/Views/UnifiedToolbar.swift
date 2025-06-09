@@ -350,19 +350,34 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     }
     
     private var inspectorButtonGroup: some CustomizableToolbarContent {
-        ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
-            sidebarButton("Inspector", "sidebar.right", action: {
-                switch selectedTab {
-                case .resume:
-                    sheets.showResumeInspector.toggle()
-                case .coverLetter:
-                    sheets.showCoverLetterInspector.toggle()
-                default:
-                    break // No inspector for other tabs
-                }
-            }, disabled: selectedTab != .resume && selectedTab != .coverLetter,
-                          help: selectedTab == .resume ? "Show Resume Inspector" : 
-                                selectedTab == .coverLetter ? "Show Cover Letter Inspector" : "Inspector")
+        Group {
+            ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
+                sidebarButton("Inspector", "sidebar.right", action: {
+                    switch selectedTab {
+                    case .resume:
+                        sheets.showResumeInspector.toggle()
+                    case .coverLetter:
+                        sheets.showCoverLetterInspector.toggle()
+                    default:
+                        break // No inspector for other tabs
+                    }
+                }, disabled: selectedTab != .resume && selectedTab != .coverLetter,
+                              help: selectedTab == .resume ? "Show Resume Inspector" : 
+                                    selectedTab == .coverLetter ? "Show Cover Letter Inspector" : "Inspector")
+            }
+            
+            // Hidden by default but customizable toolbar items
+            ToolbarItem(id: "settings", placement: .primaryAction, showsByDefault: false) {
+                settingsButton()
+            }
+            
+            ToolbarItem(id: "applicantProfile", placement: .primaryAction, showsByDefault: false) {
+                applicantProfileButton()
+            }
+            
+            ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: false) {
+                templateEditorButton()
+            }
         }
     }
 
@@ -586,6 +601,36 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             Label("Show Sources", systemImage: "newspaper")
         }
         .help("Show Sources")
+    }
+
+    @ViewBuilder
+    private func settingsButton() -> some View {
+        Button(action: {
+            NotificationCenter.default.post(name: .showSettings, object: nil)
+        }) {
+            Label("Settings", systemImage: "gear")
+        }
+        .help("Open Settings")
+    }
+
+    @ViewBuilder
+    private func applicantProfileButton() -> some View {
+        Button(action: {
+            NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
+        }) {
+            Label("Applicant Profile", systemImage: "person.crop.circle")
+        }
+        .help("Open Applicant Profile")
+    }
+
+    @ViewBuilder
+    private func templateEditorButton() -> some View {
+        Button(action: {
+            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+        }) {
+            Label("Template Editor", systemImage: "doc.text")
+        }
+        .help("Open Template Editor")
     }
 
     @ViewBuilder
