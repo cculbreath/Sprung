@@ -451,6 +451,13 @@ class NativePDFGenerator: NSObject, ObservableObject {
     }
     
     private func saveDebugHTML(_ html: String, template: String, format: String) {
+        // Check if debug file saving is enabled in user settings
+        let saveDebugFiles = UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+        guard saveDebugFiles else {
+            Logger.debug("Debug file saving disabled - skipping HTML export")
+            return
+        }
+        
         let timestamp = Date().timeIntervalSince1970
         let filename = "debug_resume_\(template)_\(format)_\(timestamp).html"
         

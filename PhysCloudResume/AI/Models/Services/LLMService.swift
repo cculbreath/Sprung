@@ -18,6 +18,7 @@ enum LLMError: LocalizedError {
     case unexpectedResponseFormat
     case rateLimited(retryAfter: TimeInterval?)
     case timeout
+    case unauthorized(String)
     
     var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ enum LLMError: LocalizedError {
             }
         case .timeout:
             return "Request timed out"
+        case .unauthorized(let modelId):
+            return "Access denied for model '\(modelId)'. This model may require special authorization or billing setup."
         }
     }
 }
@@ -829,15 +832,22 @@ class LLMService {
                 lastError = error
                 Logger.debug("❌ Request failed with error: \(error)")
                 
-                // Log more details for SwiftOpenAI APIErrors
+                // Handle SwiftOpenAI APIErrors with enhanced 403 detection
                 if let apiError = error as? SwiftOpenAI.APIError {
                     Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)")
+                    
+                    // Check for 403 Unauthorized specifically
+                    if apiError.displayDescription.contains("status code 403") {
+                        let modelId = extractModelId(from: parameters)
+                        Logger.debug("🚫 403 Unauthorized detected for model: \(modelId)")
+                        throw LLMError.unauthorized(modelId)
+                    }
                 }
                 
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {
                     switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError:
+                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized:
                         throw appError
                     case .rateLimited(let retryAfter):
                         if let delay = retryAfter, attempt < retries {
@@ -1033,6 +1043,11 @@ class LLMService {
         
         Logger.error("❌ All flexible parsing strategies failed")
         throw LLMError.decodingFailed(NSError(domain: "FlexibleJSONParsing", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not extract valid JSON from response"]))
+    }
+    
+    /// Extract model ID from chat completion parameters for error reporting
+    private func extractModelId(from parameters: ChatCompletionParameters) -> String {
+        return parameters.model
     }
     
     /// Cancel all current requests
