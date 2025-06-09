@@ -264,15 +264,15 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     
     private var navigationButtonsGroup: some CustomizableToolbarContent {
         Group {
-            ToolbarItem(id: "newJobApp", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "newJobApp", placement: .navigation, showsByDefault: true) {
                 newJobAppButton()
             }
             
-            ToolbarItem(id: "bestJob", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "bestJob", placement: .navigation, showsByDefault: true) {
                 bestJobButton()
             }
             
-            ToolbarItem(id: "showSources", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "showSources", placement: .navigation, showsByDefault: true) {
                 showSourcesButton()
             }
         }
@@ -281,7 +281,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     private var mainButtonsGroup: some CustomizableToolbarContent {
         Group {
             // Resume Operations
-            ToolbarItem(id: "customize", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "customize", placement: .secondaryAction, showsByDefault: true) {
                 resumeButton("Customize", "wand.and.sparkles", action: {
                     selectedTab = .resume
                     showCustomizeModelSheet = true
@@ -289,11 +289,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                              help: "Create Resume Revisions")
             }
             
-            ToolbarItem(id: "clarifyCustomize", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "clarifyCustomize", placement: .secondaryAction, showsByDefault: true) {
                 clarifyAndCustomizeButton()
             }
             
-            ToolbarItem(id: "optimize", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "optimize", placement: .secondaryAction, showsByDefault: true) {
                 resumeButton("Optimize", "character.magnify", action: {
                     sheets.showResumeReview = true
                 }, disabled: selectedResumeBinding.wrappedValue == nil,
@@ -301,22 +301,22 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
             
             // Cover Letter Operations
-            ToolbarItem(id: "coverLetter", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "coverLetter", placement: .secondaryAction, showsByDefault: true) {
                 coverLetterGenerateButton()
             }
             
-            ToolbarItem(id: "batchLetter", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "batchLetter", placement: .secondaryAction, showsByDefault: true) {
                 coverLetterButton("Batch Letter", "square.stack.3d.up.fill", action: {
                     sheets.showBatchCoverLetter = true
                 }, disabled: jobAppStore.selectedApp?.selectedRes == nil,
                               help: "Batch Cover Letter Operations")
             }
             
-            ToolbarItem(id: "bestLetter", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "bestLetter", placement: .secondaryAction, showsByDefault: true) {
                 bestLetterButton()
             }
             
-            ToolbarItem(id: "committee", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "committee", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
                     sheets.showMultiModelChooseBest = true
                 }) {
@@ -330,15 +330,13 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
             }
             
-            // Conditional TTS and Analyze buttons
-            if UserDefaults.standard.bool(forKey: "ttsEnabled") {
-                ToolbarItem(id: "tts", placement: .primaryAction, showsByDefault: false) {
-                    TTSButton()
-                        .disabled(coverLetterStore.cL?.generated != true)
-                }
+            // TTS button (always present but conditionally visible)
+            ToolbarItem(id: "tts", placement: .secondaryAction, showsByDefault: false) {
+                TTSButton()
+                    .disabled(coverLetterStore.cL?.generated != true)
             }
             
-            ToolbarItem(id: "analyze", placement: .primaryAction, showsByDefault: true) {
+            ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {
                 sidebarButton("Analyze", "mail.and.text.magnifyingglass", action: {
                     sheets.showApplicationReview = true
                 }, disabled: jobAppStore.selectedApp?.selectedRes == nil ||
@@ -377,6 +375,19 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             
             ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: false) {
                 templateEditorButton()
+            }
+            
+            // Standard customizable toolbar items
+            ToolbarItem(id: "flexibleSpace", placement: .secondaryAction, showsByDefault: false) {
+                Spacer(minLength: 0)
+            }
+            
+            ToolbarItem(id: "space", placement: .secondaryAction, showsByDefault: false) {
+                Spacer(minLength: 32)
+            }
+            
+            ToolbarItem(id: "separator", placement: .secondaryAction, showsByDefault: false) {
+                Divider()
             }
         }
     }
