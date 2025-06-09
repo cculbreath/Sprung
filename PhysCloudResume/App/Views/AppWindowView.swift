@@ -42,7 +42,7 @@ struct AppWindowView: View {
             tabView
         }
         .id($tabRefresh.wrappedValue)
-        .toolbar {
+        .toolbar(id: "mainToolbar") {
             buildUnifiedToolbar(
                 selectedTab: $selectedTab,
                 listingButtons: $listingButtons,
