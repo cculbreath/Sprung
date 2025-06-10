@@ -94,18 +94,6 @@ struct PhysicsCloudResumeApp: App {
                 .keyboardShortcut("i", modifiers: [.command, .shift])
             }
             
-            // Job Application Menu  
-            CommandGroup(after: .newItem) {
-                Button("New Job Application") {
-                    NotificationCenter.default.post(name: .newJobApp, object: nil)
-                }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
-                
-                Button("Best Job Match") {
-                    NotificationCenter.default.post(name: .bestJob, object: nil)
-                }
-                .keyboardShortcut("j", modifiers: [.command, .shift])
-            }
             
             // View Menu - Show Inspectors and Sources
             CommandGroup(after: .sidebar) {
@@ -127,9 +115,8 @@ struct PhysicsCloudResumeApp: App {
                 .keyboardShortcut("2", modifiers: [.command, .option])
             }
         }
-        
-        // Top-level Resume Menu
-        MenuBarExtra("Resume", content: {
+        .commands {
+            CommandMenu("Résumé") {
             Button("Customize Resume") {
                 NotificationCenter.default.post(name: .customizeResume, object: nil)
             }
@@ -159,10 +146,10 @@ struct PhysicsCloudResumeApp: App {
             Button("Export Resume as JSON") {
                 NotificationCenter.default.post(name: .exportResumeJSON, object: nil)
             }
-        })
-        
-        // Top-level Cover Letter Menu
-        MenuBarExtra("Cover Letter", content: {
+            }
+        }
+        .commands {
+            CommandMenu("Cover Letter") {
             Button("Generate Cover Letter") {
                 NotificationCenter.default.post(name: .generateCoverLetter, object: nil)
             }
@@ -216,14 +203,26 @@ struct PhysicsCloudResumeApp: App {
             Button("Export All Cover Letter Options") {
                 NotificationCenter.default.post(name: .exportAllCoverLetters, object: nil)
             }
-        })
-        
-        // Top-level Application Menu  
-        MenuBarExtra("Application", content: {
+            }
+        }
+        .commands {
+            CommandMenu("Application") {
+            Button("New Job Application") {
+                NotificationCenter.default.post(name: .newJobApp, object: nil)
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            
+            Button("Best Job Match") {
+                NotificationCenter.default.post(name: .bestJob, object: nil)
+            }
+            .keyboardShortcut("j", modifiers: [.command, .shift])
+            
+            Divider()
+            
             Button("Analyze Application") {
                 NotificationCenter.default.post(name: .analyzeApplication, object: nil)
             }
-            .keyboardShortcut("a", modifiers: [.command])
+            .keyboardShortcut("a", modifiers: [.command, .shift])
             
             Divider()
             
@@ -231,7 +230,8 @@ struct PhysicsCloudResumeApp: App {
                 NotificationCenter.default.post(name: .exportApplicationPacket, object: nil)
             }
             .keyboardShortcut("e", modifiers: [.command])
-        })
+            }
+        }
     }
 }
 

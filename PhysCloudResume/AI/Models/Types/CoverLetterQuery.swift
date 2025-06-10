@@ -353,7 +353,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
             
             Return your selection as JSON:
             {
-                "strengthAndVoiceAnalysis": "Brief assessment of each letter's strengths",
+                "strengthAndVoiceAnalysis": "Brief assessment of each letter's strengths and weaknesses. Please provide commentary for every evaluated letter",
                 "bestLetterUuid": "UUID of the selected best cover letter",
                 "verdict": "Reason for your choice"
             }
@@ -368,7 +368,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
             
             Return your allocation as JSON:
             {
-                "strengthAndVoiceAnalysis": "Brief assessment of each letter's strengths",
+                "strengthAndVoiceAnalysis": "Brief assessment of each letter's strengths and weaknesses. Provide commentary for every evaluated letter",
                 "scoreAllocations": [
                     {"letterUuid": "UUID", "score": 0}
                 ],
@@ -416,7 +416,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
                 properties: [
                     "strengthAndVoiceAnalysis": JSONSchema(
                         type: .string,
-                        description: "Brief assessment of each letter's strengths"
+                        description: "Brief assessment of each letter's strengths and weaknesses"
                     ),
                     "scoreAllocations": JSONSchema(
                         type: .array,

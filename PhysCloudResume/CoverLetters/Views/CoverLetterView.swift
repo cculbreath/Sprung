@@ -14,12 +14,17 @@ struct CoverLetterView: View {
     @Environment(AppState.self) private var appState: AppState
     
     @Binding var showCoverLetterInspector: Bool
+    @State private var isEditing = false
 
     var body: some View {
-        contentView()
-            .inspector(isPresented: $showCoverLetterInspector) {
-                CoverLetterInspectorView()
-            }
+        HStack {
+            contentView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
+        .inspector(isPresented: $showCoverLetterInspector) {
+            CoverLetterInspectorView(isEditing: $isEditing)
+        }
     }
 
     @ViewBuilder
@@ -30,7 +35,8 @@ struct CoverLetterView: View {
         if let jobApp = jobAppStore.selectedApp {
             VStack {
                 CoverLetterContentView(
-                    jobApp: jobApp
+                    jobApp: jobApp,
+                    isEditing: $isEditing
                 )
             }
         } else {
@@ -48,13 +54,7 @@ struct CoverLetterContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Bindable var jobApp: JobApp
-    
-    // Local state instead of legacy button state
-    @State private var isEditing = false
-    @State private var canEdit = true
-    @State private var isHoveringDelete = false
-    @State private var isHoveringEdit = false
-    @State private var isHoveringStar = false
+    @Binding var isEditing: Bool
 
     var body: some View {
         @Bindable var coverLetterStore = coverLetterStore
@@ -65,7 +65,7 @@ struct CoverLetterContentView: View {
         {
             @Bindable var bindApp = app
             VStack(alignment: .leading, spacing: 8) {
-                // Picker, delete and edit controls
+                // Cover letter picker
                 HStack {
                     CoverLetterPicker(
                         coverLetters: bindApp.coverLetters,
@@ -74,66 +74,8 @@ struct CoverLetterContentView: View {
                         label: ""
                     )
                     .padding()
-
-                    // Delete Button
-                    // Delete Button
-                    Button(action: { deleteCoverLetter() }) {
-                        HStack {
-                            Image(systemName: "trash.fill")
-                                .foregroundColor(isHoveringDelete ? .red : .secondary)
-                                .font(.system(size: 14))
-                            Text("Delete")
-                                .font(.caption)
-                                .foregroundColor(isHoveringDelete ? .red : .secondary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(isHoveringDelete ? Color.white.opacity(0.4) : Color.clear)
-                        .cornerRadius(10)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .onHover { hovering in isHoveringDelete = hovering }
-
-                    // Edit/Preview toggle Button
-                    Button(action: { isEditing.toggle() }) {
-                        HStack {
-                            Image(systemName: isEditing ? "doc.text.viewfinder" : "pencil")
-                                .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
-                                .font(.system(size: 14))
-                            Text(isEditing ? "Preview" : "Edit")
-                                .font(.caption)
-                                .foregroundColor(isHoveringEdit ? .accentColor : .secondary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(isHoveringEdit ? Color.white.opacity(0.4) : Color.clear)
-                        .cornerRadius(10)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .onHover { hovering in isHoveringEdit = hovering }
-                    .disabled(!canEdit)
                     
-                    // Star toggle button for chosen submission draft
-                    Button(action: { toggleChosenSubmissionDraft() }) {
-                        HStack {
-                            Image(systemName: cL.isChosenSubmissionDraft ? "star.fill" : "star")
-                                .foregroundColor(isHoveringStar ? .yellow : (cL.isChosenSubmissionDraft ? .yellow : .secondary))
-                                .font(.system(size: 14))
-                            Text(cL.isChosenSubmissionDraft ? "Chosen" : "Mark as Chosen")
-                                .font(.caption)
-                                .foregroundColor(isHoveringStar ? .primary : .secondary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(isHoveringStar ? Color.white.opacity(0.4) : Color.clear)
-                        .cornerRadius(10)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .onHover { hovering in isHoveringStar = hovering }
-                    .disabled(!cL.generated)
-                    .help("Mark this cover letter as your chosen submission draft")
-
-                    // Legacy progress indicator removed - progress now handled by UnifiedToolbar
+                    Spacer()
                 }
                 // Toggle between editing raw content and PDF preview
                 if isEditing {
@@ -184,42 +126,6 @@ struct CoverLetterContentView: View {
             }
         } else {
             EmptyView()
-        }
-    }
-
-    /// Deletes the current cover letter and updates the selectedCover to the most recent generated cover letter.
-    private func deleteCoverLetter() {
-        guard let selectedCover = jobApp.selectedCover else { return }
-        // Delete the selected cover letter
-        coverLetterStore.deleteLetter(selectedCover)
-        jobApp.selectedCover = nil
-
-        // Select the most recent generated cover letter
-        if let mostRecentGenerated = jobApp.coverLetters
-            .filter({ $0.generated })
-            .sorted(by: { $0.modDate > $1.modDate })
-            .first
-        {
-            jobApp.selectedCover = mostRecentGenerated
-        } else if let anyLetter = jobApp.coverLetters.first {
-            // If no generated letters exist, select any remaining letter
-            jobApp.selectedCover = anyLetter
-        } else {
-            // If no letters remain, create a new blank one
-            coverLetterStore.createBlank(jobApp: jobApp)
-        }
-    }
-    
-    /// Toggles the chosen submission draft status
-    private func toggleChosenSubmissionDraft() {
-        guard let selectedCover = jobApp.selectedCover else { return }
-        
-        if selectedCover.isChosenSubmissionDraft {
-            // Just clear the flag
-            selectedCover.isChosenSubmissionDraft = false
-        } else {
-            // Mark as chosen (this will clear others)
-            selectedCover.markAsChosenSubmissionDraft()
         }
     }
 }

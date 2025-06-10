@@ -45,7 +45,7 @@ struct AppWindowView: View {
             tabView
         }
         .id($tabRefresh.wrappedValue)
-        .toolbar(id: "mainToolbar") {
+        .toolbar(id: "mainToolbarV2") {
             buildUnifiedToolbar(
                 selectedTab: $selectedTab,
                 listingButtons: $listingButtons,
@@ -64,6 +64,14 @@ struct AppWindowView: View {
                 selectedTab: $selectedTab,
                 showSlidingList: $showSlidingList
             )
+            
+            // Initialize ResumeReviseViewModel if not already created
+            if resumeReviseViewModel == nil {
+                resumeReviseViewModel = ResumeReviseViewModel(
+                    llmService: LLMService.shared,
+                    appState: appState
+                )
+            }
         }
         .modifier(AppWindowViewModifiers(
             jobAppStore: jobAppStore,
@@ -184,7 +192,9 @@ struct AppWindowView: View {
                 jobApp: jobApp,
                 resume: resume,
                 modelId: modelId,
-                coverLetterStore: coverLetterStore
+                coverLetterStore: coverLetterStore,
+                selectedRefs: [],
+                includeResumeRefs: true
             )
             
         } catch {

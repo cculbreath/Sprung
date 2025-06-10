@@ -474,11 +474,58 @@ struct MultiModelChooseBestCoverLetterSheet: View {
         }
     }
     
-    /// Generates a summary of all model reasonings using o3-mini
+    /// Generates a summary of all model reasonings using structured JSON output and stores committee feedback
     private func generateReasoningSummary() async {
         guard let jobApp = jobAppStore.selectedApp else { return }
         
-        // Build the prompt for summary generation
+        // Build structured committee analysis for each letter
+        var letterAnalyses: [LetterAnalysis] = []
+        
+        for letter in jobApp.coverLetters {
+            let letterAnalysis: LetterAnalysis
+            
+            if selectedVotingScheme == .firstPastThePost {
+                // For FPTP, create analysis based on votes
+                let votes = voteTally[letter.id] ?? 0
+                let modelComments = modelReasonings.compactMap { reasoning -> String? in
+                    if reasoning.response.bestLetterUuid == letter.id.uuidString {
+                        return "\(reasoning.model): \(reasoning.response.verdict)"
+                    }
+                    return nil
+                }
+                
+                letterAnalysis = LetterAnalysis(
+                    letterId: letter.id.uuidString,
+                    summaryOfModelAnalysis: modelComments.isEmpty ? "No specific comments from voting models." : modelComments.joined(separator: " | "),
+                    pointsAwarded: [ModelPointsAwarded(model: "Committee Vote", points: votes)]
+                )
+            } else {
+                // For score voting, collect actual point allocations
+                var pointsFromModels: [ModelPointsAwarded] = []
+                var modelComments: [String] = []
+                
+                for reasoning in modelReasonings {
+                    if let scoreAllocations = reasoning.response.scoreAllocations,
+                       let allocation = scoreAllocations.first(where: { $0.letterUuid == letter.id.uuidString }) {
+                        pointsFromModels.append(ModelPointsAwarded(model: reasoning.model, points: allocation.score))
+                        modelComments.append("\(reasoning.model): \(reasoning.response.verdict)")
+                    }
+                }
+                
+                letterAnalysis = LetterAnalysis(
+                    letterId: letter.id.uuidString,
+                    summaryOfModelAnalysis: modelComments.isEmpty ? "No specific analysis provided." : modelComments.joined(separator: " | "),
+                    pointsAwarded: pointsFromModels
+                )
+            }
+            
+            letterAnalyses.append(letterAnalysis)
+        }
+        
+        // Create structured response for committee summary
+        let committeeSummaryResponse = CommitteeSummaryResponse(letterAnalyses: letterAnalyses)
+        
+        // Build the prompt for structured summary generation
         var summaryPrompt = "You are analyzing the reasoning from multiple AI models that evaluated cover letters for a \(jobApp.jobPosition) position at \(jobApp.companyName). "
         
         if selectedVotingScheme == .firstPastThePost {
@@ -487,12 +534,11 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             summaryPrompt += "Each model allocated 20 points among all cover letters using a score voting system. "
         }
         
-        summaryPrompt += "Please provide a comprehensive summary that:\n"
-        summaryPrompt += "1. Identifies key themes and criteria the models used\n"
-        summaryPrompt += "2. Highlights areas of agreement and disagreement\n"
-        summaryPrompt += "3. Synthesizes the overall reasoning behind the winning choice\n"
-        summaryPrompt += "4. Notes any interesting insights about what makes an effective cover letter based on the models' analyses\n\n"
-        summaryPrompt += "Here are the model reasonings:\n\n"
+        summaryPrompt += "Based on the voting results and model reasoning provided, create a structured analysis for each cover letter that includes:\n"
+        summaryPrompt += "1. A comprehensive summary of what the models said about this specific letter\n"
+        summaryPrompt += "2. The points/votes awarded by each model\n"
+        summaryPrompt += "3. Key themes in the model feedback\n\n"
+        summaryPrompt += "Here are the model reasonings and vote allocations:\n\n"
         
         // Add all model reasonings with their votes
         for reasoning in modelReasonings {
@@ -531,26 +577,109 @@ struct MultiModelChooseBestCoverLetterSheet: View {
             }
         }
         
+        // Add JSON schema instructions
+        summaryPrompt += "\n\nProvide your analysis as a JSON response following this structure:\n"
+        summaryPrompt += "```json\n"
+        summaryPrompt += "{\n"
+        summaryPrompt += "  \"letterAnalyses\": [\n"
+        summaryPrompt += "    {\n"
+        summaryPrompt += "      \"letterId\": \"UUID of the letter\",\n"
+        summaryPrompt += "      \"summaryOfModelAnalysis\": \"Comprehensive summary of what models said about this letter\",\n"
+        summaryPrompt += "      \"pointsAwarded\": [\n"
+        summaryPrompt += "        {\"model\": \"Model name\", \"points\": 0}\n"
+        summaryPrompt += "      ]\n"
+        summaryPrompt += "    }\n"
+        summaryPrompt += "  ]\n"
+        summaryPrompt += "}\n"
+        summaryPrompt += "```"
+        
         do {
-            // Use LLMService for summary generation
+            // Use LLMService for structured summary generation
             let llmService = LLMService.shared
             
-            // Create a conversation with system prompt
-            let (_, summaryText) = try await llmService.startConversation(
-                systemPrompt: "You are an expert at analyzing and summarizing AI model reasoning. Provide clear, insightful summaries that help users understand the decision-making process.",
-                userMessage: summaryPrompt,
+            // Create JSON schema for committee summary response
+            let jsonSchema = JSONSchema(
+                type: .object,
+                properties: [
+                    "letterAnalyses": JSONSchema(
+                        type: .array,
+                        items: JSONSchema(
+                            type: .object,
+                            properties: [
+                                "letterId": JSONSchema(
+                                    type: .string,
+                                    description: "UUID of the cover letter"
+                                ),
+                                "summaryOfModelAnalysis": JSONSchema(
+                                    type: .string,
+                                    description: "Comprehensive summary of model feedback for this letter"
+                                ),
+                                "pointsAwarded": JSONSchema(
+                                    type: .array,
+                                    items: JSONSchema(
+                                        type: .object,
+                                        properties: [
+                                            "model": JSONSchema(
+                                                type: .string,
+                                                description: "Name of the model"
+                                            ),
+                                            "points": JSONSchema(
+                                                type: .integer,
+                                                description: "Points awarded by this model"
+                                            )
+                                        ],
+                                        required: ["model", "points"],
+                                        additionalProperties: false
+                                    )
+                                )
+                            ],
+                            required: ["letterId", "summaryOfModelAnalysis", "pointsAwarded"],
+                            additionalProperties: false
+                        )
+                    )
+                ],
+                required: ["letterAnalyses"],
+                additionalProperties: false
+            )
+            
+            // Generate structured summary
+            let summaryResponse = try await llmService.executeStructured(
+                prompt: summaryPrompt,
                 modelId: "openai/gpt-4o-mini",
-                temperature: 0.7
+                responseType: CommitteeSummaryResponse.self,
+                temperature: 0.7,
+                jsonSchema: jsonSchema
             )
             
             await MainActor.run {
-                self.reasoningSummary = summaryText
+                // Store committee feedback for each letter
+                for analysis in summaryResponse.letterAnalyses {
+                    if let letter = jobApp.coverLetters.first(where: { $0.id.uuidString == analysis.letterId }) {
+                        let committeeFeedback = CommitteeFeedbackSummary(
+                            letterId: analysis.letterId,
+                            summaryOfModelAnalysis: analysis.summaryOfModelAnalysis,
+                            pointsAwarded: analysis.pointsAwarded
+                        )
+                        letter.committeeFeedback = committeeFeedback
+                    }
+                }
+                
+                // Create a readable summary for display
+                var displaySummary = "Committee Analysis Summary:\n\n"
+                for analysis in summaryResponse.letterAnalyses {
+                    if let letter = jobApp.coverLetters.first(where: { $0.id.uuidString == analysis.letterId }) {
+                        displaySummary += "**\(letter.sequencedName)**\n"
+                        displaySummary += "\(analysis.summaryOfModelAnalysis)\n\n"
+                    }
+                }
+                
+                self.reasoningSummary = displaySummary
                 self.isGeneratingSummary = false
             }
             
         } catch {
             await MainActor.run {
-                self.reasoningSummary = "Failed to generate summary: \(error.localizedDescription)"
+                self.reasoningSummary = "Failed to generate structured summary: \(error.localizedDescription)"
                 self.isGeneratingSummary = false
             }
         }

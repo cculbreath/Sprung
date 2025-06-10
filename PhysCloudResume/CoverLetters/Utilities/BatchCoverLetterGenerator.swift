@@ -229,6 +229,10 @@ class BatchCoverLetterGenerator {
         newLetter.currentMode = mode
         newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zissner
         
+        // Store generation metadata (snapshot of sources and settings at generation time)
+        newLetter.generationSources = baseCoverLetter.enabledRefs
+        newLetter.generationUsedResumeRefs = baseCoverLetter.includeResumeRefs
+        
         // Generate content using CoverLetterService
         let responseText: String
         if let revision = revision {

@@ -8,6 +8,31 @@ struct AssessmentData: Codable {
     var hasBeenAssessed: Bool = false
 }
 
+/// Committee feedback summary for a cover letter
+struct CommitteeFeedbackSummary: Codable {
+    let letterId: String
+    let summaryOfModelAnalysis: String
+    let pointsAwarded: [ModelPointsAwarded]
+}
+
+/// Points awarded by a specific model
+struct ModelPointsAwarded: Codable {
+    let model: String
+    let points: Int
+}
+
+/// Structured summary response for committee analysis
+struct CommitteeSummaryResponse: Codable {
+    let letterAnalyses: [LetterAnalysis]
+}
+
+/// Analysis for a specific letter from the committee
+struct LetterAnalysis: Codable {
+    let letterId: String
+    let summaryOfModelAnalysis: String
+    let pointsAwarded: [ModelPointsAwarded]
+}
+
 @Model
 class CoverLetter: Identifiable, Hashable {
     var jobApp: JobApp? = nil
@@ -43,6 +68,15 @@ class CoverLetter: Identifiable, Hashable {
     
     /// Multi-model assessment data (stored as encoded data to avoid schema changes)
     var encodedAssessmentData: Data? // Stores AssessmentData as JSON
+    
+    /// Committee feedback summary (stored as encoded data)
+    var encodedCommitteeFeedback: Data? // Stores CommitteeFeedbackSummary as JSON
+    
+    /// Generation metadata: sources used at time of generation (stored as encoded data)
+    var encodedGenerationSources: Data? // Stores [CoverRef] as JSON
+    
+    /// Generation metadata: resume background state at time of generation
+    var generationUsedResumeRefs: Bool = false
     var modDate: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -128,6 +162,50 @@ class CoverLetter: Identifiable, Hashable {
             var data = assessmentData
             data.hasBeenAssessed = newValue
             assessmentData = data
+        }
+    }
+    
+    /// Committee feedback summary computed properties
+    var committeeFeedback: CommitteeFeedbackSummary? {
+        get {
+            guard let data = encodedCommitteeFeedback else {
+                return nil
+            }
+            do {
+                return try JSONDecoder().decode(CommitteeFeedbackSummary.self, from: data)
+            } catch {
+                Logger.debug("Failed to decode committeeFeedback: \(error.localizedDescription)")
+                return nil
+            }
+        }
+        set {
+            do {
+                encodedCommitteeFeedback = try JSONEncoder().encode(newValue)
+            } catch {
+                Logger.debug("Failed to encode committeeFeedback: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Generation sources computed properties (read-only snapshot of sources at generation time)
+    var generationSources: [CoverRef] {
+        get {
+            guard let data = encodedGenerationSources else {
+                return []
+            }
+            do {
+                return try JSONDecoder().decode([CoverRef].self, from: data)
+            } catch {
+                Logger.debug("Failed to decode generationSources: \(error.localizedDescription)")
+                return []
+            }
+        }
+        set {
+            do {
+                encodedGenerationSources = try JSONEncoder().encode(newValue)
+            } catch {
+                Logger.debug("Failed to encode generationSources: \(error.localizedDescription)")
+            }
         }
     }
 

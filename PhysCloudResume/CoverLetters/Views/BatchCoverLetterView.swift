@@ -11,6 +11,11 @@ struct BatchCoverLetterView: View {
     @Environment(AppState.self) var appState: AppState
     @Environment(JobAppStore.self) var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
+    @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
+    @Environment(\.modelContext) private var modelContext
+    
+    // Live SwiftData query to automatically refresh on model changes
+    @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
     
     @State private var mode: BatchMode = .generate
     @State private var selectedModels: Set<String> = []
@@ -22,6 +27,13 @@ struct BatchCoverLetterView: View {
     @State private var totalOperations: Int = 0
     @State private var completedOperations: Int = 0
     @State private var errorMessage: String?
+    
+    // Source management states
+    @State private var includeResumeRefs: Bool = true
+    @State private var selectedBackgroundFacts: Set<String> = []
+    @State private var selectedWritingSamples: Set<String> = []
+    @State private var showAddSheet = false
+    @State private var newRefType: CoverRefType = .backgroundFact
     
     // Access OpenRouter service for model selection
     private var openRouterService: OpenRouterService {
@@ -51,12 +63,22 @@ struct BatchCoverLetterView: View {
         }
         .frame(width: 550, height: 600)
         .onAppear {
+            // Load persisted model selection
+            selectedModels = appState.settings.batchCoverLetterModels
+            
+            // Load default reference selections
+            loadDefaultSelections()
+            
             // Fetch OpenRouter models if we don't have any and have a valid API key
             if appState.hasValidOpenRouterKey && openRouterService.availableModels.isEmpty {
                 Task {
                     await openRouterService.fetchModels()
                 }
             }
+        }
+        .onChange(of: selectedModels) { _, newValue in
+            // Save model selection whenever it changes
+            appState.settings.batchCoverLetterModels = newValue
         }
     }
     
@@ -88,6 +110,7 @@ struct BatchCoverLetterView: View {
     private var generateModeContent: some View {
         VStack(spacing: 16) {
             modelSelectionBox
+            sourceManagementSection
             revisionsBox
         }
     }
@@ -147,6 +170,15 @@ struct BatchCoverLetterView: View {
                 }
             }
         }
+    }
+    
+    private var sourceManagementSection: some View {
+        CoverRefSelectionManagerView(
+            includeResumeRefs: $includeResumeRefs,
+            selectedBackgroundFacts: $selectedBackgroundFacts,
+            selectedWritingSamples: $selectedWritingSamples,
+            showGroupBox: true
+        )
     }
     
     private var existingModeContent: some View {
@@ -381,10 +413,6 @@ struct BatchCoverLetterView: View {
                 }
                 
                 await MainActor.run {
-                    // Clean up any extra ungenerated drafts after batch generation
-                    if let app = jobAppStore.selectedApp {
-                        coverLetterStore.cleanupExtraUngeneratedDrafts(for: app)
-                    }
                     dismiss()
                 }
             } catch {
@@ -393,6 +421,20 @@ struct BatchCoverLetterView: View {
                     isGenerating = false
                 }
             }
+        }
+    }
+    
+    private func loadDefaultSelections() {
+        // Pre-select enabled by default refs
+        let backgroundFacts = allCoverRefs.filter { $0.type == .backgroundFact }
+        let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
+        
+        for ref in backgroundFacts where ref.enabledByDefault {
+            selectedBackgroundFacts.insert(ref.id.description)
+        }
+        
+        for ref in writingSamples where ref.enabledByDefault {
+            selectedWritingSamples.insert(ref.id.description)
         }
     }
 }
