@@ -54,6 +54,7 @@ class LLMService {
     private var appState: AppState?
     private var openRouterClient: OpenAIService?
     private var conversationManager: ConversationManager?
+    private var enabledLLMStore: EnabledLLMStore?
     
     // Request management
     private var currentRequestIDs: Set<UUID> = []
@@ -71,6 +72,7 @@ class LLMService {
     func initialize(appState: AppState, modelContext: ModelContext? = nil) {
         self.appState = appState
         self.conversationManager = ConversationManager(modelContext: modelContext)
+        self.enabledLLMStore = appState.enabledLLMStore
         
         // Configure client with current API key
         reconfigureClient()
@@ -608,7 +610,7 @@ class LLMService {
     ///   - responseType: The expected response type
     ///   - temperature: Optional temperature setting
     /// - Returns: Dictionary mapping model IDs to their responses
-    func executeParallelStructured<T: Codable>(
+    func executeParallelStructured<T: Codable & Sendable>(
         prompt: String,
         modelIds: [String],
         responseType: T.Type,
@@ -641,48 +643,168 @@ class LLMService {
         return results
     }
     
+    /// Result containing both successful and failed model results
+    struct ParallelExecutionResult<T: Codable & Sendable> {
+        let successes: [String: T]
+        let failures: [String: String]
+        
+        var hasSuccesses: Bool { !successes.isEmpty }
+        var hasFailures: Bool { !failures.isEmpty }
+        var totalModels: Int { successes.count + failures.count }
+    }
+    
     /// Execute request across multiple models in parallel with flexible JSON handling
     /// Uses structured output when available, falls back to prompt-based JSON guidance
+    /// Handles partial failures gracefully - continues with successful models
     /// - Parameters:
     ///   - prompt: The text prompt
     ///   - modelIds: Array of model identifiers to use
     ///   - responseType: The expected response type
     ///   - temperature: Optional temperature setting
     ///   - jsonSchema: Optional JSON schema for models that support structured output
-    /// - Returns: Dictionary mapping model IDs to their responses
-    func executeParallelFlexibleJSON<T: Codable>(
+    /// - Returns: ParallelExecutionResult with both successful results and failure info
+    func executeParallelFlexibleJSONWithFailures<T: Codable & Sendable>(
+        prompt: String,
+        modelIds: [String],
+        responseType: T.Type,
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> ParallelExecutionResult<T> {
+        try ensureInitialized()
+        
+        var results: [String: T] = [:]
+        var failures: [String: String] = [:]
+        
+        // Execute in parallel using TaskGroup, collecting both successes and failures
+        await withTaskGroup(of: (String, Result<T, Error>).self) { group in
+            for modelId in modelIds {
+                group.addTask {
+                    do {
+                        let result = try await self.executeFlexibleJSON(
+                            prompt: prompt,
+                            modelId: modelId,
+                            responseType: responseType,
+                            temperature: temperature,
+                            jsonSchema: jsonSchema
+                        )
+                        return (modelId, .success(result))
+                    } catch {
+                        Logger.debug("❌ Model \(modelId) failed: \(error.localizedDescription)")
+                        return (modelId, .failure(error))
+                    }
+                }
+            }
+            
+            // Collect results
+            for await (modelId, result) in group {
+                switch result {
+                case .success(let value):
+                    results[modelId] = value
+                case .failure(let error):
+                    failures[modelId] = error.localizedDescription
+                }
+            }
+        }
+        
+        // Log failure summary
+        if !failures.isEmpty {
+            Logger.debug("⚠️ \(failures.count) of \(modelIds.count) models failed:")
+            for (modelId, error) in failures {
+                Logger.debug("  - \(modelId): \(error)")
+            }
+        }
+        
+        return ParallelExecutionResult(successes: results, failures: failures)
+    }
+    
+    /// Execute request across multiple models in parallel with flexible JSON handling and progress reporting
+    /// Uses structured output when available, falls back to prompt-based JSON guidance
+    /// Handles partial failures gracefully - continues with successful models
+    /// - Parameters:
+    ///   - prompt: The text prompt
+    ///   - modelIds: Array of model identifiers to use
+    ///   - responseType: The expected response type
+    ///   - temperature: Optional temperature setting
+    ///   - jsonSchema: Optional JSON schema for models that support structured output
+    ///   - onProgress: Progress callback called on main actor with (completed, total) counts
+    /// - Returns: ParallelExecutionResult with both successful results and failure info
+    func executeParallelFlexibleJSONWithProgress<T: Codable & Sendable>(
+        prompt: String,
+        modelIds: [String],
+        responseType: T.Type,
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil,
+        onProgress: @MainActor @escaping (Int, Int) -> Void
+    ) async throws -> ParallelExecutionResult<T> {
+        try ensureInitialized()
+        
+        var results: [String: T] = [:]
+        var failures: [String: String] = [:]
+        var completedCount = 0
+        let totalCount = modelIds.count
+        
+        // Execute in parallel using TaskGroup, collecting both successes and failures
+        await withTaskGroup(of: (String, Result<T, Error>).self) { group in
+            for modelId in modelIds {
+                group.addTask {
+                    do {
+                        let result = try await self.executeFlexibleJSON(
+                            prompt: prompt,
+                            modelId: modelId,
+                            responseType: responseType,
+                            temperature: temperature,
+                            jsonSchema: jsonSchema
+                        )
+                        return (modelId, .success(result))
+                    } catch {
+                        Logger.debug("❌ Model \(modelId) failed: \(error.localizedDescription)")
+                        return (modelId, .failure(error))
+                    }
+                }
+            }
+            
+            // Collect results and report progress
+            for await (modelId, result) in group {
+                switch result {
+                case .success(let value):
+                    results[modelId] = value
+                case .failure(let error):
+                    failures[modelId] = error.localizedDescription
+                }
+                
+                completedCount += 1
+                onProgress(completedCount, totalCount)
+            }
+        }
+        
+        // Log failure summary
+        if !failures.isEmpty {
+            Logger.debug("⚠️ \(failures.count) of \(modelIds.count) models failed:")
+            for (modelId, error) in failures {
+                Logger.debug("  - \(modelId): \(error)")
+            }
+        }
+        
+        return ParallelExecutionResult(successes: results, failures: failures)
+    }
+    
+    /// Execute request across multiple models in parallel with flexible JSON handling (legacy method)
+    /// - Returns: Only successful results (for backward compatibility)
+    func executeParallelFlexibleJSON<T: Codable & Sendable>(
         prompt: String,
         modelIds: [String],
         responseType: T.Type,
         temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> [String: T] {
-        try ensureInitialized()
-        
-        var results: [String: T] = [:]
-        
-        // Execute in parallel using TaskGroup
-        try await withThrowingTaskGroup(of: (String, T).self) { group in
-            for modelId in modelIds {
-                group.addTask {
-                    let result = try await self.executeFlexibleJSON(
-                        prompt: prompt,
-                        modelId: modelId,
-                        responseType: responseType,
-                        temperature: temperature,
-                        jsonSchema: jsonSchema
-                    )
-                    return (modelId, result)
-                }
-            }
-            
-            // Collect results
-            for try await (modelId, result) in group {
-                results[modelId] = result
-            }
-        }
-        
-        return results
+        let result = try await executeParallelFlexibleJSONWithFailures(
+            prompt: prompt,
+            modelIds: modelIds,
+            responseType: responseType,
+            temperature: temperature,
+            jsonSchema: jsonSchema
+        )
+        return result.successes
     }
     
     /// Request with flexible JSON output - uses structured output when available, basic JSON mode otherwise
@@ -709,14 +831,15 @@ class LLMService {
         // Validate model exists
         try validateModel(modelId: modelId, for: [])
         
-        // Check if model supports structured output
+        // Check if model supports structured output and should use JSON schema
         let model = appState?.openRouterService.findModel(id: modelId)
         let supportsStructuredOutput = model?.supportsStructuredOutput ?? false
+        let shouldAvoidJSONSchema = enabledLLMStore?.shouldAvoidJSONSchema(modelId: modelId) ?? false
         
         let message = LLMMessage.text(role: .user, content: prompt)
         let parameters: ChatCompletionParameters
         
-        if supportsStructuredOutput {
+        if supportsStructuredOutput && !shouldAvoidJSONSchema {
             if let schema = jsonSchema {
                 // Use full structured output with JSON schema enforcement
                 let responseFormatSchema = JSONSchemaResponseFormat(
@@ -743,7 +866,8 @@ class LLMService {
             }
         } else {
             // Use basic mode - rely on prompt instructions for JSON formatting
-            Logger.debug("📝 Using basic mode with prompt-based JSON for model: \(modelId)")
+            let reason = shouldAvoidJSONSchema ? "avoiding due to previous failures" : "model doesn't support structured output"
+            Logger.debug("📝 Using basic mode with prompt-based JSON for model: \(modelId) (\(reason))")
             parameters = ChatCompletionParameters(
                 messages: [message],
                 model: .custom(modelId),
@@ -752,8 +876,26 @@ class LLMService {
         }
         
         // Execute with retry logic and flexible parsing
-        return try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
-            try self.parseFlexibleJSONResponse(response, as: responseType)
+        do {
+            let result = try await executeWithRetry(parameters: parameters, requestId: requestId) { response in
+                try self.parseFlexibleJSONResponse(response, as: responseType)
+            }
+            
+            // Record success if we used JSON schema
+            if supportsStructuredOutput && !shouldAvoidJSONSchema && jsonSchema != nil {
+                enabledLLMStore?.recordJSONSchemaSuccess(modelId: modelId)
+            }
+            
+            return result
+        } catch {
+            // Record failure if it was related to JSON schema
+            if let apiError = error as? SwiftOpenAI.APIError,
+               apiError.displayDescription.contains("response_format") ||
+               apiError.displayDescription.contains("json_schema") {
+                enabledLLMStore?.recordJSONSchemaFailure(modelId: modelId, reason: apiError.displayDescription)
+                Logger.debug("🚫 Recorded JSON schema failure for \(modelId): \(apiError.displayDescription)")
+            }
+            throw error
         }
     }
     
@@ -899,7 +1041,7 @@ class LLMService {
             throw LLMError.unexpectedResponseFormat
         }
         
-        Logger.debug("🔍 Parsing flexible JSON response (\(content.count) chars): \(content.prefix(200))...")
+        Logger.debug("🔍 Parsing flexible JSON response (\(content.count) chars): \(content.prefix(500))...")
         
         // Try to parse JSON from the response content with enhanced fallback strategies
         return try parseJSONFromTextFlexible(content, as: type)
@@ -907,7 +1049,7 @@ class LLMService {
     
     /// Extract and parse JSON from text response
     private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
-        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(200))...")
+        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")
         
         // First try direct parsing if the entire text is JSON
         if let jsonData = text.data(using: .utf8) {
@@ -917,6 +1059,18 @@ class LLMService {
                 return result
             } catch {
                 Logger.debug("❌ Direct JSON parsing failed: \(error)")
+                if let decodingError = error as? DecodingError {
+                    Logger.debug("❌ Detailed decoding error: \(decodingError)")
+                    switch decodingError {
+                    case .dataCorrupted(let context):
+                        Logger.debug("❌ Data corrupted at path: \(context.codingPath), description: \(context.debugDescription)")
+                        if let underlyingError = context.underlyingError {
+                            Logger.debug("❌ Underlying error: \(underlyingError)")
+                        }
+                    default:
+                        Logger.debug("❌ Other decoding error: \(decodingError)")
+                    }
+                }
             }
         }
         
@@ -955,7 +1109,7 @@ class LLMService {
     
     /// Enhanced JSON parsing with additional fallback strategies for flexible responses
     private func parseJSONFromTextFlexible<T: Codable>(_ text: String, as type: T.Type) throws -> T {
-        Logger.debug("🔍 Attempting flexible JSON parsing from text: \(text.prefix(200))...")
+        Logger.debug("🔍 Attempting flexible JSON parsing from text: \(text.prefix(500))...")
         
         // First try the standard parsing approach
         do {
@@ -1029,19 +1183,27 @@ class LLMService {
         for (index, strategy) in cleanupStrategies.enumerated() {
             let cleanedText = strategy(text)
             if cleanedText != text {
-                Logger.debug("🧹 Trying cleanup strategy \(index + 1): \(cleanedText.prefix(100))...")
+                Logger.debug("🧹 Trying cleanup strategy \(index + 1)")
+                Logger.debug("🧹 Strategy \(index + 1) input: \(text.prefix(300))...")
+                Logger.debug("🧹 Strategy \(index + 1) output: \(cleanedText.prefix(300))...")
                 do {
                     let result = try parseJSONFromText(cleanedText, as: type)
                     Logger.debug("✅ Flexible parsing successful with strategy \(index + 1)")
                     return result
                 } catch {
                     Logger.debug("⚠️ Cleanup strategy \(index + 1) failed: \(error)")
+                    Logger.debug("⚠️ Strategy \(index + 1) cleaned text (first 500 chars): \(cleanedText.prefix(500))")
                     continue
                 }
             }
         }
         
         Logger.error("❌ All flexible parsing strategies failed")
+        Logger.error("🔍 FULL RESPONSE CONTENT FOR DEBUGGING:")
+        Logger.error("📄 Content length: \(text.count) characters")
+        Logger.error("📄 Full content:\n\(text)")
+        Logger.error("📄 First 1000 chars: \(text.prefix(1000))")
+        Logger.error("📄 Last 1000 chars: \(text.suffix(1000))")
         throw LLMError.decodingFailed(NSError(domain: "FlexibleJSONParsing", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not extract valid JSON from response"]))
     }
     

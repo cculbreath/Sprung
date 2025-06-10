@@ -16,8 +16,10 @@ struct JobAppRowView: View {
         Text("\(jobApp.companyName): \(jobApp.jobPosition)")
             .tag(jobApp)
             .padding(.vertical, 4)
-            .background(isRecommended ? Color.blue.opacity(0.1) : Color.clear)
-            .cornerRadius(4)
+            .padding(.horizontal, 8)
+            .if(isRecommended) { view in
+                view.glassEffect(.regular.tint(.blue), in: .rect(cornerRadius: 4))
+            }
             .animation(.easeInOut(duration: 0.3), value: isRecommended)
             .contextMenu {
                 Button(role: .destructive, action: deleteAction) {

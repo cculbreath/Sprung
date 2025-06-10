@@ -23,7 +23,7 @@ struct BestLetterButton: View {
                     .font(.system(size: 14, weight: .light))
             }
         }
-        .buttonStyle(.automatic)
+        .buttonStyle( .automatic )
         .help("Choose Best Cover Letter")
         .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
         .sheet(isPresented: $showBestLetterModelSheet) {
@@ -46,7 +46,8 @@ struct BestLetterButton: View {
         .alert("Best Cover Letter Selection", isPresented: $showBestLetterAlert) {
             Button("OK") {
                 if let result = bestLetterResult,
-                   let uuid = UUID(uuidString: result.bestLetterUuid),
+                   let bestUuid = result.bestLetterUuid,
+                   let uuid = UUID(uuidString: bestUuid),
                    let jobApp = jobAppStore.selectedApp,
                    let selectedLetter = jobApp.coverLetters.first(where: { $0.id == uuid }) {
                     jobApp.selectedCover = selectedLetter
@@ -78,7 +79,7 @@ struct BestLetterButton: View {
             bestLetterResult = result
             showBestLetterAlert = true
             
-            Logger.debug("✅ Best cover letter selection completed: \(result.bestLetterUuid)")
+            Logger.debug("✅ Best cover letter selection completed: \(result.bestLetterUuid ?? "score voting mode")")
             
         } catch {
             isProcessingBestLetter = false

@@ -17,28 +17,38 @@ struct PhysicsCloudResumeApp: App {
     private let modelContainer: ModelContainer
     
     init() {
-        // Create the model container first
+        // Create the model container with migration support
         do {
-            // Try with current models directly
-            let container = try ModelContainer(for: 
-                JobApp.self,
-                Resume.self,
-                ResRef.self,
-                TreeNode.self,
-                FontSizeNode.self,
-                CoverLetter.self,
-                MessageParams.self,
-                CoverRef.self,
-                ApplicantProfile.self,
-                ResModel.self,
-                ConversationContext.self,
-                ConversationMessage.self
-            )
+            // Use the migration-aware container from SchemaVersioning
+            let container = try ModelContainer.createWithMigration()
             self.modelContainer = container
-            Logger.debug("✅ ModelContainer created with current models")
+            Logger.debug("✅ ModelContainer created with migration support (Schema V3)")
         } catch {
-            Logger.error("x Failed to create ModelContainer: \(error)")
-            fatalError("Failed to create ModelContainer: \(error)")
+            Logger.error("❌ Failed to create ModelContainer with migrations: \(error)")
+            
+            // Fallback to direct container creation (for debugging only)
+            do {
+                let fallbackContainer = try ModelContainer(for: 
+                    JobApp.self,
+                    Resume.self,
+                    ResRef.self,
+                    TreeNode.self,
+                    FontSizeNode.self,
+                    CoverLetter.self,
+                    MessageParams.self,
+                    CoverRef.self,
+                    ApplicantProfile.self,
+                    ResModel.self,
+                    ConversationContext.self,
+                    ConversationMessage.self,
+                    EnabledLLM.self
+                )
+                self.modelContainer = fallbackContainer
+                Logger.warning("⚠️ Using fallback ModelContainer without migration plan")
+            } catch {
+                Logger.error("❌ Failed to create fallback ModelContainer: \(error)")
+                fatalError("Failed to create ModelContainer: \(error)")
+            }
         }
         
         // Log after all properties are initialized

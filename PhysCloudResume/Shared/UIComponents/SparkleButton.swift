@@ -19,19 +19,8 @@ struct SparkleButton: View {
                     node.status == LeafStatus.saved ? .gray : .accentColor
                 )
                 .font(.system(size: 14))
-                .padding(2)
-                .background(
-                    isHovering
-                        ? (node.status == LeafStatus.saved
-                            ? Color.gray.opacity(0.3)
-                            : Color.accentColor.opacity(0.3))
-                        : Color.clear
-                )
-                .cornerRadius(5)
         }
-        .buttonStyle(PlainButtonStyle())
-        .onHover { hovering in
-            isHovering = hovering
-        }
+        .buttonStyle( .automatic )
+        .disabled(node.status == LeafStatus.saved)
     }
 }

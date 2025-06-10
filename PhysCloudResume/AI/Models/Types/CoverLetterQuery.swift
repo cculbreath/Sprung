@@ -30,33 +30,68 @@ enum VotingScheme: String, CaseIterable {
 struct CoverLetterScore: Codable {
     let letterUuid: String
     let score: Int
-    let reasoning: String
+    let reasoning: String?  // Optional reasoning field
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        letterUuid = try container.decode(String.self, forKey: .letterUuid)
+        score = try container.decode(Int.self, forKey: .score)
+        reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning)
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case letterUuid, score, reasoning
+    }
 }
 
 /// Response schema for best cover letter selection
 struct BestCoverLetterResponse: Codable, StructuredOutput {
     let strengthAndVoiceAnalysis: String
-    let bestLetterUuid: String
+    let bestLetterUuid: String?  // Optional: Used only for FPTP voting
     let verdict: String
+    let scoreAllocations: [CoverLetterScore]?  // Optional: Used only for score voting
     
-    // Optional: Used only for score voting
-    let scoreAllocations: [CoverLetterScore]?
+    // Coding keys to handle optional fields gracefully
+    enum CodingKeys: String, CodingKey {
+        case strengthAndVoiceAnalysis
+        case bestLetterUuid
+        case verdict
+        case scoreAllocations
+    }
+    
+    // Custom decoder to handle missing fields
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        strengthAndVoiceAnalysis = try container.decode(String.self, forKey: .strengthAndVoiceAnalysis)
+        verdict = try container.decode(String.self, forKey: .verdict)
+        
+        // Try to decode bestLetterUuid, but allow it to be missing
+        bestLetterUuid = try container.decodeIfPresent(String.self, forKey: .bestLetterUuid)
+        
+        // Try to decode scoreAllocations, but allow it to be missing
+        scoreAllocations = try container.decodeIfPresent([CoverLetterScore].self, forKey: .scoreAllocations)
+    }
     
     // Implement validate for StructuredOutput
     func validate() -> Bool {
-        // Check if we have non-empty values
-        let baseValidation = !strengthAndVoiceAnalysis.isEmpty &&
-               !bestLetterUuid.isEmpty &&
-               !verdict.isEmpty
-        
-        // If scoreAllocations exist, validate them
-        if let scores = scoreAllocations {
-            let totalScore = scores.reduce(0) { $0 + $1.score }
-            // Score voting should allocate exactly 20 points
-            return baseValidation && totalScore == 20 && scores.allSatisfy { $0.score >= 0 }
+        // Base validation
+        guard !strengthAndVoiceAnalysis.isEmpty && !verdict.isEmpty else {
+            return false
         }
         
-        return baseValidation
+        // Either we need bestLetterUuid (FPTP) or scoreAllocations (score voting)
+        if let uuid = bestLetterUuid {
+            // FPTP mode: need valid UUID, no score allocations
+            return !uuid.isEmpty && scoreAllocations == nil
+        } else if let scores = scoreAllocations {
+            // Score voting mode: need valid score allocations totaling 20
+            let totalScore = scores.reduce(0) { $0 + $1.score }
+            return totalScore == 20 && scores.allSatisfy { $0.score >= 0 }
+        } else {
+            // Must have either bestLetterUuid or scoreAllocations
+            return false
+        }
     }
     
     // Backward compatibility initializer for FPTP voting
@@ -68,7 +103,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     }
     
     // Full initializer including score allocations
-    init(strengthAndVoiceAnalysis: String, bestLetterUuid: String, verdict: String, scoreAllocations: [CoverLetterScore]?) {
+    init(strengthAndVoiceAnalysis: String, bestLetterUuid: String?, verdict: String, scoreAllocations: [CoverLetterScore]?) {
         self.strengthAndVoiceAnalysis = strengthAndVoiceAnalysis
         self.bestLetterUuid = bestLetterUuid
         self.verdict = verdict
@@ -91,7 +126,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
         "properties": {
             "strengthAndVoiceAnalysis": {
                 "type": "string",
-                "description": "Brief summary ranking/assessment of each letter's strength and voice"
+                "description": "Comprehensive assessment of each letter's strength and voice covering all evaluated letters"
             },
             "bestLetterUuid": {
                 "type": "string",
@@ -114,7 +149,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
         "properties": {
             "strengthAndVoiceAnalysis": {
                 "type": "string",
-                "description": "Brief assessment of each letter's strengths"
+                "description": "Comprehensive assessment of each letter's strengths covering all evaluated letters"
             },
             "scoreAllocations": {
                 "type": "array",
@@ -314,7 +349,8 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     /// Generate prompt for best cover letter evaluation
     func bestCoverLetterPrompt(
         coverLetters: [CoverLetter],
-        votingScheme: VotingScheme
+        votingScheme: VotingScheme,
+        includeJSONInstructions: Bool = false
     ) -> String {
         let schemeInstructions = votingScheme == .firstPastThePost ?
             "Select the single best cover letter and return its UUID in the bestLetterUuid field." :
@@ -337,7 +373,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
         for letter in coverLetters {
             prompt += """
             
-            \(letter.id.uuidString): "\(letter.name)"
+            \(letter.id.uuidString):
             Content: \(letter.content)
             
             """
@@ -350,10 +386,35 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
             - Voice: How well does the letter reflect the candidate's authentic self?
             - Style: Does the style align with the candidate's writing samples?
             - Quality: Grammar, coherence, impact, and relevancy to the job description.
+            """
             
-            Return your selection as JSON:
+            if includeJSONInstructions {
+                prompt += """
+                
+                CRITICAL JSON FORMATTING REQUIREMENTS:
+                - You must respond with valid JSON only
+                - Do not include any text before or after the JSON object
+                - Use double quotes for all strings
+                - Ensure all required fields are present
+                - Follow the exact schema structure below
+                
+                Required JSON Schema:
+                """
+                prompt += Self.bestCoverLetterSchemaString
+                prompt += """
+                
+                Return your selection as JSON following this exact format:
+                """
+            } else {
+                prompt += """
+                
+                Return your selection as JSON:
+                """
+            }
+            
+            prompt += """
             {
-                "strengthAndVoiceAnalysis": "Brief assessment of each letter's strengths and weaknesses. Please provide commentary for every evaluated letter",
+                "strengthAndVoiceAnalysis": "Comprehensive assessment of each letter's strengths and weaknesses. Provide specific commentary for every evaluated letter including voice, style, and quality analysis",
                 "bestLetterUuid": "UUID of the selected best cover letter",
                 "verdict": "Reason for your choice"
             }
@@ -365,10 +426,36 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
             - Voice: How well does the letter reflect the candidate's authentic self?
             - Style: Does the style align with the candidate's writing samples?
             - Quality: Grammar, coherence, impact, and relevancy to the job description.
+            """
             
-            Return your allocation as JSON:
+            if includeJSONInstructions {
+                prompt += """
+                
+                CRITICAL JSON FORMATTING REQUIREMENTS:
+                - You must respond with valid JSON only
+                - Do not include any text before or after the JSON object
+                - Use double quotes for all strings
+                - Ensure all required fields are present
+                - The total points must equal exactly 20
+                - Follow the exact schema structure below
+                
+                Required JSON Schema:
+                """
+                prompt += Self.scoreVotingSchemaString
+                prompt += """
+                
+                Return your allocation as JSON following this exact format:
+                """
+            } else {
+                prompt += """
+                
+                Return your allocation as JSON:
+                """
+            }
+            
+            prompt += """
             {
-                "strengthAndVoiceAnalysis": "Brief assessment of each letter's strengths and weaknesses. Provide commentary for every evaluated letter",
+                "strengthAndVoiceAnalysis": "Comprehensive assessment of each letter's strengths and weaknesses. Provide commentary for every evaluated letter",
                 "scoreAllocations": [
                     {"letterUuid": "UUID", "score": 0}
                 ],
@@ -395,7 +482,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
                 properties: [
                     "strengthAndVoiceAnalysis": JSONSchema(
                         type: .string,
-                        description: "Brief summary ranking/assessment of each letter's strength and voice"
+                        description: "Comprehensive assessment of each letter's strength and voice covering all evaluated letters"
                     ),
                     "bestLetterUuid": JSONSchema(
                         type: .string,
@@ -416,7 +503,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
                 properties: [
                     "strengthAndVoiceAnalysis": JSONSchema(
                         type: .string,
-                        description: "Brief assessment of each letter's strengths and weaknesses"
+                        description: "Comprehensive assessment of each letter's strengths and weaknesses covering all evaluated letters"
                     ),
                     "scoreAllocations": JSONSchema(
                         type: .array,

@@ -110,18 +110,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.insertItem(templateMenuItem, at: aboutSeparatorIndex + 2)
     }
 
-    @objc func showSettingsWindow() {
+    @MainActor @objc func showSettingsWindow() {
         if settingsWindow == nil {
             let settingsView = SettingsView()
             
             // Create hosting view with proper environment objects
             let hostingView: NSHostingView<AnyView>
-            if let appState = self.appState {
+            if let appState = self.appState, let container = self.modelContainer {
+                // Create EnabledLLMStore for the Settings window
+                let enabledLLMStore = EnabledLLMStore(modelContext: container.mainContext)
+                
                 hostingView = NSHostingView(rootView: AnyView(settingsView
                     .environment(appState)
+                    .environment(enabledLLMStore)
+                    .modelContainer(container)
                 ))
             } else {
-                // Fallback if appState is not available
+                // Fallback if appState or modelContainer is not available
                 hostingView = NSHostingView(rootView: AnyView(settingsView))
             }
             

@@ -39,9 +39,9 @@ struct ClarifyingQuestionsButton: View {
             }
         }
         .font(.system(size: 14, weight: .light))
-        .buttonStyle(.automatic)
+        .buttonStyle( .automatic )
         .help("Create Resume Revisions with Clarifying Questions")
-        .disabled(jobAppStore.selectedApp?.selectedRes?.rootNode == nil)
+        .disabled(jobAppStore.selectedApp == nil || jobAppStore.selectedApp?.selectedRes?.rootNode == nil)
         .sheet(isPresented: $showClarifyingQuestionsModelSheet) {
             ModelSelectionSheet(
                 title: "Choose Model for Clarifying Questions",

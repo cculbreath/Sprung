@@ -205,8 +205,6 @@ class BatchCoverLetterGenerator {
         model: String,
         revision: CoverLetterPrompts.EditorPrompts?
     ) async throws -> CoverLetter {
-        // Use CoverLetterService instead of CoverChatProvider
-        
         // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model
         let letterName: String

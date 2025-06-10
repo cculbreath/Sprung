@@ -53,14 +53,38 @@ enum SchemaV2: VersionedSchema {
     }
 }
 
+// MARK: - Schema V3 (Added EnabledLLM Model)
+enum SchemaV3: VersionedSchema {
+    static var versionIdentifier = Schema.Version(3, 0, 0)
+    
+    static var models: [any PersistentModel.Type] {
+        [
+            JobApp.self,
+            Resume.self,
+            ResRef.self,
+            TreeNode.self,
+            FontSizeNode.self,
+            CoverLetter.self,
+            MessageParams.self,
+            CoverRef.self,
+            ApplicantProfile.self,
+            ResModel.self,
+            ConversationContext.self,
+            ConversationMessage.self,
+            // New models added in V3
+            EnabledLLM.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self]
+        [SchemaV1.self, SchemaV2.self, SchemaV3.self]
     }
     
     static var stages: [MigrationStage] {
-        [migrateV1toV2]
+        [migrateV1toV2, migrateV2toV3]
     }
     
     // MARK: - Migration Stages
@@ -132,6 +156,31 @@ enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
             Logger.warning("⚠️ Could not clean up temporary fixes: \(error)")
         }
     }
+    
+    /// Migrates from V2 to V3 by adding EnabledLLM model
+    static let migrateV2toV3 = MigrationStage.custom(
+        fromVersion: SchemaV2.self,
+        toVersion: SchemaV3.self,
+        willMigrate: { context in
+            Logger.debug("🔄 Starting migration from Schema V2 to V3...")
+            
+            // The EnabledLLM model will be automatically added by SwiftData
+            // No manual migration needed for new models
+        },
+        didMigrate: { context in
+            Logger.debug("✅ Completed migration from Schema V2 to V3")
+            
+            // Verify the new table exists
+            do {
+                let enabledModels = try context.fetch(FetchDescriptor<EnabledLLM>())
+                Logger.debug("✅ EnabledLLM table created with \(enabledModels.count) records")
+            } catch {
+                Logger.warning("⚠️ Could not verify EnabledLLM table: \(error)")
+            }
+            
+            Logger.debug("✅ EnabledLLM model migration completed successfully")
+        }
+    )
 }
 
 // MARK: - Model Container Factory
@@ -139,13 +188,13 @@ extension ModelContainer {
     /// Creates a model container with the migration plan
     static func createWithMigration() throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV2.models),
+            schema: Schema(SchemaV3.models),
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
         
         return try ModelContainer(
-            for: Schema(SchemaV2.models),
+            for: Schema(SchemaV3.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )
@@ -154,14 +203,14 @@ extension ModelContainer {
     /// Creates a model container for a specific URL with migration support
     static func createWithMigration(url: URL) throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV2.models),
+            schema: Schema(SchemaV3.models),
             url: url,
             allowsSave: true,
             cloudKitDatabase: .none
         )
         
         return try ModelContainer(
-            for: Schema(SchemaV2.models),
+            for: Schema(SchemaV3.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )

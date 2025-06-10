@@ -26,9 +26,9 @@ struct BestJobButton: View {
 
             }
         }
-        .buttonStyle(.automatic)
+        .buttonStyle( .automatic )
         .help("Find the best job match based on your qualifications")
-        .disabled(isProcessingBestJob || jobAppStore.selectedApp?.selectedRes == nil)
+        .disabled(isProcessingBestJob)
         .sheet(isPresented: $showBestJobModelSheet) {
             ModelSelectionSheet(
                 title: "Choose Model for Job Recommendation",
