@@ -73,6 +73,10 @@ struct CoverLetterContentView: View {
                         includeNoneOption: false,
                         label: ""
                     )
+                    .onChange(of: bindApp.selectedCover) { _, newSelection in
+                        // Sync with coverLetterStore when selection changes
+                        coverLetterStore.cL = newSelection
+                    }
                     .padding()
                     
                     Spacer()
