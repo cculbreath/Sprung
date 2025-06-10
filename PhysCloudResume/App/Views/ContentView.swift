@@ -7,6 +7,7 @@ struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
 
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(\.appState) private var appState
     // DragInfo is inherited from ContentViewLaunch
 
@@ -16,6 +17,11 @@ struct ContentView: View {
     @State var selectedTab: TabList = .listing
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var showImportSheet: Bool = false
+    @State private var sheets = AppSheets()
+    @State private var clarifyingQuestions: [ClarifyingQuestion] = []
+    @State private var listingButtons = SaveButtons()
+    @State private var hasVisitedResumeTab: Bool = false
+    @State private var refPopup: Bool = false
 
     // App Storage remains here as it's app-level config
     @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
@@ -33,39 +39,52 @@ struct ContentView: View {
                 showSlidingList: $showSlidingList // Pass sliding list state
             )
             .frame(minWidth: 220, maxWidth: .infinity) // Keep min width for sidebar
-            .toolbar {
-                // Only show toolbar when sidebar is visible
-                if sidebarVisibility != .detailOnly {
-                    SidebarToolbarView(
-                        showSlidingList: $showSlidingList
-                    )
-                }
-            }
 
         } detail: {
             // --- Detail Column ---
             VStack(alignment: .leading) {
                 if jobAppStore.selectedApp != nil {
                     // Embed AppWindowView directly
-                    AppWindowView(selectedTab: $selectedTab, tabRefresh: $tabRefresh, showSlidingList: $showSlidingList)
+                    AppWindowView(
+                        selectedTab: $selectedTab,
+                        refPopup: $refPopup,
+                        hasVisitedResumeTab: $hasVisitedResumeTab,
+                        tabRefresh: $tabRefresh,
+                        showSlidingList: $showSlidingList,
+                        sheets: $sheets,
+                        clarifyingQuestions: $clarifyingQuestions
+                    )
 //                        .navigationTitle(" ")
                 } else {
                     // Placeholder when no job application is selected
-                    Text("Select a Job Application")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .foregroundColor(.secondary)
+                    VStack {
+                        Spacer()
+                        Text("Select a job application from the sidebar to begin")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .background( // Add a subtle background or divider for visual separation
-                VStack {
-                    Divider()
-                    Spacer()
-                }
-                .edgesIgnoringSafeArea(.top) // Allow divider to touch the top edge
-            )
-            // Note: The main application toolbar is attached within AppWindowView
+            // Main application toolbar is attached here to be visible regardless of job app selection
+            .toolbar(id: "mainToolbarV2") {
+                buildUnifiedToolbar(
+                    selectedTab: $selectedTab,
+                    listingButtons: $listingButtons,
+                    refresh: $tabRefresh,
+                    sheets: $sheets,
+                    clarifyingQuestions: $clarifyingQuestions,
+                    resumeReviseViewModel: appState.resumeReviseViewModel,
+                    showNewAppSheet: $showImportSheet,
+                    showSlidingList: $showSlidingList
+                )
+            }
         }
+        // Apply sheet modifier
+        .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
+        // Import sheet remains separate as it's specific to ContentView
         .sheet(isPresented: $showImportSheet) {
             ImportJobAppsFromURLsView()
                 .environment(jobAppStore)
@@ -81,6 +100,15 @@ struct ContentView: View {
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             // Sync selected app to AppState for template editor
             appState.selectedJobApp = newValue
+            updateMyLetter()
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .resume {
+                if !hasVisitedResumeTab {
+                    sheets.showResumeInspector = false
+                    hasVisitedResumeTab = true
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowImportJobApps"))) { _ in
             Logger.debug("🟢 ContentView received ShowImportJobApps notification")
@@ -89,6 +117,17 @@ struct ContentView: View {
         .onAppear {
             Logger.debug("🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
             Logger.debug("🟡 Initial appState.showImportJobAppsSheet: \(appState.showImportJobAppsSheet)")
+            
+            // Initialize Resume Revise View Model
+            appState.resumeReviseViewModel = ResumeReviseViewModel(
+                llmService: LLMService.shared,
+                appState: appState
+            )
+            
+            // Initialize cover letter state
+            updateMyLetter()
+            hasVisitedResumeTab = false
+            
             // Initial setup or logging can remain here
             if let storeURL = FileManager.default
                 .urls(for: .applicationSupportDirectory, in: .userDomainMask)
@@ -99,5 +138,23 @@ struct ContentView: View {
             }
         }
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch
+    }
+    
+    // MARK: - Helper Methods
+    
+    func updateMyLetter() {
+        if let selectedApp = jobAppStore.selectedApp {
+            // Determine or create the cover letter
+            let letter: CoverLetter
+            if let lastLetter = selectedApp.coverLetters.last {
+                letter = lastLetter
+            } else {
+                letter = coverLetterStore.create(jobApp: selectedApp)
+            }
+            coverLetterStore.cL = letter
+            // Note: Individual views now manage their own editing state
+        } else {
+            coverLetterStore.cL = nil
+        }
     }
 }

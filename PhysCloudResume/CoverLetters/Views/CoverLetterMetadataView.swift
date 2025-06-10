@@ -14,19 +14,41 @@ struct CoverLetterMetadataView: View {
     @Environment(AppState.self) private var appState: AppState
     
     @Binding var isEditing: Bool
-    
-    @State private var isHoveringDelete = false
-    @State private var isHoveringStar = false
+    @Namespace private var namespace
     
     private var openRouterService: OpenRouterService {
         appState.openRouterService
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Cover Letter Details")
-                .font(.headline)
-                .padding(.horizontal, 12)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header with glass effect
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cover Letter Details")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    if let coverLetter = coverLetterStore.cL {
+                        Text(coverLetter.sequencedName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Navigation arrows for browsing cover letters
+                if let coverLetter = coverLetterStore.cL {
+                    CoverLetterNavigationButtons(
+                        currentLetter: coverLetter,
+                        namespace: namespace
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .glassEffect(.regular, in: .rect(cornerRadius: 0))
             
             if let coverLetter = coverLetterStore.cL {
                 ScrollView {
@@ -45,93 +67,54 @@ struct CoverLetterMetadataView: View {
                             committeeFeedbackSection(for: coverLetter)
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(16)
                 }
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
                     Image(systemName: "doc.text")
-                        .font(.title)
+                        .font(.system(size: 32))
                         .foregroundColor(.secondary)
+                        .opacity(0.5)
                     
                     Text("No cover letter selected")
-                        .font(.caption)
+                        .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .frame(alignment: .center)
+                .padding()
+                .glassEffect(.regular, in: .rect(cornerRadius: 8))
             }
-            
-            Spacer()
         }
+        .background(Color(NSColor.controlBackgroundColor))
     }
     
     @ViewBuilder
     private func actionButtonsSection(for coverLetter: CoverLetter) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Actions")
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
+                .textCase(.uppercase)
             
             HStack(spacing: 12) {
-                // Edit toggle button
-                Button(action: {
-                    isEditing.toggle()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: isEditing ? "doc.text.viewfinder" : "pencil")
-                            .font(.caption)
-                        Text(isEditing ? "View" : "Edit")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.accentColor)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.accentColor.opacity(0.1))
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
+                // Edit toggle button - blue when editing, orange on hover
+                EditToggleButton(isEditing: $isEditing, namespace: namespace)
                 
-                // Star toggle button
-                Button(action: {
-                    toggleChosenSubmissionDraft(for: coverLetter)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: coverLetter.isChosenSubmissionDraft ? "star.fill" : "star")
-                            .font(.caption)
-                        Text(coverLetter.isChosenSubmissionDraft ? "Chosen" : "Choose")
-                            .font(.caption)
-                    }
-                    .foregroundColor(isHoveringStar ? .primary : (coverLetter.isChosenSubmissionDraft ? .yellow : .secondary))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(coverLetter.isChosenSubmissionDraft ? Color.yellow.opacity(0.2) : Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in isHoveringStar = hovering }
-                .disabled(!coverLetter.generated)
+                // Star toggle button - yellow when chosen, can toggle on/off
+                StarToggleButton(
+                    coverLetter: coverLetter, 
+                    action: { toggleChosenSubmissionDraft(for: coverLetter) },
+                    namespace: namespace
+                )
                 
                 Spacer()
                 
-                // Delete button
-                Button(action: {
-                    deleteCoverLetter(coverLetter)
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                        Text("Delete")
-                            .font(.caption)
-                    }
-                    .foregroundColor(isHoveringDelete ? .red : .secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(isHoveringDelete ? Color.red.opacity(0.1) : Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in isHoveringDelete = hovering }
+                // Delete button - red on hover only
+                DeleteButton(
+                    action: { deleteCoverLetter(coverLetter) },
+                    namespace: namespace
+                )
             }
         }
     }
@@ -140,65 +123,68 @@ struct CoverLetterMetadataView: View {
     private func generationMetadataSection(for coverLetter: CoverLetter) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Generation Info")
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
+                .textCase(.uppercase)
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 if let model = coverLetter.generationModel {
-                    HStack {
-                        Text("Model:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(openRouterService.friendlyModelName(for: model))
-                            .font(.caption)
-                            .fontWeight(.medium)
-                    }
+                    MetadataRow(
+                        label: "Model",
+                        value: openRouterService.friendlyModelName(for: model)
+                    )
                 }
                 
-                HStack {
-                    Text("Created:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(coverLetter.createdDate.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption)
-                }
+                MetadataRow(
+                    label: "Created",
+                    value: coverLetter.createdDate.formatted(date: .abbreviated, time: .shortened)
+                )
                 
                 if coverLetter.moddedDate != coverLetter.createdDate {
-                    HStack {
-                        Text("Modified:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(coverLetter.moddedDate.formatted(date: .abbreviated, time: .shortened))
-                            .font(.caption)
-                    }
+                    MetadataRow(
+                        label: "Modified",
+                        value: coverLetter.moddedDate.formatted(date: .abbreviated, time: .shortened)
+                    )
                 }
                 
-                HStack {
-                    Text("Status:")
-                        .font(.caption)
+                HStack(spacing: 0) {
+                    Text("Status")
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
-                    Text(coverLetter.generated ? "Generated" : "Draft")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(coverLetter.generated ? .green : .orange)
+                        .frame(width: 80, alignment: .leading)
+                    
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(coverLetter.generated ? Color.green : Color.orange)
+                            .frame(width: 6, height: 6)
+                            .glassEffect(.regular.tint(coverLetter.generated ? .green : .orange), in: .circle)
+                        Text(coverLetter.generated ? "Generated" : "Draft")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(coverLetter.generated ? .green : .orange)
+                    }
+                    
+                    Spacer()
                 }
+                .frame(height: 24)
                 
                 if coverLetter.isChosenSubmissionDraft {
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: "star.fill")
                             .foregroundColor(.yellow)
-                            .font(.caption)
+                            .font(.system(size: 10))
+                            .glassEffect(.regular.tint(.yellow), in: .circle)
                         Text("Chosen for submission")
-                            .font(.caption)
-                            .fontWeight(.medium)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.primary)
                     }
+                    .padding(.top, 4)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .glassEffect(.regular.tint(.yellow.opacity(0.3)), in: .rect(cornerRadius: 12))
                 }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
+            .padding(10)
+            .glassEffect(.regular, in: .rect(cornerRadius: 6))
         }
     }
     
@@ -206,82 +192,103 @@ struct CoverLetterMetadataView: View {
     private func sourcesUsedSection(for coverLetter: CoverLetter) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Sources Used")
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
+                .textCase(.uppercase)
             
-            VStack(alignment: .leading, spacing: 8) {
-                // Resume background toggle status (use generation metadata if available)
+            VStack(alignment: .leading, spacing: 12) {
+                // Resume background toggle status
                 let usedResumeRefs = coverLetter.generated ? coverLetter.generationUsedResumeRefs : coverLetter.includeResumeRefs
-                HStack {
-                    Image(systemName: usedResumeRefs ? "checkmark.circle.fill" : "circle")
+                HStack(spacing: 8) {
+                    Image(systemName: usedResumeRefs ? "checkmark.circle.fill" : "xmark.circle")
                         .foregroundColor(usedResumeRefs ? .green : .secondary)
-                        .font(.caption)
+                        .font(.system(size: 12))
+                        .glassEffect(.regular.tint(usedResumeRefs ? .green.opacity(0.3) : .clear), in: .circle)
                     Text("Resume Background")
-                        .font(.caption)
-                        .foregroundColor(usedResumeRefs ? .primary : .secondary)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.primary)
                 }
                 
-                // Background facts (use generation metadata if available)
+                // Background facts
                 let sourcesToShow = coverLetter.generated ? coverLetter.generationSources : coverLetter.enabledRefs
                 let backgroundFacts = sourcesToShow.filter { $0.type == .backgroundFact }
                 if !backgroundFacts.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Background Facts (\(backgroundFacts.count))")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .fontWeight(.medium)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Background Facts")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.primary)
+                            Text("(\(backgroundFacts.count))")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
                         
-                        ForEach(backgroundFacts, id: \.id) { ref in
-                            HStack(alignment: .top, spacing: 4) {
-                                Image(systemName: "circle.fill")
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 6))
-                                    .padding(.top, 4)
-                                
-                                Text(ref.name)
-                                    .font(.caption2)
-                                    .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(backgroundFacts, id: \.id) { ref in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Circle()
+                                        .fill(Color.blue)
+                                        .frame(width: 4, height: 4)
+                                        .padding(.top, 5)
+                                        .glassEffect(.regular.tint(.blue), in: .circle)
+                                    
+                                    Text(ref.name)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    
+                                    Spacer(minLength: 0)
+                                }
                             }
                         }
+                        .padding(.leading, 8)
                     }
                 }
                 
-                // Writing samples (use generation metadata if available)
+                // Writing samples
                 let writingSamples = sourcesToShow.filter { $0.type == .writingSample }
                 if !writingSamples.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Writing Samples (\(writingSamples.count))")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .fontWeight(.medium)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Writing Samples")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.primary)
+                            Text("(\(writingSamples.count))")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
                         
-                        ForEach(writingSamples, id: \.id) { ref in
-                            HStack(alignment: .top, spacing: 4) {
-                                Image(systemName: "circle.fill")
-                                    .foregroundColor(.purple)
-                                    .font(.system(size: 6))
-                                    .padding(.top, 4)
-                                
-                                Text(ref.name)
-                                    .font(.caption2)
-                                    .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(writingSamples, id: \.id) { ref in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Circle()
+                                        .fill(Color.purple)
+                                        .frame(width: 4, height: 4)
+                                        .padding(.top, 5)
+                                        .glassEffect(.regular.tint(.purple), in: .circle)
+                                    
+                                    Text(ref.name)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    
+                                    Spacer(minLength: 0)
+                                }
                             }
                         }
+                        .padding(.leading, 8)
                     }
                 }
                 
                 if backgroundFacts.isEmpty && writingSamples.isEmpty && !usedResumeRefs {
                     Text("No additional sources used")
-                        .font(.caption2)
+                        .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .italic()
                 }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
+            .padding(10)
+            .glassEffect(.regular, in: .rect(cornerRadius: 6))
         }
     }
     
@@ -289,68 +296,66 @@ struct CoverLetterMetadataView: View {
     private func committeeFeedbackSection(for coverLetter: CoverLetter) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Committee Analysis")
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
+                .textCase(.uppercase)
             
             VStack(alignment: .leading, spacing: 12) {
-                // Prominent total score/votes with medal indicator
-                HStack {
-                    // Medal indicator for top 5 performers
+                // Total score/votes with medal indicator
+                HStack(spacing: 12) {
+                    // Medal indicator with glass effect
                     if let medalImage = getMedalIndicator(for: coverLetter) {
                         Image(systemName: medalImage)
-                            .foregroundColor(getMedalColor(for: coverLetter))
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                            .font(.system(size: 28, weight: .medium))
+                            .padding(10)
+                            .glassEffect(.regular.tint(getMedalColor(for: coverLetter).opacity(0.3)), in: .circle)
                     }
                     
-                    VStack(alignment: .leading, spacing: 2) {
-                        // Total score/votes prominently displayed
+                    VStack(alignment: .leading, spacing: 4) {
                         let totalScore = getTotalScore(for: coverLetter)
                         if totalScore > 0 {
-                            HStack {
-                                Text("Total Score:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
                                 Text("\(totalScore)")
-                                    .font(.title3)
-                                    .fontWeight(.bold)
+                                    .font(.system(size: 24, weight: .semibold, design: .rounded))
                                     .foregroundColor(getScoreColor(for: totalScore))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .glassEffect(.regular.tint(getScoreColor(for: totalScore).opacity(0.2)), in: .rect(cornerRadius: 8))
                                 Text(coverLetter.voteCount > 0 ? "votes" : "points")
-                                    .font(.caption)
+                                    .font(.system(size: 13))
                                     .foregroundColor(.secondary)
                             }
                             
-                            // Ranking indicator if this letter is in top 5
                             if let ranking = getRanking(for: coverLetter) {
                                 Text(getRankingText(for: ranking))
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(getMedalColor(for: coverLetter))
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .glassEffect(.regular.tint(getMedalColor(for: coverLetter).opacity(0.15)), in: .capsule)
                             }
                         } else {
-                            // Fallback to individual vote/score counts
-                            HStack {
-                                HStack {
+                            HStack(spacing: 16) {
+                                HStack(spacing: 4) {
                                     Text("Votes:")
-                                        .font(.caption)
+                                        .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                     Text("\(coverLetter.voteCount)")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
+                                        .font(.system(size: 11, weight: .medium))
                                 }
                                 
-                                Spacer()
-                                
-                                HStack {
+                                HStack(spacing: 4) {
                                     Text("Points:")
-                                        .font(.caption)
+                                        .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                     Text("\(coverLetter.scoreCount)")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
+                                        .font(.system(size: 11, weight: .medium))
                                 }
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 6))
                         }
                     }
                     
@@ -360,67 +365,76 @@ struct CoverLetterMetadataView: View {
                 // Detailed committee feedback if available
                 if let feedback = coverLetter.committeeFeedback {
                     Divider()
+                        .padding(.vertical, 4)
                     
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Analysis Summary")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-                        
-                        Text(feedback.summaryOfModelAnalysis)
-                            .font(.caption2)
-                            .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !feedback.summaryOfModelAnalysis.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Analysis Summary")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                
+                                Text(feedback.summaryOfModelAnalysis)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                         
                         if !feedback.pointsAwarded.isEmpty {
-                            Text("Points Breakdown")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 4)
-                            
-                            ForEach(feedback.pointsAwarded, id: \.model) { award in
-                                HStack {
-                                    Text(openRouterService.friendlyModelName(for: award.model))
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Points Breakdown")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                
+                                VStack(spacing: 2) {
+                                    ForEach(feedback.pointsAwarded, id: \.model) { award in
+                                        HStack {
+                                            Text(openRouterService.friendlyModelName(for: award.model))
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.secondary)
+                                            
+                                            Spacer()
+                                            
+                                            Text("\(award.points)")
+                                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                                .foregroundColor(pointsColor(for: award.points))
+                                            Text("pts")
+                                                .font(.system(size: 9))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
                                     
-                                    Spacer()
+                                    Divider()
+                                        .padding(.vertical, 2)
                                     
-                                    Text("\(award.points) pts")
-                                        .font(.caption2)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(pointsColor(for: award.points))
+                                    let totalPoints = feedback.pointsAwarded.reduce(0) { $0 + $1.points }
+                                    HStack {
+                                        Text("Total")
+                                            .font(.system(size: 10, weight: .semibold))
+                                        
+                                        Spacer()
+                                        
+                                        Text("\(totalPoints)")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(pointsColor(for: totalPoints))
+                                        Text("pts")
+                                            .font(.system(size: 9))
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
-                            
-                            // Total points
-                            let totalPoints = feedback.pointsAwarded.reduce(0) { $0 + $1.points }
-                            HStack {
-                                Text("Total")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                
-                                Spacer()
-                                
-                                Text("\(totalPoints) pts")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(pointsColor(for: totalPoints))
-                            }
-                            .padding(.top, 2)
                         }
                     }
                 } else if coverLetter.hasBeenAssessed {
                     Text("Assessment completed, detailed analysis pending...")
-                        .font(.caption2)
+                        .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .italic()
                 }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(8)
+            .padding(10)
+            .glassEffect(.regular, in: .rect(cornerRadius: 6))
         }
     }
     
@@ -429,9 +443,9 @@ struct CoverLetterMetadataView: View {
         case 8...10:
             return .green
         case 6...7:
-            return .orange
+            return .blue
         case 4...5:
-            return .yellow
+            return .orange
         default:
             return .red
         }
@@ -439,21 +453,18 @@ struct CoverLetterMetadataView: View {
     
     // MARK: - Medal System Helper Functions
     
-    /// Get the total score for a cover letter (votes or points)
     private func getTotalScore(for coverLetter: CoverLetter) -> Int {
         return max(coverLetter.voteCount, coverLetter.scoreCount)
     }
     
-    /// Get all cover letters ranked by their total scores
     private func getRankedLetters() -> [CoverLetter] {
         guard let jobApp = jobAppStore.selectedApp else { return [] }
         
         return jobApp.coverLetters
-            .filter { getTotalScore(for: $0) > 0 } // Only include letters with scores
+            .filter { getTotalScore(for: $0) > 0 }
             .sorted { getTotalScore(for: $0) > getTotalScore(for: $1) }
     }
     
-    /// Get the ranking (1-5) of a cover letter, or nil if not in top 5
     private func getRanking(for coverLetter: CoverLetter) -> Int? {
         let rankedLetters = getRankedLetters()
         guard let index = rankedLetters.firstIndex(where: { $0.id == coverLetter.id }) else { return nil }
@@ -461,45 +472,37 @@ struct CoverLetterMetadataView: View {
         return ranking <= 5 ? ranking : nil
     }
     
-    /// Get the medal system image for a cover letter
     private func getMedalIndicator(for coverLetter: CoverLetter) -> String? {
         guard let ranking = getRanking(for: coverLetter) else { return nil }
         
         switch ranking {
-        case 1:
-            return "medal.fill" // Gold medal
-        case 2:
-            return "medal.fill" // Silver medal (will be colored differently)
-        case 3:
-            return "medal.fill" // Bronze medal (will be colored differently)
+        case 1...3:
+            return "medal.fill"
         case 4, 5:
-            return "star.circle.fill" // Star for 4th and 5th place
+            return "star.circle.fill"
         default:
             return nil
         }
     }
     
-    /// Get the color for medal indicators
     private func getMedalColor(for coverLetter: CoverLetter) -> Color {
         guard let ranking = getRanking(for: coverLetter) else { return .secondary }
         
         switch ranking {
         case 1:
-            return .yellow // Gold
+            return Color(red: 1.0, green: 0.84, blue: 0) // Gold
         case 2:
-            return .gray // Silver
+            return Color(red: 0.75, green: 0.75, blue: 0.75) // Silver
         case 3:
-            return .orange // Bronze
+            return Color(red: 0.8, green: 0.5, blue: 0.2) // Bronze
         case 4, 5:
-            return .blue // Star blue
+            return .blue
         default:
             return .secondary
         }
     }
     
-    /// Get the color for score display based on ranking
     private func getScoreColor(for score: Int) -> Color {
-        // Use a dynamic color based on score magnitude
         switch score {
         case 15...Int.max:
             return .green
@@ -514,35 +517,42 @@ struct CoverLetterMetadataView: View {
         }
     }
     
-    /// Get descriptive text for ranking
     private func getRankingText(for ranking: Int) -> String {
         switch ranking {
         case 1:
-            return "🥇 First Place"
+            return "First Place"
         case 2:
-            return "🥈 Second Place"
+            return "Second Place"
         case 3:
-            return "🥉 Third Place"
+            return "Third Place"
         case 4:
-            return "⭐ Fourth Place"
+            return "Fourth Place"
         case 5:
-            return "⭐ Fifth Place"
+            return "Fifth Place"
         default:
             return ""
         }
     }
     
     private func toggleChosenSubmissionDraft(for coverLetter: CoverLetter) {
-        coverLetter.markAsChosenSubmissionDraft()
+        // Toggle chosen status - if already chosen, unmark it
+        // If not chosen, mark it (which will automatically unmark others)
+        if coverLetter.isChosenSubmissionDraft {
+            // Unmark this one by setting selectedCover to nil
+            if let jobApp = jobAppStore.selectedApp {
+                jobApp.selectedCover = nil
+            }
+        } else {
+            // Mark this one as chosen (automatically unmarks others)
+            coverLetter.markAsChosenSubmissionDraft()
+        }
     }
     
     private func deleteCoverLetter(_ coverLetter: CoverLetter) {
         guard let jobApp = jobAppStore.selectedApp else { return }
         
-        // Delete the cover letter
         coverLetterStore.deleteLetter(coverLetter)
         
-        // Set selected cover to the most recent generated letter or nil
         if let mostRecentGenerated = jobApp.coverLetters
             .filter({ $0.generated })
             .sorted(by: { $0.moddedDate > $1.moddedDate })
@@ -555,3 +565,248 @@ struct CoverLetterMetadataView: View {
         }
     }
 }
+
+// Helper view for consistent metadata rows
+struct MetadataRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .leading)
+            
+            Text(value)
+                .font(.system(size: 11))
+                .foregroundColor(.primary)
+            
+            Spacer()
+        }
+        .frame(height: 24)
+    }
+}
+
+// Helper button components
+struct EditToggleButton: View {
+    @Binding var isEditing: Bool
+    let namespace: Namespace.ID
+    @State private var isHovering = false
+    
+    var body: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isEditing.toggle()
+            }
+        }) {
+            Image(systemName: isEditing ? "doc.text.viewfinder" : "pencil")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(buttonColor)
+                .frame(width: 32, height: 32)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(glassColor), in: .circle)
+        .glassEffectID("edit", in: namespace)
+        .help(isEditing ? "View Mode" : "Edit Mode")
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+    
+    private var buttonColor: Color {
+        if isEditing {
+            return isHovering ? .orange : .blue
+        } else {
+            return isHovering ? .blue : .secondary
+        }
+    }
+    
+    private var glassColor: Color {
+        if isEditing {
+            return isHovering ? .orange.opacity(0.3) : .blue.opacity(0.3)
+        } else {
+            return isHovering ? .blue.opacity(0.3) : .secondary.opacity(0.1)
+        }
+    }
+}
+
+struct StarToggleButton: View {
+    let coverLetter: CoverLetter
+    let action: () -> Void
+    let namespace: Namespace.ID
+    @State private var isHovering = false
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: iconName)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(buttonColor)
+                .symbolRenderingMode(.hierarchical)
+                .frame(width: 32, height: 32)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(glassColor), in: .circle)
+        .glassEffectID("star", in: namespace)
+        .disabled(!coverLetter.generated)
+        .opacity(coverLetter.generated ? 1.0 : 0.5)
+        .help(coverLetter.isChosenSubmissionDraft ? "Unmark as Chosen" : "Mark as Chosen")
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+    
+    private var iconName: String {
+        if coverLetter.isChosenSubmissionDraft {
+            return isHovering ? "star" : "star.fill"
+        } else {
+            return isHovering ? "star.fill" : "star"
+        }
+    }
+    
+    private var buttonColor: Color {
+        if coverLetter.isChosenSubmissionDraft {
+            return isHovering ? .secondary : .yellow
+        } else {
+            return isHovering ? .yellow : .secondary
+        }
+    }
+    
+    private var glassColor: Color {
+        if coverLetter.isChosenSubmissionDraft {
+            return isHovering ? .secondary.opacity(0.1) : .yellow.opacity(0.3)
+        } else {
+            return isHovering ? .yellow.opacity(0.3) : .secondary.opacity(0.1)
+        }
+    }
+}
+
+struct DeleteButton: View {
+    let action: () -> Void
+    let namespace: Namespace.ID
+    @State private var isHovering = false
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "trash")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(isHovering ? .red : .secondary)
+                .frame(width: 32, height: 32)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(isHovering ? .red.opacity(0.3) : .secondary.opacity(0.1)), in: .circle)
+        .glassEffectID("delete", in: namespace)
+        .help("Delete Cover Letter")
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
+struct CoverLetterNavigationButtons: View {
+    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+    
+    let currentLetter: CoverLetter
+    let namespace: Namespace.ID
+    
+    @State private var isHoveringPrev = false
+    @State private var isHoveringNext = false
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            // Previous button
+            Button(action: navigateToPrevious) {
+                Image(systemName: "chevron.left.circle")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(canNavigatePrevious ? (isHoveringPrev ? .accentColor : .secondary) : .secondary.opacity(0.3))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.tint(isHoveringPrev && canNavigatePrevious ? .accentColor.opacity(0.3) : .clear), in: .circle)
+            .glassEffectID("nav-prev", in: namespace)
+            .disabled(!canNavigatePrevious)
+            .help("Previous Cover Letter")
+            .onHover { hovering in
+                isHoveringPrev = hovering
+            }
+            
+            // Next button
+            Button(action: navigateToNext) {
+                Image(systemName: "chevron.right.circle")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(canNavigateNext ? (isHoveringNext ? .accentColor : .secondary) : .secondary.opacity(0.3))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.tint(isHoveringNext && canNavigateNext ? .accentColor.opacity(0.3) : .clear), in: .circle)
+            .glassEffectID("nav-next", in: namespace)
+            .disabled(!canNavigateNext)
+            .help("Next Cover Letter")
+            .onHover { hovering in
+                isHoveringNext = hovering
+            }
+        }
+    }
+    
+    private var availableLetters: [CoverLetter] {
+        guard let jobApp = jobAppStore.selectedApp else { return [] }
+        return sortCoverLetters(jobApp.coverLetters)
+    }
+    
+    /// Sort cover letters using the same logic as CoverLetterPicker
+    private func sortCoverLetters(_ letters: [CoverLetter]) -> [CoverLetter] {
+        return letters.sorted { letter1, letter2 in
+            // First, separate assessed from unassessed
+            if letter1.hasBeenAssessed != letter2.hasBeenAssessed {
+                return letter1.hasBeenAssessed && !letter2.hasBeenAssessed
+            }
+            
+            // If both are assessed, sort by vote/score count (descending)
+            if letter1.hasBeenAssessed && letter2.hasBeenAssessed {
+                let score1 = max(letter1.voteCount, letter1.scoreCount)
+                let score2 = max(letter2.voteCount, letter2.scoreCount)
+                if score1 != score2 {
+                    return score1 > score2
+                }
+            }
+            
+            // Otherwise, sort by modification date (most recent first)
+            return letter1.moddedDate > letter2.moddedDate
+        }
+    }
+    
+    private var currentIndex: Int? {
+        availableLetters.firstIndex { $0.id == currentLetter.id }
+    }
+    
+    private var canNavigatePrevious: Bool {
+        guard let index = currentIndex else { return false }
+        return index > 0
+    }
+    
+    private var canNavigateNext: Bool {
+        guard let index = currentIndex else { return false }
+        return index < availableLetters.count - 1
+    }
+    
+    private func navigateToPrevious() {
+        guard let index = currentIndex, canNavigatePrevious else { return }
+        let previousLetter = availableLetters[index - 1]
+        navigateToLetter(previousLetter)
+    }
+    
+    private func navigateToNext() {
+        guard let index = currentIndex, canNavigateNext else { return }
+        let nextLetter = availableLetters[index + 1]
+        navigateToLetter(nextLetter)
+    }
+    
+    private func navigateToLetter(_ letter: CoverLetter) {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            jobAppStore.selectedApp?.selectedCover = letter
+            coverLetterStore.cL = letter
+        }
+    }
+}
+

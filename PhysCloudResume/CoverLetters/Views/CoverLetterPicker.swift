@@ -38,6 +38,9 @@ struct CoverLetterPicker: View {
             ForEach(assessedLetters, id: \.id) { letter in
                 Text(formattedLetterName(letter))
                     .tag(Optional(letter))
+                    .if(letter.isChosenSubmissionDraft) { view in
+                        view.glassEffect(.regular.tint(.yellow.opacity(0.3)), in: .rect(cornerRadius: 4))
+                    }
             }
             
             // Show separator and unassessed letters if both groups exist
@@ -50,6 +53,9 @@ struct CoverLetterPicker: View {
             ForEach(unassessedLetters, id: \.id) { letter in
                 Text(formattedLetterName(letter))
                     .tag(Optional(letter))
+                    .if(letter.isChosenSubmissionDraft) { view in
+                        view.glassEffect(.regular.tint(.yellow.opacity(0.3)), in: .rect(cornerRadius: 4))
+                    }
             }
         }
         .id(coverLetters.map(\.id)) // Force refresh when letters array changes
@@ -79,8 +85,8 @@ struct CoverLetterPicker: View {
     private func formattedLetterName(_ letter: CoverLetter) -> String {
         let baseName = letter.generated ? letter.sequencedName : "Ungenerated draft"
         
-        // Add star prefix if this is the chosen submission draft
-        var name = letter.isChosenSubmissionDraft ? "⭐️ " + baseName : baseName
+        // No longer adding star prefix - using glass highlight instead
+        var name = baseName
         
         if letter.hasBeenAssessed {
             let count = max(letter.voteCount, letter.scoreCount)

@@ -2,7 +2,8 @@ import SwiftUI
 
 struct OpenRouterModelSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     
     @State private var searchText = ""
     @State private var selectedProvider: String?
@@ -57,7 +58,9 @@ struct OpenRouterModelSelectionSheet: View {
         
         // Filter by selection status if requested
         if showOnlySelected {
-            models = models.filter { appState.selectedOpenRouterModels.contains($0.id) }
+            models = models.filter { model in
+                enabledLLMStore.enabledModelIds.contains(model.id)
+            }
         }
         
         return models
@@ -187,13 +190,13 @@ struct OpenRouterModelSelectionSheet: View {
                         .buttonStyle(.borderless)
                         .disabled(openRouterService.isLoading)
                         
-                        Text("\(appState.selectedOpenRouterModels.count) selected")
+                        Text("\(enabledLLMStore.enabledModelIds.count) selected")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
                         Button("Select All") {
                             for model in filteredModels {
-                                appState.selectedOpenRouterModels.insert(model.id)
+                                enabledLLMStore.updateModelCapabilities(from: model)
                             }
                         }
                         .buttonStyle(.borderless)
@@ -201,7 +204,7 @@ struct OpenRouterModelSelectionSheet: View {
                         
                         Button("Select None") {
                             for model in filteredModels {
-                                appState.selectedOpenRouterModels.remove(model.id)
+                                enabledLLMStore.disableModel(id: model.id)
                             }
                         }
                         .buttonStyle(.borderless)
@@ -235,13 +238,13 @@ struct OpenRouterModelSelectionSheet: View {
                         ForEach(filteredModels) { model in
                             OpenRouterModelRow(
                                 model: model,
-                                isSelected: appState.selectedOpenRouterModels.contains(model.id),
+                                isSelected: enabledLLMStore.enabledModelIds.contains(model.id),
                                 pricingThresholds: openRouterService.pricingThresholds
                             ) { isSelected in
                                 if isSelected {
-                                    appState.selectedOpenRouterModels.insert(model.id)
+                                    enabledLLMStore.updateModelCapabilities(from: model)
                                 } else {
-                                    appState.selectedOpenRouterModels.remove(model.id)
+                                    enabledLLMStore.disableModel(id: model.id)
                                 }
                             }
                         }
@@ -258,8 +261,7 @@ struct OpenRouterModelSelectionSheet: View {
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Save") {
-                        // Models are already saved to selectedOpenRouterModels via binding
+                    Button("Done") {
                         dismiss()
                     }
                 }

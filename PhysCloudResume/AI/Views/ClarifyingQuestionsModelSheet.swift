@@ -15,6 +15,7 @@ struct ClarifyingQuestionsModelSheet: View {
     
     @State private var selectedModel: String = ""
     @Environment(AppState.self) private var appState
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(\.dismiss) private var dismiss
     
     private var openRouterService: OpenRouterService {
@@ -126,7 +127,7 @@ struct ClarifyingQuestionsModelSheet: View {
             // Auto-select the first available model if none selected
             if selectedModel.isEmpty {
                 let availableModels = openRouterService.availableModels
-                    .filter { appState.selectedOpenRouterModels.contains($0.id) }
+                    .filter { enabledLLMStore.enabledModelIds.contains($0.id) }
                     .filter { $0.supportsStructuredOutput }
                 
                 if let firstModel = availableModels.first {

@@ -26,7 +26,7 @@ struct CoverLetterGenerateButton: View {
             }
         }
         .font(.system(size: 14, weight: .light))
-        .buttonStyle(.automatic)
+        .buttonStyle( .automatic )
         .help("Generate Cover Letter")
         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
         .sheet(isPresented: $showCoverLetterModelSheet) {

@@ -34,6 +34,7 @@ struct APIKeysSettingsView: View {
     
     // Environment
     @Environment(\.appState) private var appState
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     
     // App Storage for API keys
     @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
@@ -168,7 +169,7 @@ struct APIKeysSettingsView: View {
                             Circle()
                                 .fill(.green)
                                 .frame(width: 8, height: 8)
-                            Text("\(appState.openRouterService.availableModels.count) available, \(appState.selectedOpenRouterModels.count) selected")
+                            Text("\(appState.openRouterService.availableModels.count) available, \(enabledLLMStore.enabledModelIds.count) selected")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

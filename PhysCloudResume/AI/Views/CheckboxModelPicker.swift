@@ -15,6 +15,7 @@ struct CheckboxModelPicker: View {
     
     /// Access to app state and OpenRouter service
     @Environment(AppState.self) private var appState
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     
     /// Optional capability filter for operation-specific requirements
     var requiredCapability: ModelCapability? = nil
@@ -100,7 +101,7 @@ struct CheckboxModelPicker: View {
                         Text("Loading models...")
                     }
                     .foregroundColor(.secondary)
-                } else if appState.selectedOpenRouterModels.isEmpty {
+                } else if enabledLLMStore.enabledModelIds.isEmpty {
                     Text("No models selected - Configure in Settings")
                         .foregroundColor(.secondary)
                         .italic()
@@ -182,7 +183,7 @@ struct CheckboxModelPicker: View {
         var models = openRouterService.availableModels
         
         // First filter: User's selected models from Settings (global filter)
-        models = models.filter { appState.selectedOpenRouterModels.contains($0.id) }
+        models = models.filter { enabledLLMStore.enabledModelIds.contains($0.id) }
         
         // Second filter: Capability requirements for the operation
         if let capability = requiredCapability {

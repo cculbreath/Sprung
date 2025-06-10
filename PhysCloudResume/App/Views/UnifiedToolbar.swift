@@ -57,7 +57,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }){
                     Label("Job App", systemImage:"note.text.badge.plus" ).font(.system(size: 14, weight: .light))
                 }
-
+                .buttonStyle( .automatic )
                 .help("Create New Job Application")
             }
 
@@ -71,9 +71,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         showSlidingList.toggle()
                     }})
                 {Label("Show Sources", systemImage: "newspaper").font(.system(size: 14, weight: .light))
-
-                        .help("Show Sources")
                 }
+                .buttonStyle( .automatic )
+                .help("Show Sources")
+                .disabled(jobAppStore.selectedApp == nil)
             }
         }}
 
@@ -104,7 +105,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         .font(.system(size: 14, weight: .light))
                        
                 }
-                .buttonStyle(.automatic)
+                .buttonStyle( .automatic )
                 .help("AI Resume Review")
                 .disabled(jobAppStore.selectedApp?.selectedRes == nil)
             }
@@ -124,7 +125,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }){Label("Batch Letter", systemImage: "square.stack.3d.down.right").font(.system(size: 14, weight: .light))
 
                         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-                    .help("Batch Cover Letter Operations")}
+                    .help("Batch Cover Letter Operations")}.buttonStyle( .automatic )
             }
             
             ToolbarItem(id: "committee", placement: .secondaryAction, showsByDefault: true) {
@@ -136,7 +137,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                     }
 
                 .font(.system(size: 14, weight: .light))
-                .buttonStyle(.automatic)
+                .buttonStyle( .automatic )
                 .help("Multi-model Choose Best Cover Letter")
                 .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
             }
@@ -151,7 +152,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         .font(.system(size: 14, weight: .light))
                        
                 }
-                .buttonStyle(.automatic)
+                .buttonStyle( .automatic )
                 .help("Review Application")
                 .disabled(jobAppStore.selectedApp?.selectedRes == nil ||
                           jobAppStore.selectedApp?.selectedCover == nil ||

@@ -16,14 +16,14 @@ struct AppWindowView: View {
 
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
-    @State private var refPopup: Bool = false
-    @State private var hasVisitedResumeTab: Bool = false
+    @Binding var refPopup: Bool
+    @Binding var hasVisitedResumeTab: Bool
     @Binding var tabRefresh: Bool
     @Binding var showSlidingList: Bool
     
     // Centralized sheet state management for all app windows/modals
-    @State private var sheets = AppSheets()
-    @State private var clarifyingQuestions: [ClarifyingQuestion] = []
+    @Binding var sheets: AppSheets
+    @Binding var clarifyingQuestions: [ClarifyingQuestion]
     
     // Revision workflow - managed by ResumeReviseViewModel
     @State private var resumeReviseViewModel: ResumeReviseViewModel?
@@ -34,29 +34,25 @@ struct AppWindowView: View {
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
-        if let jobApp = jobAppStore.selectedApp {
-            @Bindable var jobApp = jobApp
-            mainContent
-        }
+        mainContent
     }
     
     private var mainContent: some View {
         VStack {
-            tabView
+            if jobAppStore.selectedApp != nil {
+                tabView
+            } else {
+                // Show empty state when no job app is selected
+                VStack {
+                    Spacer()
+                    Text("Select a job application from the sidebar to begin")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+            }
         }
         .id($tabRefresh.wrappedValue)
-        .toolbar(id: "mainToolbarV2") {
-            buildUnifiedToolbar(
-                selectedTab: $selectedTab,
-                listingButtons: $listingButtons,
-                refresh: $tabRefresh,
-                sheets: $sheets,
-                clarifyingQuestions: $clarifyingQuestions,
-                resumeReviseViewModel: resumeReviseViewModel,
-                showNewAppSheet: $sheets.showNewJobApp,
-                showSlidingList: $showSlidingList
-            )
-        }
         .onAppear {
             menuHandler.configure(
                 jobAppStore: jobAppStore,
@@ -215,10 +211,11 @@ struct AppWindowView: View {
                 modelId: modelId
             )
             
-            Logger.debug("✅ Best cover letter selection completed: \(result.bestLetterUuid)")
+            Logger.debug("✅ Best cover letter selection completed: \(result.bestLetterUuid ?? "score voting mode")")
             
-            // Update the selected cover letter
-            if let uuid = UUID(uuidString: result.bestLetterUuid),
+            // Update the selected cover letter (only for FPTP mode)
+            if let bestUuid = result.bestLetterUuid,
+               let uuid = UUID(uuidString: bestUuid),
                let selectedLetter = jobApp.coverLetters.first(where: { $0.id == uuid }) {
                 jobApp.selectedCover = selectedLetter
                 Logger.debug("📝 Updated selected cover letter to: \(selectedLetter.sequencedName)")

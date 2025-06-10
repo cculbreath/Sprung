@@ -33,6 +33,19 @@ extension AppState {
                 UserDefaults.standard.set(Array(newValue), forKey: "batchCoverLetterModels")
             }
         }
+        
+        /// Gets the selected models for multi-model cover letter selection
+        var multiModelSelectedModels: Set<String> {
+            get {
+                if let array = UserDefaults.standard.array(forKey: "multiModelSelectedModels") as? [String] {
+                    return Set(array)
+                }
+                return []
+            }
+            set {
+                UserDefaults.standard.set(Array(newValue), forKey: "multiModelSelectedModels")
+            }
+        }
     }
     
     /// The settings manager for the application

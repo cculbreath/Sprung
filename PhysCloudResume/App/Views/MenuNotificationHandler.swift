@@ -43,7 +43,7 @@ class MenuNotificationHandler {
             forName: .bestJob,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             // TODO: Implement best job functionality
             // This should trigger the same logic as the toolbar button
         }
@@ -100,7 +100,7 @@ class MenuNotificationHandler {
             forName: .generateCoverLetter,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             // TODO: Trigger cover letter generation
         }
         
@@ -116,7 +116,7 @@ class MenuNotificationHandler {
             forName: .bestCoverLetter,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             // TODO: Trigger best cover letter functionality
         }
         
@@ -153,8 +153,10 @@ class MenuNotificationHandler {
             queue: .main
         ) { _ in
             // Delegate to AppDelegate via existing menu command mechanism
-            if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                appDelegate.showSettingsWindow()
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSettingsWindow()
+                }
             }
         }
         

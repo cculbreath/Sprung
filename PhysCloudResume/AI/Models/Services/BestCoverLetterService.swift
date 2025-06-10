@@ -7,8 +7,34 @@
 
 import Foundation
 
+/// Errors that can occur during best cover letter selection
+enum BestCoverLetterError: LocalizedError {
+    case notEnoughCoverLetters
+    case invalidUUID(String)
+    case letterNotFound(String)
+    case invalidScoreTotal(Int)
+    case invalidResponse(String)
+    case modelValidationFailed
+    
+    var errorDescription: String? {
+        switch self {
+        case .notEnoughCoverLetters:
+            return "At least 2 generated cover letters are required for selection"
+        case .invalidUUID(let uuid):
+            return "Invalid UUID format: \(uuid)"
+        case .letterNotFound(let uuid):
+            return "Cover letter not found with UUID: \(uuid)"
+        case .invalidScoreTotal(let total):
+            return "Invalid score total: \(total). Must equal 20."
+        case .invalidResponse(let message):
+            return "Invalid response: \(message)"
+        case .modelValidationFailed:
+            return "Selected model does not support required capabilities"
+        }
+    }
+}
+
 /// Service for best cover letter selection using the unified LLM architecture
-/// Replaces single-model usage of CoverLetterRecommendationProvider with cleaner LLMService integration
 @MainActor
 class BestCoverLetterService {
     
@@ -87,17 +113,39 @@ class BestCoverLetterService {
             responseType: BestCoverLetterResponse.self
         )
         
-        // Validate response
-        guard let uuid = UUID(uuidString: response.bestLetterUuid) else {
-            throw BestCoverLetterError.invalidUUID(response.bestLetterUuid)
+        // Validate response based on voting scheme
+        if let bestLetterUuid = response.bestLetterUuid {
+            // FPTP mode validation
+            guard let uuid = UUID(uuidString: bestLetterUuid) else {
+                throw BestCoverLetterError.invalidUUID(bestLetterUuid)
+            }
+            
+            // Verify the selected UUID exists in the cover letters
+            guard coverLetters.contains(where: { $0.id == uuid }) else {
+                throw BestCoverLetterError.letterNotFound(bestLetterUuid)
+            }
+            
+            Logger.debug("✅ Best cover letter selection successful: \(bestLetterUuid)")
+        } else if let scoreAllocations = response.scoreAllocations {
+            // Score voting mode validation
+            let totalScore = scoreAllocations.reduce(0) { $0 + $1.score }
+            guard totalScore == 20 else {
+                throw BestCoverLetterError.invalidScoreTotal(totalScore)
+            }
+            
+            // Verify all UUIDs exist
+            for allocation in scoreAllocations {
+                guard let uuid = UUID(uuidString: allocation.letterUuid),
+                      coverLetters.contains(where: { $0.id == uuid }) else {
+                    throw BestCoverLetterError.letterNotFound(allocation.letterUuid)
+                }
+            }
+            
+            Logger.debug("✅ Score voting selection successful with \(scoreAllocations.count) allocations")
+        } else {
+            throw BestCoverLetterError.invalidResponse("Response must contain either bestLetterUuid or scoreAllocations")
         }
         
-        // Verify the selected UUID exists in the cover letters
-        guard coverLetters.contains(where: { $0.id == uuid }) else {
-            throw BestCoverLetterError.letterNotFound(response.bestLetterUuid)
-        }
-        
-        Logger.debug("✅ Best cover letter selection successful: \(response.bestLetterUuid)")
         return response
     }
     
@@ -164,27 +212,5 @@ class BestCoverLetterService {
         
         let fileURL = downloadsURL.appendingPathComponent(fileName)
         try? content.write(to: fileURL, atomically: true, encoding: .utf8)
-    }
-}
-
-// MARK: - Error Types
-
-enum BestCoverLetterError: LocalizedError {
-    case notEnoughCoverLetters
-    case invalidUUID(String)
-    case letterNotFound(String)
-    case modelValidationFailed
-    
-    var errorDescription: String? {
-        switch self {
-        case .notEnoughCoverLetters:
-            return "At least 2 generated cover letters are required for selection"
-        case .invalidUUID(let uuid):
-            return "Invalid UUID format in response: \(uuid)"
-        case .letterNotFound(let uuid):
-            return "Selected cover letter UUID not found: \(uuid)"
-        case .modelValidationFailed:
-            return "Selected model does not support required capabilities"
-        }
     }
 }

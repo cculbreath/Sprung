@@ -103,6 +103,11 @@ final class Logger {
     
     // MARK: - Convenience Methods
     
+    /// Log a verbose message
+    static func verbose(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
+        log(.verbose, message, file: file, function: function, line: line)
+    }
+    
     /// Log a debug message
     static func debug(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
         log(.debug, message, file: file, function: function, line: line)

@@ -18,7 +18,7 @@ struct CoverLetterReviseButton: View {
                     .font(.system(size: 14, weight: .light))
             }
         }
-        .buttonStyle(.automatic)
+        .buttonStyle( .automatic )
         .help("Revise Cover Letter")
         .disabled(jobAppStore.selectedApp?.selectedCover?.generated != true)
         .sheet(isPresented: $showReviseCoverLetterSheet) {

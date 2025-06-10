@@ -182,16 +182,18 @@ struct RichTextView: View {
                 .foregroundColor(.primary)
         }
 
-        // Build the combined text
-        var combinedText = Text("")
+        // Build the combined text using AttributedString for modern SwiftUI
+        var attributedString = AttributedString()
         for segment in segments {
-            let processedText = processEmailLinks(segment.text)
-            let textPart = Text(processedText)
-                .fontWeight(segment.isBold ? .bold : .regular)
-            combinedText = combinedText + textPart
+            var part = processEmailLinks(segment.text)
+            if segment.isBold {
+                part.font = Font.body.bold()
+            }
+            attributedString.append(part)
         }
-
-        return combinedText
+        
+        return Text(attributedString)
+            .foregroundColor(.primary)
     }
 
     struct TextSegment {
