@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 90;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -50,7 +50,6 @@
 /* Begin PBXFrameworksBuildPhase section */
 		570FEC652C855BF50074D1E0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				573467692DF42865008DED68 /* Mustache in Frameworks */,
 				57DC509F2DBA3B68000F1A48 /* OrderedCollections in Frameworks */,
@@ -59,7 +58,6 @@
 				57DC4F202DBA324B000F1A48 /* SwiftSoup in Frameworks */,
 				574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -104,8 +102,6 @@
 			);
 			buildRules = (
 			);
-			dependencies = (
-			);
 			fileSystemSynchronizedGroups = (
 				570FEC6A2C855BF50074D1E0 /* PhysCloudResume */,
 			);
@@ -146,7 +142,7 @@
 				57306AF32DDE57980053246D /* XCRemoteSwiftPackageReference "ViewInspector" */,
 				573467672DF42865008DED68 /* XCRemoteSwiftPackageReference "GRMustache.swift" */,
 			);
-			preferredProjectObjectVersion = 77;
+			preferredProjectObjectVersion = 90;
 			productRefGroup = 570FEC692C855BF50074D1E0 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -159,25 +155,21 @@
 /* Begin PBXResourcesBuildPhase section */
 		570FEC662C855BF50074D1E0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		570FEC642C855BF50074D1E0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		570FEC772C855BF80074D1E0 /* Debug */ = {
+		570FEC772C855BF80074D1E0 /* Debug configuration for PBXProject "PhysCloudResume" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -243,7 +235,7 @@
 			};
 			name = Debug;
 		};
-		570FEC782C855BF80074D1E0 /* Release */ = {
+		570FEC782C855BF80074D1E0 /* Release configuration for PBXProject "PhysCloudResume" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -301,7 +293,7 @@
 			};
 			name = Release;
 		};
-		570FEC7A2C855BF80074D1E0 /* Debug */ = {
+		570FEC7A2C855BF80074D1E0 /* Debug configuration for PBXNativeTarget "PhysCloudResume" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -325,7 +317,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Physics-Cloud.PhysCloudResume";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -334,7 +326,7 @@
 			};
 			name = Debug;
 		};
-		570FEC7B2C855BF80074D1E0 /* Release */ = {
+		570FEC7B2C855BF80074D1E0 /* Release configuration for PBXNativeTarget "PhysCloudResume" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -360,7 +352,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Physics-Cloud.PhysCloudResume";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -376,19 +368,17 @@
 		570FEC632C855BF50074D1E0 /* Build configuration list for PBXProject "PhysCloudResume" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				570FEC772C855BF80074D1E0 /* Debug */,
-				570FEC782C855BF80074D1E0 /* Release */,
+				570FEC772C855BF80074D1E0 /* Debug configuration for PBXProject "PhysCloudResume" */,
+				570FEC782C855BF80074D1E0 /* Release configuration for PBXProject "PhysCloudResume" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		570FEC792C855BF80074D1E0 /* Build configuration list for PBXNativeTarget "PhysCloudResume" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				570FEC7A2C855BF80074D1E0 /* Debug */,
-				570FEC7B2C855BF80074D1E0 /* Release */,
+				570FEC7A2C855BF80074D1E0 /* Debug configuration for PBXNativeTarget "PhysCloudResume" */,
+				570FEC7B2C855BF80074D1E0 /* Release configuration for PBXNativeTarget "PhysCloudResume" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
