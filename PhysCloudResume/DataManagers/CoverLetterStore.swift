@@ -47,28 +47,6 @@ final class CoverLetterStore: SwiftDataStore {
         return letter
     }
 
-    func createBlank(jobApp: JobApp) {
-        // Check if an ungenerated draft already exists
-        if let existingUngenerated = jobApp.coverLetters.first(where: { !$0.generated }) {
-            // Select the existing ungenerated draft instead of creating a new one
-            jobApp.selectedCover = existingUngenerated
-            Logger.debug("Found existing ungenerated draft, selecting it instead of creating new one")
-            return
-        }
-        
-        let letter = CoverLetter(
-            enabledRefs: coverRefStore.defaultSources, // Start with default refs
-            jobApp: jobApp
-        )
-        letter.generated = false // A blank letter is not yet generated
-        // Do not set a name for a blank letter initially.
-        // It will be named upon first generation or if the user manually edits and saves.
-        jobApp.coverLetters.append(letter)
-        jobApp.selectedCover = letter // Select the new blank letter
-
-        modelContext.insert(letter)
-        // saveContext() // Avoid saving context here; let higher-level operations manage saves.
-    }
 
     @discardableResult
     func create(jobApp: JobApp) -> CoverLetter {
@@ -129,74 +107,35 @@ final class CoverLetterStore: SwiftDataStore {
         }
     }
     
-    /// Deletes all ungenerated draft letters from the database, except the currently selected one
-    func deleteUngeneratedDrafts(excludingSelected: Bool = true) {
+
+    /// Deletes all ungenerated draft cover letters to prevent accumulation of blank letters
+    func deleteUngeneratedDrafts() {
         do {
-            // Fetch all cover letters that are not generated
+            // Fetch all cover letters that are not generated (draft state)
             let descriptor = FetchDescriptor<CoverLetter>(
                 predicate: #Predicate<CoverLetter> { letter in
-                    letter.generated == false
+                    !letter.generated && letter.content.isEmpty
                 }
             )
-            let ungeneratedLetters = try modelContext.fetch(descriptor)
+            let ungeneratedDrafts = try modelContext.fetch(descriptor)
             
-            var deletedCount = 0
-            for letter in ungeneratedLetters {
-                // Skip if this is the currently selected cover letter and we're excluding it
-                if excludingSelected, let jobApp = letter.jobApp, jobApp.selectedCover == letter {
-                    Logger.debug("🔒 Skipping deletion of currently selected ungenerated draft")
-                    continue
-                }
-                
+            // Delete each ungenerated draft
+            for letter in ungeneratedDrafts {
                 if let jobApp = letter.jobApp {
                     if let index = jobApp.coverLetters.firstIndex(of: letter) {
                         jobApp.coverLetters.remove(at: index)
                     }
                 }
                 modelContext.delete(letter)
-                deletedCount += 1
             }
             
-            if deletedCount > 0 {
-                Logger.debug("🧹 Cleaned up \(deletedCount) ungenerated draft letters")
+            if !ungeneratedDrafts.isEmpty {
+                Logger.debug("🧹 Cleaned up \(ungeneratedDrafts.count) ungenerated draft letters")
                 saveContext()
             }
             
         } catch {
-            Logger.error("Failed to clean up ungenerated drafts: \(error.localizedDescription)")
-        }
-    }
-    
-    /// Ensures only one ungenerated draft exists per job application
-    func cleanupExtraUngeneratedDrafts(for jobApp: JobApp) {
-        let ungeneratedDrafts = jobApp.coverLetters.filter { !$0.generated }
-        
-        // If there's more than one ungenerated draft
-        if ungeneratedDrafts.count > 1 {
-            // Keep the selected one if it's ungenerated, otherwise keep the most recent
-            let draftsToKeep: CoverLetter?
-            if let selected = jobApp.selectedCover, !selected.generated {
-                draftsToKeep = selected
-            } else {
-                draftsToKeep = ungeneratedDrafts.sorted(by: { $0.moddedDate > $1.moddedDate }).first
-            }
-            
-            // Delete all others
-            var deletedCount = 0
-            for draft in ungeneratedDrafts {
-                if draft != draftsToKeep {
-                    if let index = jobApp.coverLetters.firstIndex(of: draft) {
-                        jobApp.coverLetters.remove(at: index)
-                    }
-                    modelContext.delete(draft)
-                    deletedCount += 1
-                }
-            }
-            
-            if deletedCount > 0 {
-                Logger.debug("🧹 Cleaned up \(deletedCount) extra ungenerated drafts for job app")
-                saveContext()
-            }
+            Logger.error("Failed to cleanup ungenerated drafts: \(error.localizedDescription)")
         }
     }
 

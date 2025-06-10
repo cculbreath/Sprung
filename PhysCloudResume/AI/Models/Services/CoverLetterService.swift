@@ -32,11 +32,15 @@ class CoverLetterService: ObservableObject {
     ///   - resume: The resume to use for context
     ///   - modelId: The model ID to use for generation
     ///   - coverLetterStore: The store to create the cover letter in
+    ///   - selectedRefs: The selected cover references to include
+    ///   - includeResumeRefs: Whether to include resume background references
     func generateNewCoverLetter(
         jobApp: JobApp,
         resume: Resume,
         modelId: String,
-        coverLetterStore: CoverLetterStore
+        coverLetterStore: CoverLetterStore,
+        selectedRefs: [CoverRef],
+        includeResumeRefs: Bool
     ) async throws {
         // Create a new cover letter
         let newCoverLetter = coverLetterStore.create(jobApp: jobApp)
@@ -45,7 +49,12 @@ class CoverLetterService: ObservableObject {
         newCoverLetter.content = ""
         newCoverLetter.setEditableName("Generating...")
         newCoverLetter.generated = false
-        newCoverLetter.includeResumeRefs = true
+        newCoverLetter.includeResumeRefs = includeResumeRefs
+        newCoverLetter.enabledRefs = selectedRefs
+        
+        // Store generation metadata (snapshot of sources and settings at generation time)
+        newCoverLetter.generationSources = selectedRefs
+        newCoverLetter.generationUsedResumeRefs = includeResumeRefs
         
         // Set it as the selected cover letter
         jobApp.selectedCover = newCoverLetter
@@ -56,7 +65,7 @@ class CoverLetterService: ObservableObject {
                 coverLetter: newCoverLetter,
                 resume: resume,
                 modelId: modelId,
-                includeResumeRefs: newCoverLetter.includeResumeRefs
+                includeResumeRefs: includeResumeRefs
             )
             
             Logger.debug("✅ Cover letter generated successfully")

@@ -55,6 +55,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     
     @State private var showCoverLetterModelSheet = false
     @State private var selectedCoverLetterModel = ""
+    @State private var showReviseCoverLetterSheet = false
     
     @State private var showBestLetterModelSheet = false
     @State private var selectedBestLetterModel = ""
@@ -135,7 +136,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 return
             }
             
-            // Start fresh revision workflow - ResumeReviseViewModel manages everything
+            // Start fresh revision workflow - ResumeReviseViewModel manages everylightg
             try await viewModel.startFreshRevisionWorkflow(
                 resume: resume,
                 modelId: modelId
@@ -229,7 +230,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
 
     /// Generates a cover letter with the selected model
     @MainActor
-    private func generateCoverLetter(modelId: String) async {
+    private func generateCoverLetter(modelId: String, selectedRefs: [CoverRef], includeResumeRefs: Bool) async {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes else {
             isGeneratingCoverLetter = false
@@ -242,7 +243,9 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 jobApp: jobApp,
                 resume: resume,
                 modelId: modelId,
-                coverLetterStore: coverLetterStore
+                coverLetterStore: coverLetterStore,
+                selectedRefs: selectedRefs,
+                includeResumeRefs: includeResumeRefs
             )
             
             isGeneratingCoverLetter = false
@@ -250,6 +253,50 @@ struct UnifiedToolbar: CustomizableToolbarContent {
         } catch {
             Logger.error("Error generating cover letter: \(error.localizedDescription)")
             isGeneratingCoverLetter = false
+            // TODO: Show error alert to user
+        }
+    }
+    
+    /// Revises a cover letter with the selected model and operation
+    @MainActor
+    private func reviseCoverLetter(modelId: String, operation: CoverLetterPrompts.EditorPrompts, feedback: String) async {
+        guard let coverLetter = jobAppStore.selectedApp?.selectedCover,
+              let resume = jobAppStore.selectedApp?.selectedRes else {
+            return
+        }
+        
+        do {
+            // Create a duplicate if the current letter is already generated
+            let targetLetter: CoverLetter
+            if coverLetter.generated {
+                targetLetter = coverLetterStore.createDuplicate(letter: coverLetter)
+                targetLetter.generated = false
+                targetLetter.editorPrompt = operation
+                
+                // Update selected cover letter
+                jobAppStore.selectedApp?.selectedCover = targetLetter
+                coverLetterStore.cL = targetLetter
+            } else {
+                targetLetter = coverLetter
+                targetLetter.editorPrompt = operation
+            }
+            
+            // Set the current mode for the prompt generation
+            targetLetter.currentMode = operation == .custom ? .revise : .rewrite
+            
+            // Perform the revision
+            _ = try await CoverLetterService.shared.reviseCoverLetter(
+                coverLetter: targetLetter,
+                resume: resume,
+                modelId: modelId,
+                feedback: feedback,
+                editorPrompt: operation
+            )
+            
+            Logger.debug("✅ Cover letter revision completed successfully")
+            
+        } catch {
+            Logger.error("Error during cover letter revision: \(error.localizedDescription)")
             // TODO: Show error alert to user
         }
     }
@@ -305,6 +352,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 coverLetterGenerateButton()
             }
             
+            ToolbarItem(id: "reviseLetter", placement: .secondaryAction, showsByDefault: true) {
+                reviseCoverLetterButton()
+            }
+            
             ToolbarItem(id: "batchLetter", placement: .secondaryAction, showsByDefault: true) {
                 coverLetterButton("Batch Letter", "square.stack.3d.up.fill", action: {
                     sheets.showBatchCoverLetter = true
@@ -326,6 +377,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         Image("custom.medal.square.stack")
                     }
                 }
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
+                .buttonStyle(.automatic)
+                .controlSize(.regular)
                 .help("Multi-model Choose Best Cover Letter")
                 .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
             }
@@ -373,8 +428,26 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 templateEditorButton()
             }
             
-            // Standard customizable toolbar items removed - they cause duplicate ID crashes during customization
-            // SwiftUI toolbar customization should provide these automatically
+            // Legacy placeholder items to prevent crashes for previously customized toolbars
+            ToolbarItem(id: "tts", placement: .primaryAction, showsByDefault: false) {
+                Button("TTS") {
+                    // Legacy TTS button - functionality moved to menu
+                }
+                .disabled(true)
+                .help("TTS functionality moved to Cover Letter menu")
+            }
+            
+            ToolbarItem(id: "ttsReadAloud", placement: .primaryAction, showsByDefault: false) {
+                Button("Read Aloud") {
+                    // Legacy TTS button - functionality moved to menu
+                }
+                .disabled(true)
+                .help("TTS functionality moved to Cover Letter menu")
+            }
+            
+            ToolbarItem(id: "separator", placement: .primaryAction, showsByDefault: false) {
+                Divider()
+            }
         }
     }
 
@@ -389,8 +462,8 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 Label {
                     Text("Clarify & Customize")
                 } icon: {
-                    Image("custom.wand.and.rays.inverse.badge.questionmark")
-                        .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
+                    Image("custom.wand.and.rays.inverse.badge.questionmark").fontWeight(.bold).foregroundColor(.blue)
+                        .symbolEffect(.variableColor.iterative.nonReversing)
                 }
             } else {
                 Label {
@@ -400,6 +473,9 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }
             }
         }
+        .font(.system(size: 20, weight: .light))
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Create Resume Revisions with Clarifying Questions")
         .disabled(selectedResumeBinding.wrappedValue?.rootNode == nil)
         .sheet(isPresented: $showClarifyingQuestionsModelSheet) {
@@ -463,24 +539,30 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }
             }
         }
+        .font(.system(size: 20, weight: .light))
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Generate Cover Letter")
         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
         .sheet(isPresented: $showCoverLetterModelSheet) {
-            ModelSelectionSheet(
-                title: "Choose Model for Cover Letter Generation",
-                requiredCapability: nil,
-                operationKey: "cover_letter",
-                isPresented: $showCoverLetterModelSheet,
-                onModelSelected: { modelId in
-                    selectedCoverLetterModel = modelId
-                    showCoverLetterModelSheet = false
-                    isGeneratingCoverLetter = true
-                    
-                    Task {
-                        await generateCoverLetter(modelId: modelId)
+            if let jobApp = jobAppStore.selectedApp {
+                GenerateCoverLetterView(
+                    jobApp: jobApp,
+                    onGenerate: { modelId, selectedRefs, includeResumeRefs in
+                        selectedCoverLetterModel = modelId
+                        showCoverLetterModelSheet = false
+                        isGeneratingCoverLetter = true
+                        
+                        Task {
+                            await generateCoverLetter(
+                                modelId: modelId,
+                                selectedRefs: selectedRefs,
+                                includeResumeRefs: includeResumeRefs
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
     
@@ -492,10 +574,16 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             if isProcessingBestLetter {
                 Label("Best Letter", systemImage: "gearshape")
                     .symbolEffect(.rotate, options: .repeating)
+                    .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
             } else {
                 Label("Best Letter", systemImage: "medal")
+                    .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
             }
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Choose Best Cover Letter")
         .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
         .sheet(isPresented: $showBestLetterModelSheet) {
@@ -531,6 +619,42 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
         }
     }
+    
+    @ViewBuilder
+    private func reviseCoverLetterButton() -> some View {
+        Button(action: {
+            showReviseCoverLetterSheet = true
+        }) {
+            Label {
+                Text("Revise")
+            } icon: {
+                Image(systemName: "wand.and.stars")
+            }
+        }
+        .font(.system(size: 20, weight: .light))
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
+        .help("Revise Cover Letter")
+        .disabled(jobAppStore.selectedApp?.selectedCover?.generated != true)
+        .sheet(isPresented: $showReviseCoverLetterSheet) {
+            if let coverLetter = jobAppStore.selectedApp?.selectedCover {
+                ReviseCoverLetterView(
+                    coverLetter: coverLetter,
+                    onRevise: { modelId, operation, feedback in
+                        showReviseCoverLetterSheet = false
+                        
+                        Task {
+                            await reviseCoverLetter(
+                                modelId: modelId,
+                                operation: operation,
+                                feedback: feedback
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
 
     // Helper functions for consistent button styling
     @ViewBuilder
@@ -541,12 +665,20 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                               help: String) -> some View {
         Button(action: action) {
             if isGeneratingResume && (title == "Customize") {
-                Label(title, systemImage: "wand.and.rays")
-                    .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
+                Label(title, systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
+                    .symbolEffect(.variableColor.iterative.nonReversing)
+                    .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
+                    .padding(.vertical, 4)
             } else {
                 Label(title, systemImage: systemName)
+                    .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
+                    .padding(.vertical, 4)
             }
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help(help)
         .disabled(disabled)
     }
@@ -559,7 +691,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                                    help: String) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemName)
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help(help)
         .disabled(disabled)
     }
@@ -573,7 +709,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                                help: String) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemName)
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help(help)
         .disabled(disabled)
     }
@@ -584,7 +724,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             showNewAppSheet = true
         }) {
             Label("New App", systemImage: "note.text.badge.plus")
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Create New Job Application")
     }
 
@@ -596,7 +740,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
         } label: {
             Label("Show Sources", systemImage: "newspaper")
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Show Sources")
     }
 
@@ -606,7 +754,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             NotificationCenter.default.post(name: .showSettings, object: nil)
         }) {
             Label("Settings", systemImage: "gear")
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Open Settings")
     }
 
@@ -616,7 +768,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
         }) {
             Label("Applicant Profile", systemImage: "person.crop.circle")
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Open Applicant Profile")
     }
 
@@ -626,7 +782,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
         }) {
             Label("Template Editor", systemImage: "doc.text")
+                .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Open Template Editor")
     }
 
@@ -636,12 +796,18 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             showBestJobModelSheet = true
         }) {
             if isProcessingBestJob {
-                Label("Best Job", systemImage: "wand.and.rays")
-                    .symbolEffect(.variableColor.iterative.hideInactiveLayers.nonReversing)
+                Label("Best Job", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
+                    .symbolEffect(.variableColor.iterative.nonReversing)
+                    .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
             } else {
                 Label("Best Job", systemImage: "medal.star")
+                    .font(.system(size: 20, weight: .light))
+                .padding(.vertical, 4)
             }
         }
+        .buttonStyle(.automatic)
+        .controlSize(.regular)
         .help("Find the best job match based on your qualifications")
         .disabled(isProcessingBestJob || jobAppStore.selectedApp?.selectedRes == nil)
         .sheet(isPresented: $showBestJobModelSheet) {

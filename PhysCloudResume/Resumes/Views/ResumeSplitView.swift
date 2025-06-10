@@ -48,7 +48,9 @@ struct ResumeSplitView: View {
                         )
                         .id(selRes.id) // Force view recreation when selected resume changes
                         .layoutPriority(1) // Less priority, but still resizable
-                }.inspector(isPresented: $showResumeInspector) {
+                }
+                .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
+                .inspector(isPresented: $showResumeInspector) {
                     ResumeInspectorView(refresh: $refresh)
                 }
             } else {

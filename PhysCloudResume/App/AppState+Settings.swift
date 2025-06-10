@@ -20,6 +20,19 @@ extension AppState {
                 UserDefaults.standard.set(newValue, forKey: "preferredLLMProvider")
             }
         }
+        
+        /// Gets the selected models for batch cover letter generation
+        var batchCoverLetterModels: Set<String> {
+            get {
+                if let array = UserDefaults.standard.array(forKey: "batchCoverLetterModels") as? [String] {
+                    return Set(array)
+                }
+                return []
+            }
+            set {
+                UserDefaults.standard.set(Array(newValue), forKey: "batchCoverLetterModels")
+            }
+        }
     }
     
     /// The settings manager for the application

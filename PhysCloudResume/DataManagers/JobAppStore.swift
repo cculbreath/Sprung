@@ -80,10 +80,6 @@ final class JobAppStore: SwiftDataStore {
     }
 
     func addJobApp(_ jobApp: JobApp) -> JobApp? {
-        // Side‑effect: create an empty cover‑letter placeholder so the UI can
-        // immediately reference `selectedCover`.
-        coverLetterStore.createBlank(jobApp: jobApp)
-
         modelContext.insert(jobApp)
         saveContext()
 
