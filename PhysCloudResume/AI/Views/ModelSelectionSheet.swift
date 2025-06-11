@@ -105,7 +105,7 @@ struct ModelSelectionSheet: View {
         operationKey: "resume_customize",
         isPresented: .constant(true),
         onModelSelected: { modelId in
-            print("Selected model: \(modelId)")
+            Logger.debug("🤖 Selected model: \(modelId)")
         }
     )
 }

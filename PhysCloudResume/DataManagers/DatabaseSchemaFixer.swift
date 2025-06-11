@@ -14,7 +14,7 @@ class DatabaseSchemaFixer {
             return
         }
         
-        Logger.debug("🔧 Starting database schema fix for: \(dbPath)")
+        Logger.info("🔧 Starting database schema fix for: \(dbPath)")
         
         // Check if schema fixes are actually needed before backing up
         var needsFixing = false
@@ -36,7 +36,7 @@ class DatabaseSchemaFixer {
         needsFixing = try checkIfFixesNeeded(db: db)
         
         if !needsFixing {
-            Logger.debug("✅ Database schema is up to date, no fixes needed")
+            Logger.info("✅ Database schema is up to date, no fixes needed")
             return
         }
         
@@ -49,7 +49,7 @@ class DatabaseSchemaFixer {
         try fixResumeSchema(db: db)
         try fixResRefRelationshipSchema(db: db)
         
-        Logger.debug("✅ Database schema fix completed")
+        Logger.info("✅ Database schema fix completed")
     }
     
     /// Checks if any schema fixes are needed without making changes
@@ -120,7 +120,7 @@ class DatabaseSchemaFixer {
     }
     
     private static func fixTreeNodeSchema(db: OpaquePointer?) throws {
-        Logger.debug("🔧 Fixing TreeNode schema...")
+        Logger.info("🔧 Fixing TreeNode schema...")
         
         // Check if Z12CHILDREN column exists
         let checkChildrenColumn = "PRAGMA table_info(ZTREENODE);"
@@ -140,7 +140,7 @@ class DatabaseSchemaFixer {
         
         // Add missing columns if needed
         if !hasChildrenColumn {
-            Logger.debug("➕ Adding missing Z12CHILDREN column to ZTREENODE")
+            Logger.info("➕ Adding missing Z12CHILDREN column to ZTREENODE")
             let addChildrenColumn = "ALTER TABLE ZTREENODE ADD COLUMN Z12CHILDREN INTEGER;"
             if sqlite3_exec(db, addChildrenColumn, nil, nil, nil) != SQLITE_OK {
                 Logger.warning("⚠️ Could not add Z12CHILDREN column (may already exist)")
@@ -149,7 +149,7 @@ class DatabaseSchemaFixer {
     }
     
     private static func fixResumeSchema(db: OpaquePointer?) throws {
-        Logger.debug("🔧 Fixing Resume schema...")
+        Logger.info("🔧 Fixing Resume schema...")
         
         // Check if Z11FONTSIZENODES column exists
         let checkFontColumn = "PRAGMA table_info(ZRESUME);"
@@ -169,7 +169,7 @@ class DatabaseSchemaFixer {
         
         // Add missing columns if needed
         if !hasFontColumn {
-            Logger.debug("➕ Adding missing Z11FONTSIZENODES column to ZRESUME")
+            Logger.info("➕ Adding missing Z11FONTSIZENODES column to ZRESUME")
             let addFontColumn = "ALTER TABLE ZRESUME ADD COLUMN Z11FONTSIZENODES INTEGER;"
             if sqlite3_exec(db, addFontColumn, nil, nil, nil) != SQLITE_OK {
                 Logger.warning("⚠️ Could not add Z11FONTSIZENODES column (may already exist)")
@@ -188,7 +188,7 @@ class DatabaseSchemaFixer {
         sqlite3_finalize(stmt)
         
         if !hasFontSizeTable {
-            Logger.debug("➕ Creating ZFONTSIZENODE table")
+            Logger.info("➕ Creating ZFONTSIZENODE table")
             let createFontSizeTable = """
                 CREATE TABLE ZFONTSIZENODE (
                     Z_PK INTEGER PRIMARY KEY,
@@ -208,7 +208,7 @@ class DatabaseSchemaFixer {
     }
     
     private static func fixResRefRelationshipSchema(db: OpaquePointer?) throws {
-        Logger.debug("🔧 Fixing ResRef relationship schema...")
+        Logger.info("🔧 Fixing ResRef relationship schema...")
         
         // Check if the join table exists for the many-to-many relationship
         let checkJoinTable = "SELECT name FROM sqlite_master WHERE type='table' AND name='Z_10ENABLEDRESUMES';"
@@ -223,7 +223,7 @@ class DatabaseSchemaFixer {
         sqlite3_finalize(stmt)
         
         if !hasJoinTable {
-            Logger.debug("➕ Creating Z_10ENABLEDRESUMES join table for Resume-ResRef relationship")
+            Logger.info("➕ Creating Z_10ENABLEDRESUMES join table for Resume-ResRef relationship")
             
             // Create the join table with the expected structure
             // This table links Resume and ResRef entities in a many-to-many relationship
@@ -251,12 +251,12 @@ class DatabaseSchemaFixer {
                     """
                 
                 if sqlite3_exec(db, alternativeCreateTable, nil, nil, nil) == SQLITE_OK {
-                    Logger.debug("✅ Created Z_10ENABLEDRESUMES table with alternative schema")
+                    Logger.info("✅ Created Z_10ENABLEDRESUMES table with alternative schema")
                 } else {
                     Logger.warning("⚠️ Could not create Z_10ENABLEDRESUMES table")
                 }
             } else {
-                Logger.debug("✅ Created Z_10ENABLEDRESUMES join table")
+                Logger.info("✅ Created Z_10ENABLEDRESUMES join table")
             }
         } else {
             Logger.debug("✅ Z_10ENABLEDRESUMES join table already exists")

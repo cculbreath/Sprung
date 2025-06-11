@@ -176,10 +176,11 @@ struct CoverLetterMetadataView: View {
                         Text("Chosen for submission")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.primary)
+                        Spacer()
                     }
-                    .padding(.top, 4)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
                     .glassEffect(.regular.tint(.yellow.opacity(0.3)), in: .rect(cornerRadius: 12))
                 }
             }
@@ -303,38 +304,20 @@ struct CoverLetterMetadataView: View {
             VStack(alignment: .leading, spacing: 12) {
                 // Total score/votes with medal indicator
                 HStack(spacing: 12) {
-                    // Medal indicator with glass effect
-                    if let medalImage = getMedalIndicator(for: coverLetter) {
-                        Image(systemName: medalImage)
-                            .foregroundColor(.primary)
-                            .font(.system(size: 28, weight: .medium))
-                            .padding(10)
-                            .glassEffect(.regular.tint(getMedalColor(for: coverLetter).opacity(0.3)), in: .circle)
-                    }
-                    
                     VStack(alignment: .leading, spacing: 4) {
                         let totalScore = getTotalScore(for: coverLetter)
                         if totalScore > 0 {
-                            HStack(spacing: 4) {
+                            VStack(spacing: 2) {
                                 Text("\(totalScore)")
                                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                                     .foregroundColor(getScoreColor(for: totalScore))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .glassEffect(.regular.tint(getScoreColor(for: totalScore).opacity(0.2)), in: .rect(cornerRadius: 8))
                                 Text(coverLetter.voteCount > 0 ? "votes" : "points")
-                                    .font(.system(size: 13))
+                                    .font(.system(size: 11))
                                     .foregroundColor(.secondary)
                             }
-                            
-                            if let ranking = getRanking(for: coverLetter) {
-                                Text(getRankingText(for: ranking))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .glassEffect(.regular.tint(getMedalColor(for: coverLetter).opacity(0.15)), in: .capsule)
-                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .glassEffect(.regular.tint(getScoreColor(for: totalScore).opacity(0.2)), in: .rect(cornerRadius: 8))
                         } else {
                             HStack(spacing: 16) {
                                 HStack(spacing: 4) {
@@ -360,6 +343,29 @@ struct CoverLetterMetadataView: View {
                     }
                     
                     Spacer()
+                    
+                    // Medal and ranking on the right
+                    if let ranking = getRanking(for: coverLetter) {
+                        VStack(spacing: 8) {
+                            // Medal indicator with glass effect
+                            if let medalImage = getMedalIndicator(for: coverLetter) {
+                                Image(systemName: medalImage)
+                                    .foregroundColor(.primary)
+                                    .font(.system(size: 28, weight: .medium))
+                                    .padding(10)
+                                    .glassEffect(.regular.tint(getMedalColor(for: coverLetter).opacity(0.3)), in: .circle)
+                            }
+                            
+                            Text(getRankingText(for: ranking))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.primary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize()
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .glassEffect(.regular.tint(getMedalColor(for: coverLetter).opacity(0.15)), in: .capsule)
+                        }
+                    }
                 }
                 
                 // Detailed committee feedback if available

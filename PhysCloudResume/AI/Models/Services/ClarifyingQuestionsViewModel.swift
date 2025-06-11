@@ -54,7 +54,7 @@ class ClarifyingQuestionsViewModel {
             currentModelId = modelId
             
             // Create the query for clarifying questions
-            let query = ResumeApiQuery(resume: resume)
+            let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
             
             // Start a new conversation with background docs and clarifying questions request
             let systemPrompt = query.genericSystemMessage.textContent
@@ -189,7 +189,7 @@ class ClarifyingQuestionsViewModel {
     ) async throws -> [ProposedRevisionNode] {
         
         // Create initial conversation with system prompt
-        let query = ResumeApiQuery(resume: resume)
+        let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
         let systemPrompt = query.genericSystemMessage.textContent
         let initialUserMessage = await query.wholeResumeQueryString()
         

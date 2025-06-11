@@ -419,7 +419,8 @@ struct MultiModelProgressSheet: View {
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: jobApp.selectedRes!,
-            jobApp: jobApp
+            jobApp: jobApp,
+            saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         
         // Capture model capabilities and cover letters data before entering async context

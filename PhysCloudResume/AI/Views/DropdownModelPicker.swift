@@ -26,6 +26,9 @@ struct DropdownModelPicker: View {
     /// Whether to show inside a GroupBox
     var showInGroupBox: Bool = true
     
+    /// Optional special option to show at the top (label, value)
+    var includeSpecialOption: (String, String)? = nil
+    
     private var openRouterService: OpenRouterService {
         appState.openRouterService
     }
@@ -94,6 +97,16 @@ struct DropdownModelPicker: View {
     
     @ViewBuilder
     private var pickerContent: some View {
+        // Add special option first if provided
+        if let specialOption = includeSpecialOption {
+            Text(specialOption.0)
+                .tag(specialOption.1)
+            
+            if appState.hasValidOpenRouterKey && !availableModels.isEmpty {
+                Divider()
+            }
+        }
+        
         if !appState.hasValidOpenRouterKey {
             Text("Configure OpenRouter API key in Settings")
                 .foregroundColor(.secondary)

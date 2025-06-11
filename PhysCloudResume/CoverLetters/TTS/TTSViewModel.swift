@@ -46,7 +46,7 @@ class TTSViewModel {
     /// - Parameter ttsProvider: The TTS provider to use for speech synthesis
     init(ttsProvider: OpenAITTSProvider) {
         self.ttsProvider = ttsProvider
-        Logger.debug("[TTSViewModel] Initialized with provider")
+        Logger.info("🎤 [TTSViewModel] Initialized with provider")
         setupCallbacks()
     }
 
@@ -73,7 +73,7 @@ class TTSViewModel {
 
     /// Configures callbacks from the TTS provider to update view model state
     private func setupCallbacks() {
-        Logger.debug("[TTSViewModel] Setting up callbacks")
+        Logger.info("🔧 [TTSViewModel] Setting up TTS callbacks")
         // Update buffering state when it changes in the provider
         ttsProvider.onBufferingStateChanged = { [weak self] buffering in
             guard let self = self else { return }
@@ -105,7 +105,7 @@ class TTSViewModel {
             self.isSpeaking = true
             self.isPaused = false
             self.clearStateTimeout() // Clear any timeout since we're now playing
-            Logger.debug("[TTSViewModel] Playback ready (from provider onReady)")
+            Logger.info("▶️ [TTSViewModel] Audio stream connected, playback started")
             self.logCurrentState("after provider onReady")
         }
 
@@ -129,7 +129,7 @@ class TTSViewModel {
             self.isPaused = false
             self.isBuffering = false
             self.clearStateTimeout() // Clear any timeout since we're done
-            Logger.debug("[TTSViewModel] Playback finished (from provider onFinish)")
+            Logger.info("⏹️ [TTSViewModel] Playback completed successfully")
             self.logCurrentState("after provider onFinish")
         }
 
@@ -150,7 +150,7 @@ class TTSViewModel {
 
     /// Clear all callbacks to break potential reference cycles
     private func clearCallbacks() {
-        Logger.debug("[TTSViewModel] Clearing all callbacks")
+        Logger.info("🧹 [TTSViewModel] Clearing TTS provider callbacks")
         ttsProvider.onBufferingStateChanged = nil
         ttsProvider.onReady = nil
         ttsProvider.onFinish = nil
@@ -232,7 +232,7 @@ class TTSViewModel {
         
         do {
             try cachedAudioData.write(to: fileURL)
-            Logger.debug("[TTSViewModel] Successfully saved audio to \(fileURL.path)")
+            Logger.info("💾 [TTSViewModel] Successfully saved audio to \(fileURL.path)")
             return fileURL
         } catch {
             Logger.error("[TTSViewModel] Failed to save audio: \(error.localizedDescription)")
@@ -246,7 +246,7 @@ class TTSViewModel {
     ///   - voice: The voice to use for speech
     ///   - instructions: Optional voice tuning instructions
     func speakContent(_ content: String, voice: OpenAITTSProvider.Voice, instructions: String?) {
-        Logger.debug("[TTSViewModel] speakContent called. Content empty: \(content.isEmpty)")
+        Logger.info("🎯 [TTSViewModel] Starting TTS playback. Content empty: \(content.isEmpty)")
         logCurrentState("at start of speakContent")
 
         guard !content.isEmpty else {
@@ -279,7 +279,7 @@ class TTSViewModel {
             .replacingOccurrences(of: "*", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines) // Trim extra whitespace
 
-        Logger.debug("[TTSViewModel] Starting ttsProvider.streamAndPlayText (isInitialSetup is true)")
+        Logger.info("🌊 [TTSViewModel] Initiating audio stream for TTS content")
 
         // No artificial delay needed here if state updates are correctly managed.
         // The provider's callbacks will handle transitions out of buffering.
@@ -314,7 +314,7 @@ class TTSViewModel {
             isBuffering = false
             // Clear any timeout since we're paused
             clearStateTimeout()
-            Logger.debug("[TTSViewModel] Playback paused")
+            Logger.info("⏸️ [TTSViewModel] Playback paused")
             logCurrentState("after pause")
         } else {
             Logger.debug("[TTSViewModel] Pause command ignored or failed")
@@ -330,7 +330,7 @@ class TTSViewModel {
             isBuffering = false
             // Set new timeout for the resumed playing state
             setStateTimeout(for: "speaking", duration: 30.0)
-            Logger.debug("[TTSViewModel] Playback resumed")
+            Logger.info("▶️ [TTSViewModel] Playback resumed")
             logCurrentState("after resume")
         } else {
             Logger.debug("[TTSViewModel] Resume command ignored or failed")
@@ -354,7 +354,7 @@ class TTSViewModel {
             self.isSpeaking = false
             self.isPaused = false
             self.isBuffering = false
-            Logger.debug("[TTSViewModel] Playback stopped, state reset")
+            Logger.info("⏹️ [TTSViewModel] Playback stopped, state reset")
             self.logCurrentState("after stop")
         }
     }
