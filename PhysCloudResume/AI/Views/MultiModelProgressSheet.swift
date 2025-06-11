@@ -64,7 +64,7 @@ struct MultiModelProgressSheet: View {
         }
         .frame(width: 700, height: 600)
         .onAppear {
-            Logger.debug("🎯 MultiModelProgressSheet appeared, starting selection with \(selectedModels.count) models")
+            Logger.info("🎯 MultiModelProgressSheet appeared, starting selection with \(selectedModels.count) models")
             Task {
                 await performMultiModelSelection()
             }
@@ -396,7 +396,7 @@ struct MultiModelProgressSheet: View {
     // MARK: - Multi-Model Selection Logic
     
     private func performMultiModelSelection() async {
-        Logger.debug("🚀 Starting multi-model selection with \(selectedModels.count) models using \(selectedVotingScheme.rawValue)")
+        Logger.info("🚀 Starting multi-model selection with \(selectedModels.count) models using \(selectedVotingScheme.rawValue)")
         isProcessing = true
         errorMessage = nil
         voteTally = [:]
@@ -437,6 +437,7 @@ struct MultiModelProgressSheet: View {
         do {
             try await withThrowingTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in
                 // Start all model tasks
+                Logger.info("🚀 Starting all \(selectedModels.count) model tasks in parallel")
                 for modelId in selectedModels {
                     group.addTask {
                         do {
@@ -509,9 +510,15 @@ struct MultiModelProgressSheet: View {
                         let failureCount = failedModels.count
                         let totalCompleted = successCount + failureCount
                         
+                        // Log major progress milestones
+                        if successCount == 1 && failureCount == 0 {
+                            Logger.info("🎉 First model completed successfully")
+                        }
+                        
                         if failureCount > 0 && successCount > 0 {
                             errorMessage = "\(failureCount) of \(totalCompleted) models failed"
                         } else if successCount == 0 && totalCompleted == selectedModels.count {
+                            Logger.info("❌ All selected models failed to respond")
                             errorMessage = "All selected models failed to respond"
                             isProcessing = false
                             return
@@ -522,6 +529,7 @@ struct MultiModelProgressSheet: View {
                 }
             }
         } catch {
+            Logger.error("💥 Multi-model task group failed: \(error.localizedDescription)")
             await MainActor.run {
                 errorMessage = "Multi-model selection failed: \(error.localizedDescription)"
                 isProcessing = false
@@ -531,7 +539,7 @@ struct MultiModelProgressSheet: View {
         
         await MainActor.run {
             isProcessing = false
-            Logger.debug("✅ Multi-model selection completed. Processing results...")
+            Logger.info("✅ Multi-model selection completed. Processing results...")
             
             for letter in coverLetters {
                 if selectedVotingScheme == .firstPastThePost {
@@ -545,19 +553,19 @@ struct MultiModelProgressSheet: View {
             }
             
             if selectedVotingScheme == .scoreVoting {
-                Logger.debug("📊 Final Score Tally:")
+                Logger.info("📊 Final Score Tally:")
                 for (letterId, score) in scoreTally {
                     if let letter = coverLetters.first(where: { $0.id == letterId }) {
                         Logger.debug("  - \(letter.sequencedName): \(score) points")
                     }
                 }
                 let totalPoints = scoreTally.values.reduce(0, +)
-                Logger.debug("  Total points allocated: \(totalPoints) (should be \(selectedModels.count * 20))")
+                Logger.info("  Total points allocated: \(totalPoints) (should be \(selectedModels.count * 20))")
             }
             
             if !modelReasonings.isEmpty {
                 isGeneratingSummary = true
-                Logger.debug("📝 Starting analysis summary generation with \(modelReasonings.count) model responses")
+                Logger.info("📝 Starting analysis summary generation with \(modelReasonings.count) model responses")
                 Logger.debug("🔍 Current reasoningSummary state: \(reasoningSummary == nil ? "nil" : "has value")")
                 Logger.debug("🔍 Current isGeneratingSummary state: \(isGeneratingSummary)")
             }
@@ -566,12 +574,12 @@ struct MultiModelProgressSheet: View {
         if !modelReasonings.isEmpty {
             await generateReasoningSummary(coverLetters: coverLetters)
         } else {
-            Logger.debug("⚠️ No model reasonings to summarize")
+            Logger.info("⚠️ No model reasonings to summarize")
         }
         
         await MainActor.run {
             isCompleted = true
-            Logger.debug("🏁 MultiModel process completed. Summary state: \(reasoningSummary == nil ? "nil" : "has value")")
+            Logger.info("🏁 MultiModel process completed. Summary state: \(reasoningSummary == nil ? "nil" : "has value")")
             Logger.debug("🏁 Final UI state - isCompleted: \(isCompleted), isGeneratingSummary: \(isGeneratingSummary)")
             if getWinningLetter() == nil {
                 errorMessage = "No clear winner could be determined"
@@ -580,7 +588,7 @@ struct MultiModelProgressSheet: View {
     }
     
     private func generateReasoningSummary(coverLetters: [CoverLetter]) async {
-        Logger.debug("🧠 Generating reasoning summary...")
+        Logger.info("🧠 Generating reasoning summary...")
         guard let jobApp = jobAppStore.selectedApp else { 
             Logger.debug("❌ No job app selected for summary generation")
             return 
@@ -784,13 +792,13 @@ struct MultiModelProgressSheet: View {
                 
                 self.reasoningSummary = displaySummary
                 self.isGeneratingSummary = false
-                Logger.debug("✅ Analysis summary generation completed")
+                Logger.info("✅ Analysis summary generation completed")
                 Logger.debug("🔍 Summary length: \(displaySummary.count) characters")
                 Logger.debug("🔍 Summary preview: \(String(displaySummary.prefix(100)))...")
             }
             
         } catch {
-            Logger.debug("❌ Analysis summary generation failed: \(error.localizedDescription)")
+            Logger.error("❌ Analysis summary generation failed: \(error.localizedDescription)")
             await MainActor.run {
                 // Update error message to include analysis failure
                 let analysisError = "Analysis generation failed: \(error.localizedDescription)"
