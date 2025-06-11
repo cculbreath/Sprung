@@ -78,9 +78,9 @@ extension JobApp {
 
             guard let jobDict else {
                 // Dump HTML for debugging so the user can provide the file.
-                #if DEBUG
+                if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
                     DebugFileWriter.write(html, prefix: "IndeedNoJSONLD")
-                #endif
+                }
                 // -------- Fallback Path 1: Legacy "EmbeddedData" script --------
                 if let embedded = try? doc.select("#jobsearch-Viewjob-EmbeddedData").first() {
                     if let rawJSON = try? embedded.text(),

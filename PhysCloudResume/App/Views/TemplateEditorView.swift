@@ -331,16 +331,16 @@ struct TemplateEditorView: View {
         if let bundlePath = Bundle.main.resourcePath {
             let fileManager = FileManager.default
             if let contents = try? fileManager.contentsOfDirectory(atPath: bundlePath) {
-                print("Bundle contents: \(contents)")
+                Logger.debug("🗂️ Bundle contents: \(contents)")
                 
                 // Look for Templates directory
                 let templatesPath = bundlePath + "/Templates"
                 if fileManager.fileExists(atPath: templatesPath) {
                     if let templateContents = try? fileManager.contentsOfDirectory(atPath: templatesPath) {
-                        print("Templates directory contents: \(templateContents)")
+                        Logger.debug("📁 Templates directory contents: \(templateContents)")
                     }
                 } else {
-                    print("Templates directory not found in bundle")
+                    Logger.debug("❓ Templates directory not found in bundle")
                 }
             }
         }
@@ -351,14 +351,14 @@ struct TemplateEditorView: View {
         // Strategy 1: Resources/Templates subdirectory
         bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Resources/Templates/\(selectedTemplate)")
         if bundlePath != nil {
-            print("Found via Resources/Templates/\(selectedTemplate)")
+            Logger.debug("✅ Found via Resources/Templates/\(selectedTemplate)")
         }
         
         // Strategy 2: Templates subdirectory
         if bundlePath == nil {
             bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Templates/\(selectedTemplate)")
             if bundlePath != nil {
-                print("Found via Templates/\(selectedTemplate)")
+                Logger.debug("✅ Found via Templates/\(selectedTemplate)")
             }
         }
         
@@ -366,7 +366,7 @@ struct TemplateEditorView: View {
         if bundlePath == nil {
             bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension)
             if bundlePath != nil {
-                print("Found via direct lookup")
+                Logger.debug("✅ Found via direct lookup")
             }
         }
         

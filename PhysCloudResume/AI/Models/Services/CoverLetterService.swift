@@ -94,7 +94,8 @@ class CoverLetterService: ObservableObject {
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
-            jobApp: coverLetter.jobApp!
+            jobApp: coverLetter.jobApp!,
+            saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         
         // Build system and user prompts
@@ -158,7 +159,8 @@ class CoverLetterService: ObservableObject {
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
-            jobApp: coverLetter.jobApp!
+            jobApp: coverLetter.jobApp!,
+            saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         
         // Build user message for revision

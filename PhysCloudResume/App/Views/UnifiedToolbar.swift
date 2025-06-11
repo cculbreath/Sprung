@@ -142,7 +142,9 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
             }
             
-            // TTS button removed temporarily - causes duplicate ID crashes during toolbar customization
+            ToolbarItem(id: "tts", placement: .secondaryAction, showsByDefault: true) {
+                TTSButton()
+            }
             
             ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
@@ -202,14 +204,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
             
             // Legacy placeholder items to prevent crashes for previously customized toolbars
-            ToolbarItem(id: "tts", placement: .primaryAction, showsByDefault: false) {
-                Button("TTS") {
-                    // Legacy TTS button - functionality moved to menu
-                }
-                .disabled(true)
-                .help("TTS functionality moved to Cover Letter menu")
-            }
-            
             ToolbarItem(id: "ttsReadAloud", placement: .primaryAction, showsByDefault: false) {
                 Button("Read Aloud") {
                     // Legacy TTS button - functionality moved to menu

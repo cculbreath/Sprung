@@ -135,7 +135,7 @@ final class OpenRouterService {
             let data = try JSONEncoder().encode(availableModels)
             UserDefaults.standard.set(data, forKey: cacheKey)
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: cacheTimestampKey)
-            Logger.debug("💾 Cached \(availableModels.count) models")
+            Logger.info("💾 Cached \(availableModels.count) models")
         } catch {
             Logger.error("🔴 Failed to cache models: \(error.localizedDescription)")
         }
@@ -151,7 +151,7 @@ final class OpenRouterService {
         let cacheAge = Date().timeIntervalSince1970 - cacheTimestamp
         
         if cacheAge > cacheValidityDuration {
-            Logger.debug("⏰ Cached models expired (age: \(Int(cacheAge))s)")
+            Logger.info("⏰ Cached models expired (age: \(Int(cacheAge))s)")
             return
         }
         

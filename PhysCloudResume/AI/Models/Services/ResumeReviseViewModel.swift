@@ -103,7 +103,7 @@ class ResumeReviseViewModel {
         
         do {
             // Create query for revision workflow
-            let query = ResumeApiQuery(resume: resume)
+            let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
             
             // Start conversation with system prompt and user query
             let systemPrompt = query.genericSystemMessage.textContent

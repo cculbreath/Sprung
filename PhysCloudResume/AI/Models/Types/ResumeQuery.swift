@@ -171,8 +171,8 @@ import SwiftUI
                 withJSONObject: exportDict, options: .prettyPrinted
             )
             let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
-            print("🫥🫥🫥🫥🫥🫥 UPDATABLE NODES 🫥🫥🫥🫥🫥🫥")
-            print(returnString)
+            Logger.verbose("🫥🫥🫥🫥🫥🫥 UPDATABLE NODES 🫥🫥🫥🫥🫥🫥")
+            Logger.verbose(returnString)
             return returnString
         } catch {
             return ""
@@ -189,8 +189,8 @@ import SwiftUI
                 withJSONObject: exportDict, options: .prettyPrinted
             )
             let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
-            print("🫥🫥🫥🫥🫥🫥 ALL EDITABLE NODES 🫥🫥🫥🫥🫥🫥")
-            print(returnString)
+            Logger.verbose("🫥🫥🫥🫥🫥🫥 ALL EDITABLE NODES 🫥🫥🫥🫥🫥🫥")
+            Logger.verbose(returnString)
             return returnString
         } catch {
             return ""

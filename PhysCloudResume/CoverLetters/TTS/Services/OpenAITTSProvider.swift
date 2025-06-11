@@ -140,15 +140,10 @@ class OpenAITTSProvider {
             Logger.debug("🔑 Creating dedicated OpenAI TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")
             let openAIClient = OpenAIServiceFactory.service(apiKey: apiKey)
             
-            // Check if the client supports TTS
-            if let ttsCapableClient = openAIClient as? TTSCapable {
-                ttsClient = ttsCapableClient
-                Logger.debug("✅ OpenAI TTS client created successfully, type: \(type(of: ttsCapableClient))")
-            } else {
-                // Fall back to placeholder if TTS not supported by this client
-                Logger.warning("⚠️ OpenAI client does not support TTS - using placeholder, client type: \(type(of: openAIClient))")
-                ttsClient = PlaceholderTTSClient(errorMessage: "TTS not supported by this provider")
-            }
+            // Wrap the OpenAI service to make it TTSCapable
+            // Since our fork of SwiftOpenAI already has TTS methods, we just need to bridge them
+            ttsClient = OpenAIServiceTTSWrapper(service: openAIClient)
+            Logger.debug("✅ OpenAI TTS client created successfully via wrapper")
         }
 
         // Connect streamer buffering state to our provider
