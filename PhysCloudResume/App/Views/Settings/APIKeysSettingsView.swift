@@ -129,6 +129,7 @@ struct APIKeysSettingsView: View {
                     isHoveringCheckmark: $isHoveringCheckmark,
                     isHoveringXmark: $isHoveringXmark
                 )
+                
             }
             .padding(10)
             .background(Color(NSColor.windowBackgroundColor).opacity(0.9))

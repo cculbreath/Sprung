@@ -13,30 +13,17 @@ import UniformTypeIdentifiers
 //  Extracted network export logic out of the Resume model so that the core
 //  data objects are no longer coupled to URLSession.
 
-protocol ResumeExportServiceProtocol {
-    func export(jsonURL: URL, for resume: Resume) async throws
-}
 
 @MainActor
 class ResumeExportService: ObservableObject {
     private let nativeGenerator = NativePDFGenerator()
-    private let apiService = ApiResumeExportService()
-    
-    @Published var useNativeGeneration = true
     
     func export(jsonURL: URL, for resume: Resume) async throws {
-        // Check if the resume's model has custom settings
-        let shouldUseNative = resume.model?.useNativeGeneration ?? useNativeGeneration
-        
-        if shouldUseNative {
-            do {
-                try await exportNatively(jsonURL: jsonURL, for: resume)
-            } catch PDFGeneratorError.templateNotFound {
-                // Prompt user to select template files
-                try await handleMissingTemplate(for: resume)
-            }
-        } else {
-            try await apiService.export(jsonURL: jsonURL, for: resume)
+        do {
+            try await exportNatively(jsonURL: jsonURL, for: resume)
+        } catch PDFGeneratorError.templateNotFound {
+            // Prompt user to select template files
+            try await handleMissingTemplate(for: resume)
         }
     }
     
@@ -198,87 +185,3 @@ enum ResumeExportError: Error, LocalizedError {
     }
 }
 
-struct ApiResumeExportService: ResumeExportServiceProtocol {
-    private let endpoint = URL(string: "https://resume.physicscloud.net/build-resume-file")!
-    
-    private var apiKey: String {
-        // Try to get from keychain first
-        if let storedKey = KeychainHelper.getAPIKey(for: "resume-export-service") {
-            return storedKey
-        }
-        
-        // Fallback to default key and store it in keychain
-        let defaultKey = "b0b307e1-6eb4-41d9-8c1f-278c254351d3"
-        KeychainHelper.setAPIKey(defaultKey, for: "resume-export-service")
-        return defaultKey
-    }
-
-    func export(jsonURL: URL, for resume: Resume) async throws {
-        guard let style = resume.model?.style else { throw ExportError.missingStyle }
-
-        let fileData = try Data(contentsOf: jsonURL)
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
-
-        let boundary = UUID().uuidString
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        var body = Data()
-        func append(_ string: String) { body.append(string.data(using: .utf8)!) }
-
-        // style
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"style\"\r\n\r\n")
-        append("\(style)\r\n")
-
-        // file
-        append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"resumeFile\"; filename=\"\(jsonURL.lastPathComponent)\"\r\n")
-        append("Content-Type: application/json\r\n\r\n")
-        body.append(fileData)
-        append("\r\n")
-        append("--\(boundary)--\r\n")
-
-        request.httpBody = body
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-        guard
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let pdfUrl = json["pdfUrl"] as? String
-        else {
-            throw ExportError.invalidResponse
-        }
-
-        if let text = json["resumeText"] as? String {
-            resume.textRes = text
-        }
-
-        try await downloadPDF(from: pdfUrl, into: resume)
-    }
-
-    /// Downloads the exported PDF and stores it in the given resume model.
-    ///
-    /// ⚠️  All writes to `Resume` models **must** occur on the main actor to
-    ///     avoid SwiftData/SwiftUI runtime warnings and to ensure UI updates
-    ///     are propagated correctly.  Without hopping back to the main actor
-    ///     the view displaying the PDF (`ResumePDFView`) would never be
-    ///     invalidated after calling `applyChanges()` from `ReviewView`
-    ///     because the property change happened on a background thread.
-    @MainActor
-    private func downloadPDF(from urlString: String, into resume: Resume) async throws {
-        guard let url = URL(string: urlString) else { throw ExportError.invalidResponse }
-
-        // Network transfer runs on the current actor (background by default)
-        // but the assignment to `resume.pdfData` happens after an explicit
-        // hop to the main actor enforced by the `@MainActor` attribute.
-        let (data, _) = try await URLSession.shared.data(from: url)
-        resume.pdfData = data
-    }
-
-    enum ExportError: Error {
-        case missingStyle
-        case invalidResponse
-    }
-}
