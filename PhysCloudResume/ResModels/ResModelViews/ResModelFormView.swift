@@ -22,7 +22,6 @@ struct ResModelFormView: View {
     @State private var selectedStyle: String = "Typewriter" // initial fallback
     
     // Template customization state
-    @State private var useNativeGeneration: Bool = true
     @State private var customTemplateHTML: String = ""
     @State private var customTemplateText: String = ""
     @State private var templateName: String = ""
@@ -124,8 +123,6 @@ struct ResModelFormView: View {
                             .buttonStyle(PlainButtonStyle())
                         }
                         
-                        Toggle("Use Native PDF Generation", isOn: $useNativeGeneration)
-                            .help("Generate PDFs locally instead of using API")
                         
                         if showAdvancedTemplates {
                             VStack(alignment: .leading, spacing: 8) {
@@ -206,7 +203,6 @@ struct ResModelFormView: View {
             formJson = resModel.json
             formResumeText = resModel.renderedResumeText
             selectedStyle = resModel.style
-            useNativeGeneration = resModel.useNativeGeneration
             customTemplateHTML = resModel.customTemplateHTML ?? ""
             customTemplateText = resModel.customTemplateText ?? ""
             templateName = resModel.templateName ?? ""
@@ -223,7 +219,6 @@ struct ResModelFormView: View {
             updatedResModel.json = formJson
             updatedResModel.style = selectedStyle
             updatedResModel.renderedResumeText = formResumeText
-            updatedResModel.useNativeGeneration = useNativeGeneration
             updatedResModel.customTemplateHTML = customTemplateHTML.isEmpty ? nil : customTemplateHTML
             updatedResModel.customTemplateText = customTemplateText.isEmpty ? nil : customTemplateText
             updatedResModel.templateName = templateName.isEmpty ? nil : templateName
@@ -235,7 +230,6 @@ struct ResModelFormView: View {
                 renderedResumeText: formResumeText,
                 style: selectedStyle
             )
-            newResModel.useNativeGeneration = useNativeGeneration
             newResModel.customTemplateHTML = customTemplateHTML.isEmpty ? nil : customTemplateHTML
             newResModel.customTemplateText = customTemplateText.isEmpty ? nil : customTemplateText
             newResModel.templateName = templateName.isEmpty ? nil : templateName

@@ -20,7 +20,6 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
     var includeFonts: Bool = false
     
     // Template customization
-    var useNativeGeneration: Bool = true
     var customTemplateHTML: String?
     var customTemplateText: String?
     var templateName: String? // Custom template name if using custom templates
@@ -51,7 +50,6 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
         case renderedResumeText
         case style
         case includeFonts
-        case useNativeGeneration
         case customTemplateHTML
         case customTemplateText
         case templateName
@@ -66,7 +64,6 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
         renderedResumeText = try container.decode(String.self, forKey: .renderedResumeText)
         style = try container.decode(String.self, forKey: .style)
         includeFonts = try container.decode(Bool.self, forKey: .includeFonts)
-        useNativeGeneration = try container.decodeIfPresent(Bool.self, forKey: .useNativeGeneration) ?? true
         customTemplateHTML = try container.decodeIfPresent(String.self, forKey: .customTemplateHTML)
         customTemplateText = try container.decodeIfPresent(String.self, forKey: .customTemplateText)
         templateName = try container.decodeIfPresent(String.self, forKey: .templateName)
@@ -82,7 +79,6 @@ class ResModel: Identifiable, Equatable, Hashable, Codable {
         try container.encode(renderedResumeText, forKey: .renderedResumeText)
         try container.encode(style, forKey: .style)
         try container.encode(includeFonts, forKey: .includeFonts)
-        try container.encode(useNativeGeneration, forKey: .useNativeGeneration)
         try container.encodeIfPresent(customTemplateHTML, forKey: .customTemplateHTML)
         try container.encodeIfPresent(customTemplateText, forKey: .customTemplateText)
         try container.encodeIfPresent(templateName, forKey: .templateName)
