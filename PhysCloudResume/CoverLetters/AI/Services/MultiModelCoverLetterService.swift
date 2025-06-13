@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 @Observable
+@MainActor
 class MultiModelCoverLetterService {
     
     // MARK: - Published Properties
@@ -37,6 +38,7 @@ class MultiModelCoverLetterService {
     private weak var jobAppStore: JobAppStore?
     private weak var coverLetterStore: CoverLetterStore?
     private weak var enabledLLMStore: EnabledLLMStore?
+    private var modelContext: ModelContext?
     
     // MARK: - Initialization
     init() {}
@@ -46,6 +48,7 @@ class MultiModelCoverLetterService {
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.enabledLLMStore = enabledLLMStore
+        self.modelContext = coverLetterStore.modelContext
     }
     
     // MARK: - Public Methods
@@ -188,6 +191,18 @@ class MultiModelCoverLetterService {
         // Capture cover letters to avoid SwiftData concurrency issues
         let coverLetters = jobApp.coverLetters
         
+        // Pre-generate all prompts to avoid capturing non-Sendable types in async closures
+        let modelPrompts = Dictionary(uniqueKeysWithValues: selectedModels.map { modelId in
+            let capabilities = modelCapabilities[modelId]!
+            let includeJSONInstructions = !capabilities.supportsSchema || capabilities.shouldAvoidSchema
+            let prompt = query.bestCoverLetterPrompt(
+                coverLetters: coverLetters,
+                votingScheme: selectedVotingScheme,
+                includeJSONInstructions: includeJSONInstructions
+            )
+            return (modelId, prompt)
+        })
+        
         // Execute models in parallel with real-time result processing
         do {
             try await withThrowingTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in
@@ -196,20 +211,11 @@ class MultiModelCoverLetterService {
                 // Start all model tasks
                 Logger.info("🚀 Starting all \(selectedModels.count) model tasks in parallel")
                 for modelId in selectedModels {
+                    let prompt = modelPrompts[modelId]!
                     group.addTask {
                         do {
                             // Check for cancellation before starting this model
                             try Task.checkCancellation()
-                            // Get model capabilities from pre-captured data
-                            let capabilities = modelCapabilities[modelId]!
-                            let includeJSONInstructions = !capabilities.supportsSchema || capabilities.shouldAvoidSchema
-                            
-                            // Generate model-specific prompt with JSON instructions if needed
-                            let prompt = query.bestCoverLetterPrompt(
-                                coverLetters: coverLetters,
-                                votingScheme: selectedVotingScheme,
-                                includeJSONInstructions: includeJSONInstructions
-                            )
                             
                             let response = try await LLMService.shared.executeFlexibleJSON(
                                 prompt: prompt,
@@ -339,12 +345,16 @@ class MultiModelCoverLetterService {
         }
         
         if !modelReasonings.isEmpty {
-            await generateReasoningSummary(
-                coverLetter: coverLetter,
-                coverLetters: coverLetters,
-                selectedVotingScheme: selectedVotingScheme,
-                selectedModels: selectedModels
-            )
+            isGeneratingSummary = true
+            
+            Task { @MainActor in
+                await generateReasoningSummary(
+                    coverLetters: coverLetters,
+                    jobApp: jobApp,
+                    selectedVotingScheme: selectedVotingScheme,
+                    selectedModels: selectedModels
+                )
+            }
         } else {
             Logger.info("⚠️ No model reasonings to summarize")
         }
@@ -359,20 +369,14 @@ class MultiModelCoverLetterService {
     }
     
     private func generateReasoningSummary(
-        coverLetter: CoverLetter,
         coverLetters: [CoverLetter],
+        jobApp: JobApp,
         selectedVotingScheme: VotingScheme,
         selectedModels: Set<String>
     ) async {
-        guard let jobApp = jobAppStore?.selectedApp,
-              let appState = appState else { 
-            Logger.debug("❌ No job app or app state available for summary generation")
-            return 
-        }
-        
         do {
             let summary = try await summaryGenerator.generateSummary(
-                coverLetter: coverLetter,
+                coverLetter: coverLetters.first!, // We know there's at least one
                 coverLetters: coverLetters,
                 jobApp: jobApp,
                 modelReasonings: modelReasonings,
@@ -382,14 +386,14 @@ class MultiModelCoverLetterService {
                 selectedModels: selectedModels
             )
             
-            await MainActor.run {
-                self.reasoningSummary = summary
-                self.isGeneratingSummary = false
-                Logger.info("✅ Analysis summary generation completed")
-                
-                // Save changes to ensure committeeFeedback is persisted
+            self.reasoningSummary = summary
+            self.isGeneratingSummary = false
+            Logger.info("✅ Analysis summary generation completed")
+            
+            // Save changes to ensure committeeFeedback is persisted
+            if let modelContext = modelContext {
                 do {
-                    try appState.modelContext.save()
+                    try modelContext.save()
                     Logger.debug("💾 Successfully saved committee feedback to database")
                 } catch {
                     Logger.error("❌ Failed to save committee feedback: \(error.localizedDescription)")
@@ -398,28 +402,27 @@ class MultiModelCoverLetterService {
             
         } catch {
             Logger.error("❌ Analysis summary generation failed: \(error.localizedDescription)")
-            await MainActor.run {
-                // Update error message to include analysis failure
-                let analysisError = "Analysis generation failed: \(error.localizedDescription)"
-                if let existingError = errorMessage {
-                    errorMessage = "\(existingError); \(analysisError)"
-                } else {
-                    errorMessage = analysisError
-                }
-                
-                // Provide a fallback summary
-                let fallbackSummary = summaryGenerator.createFallbackSummary(
-                    coverLetter: coverLetter,
-                    coverLetters: coverLetters,
-                    modelReasonings: modelReasonings,
-                    voteTally: voteTally,
-                    scoreTally: scoreTally,
-                    selectedVotingScheme: selectedVotingScheme
-                )
-                
-                self.reasoningSummary = fallbackSummary
-                self.isGeneratingSummary = false
+            
+            // Update error message to include analysis failure
+            let analysisError = "Analysis generation failed: \(error.localizedDescription)"
+            if let existingError = errorMessage {
+                errorMessage = "\(existingError); \(analysisError)"
+            } else {
+                errorMessage = analysisError
             }
+            
+            // Provide a fallback summary
+            let fallbackSummary = summaryGenerator.createFallbackSummary(
+                coverLetter: coverLetters.first!,
+                coverLetters: coverLetters,
+                modelReasonings: modelReasonings,
+                voteTally: voteTally,
+                scoreTally: scoreTally,
+                selectedVotingScheme: selectedVotingScheme
+            )
+            
+            self.reasoningSummary = fallbackSummary
+            self.isGeneratingSummary = false
         }
     }
 }
