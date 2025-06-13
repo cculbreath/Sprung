@@ -369,7 +369,7 @@ struct CoverLetterMetadataView: View {
                 }
                 
                 // Detailed committee feedback if available
-                if let feedback = coverLetter.committeeFeedback {
+                if let feedback =  coverLetter.committeeFeedback {
                     Divider()
                         .padding(.vertical, 4)
                     
@@ -379,11 +379,12 @@ struct CoverLetterMetadataView: View {
                                 Text("Analysis Summary")
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundColor(.secondary)
-                                
-                                Text(feedback.summaryOfModelAnalysis)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.primary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                if let jobApp = coverLetter.jobApp {
+                                    Text(jobApp.replaceUUIDsWithLetterNames(in:feedback.summaryOfModelAnalysis))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.primary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
                         }
                         

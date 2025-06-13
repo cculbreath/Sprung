@@ -57,25 +57,8 @@ struct AIModels {
         // Handle different model naming patterns
         
         // Handle o1 models first (before general GPT handling)
-        if modelName.lowercased().starts(with: "o1") {
-            if modelName.lowercased().contains("mini") {
-                return "o1-mini"
-            } else if modelName.lowercased().contains("preview") {
-                return "o1-preview"
-            } else {
-                return "o1"
-            }
-        }
-        
-        // Handle o3 models first (before general GPT handling)
-        if modelName.lowercased().starts(with: "o3") {
-            if modelName.lowercased().contains("mini") {
-                return "o3-mini"
-            } else {
-                return "o3"
-            }
-        }
-        
+
+
         if modelName.lowercased().contains("gpt") {
             if components.count >= 2 {
                 // Extract main version (e.g., "GPT-4" from "gpt-4-1106-preview")
@@ -87,11 +70,7 @@ struct AIModels {
                 if components.contains("mini") {
                     return "GPT-\(components[1]) Mini"
                 }
-                
-                // Handle o4 models
-                if components[0] == "o4" || components.contains("o") {
-                    return "GPT-4o"
-                }
+
             }
             
             // Special case for GPT-4o models
@@ -153,7 +132,8 @@ struct AIModels {
         }
         
         // Default fallback: Use the first part of the model name, capitalized
-        return modelName.split(separator: "-").first?.capitalized
+        return modelName.split(separator: "-").map { $0.capitalized }
+            .joined(separator: " ")
     }
     }
 

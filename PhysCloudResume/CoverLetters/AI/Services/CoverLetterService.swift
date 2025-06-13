@@ -90,11 +90,16 @@ class CoverLetterService: ObservableObject {
         modelId: String,
         includeResumeRefs: Bool = true
     ) async throws -> String {
+        // Ensure cover letter has an associated job application
+        guard let jobApp = coverLetter.jobApp else {
+            throw NSError(domain: "CoverLetterService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application"])
+        }
+        
         // Create CoverLetterQuery for centralized prompt management
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
-            jobApp: coverLetter.jobApp!,
+            jobApp: jobApp,
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         
@@ -155,11 +160,16 @@ class CoverLetterService: ObservableObject {
         feedback: String? = nil,
         editorPrompt: CoverLetterPrompts.EditorPrompts = .improve
     ) async throws -> String {
+        // Ensure cover letter has an associated job application
+        guard let jobApp = coverLetter.jobApp else {
+            throw NSError(domain: "CoverLetterService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application for revision"])
+        }
+        
         // Create CoverLetterQuery for centralized prompt management
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
-            jobApp: coverLetter.jobApp!,
+            jobApp: jobApp,
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         

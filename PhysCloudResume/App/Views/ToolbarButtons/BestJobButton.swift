@@ -55,6 +55,10 @@ struct BestJobButton: View {
                 Text(result)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerBestJobButton)) { _ in
+            // Programmatically trigger the button action (from menu commands)
+            showBestJobModelSheet = true
+        }
     }
     
     @MainActor

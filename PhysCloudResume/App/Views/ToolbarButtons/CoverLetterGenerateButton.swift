@@ -5,7 +5,6 @@ struct CoverLetterGenerateButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     
-    @State private var isGeneratingCoverLetter = false
     @State private var showCoverLetterModelSheet = false
     @State private var selectedCoverLetterModel = ""
     
@@ -16,7 +15,7 @@ struct CoverLetterGenerateButton: View {
             Label {
                 Text("Cover Letter")
             } icon: {
-                if isGeneratingCoverLetter {
+                if coverLetterStore.isGeneratingCoverLetter {
                     Image("custom.append.page.badge.plus")
                         .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
                     .font(.system(size: 14, weight: .light))                } else {
@@ -36,7 +35,7 @@ struct CoverLetterGenerateButton: View {
                     onGenerate: { modelId, selectedRefs, includeResumeRefs in
                         selectedCoverLetterModel = modelId
                         showCoverLetterModelSheet = false
-                        isGeneratingCoverLetter = true
+                        coverLetterStore.isGeneratingCoverLetter = true
                         
                         Task {
                             await generateCoverLetter(
@@ -49,13 +48,17 @@ struct CoverLetterGenerateButton: View {
                 )
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerGenerateCoverLetterButton)) { _ in
+            // Programmatically trigger the button action (from menu commands)
+            showCoverLetterModelSheet = true
+        }
     }
     
     @MainActor
     private func generateCoverLetter(modelId: String, selectedRefs: [CoverRef], includeResumeRefs: Bool) async {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes else {
-            isGeneratingCoverLetter = false
+            coverLetterStore.isGeneratingCoverLetter = false
             return
         }
         
@@ -69,11 +72,11 @@ struct CoverLetterGenerateButton: View {
                 includeResumeRefs: includeResumeRefs
             )
             
-            isGeneratingCoverLetter = false
+            coverLetterStore.isGeneratingCoverLetter = false
             
         } catch {
             Logger.error("Error generating cover letter: \(error.localizedDescription)")
-            isGeneratingCoverLetter = false
+            coverLetterStore.isGeneratingCoverLetter = false
         }
     }
 }

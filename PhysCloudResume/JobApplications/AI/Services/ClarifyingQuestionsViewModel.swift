@@ -176,9 +176,34 @@ class ClarifyingQuestionsViewModel {
         query: ResumeApiQuery,
         modelId: String
     ) async {
-        // This would trigger the standard revision workflow
-        // For now, we can delegate to ResumeReviseViewModel
-        Logger.debug("TODO: Proceed directly to revisions workflow")
+        Logger.info("🎯 Proceeding directly to revisions workflow without clarifying questions")
+        
+        do {
+            // Create a ResumeReviseViewModel instance to handle the revision workflow
+            let reviseViewModel = ResumeReviseViewModel(llmService: llmService, appState: appState)
+            
+            // Start the fresh revision workflow
+            try await reviseViewModel.startFreshRevisionWorkflow(
+                resume: resume,
+                modelId: modelId
+            )
+            
+            // Update our state to indicate we're showing revisions
+            Logger.info("✅ Direct revision workflow completed, transitioning to review")
+            
+            // Signal that revisions are ready (this will be handled by the view layer)
+            await MainActor.run {
+                appState.resumeReviseViewModel = reviseViewModel
+                reviseViewModel.showResumeRevisionSheet = true
+            }
+            
+        } catch {
+            Logger.error("❌ Direct revision workflow failed: \(error.localizedDescription)")
+            await MainActor.run {
+                lastError = "Failed to generate revisions: \(error.localizedDescription)"
+                showError = true
+            }
+        }
     }
     
     /// Start a new conversation with user answers

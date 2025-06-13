@@ -12,6 +12,7 @@ struct BatchCoverLetterView: View {
     @Environment(JobAppStore.self) var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
     @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore: EnabledLLMStore
     @Environment(\.modelContext) private var modelContext
     
     // Live SwiftData query to automatically refresh on model changes
@@ -68,7 +69,6 @@ struct BatchCoverLetterView: View {
             
             // Load default reference selections
             loadDefaultSelections()
-            
             
             // Fetch OpenRouter models if we don't have any and have a valid API key
             if appState.hasValidOpenRouterKey && openRouterService.availableModels.isEmpty {
@@ -388,9 +388,13 @@ struct BatchCoverLetterView: View {
                     baseCoverLetter.includeResumeRefs = includeResumeRefs
                     baseCoverLetter.content = "" // Will be generated
                     
+                    // Debug: Verify jobApp relationship is set
+                    Logger.debug("🔍 Created baseCoverLetter with jobApp: \(baseCoverLetter.jobApp?.id.uuidString ?? "nil")")
+                    
                     // Generate cover letters with progress tracking
                     try await generator.generateBatch(
                         baseCoverLetter: baseCoverLetter,
+                        jobApp: app,
                         resume: resume,
                         models: Array(selectedModels),
                         revisions: Array(selectedRevisions),

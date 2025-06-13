@@ -14,7 +14,6 @@ import SwiftUI
 import SwiftOpenAI // For the TTS functionality from your SwiftOpenAI fork
 
 /// Provides Text-to-Speech functionality using the OpenAI API
-@MainActor
 class OpenAITTSProvider {
     /// Available voices for TTS
     enum Voice: String, CaseIterable {
@@ -393,17 +392,80 @@ class OpenAITTSProvider {
         // Split text into chunks if needed
         let textChunks = splitTextIntoChunks(text)
         
-        // For now, only use the first chunk to avoid gaps in playback
-        // TODO: Implement proper multi-chunk streaming with seamless playback
-        let textToSpeak = textChunks.first ?? text
-        
-        if textChunks.count > 1 {
-            Logger.warning("Text was split into \(textChunks.count) chunks. Currently only playing the first chunk (\(textToSpeak.count) chars)")
+        if textChunks.count == 1 {
+            // Single chunk - use existing streaming logic
+            streamSingleChunk(textChunks[0], voice: voice, instructions: instructions,
+                             onStart: onStart, onComplete: onComplete)
+        } else {
+            // Multiple chunks - use new seamless multi-chunk streaming
+            Logger.info("🎵 Starting multi-chunk TTS streaming with \(textChunks.count) chunks")
+            streamMultipleChunks(textChunks, voice: voice, instructions: instructions,
+                                onStart: onStart, onComplete: onComplete)
+        }
+    }
+    
+    /// Streams multiple text chunks with seamless playback transitions
+    private func streamMultipleChunks(
+        _ chunks: [String],
+        voice: Voice,
+        instructions: String?,
+        onStart: (() -> Void)?,
+        onComplete: @escaping (Error?) -> Void
+    ) {
+        guard !chunks.isEmpty else {
+            onComplete(nil)
+            return
         }
         
-        // Proceed with normal streaming
-        streamSingleChunk(textToSpeak, voice: voice, instructions: instructions,
-                         onStart: onStart, onComplete: onComplete)
+        Logger.debug("🎵 Starting multi-chunk streaming: \(chunks.count) chunks")
+        
+        // Create a task to handle the sequential chunk processing
+        Task {
+            var chunkIndex = 0
+            var hasStarted = false
+            
+            func playNextChunk() async {
+                guard chunkIndex < chunks.count else {
+                    Logger.info("✅ Multi-chunk TTS streaming completed")
+                    onComplete(nil)
+                    return
+                }
+                
+                let currentChunk = chunks[chunkIndex]
+                Logger.debug("🎵 Streaming chunk \(chunkIndex + 1)/\(chunks.count) (\(currentChunk.count) chars)")
+                
+                streamSingleChunk(
+                    currentChunk,
+                    voice: voice,
+                    instructions: instructions,
+                    onStart: hasStarted ? nil : onStart, // Only call onStart for the first chunk
+                    onComplete: { error in
+                        if let error = error {
+                            Logger.error("❌ Chunk \(chunkIndex + 1) failed: \(error.localizedDescription)")
+                            onComplete(error)
+                            return
+                        }
+                        
+                        // Mark that we've started (for onStart callback)
+                        if !hasStarted {
+                            hasStarted = true
+                        }
+                        
+                        // Move to next chunk
+                        chunkIndex += 1
+                        
+                        // Small delay to ensure smooth transition between chunks
+                        Task {
+                            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                            await playNextChunk()
+                        }
+                    }
+                )
+            }
+            
+            // Start playing the first chunk
+            await playNextChunk()
+        }
     }
     
     /// Streams a single chunk of text using ChunkedAudioPlayer

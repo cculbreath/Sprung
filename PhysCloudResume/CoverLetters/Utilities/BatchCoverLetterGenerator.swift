@@ -23,6 +23,7 @@ class BatchCoverLetterGenerator {
     ///   - onProgress: Progress callback with (completed, total) operations
     func generateBatch(
         baseCoverLetter: CoverLetter,
+        jobApp: JobApp,
         resume: Resume,
         models: [String],
         revisions: [CoverLetterPrompts.EditorPrompts],
@@ -67,6 +68,7 @@ class BatchCoverLetterGenerator {
                     do {
                         let coverLetter = try await self.generateSingleCoverLetter(
                             baseCoverLetter: baseCoverLetter,
+                            jobApp: jobApp,
                             resume: resume,
                             model: model,
                             revision: nil
@@ -119,6 +121,7 @@ class BatchCoverLetterGenerator {
                                 
                                 _ = try await self.generateSingleCoverLetter(
                                     baseCoverLetter: baseLetter,
+                                    jobApp: jobApp,
                                     resume: resume,
                                     model: modelToUseForRevisions,
                                     revision: revision
@@ -195,8 +198,14 @@ class BatchCoverLetterGenerator {
                                 modelToUse = revisionModel
                             }
                             
+                            // Get the jobApp from the existing letter
+                            guard let jobApp = letter.jobApp else {
+                                throw NSError(domain: "BatchGeneration", code: 4, userInfo: [NSLocalizedDescriptionKey: "Existing letter must have an associated job application"])
+                            }
+                            
                             _ = try await self.generateSingleCoverLetter(
                                 baseCoverLetter: letter,
+                                jobApp: jobApp,
                                 resume: resume,
                                 model: modelToUse,
                                 revision: revision
@@ -226,10 +235,14 @@ class BatchCoverLetterGenerator {
     @MainActor
     private func generateSingleCoverLetter(
         baseCoverLetter: CoverLetter,
+        jobApp: JobApp,
         resume: Resume,
         model: String,
         revision: CoverLetterPrompts.EditorPrompts?
     ) async throws -> CoverLetter {
+        // Debug: Verify jobApp parameter is provided
+        Logger.debug("🔍 generateSingleCoverLetter called with jobApp: \(jobApp.id.uuidString)")
+        
         // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model
         let letterName: String
@@ -247,7 +260,7 @@ class BatchCoverLetterGenerator {
         // Create a new cover letter object for generation
         let newLetter = CoverLetter(
             enabledRefs: baseCoverLetter.enabledRefs,
-            jobApp: baseCoverLetter.jobApp
+            jobApp: jobApp
         )
         newLetter.includeResumeRefs = baseCoverLetter.includeResumeRefs
         newLetter.content = baseCoverLetter.content
@@ -307,10 +320,9 @@ class BatchCoverLetterGenerator {
             newLetter.name = "Option \(nextOptionLetter): \(letterName)"
         }
         
-        // Only persist the letter after it's fully populated
-        if let jobApp = baseCoverLetter.jobApp {
-            coverLetterStore.addLetter(letter: newLetter, to: jobApp)
-        }
+        // Persist the letter after it's fully populated
+        // Note: jobApp is guaranteed to exist due to guard statement above
+        coverLetterStore.addLetter(letter: newLetter, to: jobApp)
         
         Logger.debug("📝 Created cover letter: \(newLetter.name) for model: \(model)")
         

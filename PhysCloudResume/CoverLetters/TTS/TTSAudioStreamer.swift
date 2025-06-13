@@ -13,7 +13,6 @@ import Foundation
 import os.log // For system logging
 
 /// Drop-in replacement for StreamingTTSPlayer that handles buffered audio playback
-@MainActor
 final class TTSAudioStreamer {
     // MARK: - Properties
 

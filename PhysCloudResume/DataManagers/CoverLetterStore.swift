@@ -26,6 +26,7 @@ final class CoverLetterStore: SwiftDataStore {
     unowned let modelContext: ModelContext
     var coverRefStore: CoverRefStore
     var cL: CoverLetter? // This is the currently selected/active cover letter instance
+    var isGeneratingCoverLetter = false // Track when cover letter generation is in progress
     private let exportService: any CoverLetterExportService = LocalCoverLetterExportService()
 
     // MARK: - Initialiser
