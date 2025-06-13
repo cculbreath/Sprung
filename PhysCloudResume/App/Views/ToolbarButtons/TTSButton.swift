@@ -92,6 +92,22 @@ struct TTSButton: View {
         .onChange(of: openAiApiKey) { _, _ in
             setupTTS()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerTTSButton)) { _ in
+            // Programmatically trigger the button action (from menu commands)
+            handleClick()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerTTSStart)) { _ in
+            // Force start TTS
+            startTTS()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerTTSStop)) { _ in
+            // Force stop TTS
+            ttsViewModel?.stop()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerTTSRestart)) { _ in
+            // Force restart TTS
+            restartTTS()
+        }
     }
     
     private func handleClick() {

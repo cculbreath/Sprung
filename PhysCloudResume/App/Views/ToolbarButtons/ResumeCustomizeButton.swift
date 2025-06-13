@@ -43,6 +43,10 @@ struct ResumeCustomizeButton: View {
                 }
             )
         }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerCustomizeButton)) { _ in
+            // Programmatically trigger the button action (from menu commands)
+            showCustomizeModelSheet = true
+        }
     }
     
     @MainActor 

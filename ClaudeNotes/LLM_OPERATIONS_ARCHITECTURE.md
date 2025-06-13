@@ -1,6 +1,7 @@
 ================================================================================
                       LLM OPERATIONS ARCHITECTURE ANALYSIS
 ================================================================================
+As of 6/11/2025 this document is somewhat out of date.
 
 OVERVIEW
 --------
@@ -69,7 +70,8 @@ CURRENT LLM OPERATION TYPES
    - API key validation
    - Service configuration
 
----
+8. PROMPT-ENCOURAGED STRUCTED OUTPUT
+	- For models that don't support json_object schema, we append extra prompt insturctions and generalized response parsing
 
 ## Detailed Operation Inventory
 
@@ -86,7 +88,7 @@ CURRENT LLM OPERATION TYPES
 └─────────────────────────────┴──────────────────────────────┴─────────────┴──────────┴─────────────┴────────────────────────────┴──────────────────────────────────────┘
 ```
 
-### **Cover Letter Operations** ✅ **PHASE 2.3 COMPLETED**
+### **Cover Letter Operations** 
 
 ```
 ┌─────────────────────────────┬─────────────────────────────────────────┬───────────────────┬──────────┬─────────────┬─────────────────────────┬─────────────────────────────────────────────┐
@@ -123,7 +125,7 @@ CURRENT LLM OPERATION TYPES
 │ Cover Letter Conversation   │ LLMService.swift         │ Multi-turn  │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
 └─────────────────────────────┴──────────────────────────┴─────────────┴──────────┴─────────────┴───────────────┴──────────────────────────────────────┘
 
-### **Review Services** ✅ **PHASE 4 COMPLETED**
+### **Review Services**
 
 ```
 ┌─────────────────────────────┬─────────────────────────────────┬─────────────┬──────────┬─────────────┬─────────────────────┬───────────────────────────────────────┐
@@ -134,7 +136,7 @@ CURRENT LLM OPERATION TYPES
 └─────────────────────────────┴─────────────────────────────────┴─────────────┴──────────┴─────────────┴─────────────────────┴───────────────────────────────────────┘
 ```
 
-### **Fix Overflow Operations (Image + Text → JSON)** ✅ **PHASE 4 COMPLETED**
+### **Fix Overflow Operations (Image + Text → JSON)
 
 ```
 ┌─────────────────────────────┬───────────────────────────┬─────────────────┬──────────┬─────────────┬─────────────────────────┬───────────────────────────────────┐
@@ -235,11 +237,6 @@ Models have capability flags stored in `OpenRouterModel`:
 
 ### **Implementation Notes**
 
-#### **Missing Model Pickers**
-Several operations currently lack dedicated model pickers and need implementation:
-- **Cover Letter Chat UI**: Needs DropdownModelPicker for cover letter generation/revision
-- **UnifiedToolbar "Customize" button**: Needs DropdownModelPicker implementation (follows JobRecommendationButton pattern)
-
 #### **TTS Voice Selection**
 TTS operations use a different system:
 - **Voices**: Predefined OpenAI TTS voices (alloy, echo, fable, nova, onyx, shimmer)
@@ -254,46 +251,9 @@ TTS operations use a different system:
 
 ---
 
-## Current Architecture Issues
 
-### **1. Multiple Abstraction Layers**
-- `AppLLMClientProtocol` (new unified interface)
-- `BaseLLMProvider` (mid-level abstraction) 
-- `LLMRequestService` (high-level service)
-- Individual provider classes (`ResumeChatProvider`, `CoverChatProvider`, etc.)
-- **Problem**: Redundant code, inconsistent interfaces
+ Unified Architecture
 
-### **2. Mixed Client Management**
-- OpenRouter clients for LLM operations
-- Direct OpenAI clients for TTS
-- Legacy service configurations
-- **Problem**: Complex client lifecycle management
-
-### **3. Conversation Context Complexity**
-- Provider-level conversation history
-- `ConversationContextManager` for persistence
-- Message format conversions (`ChatMessage` ↔ `AppLLMMessage`)
-- **Problem**: Context management scattered across multiple classes
-
-### **4. Inconsistent Error Handling**
-- Different error types across providers
-- Model-specific fallback logic
-- Manual JSON extraction for malformed responses
-- **Problem**: Fragile error recovery
-
-### **5. Model Capability Detection**
-- Hardcoded model compatibility checks
-- Special handling for o1 models (no system messages)
-- Image model substitution logic
-- **Problem**: Difficult to maintain as models change
-
----
-
-## Proposed Unified Architecture
-
-### **Core LLM Operation Types Needed**
-
-Based on the analysis, we need **7 core operation types**:
 
 #### **1. Simple Query (Text → Text)**
 ```swift
@@ -419,172 +379,8 @@ func validateModel(modelId: String, capability: ModelCapability) -> Bool
 
 ---
 
-## Implementation Strategy
 
-### **1. Unified Service Layer**
-Create a single `LLMService` class that handles all operations:
-
-```swift
-@MainActor
-class LLMService {
-    // Core operations
-    func execute(prompt: String, modelId: String, images: [Data] = []) async throws -> String
-    func executeStructured<T: Codable>(prompt: String, modelId: String, responseType: T.Type, images: [Data] = []) async throws -> T
-    
-    // Conversation operations  
-    func startConversation(systemPrompt: String, userMessage: String, modelId: String) async throws -> (conversationId: UUID, response: String)
-    func continueConversation(userMessage: String, modelId: String, conversationId: UUID, images: [Data] = []) async throws -> String
-    func continueConversationStructured<T: Codable>(userMessage: String, modelId: String, conversationId: UUID, responseType: T.Type, images: [Data] = []) async throws -> T
-    
-    // Multi-model operations
-    func executeParallelStructured<T: Codable>(prompt: String, modelIds: [String], responseType: T.Type, votingScheme: VotingScheme) async throws -> MultiModelResult<T>
-    
-    // Model management
-    func getAvailableModels() async throws -> [OpenRouterModel]
-    func validateModel(modelId: String, capability: ModelCapability) -> Bool
-}
-```
-
-### **2. Conversation Management**
-Centralized conversation context handling:
-
-```swift
-class ConversationManager {
-    private var conversations: [UUID: [AppLLMMessage]] = [:]
-    
-    func createConversation(systemPrompt: String, userMessage: String) -> UUID
-    func addMessage(conversationId: UUID, message: AppLLMMessage)
-    func getMessages(conversationId: UUID) -> [AppLLMMessage]
-    func clearConversation(conversationId: UUID)
-}
-```
-
-### **3. Model Capability System**
-Dynamic capability detection:
-
-```swift
-enum ModelCapability {
-    case structuredOutput
-    case imageInput
-    case longContext
-}
-
-class ModelCapabilityManager {
-    func checkCapability(modelId: String, capability: ModelCapability) -> Bool
-    func getCompatibleModels(for capability: ModelCapability) -> [String]
-}
-```
-
-### **4. Migration Plan**
-
-#### **✅ Phase 1: Create Core Services** (COMPLETED)
-- **COMPLETED**: Implement `LLMService` class and `ResumeReviseViewModel` for clean separation
-- **Key Dependencies**: 
-  - `AppState.selectedOpenRouterModels` (already exists)
-  - `OpenRouterService` (already exists)
-  - `DropdownModelPicker` and `CheckboxModelPicker` (already exist)
-- **Implementation Order** ✅:
-  1. ✅ Create `LLMService.swift` with basic LLM operations
-  2. ✅ Create `ResumeReviseViewModel.swift` for revision workflow business logic
-  3. ✅ Implement `ConversationManager` for context handling
-  4. ✅ Add `ModelCapabilityManager` for dynamic capability detection
-  5. ✅ Implement core operations: `execute()`, `executeStructured()`, `continueConversation()`
-
-#### **✅ Phase 2.1: Simple One-Shot Operations** (COMPLETED)
-- **✅ Start With**: Simple one-shot operations (easier to test)
-  - ✅ Job recommendations (`JobRecommendationService`)
-  - ✅ Skill reordering (`SkillReorderService`)
-
-#### **✅ Phase 2.2: Multi-Turn Operations & Architecture Cleanup** (COMPLETED)
-- **✅ Multi-turn operations**:
-  - ✅ Resume revisions (ResumeReviseViewModel)
-  - ✅ Clarifying questions workflow (ClarifyingQuestionsViewModel)
-- **✅ Architecture improvements**:
-  - ✅ Enhanced node classes with business logic
-  - ✅ Unified model selection (ModelSelectionSheet)
-  - ✅ Clean ViewModel separation of concerns
-  - ✅ Removal of deprecated legacy code
-
-#### **✅ Phase 2.3: Cover Letter Migration** (COMPLETED)
-- **✅ Cover letter operations**:
-  - ✅ Cover letter generation (CoverChatProvider → CoverLetterService)
-  - ✅ Cover letter revision (CoverChatProvider → CoverLetterService)
-  - ✅ Inspector functionality restored (Sources + Revisions tabs)
-- **✅ Complex workflows**:
-  - ✅ Multi-model voting systems (LLMService parallel execution)
-  - ⏳ Fix overflow (multimodal + iterative)
-
-#### **Phase 3: Remaining UI Components**
-- **✅ UnifiedToolbar Integration**: 
-  - **✅ COMPLETE**: Model selection added to all cover letter buttons
-  - ✅ ModelSelectionSheet unified component created
-  - ✅ Cover Letter toolbar buttons properly wired to CoverLetterService
-  - ✅ Inspector button context-aware for Resume and Cover Letter tabs
-- **✅ Cover Letter Components**: 
-  - ✅ Cover Letter inspector with Sources and Revisions tabs
-  - ✅ All revision operations (Improve, Zissner, Mimic, Custom) functional
-- **⏳ Remaining Toolbar Button Audit**: 
-  - ⏳ Verify all remaining LLM operations have proper model selection
-  - ⏳ Test that all button actions are connected to actual LLM services
-
-#### **Phase 4: Legacy Code Cleanup**
-- **✅ COMPLETED Phase 2.2 Cleanup**:
-  - ✅ Removed `AiCommsView` (legacy revision workflow UI)
-  - ✅ Removed `AiFunctionView` (legacy wrapper)
-  - ✅ Removed old `Toolbar.swift` (replaced by UnifiedToolbar)
-  - ✅ Removed `ReviewView.swift` (renamed to RevisionReviewView)
-- **✅ COMPLETED Phase 2.3 Cleanup**:
-  - ✅ Removed `CoverChatProvider` (migrated to CoverLetterService)
-  - ✅ Removed `CoverLetterRecommendationProvider` (migrated to LLMService)
-  - ✅ Removed `CoverRevisionsView` (functionality in CoverLetterInspectorView)
-  - ✅ Removed `GenerateCoverLetterButton` and `CoverLetterActionButtonsView`
-- **⏳ Remaining Cleanup**:
-  - Remove `LLMRequestService` redundancy
-  - Remove `ResumeChatProvider` after migration complete (already done?)
-  - Clean up `BaseLLMProvider` if no longer needed
-
-#### **Phase 5: Polish & Optimization**
-- Add comprehensive error handling
-- Add operation timeout management  
-- Add request/response logging
-- Add performance monitoring
-
----
-
-## Benefits of Unified Architecture
-
-1. **Single Responsibility**: Each operation type has one clear implementation
-2. **Type Safety**: Structured responses are type-safe with compile-time checking
-3. **Consistency**: All operations use the same error handling and timeout logic
-4. **Maintainability**: Model capabilities managed in one place
-5. **Provider Independence**: Clean abstraction allows easy migration from OpenRouter to other providers
-6. **Performance**: Conversation context managed efficiently
-7. **Scalability**: Easy to add new operation types or model capabilities
-
-### **Provider Abstraction Layer**
-
-The unified `LLMService` provides a **clean abstraction layer** that isolates OpenRouter implementation details:
-
-**API Independence:**
-- `LLMService` methods use generic parameters (modelId, prompt, responseType)
-- No OpenRouter-specific types leak into business logic
-- `OpenRouterService` is encapsulated within `LLMService` implementation
-
-**Migration Path for Future Providers:**
-- To switch from OpenRouter → Direct Provider APIs: Replace `OpenRouterService` implementation
-- To switch to different aggregator: Swap out the underlying HTTP client
-- Business logic (conversations, model selection, UI) remains unchanged
-- Only the `LLMService` implementation needs modification
-
-**Preserved Interfaces:**
-- Model selection UI components work with any provider
-- Conversation management is provider-agnostic  
-- Structured output handling works with any JSON-capable API
-- Error handling and retry logic applies universally
-
----
-
-## Current Operation Mapping to New Architecture
+## Current Operation Mapping to Unified Architecture
 
 ```
 ┌────────────────────────────────────────────────────┬─────────────────────────────────────┬─────────────────────────┐
@@ -607,65 +403,3 @@ The unified `LLMService` provides a **clean abstraction layer** that isolates Op
 └────────────────────────────────────────────────────┴─────────────────────────────────────┴─────────────────────────┘
 ```
 
-This unified architecture will eliminate redundancy, improve maintainability, and provide a clean foundation for future LLM operations.
-
----
-
-## 🚨 CRITICAL IMPLEMENTATION GUIDANCE
-
-### **Key Files to Study First**
-- `DropdownModelPicker.swift` and `CheckboxModelPicker.swift` - Already implement the model selection patterns you need
-- `OpenRouterService.swift` - Study the existing model capability detection and API integration
-- `ResumeChatProvider.swift` - Complex example of conversation management and structured output
-- `ReviewView.swift` + `AiCommsView.swift` - Shows the iterative revision loop pattern (extract business logic to ResumeReviseService)
-
-### **New Service Architecture**
-**LLMService**: Handles all basic LLM operations
-- Text requests (one-shot and multi-turn)
-- Structured output with JSON schemas
-- Image + text multimodal requests
-- Conversation context management
-- Model capability detection and selection
-
-**ResumeReviseService**: Handles complex revision workflow business logic
-- Managing revision nodes and their state
-- Processing feedback arrays and user selections  
-- Coordinating with LLMService for AI resubmissions
-- Applying changes to resume tree structure
-- Validation and node ID matching
-- State persistence across revision rounds
-
-**UnifiedToolbar**: Direct workflow integration (replaces AiCommsView) ✅
-- **"Customize" button**: ModelSelectionSheet → ResumeReviseViewModel.startRevisionWorkflow() → RevisionReviewView ✅
-- **"Clarify & Customize" button**: ModelSelectionSheet → ClarifyingQuestionsViewModel → ResumeReviseViewModel workflow → RevisionReviewView ✅
-- **Pattern**: UnifiedToolbar button → ModelSelectionSheet → LLM operation → RevisionReviewView (clean architecture achieved) ✅
-
-### **Important Patterns to Preserve**
-1. **Two-Stage Model Filtering**: Global user selection + operation-specific capabilities
-2. **Conversation Context Management**: Must persist across UI state changes and provider resets
-3. **Structured Output with Fallback**: Always have backup parsing for malformed JSON responses
-4. **Progressive Enhancement**: Start with basic operations, add complexity incrementally
-
-### **Critical Architecture Decisions**
-- **@MainActor for LLMService**: All UI updates must happen on main thread
-- **Conversation IDs**: Use UUID for unique conversation tracking across app lifecycle
-- **Error Recovery**: Implement retry logic with exponential backoff for network failures
-- **Model Capability Caching**: Cache capability checks to avoid repeated API calls
-
-### **Known Gotchas to Avoid**
-1. **o1 Model Handling**: These models don't support system messages - handle this in capability detection
-2. **Image Model Substitution**: Some operations require vision models - implement automatic fallback
-3. **Provider Reset Issues**: AiCommsView shows how to handle provider recreation without losing state
-4. **Node ID Validation**: Resume tree nodes can be deleted between revision rounds - always validate
-
-### **Implementation Strategy**
-1. **Start Simple**: Begin with basic one-shot operations before complex multi-turn workflows
-2. **Incremental Testing**: Test each operation manually through the UI as you implement
-3. **Error Handling**: Test network failures, malformed responses, and model capability mismatches
-4. **Model Integration**: Verify model picker integration and capability filtering works correctly
-
-### **Performance Considerations**
-- Use `TaskGroup` for parallel operations (see BatchCoverLetterGenerator example)
-- Implement request deduplication for identical prompts
-- Cache conversation context to avoid redundant API calls
-- Monitor token usage and implement rate limiting if needed

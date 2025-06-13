@@ -31,6 +31,7 @@ struct AppSheetsModifier: ViewModifier {
     
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(\.appState) private var appState
     
     func body(content: Content) -> some View {
@@ -115,6 +116,7 @@ struct AppSheetsModifier: ViewModifier {
                     .environment(appState)
                     .environment(jobAppStore)
                     .environment(coverLetterStore)
+                    .environment(enabledLLMStore)
             }
             .sheet(isPresented: $refPopup) {
                 ResRefView()

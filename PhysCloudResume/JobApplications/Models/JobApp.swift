@@ -223,4 +223,17 @@ enum Statuses: String, Codable, CaseIterable {
         status = try container.decodeIfPresent(Statuses.self, forKey: .status) ?? .new
         resumes = []
     }
+    func replaceUUIDsWithLetterNames(in text: String) -> String {
+
+
+        var result = text
+
+        for letter in self.coverLetters {
+            let uuidString = letter.id.uuidString
+            if result.contains(uuidString) {
+                result = result.replacingOccurrences(of: uuidString, with: letter.sequencedName)
+            }
+        }
+        return result
+    }
 }

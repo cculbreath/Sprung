@@ -39,6 +39,10 @@ struct CoverLetterReviseButton: View {
                 )
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerReviseCoverLetterButton)) { _ in
+            // Programmatically trigger the button action (from menu commands)
+            showReviseCoverLetterSheet = true
+        }
     }
     
     @MainActor

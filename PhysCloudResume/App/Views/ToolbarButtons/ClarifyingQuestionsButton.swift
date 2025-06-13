@@ -70,6 +70,12 @@ struct ClarifyingQuestionsButton: View {
                 }
             )
         }
+        .onReceive(NotificationCenter.default.publisher(for: .triggerClarifyingQuestionsButton)) { _ in
+            // Programmatically trigger the button action (from menu commands)
+            selectedTab = .resume
+            clarifyingQuestions = []
+            showClarifyingQuestionsModelSheet = true
+        }
     }
     
     @MainActor

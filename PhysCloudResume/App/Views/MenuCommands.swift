@@ -24,6 +24,7 @@ extension Notification.Name {
     
     // Cover Letter Commands
     static let generateCoverLetter = Notification.Name("generateCoverLetter")
+    static let reviseCoverLetter = Notification.Name("reviseCoverLetter")
     static let batchCoverLetter = Notification.Name("batchCoverLetter")
     static let bestCoverLetter = Notification.Name("bestCoverLetter")
     static let committee = Notification.Name("committee")
@@ -41,6 +42,17 @@ extension Notification.Name {
     static let showSettings = Notification.Name("showSettings")
     static let showApplicantProfile = Notification.Name("showApplicantProfile")
     static let showTemplateEditor = Notification.Name("showTemplateEditor")
+    
+    // Menu-to-Toolbar Bridge Commands (for programmatically triggering toolbar buttons)
+    static let triggerBestJobButton = Notification.Name("triggerBestJobButton")
+    static let triggerCustomizeButton = Notification.Name("triggerCustomizeButton")
+    static let triggerClarifyingQuestionsButton = Notification.Name("triggerClarifyingQuestionsButton")
+    static let triggerGenerateCoverLetterButton = Notification.Name("triggerGenerateCoverLetterButton")
+    static let triggerReviseCoverLetterButton = Notification.Name("triggerReviseCoverLetterButton")
+    static let triggerTTSButton = Notification.Name("triggerTTSButton")
+    static let triggerTTSStart = Notification.Name("triggerTTSStart")
+    static let triggerTTSStop = Notification.Name("triggerTTSStop")
+    static let triggerTTSRestart = Notification.Name("triggerTTSRestart")
     
     // Export Commands
     static let exportResumePDF = Notification.Name("exportResumePDF")

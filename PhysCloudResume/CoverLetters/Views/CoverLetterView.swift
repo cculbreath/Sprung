@@ -56,6 +56,7 @@ struct CoverLetterContentView: View {
     @Environment(AppState.self) private var appState: AppState
     @Bindable var jobApp: JobApp
     @Binding var isEditing: Bool
+    @Namespace private var namespace
 
     var body: some View {
         @Bindable var coverLetterStore = coverLetterStore
@@ -63,36 +64,94 @@ struct CoverLetterContentView: View {
         @Bindable var bindStore = jobAppStore
         
         if let app = jobAppStore.selectedApp {
-            if app.coverLetters.isEmpty {
+            if app.coverLetters.filter(\.generated).isEmpty {
                 // Show encourage generation view when no cover letters exist
-                VStack(spacing: 24) {
-                    Spacer()
-                    
-                    VStack(spacing: 16) {
-                        Image(systemName: "doc.text.badge.plus")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        
-                        Text("No cover letters yet")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                        
-                        Text("Generate your first cover letter to get started")
-                            .font(.body)
-                            .foregroundColor(.secondary)
+                VStack(spacing: 40) {
+                    VStack(spacing: 24) {
+                        // Icon with background gradient
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(
+                                    colors: [Color.indigo.opacity(0.1), Color.blue.opacity(0.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                                .frame(width: 140, height: 140)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.indigo.opacity(0.2), lineWidth: 1)
+                                )
+                            
+                            Image(systemName: "append.page")
+                                .font(.system(size: 60, weight: .light))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Color.indigo, Color.blue],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .symbolRenderingMode(.hierarchical)
+                        }
+                        .shadow(color: .indigo.opacity(0.1), radius: 20, x: 0, y: 10)
+
+                        VStack(spacing: 12) {
+                            Text("Create Your First Cover Letter")
+                                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Color.primary, Color.primary.opacity(0.8)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+
+                            Text("Choose how you'd like to get started")
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundColor(.secondary)
+                        }
                     }
-                    
-                    HStack(spacing: 20) {
-                        // Generate Cover Letter Button (1.5x bigger)
-                        GenerateCoverLetterButtonView()
-                        
-                        // Batch Cover Letter Button (1.5x bigger)
-                        BatchCoverLetterButtonView()
+                    .padding(.top, 40)
+
+                    // Action buttons section
+                    VStack(spacing: 16) {
+                        if coverLetterStore.isGeneratingCoverLetter {
+                            ProgressView("Generating cover letter...")
+                                .scaleEffect(1.2)
+                                .tint(Color.indigo)
+                        } else {
+                            HStack(spacing: 16) {
+                                // Generate Cover Letter Button
+                                GenerateCoverLetterButtonView()
+                                    .frame(maxWidth: 280)
+
+                                // Batch Cover Letter Button
+                                BatchCoverLetterButtonView()
+                                    .frame(maxWidth: 280)
+                            }
+                        }
                     }
                     
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    // Subtle background pattern
+                    ZStack {
+                        Color(NSColor.windowBackgroundColor)
+                        
+                        // Gradient overlay
+                        LinearGradient(
+                            colors: [
+                                Color.indigo.opacity(0.02),
+                                Color.clear,
+                                Color.blue.opacity(0.02)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    }
+                )
             } else if let cL = app.selectedCover {
                 @Bindable var bindApp = app
                 VStack(alignment: .leading, spacing: 8) {
@@ -172,108 +231,164 @@ struct CoverLetterContentView: View {
 struct GenerateCoverLetterButtonView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    
-    @State private var isGeneratingCoverLetter = false
-    @State private var showCoverLetterModelSheet = false
-    @State private var selectedCoverLetterModel = ""
+    @State private var isHovered = false
     
     var body: some View {
         Button(action: {
-            showCoverLetterModelSheet = true
+            NotificationCenter.default.post(name: .triggerGenerateCoverLetterButton, object: nil)
         }) {
-            Label {
-                Text("Generate Cover Letter")
-                    .font(.system(size: 16, weight: .medium))
-            } icon: {
-                if isGeneratingCoverLetter {
-                    Image("custom.append.page.badge.plus")
-                        .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
-                        .font(.system(size: 20, weight: .light))
-                } else {
-                    Image("custom.append.page.badge.plus")
-                        .font(.system(size: 20, weight: .light))
-                }
-            }
-        }
-        .controlSize(.large)
-        .buttonStyle(.borderedProminent)
-        .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-        .sheet(isPresented: $showCoverLetterModelSheet) {
-            if let jobApp = jobAppStore.selectedApp {
-                GenerateCoverLetterView(
-                    jobApp: jobApp,
-                    onGenerate: { modelId, selectedRefs, includeResumeRefs in
-                        selectedCoverLetterModel = modelId
-                        showCoverLetterModelSheet = false
-                        isGeneratingCoverLetter = true
-                        
-                        Task {
-                            await generateCoverLetter(
-                                modelId: modelId,
-                                selectedRefs: selectedRefs,
-                                includeResumeRefs: includeResumeRefs
+            VStack(spacing: 12) {
+                // Modern card design
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            colors: isHovered ? 
+                                [Color.indigo.opacity(0.15), Color.blue.opacity(0.15)] :
+                                [Color.indigo.opacity(0.08), Color.blue.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(height: 120)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.indigo.opacity(0.3), Color.blue.opacity(0.3)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: isHovered ? 2 : 1
                             )
+                    )
+                    .overlay(
+                        VStack(spacing: 12) {
+                            if coverLetterStore.isGeneratingCoverLetter {
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                                    .tint(Color.indigo)
+                                    .frame(width: 36, height: 36)
+                            } else {
+                                Image("generate.coverletter")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 36, height: 36)
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color.indigo, Color.blue],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                            VStack(spacing: 4) {
+                                Text("Generate Cover Letter")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Create a tailored letter")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                    }
-                )
+                    )
+                    .shadow(
+                        color: isHovered ? Color.indigo.opacity(0.2) : Color.black.opacity(0.05),
+                        radius: isHovered ? 12 : 8,
+                        x: 0,
+                        y: isHovered ? 8 : 4
+                    )
             }
+            .scaleEffect(isHovered ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
         }
-    }
-    
-    @MainActor
-    private func generateCoverLetter(modelId: String, selectedRefs: [CoverRef], includeResumeRefs: Bool) async {
-        guard let jobApp = jobAppStore.selectedApp,
-              let resume = jobApp.selectedRes else {
-            isGeneratingCoverLetter = false
-            return
-        }
-        
-        do {
-            try await CoverLetterService.shared.generateNewCoverLetter(
-                jobApp: jobApp,
-                resume: resume,
-                modelId: modelId,
-                coverLetterStore: coverLetterStore,
-                selectedRefs: selectedRefs,
-                includeResumeRefs: includeResumeRefs
-            )
-            
-            isGeneratingCoverLetter = false
-            
-        } catch {
-            Logger.error("Error generating cover letter: \(error.localizedDescription)")
-            isGeneratingCoverLetter = false
+        .buttonStyle(.plain)
+        .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+        .onHover { hovering in
+            isHovered = hovering
         }
     }
 }
 
 // MARK: - Batch Cover Letter Button Component
 struct BatchCoverLetterButtonView: View {
-    @Environment(AppState.self) private var appState: AppState
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @State private var showBatchCoverLetterSheet = false
+    @State private var isHovered = false
     
     var body: some View {
         Button(action: {
-            showBatchCoverLetterSheet = true
+            NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
         }) {
-            Label {
-                Text("Batch Generation")
-                    .font(.system(size: 16, weight: .medium))
-            } icon: {
-                Image(systemName: "square.stack.3d.down.right")
-                    .font(.system(size: 20, weight: .light))
+            VStack(spacing: 12) {
+                // Modern card design
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            colors: isHovered ? 
+                                [Color.purple.opacity(0.15), Color.pink.opacity(0.15)] :
+                                [Color.purple.opacity(0.08), Color.pink.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(height: 120)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.purple.opacity(0.3), Color.pink.opacity(0.3)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: isHovered ? 2 : 1
+                            )
+                    )
+                    .overlay(
+                        VStack(spacing: 12) {
+                            if coverLetterStore.isGeneratingCoverLetter {
+                                ProgressView()
+                                    .scaleEffect(1.5)
+                                    .tint(Color.purple)
+                                    .frame(width: 36, height: 36)
+                            } else {
+                                Image(systemName: "square.stack.3d.forward.dottedline")
+                                    .font(.system(size: 36, weight: .light))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color.purple, Color.pink],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                            
+                            VStack(spacing: 4) {
+                                Text("Batch Generation")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Generate multiple at once")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    )
+                    .shadow(
+                        color: isHovered ? Color.purple.opacity(0.2) : Color.black.opacity(0.05),
+                        radius: isHovered ? 12 : 8,
+                        x: 0,
+                        y: isHovered ? 8 : 4
+                    )
             }
+            .scaleEffect(isHovered ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
         }
-        .controlSize(.large)
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-        .sheet(isPresented: $showBatchCoverLetterSheet) {
-            BatchCoverLetterView()
-                .environment(appState)
-                .environment(jobAppStore)
-                .environment(coverLetterStore)
+        .onHover { hovering in
+            isHovered = hovering
         }
     }
 }

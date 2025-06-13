@@ -28,8 +28,8 @@ struct GenerateCoverLetterView: View {
     @State private var selectedWritingSamples: Set<String> = []
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Header
+        VStack(spacing: 0) {
+            // Header - Fixed
             VStack(spacing: 8) {
                 Text("Generate Cover Letter")
                     .font(.title2)
@@ -39,31 +39,44 @@ struct GenerateCoverLetterView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
+            .padding(.horizontal)
+            .padding(.top)
             
-            // Model Selection
+            // Model Selection - Fixed
             VStack(alignment: .leading, spacing: 8) {
                 Text("AI Model")
                     .font(.headline)
                 
                 DropdownModelPicker(
                     selectedModel: $selectedModel,
-                    requiredCapability: .textOnly
+                    requiredCapability: nil
                 )
             }
+            .padding(.horizontal)
+            .padding(.top)
             
             Divider()
+                .padding(.horizontal)
             
-            // Source Management using shared component
-            CoverRefSelectionManagerView(
-                includeResumeRefs: $includeResumeRefs,
-                selectedBackgroundFacts: $selectedBackgroundFacts,
-                selectedWritingSamples: $selectedWritingSamples,
-                showGroupBox: false
-            )
+            // Scrollable content area
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 20) {
+                    // Source Management using shared component
+                    CoverRefSelectionManagerView(
+                        includeResumeRefs: $includeResumeRefs,
+                        selectedBackgroundFacts: $selectedBackgroundFacts,
+                        selectedWritingSamples: $selectedWritingSamples,
+                        showGroupBox: false
+                    )
+                    
+                    // Extra padding at bottom for better scrolling
+                    Color.clear.frame(height: 20)
+                }
+                .padding(.horizontal)
+                .padding(.top)
+            }
             
-            Spacer()
-            
-            // Action Buttons
+            // Action Buttons - Fixed at bottom
             HStack {
                 Button("Cancel") {
                     dismiss()
@@ -85,8 +98,10 @@ struct GenerateCoverLetterView: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(selectedModel.isEmpty)
             }
+            .padding(.horizontal)
+            .padding(.bottom)
+            .background(Color(.windowBackgroundColor))
         }
-        .padding()
         .frame(width: 500, height: 600)
         .onAppear {
             loadDefaultSelections()
