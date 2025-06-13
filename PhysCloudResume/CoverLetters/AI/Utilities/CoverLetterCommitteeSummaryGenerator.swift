@@ -36,14 +36,29 @@ class CoverLetterCommitteeSummaryGenerator {
                     return nil
                 }
                 
+                // Track individual votes for first-past-the-post
+                let modelVotes = modelReasonings.compactMap { reasoning -> ModelVote? in
+                    if let bestUuid = reasoning.response.bestLetterUuid,
+                       bestUuid == letter.id.uuidString {
+                        return ModelVote(
+                            model: reasoning.model,
+                            votedForLetterId: letter.id.uuidString,
+                            reasoning: reasoning.response.verdict
+                        )
+                    }
+                    return nil
+                }
+                
                 letterAnalysis = LetterAnalysis(
                     letterId: letter.id.uuidString,
                     summaryOfModelAnalysis: modelComments.isEmpty ? "No specific comments from voting models." : modelComments.joined(separator: " | "),
-                    pointsAwarded: [ModelPointsAwarded(model: "Committee Vote", points: votes)]
+                    pointsAwarded: [ModelPointsAwarded(model: "Committee Vote", points: votes)],
+                    modelVotes: modelVotes
                 )
             } else {
                 var pointsFromModels: [ModelPointsAwarded] = []
                 var modelComments: [String] = []
+                var modelVotes: [ModelVote] = []
                 
                 for reasoning in modelReasonings {
                     if let scoreAllocations = reasoning.response.scoreAllocations,
@@ -54,13 +69,21 @@ class CoverLetterCommitteeSummaryGenerator {
                             comment += " (Score reasoning: \(allocationReasoning))"
                         }
                         modelComments.append(comment)
+                        
+                        // Track individual votes for score voting (points allocation)
+                        modelVotes.append(ModelVote(
+                            model: reasoning.model,
+                            votedForLetterId: letter.id.uuidString,
+                            reasoning: allocation.reasoning
+                        ))
                     }
                 }
                 
                 letterAnalysis = LetterAnalysis(
                     letterId: letter.id.uuidString,
                     summaryOfModelAnalysis: modelComments.isEmpty ? "No specific analysis provided." : modelComments.joined(separator: " | "),
-                    pointsAwarded: pointsFromModels
+                    pointsAwarded: pointsFromModels,
+                    modelVotes: modelVotes
                 )
             }
             
@@ -97,7 +120,8 @@ class CoverLetterCommitteeSummaryGenerator {
                 let committeeFeedback = CommitteeFeedbackSummary(
                     letterId: analysis.letterId,
                     summaryOfModelAnalysis: analysis.summaryOfModelAnalysis,
-                    pointsAwarded: analysis.pointsAwarded
+                    pointsAwarded: analysis.pointsAwarded,
+                    modelVotes: analysis.modelVotes
                 )
                 letter.committeeFeedback = committeeFeedback
             } else {
@@ -230,6 +254,9 @@ class CoverLetterCommitteeSummaryGenerator {
         summaryPrompt += "      \"summaryOfModelAnalysis\": \"Comprehensive summary of what models said about this letter\",\n"
         summaryPrompt += "      \"pointsAwarded\": [\n"
         summaryPrompt += "        {\"model\": \"Model name\", \"points\": 0}\n"
+        summaryPrompt += "      ],\n"
+        summaryPrompt += "      \"modelVotes\": [\n"
+        summaryPrompt += "        {\"model\": \"Model name\", \"votedForLetterId\": \"UUID\", \"reasoning\": \"Model's reasoning\"}\n"
         summaryPrompt += "      ]\n"
         summaryPrompt += "    }\n"
         summaryPrompt += "  ]\n"
@@ -273,9 +300,31 @@ class CoverLetterCommitteeSummaryGenerator {
                                     required: ["model", "points"],
                                     additionalProperties: false
                                 )
+                            ),
+                            "modelVotes": JSONSchema(
+                                type: .array,
+                                items: JSONSchema(
+                                    type: .object,
+                                    properties: [
+                                        "model": JSONSchema(
+                                            type: .string,
+                                            description: "Name of the model"
+                                        ),
+                                        "votedForLetterId": JSONSchema(
+                                            type: .string,
+                                            description: "UUID of the letter this model voted for"
+                                        ),
+                                        "reasoning": JSONSchema(
+                                            type: .string,
+                                            description: "Model's reasoning for the vote"
+                                        )
+                                    ],
+                                    required: ["model", "votedForLetterId", "reasoning"],
+                                    additionalProperties: false
+                                )
                             )
                         ],
-                        required: ["letterId", "summaryOfModelAnalysis", "pointsAwarded"],
+                        required: ["letterId", "summaryOfModelAnalysis", "pointsAwarded", "modelVotes"],
                         additionalProperties: false
                     )
                 )
