@@ -100,7 +100,7 @@ class CoverLetterCommitteeSummaryGenerator {
             selectedVotingScheme: selectedVotingScheme
         )
         
-        let llmService = LLMService.shared
+        let llmService = await MainActor.run { LLMService.shared }
         
         let jsonSchema = createJSONSchema()
         

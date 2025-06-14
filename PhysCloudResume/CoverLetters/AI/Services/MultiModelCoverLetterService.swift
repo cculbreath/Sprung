@@ -59,6 +59,12 @@ class MultiModelCoverLetterService {
         selectedVotingScheme: VotingScheme
     ) {
         Logger.info("🎯 Starting multi-model selection with \(selectedModels.count) models")
+        
+        // Clear all previous votes, points, and committee analysis for all cover letters in the current job app
+        if let jobApp = jobAppStore?.selectedApp {
+            clearAllCoverLetterVotes(in: jobApp)
+        }
+        
         currentTask = Task {
             await performMultiModelSelection(
                 coverLetter: coverLetter,
@@ -134,6 +140,31 @@ class MultiModelCoverLetterService {
     }
     
     // MARK: - Private Methods
+    
+    private func clearAllCoverLetterVotes(in jobApp: JobApp) {
+        Logger.info("🧹 Clearing all previous votes, points, and committee analysis for job app")
+        
+        for letter in jobApp.coverLetters {
+            // Clear vote and score counts
+            letter.voteCount = 0
+            letter.scoreCount = 0
+            letter.hasBeenAssessed = false
+            
+            // Clear committee feedback
+            letter.committeeFeedback = nil
+            
+            Logger.debug("🧹 Cleared votes and analysis for letter: \(letter.sequencedName)")
+        }
+        
+        // Clear local tallies
+        voteTally.removeAll()
+        scoreTally.removeAll()
+        modelReasonings.removeAll()
+        reasoningSummary = nil
+        failedModels.removeAll()
+        
+        Logger.info("✅ All cover letter votes and analysis cleared")
+    }
     
     private func performMultiModelSelection(
         coverLetter: CoverLetter,

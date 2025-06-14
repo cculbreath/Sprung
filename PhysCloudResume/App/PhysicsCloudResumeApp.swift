@@ -91,6 +91,8 @@ struct PhysicsCloudResumeApp: App {
             }
             
             CommandGroup(after: .importExport) {
+                // Import functionality removed - ImportJobAppsFromURLsView was a rogue view
+                /*
                 Button("Import Job Applications from URLs...") {
                     Logger.debug("🔵 Menu item clicked - Import Job Applications")
                     Logger.debug("🔵 appState address in menu: \(Unmanaged.passUnretained(appState).toOpaque())")
@@ -102,6 +104,7 @@ struct PhysicsCloudResumeApp: App {
                     NotificationCenter.default.post(name: NSNotification.Name("ShowImportJobApps"), object: nil)
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
+                */
             }
             
             
