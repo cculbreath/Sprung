@@ -224,6 +224,12 @@ class TreeToJson {
     }
 
     func stringStringSection(for sectionName: String) -> String? {
+        // Special handling for include-fonts since it's stored on the resume object, not in the tree
+        if sectionName == "include-fonts" {
+            return rootNode.resume.includeFonts ? "\"true\"" : "\"false\""
+        }
+        
+        // Regular string section handling for other sections
         if let node = rootNode.children?.first(where: { $0.name == sectionName }),
            let child = node.children?.first
         {
