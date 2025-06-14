@@ -119,7 +119,7 @@ extension JobApp {
 
             // Title
             if let title = jobDict["title"] as? String {
-                jobApp.jobPosition = title
+                jobApp.jobPosition = title.decodingHTMLEntities()
             }
 
             // Description (HTML in JSON – strip tags quickly).
@@ -128,13 +128,14 @@ extension JobApp {
                 jobApp.jobDescription = descriptionHTML
                     .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .decodingHTMLEntities()
             }
 
             // Company
             if let org = jobDict["hiringOrganization"] as? [String: Any],
                let companyName = org["name"] as? String
             {
-                jobApp.companyName = companyName
+                jobApp.companyName = companyName.decodingHTMLEntities()
             }
 
             // Employment type
@@ -173,7 +174,7 @@ extension JobApp {
                 }
 
                 if let locationString {
-                    jobApp.jobLocation = locationString
+                    jobApp.jobLocation = locationString.decodingHTMLEntities()
                 }
             }
 
@@ -229,18 +230,19 @@ extension JobApp {
         let jobApp = JobApp()
 
         if let title = info["jobTitle"] as? String {
-            jobApp.jobPosition = title
+            jobApp.jobPosition = title.decodingHTMLEntities()
         }
         if let company = info["companyName"] as? String {
-            jobApp.companyName = company
+            jobApp.companyName = company.decodingHTMLEntities()
         }
         if let location = info["formattedLocation"] as? String {
-            jobApp.jobLocation = location
+            jobApp.jobLocation = location.decodingHTMLEntities()
         }
         if let description = info["sanitizedJobDescription"] as? String {
             jobApp.jobDescription = description
                 .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+                .decodingHTMLEntities()
         }
 
         jobApp.postingURL = url
