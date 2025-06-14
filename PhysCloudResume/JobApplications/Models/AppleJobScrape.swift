@@ -35,7 +35,7 @@ extension JobApp {
                        let detailsData = loaderData["routes/external.jobdetails.$positionId"] as? [String: Any] {
                         
                         // Extract data from JSON
-                        jobApp.jobPosition = detailsData["postingTitle"] as? String ?? ""
+                        jobApp.jobPosition = (detailsData["postingTitle"] as? String ?? "").decodingHTMLEntities()
                         
                         if let localeLocation = detailsData["localeLocation"] as? [[String: Any]],
                            let firstLocation = localeLocation.first {
@@ -43,7 +43,9 @@ extension JobApp {
                             let state = firstLocation["stateProvince"] as? String ?? ""
                             let country = firstLocation["countryName"] as? String ?? ""
                             jobApp.jobLocation = [city, state, country]
-                                .filter { !$0.isEmpty }.joined(separator: ", ")
+                                .filter { !$0.isEmpty }
+                                .map { $0.decodingHTMLEntities() }
+                                .joined(separator: ", ")
                         }
                         
                         jobApp.companyName = "Apple"
@@ -60,12 +62,12 @@ extension JobApp {
                         if let prefQual = detailsData["preferredQualifications"] as? String {
                             desc += "Preferred Qualifications:\n" + prefQual
                         }
-                        jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines)
+                        jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines).decodingHTMLEntities()
                         
                         if let location = detailsData["location"] as? [String: Any],
                            let teams = location["teams"] as? [[String: Any]],
                            let firstTeam = teams.first {
-                            jobApp.jobFunction = firstTeam["name"] as? String ?? ""
+                            jobApp.jobFunction = (firstTeam["name"] as? String ?? "").decodingHTMLEntities()
                         }
                         
                         jobApp.postingURL = url
@@ -79,12 +81,12 @@ extension JobApp {
             // Fallback to HTML parsing with new selectors
             // Title
             if let titleEl = try doc.select("#jobdetails-postingtitle").first() {
-                jobApp.jobPosition = try titleEl.text()
+                jobApp.jobPosition = try titleEl.text().decodingHTMLEntities()
             }
 
             // Location
             if let locEl = try doc.select("#jobdetails-joblocation").first() {
-                jobApp.jobLocation = try locEl.text()
+                jobApp.jobLocation = try locEl.text().decodingHTMLEntities()
             }
 
             jobApp.companyName = "Apple"
@@ -117,11 +119,11 @@ extension JobApp {
                 desc += "Preferred Qualifications:\n" + (try prefQEl.text())
             }
             
-            jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines)
+            jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines).decodingHTMLEntities()
 
             // Team / Function
             if let teamEl = try doc.select("#jobdetails-teamname").first() {
-                jobApp.jobFunction = try teamEl.text()
+                jobApp.jobFunction = try teamEl.text().decodingHTMLEntities()
             }
 
             jobApp.postingURL = url

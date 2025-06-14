@@ -19,23 +19,23 @@ extension JobApp {
             let jobApp = JobApp()
 
             // Map the Proxycurl response fields to JobApp properties
-            jobApp.jobPosition = proxycurlJob.title
+            jobApp.jobPosition = proxycurlJob.title.decodingHTMLEntities()
 
             // Construct location string
             var locationParts: [String] = []
             if let city = proxycurlJob.location.city, !city.isEmpty {
-                locationParts.append(city)
+                locationParts.append(city.decodingHTMLEntities())
             }
             if let region = proxycurlJob.location.region, !region.isEmpty {
-                locationParts.append(region)
+                locationParts.append(region.decodingHTMLEntities())
             }
             if let country = proxycurlJob.location.country, !country.isEmpty {
-                locationParts.append(country)
+                locationParts.append(country.decodingHTMLEntities())
             }
             jobApp.jobLocation = locationParts.joined(separator: ", ")
 
             // Company information
-            jobApp.companyName = proxycurlJob.company.name
+            jobApp.companyName = proxycurlJob.company.name.decodingHTMLEntities()
 
             // LinkedIn ID (derived from the internal ID)
             jobApp.companyLinkedinId = proxycurlJob.linkedin_internal_id
@@ -54,7 +54,7 @@ extension JobApp {
                 )
             }
 
-            jobApp.jobDescription = cleanedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            jobApp.jobDescription = cleanedDescription.trimmingCharacters(in: .whitespacesAndNewlines).decodingHTMLEntities()
 
             // Seniority level
             jobApp.seniorityLevel = proxycurlJob.seniority_level
