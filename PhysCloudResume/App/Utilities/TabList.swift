@@ -5,10 +5,10 @@
 //  Created by Christopher Culbreath on .
 //
 
-enum TabList: String {
-    case listing = "Job Listing"
-    case resume = "Customize Résumé"
-    case coverLetter = "Compose Cover Letter"
-    case submitApp = "Submit Application"
+enum TabList: String, CaseIterable, Codable {
+    case listing = "Listing"
+    case resume = "Résumé"
+    case coverLetter = "Cover Letter"
+    case submitApp = "Export"
     case none = "None"
 }

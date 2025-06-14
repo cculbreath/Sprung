@@ -14,7 +14,6 @@ struct ContentView: View {
     // States managed by ContentView
     @State var tabRefresh: Bool = false
     @State var showSlidingList: Bool = false
-    @State var selectedTab: TabList = .listing
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var sheets = AppSheets()
     @State private var clarifyingQuestions: [ClarifyingQuestion] = []
@@ -27,8 +26,9 @@ struct ContentView: View {
     @AppStorage("availableStyles") var availableStylesString: String = "Typewriter"
 
     var body: some View {
-        // Bindable reference to the store for selection binding
+        // Bindable references for selection binding
         @Bindable var jobAppStore = jobAppStore
+        @Bindable var appState = appState
 
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             // --- Sidebar Column ---
@@ -45,7 +45,7 @@ struct ContentView: View {
                 if jobAppStore.selectedApp != nil {
                     // Embed AppWindowView directly
                     AppWindowView(
-                        selectedTab: $selectedTab,
+                        selectedTab: $appState.selectedTab,
                         refPopup: $refPopup,
                         hasVisitedResumeTab: $hasVisitedResumeTab,
                         tabRefresh: $tabRefresh,
@@ -70,7 +70,7 @@ struct ContentView: View {
             // Main application toolbar is attached here to be visible regardless of job app selection
             .toolbar(id: "mainToolbarV2") {
                 buildUnifiedToolbar(
-                    selectedTab: $selectedTab,
+                    selectedTab: $appState.selectedTab,
                     listingButtons: $listingButtons,
                     refresh: $tabRefresh,
                     sheets: $sheets,
@@ -86,9 +86,11 @@ struct ContentView: View {
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             // Sync selected app to AppState for template editor
             appState.selectedJobApp = newValue
+            // Save selection for persistence
+            appState.saveSelectedJobApp(newValue)
             updateMyLetter()
         }
-        .onChange(of: selectedTab) { _, newTab in
+        .onChange(of: appState.selectedTab) { _, newTab in
             if newTab == .resume {
                 if !hasVisitedResumeTab {
                     sheets.showResumeInspector = false
@@ -98,6 +100,9 @@ struct ContentView: View {
         }
         .onAppear {
             Logger.debug("🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
+            
+            // Restore persistent state
+            appState.restoreSelectedJobApp(from: jobAppStore)
             
             // Initialize Resume Revise View Model
             appState.resumeReviseViewModel = ResumeReviseViewModel(
