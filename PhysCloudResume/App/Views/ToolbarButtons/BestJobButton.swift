@@ -30,18 +30,19 @@ struct BestJobButton: View {
         .help("Find the best job match based on your qualifications")
         .disabled(isProcessingBestJob)
         .sheet(isPresented: $showBestJobModelSheet) {
-            ModelSelectionSheet(
-                title: "Choose Model for Job Recommendation",
-                requiredCapability: .structuredOutput,
-                operationKey: "best_job",
+            BestJobModelSelectionSheet(
                 isPresented: $showBestJobModelSheet,
-                onModelSelected: { modelId in
+                onModelSelected: { modelId, includeResumeBackground, includeCoverLetterBackground in
                     selectedBestJobModel = modelId
                     showBestJobModelSheet = false
                     isProcessingBestJob = true
                     
                     Task {
-                        await startBestJobRecommendation(modelId: modelId)
+                        await startBestJobRecommendation(
+                            modelId: modelId,
+                            includeResumeBackground: includeResumeBackground,
+                            includeCoverLetterBackground: includeCoverLetterBackground
+                        )
                     }
                 }
             )
@@ -62,21 +63,19 @@ struct BestJobButton: View {
     }
     
     @MainActor
-    private func startBestJobRecommendation(modelId: String) async {
-        guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
-            isProcessingBestJob = false
-            bestJobResult = "Please select a resume first"
-            showBestJobAlert = true
-            return
-        }
-
+    private func startBestJobRecommendation(
+        modelId: String,
+        includeResumeBackground: Bool,
+        includeCoverLetterBackground: Bool
+    ) async {
         do {
             let service = JobRecommendationService(llmService: LLMService.shared)
             
             let (jobId, reason) = try await service.fetchRecommendation(
                 jobApps: jobAppStore.jobApps,
-                resume: selectedResume,
-                modelId: modelId
+                modelId: modelId,
+                includeResumeBackground: includeResumeBackground,
+                includeCoverLetterBackground: includeCoverLetterBackground
             )
 
             if let recommendedJob = jobAppStore.jobApps.first(where: { $0.id == jobId }) {

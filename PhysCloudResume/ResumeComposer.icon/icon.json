@@ -7,12 +7,12 @@
   },
   "groups" : [
     {
-      "blend-mode" : "normal",
-      "blur-material" : 0.1,
+      "blend-mode" : "plus-lighter",
+      "blur-material" : 0.25,
       "layers" : [
         {
           "fill" : {
-            "solid" : "display-p3:1.00000,0.94824,0.05829,1.00000"
+            "solid" : "extended-srgb:1.00000,0.80000,0.00000,1.00000"
           },
           "glass" : true,
           "hidden" : false,
@@ -29,11 +29,12 @@
         },
         {
           "fill" : {
-            "solid" : "display-p3:1.00000,0.95907,0.07098,1.00000"
+            "solid" : "extended-srgb:1.00000,0.80000,0.00000,1.00000"
           },
           "hidden" : false,
           "image-name" : "sparkle_1.svg",
           "name" : "sparkle_1",
+          "opacity" : 0.9,
           "position" : {
             "scale" : 1.29,
             "translation-in-points" : [
@@ -69,7 +70,7 @@
         {
           "value" : {
             "enabled" : true,
-            "value" : 0.8
+            "value" : 0.6
           }
         },
         {
@@ -112,11 +113,11 @@
           "name" : "atomsheet",
           "opacity-specializations" : [
             {
-              "value" : 0.8
+              "value" : 0.75
             },
             {
               "appearance" : "tinted",
-              "value" : 0.6
+              "value" : 0.8
             }
           ],
           "position" : {
@@ -136,7 +137,7 @@
       },
       "specular-specializations" : [
         {
-          "value" : false
+          "value" : true
         },
         {
           "appearance" : "dark",
@@ -147,7 +148,7 @@
         {
           "value" : {
             "enabled" : true,
-            "value" : 0.9
+            "value" : 0.75
           }
         },
         {
@@ -169,7 +170,7 @@
           "value" : "lighten"
         }
       ],
-      "blur-material" : null,
+      "blur-material" : 0.25,
       "layers" : [
         {
           "fill-specializations" : [
@@ -188,11 +189,116 @@
           "hidden" : false,
           "image-name" : "sparkle_1.svg",
           "name" : "sparkle_1",
+          "opacity" : 0.9,
+          "position" : {
+            "scale" : 0.3,
+            "translation-in-points" : [
+              -180.125,
+              -232.2265625
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.97255,0.83137,0.22353,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "gray:1.00000,1.00000"
+              }
+            }
+          ],
+          "hidden" : false,
+          "image-name" : "sparkle_1.svg",
+          "name" : "sparkle_1",
+          "opacity" : 0.9,
+          "position" : {
+            "scale" : 0.25,
+            "translation-in-points" : [
+              -29.3828125,
+              -302.34375
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.97255,0.83137,0.22353,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "gray:1.00000,1.00000"
+              }
+            }
+          ],
+          "hidden" : false,
+          "image-name" : "sparkle_1.svg",
+          "name" : "sparkle_1",
+          "opacity" : 0.9,
           "position" : {
             "scale" : 0.2,
             "translation-in-points" : [
-              -195.6328125,
-              -177.6875
+              109.4375,
+              -349.5
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.97255,0.83137,0.22353,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "gray:1.00000,1.00000"
+              }
+            }
+          ],
+          "hidden" : false,
+          "image-name" : "sparkle_1.svg",
+          "name" : "sparkle_1",
+          "opacity" : 0.9,
+          "position" : {
+            "scale" : 0.15,
+            "translation-in-points" : [
+              226.8671875,
+              -370
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.97255,0.83137,0.22353,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "gray:1.00000,1.00000"
+              }
+            }
+          ],
+          "hidden" : false,
+          "image-name" : "sparkle_1.svg",
+          "name" : "sparkle_1",
+          "opacity" : 0.9,
+          "position" : {
+            "scale" : 0.1,
+            "translation-in-points" : [
+              347.6328125,
+              -374.1171875
             ]
           }
         },
@@ -213,11 +319,12 @@
           ],
           "image-name" : "sparkle_1.svg",
           "name" : "sparkle_1",
+          "opacity" : 0.9,
           "position" : {
             "scale" : 0.5,
             "translation-in-points" : [
-              -307.109375,
-              -84.59375
+              -318.203125,
+              -103.109375
             ]
           }
         }
@@ -234,6 +341,9 @@
       "name" : "Group",
       "opacity-specializations" : [
         {
+          "value" : 0.9
+        },
+        {
           "appearance" : "tinted",
           "value" : 0.9
         }
@@ -247,14 +357,14 @@
         {
           "value" : {
             "enabled" : true,
-            "value" : 0.5
+            "value" : 0.6
           }
         },
         {
           "appearance" : "tinted",
           "value" : {
             "enabled" : true,
-            "value" : 0.8
+            "value" : 0.4
           }
         }
       ]
