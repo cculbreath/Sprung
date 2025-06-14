@@ -13,12 +13,20 @@ struct CommitteeFeedbackSummary: Codable {
     let letterId: String
     let summaryOfModelAnalysis: String
     let pointsAwarded: [ModelPointsAwarded]
+    let modelVotes: [ModelVote]
 }
 
 /// Points awarded by a specific model
 struct ModelPointsAwarded: Codable {
     let model: String
     let points: Int
+}
+
+/// Individual model vote tracking
+struct ModelVote: Codable {
+    let model: String
+    let votedForLetterId: String
+    let reasoning: String?
 }
 
 /// Structured summary response for committee analysis
@@ -31,6 +39,7 @@ struct LetterAnalysis: Codable {
     let letterId: String
     let summaryOfModelAnalysis: String
     let pointsAwarded: [ModelPointsAwarded]
+    let modelVotes: [ModelVote]
 }
 
 @Model

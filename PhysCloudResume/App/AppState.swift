@@ -21,8 +21,8 @@ class AppState {
     var recommendedJobId: UUID?
     var isLoadingRecommendation: Bool = false
     
-    // Import job apps sheet
-    var showImportJobAppsSheet: Bool = false
+    // Import job apps sheet (disabled - functionality removed)
+    // var showImportJobAppsSheet: Bool = false
     
     // Selected job app and resume for template editor
     var selectedJobApp: JobApp?

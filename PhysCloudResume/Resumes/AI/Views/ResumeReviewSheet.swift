@@ -12,29 +12,11 @@ struct ResumeReviewSheet: View {
     @Environment(\.appState) private var appState
 
     @Binding var selectedResume: Resume?
-    // Use the existing reviewService, it now has the new methods
-    @State private var reviewService: ResumeReviewService?
+    @State private var viewModel = ResumeReviewViewModel()
 
     @State private var selectedReviewType: ResumeReviewType = .assessQuality
-    @State private var customOptions = CustomReviewOptions() // For .custom type
+    @State private var customOptions = CustomReviewOptions()
 
-    // State for general review text response (used by other review types)
-    @State private var reviewResponseText = ""
-
-    // State specific to Fix Overflow feature
-    @State private var fixOverflowStatusMessage: String = ""
-    @State private var fixOverflowChangeMessage: String = ""
-    @State private var isProcessingFixOverflow: Bool = false
-    @State private var fixOverflowError: String? = nil
-    @State private var currentOverflowLineCount: Int = 0
-
-    // General processing and error state (can be shared or separated)
-    @State private var isProcessingGeneral: Bool = false
-    @State private var generalError: String? = nil
-
-    // AppStorage for max iterations
-    @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
-    
     // Model selection state with persistence
     @AppStorage("resumeReviewSelectedModel") private var selectedModel: String = ""
     
@@ -44,29 +26,29 @@ struct ResumeReviewSheet: View {
     // Computed property for the content view (remains the same)
     private var contentView: some View {
         Group {
-            if isProcessingGeneral {
+            if viewModel.isProcessingGeneral {
                 VStack(spacing: 16) {
                     Spacer()
                     ProgressView()
-                    Text(reviewResponseText.isEmpty || reviewResponseText == "Submitting request..." ? "Analyzing resume..." : reviewResponseText)
+                    Text(viewModel.reviewResponseText.isEmpty || viewModel.reviewResponseText == "Submitting request..." ? "Analyzing resume..." : viewModel.reviewResponseText)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, alignment: .center)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if isProcessingFixOverflow {
+            } else if viewModel.isProcessingFixOverflow {
                 VStack(spacing: 16) {
                     Spacer()
                     ProgressView()
-                    Text(fixOverflowStatusMessage.isEmpty ? "Optimizing skills section..." : fixOverflowStatusMessage)
+                    Text(viewModel.fixOverflowStatusMessage.isEmpty ? "Optimizing skills section..." : viewModel.fixOverflowStatusMessage)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, alignment: .center)
-                    if currentOverflowLineCount > 0 {
-                        Text("Overflow detected: ~\(currentOverflowLineCount) lines")
+                    if viewModel.currentOverflowLineCount > 0 {
+                        Text("Overflow detected: ~\(viewModel.currentOverflowLineCount) lines")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    if !fixOverflowChangeMessage.isEmpty && fixOverflowChangeMessage.contains("Merge performed") {
+                    if !viewModel.fixOverflowChangeMessage.isEmpty && viewModel.fixOverflowChangeMessage.contains("Merge performed") {
                         Text("✓ Merge operation completed")
                             .font(.caption)
                             .foregroundColor(.green)
@@ -74,25 +56,25 @@ struct ResumeReviewSheet: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if !reviewResponseText.isEmpty {
-                MarkdownView(markdown: reviewResponseText)
+            } else if !viewModel.reviewResponseText.isEmpty {
+                MarkdownView(markdown: viewModel.reviewResponseText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(12)
                     .background(Color(NSColor.controlBackgroundColor))
                     .cornerRadius(8)
-            } else if !fixOverflowStatusMessage.isEmpty || !fixOverflowChangeMessage.isEmpty {
+            } else if !viewModel.fixOverflowStatusMessage.isEmpty || !viewModel.fixOverflowChangeMessage.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         // Show status message if it exists
-                        if !fixOverflowStatusMessage.isEmpty {
-                            Text(fixOverflowStatusMessage)
+                        if !viewModel.fixOverflowStatusMessage.isEmpty {
+                            Text(viewModel.fixOverflowStatusMessage)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         
                         // Always show change message if it exists
-                        if !fixOverflowChangeMessage.isEmpty {
-                            if !fixOverflowStatusMessage.isEmpty {
+                        if !viewModel.fixOverflowChangeMessage.isEmpty {
+                            if !viewModel.fixOverflowStatusMessage.isEmpty {
                                 Divider()
                                     .padding(.vertical, 4)
                             }
@@ -101,7 +83,7 @@ struct ResumeReviewSheet: View {
                                 .font(.headline)
                                 .padding(.bottom, 4)
                             
-                            Text(fixOverflowChangeMessage)
+                            Text(viewModel.fixOverflowChangeMessage)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .multilineTextAlignment(.leading)
@@ -111,7 +93,7 @@ struct ResumeReviewSheet: View {
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(8)
                 }
-            } else if let error = generalError ?? fixOverflowError {
+            } else if let error = viewModel.generalError ?? viewModel.fixOverflowError {
                 Text(error)
                     .foregroundColor(.red)
                     .padding()
@@ -153,13 +135,7 @@ struct ResumeReviewSheet: View {
                     }
                     .pickerStyle(.menu)
                     .onChange(of: selectedReviewType) { _, _ in
-                        // Reset states when review type changes
-                        reviewResponseText = ""
-                        fixOverflowStatusMessage = ""
-                        isProcessingGeneral = false
-                        isProcessingFixOverflow = false
-                        generalError = nil
-                        fixOverflowError = nil
+                        viewModel.resetOnReviewTypeChange()
                     }
 
                     // Custom options if custom type is selected
@@ -196,18 +172,14 @@ struct ResumeReviewSheet: View {
 
             // Button row - Pinned to the bottom
             HStack {
-                if isProcessingGeneral || isProcessingFixOverflow {
+                if viewModel.isProcessingGeneral || viewModel.isProcessingFixOverflow {
                     Button("Stop") {
-                        reviewService?.cancelRequest() // General cancel
-                        isProcessingGeneral = false
-                        isProcessingFixOverflow = false
-                        fixOverflowStatusMessage = "Optimization stopped by user."
+                        viewModel.cancelRequest()
                     }
                     .buttonStyle(.bordered)
                     Spacer()
                     Button("Close") { 
-                        // Reset change message when closing the sheet
-                        fixOverflowChangeMessage = ""
+                        viewModel.resetChangeMessage()
                         dismiss() 
                     }
                 } else {
@@ -221,8 +193,7 @@ struct ResumeReviewSheet: View {
                     .disabled(selectedResume == nil)
                     Spacer()
                     Button("Close") { 
-                        // Reset change message when closing the sheet
-                        fixOverflowChangeMessage = ""
+                        viewModel.resetChangeMessage()
                         dismiss() 
                     }
                 }
@@ -233,10 +204,7 @@ struct ResumeReviewSheet: View {
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
         .onAppear {
-            // Initialize services and reset state
-            reviewService = ResumeReviewService(llmService: LLMService.shared)
-            reviewService?.initialize()
-            fixOverflowChangeMessage = ""
+            viewModel.initialize()
         }
     }
 
@@ -269,486 +237,16 @@ struct ResumeReviewSheet: View {
         }
     }
 
-    // Main submission handler - Unchanged
     func handleSubmit() {
-        guard let resume = selectedResume else {
-            generalError = "No resume selected."
-            return
-        }
-
-        reviewResponseText = ""
-        fixOverflowStatusMessage = ""
-        fixOverflowChangeMessage = ""
-        generalError = nil
-        fixOverflowError = nil
-
-        if selectedReviewType == .fixOverflow {
-            isProcessingFixOverflow = true
-            fixOverflowStatusMessage = "Starting skills optimization..."
-            Task {
-                await performFixOverflow(resume: resume, allowEntityMerge: allowEntityMerge)
-            }
-        } else if selectedReviewType == .reorderSkills {
-            isProcessingFixOverflow = true
-            fixOverflowStatusMessage = "Starting skills reordering..."
-            Task {
-                await performReorderSkills(resume: resume)
-            }
-        } else {
-            isProcessingGeneral = true
-            reviewResponseText = "Submitting request..."
-            reviewService?.sendReviewRequest(
-                reviewType: selectedReviewType,
-                resume: resume,
-                modelId: selectedModel,
-                customOptions: selectedReviewType == .custom ? customOptions : nil,
-                onProgress: { contentChunk in
-                    DispatchQueue.main.async {
-                        if reviewResponseText == "Submitting request..." { reviewResponseText = "" }
-                        reviewResponseText += contentChunk
-                    }
-                },
-                onComplete: { result in
-                    DispatchQueue.main.async {
-                        isProcessingGeneral = false
-                        switch result {
-                        case let .success(finalMessage):
-                            if reviewResponseText == "Submitting request..." || reviewResponseText.isEmpty {
-                                reviewResponseText = finalMessage
-                            }
-                            if reviewResponseText.isEmpty {
-                                reviewResponseText = "Review complete. No specific feedback provided."
-                            }
-                        case let .failure(error):
-                            // Improved error display with more details
-                            if let nsError = error as NSError? {
-                                // Extract and display API errors
-                                if nsError.domain == "OpenAIAPI" {
-                                    generalError = "API Error: \(nsError.localizedDescription)"
-                                } else if let errorInfo = nsError.userInfo[NSLocalizedDescriptionKey] as? String {
-                                    // Specific handling for parameter errors
-                                    generalError = "Error: \(errorInfo)\nPlease try again or select a different model in Settings."
-                                } else {
-                                    generalError = "Error: \(error.localizedDescription)"
-                                }
-                            } else {
-                                generalError = "Error: \(error.localizedDescription)"
-                            }
-                            
-                            if reviewResponseText == "Submitting request..." || !reviewResponseText.isEmpty {
-                                reviewResponseText = ""
-                            }
-                        }
-                    }
-                }
-            )
-        }
-    }
-
-    // MARK: - Fix Overflow Logic (Unchanged)
-
-    @MainActor
-    func performFixOverflow(resume: Resume, allowEntityMerge: Bool) async {
-        var loopCount = 0
-        var operationSuccess = false
-        currentOverflowLineCount = 0  // Track overflow lines between iterations
+        guard let resume = selectedResume else { return }
         
-        Logger.debug("FixOverflow: Starting performFixOverflow with max iterations: \(fixOverflowMaxIterations)")
-
-        if resume.pdfData == nil {
-            fixOverflowStatusMessage = "Generating initial PDF for analysis..."
-            Logger.debug("FixOverflow: No PDF data, generating...")
-            do {
-                try await resume.ensureFreshRenderedText()
-                guard resume.pdfData != nil else {
-                    fixOverflowError = "Failed to generate initial PDF for Fix Overflow."
-                    Logger.debug("FixOverflow: Failed to generate initial PDF")
-                    isProcessingFixOverflow = false
-                    return
-                }
-                Logger.debug("FixOverflow: Successfully generated initial PDF")
-            } catch {
-                fixOverflowError = "Error generating initial PDF: \(error.localizedDescription)"
-                Logger.debug("FixOverflow: Error generating initial PDF: \(error.localizedDescription)")
-                isProcessingFixOverflow = false
-                return
-            }
-        } else {
-            Logger.debug("FixOverflow: Using existing PDF data")
-        }
-
-        repeat {
-            loopCount += 1
-            Logger.debug("FixOverflow: Starting iteration \(loopCount) of \(fixOverflowMaxIterations)")
-            fixOverflowStatusMessage = "Iteration \(loopCount)/\(fixOverflowMaxIterations): Analyzing skills section..."
-
-            guard let currentPdfData = resume.pdfData,
-                  let currentImageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: currentPdfData)
-            else {
-                fixOverflowError = "Error converting current resume to image (Iteration \(loopCount))."
-                Logger.debug("FixOverflow: Failed to convert PDF to image in iteration \(loopCount)")
-                break
-            }
-            Logger.debug("FixOverflow: Successfully converted PDF to image")
-
-            guard let skillsJsonString = reviewService?.extractSkillsForFixOverflow(resume: resume) else {
-                fixOverflowError = "Error extracting skills from resume (Iteration \(loopCount))."
-                Logger.debug("FixOverflow: Failed to extract skills from resume in iteration \(loopCount)")
-                break
-            }
-            Logger.debug("FixOverflow: Successfully extracted skills JSON: \(skillsJsonString.prefix(100))...")
-
-            if skillsJsonString == "[]" {
-                fixOverflowStatusMessage = "No 'Skills and Expertise' items found to optimize or section is empty."
-                Logger.debug("FixOverflow: No skills items found to optimize")
-                operationSuccess = true
-                break
-            }
-
-            fixOverflowStatusMessage = "Iteration \(loopCount): Asking AI to revise skills..."
-
-            let fixFitsResult: Result<FixFitsResponseContainer, Error> = await withCheckedContinuation { continuation in
-                reviewService?.sendFixFitsRequest(
-                    resume: resume,
-                    skillsJsonString: skillsJsonString,
-                    base64Image: currentImageBase64,
-                    overflowLineCount: currentOverflowLineCount,
-                    modelId: selectedModel,
-                    allowEntityMerge: allowEntityMerge
-                ) { result in
-                    continuation.resume(returning: result)
-                }
-            }
-
-            guard case let .success(fixFitsResponse) = fixFitsResult else {
-                if case let .failure(error) = fixFitsResult {
-                    fixOverflowError = "Error getting skill revisions (Iteration \(loopCount)): \(error.localizedDescription)"
-                } else {
-                    fixOverflowError = "Unknown error getting skill revisions (Iteration \(loopCount))."
-                }
-                break
-            }
-
-            fixOverflowStatusMessage = "Iteration \(loopCount): Applying suggested revisions..."
-            var changesMadeInThisIteration = false
-            var changedNodes: [(oldValue: String, newValue: String)] = []
-            
-            // First, handle any merge operation
-            if let mergeOp = fixFitsResponse.mergeOperation {
-                Logger.debug("FixOverflow: Processing merge operation in iteration \(loopCount)")
-                if let keepNode = findTreeNode(byId: mergeOp.skillToKeepId, in: resume),
-                   let deleteNode = findTreeNode(byId: mergeOp.skillToDeleteId, in: resume) {
-                    
-                    // Update the kept node with merged content
-                    let oldTitle = keepNode.name
-                    let oldDescription = keepNode.value
-                    keepNode.name = mergeOp.mergedTitle
-                    keepNode.value = mergeOp.mergedDescription
-                    
-                    // Delete the redundant node
-                    if let parent = deleteNode.parent,
-                       let index = parent.children?.firstIndex(where: { $0.id == deleteNode.id }) {
-                        parent.children?.remove(at: index)
-                        
-                        // Update indices of remaining children
-                        parent.children?.enumerated().forEach { index, child in
-                            child.myIndex = index
-                        }
-                    }
-                    
-                    changesMadeInThisIteration = true
-                    changedNodes.append((oldValue: "\(oldTitle): \(oldDescription) [merged with \(deleteNode.name)]", 
-                                       newValue: "\(mergeOp.mergedTitle): \(mergeOp.mergedDescription)"))
-                    
-                    fixOverflowChangeMessage += "\n\nMerge performed: \(mergeOp.mergeReason)"
-                }
-            }
-            
-            // Then handle regular revisions
-            for revisedNode in fixFitsResponse.revisedSkillsAndExpertise {
-                if let treeNode = findTreeNode(byId: revisedNode.id, in: resume) {
-                    var changed = false
-                    var oldDisplay = ""
-                    var newDisplay = ""
-                    
-                    if let newTitle = revisedNode.newTitle, treeNode.name != newTitle {
-                        oldDisplay = "\(treeNode.name): \(treeNode.value)"
-                        treeNode.name = newTitle
-                        changed = true
-                    }
-                    
-                    if let newDescription = revisedNode.newDescription, treeNode.value != newDescription {
-                        if oldDisplay.isEmpty {
-                            oldDisplay = "\(treeNode.name): \(treeNode.value)"
-                        }
-                        treeNode.value = newDescription
-                        changed = true
-                    }
-                    
-                    if changed {
-                        newDisplay = "\(treeNode.name): \(treeNode.value)"
-                        changesMadeInThisIteration = true
-                        changedNodes.append((oldValue: oldDisplay, newValue: newDisplay))
-                    }
-                } else {
-                    Logger.debug("Warning: TreeNode with ID \(revisedNode.id) not found for applying revision.")
-                }
-            }
-            
-            // Update change message with details of what changed
-            if !changedNodes.isEmpty {
-                var changesSummary = "Iteration \(loopCount): \(changedNodes.count) node\(changedNodes.count > 1 ? "s" : "") updated:\n\n"
-                
-                for (index, change) in changedNodes.enumerated() {
-                    // Show the full values without truncation
-                    changesSummary += "\(index + 1). \"\(change.oldValue)\" → \"\(change.newValue)\"\n\n"
-                }
-                
-                // Store in the change message, not the status message
-                fixOverflowChangeMessage = changesSummary
-                fixOverflowStatusMessage = "Iteration \(loopCount): Applied \(changedNodes.count) changes"
-            }
-
-            if !changesMadeInThisIteration && loopCount > 1 {
-                fixOverflowStatusMessage = "AI suggested no further changes. Assuming content fits or cannot be further optimized."
-                operationSuccess = true
-                break
-            }
-
-            // Update status while rendering
-            fixOverflowStatusMessage = "Re-rendering resume with changes..."
-            do {
-                try await resume.ensureFreshRenderedText()
-                guard resume.pdfData != nil else {
-                    fixOverflowError = "Failed to re-render PDF after applying changes (Iteration \(loopCount))."
-                    break
-                }
-            } catch {
-                fixOverflowError = "Error re-rendering PDF (Iteration \(loopCount)): \(error.localizedDescription)"
-                break
-            }
-
-            guard let updatedPdfData = resume.pdfData,
-                  let updatedImageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: updatedPdfData)
-            else {
-                fixOverflowError = "Error converting updated resume to image (Iteration \(loopCount))."
-                break
-            }
-
-            fixOverflowStatusMessage = "Iteration \(loopCount): Asking AI to check if content fits..."
-            Logger.debug("FixOverflow: About to send contentsFit request in iteration \(loopCount)")
-            let contentsFitResult: Result<ContentsFitResponse, Error> = await withCheckedContinuation { continuation in
-                Logger.debug("FixOverflow: Inside continuation for contentsFit request")
-                reviewService?.sendContentsFitRequest(
-                    resume: resume,
-                    base64Image: updatedImageBase64,
-                    modelId: selectedModel
-                ) { result in
-                    Logger.debug("FixOverflow: Received contentsFit response: \(result)")
-                    continuation.resume(returning: result)
-                }
-            }
-            Logger.debug("FixOverflow: After contentsFit request in iteration \(loopCount)")
-
-            guard case let .success(contentsFitResponse) = contentsFitResult else {
-                if case let .failure(error) = contentsFitResult {
-                    fixOverflowError = "Error checking content fit (Iteration \(loopCount)): \(error.localizedDescription)"
-                } else {
-                    fixOverflowError = "Unknown error checking content fit (Iteration \(loopCount))."
-                }
-                break
-            }
-
-            Logger.debug("FixOverflow: contentsFitResponse.contentsFit = \(contentsFitResponse.contentsFit), overflowLineCount = \(contentsFitResponse.overflowLineCount)")
-            
-            // Update our tracking of overflow lines for the next iteration
-            currentOverflowLineCount = contentsFitResponse.overflowLineCount
-            
-            if contentsFitResponse.contentsFit {
-                fixOverflowStatusMessage = "AI confirms content fits after \(loopCount) iteration(s)."
-                operationSuccess = true
-                Logger.debug("FixOverflow: Content fits! Breaking loop.")
-                break
-            } else {
-                let overflowDetail = currentOverflowLineCount > 0 ? " (\(currentOverflowLineCount) lines overflowing)" : ""
-                Logger.debug("FixOverflow: Content does NOT fit\(overflowDetail). Will continue iterations if possible.")
-            }
-
-            if loopCount >= fixOverflowMaxIterations {
-                fixOverflowStatusMessage = "Reached maximum iterations (\(fixOverflowMaxIterations)). Manual review of skills section recommended."
-                operationSuccess = false
-                break
-            }
-
-            fixOverflowStatusMessage = "Iteration \(loopCount): Content still overflowing. Preparing for next iteration..."
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
-
-        } while true
-
-        if fixOverflowError != nil {
-            // Error message is already set
-        } else if operationSuccess {
-            if !fixOverflowStatusMessage.lowercased().contains("fits") {
-                fixOverflowStatusMessage = "Skills section optimization complete."
-            }
-        } else if loopCount >= fixOverflowMaxIterations {
-            // Message for max iterations already set
-        } else {
-            fixOverflowStatusMessage = "Fix Overflow operation did not complete as expected. Please review."
-        }
-
-        isProcessingFixOverflow = false
-        resume.debounceExport()
-    }
-
-    // Helper to find TreeNode by ID - Unchanged
-    func findTreeNode(byId id: String, in resume: Resume) -> TreeNode? {
-        return resume.nodes.first { $0.id == id }
-    }
-    
-    // MARK: - Reorder Skills Logic
-    
-    @MainActor
-    func performReorderSkills(resume: Resume) async {
-        Logger.debug("ReorderSkills: Starting performReorderSkills")
-        fixOverflowStatusMessage = "Analyzing skills section..."
-        
-        if resume.jobApp == nil {
-            fixOverflowError = "No job application associated with this resume. Add a job application first."
-            isProcessingFixOverflow = false
-            return
-        }
-
-        fixOverflowStatusMessage = "Asking AI to analyze and reorder skills for the target job position..."
-
-        // Send request to LLM to reorder skills
-        let reorderResult: Result<ReorderSkillsResponseContainer, Error> = await withCheckedContinuation { continuation in
-            reviewService?.sendReorderSkillsRequest(
-                resume: resume,
-                appState: appState,
-                modelId: selectedModel,
-                onComplete: { result in
-                    continuation.resume(returning: result)
-                }
-            )
-        }
-
-        // Handle LLM response
-        guard case let .success(reorderResponse) = reorderResult else {
-            if case let .failure(error) = reorderResult {
-                fixOverflowError = "Error reordering skills: \(error.localizedDescription)"
-            } else {
-                fixOverflowError = "Unknown error while reordering skills."
-            }
-            isProcessingFixOverflow = false
-            return
-        }
-
-        // Apply the new ordering
-        fixOverflowStatusMessage = "Applying new skill order..."
-        
-        // Collect current order of skills and their data 
-        var currentNodes: [(id: String, name: String, position: Int)] = []
-        var skillsSectionNode: TreeNode?
-        
-        if let rootNode = resume.rootNode {
-            skillsSectionNode = rootNode.children?.first(where: { 
-                $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise" 
-            })
-            
-            if let skillsSection = skillsSectionNode, let children = skillsSection.children {
-                // Get all top-level skills nodes in their current order
-                for child in children.sorted(by: { $0.myIndex < $1.myIndex }) {
-
-                                currentNodes.append((id: child.id, name: child.name, position: child.myIndex))
-
-                    // Also add subcategory children if they exist
-                    if let subChildren = child.children?.sorted(by: { $0.myIndex < $1.myIndex }) {
-                        for subChild in subChildren {
-
-                                        currentNodes.append((id: subChild.id, name: subChild.name, position: subChild.myIndex))
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Create a map of node IDs to their current positions for comparison
-        var currentPositions: [String: Int] = [:]
-        for node in currentNodes {
-            currentPositions[node.id] = node.position
-        }
-        
-        // Sort the nodes by their new position for display
-        let sortedNodes = reorderResponse.reorderedSkillsAndExpertise.sorted { $0.newPosition < $1.newPosition }
-        
-        // Create a simple before/after ordering display
-        var oldOrder = "Old Order:\n"
-        var newOrder = "New Order:\n"
-        
-        // Sort current nodes by their position (old order)
-        let sortedCurrentNodes = currentNodes.sorted { $0.position < $1.position }
-        
-        // Create old order listing - just node names by index
-        for (index, node) in sortedCurrentNodes.enumerated() {
-            oldOrder += "\(index+1): \(node.name)\n"
-        }
-        
-        // Create new order listing - just node names by index
-        for (index, node) in sortedNodes.enumerated() {
-            newOrder += "\(index+1): \(node.originalValue)\n"
-        }
-        
-        // Create status message with just the order summary
-        let reasonsText = "Skills have been reordered for maximum relevance.\n\n\(oldOrder)\n\(newOrder)"
-        
-        // Create detailed change message that persists
-        var changeMessage = "Skills reordered by position:\n\n"
-        
-        // Show position changes
-        for node in sortedNodes {
-            let nodeText = node.originalValue
-            let oldPosition = currentPositions[node.id] ?? -1
-            
-            // Skip nodes that didn't move or we couldn't find positions for
-            if oldPosition == -1 || oldPosition == node.newPosition {
-                continue
-            }
-            
-            let changeIndicator = oldPosition < node.newPosition ? "↓" : "↑"
-            changeMessage += "• \(nodeText) moved from position \(oldPosition + 1) to \(node.newPosition + 1) \(changeIndicator)\n"
-        }
-        
-        changeMessage += "\n\nReordered skills with reasons:\n\n"
-        for node in sortedNodes {
-            let nodeText = node.isTitleNode ? "**\(node.originalValue)**" : node.originalValue
-            changeMessage += "- \(nodeText)\n  _\(node.reasonForReordering)_\n\n"
-        }
-        
-        // Store in the change message so it persists
-        fixOverflowChangeMessage = changeMessage
-        fixOverflowStatusMessage = reasonsText
-        
-        // Apply the reordering to the actual tree nodes
-        let success = reviewService?.applySkillReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise) ?? false
-        
-        if success {
-            // Re-render the resume with the new order
-            fixOverflowStatusMessage = "Re-rendering resume with new skill order..."
-            do {
-                try await resume.ensureFreshRenderedText()
-                // Update with success message
-                fixOverflowStatusMessage = reasonsText
-                
-                // Make sure changes are saved
-                resume.debounceExport()
-            } catch {
-                fixOverflowError = "Error re-rendering resume: \(error.localizedDescription)"
-            }
-        } else {
-            fixOverflowError = "Error applying new skill order to resume."
-        }
-        
-        isProcessingFixOverflow = false
+        viewModel.handleSubmit(
+            reviewType: selectedReviewType,
+            resume: resume,
+            selectedModel: selectedModel,
+            customOptions: customOptions,
+            allowEntityMerge: allowEntityMerge,
+            appState: appState
+        )
     }
 }

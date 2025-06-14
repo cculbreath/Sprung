@@ -16,7 +16,6 @@ struct ContentView: View {
     @State var showSlidingList: Bool = false
     @State var selectedTab: TabList = .listing
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
-    @State private var showImportSheet: Bool = false
     @State private var sheets = AppSheets()
     @State private var clarifyingQuestions: [ClarifyingQuestion] = []
     @State private var listingButtons = SaveButtons()
@@ -77,26 +76,13 @@ struct ContentView: View {
                     sheets: $sheets,
                     clarifyingQuestions: $clarifyingQuestions,
                     resumeReviseViewModel: appState.resumeReviseViewModel,
-                    showNewAppSheet: $showImportSheet,
+                    showNewAppSheet: $sheets.showNewJobApp,
                     showSlidingList: $showSlidingList
                 )
             }
         }
         // Apply sheet modifier
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
-        // Import sheet remains separate as it's specific to ContentView
-        .sheet(isPresented: $showImportSheet) {
-            ImportJobAppsFromURLsView()
-                .environment(jobAppStore)
-        }
-        .onChange(of: appState.showImportJobAppsSheet) { _, newValue in
-            Logger.debug("🟢 ContentView detected appState.showImportJobAppsSheet changed to: \(newValue)")
-            if newValue {
-                showImportSheet = true
-                // Reset the appState flag
-                appState.showImportJobAppsSheet = false
-            }
-        }
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             // Sync selected app to AppState for template editor
             appState.selectedJobApp = newValue
@@ -110,13 +96,8 @@ struct ContentView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowImportJobApps"))) { _ in
-            Logger.debug("🟢 ContentView received ShowImportJobApps notification")
-            showImportSheet = true
-        }
         .onAppear {
             Logger.debug("🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
-            Logger.debug("🟡 Initial appState.showImportJobAppsSheet: \(appState.showImportJobAppsSheet)")
             
             // Initialize Resume Revise View Model
             appState.resumeReviseViewModel = ResumeReviseViewModel(
