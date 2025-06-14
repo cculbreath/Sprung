@@ -9,6 +9,7 @@ import Foundation
 
 class CoverLetterCommitteeSummaryGenerator {
     
+    @MainActor
     func generateSummary(
         coverLetter: CoverLetter,
         coverLetters: [CoverLetter],
@@ -100,7 +101,7 @@ class CoverLetterCommitteeSummaryGenerator {
             selectedVotingScheme: selectedVotingScheme
         )
         
-        let llmService = await MainActor.run { LLMService.shared }
+        let llmService = LLMService.shared
         
         let jsonSchema = createJSONSchema()
         
