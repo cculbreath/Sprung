@@ -14,7 +14,12 @@ import SwiftData
 class AppState {
     var showNewAppSheet: Bool = false
     var showSlidingList: Bool = false
-    var selectedTab: TabList = .listing
+    var selectedTab: TabList = .listing {
+        didSet {
+            // Save to UserDefaults when changed
+            UserDefaults.standard.set(selectedTab.rawValue, forKey: "selectedTab")
+        }
+    }
     var dragInfo = DragInfo()
 
     // AI job recommendation properties
@@ -29,6 +34,9 @@ class AppState {
     var selectedResume: Resume? {
         selectedJobApp?.selectedRes
     }
+    
+    // Persistent selected job app UUID
+    @ObservationIgnored @AppStorage("selectedJobAppId") private var selectedJobAppId: String = ""
     
     // OpenRouter service
     let openRouterService = OpenRouterService.shared
@@ -45,6 +53,16 @@ class AppState {
     
     init() {
         configureOpenRouterService()
+        restoreSelectedTab()
+    }
+    
+    /// Restore the selected tab from UserDefaults
+    private func restoreSelectedTab() {
+        if let savedTabRawValue = UserDefaults.standard.object(forKey: "selectedTab") as? String,
+           let savedTab = TabList(rawValue: savedTabRawValue) {
+            selectedTab = savedTab
+            Logger.debug("✅ Restored selected tab: \(savedTab.rawValue)")
+        }
     }
     
     /// Initialize the EnabledLLM store with a ModelContext
@@ -104,6 +122,34 @@ class AppState {
         configureOpenRouterService()
         // Also reconfigure LLMService to use the updated API key
         LLMService.shared.reconfigureClient()
+    }
+    
+    /// Save the selected job app ID for persistence
+    func saveSelectedJobApp(_ jobApp: JobApp?) {
+        if let jobApp = jobApp {
+            selectedJobAppId = jobApp.id.uuidString
+        } else {
+            selectedJobAppId = ""
+        }
+    }
+    
+    /// Restore the selected job app from persistence
+    func restoreSelectedJobApp(from jobAppStore: JobAppStore) {
+        guard !selectedJobAppId.isEmpty,
+              let uuid = UUID(uuidString: selectedJobAppId) else {
+            return
+        }
+        
+        // Find the job app with the saved ID
+        if let jobApp = jobAppStore.jobApps.first(where: { $0.id == uuid }) {
+            jobAppStore.selectedApp = jobApp
+            selectedJobApp = jobApp
+            Logger.debug("✅ Restored selected job app: \(jobApp.jobPosition)")
+        } else {
+            // Clear invalid ID if job app no longer exists
+            selectedJobAppId = ""
+            Logger.debug("⚠️ Could not restore job app with ID: \(selectedJobAppId)")
+        }
     }
     
     /// Validate all enabled models at startup to check availability and capabilities
