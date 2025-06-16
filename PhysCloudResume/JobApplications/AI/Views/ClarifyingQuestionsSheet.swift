@@ -16,9 +16,17 @@ struct ClarifyingQuestionsSheet: View {
     @State private var declinedQuestions: Set<String> = []
     @FocusState private var focusedQuestionId: String?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appState) private var appState
+    
+    // Access the reasoning stream manager from the view model
+    private var reasoningStreamManager: ReasoningStreamManager? {
+        appState.clarifyingQuestionsViewModel?.reasoningStreamManager
+    }
     
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 0) {
+            // Main content
+            VStack(spacing: 20) {
             // Header
             VStack(spacing: 8) {
                 Image(systemName: "questionmark.bubble")
@@ -97,6 +105,21 @@ struct ClarifyingQuestionsSheet: View {
                 .disabled(!isValidToSubmit)
             }
             .padding()
+            }
+            
+            // Reasoning stream view at the bottom
+            if let manager = reasoningStreamManager {
+                ReasoningStreamView(
+                    isVisible: Binding(
+                        get: { manager.isVisible },
+                        set: { manager.isVisible = $0 }
+                    ),
+                    reasoningText: Binding(
+                        get: { manager.reasoningText },
+                        set: { manager.reasoningText = $0 }
+                    )
+                )
+            }
         }
         .frame(minWidth: 600, idealWidth: 700, minHeight: 400)
         .background(Color(NSColor.controlBackgroundColor))

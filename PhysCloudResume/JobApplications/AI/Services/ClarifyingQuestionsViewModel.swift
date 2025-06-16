@@ -24,6 +24,9 @@ class ClarifyingQuestionsViewModel {
     var currentConversationId: UUID?
     var currentModelId: String? // Track the model used for conversation continuity
     
+    // MARK: - Reasoning Stream State
+    var reasoningStreamManager = ReasoningStreamManager()
+    
     // MARK: - Error Handling
     var lastError: String?
     var showError: Bool = false
@@ -53,6 +56,10 @@ class ClarifyingQuestionsViewModel {
             // Store the model for conversation continuity
             currentModelId = modelId
             
+            // Check if model supports reasoning
+            let model = appState.openRouterService.findModel(id: modelId)
+            let supportsReasoning = model?.supportsReasoning ?? false
+            
             // Create the query for clarifying questions
             let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
             
@@ -70,37 +77,72 @@ class ClarifyingQuestionsViewModel {
             // Store the conversation ID and get structured response
             currentConversationId = conversationId
             
-            // Request clarifying questions in structured format with schema enforcement
-            let questionsRequest = try await llmService.continueConversationStructured(
-                userMessage: "Please provide clarifying questions in the specified JSON format.",
-                modelId: modelId,
-                conversationId: conversationId,
-                responseType: ClarifyingQuestionsRequest.self,
-                jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
-            )
-            
-            Logger.debug("🔍 Parsed clarifying questions response:")
-            Logger.debug("🔍 proceedWithRevisions: \(questionsRequest.proceedWithRevisions)")
-            Logger.debug("🔍 questions.count: \(questionsRequest.questions.count)")
-            Logger.debug("🔍 questions.isEmpty: \(questionsRequest.questions.isEmpty)")
-            
-            // Only auto-proceed if AI explicitly says to proceed AND there are no questions
-            if questionsRequest.proceedWithRevisions && questionsRequest.questions.isEmpty {
-                // AI decided no questions needed, proceed directly to revisions
-                Logger.debug("AI opted to proceed without clarifying questions")
-                await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
-            } else if !questionsRequest.questions.isEmpty {
-                // Store questions for UI - let user decide whether to answer them
-                Logger.debug("Generated \(questionsRequest.questions.count) clarifying questions")
-                for (index, question) in questionsRequest.questions.enumerated() {
-                    Logger.debug("🔍 Question \(index + 1): id=\(question.id), question=\(question.question.prefix(50))...")
+            if supportsReasoning {
+                // Use streaming with reasoning for supported models
+                Logger.info("🧠 Using streaming with reasoning for model: \(modelId)")
+                
+                // Configure reasoning parameters
+                let reasoning = OpenRouterReasoning(
+                    effort: "high",
+                    exclude: false // We want to see the reasoning
+                )
+                
+                // Start streaming
+                let stream = llmService.continueConversationStreaming(
+                    userMessage: "Please provide clarifying questions in the specified JSON format.",
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    reasoning: reasoning
+                )
+                
+                // Process stream and collect full response
+                reasoningStreamManager.clear()
+                var fullResponse = ""
+                var collectingJSON = false
+                var jsonResponse = ""
+                
+                for try await chunk in stream {
+                    // Handle reasoning content
+                    if let reasoningContent = chunk.reasoningContent {
+                        reasoningStreamManager.reasoningText += reasoningContent
+                        reasoningStreamManager.isVisible = true
+                    }
+                    
+                    // Collect regular content
+                    if let content = chunk.content {
+                        fullResponse += content
+                        
+                        // Try to extract JSON from the response
+                        if content.contains("{") || collectingJSON {
+                            collectingJSON = true
+                            jsonResponse += content
+                        }
+                    }
+                    
+                    // Handle completion
+                    if chunk.isFinished {
+                        reasoningStreamManager.isStreaming = false
+                    }
                 }
-                questions = questionsRequest.questions
-                Logger.debug("🔍 Stored questions in ViewModel, count: \(questions.count)")
+                
+                // Parse the JSON response
+                let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
+                let questionsRequest = try parseJSONFromText(responseText, as: ClarifyingQuestionsRequest.self)
+                
+                // Continue with the parsed questions
+                await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, query: query, modelId: modelId)
+                
             } else {
-                // Edge case: no questions and AI didn't explicitly say to proceed
-                Logger.debug("No questions generated and AI didn't explicitly request to proceed - treating as no questions needed")
-                await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
+                // Use non-streaming for models without reasoning support
+                let questionsRequest = try await llmService.continueConversationStructured(
+                    userMessage: "Please provide clarifying questions in the specified JSON format.",
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    responseType: ClarifyingQuestionsRequest.self,
+                    jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
+                )
+                
+                await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, query: query, modelId: modelId)
             }
             
             isGeneratingQuestions = false
@@ -183,6 +225,38 @@ class ClarifyingQuestionsViewModel {
     }
     
     // MARK: - Private Helpers
+    
+    /// Handle the clarifying questions response
+    private func handleClarifyingQuestionsResponse(
+        _ questionsRequest: ClarifyingQuestionsRequest,
+        resume: Resume,
+        query: ResumeApiQuery,
+        modelId: String
+    ) async {
+        Logger.debug("🔍 Parsed clarifying questions response:")
+        Logger.debug("🔍 proceedWithRevisions: \(questionsRequest.proceedWithRevisions)")
+        Logger.debug("🔍 questions.count: \(questionsRequest.questions.count)")
+        Logger.debug("🔍 questions.isEmpty: \(questionsRequest.questions.isEmpty)")
+        
+        // Only auto-proceed if AI explicitly says to proceed AND there are no questions
+        if questionsRequest.proceedWithRevisions && questionsRequest.questions.isEmpty {
+            // AI decided no questions needed, proceed directly to revisions
+            Logger.debug("AI opted to proceed without clarifying questions")
+            await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
+        } else if !questionsRequest.questions.isEmpty {
+            // Store questions for UI - let user decide whether to answer them
+            Logger.debug("Generated \(questionsRequest.questions.count) clarifying questions")
+            for (index, question) in questionsRequest.questions.enumerated() {
+                Logger.debug("🔍 Question \(index + 1): id=\(question.id), question=\(question.question.prefix(50))...")
+            }
+            questions = questionsRequest.questions
+            Logger.debug("🔍 Stored questions in ViewModel, count: \(questions.count)")
+        } else {
+            // Edge case: no questions and AI didn't explicitly say to proceed
+            Logger.debug("No questions generated and AI didn't explicitly request to proceed - treating as no questions needed")
+            await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
+        }
+    }
     
     /// Proceed directly to revisions without questions
     private func proceedDirectlyToRevisions(
@@ -268,6 +342,70 @@ class ClarifyingQuestionsViewModel {
         lastError = nil
         showError = false
         isGeneratingQuestions = false
+    }
+    
+    /// Parse JSON from text content with fallback strategies
+    private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
+        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")
+        
+        // First try direct parsing if the entire text is JSON
+        if let jsonData = text.data(using: .utf8) {
+            do {
+                let result = try JSONDecoder().decode(type, from: jsonData)
+                Logger.info("✅ Direct JSON parsing successful")
+                return result
+            } catch {
+                Logger.debug("❌ Direct JSON parsing failed: \(error)")
+            }
+        }
+        
+        // Try to extract JSON from text (look for JSON between ```json and ``` or just {...})
+        let cleanedText = extractJSONFromText(text)
+        if let jsonData = cleanedText.data(using: .utf8) {
+            do {
+                let result = try JSONDecoder().decode(type, from: jsonData)
+                Logger.info("✅ Extracted JSON parsing successful")
+                return result
+            } catch {
+                Logger.debug("❌ Extracted JSON parsing failed: \(error)")
+            }
+        }
+        
+        throw LLMError.decodingFailed(NSError(domain: "ClarifyingQuestionsViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not parse JSON from response"]))
+    }
+    
+    /// Extract JSON from text that may contain other content
+    private func extractJSONFromText(_ text: String) -> String {
+        // Look for JSON between code blocks
+        if let range = text.range(of: "```json") {
+            let afterStart = text[range.upperBound...]
+            if let endRange = afterStart.range(of: "```") {
+                return String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // Look for standalone JSON object
+        if let startRange = text.range(of: "{") {
+            var braceCount = 1
+            var index = text.index(after: startRange.lowerBound)
+            
+            while index < text.endIndex && braceCount > 0 {
+                let char = text[index]
+                if char == "{" {
+                    braceCount += 1
+                } else if char == "}" {
+                    braceCount -= 1
+                }
+                index = text.index(after: index)
+            }
+            
+            if braceCount == 0 {
+                let jsonRange = startRange.lowerBound..<index
+                return String(text[jsonRange])
+            }
+        }
+        
+        return text
     }
 }
 
