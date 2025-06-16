@@ -19,7 +19,7 @@ struct ClarifyingQuestionsRequest: Codable {
 }
 
 /// Individual clarifying question
-struct ClarifyingQuestion: Codable, Identifiable {
+struct ClarifyingQuestion: Codable, Identifiable, Equatable {
     let id: String
     let question: String
     let context: String? // Optional context about why this question is being asked

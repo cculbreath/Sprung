@@ -101,9 +101,20 @@ struct ClarifyingQuestionsSheet: View {
         .frame(minWidth: 600, idealWidth: 700, minHeight: 400)
         .background(Color(NSColor.controlBackgroundColor))
         .onAppear {
+            Logger.debug("🔍 ClarifyingQuestionsSheet.onAppear called")
+            Logger.debug("🔍 Received questions.count: \(questions.count)")
+            Logger.debug("🔍 questions.isEmpty: \(questions.isEmpty)")
+            Logger.debug("🔍 questions array: \(questions)")
+            for (index, question) in questions.enumerated() {
+                Logger.debug("🔍 Sheet Question \(index + 1): id=\(question.id), question=\(question.question.prefix(50))...")
+            }
+            
             // Focus the first question when the sheet appears
             if let firstQuestion = questions.first {
                 focusedQuestionId = firstQuestion.id
+                Logger.debug("🔍 Set focus to first question: \(firstQuestion.id)")
+            } else {
+                Logger.debug("🔍 No questions to focus on")
             }
         }
     }

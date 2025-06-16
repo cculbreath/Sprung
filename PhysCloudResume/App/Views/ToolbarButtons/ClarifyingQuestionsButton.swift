@@ -18,7 +18,7 @@ struct ClarifyingQuestionsButton: View {
     var body: some View {
         Button(action: {
             selectedTab = .resume
-            clarifyingQuestions = []
+            // Don't clear questions here - they might be needed for the sheet
             showClarifyingQuestionsModelSheet = true
         }) {
             if isGeneratingQuestions {
@@ -73,8 +73,15 @@ struct ClarifyingQuestionsButton: View {
         .onReceive(NotificationCenter.default.publisher(for: .triggerClarifyingQuestionsButton)) { _ in
             // Programmatically trigger the button action (from menu commands)
             selectedTab = .resume
-            clarifyingQuestions = []
+            // Don't clear questions here either
             showClarifyingQuestionsModelSheet = true
+        }
+        .onChange(of: clarifyingQuestions) { oldValue, newValue in
+            // Show sheet when questions are populated
+            if oldValue.isEmpty && !newValue.isEmpty {
+                Logger.debug("🔍 Questions populated, showing sheet")
+                sheets.showClarifyingQuestions = true
+            }
         }
     }
     
@@ -99,10 +106,17 @@ struct ClarifyingQuestionsButton: View {
                 modelId: modelId
             )
             
+            Logger.debug("🔍 After workflow completion, checking ViewModel questions:")
+            Logger.debug("🔍 clarifyingViewModel.questions.count: \(clarifyingViewModel.questions.count)")
+            Logger.debug("🔍 clarifyingViewModel.questions.isEmpty: \(clarifyingViewModel.questions.isEmpty)")
+            
             if !clarifyingViewModel.questions.isEmpty {
                 Logger.debug("Showing \(clarifyingViewModel.questions.count) clarifying questions")
+                Logger.debug("🔍 About to set clarifyingQuestions binding...")
+                
+                // Just set the questions - onChange will handle showing the sheet
                 clarifyingQuestions = clarifyingViewModel.questions
-                sheets.showClarifyingQuestions = true
+                Logger.debug("🔍 clarifyingQuestions binding set, count: \(clarifyingQuestions.count)")
             } else {
                 Logger.debug("AI opted to proceed without clarifying questions")
             }
