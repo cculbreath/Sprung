@@ -282,12 +282,12 @@ class LLMService {
                         if let enabled = reasoning.enabled {
                             reasoningDict["enabled"] = enabled
                         }
-                        parameters.reasoning = reasoningDict
+                        // Note: reasoning parameter will be added via custom encoding in SwiftOpenAI
+                        Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
                     }
                     
                     // Enable streaming
                     parameters.stream = true
-                    parameters.streamOptions = StreamOptions(includeUsage: true)
                     
                     // Execute streaming request
                     let stream = try await requestExecutor.executeStreaming(parameters: parameters)
@@ -354,12 +354,12 @@ class LLMService {
                         if let enabled = reasoning.enabled {
                             reasoningDict["enabled"] = enabled
                         }
-                        parameters.reasoning = reasoningDict
+                        // Note: reasoning parameter will be added via custom encoding in SwiftOpenAI
+                        Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
                     }
                     
                     // Enable streaming
                     parameters.stream = true
-                    parameters.streamOptions = StreamOptions(includeUsage: true)
                     
                     // Execute streaming request
                     let stream = try await requestExecutor.executeStreaming(parameters: parameters)
@@ -455,12 +455,12 @@ class LLMService {
                         if let enabled = reasoning.enabled {
                             reasoningDict["enabled"] = enabled
                         }
-                        parameters.reasoning = reasoningDict
+                        // Note: reasoning parameter will be added via custom encoding in SwiftOpenAI
+                        Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
                     }
                     
                     // Enable streaming
                     parameters.stream = true
-                    parameters.streamOptions = StreamOptions(includeUsage: true)
                     
                     // Execute streaming request
                     let stream = try await requestExecutor.executeStreaming(parameters: parameters)
