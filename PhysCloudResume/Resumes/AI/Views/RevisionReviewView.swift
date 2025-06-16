@@ -418,7 +418,12 @@ struct RevisionActionButtons: View {
                     ))
                     .font(.system(.body))
                     .frame(minHeight: 60)
-                    .background(Color(.controlBackgroundColor))
+                    .padding(6)
+                    .background(Color(.textBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.green.opacity(0.6), lineWidth: 2)
+                    )
                     .cornerRadius(8)
                     
                     VStack(spacing: 8) {
@@ -461,7 +466,12 @@ struct RevisionActionButtons: View {
                     ))
                     .font(.system(.body))
                     .frame(minHeight: 80)
-                    .background(Color(.controlBackgroundColor))
+                    .padding(8)
+                    .background(Color(.textBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.blue.opacity(0.6), lineWidth: 2)
+                    )
                     .cornerRadius(8)
                     
                     HStack(spacing: 12) {

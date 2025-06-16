@@ -58,19 +58,6 @@ struct ClarifyingQuestionsButton: View {
                 }
             )
         }
-        .sheet(isPresented: $sheets.showClarifyingQuestions) {
-            ClarifyingQuestionsSheet(
-                questions: clarifyingQuestions,
-                isPresented: $sheets.showClarifyingQuestions,
-                onSubmit: { answers in
-                    sheets.showClarifyingQuestions = false
-                    isGeneratingQuestions = true
-                    Task {
-                        await processClarifyingQuestionsAnswers(answers: answers)
-                    }
-                }
-            )
-        }
         .onReceive(NotificationCenter.default.publisher(for: .triggerClarifyingQuestionsButton)) { _ in
             // Programmatically trigger the button action (from menu commands)
             selectedTab = .resume
@@ -93,6 +80,7 @@ struct ClarifyingQuestionsButton: View {
                 appState: appState
             )
             clarifyingQuestionsViewModel = clarifyingViewModel
+            appState.clarifyingQuestionsViewModel = clarifyingViewModel
             
             try await clarifyingViewModel.startClarifyingQuestionsWorkflow(
                 resume: resume,
@@ -129,36 +117,4 @@ struct ClarifyingQuestionsButton: View {
         }
     }
     
-    @MainActor
-    private func processClarifyingQuestionsAnswers(answers: [QuestionAnswer]) async {
-        guard let jobApp = jobAppStore.selectedApp,
-              let resume = jobApp.selectedRes else {
-            return
-        }
-        
-        do {
-            guard let clarifyingViewModel = clarifyingQuestionsViewModel else {
-                Logger.error("ClarifyingQuestionsViewModel not available for processing answers")
-                return
-            }
-            
-            guard let resumeViewModel = resumeReviseViewModel else {
-                Logger.error("ResumeReviseViewModel not available for handoff")
-                return
-            }
-            
-            try await clarifyingViewModel.processAnswersAndHandoffConversation(
-                answers: answers,
-                resume: resume,
-                resumeReviseViewModel: resumeViewModel
-            )
-            
-            Logger.debug("✅ Clarifying questions processed and handed off to ResumeReviseViewModel")
-            
-        } catch {
-            Logger.error("Error processing clarifying questions answers: \\(error.localizedDescription)")
-        }
-        
-        isGeneratingQuestions = false
-    }
 }

@@ -50,6 +50,9 @@ class AppState {
     // Resume revision view model
     var resumeReviseViewModel: ResumeReviseViewModel?
     
+    // Clarifying questions view model for shared access
+    var clarifyingQuestionsViewModel: ClarifyingQuestionsViewModel?
+    
     
     init() {
         configureOpenRouterService()
