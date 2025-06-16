@@ -56,7 +56,7 @@ struct PhysicsCloudResumeApp: App {
     }
 
     var body: some Scene {
-        Window("Physics Cloud Résumé", id: "myApp") {
+        Window("", id: "myApp") {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization
                 .environment(appState)
                 .onAppear {

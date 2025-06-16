@@ -79,6 +79,11 @@ class ClarifyingQuestionsViewModel {
                 jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
             )
             
+            Logger.debug("🔍 Parsed clarifying questions response:")
+            Logger.debug("🔍 proceedWithRevisions: \(questionsRequest.proceedWithRevisions)")
+            Logger.debug("🔍 questions.count: \(questionsRequest.questions.count)")
+            Logger.debug("🔍 questions.isEmpty: \(questionsRequest.questions.isEmpty)")
+            
             if questionsRequest.proceedWithRevisions || questionsRequest.questions.isEmpty {
                 // AI decided no questions needed, proceed directly to revisions
                 Logger.debug("AI opted to proceed without clarifying questions")
@@ -86,7 +91,11 @@ class ClarifyingQuestionsViewModel {
             } else {
                 // Store questions for UI
                 Logger.debug("Generated \(questionsRequest.questions.count) clarifying questions")
+                for (index, question) in questionsRequest.questions.enumerated() {
+                    Logger.debug("🔍 Question \(index + 1): id=\(question.id), question=\(question.question.prefix(50))...")
+                }
                 questions = questionsRequest.questions
+                Logger.debug("🔍 Stored questions in ViewModel, count: \(questions.count)")
             }
             
             isGeneratingQuestions = false

@@ -14,5 +14,7 @@
 	<true/>
 	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
 	<true/>
+	<key>com.apple.runningboard.assertions.webkit</key>
+	<true/>
 </dict>
 </plist>

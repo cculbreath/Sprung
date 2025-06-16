@@ -39,6 +39,11 @@ class LLMRequestExecutor {
             Logger.debug("🔑 Using API key: \(maskedKey)")
             
             Logger.debug("🔧 Creating OpenRouter client with baseURL: https://openrouter.ai")
+            
+            // Only enable verbose SwiftOpenAI debug logging when user has set debug level to Verbose (2)
+            let enableSwiftOpenAIDebug = UserDefaults.standard.integer(forKey: "debugLogLevel") == 2
+            Logger.debug("🔧 SwiftOpenAI debug logging: \(enableSwiftOpenAIDebug ? "enabled" : "disabled")")
+            
             self.openRouterClient = OpenAIServiceFactory.service(
                 apiKey: apiKey,
                 overrideBaseURL: "https://openrouter.ai",
@@ -48,7 +53,7 @@ class LLMRequestExecutor {
                     "HTTP-Referer": "https://github.com/cculbreath/PhysCloudResume",
                     "X-Title": "Physics Cloud Resume"
                 ],
-                debugEnabled: true
+                debugEnabled: enableSwiftOpenAIDebug
             )
             Logger.info("🔄 LLMRequestExecutor configured OpenRouter client with key")
             Logger.debug("🌐 Expected URL: https://openrouter.ai/api/v1/chat/completions")
