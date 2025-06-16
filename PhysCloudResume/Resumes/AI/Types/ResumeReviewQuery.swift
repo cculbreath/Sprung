@@ -244,4 +244,45 @@ import Foundation
         - Do not include any text outside the JSON object
         """
     }
+    
+    // MARK: - Console Print Friendly Methods
+    
+    /// Creates a console-friendly version of the prompt with truncated long strings
+    func consoleFriendlyPrompt(_ fullPrompt: String) -> String {
+        var truncatedPrompt = fullPrompt
+        
+        // Truncate job description if present
+        if truncatedPrompt.contains("{jobDescription}") {
+            let truncatedJobDesc = "[Job description truncated...]"
+            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: "{jobDescription}", with: truncatedJobDesc)
+        }
+        
+        // Truncate resume text if present
+        if truncatedPrompt.contains("{resumeText}") {
+            let truncatedResumeText = "[Resume text truncated...]"
+            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: "{resumeText}", with: truncatedResumeText)
+        }
+        
+        // Truncate skills JSON if present in fix fits prompts
+        let skillsPattern = "Here are the current skills and expertise entries in JSON format:"
+        if let skillsRange = truncatedPrompt.range(of: skillsPattern) {
+            let fromSkills = truncatedPrompt[skillsRange.upperBound...]
+            if let taskRange = fromSkills.range(of: "TASK:") {
+                let skillsJson = String(fromSkills[..<taskRange.lowerBound])
+                let truncatedSkillsJson = truncateString(skillsJson, maxLength: 300)
+                truncatedPrompt = truncatedPrompt.replacingOccurrences(of: skillsJson, with: truncatedSkillsJson)
+            }
+        }
+        
+        return truncatedPrompt
+    }
+    
+    /// Helper method to truncate strings with ellipsis
+    private func truncateString(_ string: String, maxLength: Int) -> String {
+        if string.count <= maxLength {
+            return string
+        }
+        let truncated = String(string.prefix(maxLength))
+        return truncated + "..."
+    }
 }

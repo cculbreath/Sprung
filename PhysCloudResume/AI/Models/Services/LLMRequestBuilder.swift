@@ -8,6 +8,32 @@
 import Foundation
 import SwiftOpenAI
 
+/// Reasoning configuration for OpenRouter (different from OpenAI's format)
+public struct OpenRouterReasoning: Codable {
+    /// Effort level: "high", "medium", or "low"
+    public let effort: String?
+    /// Maximum tokens for reasoning (Anthropic-style)
+    public let maxTokens: Int?
+    /// Whether to exclude reasoning tokens from response
+    public let exclude: Bool?
+    /// Enable reasoning with default parameters
+    public let enabled: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case effort
+        case maxTokens = "max_tokens"
+        case exclude
+        case enabled
+    }
+    
+    public init(effort: String? = nil, maxTokens: Int? = nil, exclude: Bool? = nil, enabled: Bool? = nil) {
+        self.effort = effort
+        self.maxTokens = maxTokens
+        self.exclude = exclude
+        self.enabled = enabled
+    }
+}
+
 /// Factory for assembling ChatCompletionParameters objects
 struct LLMRequestBuilder {
     

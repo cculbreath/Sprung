@@ -154,6 +154,85 @@ class LLMRequestExecutor {
         throw lastError ?? LLMError.clientError("Maximum retries exceeded")
     }
     
+    /// Execute a streaming request with retry logic
+    func executeStreaming(parameters: ChatCompletionParameters, maxRetries: Int? = nil) async throws -> AsyncThrowingStream<ChatCompletionChunkObject, Error> {
+        guard let client = openRouterClient else {
+            throw LLMError.clientError("OpenRouter client not configured")
+        }
+        
+        let requestId = UUID()
+        currentRequestIDs.insert(requestId)
+        defer { currentRequestIDs.remove(requestId) }
+        
+        let retries = maxRetries ?? defaultMaxRetries
+        var lastError: Error?
+        
+        for attempt in 0...retries {
+            // Check if request was cancelled
+            guard currentRequestIDs.contains(requestId) else {
+                throw LLMError.clientError("Request was cancelled")
+            }
+            
+            do {
+                Logger.info("🌐 Starting streaming request with model: \(parameters.model)")
+                let stream = try await client.startStreamedChat(parameters: parameters)
+                Logger.info("✅ Streaming started successfully for model: \(parameters.model)")
+                return stream
+            } catch {
+                lastError = error
+                Logger.debug("❌ Streaming request failed with error: \(error)")
+                
+                // Handle SwiftOpenAI APIErrors with enhanced 403 detection
+                if let apiError = error as? SwiftOpenAI.APIError {
+                    Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)")
+                    
+                    // Check for 403 Unauthorized specifically
+                    if apiError.displayDescription.contains("status code 403") {
+                        let modelId = extractModelId(from: parameters)
+                        Logger.debug("🚫 403 Unauthorized detected for model: \(modelId)")
+                        throw LLMError.unauthorized(modelId)
+                    }
+                }
+                
+                // Don't retry on certain errors
+                if let appError = error as? LLMError {
+                    switch appError {
+                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized:
+                        throw appError
+                    case .rateLimited(let retryAfter):
+                        if let delay = retryAfter, attempt < retries {
+                            Logger.debug("🔄 Rate limited, waiting \(delay)s before retry")
+                            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                            continue
+                        } else {
+                            throw appError
+                        }
+                    case .timeout:
+                        if attempt < retries {
+                            let delay = baseRetryDelay * pow(2.0, Double(attempt))
+                            Logger.debug("🔄 Request timeout, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))")
+                            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                            continue
+                        } else {
+                            throw appError
+                        }
+                    }
+                }
+                
+                // Retry for network errors
+                if attempt < retries {
+                    let delay = baseRetryDelay * pow(2.0, Double(attempt))
+                    Logger.debug("🔄 Network error, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    continue
+                }
+            }
+        }
+        
+        // All retries exhausted
+        throw lastError ?? LLMError.clientError("Maximum retries exceeded")
+    }
+    
     /// Cancel all current requests
     func cancelAllRequests() {
         currentRequestIDs.removeAll()

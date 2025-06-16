@@ -20,7 +20,7 @@ class EnabledLLM {
     var supportsStructuredOutput: Bool = false
     var supportsJSONSchema: Bool = false  // More specific than structured output
     var supportsImages: Bool = false
-    var supportsReasoning: Bool = false
+    var supportsReasoning: Bool = false  // Supports reasoning tokens (o1, Claude 3.7, DeepSeek R1, etc.)
     var isTextToText: Bool = true
     
     // Failure tracking

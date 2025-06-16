@@ -225,7 +225,7 @@ class ResumeReviewService: @unchecked Sendable {
                 
                 // Build the prompt using the centralized ResumeReviewQuery
                 let prompt = query.buildContentsFitPrompt()
-                Logger.debug("ResumeReviewService: ContentsFit prompt:\n\(prompt)")
+                Logger.debug("ResumeReviewService: ContentsFit prompt:\n\(query.consoleFriendlyPrompt(prompt))")
                 
                 // Convert base64Image back to Data for LLMService
                 guard let imageData = Data(base64Encoded: base64Image) else {
