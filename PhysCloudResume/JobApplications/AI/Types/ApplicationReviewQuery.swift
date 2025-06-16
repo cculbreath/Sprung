@@ -122,4 +122,41 @@ import Foundation
         Logger.debug("🔧 [ApplicationReview] Custom prompt built, total length: \(result.count)")
         return result
     }
+    
+    // MARK: - Console Print Friendly Methods
+    
+    /// Creates a console-friendly version of the prompt with truncated long strings
+    func consoleFriendlyPrompt(_ fullPrompt: String) -> String {
+        var truncatedPrompt = fullPrompt
+        
+        // Get background docs for truncation
+        let bgDocs = fullPrompt.range(of: "{backgroundDocs}").map { _ in "[background docs content]" } ?? ""
+        if !bgDocs.isEmpty {
+            let truncatedBgDocs = truncateString(bgDocs, maxLength: 200)
+            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: "{backgroundDocs}", with: truncatedBgDocs)
+        }
+        
+        // Truncate resume text if present
+        if truncatedPrompt.contains("{resumeText}") {
+            let truncatedResumeText = "[Resume text truncated...]"
+            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: "{resumeText}", with: truncatedResumeText)
+        }
+        
+        // Truncate cover letter text if present
+        if truncatedPrompt.contains("{coverLetterText}") {
+            let truncatedCoverLetter = "[Cover letter text truncated...]"
+            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: "{coverLetterText}", with: truncatedCoverLetter)
+        }
+        
+        return truncatedPrompt
+    }
+    
+    /// Helper method to truncate strings with ellipsis
+    private func truncateString(_ string: String, maxLength: Int) -> String {
+        if string.count <= maxLength {
+            return string
+        }
+        let truncated = String(string.prefix(maxLength))
+        return truncated + "..."
+    }
 }

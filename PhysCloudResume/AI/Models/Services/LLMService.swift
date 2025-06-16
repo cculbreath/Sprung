@@ -10,6 +10,27 @@ import SwiftUI
 import SwiftData
 import SwiftOpenAI
 
+// MARK: - Streaming Response Types
+
+/// Represents a chunk of streamed content from the LLM
+public struct LLMStreamChunk {
+    /// Regular content from the response
+    public let content: String?
+    /// Reasoning content (thinking tokens) if available
+    public let reasoningContent: String?
+    /// Whether this is the final chunk
+    public let isFinished: Bool
+    /// The finish reason if applicable
+    public let finishReason: String?
+    
+    init(content: String? = nil, reasoningContent: String? = nil, isFinished: Bool = false, finishReason: String? = nil) {
+        self.content = content
+        self.reasoningContent = reasoningContent
+        self.isFinished = isFinished
+        self.finishReason = finishReason
+    }
+}
+
 // MARK: - LLM Error Types
 
 enum LLMError: LocalizedError {
@@ -220,6 +241,264 @@ class LLMService {
         
         // 3. Parse
         return try JSONResponseParser.parseStructured(response, as: responseType)
+    }
+    
+    // MARK: - Streaming Operations
+    
+    /// Execute a streaming request with optional reasoning
+    func executeStreaming(
+        prompt: String,
+        modelId: String,
+        temperature: Double? = nil,
+        reasoning: OpenRouterReasoning? = nil
+    ) -> AsyncThrowingStream<LLMStreamChunk, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    try ensureInitialized()
+                    
+                    // Validate model
+                    try validateModel(modelId: modelId, for: [])
+                    
+                    // Build parameters with reasoning if provided
+                    var parameters = LLMRequestBuilder.buildTextRequest(
+                        prompt: prompt,
+                        modelId: modelId,
+                        temperature: temperature ?? defaultTemperature
+                    )
+                    
+                    // Add reasoning parameters if provided
+                    if let reasoning = reasoning {
+                        var reasoningDict: [String: Any] = [:]
+                        if let effort = reasoning.effort {
+                            reasoningDict["effort"] = effort
+                        }
+                        if let maxTokens = reasoning.maxTokens {
+                            reasoningDict["max_tokens"] = maxTokens
+                        }
+                        if let exclude = reasoning.exclude {
+                            reasoningDict["exclude"] = exclude
+                        }
+                        if let enabled = reasoning.enabled {
+                            reasoningDict["enabled"] = enabled
+                        }
+                        parameters.reasoning = reasoningDict
+                    }
+                    
+                    // Enable streaming
+                    parameters.stream = true
+                    parameters.streamOptions = StreamOptions(includeUsage: true)
+                    
+                    // Execute streaming request
+                    let stream = try await requestExecutor.executeStreaming(parameters: parameters)
+                    
+                    // Process stream chunks
+                    for try await chunk in stream {
+                        if let firstChoice = chunk.choices?.first {
+                            let streamChunk = LLMStreamChunk(
+                                content: firstChoice.delta?.content,
+                                reasoningContent: firstChoice.delta?.reasoningContent,
+                                isFinished: firstChoice.finishReason != nil,
+                                finishReason: firstChoice.finishReason?.value as? String
+                            )
+                            continuation.yield(streamChunk)
+                        }
+                    }
+                    
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+    
+    /// Execute a structured streaming request with optional reasoning
+    func executeStructuredStreaming<T: Codable>(
+        prompt: String,
+        modelId: String,
+        responseType: T.Type,
+        temperature: Double? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) -> AsyncThrowingStream<LLMStreamChunk, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    try ensureInitialized()
+                    
+                    // Validate model
+                    try validateModel(modelId: modelId, for: [])
+                    
+                    // Build structured parameters
+                    var parameters = LLMRequestBuilder.buildStructuredRequest(
+                        prompt: prompt,
+                        modelId: modelId,
+                        responseType: responseType,
+                        temperature: temperature ?? defaultTemperature,
+                        jsonSchema: jsonSchema
+                    )
+                    
+                    // Add reasoning parameters if provided
+                    if let reasoning = reasoning {
+                        var reasoningDict: [String: Any] = [:]
+                        if let effort = reasoning.effort {
+                            reasoningDict["effort"] = effort
+                        }
+                        if let maxTokens = reasoning.maxTokens {
+                            reasoningDict["max_tokens"] = maxTokens
+                        }
+                        if let exclude = reasoning.exclude {
+                            reasoningDict["exclude"] = exclude
+                        }
+                        if let enabled = reasoning.enabled {
+                            reasoningDict["enabled"] = enabled
+                        }
+                        parameters.reasoning = reasoningDict
+                    }
+                    
+                    // Enable streaming
+                    parameters.stream = true
+                    parameters.streamOptions = StreamOptions(includeUsage: true)
+                    
+                    // Execute streaming request
+                    let stream = try await requestExecutor.executeStreaming(parameters: parameters)
+                    
+                    // Process stream chunks
+                    for try await chunk in stream {
+                        if let firstChoice = chunk.choices?.first {
+                            let streamChunk = LLMStreamChunk(
+                                content: firstChoice.delta?.content,
+                                reasoningContent: firstChoice.delta?.reasoningContent,
+                                isFinished: firstChoice.finishReason != nil,
+                                finishReason: firstChoice.finishReason?.value as? String
+                            )
+                            continuation.yield(streamChunk)
+                        }
+                    }
+                    
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+    
+    /// Continue conversation with streaming response
+    func continueConversationStreaming(
+        userMessage: String,
+        modelId: String,
+        conversationId: UUID,
+        images: [Data] = [],
+        temperature: Double? = nil,
+        reasoning: OpenRouterReasoning? = nil
+    ) -> AsyncThrowingStream<LLMStreamChunk, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    try ensureInitialized()
+                    
+                    guard let conversationManager = conversationManager else {
+                        throw LLMError.clientError("Conversation manager not available")
+                    }
+                    
+                    // Validate model (require vision if images provided)
+                    let requiredCapabilities: [ModelCapability] = images.isEmpty ? [] : [.vision]
+                    try validateModel(modelId: modelId, for: requiredCapabilities)
+                    
+                    // Get conversation history
+                    var messages = conversationManager.getConversation(id: conversationId)
+                    Logger.info("🗣️ Continuing streaming conversation: \(conversationId) with model: \(modelId)")
+                    
+                    // Build user message content
+                    if images.isEmpty {
+                        messages.append(LLMMessage.text(role: .user, content: userMessage))
+                    } else {
+                        var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
+                            .text(userMessage)
+                        ]
+                        
+                        for imageData in images {
+                            let base64Image = imageData.base64EncodedString()
+                            let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
+                            let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
+                            contentParts.append(.imageUrl(imageDetail))
+                        }
+                        
+                        let userMessage = ChatCompletionParameters.Message(
+                            role: .user,
+                            content: .contentArray(contentParts)
+                        )
+                        messages.append(userMessage)
+                    }
+                    
+                    // Build parameters
+                    var parameters = LLMRequestBuilder.buildConversationRequest(
+                        messages: messages,
+                        modelId: modelId,
+                        temperature: temperature ?? defaultTemperature
+                    )
+                    
+                    // Add reasoning parameters if provided
+                    if let reasoning = reasoning {
+                        var reasoningDict: [String: Any] = [:]
+                        if let effort = reasoning.effort {
+                            reasoningDict["effort"] = effort
+                        }
+                        if let maxTokens = reasoning.maxTokens {
+                            reasoningDict["max_tokens"] = maxTokens
+                        }
+                        if let exclude = reasoning.exclude {
+                            reasoningDict["exclude"] = exclude
+                        }
+                        if let enabled = reasoning.enabled {
+                            reasoningDict["enabled"] = enabled
+                        }
+                        parameters.reasoning = reasoningDict
+                    }
+                    
+                    // Enable streaming
+                    parameters.stream = true
+                    parameters.streamOptions = StreamOptions(includeUsage: true)
+                    
+                    // Execute streaming request
+                    let stream = try await requestExecutor.executeStreaming(parameters: parameters)
+                    
+                    // Accumulate response for conversation history
+                    var fullResponse = ""
+                    
+                    // Process stream chunks
+                    for try await chunk in stream {
+                        if let firstChoice = chunk.choices?.first {
+                            // Accumulate content
+                            if let content = firstChoice.delta?.content {
+                                fullResponse += content
+                            }
+                            
+                            let streamChunk = LLMStreamChunk(
+                                content: firstChoice.delta?.content,
+                                reasoningContent: firstChoice.delta?.reasoningContent,
+                                isFinished: firstChoice.finishReason != nil,
+                                finishReason: firstChoice.finishReason?.value as? String
+                            )
+                            continuation.yield(streamChunk)
+                            
+                            // When finished, update conversation history
+                            if firstChoice.finishReason != nil {
+                                messages.append(LLMMessage.text(role: .assistant, content: fullResponse))
+                                conversationManager.storeConversation(id: conversationId, messages: messages)
+                                Logger.info("✅ Streaming conversation updated: \(conversationId)")
+                            }
+                        }
+                    }
+                    
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
     
     // MARK: - Conversation Operations
