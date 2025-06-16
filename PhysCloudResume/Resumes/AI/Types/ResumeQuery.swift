@@ -172,7 +172,7 @@ import SwiftUI
             )
             let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
             Logger.verbose("🫥🫥🫥🫥🫥🫥 UPDATABLE NODES 🫥🫥🫥🫥🫥🫥")
-            Logger.verbose(returnString)
+            Logger.verbose(truncateString(returnString, maxLength: 250))
             return returnString
         } catch {
             return ""
@@ -190,7 +190,7 @@ import SwiftUI
             )
             let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
             Logger.verbose("🫥🫥🫥🫥🫥🫥 ALL EDITABLE NODES 🫥🫥🫥🫥🫥🫥")
-            Logger.verbose(returnString)
+            Logger.verbose(truncateString(returnString, maxLength: 250))
             return returnString
         } catch {
             return ""
@@ -385,6 +385,38 @@ import SwiftUI
         """
         
         return fullResumeContext + clarifyingQuestionsInstruction
+    }
+
+    // MARK: - Console Print Friendly Methods
+    
+    /// Creates a console-friendly version of the prompt with truncated long strings
+    func consoleFriendlyPrompt(_ fullPrompt: String) -> String {
+        var truncatedPrompt = fullPrompt
+        
+        // Truncate background docs (typically very long)
+        if !backgroundDocs.isEmpty {
+            let truncatedBgDocs = truncateString(backgroundDocs, maxLength: 200)
+            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: backgroundDocs, with: truncatedBgDocs)
+        }
+        
+        // Truncate resume text (can be quite long)
+        if !resumeText.isEmpty {
+            let truncatedResumeText = truncateString(resumeText, maxLength: 300)
+            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: resumeText, with: truncatedResumeText)
+        }
+        
+        // Note: updatableFieldsString is kept in full as it's needed for debugging
+        
+        return truncatedPrompt
+    }
+    
+    /// Helper method to truncate strings with ellipsis
+    private func truncateString(_ string: String, maxLength: Int) -> String {
+        if string.count <= maxLength {
+            return string
+        }
+        let truncated = String(string.prefix(maxLength))
+        return truncated + "..."
     }
 
     // MARK: - Debugging Helper

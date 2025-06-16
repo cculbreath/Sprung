@@ -14,6 +14,7 @@ struct ClarifyingQuestionsButton: View {
     @State private var showClarifyingQuestionsModelSheet = false
     @State private var selectedClarifyingQuestionsModel = ""
     @State private var clarifyingQuestionsViewModel: ClarifyingQuestionsViewModel?
+    @State private var clarifyingQuestionsConversationId: UUID?
     
     var body: some View {
         Button(action: {
@@ -76,13 +77,6 @@ struct ClarifyingQuestionsButton: View {
             // Don't clear questions here either
             showClarifyingQuestionsModelSheet = true
         }
-        .onChange(of: clarifyingQuestions) { oldValue, newValue in
-            // Show sheet when questions are populated
-            if oldValue.isEmpty && !newValue.isEmpty {
-                Logger.debug("🔍 Questions populated, showing sheet")
-                sheets.showClarifyingQuestions = true
-            }
-        }
     }
     
     @MainActor
@@ -114,9 +108,15 @@ struct ClarifyingQuestionsButton: View {
                 Logger.debug("Showing \(clarifyingViewModel.questions.count) clarifying questions")
                 Logger.debug("🔍 About to set clarifyingQuestions binding...")
                 
-                // Just set the questions - onChange will handle showing the sheet
+                // Store conversation ID for later use
+                clarifyingQuestionsConversationId = clarifyingViewModel.currentConversationId
+                
+                // Set questions and show sheet
                 clarifyingQuestions = clarifyingViewModel.questions
                 Logger.debug("🔍 clarifyingQuestions binding set, count: \(clarifyingQuestions.count)")
+                
+                // Show the sheet
+                sheets.showClarifyingQuestions = true
             } else {
                 Logger.debug("AI opted to proceed without clarifying questions")
             }
