@@ -84,18 +84,23 @@ class ClarifyingQuestionsViewModel {
             Logger.debug("🔍 questions.count: \(questionsRequest.questions.count)")
             Logger.debug("🔍 questions.isEmpty: \(questionsRequest.questions.isEmpty)")
             
-            if questionsRequest.proceedWithRevisions || questionsRequest.questions.isEmpty {
+            // Only auto-proceed if AI explicitly says to proceed AND there are no questions
+            if questionsRequest.proceedWithRevisions && questionsRequest.questions.isEmpty {
                 // AI decided no questions needed, proceed directly to revisions
                 Logger.debug("AI opted to proceed without clarifying questions")
                 await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
-            } else {
-                // Store questions for UI
+            } else if !questionsRequest.questions.isEmpty {
+                // Store questions for UI - let user decide whether to answer them
                 Logger.debug("Generated \(questionsRequest.questions.count) clarifying questions")
                 for (index, question) in questionsRequest.questions.enumerated() {
                     Logger.debug("🔍 Question \(index + 1): id=\(question.id), question=\(question.question.prefix(50))...")
                 }
                 questions = questionsRequest.questions
                 Logger.debug("🔍 Stored questions in ViewModel, count: \(questions.count)")
+            } else {
+                // Edge case: no questions and AI didn't explicitly say to proceed
+                Logger.debug("No questions generated and AI didn't explicitly request to proceed - treating as no questions needed")
+                await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
             }
             
             isGeneratingQuestions = false
