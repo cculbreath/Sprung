@@ -81,10 +81,10 @@ struct ContentView: View {
                 )
             }
         }
-        // Add reasoning stream view as overlay for AI thinking display (BEFORE sheets to ensure visibility)
-        .overlay(alignment: .bottom) {
+        // Add reasoning stream view as overlay modal for AI thinking display
+        .overlay {
             if appState.globalReasoningStreamManager.isVisible {
-                let _ = Logger.debug("🧠 [ContentView] About to render ReasoningStreamView")
+                let _ = Logger.debug("🧠 [ContentView] About to render ReasoningStreamView modal")
                 ReasoningStreamView(
                     isVisible: Binding(
                         get: { appState.globalReasoningStreamManager.isVisible },
@@ -93,11 +93,10 @@ struct ContentView: View {
                     reasoningText: Binding(
                         get: { appState.globalReasoningStreamManager.reasoningText },
                         set: { appState.globalReasoningStreamManager.reasoningText = $0 }
-                    )
+                    ),
+                    modelName: appState.globalReasoningStreamManager.modelName
                 )
-                .padding(.bottom, 10)
-                .padding(.horizontal, 20)
-                .zIndex(1000) // Ensure it's above other content
+                .zIndex(1000) // Ensure it's above all other content
             }
         }
         // Apply sheet modifier
