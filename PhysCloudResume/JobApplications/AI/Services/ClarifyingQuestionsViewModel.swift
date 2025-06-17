@@ -24,8 +24,8 @@ class ClarifyingQuestionsViewModel {
     var currentConversationId: UUID?
     var currentModelId: String? // Track the model used for conversation continuity
     
-    // MARK: - Reasoning Stream State
-    var reasoningStreamManager = ReasoningStreamManager()
+    // MARK: - Reasoning Stream State (now uses global manager)
+    // reasoningStreamManager is accessed via appState.globalReasoningStreamManager
     
     // MARK: - Error Handling
     var lastError: String?
@@ -67,36 +67,31 @@ class ClarifyingQuestionsViewModel {
             let systemPrompt = query.genericSystemMessage.textContent
             let userPrompt = await query.clarifyingQuestionsPrompt()
             
-            // Start conversation
-            let (conversationId, _) = try await llmService.startConversation(
-                systemPrompt: systemPrompt,
-                userMessage: userPrompt,
-                modelId: modelId
-            )
-            
-            // Store the conversation ID and get structured response
-            currentConversationId = conversationId
-            
             if supportsReasoning {
-                // Use streaming with reasoning for supported models
+                // Use streaming with reasoning for supported models from the start
                 Logger.info("🧠 Using streaming with reasoning for model: \(modelId)")
                 
                 // Configure reasoning parameters
                 let reasoning = OpenRouterReasoning(
                     effort: "high",
-                    exclude: false // We want to see the reasoning
+                    includeReasoning: true // We want to see the reasoning
                 )
                 
-                // Start streaming
-                let stream = llmService.continueConversationStreaming(
-                    userMessage: "Please provide clarifying questions in the specified JSON format.",
+                // Start streaming conversation with reasoning
+                let (conversationId, stream) = try await llmService.startConversationStreaming(
+                    systemPrompt: systemPrompt,
+                    userMessage: userPrompt,
                     modelId: modelId,
-                    conversationId: conversationId,
-                    reasoning: reasoning
+                    reasoning: reasoning,
+                    jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
                 )
+                
+                // Store the conversation ID
+                currentConversationId = conversationId
                 
                 // Process stream and collect full response
-                reasoningStreamManager.clear()
+                appState.globalReasoningStreamManager.clear()
+                appState.globalReasoningStreamManager.isVisible = true
                 var fullResponse = ""
                 var collectingJSON = false
                 var jsonResponse = ""
@@ -104,8 +99,7 @@ class ClarifyingQuestionsViewModel {
                 for try await chunk in stream {
                     // Handle reasoning content
                     if let reasoningContent = chunk.reasoningContent {
-                        reasoningStreamManager.reasoningText += reasoningContent
-                        reasoningStreamManager.isVisible = true
+                        appState.globalReasoningStreamManager.reasoningText += reasoningContent
                     }
                     
                     // Collect regular content
@@ -121,7 +115,7 @@ class ClarifyingQuestionsViewModel {
                     
                     // Handle completion
                     if chunk.isFinished {
-                        reasoningStreamManager.isStreaming = false
+                        appState.globalReasoningStreamManager.isStreaming = false
                     }
                 }
                 
@@ -134,6 +128,16 @@ class ClarifyingQuestionsViewModel {
                 
             } else {
                 // Use non-streaming for models without reasoning support
+                // Start conversation
+                let (conversationId, _) = try await llmService.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userPrompt,
+                    modelId: modelId
+                )
+                
+                // Store the conversation ID
+                currentConversationId = conversationId
+                
                 let questionsRequest = try await llmService.continueConversationStructured(
                     userMessage: "Please provide clarifying questions in the specified JSON format.",
                     modelId: modelId,

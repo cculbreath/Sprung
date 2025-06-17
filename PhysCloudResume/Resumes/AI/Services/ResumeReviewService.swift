@@ -118,6 +118,8 @@ class ResumeReviewService: @unchecked Sendable {
     ///   - base64Image: Base64 encoded image of the resume
     ///   - overflowLineCount: Number of lines overflowing from previous contentsFit check
     ///   - allowEntityMerge: Whether to allow merging of redundant entries
+    ///   - supportsReasoning: Whether the model supports reasoning (for streaming)
+    ///   - onReasoningUpdate: Optional callback for reasoning content streaming
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendFixFitsRequest(
@@ -127,6 +129,8 @@ class ResumeReviewService: @unchecked Sendable {
         overflowLineCount: Int = 0,
         modelId: String,
         allowEntityMerge: Bool = false,
+        supportsReasoning: Bool = false,
+        onReasoningUpdate: ((String) -> Void)? = nil,
         onComplete: @escaping (Result<FixFitsResponseContainer, Error>) -> Void
     ) {
         let requestID = UUID()
@@ -142,44 +146,62 @@ class ResumeReviewService: @unchecked Sendable {
                 
                 let response: FixFitsResponseContainer
                 
-                // Special handling for Grok models - use text-only approach
-                if provider == AIModels.Provider.grok {
-                    Logger.debug("Using Grok text-only approach for fix fits request")
+                // Check if we should use streaming for reasoning models
+                let shouldStream = supportsReasoning && onReasoningUpdate != nil
+                
+                if shouldStream && provider == AIModels.Provider.grok {
+                    Logger.debug("Using streaming approach for reasoning-capable Grok model: \(modelId)")
                     
-                    // Build specialized prompt for Grok that doesn't require image analysis
-                    let grokPrompt = query.buildGrokFixFitsPrompt(
-                        skillsJsonString: skillsJsonString, 
-                        overflowLineCount: overflowLineCount, 
-                        allowEntityMerge: allowEntityMerge
-                    )
-                    
-                    // Text-only structured request for Grok
-                    response = try await llmService.executeStructured(
-                        prompt: grokPrompt,
+                    // Only Grok supports streaming since it's text-only
+                    response = try await streamGrokFixFitsRequest(
+                        skillsJsonString: skillsJsonString,
+                        overflowLineCount: overflowLineCount,
+                        allowEntityMerge: allowEntityMerge,
                         modelId: modelId,
-                        responseType: FixFitsResponseContainer.self
+                        onReasoningUpdate: onReasoningUpdate
                     )
                 } else {
-                    Logger.debug("Using standard image-based approach for fix fits request")
+                    // Non-streaming approach for non-reasoning models or when streaming not requested
                     
-                    // Standard approach for other models (OpenAI, Claude, Gemini)
-                    let prompt = query.buildFixFitsPrompt(
-                        skillsJsonString: skillsJsonString, 
-                        allowEntityMerge: allowEntityMerge
-                    )
-                    
-                    // Convert base64Image back to Data for LLMService
-                    guard let imageData = Data(base64Encoded: base64Image) else {
-                        throw NSError(domain: "ResumeReviewService", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data"])
+                    // Special handling for Grok models - use text-only approach
+                    if provider == AIModels.Provider.grok {
+                        Logger.debug("Using Grok text-only approach for fix fits request")
+                        
+                        // Build specialized prompt for Grok that doesn't require image analysis
+                        let grokPrompt = query.buildGrokFixFitsPrompt(
+                            skillsJsonString: skillsJsonString, 
+                            overflowLineCount: overflowLineCount, 
+                            allowEntityMerge: allowEntityMerge
+                        )
+                        
+                        // Text-only structured request for Grok
+                        response = try await llmService.executeStructured(
+                            prompt: grokPrompt,
+                            modelId: modelId,
+                            responseType: FixFitsResponseContainer.self
+                        )
+                    } else {
+                        Logger.debug("Using standard image-based approach for fix fits request")
+                        
+                        // Standard approach for other models (OpenAI, Claude, Gemini)
+                        let prompt = query.buildFixFitsPrompt(
+                            skillsJsonString: skillsJsonString, 
+                            allowEntityMerge: allowEntityMerge
+                        )
+                        
+                        // Convert base64Image back to Data for LLMService
+                        guard let imageData = Data(base64Encoded: base64Image) else {
+                            throw NSError(domain: "ResumeReviewService", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data"])
+                        }
+                        
+                        // Multimodal structured request
+                        response = try await llmService.executeStructuredWithImages(
+                            prompt: prompt,
+                            modelId: modelId,
+                            images: [imageData],
+                            responseType: FixFitsResponseContainer.self
+                        )
                     }
-                    
-                    // Multimodal structured request
-                    response = try await llmService.executeStructuredWithImages(
-                        prompt: prompt,
-                        modelId: modelId,
-                        images: [imageData],
-                        responseType: FixFitsResponseContainer.self
-                    )
                 }
                 
                 // Check if request was cancelled
@@ -208,12 +230,16 @@ class ResumeReviewService: @unchecked Sendable {
     /// - Parameters:
     ///   - resume: The resume to check
     ///   - base64Image: Base64 encoded image of the resume
+    ///   - supportsReasoning: Whether the model supports reasoning (for streaming)
+    ///   - onReasoningUpdate: Optional callback for reasoning content streaming
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendContentsFitRequest(
         resume: Resume,
         base64Image: String,
         modelId: String,
+        supportsReasoning: Bool = false,
+        onReasoningUpdate: ((String) -> Void)? = nil,
         onComplete: @escaping (Result<ContentsFitResponse, Error>) -> Void
     ) {
         let requestID = UUID()
@@ -232,6 +258,10 @@ class ResumeReviewService: @unchecked Sendable {
                     throw NSError(domain: "ResumeReviewService", code: 1006, userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data for contents fit check"])
                 }
                 
+                // Check if we should use streaming for reasoning models
+                let shouldStream = supportsReasoning && onReasoningUpdate != nil
+                
+                // ContentsFit always uses images, so no streaming support
                 // Multimodal structured request
                 let response = try await llmService.executeStructuredWithImages(
                     prompt: prompt,
@@ -395,5 +425,123 @@ class ResumeReviewService: @unchecked Sendable {
         
         Logger.debug("✅ Successfully applied skill reordering: \(reorderedNodes.count) skills reordered")
         return true
+    }
+    
+    // MARK: - Private Streaming Methods
+    
+    /// Stream Grok Fix Fits request with reasoning support (text-only)
+    @MainActor
+    private func streamGrokFixFitsRequest(
+        skillsJsonString: String,
+        overflowLineCount: Int,
+        allowEntityMerge: Bool,
+        modelId: String,
+        onReasoningUpdate: ((String) -> Void)?
+    ) async throws -> FixFitsResponseContainer {
+        
+        // Grok uses text-only approach
+        let prompt = query.buildGrokFixFitsPrompt(
+            skillsJsonString: skillsJsonString,
+            overflowLineCount: overflowLineCount,
+            allowEntityMerge: allowEntityMerge
+        )
+        
+        // Configure reasoning parameters
+        let reasoning = OpenRouterReasoning(
+            effort: "high",
+            includeReasoning: true
+        )
+        
+        // Start streaming
+        let stream = llmService.executeStructuredStreaming(
+            prompt: prompt,
+            modelId: modelId,
+            responseType: FixFitsResponseContainer.self,
+            reasoning: reasoning
+        )
+        
+        return try await processStream(stream, onReasoningUpdate: onReasoningUpdate)
+    }
+    
+    /// Process streaming response and extract structured data
+    @MainActor
+    private func processStream<T: Codable>(
+        _ stream: AsyncThrowingStream<LLMStreamChunk, Error>,
+        onReasoningUpdate: ((String) -> Void)?
+    ) async throws -> T {
+        
+        var fullResponse = ""
+        var collectingJSON = false
+        var jsonResponse = ""
+        
+        for try await chunk in stream {
+            // Handle reasoning content
+            if let reasoningContent = chunk.reasoningContent {
+                onReasoningUpdate?(reasoningContent)
+            }
+            
+            // Collect regular content
+            if let content = chunk.content {
+                fullResponse += content
+                
+                // Try to extract JSON from the response
+                if content.contains("{") || collectingJSON {
+                    collectingJSON = true
+                    jsonResponse += content
+                }
+            }
+        }
+        
+        // Parse the JSON response
+        let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
+        return try parseJSONFromText(responseText, as: T.self)
+    }
+    
+    /// Parse JSON from text content with fallback strategies
+    @MainActor
+    private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
+        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")
+        
+        // First try direct parsing if the entire text is JSON
+        if let jsonData = text.data(using: .utf8) {
+            do {
+                let result = try JSONDecoder().decode(type, from: jsonData)
+                Logger.info("✅ Direct JSON parsing successful")
+                return result
+            } catch {
+                Logger.debug("❌ Direct parsing failed: \(error)")
+            }
+        }
+        
+        // Try to extract JSON from markdown code blocks
+        let patterns = [
+            "```json\\s*([\\s\\S]*?)```",
+            "```([\\s\\S]*?)```",
+            "\\{[\\s\\S]*\\}"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
+                
+                let extractedRange = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 0)
+                if let swiftRange = Range(extractedRange, in: text) {
+                    let extractedText = String(text[swiftRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if let jsonData = extractedText.data(using: .utf8) {
+                        do {
+                            let result = try JSONDecoder().decode(type, from: jsonData)
+                            Logger.info("✅ Extracted JSON parsing successful with pattern: \(pattern)")
+                            return result
+                        } catch {
+                            Logger.debug("❌ Pattern \(pattern) extraction failed: \(error)")
+                            continue
+                        }
+                    }
+                }
+            }
+        }
+        
+        throw NSError(domain: "ResumeReviewService", code: 1007, userInfo: [NSLocalizedDescriptionKey: "Failed to parse JSON from response text"])
     }
 }

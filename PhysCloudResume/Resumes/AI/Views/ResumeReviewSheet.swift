@@ -117,90 +117,94 @@ struct ResumeReviewSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) { // Use spacing 0 for the outer VStack to control padding precisely
-            // Header
-            Text("AI Resume Review")
-                .font(.title)
-                .padding([.horizontal, .top]) // Add padding to header
-                .padding(.bottom, 8)
+        ZStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 0) { // Use spacing 0 for the outer VStack to control padding precisely
+                // Header
+                Text("AI Resume Review")
+                    .font(.title)
+                    .padding([.horizontal, .top]) // Add padding to header
+                    .padding(.bottom, 8)
 
-            // Scrollable content area
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Review type selection
-                    Picker("Review Type", selection: $selectedReviewType) {
-                        ForEach(ResumeReviewType.allCases) { type in
-                            Text(type.rawValue).tag(type)
+                // Scrollable content area
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Review type selection
+                        Picker("Review Type", selection: $selectedReviewType) {
+                            ForEach(ResumeReviewType.allCases) { type in
+                                Text(type.rawValue).tag(type)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: selectedReviewType) { _, _ in
+                            viewModel.resetOnReviewTypeChange()
+                        }
+
+                        // Custom options if custom type is selected
+                        if selectedReviewType == .custom {
+                            CustomReviewOptionsView(customOptions: $customOptions)
+                        }
+                        
+                        // Fix Overflow options
+                        if selectedReviewType == .fixOverflow {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Toggle("Allow entity merge", isOn: $allowEntityMerge)
+                                    .help("When enabled, allows the AI to merge two redundant or conceptually overlapping entries into a single entry to help with fit and improve resume strength")
+                            }
+                            .padding(.vertical, 8)
+                        }
+                        
+                        // AI Model Selection
+                        // Use vision capability filter for Fix Overflow since it requires image analysis
+                        DropdownModelPicker(
+                            selectedModel: $selectedModel,
+                            requiredCapability: selectedReviewType == .fixOverflow ? .vision : nil,
+                            title: "AI Model"
+                        )
+
+                        // Content area (GroupBox with contentView)
+                        GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
+                            contentView // This already handles its internal scrolling for MarkdownView
+                                .frame(minHeight: 200, idealHeight: 280, maxHeight: 320) // Constrained max height for better layout
                         }
                     }
-                    .pickerStyle(.menu)
-                    .onChange(of: selectedReviewType) { _, _ in
-                        viewModel.resetOnReviewTypeChange()
-                    }
+                    .padding(.horizontal) // Padding for the scrollable content
+                    .padding(.bottom) // Padding at the bottom of scrollable content
+                } // End ScrollView
 
-                    // Custom options if custom type is selected
-                    if selectedReviewType == .custom {
-                        CustomReviewOptionsView(customOptions: $customOptions)
-                    }
-                    
-                    // Fix Overflow options
-                    if selectedReviewType == .fixOverflow {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle("Allow entity merge", isOn: $allowEntityMerge)
-                                .help("When enabled, allows the AI to merge two redundant or conceptually overlapping entries into a single entry to help with fit and improve resume strength")
+                // Button row - Pinned to the bottom
+                HStack {
+                    if viewModel.isProcessingGeneral || viewModel.isProcessingFixOverflow {
+                        Button("Stop") {
+                            viewModel.cancelRequest()
                         }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    // AI Model Selection
-                    // Use vision capability filter for Fix Overflow since it requires image analysis
-                    DropdownModelPicker(
-                        selectedModel: $selectedModel,
-                        requiredCapability: selectedReviewType == .fixOverflow ? .vision : nil,
-                        title: "AI Model"
-                    )
-
-                    // Content area (GroupBox with contentView)
-                    GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
-                        contentView // This already handles its internal scrolling for MarkdownView
-                            .frame(minHeight: 200, idealHeight: 280, maxHeight: 320) // Constrained max height for better layout
-                    }
-                }
-                .padding(.horizontal) // Padding for the scrollable content
-                .padding(.bottom) // Padding at the bottom of scrollable content
-            } // End ScrollView
-
-            // Button row - Pinned to the bottom
-            HStack {
-                if viewModel.isProcessingGeneral || viewModel.isProcessingFixOverflow {
-                    Button("Stop") {
-                        viewModel.cancelRequest()
-                    }
-                    .buttonStyle(.bordered)
-                    Spacer()
-                    Button("Close") { 
-                        viewModel.resetChangeMessage()
-                        dismiss() 
-                    }
-                } else {
-                    Button(
-                        selectedReviewType == .fixOverflow ? "Optimize Skills" :
-                        selectedReviewType == .reorderSkills ? "Reorder Skills" : "Submit Request"
-                    ) {
-                        handleSubmit()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(selectedResume == nil)
-                    Spacer()
-                    Button("Close") { 
-                        viewModel.resetChangeMessage()
-                        dismiss() 
+                        .buttonStyle(.bordered)
+                        Spacer()
+                        Button("Close") { 
+                            viewModel.resetChangeMessage()
+                            dismiss() 
+                        }
+                    } else {
+                        Button(
+                            selectedReviewType == .fixOverflow ? "Optimize Skills" :
+                            selectedReviewType == .reorderSkills ? "Reorder Skills" : "Submit Request"
+                        ) {
+                            handleSubmit()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(selectedResume == nil)
+                        Spacer()
+                        Button("Close") { 
+                            viewModel.resetChangeMessage()
+                            dismiss() 
+                        }
                     }
                 }
+                .padding([.horizontal, .bottom]) // Padding for the button bar
+                .padding(.top, 8) // Add some space above the button bar
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.8)) // Optional: background for button bar
             }
-            .padding([.horizontal, .bottom]) // Padding for the button bar
-            .padding(.top, 8) // Add some space above the button bar
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.8)) // Optional: background for button bar
+            
+            // Note: Reasoning stream view is now displayed globally in the main app UI
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
         .onAppear {

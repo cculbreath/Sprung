@@ -69,8 +69,34 @@ extension OpenRouterModel {
     }
     
     var supportsReasoning: Bool {
-        guard let params = supportedParameters else { return false }
-        return params.contains("reasoning") || params.contains("include_reasoning")
+        // Check supported parameters first
+        if let params = supportedParameters,
+           (params.contains("reasoning") || params.contains("include_reasoning")) {
+            return true
+        }
+        
+        // Check for known reasoning models by ID patterns
+        let reasoningModelPatterns = [
+            "openai/o1",
+            "openai/o3",
+            "openai/o4",
+            "deepseek/deepseek-r1",
+            "anthropic/claude-3.7-sonnet",
+            ":thinking"  // Models with :thinking suffix
+        ]
+        
+        for pattern in reasoningModelPatterns {
+            if id.contains(pattern) {
+                return true
+            }
+        }
+        
+        // Check pricing for internal_reasoning cost (indicates reasoning support)
+        if let pricing = pricing, pricing.internalReasoning != nil {
+            return true
+        }
+        
+        return false
     }
     
     var isTextToText: Bool {

@@ -100,17 +100,7 @@ struct RevisionReviewView: View {
                 Text("No valid Resume")
             }
             
-            // Reasoning stream view at the bottom
-            ReasoningStreamView(
-                isVisible: Binding(
-                    get: { viewModel.reasoningStreamManager.isVisible },
-                    set: { viewModel.reasoningStreamManager.isVisible = $0 }
-                ),
-                reasoningText: Binding(
-                    get: { viewModel.reasoningStreamManager.reasoningText },
-                    set: { viewModel.reasoningStreamManager.reasoningText = $0 }
-                )
-            )
+            // Note: Reasoning stream view is now displayed globally in the main app UI
         }
     }
     

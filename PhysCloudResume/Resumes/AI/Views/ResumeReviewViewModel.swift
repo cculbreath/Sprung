@@ -20,6 +20,9 @@ class ResumeReviewViewModel {
     private(set) var fixOverflowError: String? = nil
     private(set) var currentOverflowLineCount: Int = 0
     
+    // MARK: - Reasoning Stream State (now uses global manager)
+    // reasoningStreamManager is accessed via appState.globalReasoningStreamManager
+    
     // Services
     private var reviewService: ResumeReviewService?
     private var fixOverflowService: FixOverflowService?
@@ -55,7 +58,7 @@ class ResumeReviewViewModel {
         switch reviewType {
         case .fixOverflow:
             Task {
-                await performFixOverflow(resume: resume, allowEntityMerge: allowEntityMerge, selectedModel: selectedModel)
+                await performFixOverflow(resume: resume, allowEntityMerge: allowEntityMerge, selectedModel: selectedModel, appState: appState)
             }
         case .reorderSkills:
             Task {
@@ -161,22 +164,41 @@ class ResumeReviewViewModel {
         }
     }
     
-    private func performFixOverflow(resume: Resume, allowEntityMerge: Bool, selectedModel: String) async {
+    private func performFixOverflow(resume: Resume, allowEntityMerge: Bool, selectedModel: String, appState: AppState) async {
         isProcessingFixOverflow = true
         fixOverflowStatusMessage = "Starting skills optimization..."
+        
+        // Check if model supports reasoning and prepare callback  
+        let model = appState.openRouterService.findModel(id: selectedModel)
+        let supportsReasoning = model?.supportsReasoning ?? false
+        let reasoningCallback: ((String) -> Void)? = supportsReasoning ? { reasoningContent in
+            Task { @MainActor in
+                appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                appState.globalReasoningStreamManager.isVisible = true
+            }
+        } : nil
+        
+        // Start reasoning stream if applicable
+        if supportsReasoning {
+            appState.globalReasoningStreamManager.clear()
+            appState.globalReasoningStreamManager.isVisible = true
+        }
         
         let result = await fixOverflowService?.performFixOverflow(
             resume: resume,
             allowEntityMerge: allowEntityMerge,
             selectedModel: selectedModel,
-            maxIterations: UserDefaults.standard.integer(forKey: "fixOverflowMaxIterations") == 0 ? 3 : UserDefaults.standard.integer(forKey: "fixOverflowMaxIterations")
-        ) { [weak self] status in
-            Task { @MainActor in
-                self?.fixOverflowStatusMessage = status.statusMessage
-                self?.fixOverflowChangeMessage = status.changeMessage
-                self?.currentOverflowLineCount = status.overflowLineCount
-            }
-        }
+            maxIterations: UserDefaults.standard.integer(forKey: "fixOverflowMaxIterations") == 0 ? 3 : UserDefaults.standard.integer(forKey: "fixOverflowMaxIterations"),
+            supportsReasoning: supportsReasoning,
+            onStatusUpdate: { [weak self] status in
+                Task { @MainActor in
+                    self?.fixOverflowStatusMessage = status.statusMessage
+                    self?.fixOverflowChangeMessage = status.changeMessage
+                    self?.currentOverflowLineCount = status.overflowLineCount
+                }
+            },
+            onReasoningUpdate: reasoningCallback
+        )
         
         switch result {
         case .success(let finalStatus):
@@ -185,6 +207,11 @@ class ResumeReviewViewModel {
             fixOverflowError = error.localizedDescription
         case .none:
             fixOverflowError = "Fix Overflow service unavailable."
+        }
+        
+        // Complete reasoning stream
+        if supportsReasoning {
+            appState.globalReasoningStreamManager.stopStream()
         }
         
         isProcessingFixOverflow = false

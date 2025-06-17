@@ -50,8 +50,8 @@ class AppState {
     // Resume revision view model
     var resumeReviseViewModel: ResumeReviseViewModel?
     
-    // Clarifying questions view model for shared access
-    var clarifyingQuestionsViewModel: ClarifyingQuestionsViewModel?
+    // Global reasoning stream manager for AI thinking display
+    var globalReasoningStreamManager = ReasoningStreamManager()
     
     
     init() {
@@ -74,6 +74,9 @@ class AppState {
         
         // Migrate from UserDefaults if this is the first time
         migrateFromUserDefaults()
+        
+        // Migrate reasoning capabilities for existing models
+        migrateReasoningCapabilities()
         
         // Start model validation in background after a delay to not block app launch
         Task {
@@ -111,6 +114,60 @@ class AppState {
             
         } catch {
             Logger.error("❌ Failed to migrate from UserDefaults: \(error)")
+        }
+    }
+    
+    /// Migrate reasoning capabilities for existing EnabledLLM records
+    /// This ensures existing models get the new supportsReasoning property set correctly
+    private func migrateReasoningCapabilities() {
+        guard let store = enabledLLMStore else { return }
+        
+        // Check if migration is needed by looking for any models without reasoning capability set
+        let allEnabledModels = try? store.modelContext.fetch(FetchDescriptor<EnabledLLM>())
+        guard let models = allEnabledModels, !models.isEmpty else { return }
+        
+        // Use a versioned flag to check if migration has been performed (v2 includes thinking models)
+        let migrationKey = "enabledLLMReasoningMigrationCompleted_v2"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else {
+            Logger.debug("🔄 Reasoning capabilities migration already completed")
+            return
+        }
+        
+        var migrationCount = 0
+        
+        Logger.debug("🔄 Starting reasoning capabilities migration for \(models.count) models...")
+        
+        for enabledModel in models {
+            // Find the corresponding OpenRouter model
+            if let openRouterModel = openRouterService.findModel(id: enabledModel.modelId) {
+                let oldSupportsReasoning = enabledModel.supportsReasoning
+                enabledModel.supportsReasoning = openRouterModel.supportsReasoning
+                
+                // Also update other capabilities that might have changed
+                enabledModel.supportsImages = openRouterModel.supportsImages
+                enabledModel.isTextToText = openRouterModel.isTextToText
+                enabledModel.supportsStructuredOutput = openRouterModel.supportsStructuredOutput
+                
+                if oldSupportsReasoning != enabledModel.supportsReasoning {
+                    migrationCount += 1
+                    Logger.debug("📊 Updated \(enabledModel.modelId): reasoning \(oldSupportsReasoning) → \(enabledModel.supportsReasoning)")
+                }
+            } else {
+                Logger.debug("⚠️ Could not find OpenRouter model for \(enabledModel.modelId) during migration")
+            }
+        }
+        
+        // Save changes
+        do {
+            try store.modelContext.save()
+            store.refreshEnabledModels()
+            
+            // Mark migration as completed
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            
+            Logger.debug("✅ Reasoning capabilities migration completed: \(migrationCount) models updated")
+        } catch {
+            Logger.error("❌ Failed to save reasoning capabilities migration: \(error)")
         }
     }
     

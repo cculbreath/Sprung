@@ -42,8 +42,8 @@ class ResumeReviseViewModel {
     // AI Resubmission handling (from AiCommsView)
     private var isWaitingForResubmission: Bool = false
     
-    // MARK: - Reasoning Stream State
-    var reasoningStreamManager = ReasoningStreamManager()
+    // MARK: - Reasoning Stream State (now uses global manager)
+    // reasoningStreamManager is accessed via appState.globalReasoningStreamManager
     
     // MARK: - Error Handling
     private(set) var lastError: String?
@@ -112,16 +112,6 @@ class ResumeReviseViewModel {
             let systemPrompt = query.genericSystemMessage.textContent
             let userPrompt = await query.wholeResumeQueryString()
             
-            // Start conversation and get revisions
-            let (conversationId, _) = try await llmService.startConversation(
-                systemPrompt: systemPrompt,
-                userMessage: userPrompt,
-                modelId: modelId
-            )
-            
-            self.currentConversationId = conversationId
-            self.currentModelId = modelId
-            
             // Check if model supports reasoning for streaming
             let model = appState.openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
@@ -129,23 +119,73 @@ class ResumeReviseViewModel {
             let revisions: RevisionsContainer
             
             if supportsReasoning {
-                // Use streaming with reasoning for supported models
+                // Use streaming with reasoning for supported models from the start
                 Logger.info("🧠 Using streaming with reasoning for revision generation: \(modelId)")
                 
                 // Configure reasoning parameters for revision generation
                 let reasoning = OpenRouterReasoning(
                     effort: "high",
-                    exclude: false
+                    includeReasoning: true
                 )
                 
-                revisions = try await streamRevisionGeneration(
-                    userMessage: "Please provide the revision suggestions in the specified JSON format.",
+                // Start streaming conversation with reasoning
+                let (conversationId, stream) = try await llmService.startConversationStreaming(
+                    systemPrompt: systemPrompt,
+                    userMessage: userPrompt,
                     modelId: modelId,
-                    conversationId: conversationId,
-                    reasoning: reasoning
+                    reasoning: reasoning,
+                    jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
+                
+                self.currentConversationId = conversationId
+                self.currentModelId = modelId
+                
+                // Process stream and collect full response
+                appState.globalReasoningStreamManager.clear()
+                appState.globalReasoningStreamManager.isVisible = true
+                var fullResponse = ""
+                var collectingJSON = false
+                var jsonResponse = ""
+                
+                for try await chunk in stream {
+                    // Handle reasoning content
+                    if let reasoningContent = chunk.reasoningContent {
+                        appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                    }
+                    
+                    // Collect regular content
+                    if let content = chunk.content {
+                        fullResponse += content
+                        
+                        // Try to extract JSON from the response
+                        if content.contains("{") || collectingJSON {
+                            collectingJSON = true
+                            jsonResponse += content
+                        }
+                    }
+                    
+                    // Handle completion
+                    if chunk.isFinished {
+                        appState.globalReasoningStreamManager.isStreaming = false
+                    }
+                }
+                
+                // Parse the JSON response
+                let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
+                revisions = try parseJSONFromText(responseText, as: RevisionsContainer.self)
+                
             } else {
                 // Use non-streaming for models without reasoning
+                // Start conversation
+                let (conversationId, _) = try await llmService.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userPrompt,
+                    modelId: modelId
+                )
+                
+                self.currentConversationId = conversationId
+                self.currentModelId = modelId
+                
                 revisions = try await llmService.continueConversationStructured(
                     userMessage: "Please provide the revision suggestions in the specified JSON format.",
                     modelId: modelId,
@@ -197,7 +237,7 @@ class ResumeReviseViewModel {
                 // Configure reasoning parameters
                 let reasoning = OpenRouterReasoning(
                     effort: "high",
-                    exclude: false
+                    includeReasoning: true
                 )
                 
                 revisions = try await streamRevisionGeneration(
@@ -762,7 +802,8 @@ class ResumeReviseViewModel {
         )
         
         // Process stream and collect full response
-        reasoningStreamManager.clear()
+        appState.globalReasoningStreamManager.clear()
+        appState.globalReasoningStreamManager.isVisible = true
         var fullResponse = ""
         var collectingJSON = false
         var jsonResponse = ""
@@ -770,8 +811,7 @@ class ResumeReviseViewModel {
         for try await chunk in stream {
             // Handle reasoning content
             if let reasoningContent = chunk.reasoningContent {
-                reasoningStreamManager.reasoningText += reasoningContent
-                reasoningStreamManager.isVisible = true
+                appState.globalReasoningStreamManager.reasoningText += reasoningContent
             }
             
             // Collect regular content
@@ -787,7 +827,7 @@ class ResumeReviseViewModel {
             
             // Handle completion
             if chunk.isFinished {
-                reasoningStreamManager.isStreaming = false
+                appState.globalReasoningStreamManager.isStreaming = false
             }
         }
         
