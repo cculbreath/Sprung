@@ -141,8 +141,7 @@ class ResumeReviseViewModel {
                 self.currentModelId = modelId
                 
                 // Process stream and collect full response
-                appState.globalReasoningStreamManager.clear()
-                appState.globalReasoningStreamManager.isVisible = true
+                appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
                 var fullResponse = ""
                 var collectingJSON = false
                 var jsonResponse = ""
@@ -802,8 +801,7 @@ class ResumeReviseViewModel {
         )
         
         // Process stream and collect full response
-        appState.globalReasoningStreamManager.clear()
-        appState.globalReasoningStreamManager.isVisible = true
+        appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
         var fullResponse = ""
         var collectingJSON = false
         var jsonResponse = ""

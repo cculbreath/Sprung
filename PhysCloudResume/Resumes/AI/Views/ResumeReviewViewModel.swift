@@ -174,14 +174,12 @@ class ResumeReviewViewModel {
         let reasoningCallback: ((String) -> Void)? = supportsReasoning ? { reasoningContent in
             Task { @MainActor in
                 appState.globalReasoningStreamManager.reasoningText += reasoningContent
-                appState.globalReasoningStreamManager.isVisible = true
             }
         } : nil
         
         // Start reasoning stream if applicable
         if supportsReasoning {
-            appState.globalReasoningStreamManager.clear()
-            appState.globalReasoningStreamManager.isVisible = true
+            appState.globalReasoningStreamManager.startReasoning(modelName: selectedModel)
         }
         
         let result = await fixOverflowService?.performFixOverflow(

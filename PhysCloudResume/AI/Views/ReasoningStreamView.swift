@@ -10,81 +10,107 @@ import SwiftUI
 struct ReasoningStreamView: View {
     @Binding var isVisible: Bool
     @Binding var reasoningText: String
+    let modelName: String
     @State private var isExpanded: Bool = true
     @State private var scrollToBottom: Bool = false
     
-    // Customizable appearance
-    var maxHeight: CGFloat = 200
-    var backgroundColor: Color = Color(NSColor.controlBackgroundColor)
-    var textColor: Color = .secondary
+    // Modal appearance
+    var modalWidth: CGFloat = 600
+    var modalHeight: CGFloat = 400
+    var backgroundColor: Color = Color(NSColor.windowBackgroundColor)
+    var textColor: Color = .primary
     
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
             if isVisible {
-                let _ = Logger.debug("🧠 [ReasoningStreamView] Rendering view with text length: \(reasoningText.count)")
-                Divider()
+                let _ = Logger.debug("🧠 [ReasoningStreamView] Rendering modal with text length: \(reasoningText.count)")
                 
+                // Semi-transparent backdrop
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isVisible = false
+                        }
+                    }
+                
+                // Modal content
                 VStack(spacing: 0) {
-                    // Header bar
-                    HStack(spacing: 12) {
-                        // Thinking indicator
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .controlSize(.small)
-                                .scaleEffect(0.8)
+                    // Header with brain emoji and model name
+                    HStack {
+                        HStack(spacing: 8) {
+                            Text("🧠")
+                                .font(.title2)
                             
-                            Text("AI is thinking...")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(modelName) is thinking...")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                
+                                HStack(spacing: 4) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .scaleEffect(0.8)
+                                    
+                                    Text("Processing")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                         
                         Spacer()
                         
-                        // Expand/Collapse button
-                        Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
-                            Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
-                                .font(.caption)
+                        // Close button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                isVisible = false
+                            }
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title2)
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .help(isExpanded ? "Collapse reasoning" : "Expand reasoning")
+                        .help("Close reasoning view")
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .background(backgroundColor)
                     
-                    if isExpanded {
-                        Divider()
-                        
-                        // Reasoning content
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(reasoningText)
-                                        .font(.caption)
-                                        .foregroundColor(textColor)
-                                        .textSelection(.enabled)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .id("bottom")
-                                }
+                    Divider()
+                    
+                    // Reasoning content
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(reasoningText)
+                                    .font(.body) // Much larger text
+                                    .lineSpacing(4)
+                                    .foregroundColor(textColor)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 16)
+                                    .id("bottom")
                             }
-                            .frame(maxHeight: maxHeight)
-                            .background(backgroundColor.opacity(0.5))
-                            .onChange(of: reasoningText) { _ in
-                                // Auto-scroll to bottom when new content arrives
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    proxy.scrollTo("bottom", anchor: .bottom)
-                                }
+                        }
+                        .background(backgroundColor)
+                        .onChange(of: reasoningText) { _ in
+                            // Auto-scroll to bottom when new content arrives
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo("bottom", anchor: .bottom)
                             }
                         }
                     }
                 }
+                .frame(width: modalWidth, height: modalHeight)
                 .background(backgroundColor)
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
                 .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .move(edge: .bottom).combined(with: .opacity)
+                    insertion: .scale(scale: 0.8).combined(with: .opacity),
+                    removal: .scale(scale: 0.9).combined(with: .opacity)
                 ))
             }
         }
@@ -105,6 +131,11 @@ class ReasoningStreamManager {
     var reasoningText: String = "" {
         didSet {
             Logger.debug("🧠 [ReasoningStreamManager] reasoningText updated, length: \(reasoningText.count)")
+        }
+    }
+    var modelName: String = "" {
+        didSet {
+            Logger.debug("🧠 [ReasoningStreamManager] modelName changed to: \(modelName)")
         }
     }
     var isStreaming: Bool = false
@@ -157,9 +188,18 @@ class ReasoningStreamManager {
         isVisible = false
     }
     
-    /// Clear the reasoning text
+    /// Clear all reasoning state
     func clear() {
         reasoningText = ""
+        modelName = ""
+    }
+    
+    /// Start a new reasoning session with model information
+    func startReasoning(modelName: String) {
+        self.modelName = modelName
+        self.reasoningText = ""
+        self.isVisible = true
+        self.isStreaming = true
     }
 }
 
@@ -180,7 +220,8 @@ struct ReasoningStreamView_Previews: PreviewProvider {
                 Looking at the experience section, I notice that some bullet points could be more impactful by adding quantifiable achievements. For example, instead of "Managed team projects," it would be stronger to say "Managed 3 cross-functional team projects, delivering all on time and 15% under budget."
                 
                 The skills section could benefit from being reorganized to highlight the most relevant skills for the target position first...
-                """)
+                """),
+                modelName: "claude-3.5-sonnet"
             )
         }
         .frame(width: 600, height: 400)
