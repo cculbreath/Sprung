@@ -292,6 +292,11 @@ class LLMService {
                     // Process stream chunks
                     for try await chunk in stream {
                         if let firstChoice = chunk.choices?.first {
+                            // Debug logging for reasoning content
+                            if let reasoning = firstChoice.delta?.reasoningContent {
+                                Logger.debug("🧠 [LLMService] Reasoning content found: \(reasoning.prefix(100))...")
+                            }
+                            
                             let streamChunk = LLMStreamChunk(
                                 content: firstChoice.delta?.content,
                                 reasoningContent: firstChoice.delta?.reasoningContent,
@@ -367,6 +372,11 @@ class LLMService {
                     // Process stream chunks
                     for try await chunk in stream {
                         if let firstChoice = chunk.choices?.first {
+                            // Debug logging for reasoning content
+                            if let reasoning = firstChoice.delta?.reasoningContent {
+                                Logger.debug("🧠 [LLMService] Reasoning content found: \(reasoning.prefix(100))...")
+                            }
+                            
                             let streamChunk = LLMStreamChunk(
                                 content: firstChoice.delta?.content,
                                 reasoningContent: firstChoice.delta?.reasoningContent,

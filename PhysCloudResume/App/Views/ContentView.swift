@@ -8,7 +8,7 @@ struct ContentView: View {
 
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
     // DragInfo is inherited from ContentViewLaunch
 
     // States managed by ContentView
@@ -81,20 +81,27 @@ struct ContentView: View {
                 )
             }
         }
-        // Apply sheet modifier
-        .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
-        // Add reasoning stream view as overlay for AI thinking display
+        // Add reasoning stream view as overlay for AI thinking display (BEFORE sheets to ensure visibility)
         .overlay(alignment: .bottom) {
-            @Bindable var reasoningManager = appState.globalReasoningStreamManager
-            if reasoningManager.isVisible {
+            if appState.globalReasoningStreamManager.isVisible {
+                let _ = Logger.debug("🧠 [ContentView] About to render ReasoningStreamView")
                 ReasoningStreamView(
-                    isVisible: $reasoningManager.isVisible,
-                    reasoningText: $reasoningManager.reasoningText
+                    isVisible: Binding(
+                        get: { appState.globalReasoningStreamManager.isVisible },
+                        set: { appState.globalReasoningStreamManager.isVisible = $0 }
+                    ),
+                    reasoningText: Binding(
+                        get: { appState.globalReasoningStreamManager.reasoningText },
+                        set: { appState.globalReasoningStreamManager.reasoningText = $0 }
+                    )
                 )
                 .padding(.bottom, 10)
                 .padding(.horizontal, 20)
+                .zIndex(1000) // Ensure it's above other content
             }
         }
+        // Apply sheet modifier
+        .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             // Sync selected app to AppState for template editor
             appState.selectedJobApp = newValue

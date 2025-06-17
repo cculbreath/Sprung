@@ -99,6 +99,7 @@ class ClarifyingQuestionsViewModel {
                 for try await chunk in stream {
                     // Handle reasoning content
                     if let reasoningContent = chunk.reasoningContent {
+                        Logger.debug("🧠 [ClarifyingQuestionsViewModel] Adding reasoning content: \(reasoningContent.prefix(100))...")
                         appState.globalReasoningStreamManager.reasoningText += reasoningContent
                     }
                     
