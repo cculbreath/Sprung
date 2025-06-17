@@ -21,6 +21,7 @@ struct ReasoningStreamView: View {
     var body: some View {
         VStack(spacing: 0) {
             if isVisible {
+                let _ = Logger.debug("🧠 [ReasoningStreamView] Rendering view with text length: \(reasoningText.count)")
                 Divider()
                 
                 VStack(spacing: 0) {
@@ -96,8 +97,16 @@ struct ReasoningStreamView: View {
 @MainActor
 @Observable
 class ReasoningStreamManager {
-    var isVisible: Bool = false
-    var reasoningText: String = ""
+    var isVisible: Bool = false {
+        didSet {
+            Logger.debug("🧠 [ReasoningStreamManager] isVisible changed to: \(isVisible)")
+        }
+    }
+    var reasoningText: String = "" {
+        didSet {
+            Logger.debug("🧠 [ReasoningStreamManager] reasoningText updated, length: \(reasoningText.count)")
+        }
+    }
     var isStreaming: Bool = false
     
     private var currentTask: Task<Void, Never>?
@@ -120,6 +129,7 @@ class ReasoningStreamManager {
                     
                     // Append reasoning content
                     if let reasoning = chunk.reasoningContent {
+                        Logger.debug("🧠 [ReasoningStreamManager] Appending reasoning: \(reasoning.prefix(100))...")
                         reasoningText += reasoning
                     }
                     
