@@ -42,6 +42,9 @@ class ResumeReviseViewModel {
     // AI Resubmission handling (from AiCommsView)
     private var isWaitingForResubmission: Bool = false
     
+    // MARK: - Reasoning Stream State
+    var reasoningStreamManager = ReasoningStreamManager()
+    
     // MARK: - Error Handling
     private(set) var lastError: String?
     private(set) var retryCount: Int = 0
@@ -119,14 +122,38 @@ class ResumeReviseViewModel {
             self.currentConversationId = conversationId
             self.currentModelId = modelId
             
-            // Request structured revision output with schema enforcement
-            let revisions = try await llmService.continueConversationStructured(
-                userMessage: "Please provide the revision suggestions in the specified JSON format.",
-                modelId: modelId,
-                conversationId: conversationId,
-                responseType: RevisionsContainer.self,
-                jsonSchema: ResumeApiQuery.revNodeArraySchema
-            )
+            // Check if model supports reasoning for streaming
+            let model = appState.openRouterService.findModel(id: modelId)
+            let supportsReasoning = model?.supportsReasoning ?? false
+            
+            let revisions: RevisionsContainer
+            
+            if supportsReasoning {
+                // Use streaming with reasoning for supported models
+                Logger.info("🧠 Using streaming with reasoning for revision generation: \(modelId)")
+                
+                // Configure reasoning parameters for revision generation
+                let reasoning = OpenRouterReasoning(
+                    effort: "high",
+                    exclude: false
+                )
+                
+                revisions = try await streamRevisionGeneration(
+                    userMessage: "Please provide the revision suggestions in the specified JSON format.",
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    reasoning: reasoning
+                )
+            } else {
+                // Use non-streaming for models without reasoning
+                revisions = try await llmService.continueConversationStructured(
+                    userMessage: "Please provide the revision suggestions in the specified JSON format.",
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    responseType: RevisionsContainer.self,
+                    jsonSchema: ResumeApiQuery.revNodeArraySchema
+                )
+            }
             
             // Validate and process the revisions
             let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
@@ -157,15 +184,38 @@ class ResumeReviseViewModel {
         isProcessingRevisions = true
         
         do {
-            // Continue the conversation to request revisions with schema enforcement
-            // The background docs and Q&A are already in the conversation history
-            let revisions = try await llmService.continueConversationStructured(
-                userMessage: "Based on our discussion, please provide revision suggestions for the resume in the specified JSON format.",
-                modelId: modelId,
-                conversationId: conversationId,
-                responseType: RevisionsContainer.self,
-                jsonSchema: ResumeApiQuery.revNodeArraySchema
-            )
+            // Check if model supports reasoning for streaming
+            let model = appState.openRouterService.findModel(id: modelId)
+            let supportsReasoning = model?.supportsReasoning ?? false
+            
+            let revisions: RevisionsContainer
+            
+            if supportsReasoning {
+                // Use streaming with reasoning for supported models
+                Logger.info("🧠 Using streaming with reasoning for revision continuation: \(modelId)")
+                
+                // Configure reasoning parameters
+                let reasoning = OpenRouterReasoning(
+                    effort: "high",
+                    exclude: false
+                )
+                
+                revisions = try await streamRevisionGeneration(
+                    userMessage: "Based on our discussion, please provide revision suggestions for the resume in the specified JSON format.",
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    reasoning: reasoning
+                )
+            } else {
+                // Use non-streaming for models without reasoning
+                revisions = try await llmService.continueConversationStructured(
+                    userMessage: "Based on our discussion, please provide revision suggestions for the resume in the specified JSON format.",
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    responseType: RevisionsContainer.self,
+                    jsonSchema: ResumeApiQuery.revNodeArraySchema
+                )
+            }
             
             // Process and validate revisions
             let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
@@ -693,6 +743,121 @@ class ResumeReviseViewModel {
         }
         
         return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    /// Stream revision generation with reasoning support
+    private func streamRevisionGeneration(
+        userMessage: String,
+        modelId: String,
+        conversationId: UUID,
+        reasoning: OpenRouterReasoning
+    ) async throws -> RevisionsContainer {
+        
+        // Start streaming
+        let stream = llmService.continueConversationStreaming(
+            userMessage: userMessage,
+            modelId: modelId,
+            conversationId: conversationId,
+            reasoning: reasoning
+        )
+        
+        // Process stream and collect full response
+        reasoningStreamManager.clear()
+        var fullResponse = ""
+        var collectingJSON = false
+        var jsonResponse = ""
+        
+        for try await chunk in stream {
+            // Handle reasoning content
+            if let reasoningContent = chunk.reasoningContent {
+                reasoningStreamManager.reasoningText += reasoningContent
+                reasoningStreamManager.isVisible = true
+            }
+            
+            // Collect regular content
+            if let content = chunk.content {
+                fullResponse += content
+                
+                // Try to extract JSON from the response
+                if content.contains("{") || collectingJSON {
+                    collectingJSON = true
+                    jsonResponse += content
+                }
+            }
+            
+            // Handle completion
+            if chunk.isFinished {
+                reasoningStreamManager.isStreaming = false
+            }
+        }
+        
+        // Parse the JSON response
+        let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
+        return try parseJSONFromText(responseText, as: RevisionsContainer.self)
+    }
+    
+    /// Parse JSON from text content with fallback strategies
+    private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
+        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")
+        
+        // First try direct parsing if the entire text is JSON
+        if let jsonData = text.data(using: .utf8) {
+            do {
+                let result = try JSONDecoder().decode(type, from: jsonData)
+                Logger.info("✅ Direct JSON parsing successful")
+                return result
+            } catch {
+                Logger.debug("❌ Direct JSON parsing failed: \(error)")
+            }
+        }
+        
+        // Try to extract JSON from text (look for JSON between ```json and ``` or just {...})
+        let cleanedText = extractJSONFromText(text)
+        if let jsonData = cleanedText.data(using: .utf8) {
+            do {
+                let result = try JSONDecoder().decode(type, from: jsonData)
+                Logger.info("✅ Extracted JSON parsing successful")
+                return result
+            } catch {
+                Logger.debug("❌ Extracted JSON parsing failed: \(error)")
+            }
+        }
+        
+        throw LLMError.decodingFailed(NSError(domain: "ResumeReviseViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not parse JSON from response"]))
+    }
+    
+    /// Extract JSON from text that may contain other content
+    private func extractJSONFromText(_ text: String) -> String {
+        // Look for JSON between code blocks
+        if let range = text.range(of: "```json") {
+            let afterStart = text[range.upperBound...]
+            if let endRange = afterStart.range(of: "```") {
+                return String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // Look for standalone JSON object
+        if let startRange = text.range(of: "{") {
+            var braceCount = 1
+            var index = text.index(after: startRange.lowerBound)
+            
+            while index < text.endIndex && braceCount > 0 {
+                let char = text[index]
+                if char == "{" {
+                    braceCount += 1
+                } else if char == "}" {
+                    braceCount -= 1
+                }
+                index = text.index(after: index)
+            }
+            
+            if braceCount == 0 {
+                let jsonRange = startRange.lowerBound..<index
+                return String(text[jsonRange])
+            }
+        }
+        
+        return text
     }
 }
 
