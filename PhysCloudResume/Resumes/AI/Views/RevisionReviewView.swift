@@ -18,8 +18,9 @@ struct RevisionReviewView: View {
     @State private var eventMonitor: Any? = nil
 
     var body: some View {
-        if let resume = resume {
-            if viewModel.aiResubmit {
+        VStack(spacing: 0) {
+            if let resume = resume {
+                if viewModel.aiResubmit {
                 // Loading state during AI resubmission
                 VStack {
                     Text("Submitting Feedback to AI").padding()
@@ -95,8 +96,21 @@ struct RevisionReviewView: View {
                     Text("Closing will apply any accepted changes and discard pending revisions.")
                 }
             }
-        } else {
-            Text("No valid Resume")
+            } else {
+                Text("No valid Resume")
+            }
+            
+            // Reasoning stream view at the bottom
+            ReasoningStreamView(
+                isVisible: Binding(
+                    get: { viewModel.reasoningStreamManager.isVisible },
+                    set: { viewModel.reasoningStreamManager.isVisible = $0 }
+                ),
+                reasoningText: Binding(
+                    get: { viewModel.reasoningStreamManager.reasoningText },
+                    set: { viewModel.reasoningStreamManager.reasoningText = $0 }
+                )
+            )
         }
     }
     
