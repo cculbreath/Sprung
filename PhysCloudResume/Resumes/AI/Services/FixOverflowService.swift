@@ -21,7 +21,9 @@ class FixOverflowService {
         allowEntityMerge: Bool,
         selectedModel: String,
         maxIterations: Int,
-        onStatusUpdate: @escaping (FixOverflowStatus) -> Void
+        supportsReasoning: Bool = false,
+        onStatusUpdate: @escaping (FixOverflowStatus) -> Void,
+        onReasoningUpdate: ((String) -> Void)? = nil
     ) async -> Result<String, Error> {
         var loopCount = 0
         var operationSuccess = false
@@ -75,7 +77,9 @@ class FixOverflowService {
                 currentImageBase64: currentImageBase64,
                 currentOverflowLineCount: currentOverflowLineCount,
                 selectedModel: selectedModel,
-                allowEntityMerge: allowEntityMerge
+                allowEntityMerge: allowEntityMerge,
+                supportsReasoning: supportsReasoning,
+                onReasoningUpdate: onReasoningUpdate
             )
             
             guard case let .success(fixFitsResponse) = fixFitsResult else {
@@ -107,7 +111,7 @@ class FixOverflowService {
             }
             
             // Check if content fits
-            let contentsFitResult = await checkContentFits(resume: resume, selectedModel: selectedModel, iteration: loopCount)
+            let contentsFitResult = await checkContentFits(resume: resume, selectedModel: selectedModel, iteration: loopCount, supportsReasoning: supportsReasoning, onReasoningUpdate: onReasoningUpdate)
             guard case let .success(contentsFitResponse) = contentsFitResult else {
                 if case let .failure(error) = contentsFitResult {
                     return .failure(FixOverflowError.contentsFitCheckFailed(iteration: loopCount, error: error))
@@ -176,7 +180,9 @@ class FixOverflowService {
         currentImageBase64: String,
         currentOverflowLineCount: Int,
         selectedModel: String,
-        allowEntityMerge: Bool
+        allowEntityMerge: Bool,
+        supportsReasoning: Bool = false,
+        onReasoningUpdate: ((String) -> Void)? = nil
     ) async -> Result<FixFitsResponseContainer, Error> {
         await withCheckedContinuation { continuation in
             reviewService.sendFixFitsRequest(
@@ -185,7 +191,9 @@ class FixOverflowService {
                 base64Image: currentImageBase64,
                 overflowLineCount: currentOverflowLineCount,
                 modelId: selectedModel,
-                allowEntityMerge: allowEntityMerge
+                allowEntityMerge: allowEntityMerge,
+                supportsReasoning: supportsReasoning,
+                onReasoningUpdate: onReasoningUpdate
             ) { result in
                 continuation.resume(returning: result)
             }
@@ -280,7 +288,7 @@ class FixOverflowService {
         }
     }
     
-    private func checkContentFits(resume: Resume, selectedModel: String, iteration: Int) async -> Result<ContentsFitResponse, Error> {
+    private func checkContentFits(resume: Resume, selectedModel: String, iteration: Int, supportsReasoning: Bool = false, onReasoningUpdate: ((String) -> Void)? = nil) async -> Result<ContentsFitResponse, Error> {
         guard let updatedPdfData = resume.pdfData,
               let updatedImageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: updatedPdfData)
         else {
@@ -293,7 +301,9 @@ class FixOverflowService {
             reviewService.sendContentsFitRequest(
                 resume: resume,
                 base64Image: updatedImageBase64,
-                modelId: selectedModel
+                modelId: selectedModel,
+                supportsReasoning: supportsReasoning,
+                onReasoningUpdate: onReasoningUpdate
             ) { result in
                 Logger.debug("FixOverflow: Received contentsFit response: \(result)")
                 continuation.resume(returning: result)

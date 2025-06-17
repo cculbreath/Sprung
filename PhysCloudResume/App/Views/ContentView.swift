@@ -83,6 +83,18 @@ struct ContentView: View {
         }
         // Apply sheet modifier
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
+        // Add reasoning stream view as overlay for AI thinking display
+        .overlay(alignment: .bottom) {
+            @Bindable var reasoningManager = appState.globalReasoningStreamManager
+            if reasoningManager.isVisible {
+                ReasoningStreamView(
+                    isVisible: $reasoningManager.isVisible,
+                    reasoningText: $reasoningManager.reasoningText
+                )
+                .padding(.bottom, 10)
+                .padding(.horizontal, 20)
+            }
+        }
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             // Sync selected app to AppState for template editor
             appState.selectedJobApp = newValue

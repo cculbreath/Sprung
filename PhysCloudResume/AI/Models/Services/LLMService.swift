@@ -279,10 +279,7 @@ class LLMService {
                         if let exclude = reasoning.exclude {
                             reasoningDict["exclude"] = exclude
                         }
-                        if let enabled = reasoning.enabled {
-                            reasoningDict["enabled"] = enabled
-                        }
-                        // Note: reasoning parameter will be added via custom encoding in SwiftOpenAI
+                        parameters.reasoning = reasoningDict
                         Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
                     }
                     
@@ -299,7 +296,13 @@ class LLMService {
                                 content: firstChoice.delta?.content,
                                 reasoningContent: firstChoice.delta?.reasoningContent,
                                 isFinished: firstChoice.finishReason != nil,
-                                finishReason: firstChoice.finishReason?.value as? String
+                                finishReason: {
+                                    guard let finishReason = firstChoice.finishReason else { return nil }
+                                    switch finishReason {
+                                    case .string(let str): return str
+                                    case .int(let int): return String(int)
+                                    }
+                                }()
                             )
                             continuation.yield(streamChunk)
                         }
@@ -351,10 +354,7 @@ class LLMService {
                         if let exclude = reasoning.exclude {
                             reasoningDict["exclude"] = exclude
                         }
-                        if let enabled = reasoning.enabled {
-                            reasoningDict["enabled"] = enabled
-                        }
-                        // Note: reasoning parameter will be added via custom encoding in SwiftOpenAI
+                        parameters.reasoning = reasoningDict
                         Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
                     }
                     
@@ -371,7 +371,13 @@ class LLMService {
                                 content: firstChoice.delta?.content,
                                 reasoningContent: firstChoice.delta?.reasoningContent,
                                 isFinished: firstChoice.finishReason != nil,
-                                finishReason: firstChoice.finishReason?.value as? String
+                                finishReason: {
+                                    guard let finishReason = firstChoice.finishReason else { return nil }
+                                    switch finishReason {
+                                    case .string(let str): return str
+                                    case .int(let int): return String(int)
+                                    }
+                                }()
                             )
                             continuation.yield(streamChunk)
                         }
@@ -392,7 +398,8 @@ class LLMService {
         conversationId: UUID,
         images: [Data] = [],
         temperature: Double? = nil,
-        reasoning: OpenRouterReasoning? = nil
+        reasoning: OpenRouterReasoning? = nil,
+        jsonSchema: JSONSchema? = nil
     ) -> AsyncThrowingStream<LLMStreamChunk, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -440,6 +447,17 @@ class LLMService {
                         temperature: temperature ?? defaultTemperature
                     )
                     
+                    // Add JSON schema if provided
+                    if let jsonSchema = jsonSchema {
+                        let responseFormatSchema = JSONSchemaResponseFormat(
+                            name: "clarifying_questions",
+                            strict: true,
+                            schema: jsonSchema
+                        )
+                        parameters.responseFormat = .jsonSchema(responseFormatSchema)
+                        Logger.debug("📝 Streaming conversation using structured output with JSON Schema enforcement")
+                    }
+                    
                     // Add reasoning parameters if provided
                     if let reasoning = reasoning {
                         var reasoningDict: [String: Any] = [:]
@@ -452,10 +470,7 @@ class LLMService {
                         if let exclude = reasoning.exclude {
                             reasoningDict["exclude"] = exclude
                         }
-                        if let enabled = reasoning.enabled {
-                            reasoningDict["enabled"] = enabled
-                        }
-                        // Note: reasoning parameter will be added via custom encoding in SwiftOpenAI
+                        parameters.reasoning = reasoningDict
                         Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
                     }
                     
@@ -480,7 +495,13 @@ class LLMService {
                                 content: firstChoice.delta?.content,
                                 reasoningContent: firstChoice.delta?.reasoningContent,
                                 isFinished: firstChoice.finishReason != nil,
-                                finishReason: firstChoice.finishReason?.value as? String
+                                finishReason: {
+                                    guard let finishReason = firstChoice.finishReason else { return nil }
+                                    switch finishReason {
+                                    case .string(let str): return str
+                                    case .int(let int): return String(int)
+                                    }
+                                }()
                             )
                             continuation.yield(streamChunk)
                             
@@ -502,6 +523,128 @@ class LLMService {
     }
     
     // MARK: - Conversation Operations
+    
+    /// Start a new conversation with streaming support
+    /// Returns a tuple with conversation ID and the streaming response
+    func startConversationStreaming(
+        systemPrompt: String? = nil,
+        userMessage: String,
+        modelId: String,
+        temperature: Double? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> (conversationId: UUID, stream: AsyncThrowingStream<LLMStreamChunk, Error>) {
+        try ensureInitialized()
+        
+        guard let conversationManager = conversationManager else {
+            throw LLMError.clientError("Conversation manager not available")
+        }
+        
+        // Validate model
+        try validateModel(modelId: modelId, for: [])
+        
+        // Create conversation
+        let conversationId = UUID()
+        Logger.info("🗣️ Starting new streaming conversation: \(conversationId) with model: \(modelId)")
+        
+        // Build messages
+        var messages: [LLMMessage] = []
+        
+        // Add system prompt if provided
+        if let systemPrompt = systemPrompt {
+            messages.append(LLMMessage.text(role: .system, content: systemPrompt))
+        }
+        
+        // Add user message
+        messages.append(LLMMessage.text(role: .user, content: userMessage))
+        
+        // Build parameters
+        var parameters = LLMRequestBuilder.buildConversationRequest(
+            messages: messages,
+            modelId: modelId,
+            temperature: temperature ?? defaultTemperature
+        )
+        
+        // Add JSON schema if provided
+        if let jsonSchema = jsonSchema {
+            let responseFormatSchema = JSONSchemaResponseFormat(
+                name: "structured_response",
+                strict: true,
+                schema: jsonSchema
+            )
+            parameters.responseFormat = .jsonSchema(responseFormatSchema)
+            Logger.debug("📝 Starting streaming conversation using structured output with JSON Schema enforcement")
+        }
+        
+        // Add reasoning parameters if provided
+        if let reasoning = reasoning {
+            var reasoningDict: [String: Any] = [:]
+            if let effort = reasoning.effort {
+                reasoningDict["effort"] = effort
+            }
+            if let maxTokens = reasoning.maxTokens {
+                reasoningDict["max_tokens"] = maxTokens
+            }
+            if let exclude = reasoning.exclude {
+                reasoningDict["exclude"] = exclude
+            }
+            parameters.reasoning = reasoningDict
+            Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
+        }
+        
+        // Enable streaming
+        parameters.stream = true
+        
+        // Execute streaming request
+        let stream = try await requestExecutor.executeStreaming(parameters: parameters)
+        
+        // Create wrapper stream that handles conversation management
+        let managedStream = AsyncThrowingStream<LLMStreamChunk, Error> { continuation in
+            Task {
+                do {
+                    // Accumulate response for conversation history
+                    var fullResponse = ""
+                    
+                    // Process stream chunks
+                    for try await chunk in stream {
+                        if let firstChoice = chunk.choices?.first {
+                            // Accumulate content
+                            if let content = firstChoice.delta?.content {
+                                fullResponse += content
+                            }
+                            
+                            let streamChunk = LLMStreamChunk(
+                                content: firstChoice.delta?.content,
+                                reasoningContent: firstChoice.delta?.reasoningContent,
+                                isFinished: firstChoice.finishReason != nil,
+                                finishReason: {
+                                    guard let finishReason = firstChoice.finishReason else { return nil }
+                                    switch finishReason {
+                                    case .string(let str): return str
+                                    case .int(let int): return String(int)
+                                    }
+                                }()
+                            )
+                            continuation.yield(streamChunk)
+                            
+                            // When finished, update conversation history
+                            if firstChoice.finishReason != nil {
+                                messages.append(LLMMessage.text(role: .assistant, content: fullResponse))
+                                conversationManager.storeConversation(id: conversationId, messages: messages)
+                                Logger.info("✅ Streaming conversation started: \(conversationId)")
+                            }
+                        }
+                    }
+                    
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+        
+        return (conversationId: conversationId, stream: managedStream)
+    }
     
     /// Start a new conversation
     func startConversation(

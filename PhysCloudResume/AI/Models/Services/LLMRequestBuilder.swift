@@ -8,29 +8,32 @@
 import Foundation
 import SwiftOpenAI
 
-/// Reasoning configuration for OpenRouter (different from OpenAI's format)
+/// Reasoning configuration for OpenRouter (matches their API format exactly)
 public struct OpenRouterReasoning: Codable {
     /// Effort level: "high", "medium", or "low"
     public let effort: String?
-    /// Maximum tokens for reasoning (Anthropic-style)
-    public let maxTokens: Int?
-    /// Whether to exclude reasoning tokens from response
+    /// Whether to exclude reasoning tokens from response (false = include, true = exclude)
     public let exclude: Bool?
-    /// Enable reasoning with default parameters
-    public let enabled: Bool?
+    /// Maximum tokens for reasoning
+    public let maxTokens: Int?
     
     enum CodingKeys: String, CodingKey {
         case effort
-        case maxTokens = "max_tokens"
         case exclude
-        case enabled
+        case maxTokens = "max_tokens"
     }
     
-    public init(effort: String? = nil, maxTokens: Int? = nil, exclude: Bool? = nil, enabled: Bool? = nil) {
+    public init(effort: String? = nil, exclude: Bool? = nil, maxTokens: Int? = nil) {
         self.effort = effort
-        self.maxTokens = maxTokens
         self.exclude = exclude
-        self.enabled = enabled
+        self.maxTokens = maxTokens
+    }
+    
+    /// Convenience initializer with includeReasoning parameter
+    public init(effort: String? = nil, includeReasoning: Bool = true, maxTokens: Int? = nil) {
+        self.effort = effort
+        self.exclude = includeReasoning ? false : true  // false = include (don't exclude), true = exclude
+        self.maxTokens = maxTokens
     }
 }
 

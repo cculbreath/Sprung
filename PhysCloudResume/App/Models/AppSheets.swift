@@ -61,31 +61,6 @@ struct AppSheetsModifier: ViewModifier {
                     .frame(minWidth: 650)
                 }
             }
-            .sheet(isPresented: $sheets.showClarifyingQuestions) {
-                ClarifyingQuestionsSheet(
-                    questions: clarifyingQuestions,
-                    isPresented: $sheets.showClarifyingQuestions,
-                    onSubmit: { answers in
-                        Task { @MainActor in
-                            guard let jobApp = jobAppStore.selectedApp,
-                                  let resume = jobApp.selectedRes,
-                                  let resumeViewModel = appState.resumeReviseViewModel,
-                                  let clarifyingViewModel = appState.clarifyingQuestionsViewModel else { return }
-                            
-                            do {
-                                try await clarifyingViewModel.processAnswersAndHandoffConversation(
-                                    answers: answers,
-                                    resume: resume,
-                                    resumeReviseViewModel: resumeViewModel
-                                )
-                                Logger.debug("✅ Clarifying questions processed and handed off to ResumeReviseViewModel")
-                            } catch {
-                                Logger.error("Error continuing after clarifying questions: \(error)")
-                            }
-                        }
-                    }
-                )
-            }
             .sheet(isPresented: $sheets.showMultiModelChooseBest) {
                 if jobAppStore.selectedApp != nil,
                    let currentCoverLetter = coverLetterStore.cL {
