@@ -285,6 +285,8 @@ class ClarifyingQuestionsViewModel {
             
             // Signal that revisions are ready (this will be handled by the view layer)
             await MainActor.run {
+                // Ensure reasoning modal is hidden before transitioning
+                appState.globalReasoningStreamManager.isVisible = false
                 appState.resumeReviseViewModel = reviseViewModel
                 reviseViewModel.showResumeRevisionSheet = true
             }

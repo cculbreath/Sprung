@@ -166,6 +166,8 @@ class ResumeReviseViewModel {
                     // Handle completion
                     if chunk.isFinished {
                         appState.globalReasoningStreamManager.isStreaming = false
+                        // Hide the reasoning modal when streaming completes
+                        appState.globalReasoningStreamManager.isVisible = false
                     }
                 }
                 
@@ -290,6 +292,9 @@ class ResumeReviseViewModel {
             currentRevisionNode = revisions[0]
             currentFeedbackNode = revisions[0].createFeedbackNode()
         }
+        
+        // Ensure reasoning modal is hidden before showing revision review
+        appState.globalReasoningStreamManager.isVisible = false
         
         // Show the revision review UI
         showResumeRevisionSheet = true
@@ -855,6 +860,8 @@ class ResumeReviseViewModel {
             // Handle completion
             if chunk.isFinished {
                 appState.globalReasoningStreamManager.isStreaming = false
+                // Hide the reasoning modal when streaming completes
+                appState.globalReasoningStreamManager.isVisible = false
             }
         }
         
