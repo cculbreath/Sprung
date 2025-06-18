@@ -350,11 +350,11 @@ import SwiftUI
     }
 
     /// Generate prompt for clarifying questions workflow
-    /// Returns the full resume context with clarifying questions instructions
+    /// Returns resume context WITHOUT editable nodes, plus clarifying questions instructions
     @MainActor
     func clarifyingQuestionsPrompt() async -> String {
-        // Get the full resume context
-        let fullResumeContext = await wholeResumeQueryString()
+        // Get resume context WITHOUT editable nodes (clarifying questions don't need them)
+        let resumeContextOnly = await clarifyingQuestionsContextString()
         
         // Add clarifying questions instruction
         let clarifyingQuestionsInstruction = """
@@ -384,7 +384,86 @@ import SwiftUI
         ================================================================================
         """
         
-        return fullResumeContext + clarifyingQuestionsInstruction
+        return resumeContextOnly + clarifyingQuestionsInstruction
+    }
+
+    /// Generate resume context for clarifying questions (excludes editable nodes and JSON)
+    /// This provides the resume text, job listing, and background docs for context
+    /// but does NOT include the JSON structure or editable nodes array since clarifying questions
+    /// are about gathering information, not proposing specific revisions
+    @MainActor
+    func clarifyingQuestionsContextString() async -> String {
+        // Ensure the resume's rendered text is up-to-date
+        try? await res.ensureFreshRenderedText()
+        
+        // Build context prompt without JSON or editable nodes
+        let prompt = """
+        ================================================================================
+        LATEST RÉSUMÉ (PLAIN TEXT):
+        \(resumeText)
+        ================================================================================
+        GOAL:
+        Our objective is to secure \(applicant.name) an interview for the following position:
+
+        JOB LISTING:
+        \(jobListing)
+
+        CONTEXT:
+        - Review \(applicant.name)'s résumé and the job listing
+        - Consider what additional information would help provide better, more targeted revisions
+        - Focus on understanding the candidate's experience, achievements, and how to best position them for this role
+        - Background documents provide additional context about the candidate's experience
+
+        ================================================================================
+        BACKGROUND DOCUMENTS:
+        \(backgroundDocs)
+        ================================================================================
+        """
+        
+        // If debug flag is set, save the prompt to a text file in the user's Downloads folder.
+        if saveDebugPrompt {
+            savePromptToDownloads(content: prompt, fileName: "clarifyingQuestionsDebug.txt")
+        }
+        
+        return prompt
+    }
+
+    /// Generate revision prompt for multi-turn conversations (after clarifying questions)
+    /// Only includes editable nodes and revision instructions since context is already established
+    @MainActor
+    func multiTurnRevisionPrompt() async -> String {
+        // Ensure the resume's rendered text is up-to-date
+        try? await res.ensureFreshRenderedText()
+        
+        // Build prompt with only editable nodes and instructions (context already established)
+        let prompt = """
+        Based on our discussion, please provide revision suggestions for the resume. Here are the editable nodes that can be modified:
+
+        ================================================================================
+        EDITABLE NODES:
+        \(updatableFieldsString)
+        ================================================================================
+        
+        TASK:
+        - Propose revisions that align with the job requirements and incorporate the information from our discussion
+        - Provide all revisions as structured data in an array of RevNodes (RevArray) matching the schema
+        - For each field that needs no change, set newValue to "" and valueChanged to false
+        - For each field that requires a change, propose newValue, set valueChanged to true, and include a "why" explanation if non-trivial
+        - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node
+
+        OUTPUT INSTRUCTIONS:
+        - Return your proposed revisions as JSON matching the RevNode array schema provided
+        - For each original EditableNode, include exactly one RevNode in the RevArray
+        - If no change is required for a given node, set "newValue" to "" and "valueChanged" to false
+        - The "why" field can be an empty string if the reason is self-explanatory
+        """
+        
+        // If debug flag is set, save the prompt to a text file
+        if saveDebugPrompt {
+            savePromptToDownloads(content: prompt, fileName: "multiTurnRevisionDebug.txt")
+        }
+        
+        return prompt
     }
 
     // MARK: - Console Print Friendly Methods
