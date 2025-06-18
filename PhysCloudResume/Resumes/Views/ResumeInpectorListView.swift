@@ -38,6 +38,9 @@ struct ResumeInspectorListView: View {
                                 },
                                 onDelete: {
                                     resStore.deleteRes(resume)
+                                },
+                                onDuplicate: {
+                                    resStore.duplicate(resume)
                                 }
                             )
                         }
@@ -71,6 +74,7 @@ struct ResumeRowView: View {
     let isSelected: Bool
     let onSelect: () -> Void
     let onDelete: () -> Void
+    let onDuplicate: () -> Void
 
     var body: some View {
         HStack {
@@ -93,6 +97,7 @@ struct ResumeRowView: View {
         )
         .onTapGesture(perform: onSelect)
         .contextMenu {
+            Button("Duplicate", action: onDuplicate)
             Button("Delete", action: onDelete)
         }
     }

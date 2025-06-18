@@ -55,6 +55,80 @@ final class ResStore: SwiftDataStore {
         return resume
     }
 
+    @discardableResult
+    func duplicate(_ originalResume: Resume) -> Resume? {
+        guard let jobApp = originalResume.jobApp,
+              let model = originalResume.model else { return nil }
+        
+        // Create new resume with same sources and model
+        let newResume = Resume(
+            jobApp: jobApp,
+            enabledSources: originalResume.enabledSources,
+            model: model
+        )
+        
+        // Copy basic properties
+        newResume.includeFonts = originalResume.includeFonts
+        newResume.keyLabels = originalResume.keyLabels
+        newResume.importedEditorKeysData = originalResume.importedEditorKeysData
+        
+        // Deep copy the tree structure
+        if let originalRoot = originalResume.rootNode {
+            newResume.rootNode = duplicateTreeNode(originalRoot, for: newResume)
+        }
+        
+        // Deep copy font size nodes if they exist
+        if originalResume.includeFonts && !originalResume.fontSizeNodes.isEmpty {
+            newResume.fontSizeNodes = originalResume.fontSizeNodes.map { originalNode in
+                duplicateFontSizeNode(originalNode, for: newResume)
+            }
+        }
+        
+        // Add to jobApp and save
+        jobApp.addResume(newResume)
+        modelContext.insert(newResume)
+        saveContext()
+        
+        // Trigger export for the new resume
+        newResume.debounceExport()
+        
+        return newResume
+    }
+    
+    private func duplicateTreeNode(_ original: TreeNode, for resume: Resume, parent: TreeNode? = nil) -> TreeNode {
+        let newNode = TreeNode(
+            name: original.name,
+            value: original.value,
+            children: nil,
+            parent: parent,
+            inEditor: original.includeInEditor,
+            status: original.status,
+            resume: resume,
+            isTitleNode: original.isTitleNode
+        )
+        
+        newNode.myIndex = original.myIndex
+        newNode.depth = original.depth
+        
+        // Recursively duplicate children
+        if let originalChildren = original.children {
+            newNode.children = originalChildren.map { child in
+                duplicateTreeNode(child, for: resume, parent: newNode)
+            }
+        }
+        
+        return newNode
+    }
+    
+    private func duplicateFontSizeNode(_ original: FontSizeNode, for resume: Resume) -> FontSizeNode {
+        return FontSizeNode(
+            key: original.key,
+            index: original.index,
+            fontString: original.fontString,
+            resume: resume
+        )
+    }
+
     func deleteRes(_ res: Resume) {
         // Handle jobApp relationship updates and remove the resume from the jobApp
         if let jobApp = res.jobApp {
