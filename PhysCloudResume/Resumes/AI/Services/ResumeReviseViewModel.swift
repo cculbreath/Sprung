@@ -223,6 +223,10 @@ class ResumeReviseViewModel {
         isProcessingRevisions = true
         
         do {
+            // Create revision request with editable nodes only (context already established)
+            let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
+            let revisionRequestPrompt = await query.multiTurnRevisionPrompt()
+            
             // Check if model supports reasoning for streaming
             let model = appState.openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
@@ -240,7 +244,7 @@ class ResumeReviseViewModel {
                 )
                 
                 revisions = try await streamRevisionGeneration(
-                    userMessage: "Based on our discussion, please provide revision suggestions for the resume in the specified JSON format.",
+                    userMessage: revisionRequestPrompt,
                     modelId: modelId,
                     conversationId: conversationId,
                     reasoning: reasoning
@@ -248,7 +252,7 @@ class ResumeReviseViewModel {
             } else {
                 // Use non-streaming for models without reasoning
                 revisions = try await llmService.continueConversationStructured(
-                    userMessage: "Based on our discussion, please provide revision suggestions for the resume in the specified JSON format.",
+                    userMessage: revisionRequestPrompt,
                     modelId: modelId,
                     conversationId: conversationId,
                     responseType: RevisionsContainer.self,
@@ -454,14 +458,38 @@ class ResumeReviseViewModel {
             
             let revisionPrompt = createRevisionPrompt(feedbackNodes: nodesToResubmit)
             
-            // Continue the conversation with revision feedback and get new revisions
-            let revisions = try await llmService.continueConversationStructured(
-                userMessage: revisionPrompt,
-                modelId: modelId,
-                conversationId: conversationId,
-                responseType: RevisionsContainer.self,
-                jsonSchema: ResumeApiQuery.revNodeArraySchema
-            )
+            // Check if model supports reasoning for streaming during resubmission
+            let model = appState.openRouterService.findModel(id: modelId)
+            let supportsReasoning = model?.supportsReasoning ?? false
+            
+            let revisions: RevisionsContainer
+            
+            if supportsReasoning {
+                // Use streaming with reasoning for supported models
+                Logger.info("🧠 Using streaming with reasoning for AI resubmission: \(modelId)")
+                
+                // Configure reasoning parameters
+                let reasoning = OpenRouterReasoning(
+                    effort: "high",
+                    includeReasoning: true
+                )
+                
+                revisions = try await streamRevisionGeneration(
+                    userMessage: revisionPrompt,
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    reasoning: reasoning
+                )
+            } else {
+                // Use non-streaming for models without reasoning
+                revisions = try await llmService.continueConversationStructured(
+                    userMessage: revisionPrompt,
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    responseType: RevisionsContainer.self,
+                    jsonSchema: ResumeApiQuery.revNodeArraySchema
+                )
+            }
             
             // Validate and process the new revisions
             let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
@@ -797,7 +825,8 @@ class ResumeReviseViewModel {
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
-            reasoning: reasoning
+            reasoning: reasoning,
+            jsonSchema: ResumeApiQuery.revNodeArraySchema
         )
         
         // Process stream and collect full response
