@@ -460,7 +460,7 @@ class LLMService {
                     // Add JSON schema if provided
                     if let jsonSchema = jsonSchema {
                         let responseFormatSchema = JSONSchemaResponseFormat(
-                            name: "clarifying_questions",
+                            name: "structured_response",
                             strict: true,
                             schema: jsonSchema
                         )

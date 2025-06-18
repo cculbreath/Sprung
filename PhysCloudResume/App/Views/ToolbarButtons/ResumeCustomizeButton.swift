@@ -26,8 +26,10 @@ struct ResumeCustomizeButton: View {
             }
         }
         .buttonStyle( .automatic )
-        .help("Create Resume Revisions")
-        .disabled(jobAppStore.selectedApp == nil || jobAppStore.selectedApp?.selectedRes?.rootNode == nil)
+        .help("Create Resume Revisions (requires nodes marked for AI revision)")
+        .disabled(jobAppStore.selectedApp == nil || 
+                  jobAppStore.selectedApp?.selectedRes?.rootNode == nil || 
+                  !(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes == true))
         .sheet(isPresented: $showCustomizeModelSheet) {
             ModelSelectionSheet(
                 title: "Choose Model for Resume Customization",

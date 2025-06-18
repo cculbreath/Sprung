@@ -94,6 +94,12 @@ class Resume: Identifiable, Hashable {
             return [[:]]
         }
     }
+    
+    /// Returns true if there are any nodes marked for AI replacement (aiToReplace status)
+    var hasUpdatableNodes: Bool {
+        guard let rootNode = rootNode else { return false }
+        return rootNode.aiStatusChildren > 0
+    }
 
     var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
 
