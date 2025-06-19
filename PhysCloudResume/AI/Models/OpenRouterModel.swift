@@ -7,7 +7,8 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     let contextLength: Int?
     let architecture: Architecture?
     let pricing: Pricing?
-    let supportedParameters: [String]?
+    let supportedParameters: [String]? // Legacy field, may be nil
+    let endpoints: [Endpoint]?
     let created: TimeInterval?
     
     struct Architecture: Codable, Hashable {
@@ -51,8 +52,25 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
         }
     }
     
+    struct Endpoint: Codable, Hashable {
+        let name: String?
+        let contextLength: Int?
+        let pricing: Pricing?
+        let providerName: String?
+        let tag: String?
+        let supportedParameters: [String]?
+        let status: Int?
+        
+        enum CodingKeys: String, CodingKey {
+            case name, pricing, tag, status
+            case contextLength = "context_length"
+            case providerName = "provider_name"
+            case supportedParameters = "supported_parameters"
+        }
+    }
+    
     enum CodingKeys: String, CodingKey {
-        case id, name, description, created, architecture, pricing
+        case id, name, description, created, architecture, pricing, endpoints
         case contextLength = "context_length"
         case supportedParameters = "supported_parameters"
     }
@@ -60,8 +78,23 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
 
 extension OpenRouterModel {
     var supportsStructuredOutput: Bool {
-        guard let params = supportedParameters else { return false }
-        return params.contains("structured_outputs") || params.contains("response_format")
+        // 1. Check supported parameters from endpoints (primary source)
+        if let endpoints = endpoints {
+            for endpoint in endpoints {
+                if let params = endpoint.supportedParameters,
+                   (params.contains("structured_outputs") || params.contains("response_format")) {
+                    return true
+                }
+            }
+        }
+        
+        // 2. Fallback to legacy top-level supported parameters
+        if let params = supportedParameters,
+           (params.contains("structured_outputs") || params.contains("response_format")) {
+            return true
+        }
+        
+        return false
     }
     
     var supportsImages: Bool {
@@ -69,31 +102,40 @@ extension OpenRouterModel {
     }
     
     var supportsReasoning: Bool {
-        // Check supported parameters first
+        // Only rely on API-provided data - no hardcoded model names
+        
+        // 1. Check supported parameters from endpoints (primary source)
+        if let endpoints = endpoints {
+            for endpoint in endpoints {
+                if let params = endpoint.supportedParameters,
+                   (params.contains("reasoning") || params.contains("include_reasoning")) {
+                    return true
+                }
+            }
+        }
+        
+        // 2. Fallback to legacy top-level supported parameters
         if let params = supportedParameters,
            (params.contains("reasoning") || params.contains("include_reasoning")) {
             return true
         }
         
-        // Check for known reasoning models by ID patterns
-        let reasoningModelPatterns = [
-            "openai/o1",
-            "openai/o3",
-            "openai/o4",
-            "deepseek/deepseek-r1",
-            "anthropic/claude-3.7-sonnet",
-            ":thinking"  // Models with :thinking suffix
-        ]
-        
-        for pattern in reasoningModelPatterns {
-            if id.contains(pattern) {
-                return true
-            }
+        // 3. Check pricing for internal_reasoning cost (secondary indicator)
+        if let pricing = pricing, 
+           let internalReasoningCost = pricing.internalReasoning,
+           !internalReasoningCost.isEmpty && internalReasoningCost != "0" {
+            return true
         }
         
-        // Check pricing for internal_reasoning cost (indicates reasoning support)
-        if let pricing = pricing, pricing.internalReasoning != nil {
-            return true
+        // 4. Check endpoint pricing for internal_reasoning cost
+        if let endpoints = endpoints {
+            for endpoint in endpoints {
+                if let pricing = endpoint.pricing,
+                   let internalReasoningCost = pricing.internalReasoning,
+                   !internalReasoningCost.isEmpty && internalReasoningCost != "0" {
+                    return true
+                }
+            }
         }
         
         return false

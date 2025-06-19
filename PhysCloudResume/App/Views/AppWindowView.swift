@@ -117,7 +117,10 @@ struct AppWindowView: View {
                 .tag(TabList.submitApp)
                 .disabled(jobAppStore.selectedApp?.selectedRes == nil)
         }
+        .padding(.top)
+        .padding(.bottom)
         .padding(.all)
+
     }
     
 

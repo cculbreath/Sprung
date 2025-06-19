@@ -71,9 +71,10 @@ class ClarifyingQuestionsViewModel {
                 // Use streaming with reasoning for supported models from the start
                 Logger.info("🧠 Using streaming with reasoning for model: \(modelId)")
                 
-                // Configure reasoning parameters
+                // Configure reasoning parameters using user setting
+                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(
-                    effort: "high",
+                    effort: userEffort,
                     includeReasoning: true // We want to see the reasoning
                 )
                 
@@ -89,7 +90,8 @@ class ClarifyingQuestionsViewModel {
                 // Store the conversation ID
                 currentConversationId = conversationId
                 
-                // Process stream and collect full response
+                // Clear any previous reasoning content and start fresh
+                appState.globalReasoningStreamManager.clear()
                 appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
                 var fullResponse = ""
                 var collectingJSON = false
