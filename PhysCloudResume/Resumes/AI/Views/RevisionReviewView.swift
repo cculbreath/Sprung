@@ -340,7 +340,15 @@ struct RevisionComparisonPanels: View {
                     }
                     UnchangedValuePanel(
                         title: "Current Value",
-                        content: revisionNode.originalText(using: updateNodes)
+                        content: revisionNode.originalText(using: updateNodes),
+                        showEditButton: true,
+                        onEdit: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                viewModel.isCommenting = false
+                                viewModel.isMoreCommenting = false
+                                viewModel.isEditingResponse = true
+                            }
+                        }
                     )
                     if !revisionNode.why.isEmpty {
                         ReasoningPanel(
@@ -440,12 +448,39 @@ struct ComparisonPanel: View {
 struct UnchangedValuePanel: View {
     let title: String
     let content: String
+    let showEditButton: Bool
+    let onEdit: (() -> Void)?
+    
+    @State private var isHovering = false
+
+    init(title: String, content: String, showEditButton: Bool = false, onEdit: (() -> Void)? = nil) {
+        self.title = title
+        self.content = content
+        self.showEditButton = showEditButton
+        self.onEdit = onEdit
+    }
 
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
-            Text(title)
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                .foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                
+                // Edit button - only visible on hover
+                if showEditButton, let onEdit = onEdit, isHovering {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil.circle")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Manually edit")
+                    .transition(.opacity.combined(with: .scale))
+                }
+            }
             Text(content)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(.primary)
@@ -459,6 +494,11 @@ struct UnchangedValuePanel: View {
                 )
         }
         .frame(maxWidth: 500)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovering = hovering
+            }
+        }
     }
 }
 
@@ -689,27 +729,41 @@ struct RevisionActionButtons: View {
                     .help("Accept this revision")
                 }
             } else {
-                Text("Keep current value or request a change?")
+                Text("Accept current value or make changes?")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .foregroundStyle(.primary)
 
                 HStack(spacing: 16) {
                     ImageButton(
-                        systemName: "pencil.circle",
-                        activeColor: .blue,
-                        isActive: viewModel.isMoreCommenting || viewModel.isChangeRequested(viewModel.currentFeedbackNode),
+                        systemName: "hand.thumbsdown.circle",
+                        activeColor: .purple,
+                        isActive: viewModel.isCommenting || viewModel.isNodeRejectedWithComments(viewModel.currentFeedbackNode),
                         action: { 
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                viewModel.isCommenting = false
                                 viewModel.isEditingResponse = false
-                                viewModel.isMoreCommenting = true 
+                                viewModel.isMoreCommenting = false
+                                viewModel.isCommenting = true 
                             }
                         }
                     )
-                    .help("Request change")
+                    .help("Reject with comment")
 
                     ImageButton(
-                        systemName: "checkmark.circle",
+                        systemName: "pencil.circle",
+                        activeColor: .green,
+                        isActive: viewModel.isEditingResponse || viewModel.isNodeEdited(viewModel.currentFeedbackNode),
+                        action: { 
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                viewModel.isCommenting = false
+                                viewModel.isMoreCommenting = false
+                                viewModel.isEditingResponse = true 
+                            }
+                        }
+                    )
+                    .help("Manually edit")
+
+                    ImageButton(
+                        systemName: "hand.thumbsup.circle",
                         activeColor: .green,
                         isActive: viewModel.isNodeAccepted(viewModel.currentFeedbackNode),
                         action: { 
@@ -719,7 +773,7 @@ struct RevisionActionButtons: View {
                             viewModel.saveAndNext(response: .noChange, resume: resume) 
                         }
                     )
-                    .help("Keep as is")
+                    .help("Accept current value")
                 }
             }
 
