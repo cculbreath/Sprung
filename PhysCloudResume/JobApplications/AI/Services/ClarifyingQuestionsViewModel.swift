@@ -271,8 +271,17 @@ class ClarifyingQuestionsViewModel {
         Logger.info("🎯 Proceeding directly to revisions workflow without clarifying questions")
         
         do {
-            // Create a ResumeReviseViewModel instance to handle the revision workflow
-            let reviseViewModel = ResumeReviseViewModel(llmService: llmService, appState: appState)
+            // Use the existing ResumeReviseViewModel from appState instead of creating a new one
+            guard let reviseViewModel = appState.resumeReviseViewModel else {
+                Logger.error("❌ No ResumeReviseViewModel available in appState")
+                await MainActor.run {
+                    lastError = "No ResumeReviseViewModel available"
+                    showError = true
+                }
+                return
+            }
+            
+            Logger.debug("🔍 [ClarifyingQuestionsViewModel] Using existing ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(reviseViewModel).toOpaque()))")
             
             // Start the fresh revision workflow
             try await reviseViewModel.startFreshRevisionWorkflow(
@@ -287,8 +296,8 @@ class ClarifyingQuestionsViewModel {
             await MainActor.run {
                 // Ensure reasoning modal is hidden before transitioning
                 appState.globalReasoningStreamManager.isVisible = false
-                appState.resumeReviseViewModel = reviseViewModel
-                reviseViewModel.showResumeRevisionSheet = true
+                // No need to set appState.resumeReviseViewModel since we're using the existing one
+                // The reviseViewModel.showResumeRevisionSheet = true is already set in startFreshRevisionWorkflow
             }
             
         } catch {

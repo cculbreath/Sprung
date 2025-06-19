@@ -10,13 +10,14 @@ import SwiftUI
 struct ReasoningStreamView: View {
     @Binding var isVisible: Bool
     @Binding var reasoningText: String
+    @Binding var isStreaming: Bool
     let modelName: String
     @State private var isExpanded: Bool = true
     @State private var scrollToBottom: Bool = false
     
     // Modal appearance
-    var modalWidth: CGFloat = 600
-    var modalHeight: CGFloat = 400
+    var modalWidth: CGFloat = 700
+    var modalHeight: CGFloat = 500
     var backgroundColor: Color = Color(NSColor.windowBackgroundColor)
     var textColor: Color = .primary
     
@@ -36,66 +37,155 @@ struct ReasoningStreamView: View {
                 
                 // Modal content
                 VStack(spacing: 0) {
-                    // Header with brain emoji and model name
-                    HStack {
-                        HStack(spacing: 8) {
-                            Text("🧠")
-                                .font(.title2)
+                    // Header with gradient background
+                    ZStack {
+                        // Gradient background
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.blue.opacity(0.15),
+                                Color.purple.opacity(0.1)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        
+                        HStack {
+                            // Brain emoji with subtle animation
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.9))
+                                    .frame(width: 70, height: 70)
+                                    .shadow(color: .blue.opacity(0.2), radius: 8, x: 0, y: 4)
+                                
+                                Text("🧠")
+                                    .font(.system(size: 48))
+                                    .rotationEffect(.degrees(-10))
+                            }
+                            .padding(.leading, 8)
                             
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(modelName) is thinking...")
-                                    .font(.headline)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(modelName)
+                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                                     .foregroundColor(.primary)
                                 
-                                HStack(spacing: 4) {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .scaleEffect(0.8)
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 8, height: 8)
+                                        .overlay(
+                                            Circle()
+                                                .fill(Color.green.opacity(0.3))
+                                                .frame(width: 16, height: 16)
+                                                .scaleEffect(isStreaming ? 1.5 : 1)
+                                                .opacity(isStreaming ? 0 : 1)
+                                                .animation(.easeInOut(duration: 1).repeatForever(autoreverses: false), value: isStreaming)
+                                        )
                                     
-                                    Text("Processing")
-                                        .font(.caption)
+                                    Text("Reasoning in progress...")
+                                        .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
                             }
-                        }
-                        
-                        Spacer()
-                        
-                        // Close button
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                isVisible = false
+                            .padding(.leading, 12)
+                            
+                            Spacer()
+                            
+                            // Close button with hover effect
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    isVisible = false
+                                }
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.gray.opacity(0.1))
+                                        .frame(width: 32, height: 32)
+                                    
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                }
                             }
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.secondary)
+                            .buttonStyle(.plain)
+                            .help("Close reasoning view")
+                            .padding(.trailing, 8)
                         }
-                        .buttonStyle(.plain)
-                        .help("Close reasoning view")
+                        .padding(.vertical, 20)
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-                    .background(backgroundColor)
+                    .frame(height: 100)
                     
-                    Divider()
+                    // Divider with gradient
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.gray.opacity(0.1),
+                                    Color.gray.opacity(0.2),
+                                    Color.gray.opacity(0.1)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(height: 1)
                     
-                    // Reasoning content
+                    // Reasoning content with improved styling
                     ScrollViewReader { proxy in
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(reasoningText)
-                                    .font(.body) // Much larger text
-                                    .lineSpacing(4)
-                                    .foregroundColor(textColor)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 16)
-                                    .id("bottom")
+                            VStack(alignment: .leading, spacing: 12) {
+                                if reasoningText.isEmpty {
+                                    VStack(spacing: 16) {
+                                        Image(systemName: "brain")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.secondary.opacity(0.5))
+                                            .symbolEffect(.pulse)
+                                        
+                                        Text("Waiting for reasoning tokens...")
+                                            .font(.system(.body, design: .rounded))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .padding(.vertical, 40)
+                                } else {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        let _ = Logger.debug("🧠 [ReasoningStreamView] Rendering reasoning text - first 200 chars: \(reasoningText.prefix(200))")
+                                        
+                                        // Use Text view with basic markdown parsing
+                                        Text(parseBasicMarkdown(reasoningText))
+                                            .font(.system(.body, design: .default))
+                                            .foregroundColor(.primary)
+                                            .textSelection(.enabled)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 24)
+                                        .padding(.vertical, 20)
+                                        .id("bottom")
+                                    
+                                    // Subtle typing indicator at bottom
+                                    if isStreaming {
+                                        HStack(spacing: 4) {
+                                            ForEach(0..<3) { index in
+                                                Circle()
+                                                    .fill(Color.blue.opacity(0.6))
+                                                    .frame(width: 6, height: 6)
+                                                    .scaleEffect(isStreaming ? 1.2 : 0.8)
+                                                    .animation(
+                                                        .easeInOut(duration: 0.6)
+                                                        .repeatForever()
+                                                        .delay(Double(index) * 0.2),
+                                                        value: isStreaming
+                                                    )
+                                            }
+                                        }
+                                        .padding(.horizontal, 24)
+                                        .padding(.bottom, 16)
+                                    }
+                                }
                             }
                         }
-                        .background(backgroundColor)
+                        .background(Color(NSColor.textBackgroundColor))
                         .onChange(of: reasoningText) { _ in
                             // Auto-scroll to bottom when new content arrives
                             withAnimation(.easeOut(duration: 0.2)) {
@@ -106,14 +196,59 @@ struct ReasoningStreamView: View {
                 }
                 .frame(width: modalWidth, height: modalHeight)
                 .background(backgroundColor)
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
+                .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.8).combined(with: .opacity),
                     removal: .scale(scale: 0.9).combined(with: .opacity)
                 ))
             }
         }
+    }
+    
+    // MARK: - Markdown Parsing
+    
+    /// Parse basic markdown for bold text (**text**)
+    private func parseBasicMarkdown(_ text: String) -> AttributedString {
+        var attributedString = AttributedString(text)
+        
+        // Find all **bold** patterns
+        let pattern = "\\*\\*([^*]+)\\*\\*"
+        
+        do {
+            let regex = try NSRegularExpression(pattern: pattern)
+            let nsString = text as NSString
+            let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
+            
+            // Process matches in reverse order to maintain correct ranges
+            for match in matches.reversed() {
+                if let range = Range(match.range, in: text),
+                   let attributedRange = Range(range, in: attributedString) {
+                    // Get the text without asterisks (capture group 1)
+                    if let contentRange = Range(match.range(at: 1), in: text) {
+                        let boldText = String(text[contentRange])
+                        
+                        // Replace the entire match with just the bold text
+                        attributedString.replaceSubrange(attributedRange, with: AttributedString(boldText))
+                        
+                        // Apply bold formatting to the replacement
+                        if let newRange = attributedString.range(of: boldText, options: [], locale: nil) {
+                            attributedString[newRange].font = .system(.body, design: .default).bold()
+                        }
+                    }
+                }
+            }
+        } catch {
+            // If regex fails, return plain text
+            Logger.debug("Failed to parse markdown: \(error)")
+        }
+        
+        return attributedString
     }
 }
 
@@ -200,30 +335,5 @@ class ReasoningStreamManager {
         self.reasoningText = ""
         self.isVisible = true
         self.isStreaming = true
-    }
-}
-
-// MARK: - Preview
-
-struct ReasoningStreamView_Previews: PreviewProvider {
-    static var previews: some View {
-        VStack {
-            Spacer()
-            
-            ReasoningStreamView(
-                isVisible: .constant(true),
-                reasoningText: .constant("""
-                Let me analyze this resume to identify areas for improvement...
-                
-                First, I'll examine the overall structure and formatting. The resume appears to be well-organized with clear sections for education, experience, and skills.
-                
-                Looking at the experience section, I notice that some bullet points could be more impactful by adding quantifiable achievements. For example, instead of "Managed team projects," it would be stronger to say "Managed 3 cross-functional team projects, delivering all on time and 15% under budget."
-                
-                The skills section could benefit from being reorganized to highlight the most relevant skills for the target position first...
-                """),
-                modelName: "claude-3.5-sonnet"
-            )
-        }
-        .frame(width: 600, height: 400)
     }
 }

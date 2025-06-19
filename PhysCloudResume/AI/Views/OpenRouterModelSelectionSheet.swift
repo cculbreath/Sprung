@@ -395,7 +395,3 @@ struct CapabilityIndicator: View {
 }
 
 
-#Preview {
-    OpenRouterModelSelectionSheet()
-        .environment(AppState())
-}

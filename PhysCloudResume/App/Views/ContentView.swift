@@ -94,6 +94,10 @@ struct ContentView: View {
                         get: { appState.globalReasoningStreamManager.reasoningText },
                         set: { appState.globalReasoningStreamManager.reasoningText = $0 }
                     ),
+                    isStreaming: Binding(
+                        get: { appState.globalReasoningStreamManager.isStreaming },
+                        set: { appState.globalReasoningStreamManager.isStreaming = $0 }
+                    ),
                     modelName: appState.globalReasoningStreamManager.modelName
                 )
                 .zIndex(1000) // Ensure it's above all other content
@@ -123,10 +127,14 @@ struct ContentView: View {
             appState.restoreSelectedJobApp(from: jobAppStore)
             
             // Initialize Resume Revise View Model
-            appState.resumeReviseViewModel = ResumeReviseViewModel(
+            Logger.debug("🔍 [ContentView] Creating ResumeReviseViewModel with appState: \(String(describing: Unmanaged.passUnretained(appState).toOpaque()))")
+            let newViewModel = ResumeReviseViewModel(
                 llmService: LLMService.shared,
                 appState: appState
             )
+            Logger.debug("🔍 [ContentView] Created ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(newViewModel).toOpaque()))")
+            appState.resumeReviseViewModel = newViewModel
+            Logger.debug("🔍 [ContentView] Set appState.resumeReviseViewModel to new instance")
             
             // Initialize cover letter state
             updateMyLetter()
