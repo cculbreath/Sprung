@@ -12,6 +12,14 @@ import SwiftData
 @Observable
 @MainActor
 class AppState {
+    // Singleton instance
+    static let shared = AppState()
+    
+    // Private initializer to prevent external instantiation
+    private init() {
+        configureOpenRouterService()
+        restoreSelectedTab()
+    }
     var showNewAppSheet: Bool = false
     var showSlidingList: Bool = false
     var selectedTab: TabList = .listing {
@@ -53,11 +61,6 @@ class AppState {
     // Global reasoning stream manager for AI thinking display
     var globalReasoningStreamManager = ReasoningStreamManager()
     
-    
-    init() {
-        configureOpenRouterService()
-        restoreSelectedTab()
-    }
     
     /// Restore the selected tab from UserDefaults
     private func restoreSelectedTab() {

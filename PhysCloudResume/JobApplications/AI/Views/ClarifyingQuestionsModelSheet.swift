@@ -138,10 +138,3 @@ struct ClarifyingQuestionsModelSheet: View {
     }
 }
 
-#Preview {
-    ClarifyingQuestionsModelSheet(
-        isPresented: .constant(true),
-        onModelSelected: { _ in }
-    )
-    .environment(AppState())
-}

@@ -20,7 +20,14 @@ class ResumeReviseViewModel {
     private let appState: AppState
     
     // MARK: - UI State (ViewModel Layer)
-    var showResumeRevisionSheet: Bool = false
+    var showResumeRevisionSheet: Bool = false {
+        didSet {
+            if showResumeRevisionSheet {
+                Logger.debug("🔍 [ResumeReviseViewModel] Posting showResumeRevisionSheet notification")
+                NotificationCenter.default.post(name: .showResumeRevisionSheet, object: nil)
+            }
+        }
+    }
     var resumeRevisions: [ProposedRevisionNode] = []
     var feedbackNodes: [FeedbackNode] = []
     var currentRevisionNode: ProposedRevisionNode?
@@ -141,6 +148,8 @@ class ResumeReviseViewModel {
                 self.currentModelId = modelId
                 
                 // Process stream and collect full response
+                // Clear any previous reasoning text before starting
+                appState.globalReasoningStreamManager.clear()
                 appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
                 var fullResponse = ""
                 var collectingJSON = false
@@ -219,6 +228,14 @@ class ResumeReviseViewModel {
         resume: Resume,
         modelId: String
     ) async throws {
+        // Hide any existing reasoning modal and clear previous content
+        appState.globalReasoningStreamManager.isVisible = false
+        appState.globalReasoningStreamManager.clear()
+        
+        // Show reasoning modal immediately with waiting state
+        appState.globalReasoningStreamManager.modelName = modelId
+        appState.globalReasoningStreamManager.isVisible = true
+        
         // Store the conversation context
         currentConversationId = conversationId
         currentModelId = modelId
@@ -282,6 +299,10 @@ class ResumeReviseViewModel {
     /// - Parameter revisions: The validated revisions to review
     @MainActor
     private func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async {
+        Logger.debug("🔍 [ResumeReviseViewModel] setupRevisionsForReview called with \(revisions.count) revisions")
+        Logger.debug("🔍 [ResumeReviseViewModel] Current instance address: \(String(describing: Unmanaged.passUnretained(self).toOpaque()))")
+        Logger.debug("🔍 [ResumeReviseViewModel] appState.resumeReviseViewModel address: \(appState.resumeReviseViewModel.map { String(describing: Unmanaged.passUnretained($0).toOpaque()) } ?? "nil")")
+        
         // Set up revisions in the UI state
         resumeRevisions = revisions
         feedbackNodes = []
@@ -294,11 +315,16 @@ class ResumeReviseViewModel {
         }
         
         // Ensure reasoning modal is hidden before showing revision review
+        Logger.debug("🔍 [ResumeReviseViewModel] Hiding reasoning modal")
         appState.globalReasoningStreamManager.isVisible = false
         
         // Show the revision review UI
+        Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
         showResumeRevisionSheet = true
         isProcessingRevisions = false
+        
+        Logger.debug("🔍 [ResumeReviseViewModel] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
+        Logger.debug("🔍 [ResumeReviseViewModel] Is this instance the same as appState.resumeReviseViewModel? \(appState.resumeReviseViewModel === self)")
     }
     
     
@@ -835,6 +861,8 @@ class ResumeReviseViewModel {
         )
         
         // Process stream and collect full response
+        // Clear any previous reasoning text before starting
+        appState.globalReasoningStreamManager.clear()
         appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
         var fullResponse = ""
         var collectingJSON = false

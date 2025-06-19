@@ -144,10 +144,14 @@ struct ClarifyingQuestionsButton: View {
                 return
             }
             
-            guard let resumeViewModel = resumeReviseViewModel else {
-                Logger.error("ResumeReviseViewModel not available for handoff")
+            // Use the viewModel from appState to ensure we have the correct instance
+            guard let resumeViewModel = appState.resumeReviseViewModel else {
+                Logger.error("ResumeReviseViewModel not available in appState for handoff")
                 return
             }
+            
+            Logger.debug("🔍 [ClarifyingQuestionsButton] About to handoff to viewModel at address: \(String(describing: Unmanaged.passUnretained(resumeViewModel).toOpaque()))")
+            Logger.debug("🔍 [ClarifyingQuestionsButton] Current showResumeRevisionSheet value: \(resumeViewModel.showResumeRevisionSheet)")
             
             try await clarifyingViewModel.processAnswersAndHandoffConversation(
                 answers: answers,
@@ -155,6 +159,8 @@ struct ClarifyingQuestionsButton: View {
                 resumeReviseViewModel: resumeViewModel
             )
             
+            Logger.debug("🔍 [ClarifyingQuestionsButton] After handoff - showResumeRevisionSheet value: \(resumeViewModel.showResumeRevisionSheet)")
+            Logger.debug("🔍 [ClarifyingQuestionsButton] appState.resumeReviseViewModel is same instance? \(appState.resumeReviseViewModel === resumeViewModel)")
             Logger.debug("✅ Clarifying questions processed and handed off to ResumeReviseViewModel")
             
         } catch {

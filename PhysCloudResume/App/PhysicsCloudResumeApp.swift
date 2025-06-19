@@ -13,7 +13,7 @@ import SwiftUI
 @main
 struct PhysicsCloudResumeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @Bindable private var appState = AppState()
+    @Bindable private var appState = AppState.shared
     private let modelContainer: ModelContainer
     
     init() {
@@ -248,34 +248,20 @@ struct PhysicsCloudResumeApp: App {
     }
 }
 
-// Environment key for accessing AppState  
+// Environment key for accessing AppState singleton
 struct AppStateKey: EnvironmentKey {
-    static let defaultValue: AppState? = nil
+    static let defaultValue: AppState = AppState.shared
 }
 
 extension EnvironmentValues {
     var appState: AppState {
         get { 
-            // During early initialization (like window restoration), return a temporary AppState
-            // that won't cause crashes but also won't interfere with the real one
-            guard let appState = self[AppStateKey.self] else {
-                // Use temporary fallback silently during early initialization
-                return MainActor.assumeIsolated {
-                    return TemporaryAppState.instance
-                }
-            }
-            return appState
+            // Always return the singleton instance
+            return AppState.shared
         }
-        set { self[AppStateKey.self] = newValue }
+        set { 
+            // Singleton can't be replaced, but we maintain the interface for compatibility
+            // In practice, this setter should never be called
+        }
     }
-}
-
-// Temporary AppState for early initialization
-@MainActor
-private class TemporaryAppState {
-    static let instance: AppState = {
-        // This creates a temporary AppState that's only used during early initialization
-        // It will be replaced by the real AppState once the environment is properly set up
-        return AppState()
-    }()
 }

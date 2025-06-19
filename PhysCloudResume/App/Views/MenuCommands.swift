@@ -21,6 +21,7 @@ extension Notification.Name {
     static let clarifyCustomize = Notification.Name("clarifyCustomize")
     static let optimizeResume = Notification.Name("optimizeResume")
     static let showResumeInspector = Notification.Name("showResumeInspector")
+    static let showResumeRevisionSheet = Notification.Name("showResumeRevisionSheet")
     
     // Cover Letter Commands
     static let generateCoverLetter = Notification.Name("generateCoverLetter")

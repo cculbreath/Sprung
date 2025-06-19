@@ -125,9 +125,9 @@ struct ClarifyingQuestionsSheet: View {
     }
     
     private var isValidToSubmit: Bool {
-        // At least one question must be answered (not declined)
-        questions.contains { question in
-            !declinedQuestions.contains(question.id) && !(answers[question.id] ?? "").isEmpty
+        // Valid if all questions are either declined or answered
+        questions.allSatisfy { question in
+            declinedQuestions.contains(question.id) || !(answers[question.id] ?? "").isEmpty
         }
     }
     
