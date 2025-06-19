@@ -9,6 +9,9 @@ struct SettingsView: View {
 
     // AppStorage for the new Fix Overflow setting
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
+    
+    // AppStorage for reasoning effort setting
+    @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
 
     var body: some View {
         // Use a ScrollView to handle potentially long content
@@ -30,6 +33,9 @@ struct SettingsView: View {
 
                 // Fix Overflow Iterations Setting
                 FixOverflowSettingsView(fixOverflowMaxIterations: $fixOverflowMaxIterations)
+                
+                // Reasoning Effort Setting
+                ReasoningEffortSettingsView(reasoningEffort: $reasoningEffort)
                 
                 // Debug Settings Section
                 DebugSettingsView()
@@ -78,6 +84,87 @@ struct FixOverflowSettingsView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.7), lineWidth: 1)
         )
+    }
+}
+
+// New subview for Reasoning Effort settings
+struct ReasoningEffortSettingsView: View {
+    @Binding var reasoningEffort: String
+    
+    private let effortOptions = [
+        ("low", "Low", "Faster responses with basic reasoning"),
+        ("medium", "Medium", "Balanced speed and reasoning depth"),
+        ("high", "High", "Thorough reasoning with detailed analysis")
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("AI Reasoning Effort")
+                .font(.headline)
+                .padding(.bottom, 5)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(effortOptions, id: \.0) { value, title, description in
+                    HStack {
+                        RadioButton(
+                            isSelected: reasoningEffort == value,
+                            action: { reasoningEffort = value }
+                        )
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text(description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        reasoningEffort = value
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            
+            Text("Controls how much computational effort the AI uses for reasoning when available. Higher effort may result in better quality but slower responses.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 10)
+        }
+        .padding(10)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+        )
+    }
+}
+
+// Custom radio button component
+struct RadioButton: View {
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary, lineWidth: 2)
+                    .frame(width: 16, height: 16)
+                
+                if isSelected {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 8, height: 8)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

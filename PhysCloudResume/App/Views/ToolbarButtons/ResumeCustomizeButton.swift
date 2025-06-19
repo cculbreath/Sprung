@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ResumeCustomizeButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(AppState.self) private var appState: AppState
     
     @Binding var selectedTab: TabList
     var resumeReviseViewModel: ResumeReviseViewModel?
@@ -65,6 +66,11 @@ struct ResumeCustomizeButton: View {
                 isGeneratingResume = false
                 return
             }
+            
+            // Defensive check: ensure reasoning modal is not visible before starting workflow
+            Logger.debug("🛡️ [ResumeCustomizeButton] Starting fresh workflow with model: \(modelId)")
+            appState.globalReasoningStreamManager.isVisible = false
+            appState.globalReasoningStreamManager.clear()
             
             try await viewModel.startFreshRevisionWorkflow(
                 resume: resume,

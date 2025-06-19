@@ -141,7 +141,7 @@ struct ReasoningStreamView: View {
                                             .foregroundColor(.secondary.opacity(0.5))
                                             .symbolEffect(.pulse)
                                         
-                                        Text("Waiting for reasoning tokens...")
+                                        Text("AI is thinking...")
                                             .font(.system(.body, design: .rounded))
                                             .foregroundColor(.secondary)
                                     }

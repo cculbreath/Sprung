@@ -123,15 +123,28 @@ class ResumeReviseViewModel {
             let model = appState.openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
             
+            // Debug logging to track reasoning interface triggering
+            Logger.debug("🤖 [startFreshRevisionWorkflow] Model: \(modelId)")
+            Logger.debug("🤖 [startFreshRevisionWorkflow] Model found: \(model != nil)")
+            Logger.debug("🤖 [startFreshRevisionWorkflow] Model supportedParameters: \(model?.supportedParameters ?? [])")
+            Logger.debug("🤖 [startFreshRevisionWorkflow] Supports reasoning: \(supportsReasoning)")
+            
+            // Defensive check: ensure reasoning modal is hidden for non-reasoning models
+            if !supportsReasoning {
+                appState.globalReasoningStreamManager.isVisible = false
+                appState.globalReasoningStreamManager.clear()
+            }
+            
             let revisions: RevisionsContainer
             
             if supportsReasoning {
                 // Use streaming with reasoning for supported models from the start
                 Logger.info("🧠 Using streaming with reasoning for revision generation: \(modelId)")
                 
-                // Configure reasoning parameters for revision generation
+                // Configure reasoning parameters for revision generation using user setting
+                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(
-                    effort: "high",
+                    effort: userEffort,
                     includeReasoning: true
                 )
                 
@@ -185,8 +198,10 @@ class ResumeReviseViewModel {
                 revisions = try parseJSONFromText(responseText, as: RevisionsContainer.self)
                 
             } else {
-                // Use non-streaming for models without reasoning
-                // Start conversation
+                // Use non-streaming structured output for models without reasoning
+                Logger.info("📝 Using non-streaming structured output for revision generation: \(modelId)")
+                
+                // Start conversation to maintain state for potential resubmission
                 let (conversationId, _) = try await llmService.startConversation(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
@@ -196,6 +211,7 @@ class ResumeReviseViewModel {
                 self.currentConversationId = conversationId
                 self.currentModelId = modelId
                 
+                // Get structured response from the conversation
                 revisions = try await llmService.continueConversationStructured(
                     userMessage: "Please provide the revision suggestions in the specified JSON format.",
                     modelId: modelId,
@@ -228,14 +244,6 @@ class ResumeReviseViewModel {
         resume: Resume,
         modelId: String
     ) async throws {
-        // Hide any existing reasoning modal and clear previous content
-        appState.globalReasoningStreamManager.isVisible = false
-        appState.globalReasoningStreamManager.clear()
-        
-        // Show reasoning modal immediately with waiting state
-        appState.globalReasoningStreamManager.modelName = modelId
-        appState.globalReasoningStreamManager.isVisible = true
-        
         // Store the conversation context
         currentConversationId = conversationId
         currentModelId = modelId
@@ -250,15 +258,35 @@ class ResumeReviseViewModel {
             let model = appState.openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
             
+            // Debug logging to track reasoning interface triggering
+            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Model: \(modelId)")
+            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Model found: \(model != nil)")
+            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Supports reasoning: \(supportsReasoning)")
+            
+            // Only show reasoning modal for models that support reasoning
+            if supportsReasoning {
+                // Clear any previous reasoning content and reset state
+                appState.globalReasoningStreamManager.clear()
+                
+                // Show reasoning modal for reasoning-enabled models
+                appState.globalReasoningStreamManager.modelName = modelId
+                appState.globalReasoningStreamManager.isVisible = true
+            } else {
+                // Defensive check: ensure reasoning modal is hidden for non-reasoning models
+                appState.globalReasoningStreamManager.isVisible = false
+                appState.globalReasoningStreamManager.clear()
+            }
+            
             let revisions: RevisionsContainer
             
             if supportsReasoning {
                 // Use streaming with reasoning for supported models
                 Logger.info("🧠 Using streaming with reasoning for revision continuation: \(modelId)")
                 
-                // Configure reasoning parameters
+                // Configure reasoning parameters using user setting
+                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(
-                    effort: "high",
+                    effort: userEffort,
                     includeReasoning: true
                 )
                 
@@ -270,6 +298,8 @@ class ResumeReviseViewModel {
                 )
             } else {
                 // Use non-streaming for models without reasoning
+                Logger.info("📝 Using non-streaming structured output for revision continuation: \(modelId)")
+                
                 revisions = try await llmService.continueConversationStructured(
                     userMessage: revisionRequestPrompt,
                     modelId: modelId,
@@ -317,6 +347,7 @@ class ResumeReviseViewModel {
         // Ensure reasoning modal is hidden before showing revision review
         Logger.debug("🔍 [ResumeReviseViewModel] Hiding reasoning modal")
         appState.globalReasoningStreamManager.isVisible = false
+        appState.globalReasoningStreamManager.clear()
         
         // Show the revision review UI
         Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
@@ -499,9 +530,10 @@ class ResumeReviseViewModel {
                 // Use streaming with reasoning for supported models
                 Logger.info("🧠 Using streaming with reasoning for AI resubmission: \(modelId)")
                 
-                // Configure reasoning parameters
+                // Configure reasoning parameters using user setting
+                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(
-                    effort: "high",
+                    effort: userEffort,
                     includeReasoning: true
                 )
                 
@@ -660,6 +692,13 @@ class ResumeReviseViewModel {
     
     /// Reset UI state for new/fresh feedback nodes
     private func resetUIState() {
+        isCommenting = false
+        isMoreCommenting = false
+        isEditingResponse = false
+    }
+    
+    /// Clear all action states (for radio button behavior)
+    func clearActionStates() {
         isCommenting = false
         isMoreCommenting = false
         isEditingResponse = false
@@ -861,8 +900,7 @@ class ResumeReviseViewModel {
         )
         
         // Process stream and collect full response
-        // Clear any previous reasoning text before starting
-        appState.globalReasoningStreamManager.clear()
+        // Start reasoning stream (content already cleared in parent method)
         appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
         var fullResponse = ""
         var collectingJSON = false
