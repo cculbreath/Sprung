@@ -78,6 +78,7 @@ class FixOverflowService {
                 currentOverflowLineCount: currentOverflowLineCount,
                 selectedModel: selectedModel,
                 allowEntityMerge: allowEntityMerge,
+                iteration: loopCount,
                 supportsReasoning: supportsReasoning,
                 onReasoningUpdate: onReasoningUpdate
             )
@@ -181,17 +182,21 @@ class FixOverflowService {
         currentOverflowLineCount: Int,
         selectedModel: String,
         allowEntityMerge: Bool,
+        iteration: Int,
         supportsReasoning: Bool = false,
         onReasoningUpdate: ((String) -> Void)? = nil
     ) async -> Result<FixFitsResponseContainer, Error> {
         await withCheckedContinuation { continuation in
+            // Only allow entity merge on the first iteration
+            let allowMergeForThisIteration = allowEntityMerge && iteration == 1
+            
             reviewService.sendFixFitsRequest(
                 resume: resume,
                 skillsJsonString: skillsJsonString,
                 base64Image: currentImageBase64,
                 overflowLineCount: currentOverflowLineCount,
                 modelId: selectedModel,
-                allowEntityMerge: allowEntityMerge,
+                allowEntityMerge: allowMergeForThisIteration,
                 supportsReasoning: supportsReasoning,
                 onReasoningUpdate: onReasoningUpdate
             ) { result in
