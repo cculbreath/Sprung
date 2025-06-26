@@ -30,8 +30,7 @@ class AppState {
     }
     var dragInfo = DragInfo()
 
-    // AI job recommendation properties
-    var recommendedJobId: UUID?
+    // AI job recommendation properties  
     var isLoadingRecommendation: Bool = false
     
     // Import job apps sheet (disabled - functionality removed)

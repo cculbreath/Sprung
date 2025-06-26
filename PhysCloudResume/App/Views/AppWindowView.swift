@@ -298,19 +298,6 @@ struct AppWindowViewModifiers: ViewModifier {
                     ResumeReviewSheet(selectedResume: .constant(selectedResume))
                 }
             }
-            .sheet(isPresented: Binding(
-                get: { resumeReviseViewModel?.showResumeRevisionSheet ?? false },
-                set: { resumeReviseViewModel?.showResumeRevisionSheet = $0 }
-            )) {
-                if let selectedResume = jobAppStore.selectedApp?.selectedRes,
-                   let viewModel = resumeReviseViewModel {
-                    RevisionReviewView(
-                        viewModel: viewModel,
-                        resume: .constant(selectedResume)
-                    )
-                    .frame(minWidth: 650)
-                }
-            }
         
         let step3: some View = step2
             .sheet(isPresented: $sheets.showMultiModelChooseBest) {

@@ -80,7 +80,6 @@ struct BestJobButton: View {
 
             if let recommendedJob = jobAppStore.jobApps.first(where: { $0.id == jobId }) {
                 jobAppStore.selectedApp = recommendedJob
-                appState.recommendedJobId = jobId
                 bestJobResult = "Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)"
                 showBestJobAlert = true
             } else {

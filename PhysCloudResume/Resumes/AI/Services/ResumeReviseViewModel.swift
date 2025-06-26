@@ -17,14 +17,18 @@ class ResumeReviseViewModel {
     
     // MARK: - Dependencies
     private let llmService: LLMService
-    private let appState: AppState
+    let appState: AppState // Make appState accessible to views
     
     // MARK: - UI State (ViewModel Layer)
     var showResumeRevisionSheet: Bool = false {
         didSet {
+            Logger.debug("🔍 [ResumeReviseViewModel] showResumeRevisionSheet changed from \(oldValue) to \(showResumeRevisionSheet)")
             if showResumeRevisionSheet {
                 Logger.debug("🔍 [ResumeReviseViewModel] Posting showResumeRevisionSheet notification")
                 NotificationCenter.default.post(name: .showResumeRevisionSheet, object: nil)
+            } else {
+                Logger.debug("🔍 [ResumeReviseViewModel] Posting hideResumeRevisionSheet notification")
+                NotificationCenter.default.post(name: .hideResumeRevisionSheet, object: nil)
             }
         }
     }
@@ -43,7 +47,7 @@ class ResumeReviseViewModel {
     
     // MARK: - Business Logic State
     private var currentConversationId: UUID?
-    private var currentModelId: String?
+    var currentModelId: String? // Make currentModelId accessible to views
     private(set) var isProcessingRevisions: Bool = false
     
     // AI Resubmission handling (from AiCommsView)
@@ -462,7 +466,10 @@ class ResumeReviseViewModel {
             startAIResubmission(with: resume)
         } else {
             Logger.debug("No nodes need resubmission. All changes applied, dismissing sheet...")
+            Logger.debug("🔍 [completeReviewWorkflow] Setting showResumeRevisionSheet = false")
+            Logger.debug("🔍 [completeReviewWorkflow] Current showResumeRevisionSheet value: \(showResumeRevisionSheet)")
             showResumeRevisionSheet = false
+            Logger.debug("🔍 [completeReviewWorkflow] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
         }
     }
     
@@ -586,9 +593,20 @@ class ResumeReviseViewModel {
     
     /// Navigate to previous revision node
     func navigateToPrevious() {
-        guard feedbackIndex > 0 else { return }
+        guard feedbackIndex > 0 else { 
+            Logger.debug("Cannot navigate to previous: already at first revision")
+            return 
+        }
         
         feedbackIndex -= 1
+        
+        // Bounds check for resumeRevisions array
+        guard feedbackIndex < resumeRevisions.count else {
+            Logger.error("Navigation error: feedbackIndex \(feedbackIndex) out of bounds for resumeRevisions count \(resumeRevisions.count)")
+            feedbackIndex = min(feedbackIndex, resumeRevisions.count - 1)
+            return
+        }
+        
         currentRevisionNode = resumeRevisions[feedbackIndex]
         
         // Restore or create feedback node for this revision
@@ -607,7 +625,10 @@ class ResumeReviseViewModel {
     
     /// Navigate to next revision node
     func navigateToNext() {
-        guard feedbackIndex < resumeRevisions.count - 1 else { return }
+        guard feedbackIndex < resumeRevisions.count - 1 else { 
+            Logger.debug("Cannot navigate to next: already at last revision")
+            return 
+        }
         
         // Save current feedback node if it exists and isn't already saved
         if let currentFeedbackNode = currentFeedbackNode, feedbackIndex >= feedbackNodes.count {
@@ -615,6 +636,14 @@ class ResumeReviseViewModel {
         }
         
         feedbackIndex += 1
+        
+        // Bounds check for resumeRevisions array
+        guard feedbackIndex < resumeRevisions.count else {
+            Logger.error("Navigation error: feedbackIndex \(feedbackIndex) out of bounds for resumeRevisions count \(resumeRevisions.count)")
+            feedbackIndex = resumeRevisions.count - 1
+            return
+        }
+        
         currentRevisionNode = resumeRevisions[feedbackIndex]
         
         // Restore or create feedback node for this revision

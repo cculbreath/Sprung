@@ -38,6 +38,11 @@ final class ResStore: SwiftDataStore {
         if jobApp.selectedRes == nil {
             jobApp.selectedRes = resume
         }
+        
+        // Update job app status from 'new' to 'inProgress' when creating first resume
+        if jobApp.status == .new {
+            jobApp.status = .inProgress
+        }
 
         guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
             return nil

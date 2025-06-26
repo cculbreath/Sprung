@@ -177,15 +177,66 @@ class ClarifyingQuestionsViewModel {
             throw ClarifyingQuestionsError.noActiveConversation
         }
         
-        // Add the user's answers to the conversation without generating revisions yet
+        let modelId = currentModelId ?? "gpt-4o" // Use the model from the original workflow
+        
+        // Add the user's answers to the conversation
         let answerPrompt = createAnswerPrompt(answers: answers)
         
-        // Just add the answers to the conversation - don't generate revisions here
-        let _ = try await llmService.continueConversation(
-            userMessage: answerPrompt,
-            modelId: currentModelId ?? "gpt-4o", // Use the model from the original workflow
-            conversationId: conversationId
-        )
+        // Check if model supports reasoning for streaming
+        let model = appState.openRouterService.findModel(id: modelId)
+        let supportsReasoning = model?.supportsReasoning ?? false
+        
+        Logger.debug("🤖 [processAnswersAndHandoffConversation] Model: \(modelId)")
+        Logger.debug("🤖 [processAnswersAndHandoffConversation] Supports reasoning: \(supportsReasoning)")
+        
+        if supportsReasoning {
+            // Use streaming with reasoning for supported models
+            Logger.info("🧠 Using streaming with reasoning for clarifying question answers: \(modelId)")
+            
+            // Configure reasoning parameters using user setting
+            let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
+            let reasoning = OpenRouterReasoning(
+                effort: userEffort,
+                includeReasoning: true
+            )
+            
+            // Show reasoning modal for answer processing
+            appState.globalReasoningStreamManager.clear()
+            appState.globalReasoningStreamManager.modelName = modelId
+            appState.globalReasoningStreamManager.isVisible = true
+            appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
+            
+            // Stream the answer processing
+            let stream = llmService.continueConversationStreaming(
+                userMessage: answerPrompt,
+                modelId: modelId,
+                conversationId: conversationId,
+                reasoning: reasoning
+            )
+            
+            // Process the stream
+            for try await chunk in stream {
+                // Handle reasoning content
+                if let reasoningContent = chunk.reasoningContent {
+                    appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                }
+                
+                // Handle completion
+                if chunk.isFinished {
+                    appState.globalReasoningStreamManager.isStreaming = false
+                    // Keep modal visible - it will be handled by revision generation
+                }
+            }
+        } else {
+            // Use non-streaming for models without reasoning
+            Logger.info("📝 Using non-streaming for clarifying question answers: \(modelId)")
+            
+            let _ = try await llmService.continueConversation(
+                userMessage: answerPrompt,
+                modelId: modelId,
+                conversationId: conversationId
+            )
+        }
         
         Logger.debug("✅ User answers added to conversation \(conversationId)")
         
