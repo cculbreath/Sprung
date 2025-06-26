@@ -77,6 +77,10 @@ struct AppSheetsModifier: ViewModifier {
                 Logger.debug("🔍 [AppSheets] Received showResumeRevisionSheet notification")
                 showRevisionReviewSheet = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .hideResumeRevisionSheet)) { _ in
+                Logger.debug("🔍 [AppSheets] Received hideResumeRevisionSheet notification")
+                showRevisionReviewSheet = false
+            }
             .onChange(of: showRevisionReviewSheet) { _, newValue in
                 // Sync sheet state back to ViewModel when manually closed
                 if !newValue {

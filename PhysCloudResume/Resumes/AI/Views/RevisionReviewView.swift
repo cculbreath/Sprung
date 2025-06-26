@@ -16,12 +16,19 @@ struct RevisionReviewView: View {
     @Binding var resume: Resume?
     @State private var showExitConfirmation = false
     @State private var eventMonitor: Any? = nil
+    
+    // Computed property to check if reasoning modal should be used instead of loading sheet
+    private var isUsingReasoningModal: Bool {
+        guard let modelId = viewModel.currentModelId else { return false }
+        let model = viewModel.appState.openRouterService.findModel(id: modelId)
+        return model?.supportsReasoning ?? false
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             if let resume = resume {
-                if viewModel.aiResubmit {
-                    // Loading state during AI resubmission
+                if viewModel.aiResubmit && !isUsingReasoningModal {
+                    // Loading state during AI resubmission (only for non-reasoning models)
                     VStack {
                         Text("Submitting Feedback to AI")
                             .font(.system(.title2, design: .rounded, weight: .medium))
@@ -170,12 +177,18 @@ struct RevisionReviewView: View {
     }
 
     private func closeReview() {
+        Logger.debug("🔍 [RevisionReviewView] closeReview() called")
+        Logger.debug("🔍 [RevisionReviewView] Current showResumeRevisionSheet: \(viewModel.showResumeRevisionSheet)")
+        
         if let resume = resume {
             viewModel.feedbackNodes.applyAcceptedChanges(to: resume)
         }
         viewModel.resumeRevisions = []
         viewModel.feedbackNodes = []
+        
+        Logger.debug("🔍 [RevisionReviewView] Setting showResumeRevisionSheet = false")
         viewModel.showResumeRevisionSheet = false
+        Logger.debug("🔍 [RevisionReviewView] After setting - showResumeRevisionSheet = \(viewModel.showResumeRevisionSheet)")
     }
 }
 
@@ -341,14 +354,8 @@ struct RevisionComparisonPanels: View {
                     UnchangedValuePanel(
                         title: "Current Value",
                         content: revisionNode.originalText(using: updateNodes),
-                        showEditButton: true,
-                        onEdit: {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                viewModel.isCommenting = false
-                                viewModel.isMoreCommenting = false
-                                viewModel.isEditingResponse = true
-                            }
-                        }
+                        showEditButton: false,
+                        onEdit: nil
                     )
                     if !revisionNode.why.isEmpty {
                         ReasoningPanel(
@@ -411,18 +418,6 @@ struct ComparisonPanel: View {
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                
-                // Edit button for proposed revisions - only visible on hover
-                if showEditButton, let onEdit = onEdit, isHovering {
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil.circle")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(.green)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Edit Response")
-                    .transition(.opacity.combined(with: .scale))
-                }
             }
             Text(content)
                 .font(.system(.body, design: .rounded))
@@ -435,6 +430,22 @@ struct ComparisonPanel: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(accentColor.opacity(0.2), lineWidth: 1)
+        )
+        .overlay(
+            // Edit button overlay - positioned absolutely
+            Group {
+                if showEditButton, let onEdit = onEdit, isHovering {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil.circle")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit Response")
+                    .transition(.opacity.combined(with: .scale))
+                }
+            },
+            alignment: .topTrailing
         )
         .frame(maxWidth: .infinity)
         .onHover { hovering in
@@ -468,18 +479,6 @@ struct UnchangedValuePanel: View {
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                
-                // Edit button - only visible on hover
-                if showEditButton, let onEdit = onEdit, isHovering {
-                    Button(action: onEdit) {
-                        Image(systemName: "pencil.circle")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(.green)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Manually edit")
-                    .transition(.opacity.combined(with: .scale))
-                }
             }
             Text(content)
                 .font(.system(.body, design: .rounded))
@@ -494,6 +493,22 @@ struct UnchangedValuePanel: View {
                 )
         }
         .frame(maxWidth: 500)
+        .overlay(
+            // Edit button overlay - positioned absolutely
+            Group {
+                if showEditButton, let onEdit = onEdit, isHovering {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil.circle")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Manually edit")
+                    .transition(.opacity.combined(with: .scale))
+                }
+            },
+            alignment: .topTrailing
+        )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovering = hovering
@@ -729,7 +744,7 @@ struct RevisionActionButtons: View {
                     .help("Accept this revision")
                 }
             } else {
-                Text("Accept current value or make changes?")
+                Text("Accept current value?")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .foregroundStyle(.primary)
 
@@ -747,20 +762,6 @@ struct RevisionActionButtons: View {
                         }
                     )
                     .help("Reject with comment")
-
-                    ImageButton(
-                        systemName: "pencil.circle",
-                        activeColor: .green,
-                        isActive: viewModel.isEditingResponse || viewModel.isNodeEdited(viewModel.currentFeedbackNode),
-                        action: { 
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                viewModel.isCommenting = false
-                                viewModel.isMoreCommenting = false
-                                viewModel.isEditingResponse = true 
-                            }
-                        }
-                    )
-                    .help("Manually edit")
 
                     ImageButton(
                         systemName: "hand.thumbsup.circle",

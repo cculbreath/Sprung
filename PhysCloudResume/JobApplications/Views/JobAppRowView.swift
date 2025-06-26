@@ -28,7 +28,5 @@ struct JobAppRowView: View {
             }
     }
 
-    private var isRecommended: Bool {
-        appState.recommendedJobId == jobApp.id
     }
 }

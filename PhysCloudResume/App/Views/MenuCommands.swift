@@ -22,6 +22,7 @@ extension Notification.Name {
     static let optimizeResume = Notification.Name("optimizeResume")
     static let showResumeInspector = Notification.Name("showResumeInspector")
     static let showResumeRevisionSheet = Notification.Name("showResumeRevisionSheet")
+    static let hideResumeRevisionSheet = Notification.Name("hideResumeRevisionSheet")
     
     // Cover Letter Commands
     static let generateCoverLetter = Notification.Name("generateCoverLetter")
