@@ -15,11 +15,9 @@
 {{#employment}}
 {{{employmentFormatted}}}
 {{{position}}}
-{{#highlights}}
-{{#.}}
-  • {{.}}
-{{/.}}
-{{/highlights}}
+{{#highlightsFormatted}}
+{{{.}}}
+{{/highlightsFormatted}}
 
 {{/employment}}
 

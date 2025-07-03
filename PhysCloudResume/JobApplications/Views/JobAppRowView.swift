@@ -17,10 +17,7 @@ struct JobAppRowView: View {
             .tag(jobApp)
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
-            .if(isRecommended) { view in
-                view.glassEffect(.regular.tint(.blue), in: .rect(cornerRadius: 4))
-            }
-            .animation(.easeInOut(duration: 0.3), value: isRecommended)
+
             .contextMenu {
                 Button(role: .destructive, action: deleteAction) {
                     Label("Delete", systemImage: "trash")
@@ -29,4 +26,4 @@ struct JobAppRowView: View {
     }
 
     }
-}
+

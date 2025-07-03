@@ -158,7 +158,7 @@ struct CoverLetterContentView: View {
                     // Cover letter picker
                     HStack {
                         CoverLetterPicker(
-                            coverLetters: bindApp.coverLetters,
+                            coverLetters: bindApp.coverLetters.filter { $0.generated || !$0.content.isEmpty },
                             selection: $bindApp.selectedCover,
                             includeNoneOption: false,
                             label: ""
@@ -166,6 +166,10 @@ struct CoverLetterContentView: View {
                         .onChange(of: bindApp.selectedCover) { _, newSelection in
                             // Sync with coverLetterStore when selection changes
                             coverLetterStore.cL = newSelection
+                        }
+                        .onAppear {
+                            // Clean up any ungenerated drafts when the view appears
+                            coverLetterStore.deleteUngeneratedDrafts()
                         }
                         .padding()
                         

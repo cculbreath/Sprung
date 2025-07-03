@@ -564,15 +564,46 @@ class ResumeReviseViewModel {
             // Validate and process the new revisions
             let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
             
-            // Replace the old revisions with new ones and restart the review
-            resumeRevisions = validatedRevisions
-            feedbackNodes = [] // Clear old feedback
-            feedbackIndex = 0
+            // Get IDs of nodes that were resubmitted for updating
+            let resubmittedNodeIds = Set(nodesToResubmit.map { $0.id })
             
-            // Set up the first revision for review
-            if !validatedRevisions.isEmpty {
-                currentRevisionNode = validatedRevisions[0]
-                currentFeedbackNode = validatedRevisions[0].createFeedbackNode()
+            Logger.debug("🔍 Resubmitted \(nodesToResubmit.count) nodes, got back \(validatedRevisions.count) revisions")
+            Logger.debug("🔍 Resubmitted node IDs: \(resubmittedNodeIds)")
+            Logger.debug("🔍 Received revision IDs: \(validatedRevisions.map { $0.id })")
+            
+            // Filter validated revisions to only include ones that were actually requested for resubmission
+            let requestedRevisions = validatedRevisions.filter { revision in
+                resubmittedNodeIds.contains(revision.id)
+            }
+            
+            if requestedRevisions.count != validatedRevisions.count {
+                Logger.warning("⚠️ AI returned \(validatedRevisions.count) revisions but only \(requestedRevisions.count) were requested")
+            }
+            
+            // Keep feedback for nodes that were NOT resubmitted (already approved/completed)
+            let approvedFeedback = feedbackNodes.filter { feedback in
+                !resubmittedNodeIds.contains(feedback.id)
+            }
+            
+            // Only replace the revisions that were actually resubmitted
+            var updatedRevisions = resumeRevisions.filter { revision in
+                !resubmittedNodeIds.contains(revision.id)
+            }
+            
+            // Add only the requested revisions (not extra ones the AI might have returned)
+            updatedRevisions.append(contentsOf: requestedRevisions)
+            
+            // Update the arrays with the merged content
+            resumeRevisions = updatedRevisions
+            feedbackNodes = approvedFeedback // Keep approved feedback, new revisions will get fresh feedback nodes
+            
+            // Reset to first unprocessed revision (should be from the new validated revisions)
+            feedbackIndex = approvedFeedback.count // Start after the approved ones
+            
+            // Set up the first NEW revision for review (skip already approved ones)
+            if feedbackIndex < resumeRevisions.count {
+                currentRevisionNode = resumeRevisions[feedbackIndex]
+                currentFeedbackNode = resumeRevisions[feedbackIndex].createFeedbackNode()
             }
             
             // Clear loading state

@@ -17,7 +17,7 @@ class CoverLetterService: ObservableObject {
     static let shared = CoverLetterService()
     
     /// Conversation tracking
-    private var conversations: [UUID: UUID] = [:] // coverLetterId -> conversationId
+    internal var conversations: [UUID: UUID] = [:] // coverLetterId -> conversationId
     
     
     // MARK: - Initialization
@@ -217,7 +217,7 @@ class CoverLetterService: ObservableObject {
     // MARK: - Helper Methods
     
     /// Extract cover letter content from response, handling Gemini and Claude JSON formats
-    private func extractCoverLetterContent(from text: String) -> String {
+    internal func extractCoverLetterContent(from text: String) -> String {
         // Check if the response contains curly braces (indicating JSON)
         if text.contains("{") && text.contains("}") {
             // Find the JSON portion (from first { to last })
@@ -354,7 +354,7 @@ class CoverLetterService: ObservableObject {
     }
     
     /// Determine if a model is an o1-series reasoning model
-    private func isReasoningModel(_ modelId: String) -> Bool {
+    internal func isReasoningModel(_ modelId: String) -> Bool {
         let modelLower = modelId.lowercased()
         return modelLower.contains("o1") && !modelLower.contains("o3") && !modelLower.contains("o4")
     }

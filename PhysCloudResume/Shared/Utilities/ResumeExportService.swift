@@ -17,6 +17,7 @@ import UniformTypeIdentifiers
 @MainActor
 class ResumeExportService: ObservableObject {
     private let nativeGenerator = NativePDFGenerator()
+    private let textGenerator = TextResumeGenerator()
     
     func export(jsonURL: URL, for resume: Resume) async throws {
         do {
@@ -42,9 +43,9 @@ class ResumeExportService: ObservableObject {
         // Generate text version using text template (custom or bundled)
         let textContent: String
         if let customText = resume.model?.customTemplateText {
-            textContent = try nativeGenerator.generateTextFromCustomTemplate(for: resume, customText: customText)
+            textContent = try textGenerator.generateTextFromCustomTemplate(for: resume, customText: customText)
         } else {
-            textContent = try nativeGenerator.generateTextResume(for: resume, template: template)
+            textContent = try textGenerator.generateTextResume(for: resume, template: template)
         }
         resume.textRes = textContent
     }
@@ -126,7 +127,7 @@ class ResumeExportService: ObservableObject {
         resume.pdfData = pdfData
         
         // Generate text version (simplified)
-        let textContent = try nativeGenerator.generateTextFromCustomTemplate(for: resume, customText: generateBasicTextTemplate())
+        let textContent = try textGenerator.generateTextFromCustomTemplate(for: resume, customText: generateBasicTextTemplate())
         resume.textRes = textContent
     }
     

@@ -365,6 +365,23 @@ extension Array where Element == FeedbackNode {
             node.applyToResume(resume)
         }
         
+        // After applying all changes, check for nodes that should be deleted
+        // Delete any TreeNodes where both name and value are empty
+        let nodesToDelete = resume.nodes.filter { treeNode in
+            let nameIsEmpty = treeNode.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let valueIsEmpty = treeNode.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return nameIsEmpty && valueIsEmpty
+        }
+        
+        if !nodesToDelete.isEmpty {
+            Logger.debug("🗑️ Deleting \(nodesToDelete.count) empty nodes")
+            for nodeToDelete in nodesToDelete {
+                if let context = resume.modelContext {
+                    TreeNode.deleteTreeNode(node: nodeToDelete, context: context)
+                }
+            }
+        }
+        
         // Trigger PDF refresh
         resume.debounceExport()
         Logger.debug("✅ Applied \(acceptedNodes.count) accepted changes")
