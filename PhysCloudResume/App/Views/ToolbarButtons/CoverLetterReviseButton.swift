@@ -48,27 +48,39 @@ struct CoverLetterReviseButton: View {
     @MainActor
     private func reviseCoverLetter(modelId: String, operation: CoverLetterPrompts.EditorPrompts, feedback: String) async {
         guard let coverLetter = jobAppStore.selectedApp?.selectedCover,
-              let resume = jobAppStore.selectedApp?.selectedRes else {
+              let resume = jobAppStore.selectedApp?.selectedRes,
+              let jobApp = jobAppStore.selectedApp else {
             return
         }
         
         do {
             let targetLetter: CoverLetter
-            if coverLetter.generated {
-                targetLetter = coverLetterStore.createDuplicate(letter: coverLetter)
+            let isNewRevision = coverLetter.generated
+            
+            if isNewRevision {
+                // For generated letters, we'll create a duplicate AFTER successful generation
+                // For now, work with a temporary in-memory copy
+                targetLetter = CoverLetter(
+                    enabledRefs: coverLetter.enabledRefs,
+                    jobApp: coverLetter.jobApp
+                )
+                targetLetter.includeResumeRefs = coverLetter.includeResumeRefs
+                targetLetter.content = coverLetter.content
                 targetLetter.generated = false
                 targetLetter.editorPrompt = operation
+                targetLetter.encodedMessageHistory = coverLetter.encodedMessageHistory
+                targetLetter.currentMode = operation == .custom ? .revise : .rewrite
                 
-                jobAppStore.selectedApp?.selectedCover = targetLetter
-                coverLetterStore.cL = targetLetter
+                // Don't add to store yet - wait for successful generation
             } else {
+                // For existing ungenerated letters, update in place
                 targetLetter = coverLetter
                 targetLetter.editorPrompt = operation
+                targetLetter.currentMode = operation == .custom ? .revise : .rewrite
             }
             
-            targetLetter.currentMode = operation == .custom ? .revise : .rewrite
-            
-            _ = try await CoverLetterService.shared.reviseCoverLetter(
+            // Try to generate the revision
+            let generatedContent = try await CoverLetterService.shared.reviseCoverLetter(
                 coverLetter: targetLetter,
                 resume: resume,
                 modelId: modelId,
@@ -76,10 +88,33 @@ struct CoverLetterReviseButton: View {
                 editorPrompt: operation
             )
             
+            // Only if generation was successful, persist the letter
+            if isNewRevision && !generatedContent.isEmpty {
+                // Now create the actual duplicate that will be persisted
+                let persistedLetter = coverLetterStore.createDuplicate(letter: coverLetter)
+                persistedLetter.content = generatedContent
+                persistedLetter.generated = true
+                persistedLetter.editorPrompt = operation
+                persistedLetter.currentMode = targetLetter.currentMode
+                persistedLetter.generationModel = modelId
+                persistedLetter.moddedDate = Date()
+                
+                // Update the name to include the revision type
+                let baseModelName = AIModels.friendlyModelName(for: modelId) ?? modelId
+                let revisionName = "\(baseModelName) - \(operation.operation.rawValue)"
+                persistedLetter.setEditableName(revisionName)
+                
+                // Set as selected
+                jobAppStore.selectedApp?.selectedCover = persistedLetter
+                coverLetterStore.cL = persistedLetter
+            }
+            
             Logger.debug("✅ Cover letter revision completed successfully")
             
         } catch {
             Logger.error("Error during cover letter revision: \(error.localizedDescription)")
+            // If we were working on a new revision, no draft was created
+            // If we were updating an existing draft, it remains unchanged
         }
     }
 }

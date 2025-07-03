@@ -12,17 +12,13 @@ import Foundation
 
 // Helper view for creating a resume
 struct CreateResumeView: View {
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     @Environment(ResModelStore.self) private var resModelStore: ResModelStore
+    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     
     var jobApp: JobApp
     var onCreateResume: (ResModel, [ResRef]) -> Void
     
-    @State private var selectedSourceIds: Set<UUID> = []
     @State private var selectedModelId: UUID?
-    @State private var showResRefSheet: Bool = false
-    @State private var selectedResRef: ResRef?
-    @State private var isDropTargeted: Bool = false
     
     @Environment(\.dismiss) private var dismiss
     
@@ -69,89 +65,7 @@ struct CreateResumeView: View {
             }
             .padding(.bottom, 10)
             
-            // Resume Sources Section
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Select Background Documents")
-                        .font(.headline)
-                    
-                    Spacer()
-                    
-                    // Add button for new resume source
-                    Button(action: {
-                        showResRefSheet = true
-                    }) {
-                        Image(systemName: "plus.circle")
-                            .imageScale(.medium)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Add new background document")
-                }
-                    
-                // Section with selectable resume sources
-                List {
-                    ForEach(resRefStore.resRefs) { source in
-                        HStack {
-                            // Content
-                            Text(source.name)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedResRef = source
-                                }
-                            
-                            Spacer()
-                            
-                            // View button
-                            Button(action: {
-                                selectedResRef = source
-                            }) {
-                                Image(systemName: "eye")
-                                    .foregroundColor(.gray)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("View document details")
-                            
-                            // Checkmark (more elegant than standard checkbox)
-                            Image(systemName: selectedSourceIds.contains(source.id) ? 
-                                  "checkmark.circle.fill" : "circle")
-                                .foregroundColor(selectedSourceIds.contains(source.id) ? 
-                                                .accentColor : .gray)
-                                .imageScale(.large)
-                                .onTapGesture {
-                                    toggleSelection(for: source)
-                                }
-                        }
-                        .contentShape(Rectangle())
-                        .padding(.vertical, 2)
-                    }
-                }
-                .frame(height: 220)
-                .overlay(
-                    Group {
-                        if resRefStore.resRefs.isEmpty {
-                            VStack(spacing: 12) {
-                                Image(systemName: "doc.text")
-                                    .font(.system(size: 36))
-                                    .foregroundColor(.secondary)
-                                
-                                Text("No background documents available")
-                                    .foregroundColor(.secondary)
-                                
-                                Text("Drag and drop files or add new documents")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                
-                                Button("Add Document") {
-                                    showResRefSheet = true
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .padding(.top, 8)
-                            }
-                            .padding()
-                        }
-                    }
-                )
-            }
+            Spacer()
             
             // Action buttons
             HStack {
@@ -165,10 +79,8 @@ struct CreateResumeView: View {
                 Button(action: {
                     if let selectedModelId = selectedModelId,
                        let selectedModel = resModelStore.resModels.first(where: { $0.id == selectedModelId }) {
-                        let selectedRefs = resRefStore.resRefs.filter { 
-                            selectedSourceIds.contains($0.id) 
-                        }
-                        onCreateResume(selectedModel, selectedRefs)
+                        // Pass all sources since they're global and used for AI operations
+                        onCreateResume(selectedModel, resRefStore.resRefs)
                         dismiss()
                     }
                 }) {
@@ -180,90 +92,17 @@ struct CreateResumeView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(selectedModelId == nil || selectedSourceIds.isEmpty)
+                .disabled(selectedModelId == nil)
             }
         }
         .padding()
-        .frame(minWidth: 500, minHeight: 400)
-        .sheet(item: $selectedResRef) { resRef in
-            // Show the ResRef details view
-            ResRefDetailView(resRef: resRef)
-                .frame(width: 600, height: 400)
-        }
-        .sheet(isPresented: $showResRefSheet) {
-            if resModelStore.resModels.isEmpty {
-                // If no resume models exist, show model form first
-                ResModelFormView(sheetPresented: $showResRefSheet)
-                    .frame(minWidth: 500, minHeight: 600)
-            } else {
-                // Show resume source form with drag and drop functionality
-                ResRefFormView(isSheetPresented: $showResRefSheet)
-                    .frame(width: 500)
-            }
-        }
-        .onDrop(of: ["public.file-url"], isTargeted: $isDropTargeted) { providers in
-            return handleFileDrop(providers: providers)
-        }
-        .onChange(of: isDropTargeted) { _, newValue in
-            // Visual indicator could be added here if needed
-        }
+        .frame(minWidth: 500, minHeight: 300)
         .onAppear {
-            // Pre-select default sources
-            for source in resRefStore.resRefs where source.enabledByDefault {
-                selectedSourceIds.insert(source.id)
-            }
-            
             // Default model selection
             if selectedModelId == nil, let firstModel = resModelStore.resModels.first {
                 selectedModelId = firstModel.id
             }
         }
-    }
-    
-    private func toggleSelection(for source: ResRef) {
-        if selectedSourceIds.contains(source.id) {
-            selectedSourceIds.remove(source.id)
-        } else {
-            selectedSourceIds.insert(source.id)
-        }
-    }
-    
-    /// Handles file drop for creating new resume sources directly
-    private func handleFileDrop(providers: [NSItemProvider]) -> Bool {
-        for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
-                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
-                    guard let urlData = item as? Data,
-                          let url = URL(dataRepresentation: urlData, relativeTo: nil)
-                    else {
-                        return
-                    }
-
-                    do {
-                        let fileName = url.deletingPathExtension().lastPathComponent
-                        let text = try String(contentsOf: url, encoding: .utf8)
-                        
-                        // Create a new ResRef on the main thread
-                        DispatchQueue.main.async {
-                            let newSource = ResRef(
-                                name: fileName,
-                                content: text,
-                                enabledByDefault: true
-                            )
-                            
-                            // Add to store and select it
-                            resRefStore.addResRef(newSource)
-                            selectedSourceIds.insert(newSource.id)
-                        }
-
-                    } catch {
-                        Logger.debug("Failed to read dropped file: \(error.localizedDescription)")
-                    }
-                }
-                return true
-            }
-        }
-        return false
     }
 }
 

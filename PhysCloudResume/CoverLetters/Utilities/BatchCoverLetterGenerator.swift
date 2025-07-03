@@ -33,6 +33,9 @@ class BatchCoverLetterGenerator {
         // Clean up any existing ungenerated drafts before starting
         cleanupUngeneratedDrafts()
         
+        // Additional safety: Ensure we're starting with a clean state
+        Logger.info("🚀 Starting batch generation with \(models.count) models and \(revisions.count) revisions")
+        
         // Calculate total operations
         let baseGenerations = models.count
         let revisionOperations = models.count * revisions.count
@@ -147,6 +150,9 @@ class BatchCoverLetterGenerator {
                 }
             }
         }
+        
+        // Final cleanup: Remove any empty letters that might have been created during failed generations
+        emergencyCleanup(for: jobApp)
     }
     
     /// Generates revisions for existing cover letters
@@ -247,77 +253,127 @@ class BatchCoverLetterGenerator {
         let modelName = AIModels.friendlyModelName(for: model) ?? model
         let letterName: String
         if let revision = revision {
-            // For revisions, include the base letter name
-            let baseName = baseCoverLetter.sequencedName
-            letterName = "\(baseName) - \(revision.operation.rawValue) (\(modelName))"
+            // For revisions, use clean model name + revision type
+            letterName = "\(modelName) - \(revision.operation.rawValue)"
         } else {
-            letterName = modelName
+            // For base generations, include resume background indicator if enabled
+            var baseName = modelName
+            if baseCoverLetter.includeResumeRefs {
+                baseName += " with Res BG"
+            }
+            letterName = baseName
         }
         
         // Set up mode
         let mode: CoverAiMode = revision != nil ? .rewrite : .generate
         
-        // Create a new cover letter object for generation
+        // Generate content using direct LLM calls (no temporary CoverLetter objects)
+        let responseText: String
+        if let revision = revision {
+            // This is a revision - build prompt and call LLM directly
+            let query = CoverLetterQuery(
+                coverLetter: baseCoverLetter,
+                resume: resume,
+                jobApp: jobApp,
+                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+            )
+            
+            let userMessage = await query.revisionPrompt(
+                feedback: "",
+                editorPrompt: revision
+            )
+            
+            // Check if we have an existing conversation for revisions
+            if let conversationId = CoverLetterService.shared.conversations[baseCoverLetter.id] {
+                responseText = try await LLMService.shared.continueConversation(
+                    userMessage: userMessage,
+                    modelId: model,
+                    conversationId: conversationId
+                )
+            } else {
+                // Start new conversation for revision
+                let systemPrompt = query.systemPrompt(for: model)
+                let (_, initialResponse) = try await LLMService.shared.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userMessage,
+                    modelId: model
+                )
+                responseText = initialResponse
+            }
+        } else {
+            // This is a new generation - build prompt and call LLM directly
+            let query = CoverLetterQuery(
+                coverLetter: baseCoverLetter,
+                resume: resume,
+                jobApp: jobApp,
+                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+            )
+            
+            let systemPrompt = query.systemPrompt(for: model)
+            let userMessage = await query.generationPrompt(
+                mode: .generate,
+                includeResumeRefs: baseCoverLetter.includeResumeRefs
+            )
+            
+            // Check if this is an o1 model that doesn't support system messages
+            let isO1Model = CoverLetterService.shared.isReasoningModel(model)
+            
+            if isO1Model {
+                // For o1 models, combine system and user messages
+                let combinedMessage = systemPrompt + "\n\n" + userMessage
+                responseText = try await LLMService.shared.execute(
+                    prompt: combinedMessage,
+                    modelId: model
+                )
+            } else {
+                // Start new conversation
+                let (_, initialResponse) = try await LLMService.shared.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userMessage,
+                    modelId: model
+                )
+                responseText = initialResponse
+            }
+        }
+        
+        // Extract cover letter content from response
+        let content = CoverLetterService.shared.extractCoverLetterContent(from: responseText)
+        
+        // Validate that the content is not empty
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
+        }
+        
+        // Now create the actual letter object that will be persisted
         let newLetter = CoverLetter(
             enabledRefs: baseCoverLetter.enabledRefs,
             jobApp: jobApp
         )
         newLetter.includeResumeRefs = baseCoverLetter.includeResumeRefs
-        newLetter.content = baseCoverLetter.content
+        newLetter.content = content
+        newLetter.generated = true
+        newLetter.moddedDate = Date()
+        newLetter.generationModel = model
         newLetter.currentMode = mode
         newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zissner
         
         // Store generation metadata - for revisions, preserve original generation sources
         if revision != nil {
-            // For revisions, preserve the original letter's generation metadata
             newLetter.generationSources = baseCoverLetter.generationSources.isEmpty ? baseCoverLetter.enabledRefs : baseCoverLetter.generationSources
             newLetter.generationUsedResumeRefs = baseCoverLetter.generationUsedResumeRefs
         } else {
-            // For new generations, use current settings
             newLetter.generationSources = baseCoverLetter.enabledRefs
             newLetter.generationUsedResumeRefs = baseCoverLetter.includeResumeRefs
         }
         
-        // Generate content using CoverLetterService
-        let responseText: String
-        if let revision = revision {
-            // This is a revision
-            responseText = try await CoverLetterService.shared.reviseCoverLetter(
-                coverLetter: newLetter,
-                resume: resume,
-                modelId: model,
-                feedback: "",
-                editorPrompt: revision
-            )
-        } else {
-            // This is a new generation
-            responseText = try await CoverLetterService.shared.generateCoverLetter(
-                coverLetter: newLetter,
-                resume: resume,
-                modelId: model,
-                includeResumeRefs: newLetter.includeResumeRefs
-            )
-        }
+        // Set the final name - always use "Option X" format for consistency
+        let nextOptionLetter = newLetter.getNextOptionLetter()
+        newLetter.name = "Option \(nextOptionLetter): \(letterName)"
         
-        // Validate that the response is not empty
-        guard !responseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
-        }
-        
-        // Update the letter with the response (CoverLetterService already did this, but ensure it's complete)
-        newLetter.content = responseText
-        newLetter.generated = true
-        newLetter.moddedDate = Date()
-        newLetter.generationModel = model
-        
-        // Set the final name - different for revisions vs new generations
-        if revision != nil {
-            // For revisions, don't add "Option" prefix since it's a revision of an existing letter
-            newLetter.name = letterName
-        } else {
-            // For new generations, use the traditional "Option X" naming
-            let nextOptionLetter = newLetter.getNextOptionLetter()
-            newLetter.name = "Option \(nextOptionLetter): \(letterName)"
+        // Only persist the letter if generation was successful and content is not empty
+        guard !newLetter.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Logger.error("🚨 Not persisting cover letter with empty content for model: \(model)")
+            throw NSError(domain: "BatchGeneration", code: 5, userInfo: [NSLocalizedDescriptionKey: "Generated content was empty, letter not persisted"])
         }
         
         // Persist the letter after it's fully populated
@@ -335,6 +391,18 @@ class BatchCoverLetterGenerator {
     /// Cleans up any ungenerated draft letters in the store
     func cleanupUngeneratedDrafts() {
         coverLetterStore.deleteUngeneratedDrafts()
+    }
+    
+    /// Emergency cleanup - deletes any cover letters with empty content that might have been created during failed generations
+    func emergencyCleanup(for jobApp: JobApp) {
+        let emptyLetters = jobApp.coverLetters.filter { letter in
+            letter.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !letter.generated
+        }
+        
+        for letter in emptyLetters {
+            Logger.warning("🧹 Emergency cleanup: Removing empty cover letter: \(letter.sequencedName)")
+            coverLetterStore.deleteLetter(letter)
+        }
     }
 }
 

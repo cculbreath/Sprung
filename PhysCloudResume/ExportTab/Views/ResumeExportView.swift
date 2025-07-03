@@ -352,22 +352,33 @@ struct ResumeExportView: View {
             return
         }
 
-        let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        // Show regenerating status
+        showToastNotification("Generating fresh text resume...")
+        
+        // Trigger debounced export to ensure fresh text data before exporting
+        resume.debounceExport(
+            onStart: {
+                // Optional: Update UI to show export in progress
+            },
+            onFinish: { [self] in
+                let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
+                let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
 
-        // Create unique filename using the job position: e.g. "Software Engineer Resume.txt"
-        let (fileURL, filename) = createUniqueFileURL(
-            baseFileName: "\(jobPosition) Resume",
-            extension: "txt",
-            in: downloadsURL
+                // Create unique filename using the job position: e.g. "Software Engineer Resume.txt"
+                let (fileURL, filename) = createUniqueFileURL(
+                    baseFileName: "\(jobPosition) Resume",
+                    extension: "txt",
+                    in: downloadsURL
+                )
+
+                do {
+                    try resume.textRes.write(to: fileURL, atomically: true, encoding: .utf8)
+                    showToastNotification("Resume text has been exported to \"\(filename)\"")
+                } catch {
+                    showToastNotification("Failed to export text: \(error.localizedDescription)")
+                }
+            }
         )
-
-        do {
-            try resume.textRes.write(to: fileURL, atomically: true, encoding: .utf8)
-            showToastNotification("Resume text has been exported to \"\(filename)\"")
-        } catch {
-            showToastNotification("Failed to export text: \(error.localizedDescription)")
-        }
     }
 
     private func exportResumeJSON() {

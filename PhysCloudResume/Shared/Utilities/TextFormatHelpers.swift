@@ -92,6 +92,31 @@ struct TextFormatHelpers {
         return formattedLines.joined(separator: "\n")
     }
     
+    static func formatSkillsWithIndent(_ skills: [[String: Any]], width: Int = 80, indent: Int = 3) -> String {
+        var output = ""
+        
+        for (index, skill) in skills.enumerated() {
+            guard let title = skill["title"] as? String,
+                  let description = skill["description"] as? String else { continue }
+            
+            // Add title on its own line
+            output += title + "\n"
+            
+            // Wrap description with hanging indent
+            let wrappedLines = wrapText(description, maxWidth: width - indent)
+            for line in wrappedLines {
+                output += String(repeating: " ", count: indent) + line + "\n"
+            }
+            
+            // Add blank line between skills (except after the last one)
+            if index < skills.count - 1 {
+                output += "\n"
+            }
+        }
+        
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
     static func splitAligned(_ skills: [[String: Any]], width: Int = 80) -> String {
         let separator = " |       "
         var output = ""

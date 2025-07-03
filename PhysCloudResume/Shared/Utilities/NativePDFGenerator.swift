@@ -41,9 +41,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
     }
     
     @MainActor
-    func generateTextResume(for resume: Resume, template: String = "archer") throws -> String {
-        return try renderTemplate(for: resume, template: template, format: "txt")
-    }
+    // Text generation has been moved to TextResumeGenerator
     
     func generatePDFFromCustomTemplate(for resume: Resume, customHTML: String) async throws -> Data {
         return try await withCheckedThrowingContinuation { continuation in
@@ -65,12 +63,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
     }
     
-    @MainActor
-    func generateTextFromCustomTemplate(for resume: Resume, customText: String) throws -> String {
-        let context = try createTemplateContext(from: resume)
-        let mustacheTemplate = try Template(string: customText)
-        return try mustacheTemplate.render(context)
-    }
+    // Custom text template generation has been moved to TextResumeGenerator
     
     @MainActor
     private func renderTemplate(for resume: Resume, template: String, format: String) throws -> String {
@@ -259,7 +252,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
             processed["jobTitles"] = processedTitles // Also provide camelCase alias for template compatibility
             processed["jobTitlesJoined"] = processedTitles.joined(separator: "&nbsp;&middot;&nbsp;")
             
-            // Add centered job titles for text templates
+            // Add centered job titles for text templates (decode HTML entities)
             let plainJobTitles = jobTitles.joined(separator: " · ")
             processed["centeredJobTitles"] = TextFormatHelpers.wrapper(plainJobTitles, width: 80, centered: true)
         }
@@ -270,8 +263,9 @@ class NativePDFGenerator: NSObject, ObservableObject {
             processed["employment"] = employmentArray
         }
         
-        // Convert skills-and-expertise object to array format
+        // Handle skills-and-expertise (either object or array format)
         if let skillsDict = processed["skills-and-expertise"] as? [String: Any] {
+            // Convert object format to array format
             var skillsArray: [[String: Any]] = []
             for (title, description) in skillsDict {
                 skillsArray.append([
@@ -282,7 +276,10 @@ class NativePDFGenerator: NSObject, ObservableObject {
             processed["skills-and-expertise"] = skillsArray
             
             // Add formatted text helpers for text templates
-            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.splitAligned(skillsArray, width: 80)
+            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(skillsArray, width: 80, indent: 3)
+        } else if let skillsArray = processed["skills-and-expertise"] as? [[String: Any]] {
+            // Already in array format, just add formatted text
+            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(skillsArray, width: 80, indent: 3)
         }
         
         // Convert education object to array format
@@ -297,8 +294,9 @@ class NativePDFGenerator: NSObject, ObservableObject {
             processed["education"] = educationArray
         }
         
-        // Convert projects-highlights object to array format
+        // Handle projects-highlights (either object or array format)
         if let projectsDict = processed["projects-highlights"] as? [String: Any] {
+            // Convert object format to array format
             var projectsArray: [[String: Any]] = []
             for (name, description) in projectsDict {
                 projectsArray.append([
@@ -310,12 +308,17 @@ class NativePDFGenerator: NSObject, ObservableObject {
             
             // Add formatted text for projects
             processed["projectsHighlightsFormatted"] = TextFormatHelpers.wrapBlurb(projectsArray)
+        } else if let projectsArray = processed["projects-highlights"] as? [[String: Any]] {
+            // Already in array format, just add formatted text
+            processed["projectsHighlightsFormatted"] = TextFormatHelpers.wrapBlurb(projectsArray)
         }
         
         // Add pre-formatted text sections for text templates
         if let contact = processed["contact"] as? [String: Any] {
             if let name = contact["name"] as? String {
-                processed["centeredName"] = TextFormatHelpers.wrapper(name, width: 80, centered: true)
+                // Decode HTML entities for text output
+                let cleanName = name.decodingHTMLEntities()
+                processed["centeredName"] = TextFormatHelpers.wrapper(cleanName, width: 80, centered: true)
             }
             
             if let location = contact["location"] as? [String: Any] {
@@ -331,14 +334,23 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
         
         if let summary = processed["summary"] as? String {
-            processed["wrappedSummary"] = TextFormatHelpers.wrapper(summary, width: 80, leftMargin: 6, rightMargin: 6)
+            // Trim whitespace from summary before wrapping to prevent extra blank lines
+            let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            processed["wrappedSummary"] = TextFormatHelpers.wrapper(trimmedSummary, width: 80, leftMargin: 6, rightMargin: 6)
         }
         
         // Add section line formatting
         if let sectionLabels = processed["section-labels"] as? [String: Any] {
             for (key, value) in sectionLabels {
                 if let label = value as? String {
-                    processed["sectionLine_\(key)"] = TextFormatHelpers.sectionLine(label, width: 80)
+                    // Convert hyphenated keys to camelCase for template compatibility
+                    let camelCaseKey = key.split(separator: "-")
+                        .enumerated()
+                        .map { index, word in
+                            index == 0 ? String(word) : word.capitalized
+                        }
+                        .joined()
+                    processed["sectionLine_\(camelCaseKey)"] = TextFormatHelpers.sectionLine(label, width: 80)
                 }
             }
         }
@@ -373,6 +385,25 @@ class NativePDFGenerator: NSObject, ObservableObject {
         return processed
     }
     
+    private func formatDateForHTML(_ dateStr: String) -> String {
+        let months = ["January", "February", "March", "April", "May", "June", 
+                     "July", "August", "September", "October", "November", "December"]
+        
+        if dateStr.isEmpty || dateStr.trimmingCharacters(in: .whitespaces) == "undefined" {
+            return "Present"
+        }
+        
+        let parts = dateStr.split(separator: "-")
+        if parts.count == 2, 
+           let year = Int(parts[0]),
+           let month = Int(parts[1]), 
+           month >= 1 && month <= 12 {
+            return "\(months[month - 1]) \(year)"
+        }
+        
+        return dateStr
+    }
+    
     private func convertEmploymentToArrayWithSorting(_ employment: [String: Any], from resume: Resume) -> [[String: Any]] {
         // Get employment nodes directly from TreeNode structure to preserve sort order
         guard let rootNode = resume.rootNode,
@@ -402,6 +433,18 @@ class NativePDFGenerator: NSObject, ObservableObject {
                 let end = detailsDict["end"] as? String ?? ""
                 detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employer, location: location, start: start, end: end, width: 80)
                 
+                // Add formatted highlights with proper text wrapping
+                if let highlights = detailsDict["highlights"] as? [String] {
+                    let formattedHighlights = highlights.map { highlight in
+                        TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
+                    }
+                    detailsDict["highlightsFormatted"] = formattedHighlights
+                }
+                
+                // Add formatted dates for HTML templates
+                detailsDict["startFormatted"] = formatDateForHTML(start)
+                detailsDict["endFormatted"] = formatDateForHTML(end)
+                
                 employmentArray.append(detailsDict)
             }
         }
@@ -421,6 +464,18 @@ class NativePDFGenerator: NSObject, ObservableObject {
                 let start = detailsDict["start"] as? String ?? ""
                 let end = detailsDict["end"] as? String ?? ""
                 detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employer, location: location, start: start, end: end, width: 80)
+                
+                // Add formatted highlights with proper text wrapping
+                if let highlights = detailsDict["highlights"] as? [String] {
+                    let formattedHighlights = highlights.map { highlight in
+                        TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
+                    }
+                    detailsDict["highlightsFormatted"] = formattedHighlights
+                }
+                
+                // Add formatted dates for HTML templates
+                detailsDict["startFormatted"] = formatDateForHTML(start)
+                detailsDict["endFormatted"] = formatDateForHTML(end)
                 
                 employmentArray.append(detailsDict)
             }

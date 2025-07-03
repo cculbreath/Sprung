@@ -60,7 +60,15 @@ class ResumeReviewService: @unchecked Sendable {
                 var imageData: [Data] = []
                 
                 if needsImage, let pdfData = resume.pdfData {
-                    imageData = [pdfData]
+                    // Convert PDF to PNG image format
+                    if let base64Image = ImageConversionService.shared.convertPDFToBase64Image(pdfData: pdfData),
+                       let pngData = Data(base64Encoded: base64Image) {
+                        imageData = [pngData]
+                    } else {
+                        Logger.error("ResumeReviewService: Failed to convert PDF to image format")
+                        onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1008, userInfo: [NSLocalizedDescriptionKey: "Failed to convert PDF to image format"])))
+                        return
+                    }
                 }
                 
                 // Build the prompt using the centralized ResumeReviewQuery

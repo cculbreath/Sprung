@@ -52,12 +52,51 @@ class ApplicationReviewService: @unchecked Sendable {
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
+        // Ensure fresh text resume is rendered before making LLM request
+        Task {
+            do {
+                try await resume.ensureFreshRenderedText()
+                await performReviewRequest(
+                    reviewType: reviewType,
+                    jobApp: jobApp,
+                    resume: resume,
+                    coverLetter: coverLetter,
+                    modelId: modelId,
+                    customOptions: customOptions,
+                    onProgress: onProgress,
+                    onComplete: onComplete
+                )
+            } catch {
+                Logger.error("ApplicationReviewService: Failed to render fresh text: \(error)")
+                onComplete(.failure(error))
+            }
+        }
+    }
+    
+    private func performReviewRequest(
+        reviewType: ApplicationReviewType,
+        jobApp: JobApp,
+        resume: Resume,
+        coverLetter: CoverLetter?,
+        modelId: String,
+        customOptions: CustomApplicationReviewOptions? = nil,
+        onProgress: @escaping (String) -> Void,
+        onComplete: @escaping (Result<String, Error>) -> Void
+    ) async {
         // Determine if we should include image based on review type and options
         let shouldIncludeImage = (reviewType != .custom) || (customOptions?.includeResumeImage ?? false)
         var imageData: [Data] = []
         
         if shouldIncludeImage, let pdfData = resume.pdfData {
-            imageData = [pdfData]
+            // Convert PDF to PNG image format
+            if let base64Image = ImageConversionService.shared.convertPDFToBase64Image(pdfData: pdfData),
+               let pngData = Data(base64Encoded: base64Image) {
+                imageData = [pngData]
+            } else {
+                Logger.error("ApplicationReviewService: Failed to convert PDF to image format")
+                onComplete(.failure(NSError(domain: "ApplicationReviewService", code: 1008, userInfo: [NSLocalizedDescriptionKey: "Failed to convert PDF to image format"])))
+                return
+            }
         }
 
         // Build the prompt using ApplicationReviewQuery

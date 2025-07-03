@@ -16,11 +16,22 @@ struct SparkleButton: View {
         Button(action: toggleNodeStatus) {
             Image(systemName: "sparkles")
                 .foregroundColor(
-                    node.status == LeafStatus.saved ? .gray : .accentColor
+                    node.status == LeafStatus.saved ? 
+                        (isHovering ? .accentColor.opacity(0.6) : .gray) : 
+                        .accentColor
                 )
                 .font(.system(size: 14))
+                .padding(5)
+                .background(
+                    isHovering && node.status != LeafStatus.aiToReplace ? 
+                        Color.gray.opacity(0.1) : 
+                        Color.clear
+                )
+                .clipShape(Circle())
         }
-        .buttonStyle( .automatic )
-        .disabled(node.status == LeafStatus.saved)
+        .buttonStyle(PlainButtonStyle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
     }
 }

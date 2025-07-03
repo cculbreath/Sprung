@@ -40,8 +40,7 @@ struct ReviseCoverLetterView: View {
                     .font(.headline)
                 
                 DropdownModelPicker(
-                    selectedModel: $selectedModel,
-                    requiredCapability: .textOnly
+                    selectedModel: $selectedModel
                 )
             }
             
