@@ -50,11 +50,11 @@ struct PhysicsCloudResumeApp: App {
                 fatalError("Failed to create ModelContainer: \(error)")
             }
         }
-        
         // Log after all properties are initialized
         Logger.debug("🔴 PhysicsCloudResumeApp init - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
-    }
+    
 
+    }
     var body: some Scene {
         Window("", id: "myApp") {
             ContentViewLaunch() // ContentView handles its own JobAppStore initialization

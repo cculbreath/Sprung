@@ -285,11 +285,13 @@ enum PostReviewAction: String, Codable {
         guard shouldBeApplied else { return }
         
         if let treeNode = resume.nodes.first(where: { $0.id == id }) {
-            // Apply the change based on whether it's a title node or value node
+            // Apply the change based on whether this feedback is for title or value
             if isTitleNode {
+                // This feedback is for the title/name field
                 treeNode.name = proposedRevision
-                treeNode.isTitleNode = true
+                // Don't modify treeNode.isTitleNode - that's a structural property
             } else {
+                // This feedback is for the value field
                 treeNode.value = proposedRevision
             }
             Logger.debug("✅ Applied change to node \(id): \(actionRequested.rawValue)")
@@ -375,9 +377,21 @@ extension Array where Element == FeedbackNode {
         
         if !nodesToDelete.isEmpty {
             Logger.debug("🗑️ Deleting \(nodesToDelete.count) empty nodes")
-            for nodeToDelete in nodesToDelete {
-                if let context = resume.modelContext {
-                    TreeNode.deleteTreeNode(node: nodeToDelete, context: context)
+            if let context = resume.modelContext {
+                // Ensure deletion happens on main actor for UI coordination
+                Task { @MainActor in
+                    // Batch delete all empty nodes
+                    for nodeToDelete in nodesToDelete {
+                        TreeNode.deleteTreeNode(node: nodeToDelete, context: context)
+                    }
+                    
+                    // Save once after all deletions
+                    do {
+                        try context.save()
+                        Logger.debug("✅ Successfully saved context after deleting empty nodes")
+                    } catch {
+                        Logger.error("❌ Failed to save context after deleting TreeNodes: \(error)")
+                    }
                 }
             }
         }

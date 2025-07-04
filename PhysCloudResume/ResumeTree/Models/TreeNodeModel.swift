@@ -172,11 +172,7 @@ enum LeafStatus: String, Codable, Hashable {
             parent.children?.remove(at: index)
         }
         context.delete(node)
-        do {
-            try context.save()
-        } catch {
-            Logger.debug("Failed to save context after deleting TreeNode: \(error)")
-        }
+        // Note: save() is not called here to allow for batch operations
     }
 
     /// Builds the hierarchical path string for this node.

@@ -93,7 +93,7 @@ struct NodeLeafView: View {
         .padding(.vertical, 4)
         .padding(.trailing, 12) // ← new: 24-pt right margin
         .background(
-            node.status == LeafStatus.aiToReplace
+            node.status == .aiToReplace
                 ? Color.accentColor.opacity(0.3)
                 : Color.clear
         )

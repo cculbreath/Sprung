@@ -181,10 +181,15 @@ struct RevisionReviewView: View {
         Logger.debug("🔍 [RevisionReviewView] Current showResumeRevisionSheet: \(viewModel.showResumeRevisionSheet)")
         
         if let resume = resume {
-            viewModel.feedbackNodes.applyAcceptedChanges(to: resume)
+            // Apply all feedback (both approved from previous rounds and current)
+            let allFeedbackNodes = viewModel.approvedFeedbackNodes + viewModel.feedbackNodes
+            allFeedbackNodes.applyAcceptedChanges(to: resume)
         }
+        
+        // Clear all state
         viewModel.resumeRevisions = []
         viewModel.feedbackNodes = []
+        viewModel.approvedFeedbackNodes = []
         
         Logger.debug("🔍 [RevisionReviewView] Setting showResumeRevisionSheet = false")
         viewModel.showResumeRevisionSheet = false
