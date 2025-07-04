@@ -428,6 +428,11 @@ class ResumeReviewService: @unchecked Sendable {
             return pos1 < pos2
         }
         
+        // Update each node's myIndex to reflect their new position
+        for (index, node) in skillNodes.enumerated() {
+            node.myIndex = index
+        }
+        
         // Update the skills section with reordered children
         skillsSection.children = skillNodes
         

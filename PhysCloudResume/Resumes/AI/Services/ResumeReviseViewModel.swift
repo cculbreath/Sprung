@@ -34,6 +34,7 @@ class ResumeReviseViewModel {
     }
     var resumeRevisions: [ProposedRevisionNode] = []
     var feedbackNodes: [FeedbackNode] = []
+    var approvedFeedbackNodes: [FeedbackNode] = [] // Store approved feedback for multi-round workflows
     var currentRevisionNode: ProposedRevisionNode?
     var currentFeedbackNode: FeedbackNode?
     var aiResubmit: Bool = false
@@ -449,12 +450,15 @@ class ResumeReviseViewModel {
     
     /// Complete the review workflow - apply changes and handle resubmission
     func completeReviewWorkflow(with resume: Resume) {
-        // Log statistics and apply changes
-        feedbackNodes.logFeedbackStatistics()
-        feedbackNodes.applyAcceptedChanges(to: resume)
+        // Merge approved feedback from previous rounds with current feedback
+        let allFeedbackNodes = approvedFeedbackNodes + feedbackNodes
         
-        // Check for resubmission
-        let nodesToResubmit = feedbackNodes.nodesRequiringAIResubmission
+        // Log statistics and apply changes using all feedback
+        allFeedbackNodes.logFeedbackStatistics()
+        allFeedbackNodes.applyAcceptedChanges(to: resume)
+        
+        // Check for resubmission using all feedback
+        let nodesToResubmit = allFeedbackNodes.nodesRequiringAIResubmission
         
         if !nodesToResubmit.isEmpty {
             Logger.debug("Resubmitting \(nodesToResubmit.count) nodes to AI...")
@@ -468,6 +472,12 @@ class ResumeReviseViewModel {
             Logger.debug("No nodes need resubmission. All changes applied, dismissing sheet...")
             Logger.debug("🔍 [completeReviewWorkflow] Setting showResumeRevisionSheet = false")
             Logger.debug("🔍 [completeReviewWorkflow] Current showResumeRevisionSheet value: \(showResumeRevisionSheet)")
+            
+            // Clear all state before dismissing
+            approvedFeedbackNodes = []
+            feedbackNodes = []
+            resumeRevisions = []
+            
             showResumeRevisionSheet = false
             Logger.debug("🔍 [completeReviewWorkflow] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
         }
@@ -580,31 +590,28 @@ class ResumeReviseViewModel {
                 Logger.warning("⚠️ AI returned \(validatedRevisions.count) revisions but only \(requestedRevisions.count) were requested")
             }
             
-            // Keep feedback for nodes that were NOT resubmitted (already approved/completed)
-            let approvedFeedback = feedbackNodes.filter { feedback in
+            // For the second round, show ONLY the new revisions that need review
+            // Keep approved feedback for final application, but don't show in UI
+            let approvedFeedbackForLater = feedbackNodes.filter { feedback in
                 !resubmittedNodeIds.contains(feedback.id)
             }
             
-            // Only replace the revisions that were actually resubmitted
-            var updatedRevisions = resumeRevisions.filter { revision in
-                !resubmittedNodeIds.contains(revision.id)
+            // Replace arrays with only the new revisions requiring review
+            resumeRevisions = requestedRevisions
+            feedbackNodes = [] // Start fresh for new revisions
+            
+            // Reset to first revision (now only showing new ones)
+            feedbackIndex = 0
+            
+            // Set up the first NEW revision for review
+            if !resumeRevisions.isEmpty {
+                currentRevisionNode = resumeRevisions[0]
+                currentFeedbackNode = resumeRevisions[0].createFeedbackNode()
             }
             
-            // Add only the requested revisions (not extra ones the AI might have returned)
-            updatedRevisions.append(contentsOf: requestedRevisions)
-            
-            // Update the arrays with the merged content
-            resumeRevisions = updatedRevisions
-            feedbackNodes = approvedFeedback // Keep approved feedback, new revisions will get fresh feedback nodes
-            
-            // Reset to first unprocessed revision (should be from the new validated revisions)
-            feedbackIndex = approvedFeedback.count // Start after the approved ones
-            
-            // Set up the first NEW revision for review (skip already approved ones)
-            if feedbackIndex < resumeRevisions.count {
-                currentRevisionNode = resumeRevisions[feedbackIndex]
-                currentFeedbackNode = resumeRevisions[feedbackIndex].createFeedbackNode()
-            }
+            // Store approved feedback for final application
+            // We'll need to merge this back when completing the workflow
+            self.approvedFeedbackNodes = approvedFeedbackForLater
             
             // Clear loading state
             aiResubmit = false
