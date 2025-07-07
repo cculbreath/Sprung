@@ -17,7 +17,7 @@ struct ResumeCustomizeButton: View {
             selectedTab = .resume
             showCustomizeModelSheet = true
         }) {
-            if isGeneratingResume {
+            if isGeneratingResume || (resumeReviseViewModel?.aiResubmit ?? false) {
                 Label("Customize", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
                     .symbolEffect(.variableColor.iterative.nonReversing)
                     .font(.system(size: 14, weight: .light))

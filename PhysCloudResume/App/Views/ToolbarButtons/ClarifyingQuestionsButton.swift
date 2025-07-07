@@ -22,7 +22,7 @@ struct ClarifyingQuestionsButton: View {
             // Don't clear questions here - they might be needed for the sheet
             showClarifyingQuestionsModelSheet = true
         }) {
-            if isGeneratingQuestions {
+            if isGeneratingQuestions || (resumeReviseViewModel?.aiResubmit ?? false) {
                 Label {
                     Text("Clarify & Customize")
                 } icon: {
