@@ -46,12 +46,6 @@ class ResumeReviseViewModel {
     var isCommenting: Bool = false
     var isMoreCommenting: Bool = false
     
-    // Computed property to determine if review sheet should be hidden for reasoning modal
-    var shouldHideForReasoningModal: Bool {
-        // Hide the review sheet if we're in AI resubmission and reasoning modal is visible
-        return aiResubmit && appState.globalReasoningStreamManager.isVisible
-    }
-    
     // MARK: - Business Logic State
     private var currentConversationId: UUID?
     var currentModelId: String? // Make currentModelId accessible to views
@@ -532,6 +526,16 @@ class ResumeReviseViewModel {
             return
         }
         
+        // Check if model supports reasoning to determine UI behavior
+        let model = appState.openRouterService.findModel(id: modelId)
+        let supportsReasoning = model?.supportsReasoning ?? false
+        
+        // For reasoning models, temporarily hide the review sheet
+        if supportsReasoning {
+            Logger.debug("🔍 Temporarily hiding review sheet for reasoning modal")
+            showResumeRevisionSheet = false
+        }
+        
         do {
             // Create revision prompt from feedback nodes requiring resubmission
             let nodesToResubmit = feedbackNodes.filter { node in
@@ -622,11 +626,22 @@ class ResumeReviseViewModel {
             // Clear loading state
             aiResubmit = false
             
+            // For reasoning models, show the review sheet again
+            if supportsReasoning && !resumeRevisions.isEmpty {
+                Logger.debug("🔍 Showing review sheet again after reasoning modal")
+                showResumeRevisionSheet = true
+            }
+            
             Logger.debug("✅ AI resubmission complete: \(validatedRevisions.count) new revisions ready for review")
             
         } catch {
             Logger.error("Error in AI resubmission: \(error.localizedDescription)")
             aiResubmit = false
+            
+            // Ensure sheet is shown again on error for reasoning models
+            if supportsReasoning {
+                showResumeRevisionSheet = true
+            }
         }
     }
     

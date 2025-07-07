@@ -23,22 +23,11 @@ struct RevisionReviewView: View {
         let model = viewModel.appState.openRouterService.findModel(id: modelId)
         return model?.supportsReasoning ?? false
     }
-    
-    // Computed property to determine if we should hide the entire review content
-    private var shouldHideContent: Bool {
-        // Hide content when:
-        // 1. AI resubmit is active AND using reasoning modal
-        // 2. OR when the shouldHideForReasoningModal flag is true
-        return (viewModel.aiResubmit && isUsingReasoningModal) || viewModel.shouldHideForReasoningModal
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             if let resume = resume {
-                if shouldHideContent {
-                    // Hide content when reasoning modal is active or when we should hide for reasoning
-                    EmptyView()
-                } else if viewModel.aiResubmit && !isUsingReasoningModal {
+                if viewModel.aiResubmit && !isUsingReasoningModal {
                     // Loading state during AI resubmission (only for non-reasoning models)
                     VStack {
                         Text("Submitting Feedback to AI")
