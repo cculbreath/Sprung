@@ -46,6 +46,12 @@ class ResumeReviseViewModel {
     var isCommenting: Bool = false
     var isMoreCommenting: Bool = false
     
+    // Computed property to determine if review sheet should be hidden for reasoning modal
+    var shouldHideForReasoningModal: Bool {
+        // Hide the review sheet if we're in AI resubmission and reasoning modal is visible
+        return aiResubmit && appState.globalReasoningStreamManager.isVisible
+    }
+    
     // MARK: - Business Logic State
     private var currentConversationId: UUID?
     var currentModelId: String? // Make currentModelId accessible to views
