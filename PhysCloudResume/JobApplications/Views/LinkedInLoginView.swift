@@ -25,7 +25,7 @@ struct LinkedInLoginView: NSViewRepresentable {
         config.websiteDataStore = .default()
         
         // Enable JavaScript and popups (required for Google SSO)
-        config.preferences.javaScriptEnabled = true
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
         
         let webView = WKWebView(frame: .zero, configuration: config)

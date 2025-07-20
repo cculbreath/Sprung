@@ -42,21 +42,17 @@ class LinkedInSessionManager: ObservableObject {
     func checkSession() async {
         guard let webView = webView else { return }
         
-        do {
-            let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
-            let hasLinkedInSession = cookies.contains { cookie in
-                cookie.domain.contains("linkedin.com") && 
-                (cookie.name == "li_at" || cookie.name == "JSESSIONID")
+        let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+        let hasLinkedInSession = cookies.contains { cookie in
+            cookie.domain.contains("linkedin.com") && 
+            (cookie.name == "li_at" || cookie.name == "JSESSIONID")
+        }
+        
+        await MainActor.run {
+            isLoggedIn = hasLinkedInSession
+            if !hasLinkedInSession && isLoggedIn {
+                sessionExpired = true
             }
-            
-            await MainActor.run {
-                isLoggedIn = hasLinkedInSession
-                if !hasLinkedInSession && isLoggedIn {
-                    sessionExpired = true
-                }
-            }
-        } catch {
-            Logger.error("🚨 LinkedIn session check failed: \(error)")
         }
     }
     
@@ -153,7 +149,6 @@ extension JobApp {
         return try await withCheckedThrowingContinuation { continuation in
             var hasResumed = false
             var debugWindow: NSWindow?
-            var delegate: LinkedInJobScrapeDelegate?
             var originalDelegate: WKNavigationDelegate?
             
             // Ensure WebView operations happen on main thread
@@ -188,8 +183,6 @@ extension JobApp {
                     DispatchQueue.main.async {
                         webView.navigationDelegate = originalDelegate
                         webView.stopLoading()
-                        // Clear our reference to allow deallocation
-                        delegate = nil
                     }
                     
                     switch result {
@@ -208,7 +201,6 @@ extension JobApp {
                     
                     continuation.resume(with: result)
                 }
-                delegate = scrapeDelegate
                 webView.navigationDelegate = scrapeDelegate
                 
                 // Start by loading LinkedIn feed to establish session context
@@ -313,7 +305,6 @@ extension JobApp {
                     // Restore original delegate and clean up to prevent crashes
                     webView.navigationDelegate = originalDelegate
                     webView.stopLoading()
-                    delegate = nil
                     
                     // Keep debug window open longer on timeout so we can see what happened
                     Logger.info("🪟 [LinkedIn Scraper] Debug window will stay open for 10 seconds so you can inspect the page")
