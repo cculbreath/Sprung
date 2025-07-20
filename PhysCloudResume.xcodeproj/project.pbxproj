@@ -22,24 +22,9 @@
 		57306AFC2DDE6B730053246D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		57783EA32DBA096500B3167C /* Exceptions for "PhysCloudResume" folder in "PhysCloudResume" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				CoverLetters/Utilities/CoverLetterPDFGenerator.swift.new,
-				Info.plist,
-				Scripts,
-			);
-			target = 570FEC672C855BF50074D1E0 /* PhysCloudResume */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		570FEC6A2C855BF50074D1E0 /* PhysCloudResume */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				57783EA32DBA096500B3167C /* Exceptions for "PhysCloudResume" folder in "PhysCloudResume" target */,
-			);
 			explicitFolders = (
 				Scripts,
 			);

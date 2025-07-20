@@ -278,7 +278,7 @@ class ReasoningStreamManager {
     private var currentTask: Task<Void, Never>?
     
     /// Start processing a reasoning stream
-    func startStream<T: AsyncSequence & Sendable>(_ stream: T) where T.Element == LLMStreamChunk {
+    func startStream<T: AsyncSequence & Sendable>(_ stream: T) where T.Element == LLMStreamChunk, T.AsyncIterator: Sendable {
         // Cancel any existing stream
         currentTask?.cancel()
         
