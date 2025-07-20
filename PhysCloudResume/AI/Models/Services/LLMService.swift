@@ -322,7 +322,7 @@ class LLMService {
     }
     
     /// Execute a structured streaming request with optional reasoning
-    func executeStructuredStreaming<T: Codable>(
+    func executeStructuredStreaming<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
         responseType: T.Type,
@@ -496,9 +496,15 @@ class LLMService {
                     // Process stream chunks
                     for try await chunk in stream {
                         if let firstChoice = chunk.choices?.first {
-                            // Accumulate content
+                            // Accumulate content (both regular content and reasoning content)
                             if let content = firstChoice.delta?.content {
                                 fullResponse += content
+                            }
+                            
+                            // Also accumulate reasoning content for reasoning models
+                            if let reasoningContent = firstChoice.delta?.reasoningContent {
+                                fullResponse += reasoningContent
+                                Logger.debug("🧠 [LLMService] Accumulated reasoning content: \(reasoningContent.count) characters")
                             }
                             
                             let streamChunk = LLMStreamChunk(
@@ -618,9 +624,15 @@ class LLMService {
                     // Process stream chunks
                     for try await chunk in stream {
                         if let firstChoice = chunk.choices?.first {
-                            // Accumulate content
+                            // Accumulate content (both regular content and reasoning content)
                             if let content = firstChoice.delta?.content {
                                 fullResponse += content
+                            }
+                            
+                            // Also accumulate reasoning content for reasoning models
+                            if let reasoningContent = firstChoice.delta?.reasoningContent {
+                                fullResponse += reasoningContent
+                                Logger.debug("🧠 [LLMService] Accumulated reasoning content: \(reasoningContent.count) characters")
                             }
                             
                             let streamChunk = LLMStreamChunk(

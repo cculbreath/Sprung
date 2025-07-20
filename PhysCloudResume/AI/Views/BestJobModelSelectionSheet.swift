@@ -15,6 +15,10 @@ struct BestJobModelSelectionSheet: View {
     @Binding var isPresented: Bool
     let onModelSelected: (String, Bool, Bool) -> Void
     
+    // MARK: - Environment
+    
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    
     // MARK: - State
     
     @State private var selectedModel: String = ""

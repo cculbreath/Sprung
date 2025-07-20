@@ -277,7 +277,21 @@ class ClarifyingQuestionsViewModel {
             
         } catch {
             Logger.error("Error in conversation handoff: \(error.localizedDescription)")
-            // Handle error appropriately - perhaps show an error to the user
+            
+            // If it's a JSON parsing error, show the full response for debugging
+            let nsError = error as NSError
+            if nsError.domain == "ResumeReviseViewModel",
+               let fullResponse = nsError.userInfo["fullResponse"] as? String {
+                DispatchQueue.main.async {
+                    self.lastError = "AI returned an unexpected response format. Full response:\n\n\(fullResponse)"
+                    self.showError = true
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.lastError = "Error processing AI response: \(error.localizedDescription)"
+                    self.showError = true
+                }
+            }
         }
     }
     
@@ -355,9 +369,20 @@ class ClarifyingQuestionsViewModel {
             
         } catch {
             Logger.error("❌ Direct revision workflow failed: \(error.localizedDescription)")
-            await MainActor.run {
-                lastError = "Failed to generate revisions: \(error.localizedDescription)"
-                showError = true
+            
+            // If it's a JSON parsing error, show the full response for debugging
+            let nsError = error as NSError
+            if nsError.domain == "ResumeReviseViewModel",
+               let fullResponse = nsError.userInfo["fullResponse"] as? String {
+                await MainActor.run {
+                    lastError = "AI returned an unexpected response format. Full response:\n\n\(fullResponse)"
+                    showError = true
+                }
+            } else {
+                await MainActor.run {
+                    lastError = "Failed to generate revisions: \(error.localizedDescription)"
+                    showError = true
+                }
             }
         }
     }

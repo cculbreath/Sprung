@@ -48,11 +48,6 @@ class ResumeReviewViewModel {
         allowEntityMerge: Bool,
         appState: AppState
     ) {
-        guard resume != nil else {
-            generalError = "No resume selected."
-            return
-        }
-        
         resetState()
         
         switch reviewType {

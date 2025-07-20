@@ -48,8 +48,7 @@ struct CoverLetterReviseButton: View {
     @MainActor
     private func reviseCoverLetter(modelId: String, operation: CoverLetterPrompts.EditorPrompts, feedback: String) async {
         guard let coverLetter = jobAppStore.selectedApp?.selectedCover,
-              let resume = jobAppStore.selectedApp?.selectedRes,
-              let jobApp = jobAppStore.selectedApp else {
+              let resume = jobAppStore.selectedApp?.selectedRes else {
             return
         }
         

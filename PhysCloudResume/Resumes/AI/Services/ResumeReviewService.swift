@@ -266,9 +266,6 @@ class ResumeReviewService: @unchecked Sendable {
                     throw NSError(domain: "ResumeReviewService", code: 1006, userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data for contents fit check"])
                 }
                 
-                // Check if we should use streaming for reasoning models
-                let shouldStream = supportsReasoning && onReasoningUpdate != nil
-                
                 // ContentsFit always uses images, so no streaming support
                 // Multimodal structured request
                 let response = try await llmService.executeStructuredWithImages(
