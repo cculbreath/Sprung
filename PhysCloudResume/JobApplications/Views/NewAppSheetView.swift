@@ -243,11 +243,11 @@ struct NewAppSheetView: View {
         }
         
         // Try direct LinkedIn extraction first
-        if let jobApp = await JobApp.extractLinkedInJobDetails(
+        if await JobApp.extractLinkedInJobDetails(
             from: url.absoluteString,
             jobAppStore: jobAppStore,
             sessionManager: linkedInSessionManager
-        ) {
+        ) != nil {
             await MainActor.run {
                 isLoading = false
                 isPresented = false
