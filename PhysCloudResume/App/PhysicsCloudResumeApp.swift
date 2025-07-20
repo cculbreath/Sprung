@@ -250,14 +250,14 @@ struct PhysicsCloudResumeApp: App {
 
 // Environment key for accessing AppState singleton
 struct AppStateKey: EnvironmentKey {
-    static let defaultValue: AppState = AppState.shared
+    nonisolated static let defaultValue: AppState = MainActor.assumeIsolated { AppState.shared }
 }
 
 extension EnvironmentValues {
     var appState: AppState {
         get { 
             // Always return the singleton instance
-            return AppState.shared
+            return MainActor.assumeIsolated { AppState.shared }
         }
         set { 
             // Singleton can't be replaced, but we maintain the interface for compatibility

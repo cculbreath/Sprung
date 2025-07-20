@@ -55,6 +55,7 @@ struct DropdownModelPicker: View {
             }
             .pickerStyle(.menu)
             .labelsHidden()
+            .id(enabledLLMStore.enabledModelIds) // Force refresh when enabled models change
             
             if appState.hasValidOpenRouterKey {
                 refreshButton
@@ -67,6 +68,17 @@ struct DropdownModelPicker: View {
                     await openRouterService.fetchModels()
                 }
             }
+        }
+        .onChange(of: enabledLLMStore.enabledModelIds) { _, newModelIds in
+            // Reset selection if the currently selected model is no longer enabled
+            if !newModelIds.contains(selectedModel) {
+                selectedModel = ""
+            }
+            Logger.debug("🔄 [DropdownModelPicker] Model list updated - \(newModelIds.count) enabled models")
+        }
+        .onChange(of: openRouterService.availableModels) { _, _ in
+            // Also refresh when the available models from OpenRouter change
+            Logger.debug("🔄 [DropdownModelPicker] Available models refreshed from OpenRouter")
         }
     }
     

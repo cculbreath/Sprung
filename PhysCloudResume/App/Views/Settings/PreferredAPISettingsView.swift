@@ -12,7 +12,7 @@ import SwiftUI
 enum apis: String, Identifiable, CaseIterable {
     var id: Self { self }
     case scrapingDog = "Scraping Dog"
-    case proxycurl = "Proxycurl"
+    case proxycurl = "Proxycurl (Deprecated)"
 }
 
 struct PreferredAPISettingsView: View {
@@ -28,15 +28,30 @@ struct PreferredAPISettingsView: View {
             // Radio group for selecting the preferred API
             Picker("Preferred API", selection: $preferredApi) {
                 ForEach(apis.allCases) { api in
-                    Text(api.rawValue).tag(api)
+                    HStack {
+                        Text(api.rawValue)
+                        if api == .proxycurl {
+                            Text("(Service Discontinued)")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .tag(api)
                 }
             }
             .pickerStyle(.radioGroup) // Use radio buttons for clear selection
             .horizontalRadioGroupLayout() // Arrange horizontally if desired
 
-            Text("Select the default API service for scraping job details from LinkedIn URLs.")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Select the default API service for scraping job details from LinkedIn URLs.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                if preferredApi == .proxycurl {
+                    Text("⚠️ Proxycurl has been discontinued. Please switch to Scraping Dog.")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
         }
         .padding(10)
         .background(Color(NSColor.windowBackgroundColor).opacity(0.9))

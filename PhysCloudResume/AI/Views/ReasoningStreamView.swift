@@ -186,7 +186,7 @@ struct ReasoningStreamView: View {
                             }
                         }
                         .background(Color(NSColor.textBackgroundColor))
-                        .onChange(of: reasoningText) { _ in
+                        .onChange(of: reasoningText) {
                             // Auto-scroll to bottom when new content arrives
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo("bottom", anchor: .bottom)
@@ -278,7 +278,7 @@ class ReasoningStreamManager {
     private var currentTask: Task<Void, Never>?
     
     /// Start processing a reasoning stream
-    func startStream<T: AsyncSequence>(_ stream: T) where T.Element == LLMStreamChunk {
+    func startStream<T: AsyncSequence>(_ stream: T) where T.Element == LLMStreamChunk, T: Sendable, T.AsyncIterator: Sendable {
         // Cancel any existing stream
         currentTask?.cancel()
         

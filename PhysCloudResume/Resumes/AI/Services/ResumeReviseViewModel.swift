@@ -1036,6 +1036,12 @@ class ResumeReviseViewModel {
                 return result
             } catch {
                 Logger.debug("❌ Direct JSON parsing failed: \(error)")
+                Logger.error("🚨 [JSON Debug] Full LLM response that failed direct parsing:")
+                Logger.error("📄 [JSON Debug] Response length: \(text.count) characters")
+                Logger.error("📄 [JSON Debug] Full response text:")
+                Logger.error("--- START RESPONSE ---")
+                Logger.error("\(text)")
+                Logger.error("--- END RESPONSE ---")
             }
         }
         
@@ -1048,10 +1054,28 @@ class ResumeReviseViewModel {
                 return result
             } catch {
                 Logger.debug("❌ Extracted JSON parsing failed: \(error)")
+                Logger.error("🚨 [JSON Debug] Extracted text that failed parsing:")
+                Logger.error("📄 [JSON Debug] Extracted length: \(cleanedText.count) characters")
+                Logger.error("📄 [JSON Debug] Extracted text:")
+                Logger.error("--- START EXTRACTED ---")
+                Logger.error("\(cleanedText)")
+                Logger.error("--- END EXTRACTED ---")
+                Logger.error("🔍 [JSON Debug] Expected type: \(String(describing: type))")
+                Logger.error("🔍 [JSON Debug] Decoding error details: \(error)")
             }
+        } else {
+            Logger.error("🚨 [JSON Debug] Could not convert extracted text to UTF-8 data")
+            Logger.error("📄 [JSON Debug] Original text length: \(text.count)")
+            Logger.error("📄 [JSON Debug] Extracted text: '\(cleanedText)'")
         }
         
-        throw LLMError.decodingFailed(NSError(domain: "ResumeReviseViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not parse JSON from response"]))
+        // If JSON parsing fails, include the full response in the error for debugging
+        let fullResponsePreview = text.count > 1000 ? "\(text.prefix(1000))...[truncated]" : text
+        let errorMessage = "Could not parse JSON from response. Full response: \(fullResponsePreview)"
+        throw LLMError.decodingFailed(NSError(domain: "ResumeReviseViewModel", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: errorMessage,
+            "fullResponse": text
+        ]))
     }
     
     /// Extract JSON from text that may contain other content
