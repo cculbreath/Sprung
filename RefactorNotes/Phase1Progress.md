@@ -182,7 +182,7 @@ All stores are `@Observable`, `@MainActor`, and conform to `SwiftDataStore` prot
 
 **Modified**:
 - `PhysCloudResume/App/Views/ContentViewLaunch.swift` (simplified from 48 to 39 lines)
-- `PhysCloudResume.xcodeproj/project.pbxproj` (added AppDependencies to build)
+- Project uses a file-system synchronized group; `AppDependencies.swift` is picked up without manual `project.pbxproj` edits.
 
 **Not Modified** (intentional):
 - `PhysCloudResume/App/PhysicsCloudResumeApp.swift` (deferred to `.task` pattern instead)
