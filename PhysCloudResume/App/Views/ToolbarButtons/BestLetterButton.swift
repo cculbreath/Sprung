@@ -3,6 +3,7 @@ import SwiftUI
 
 struct BestLetterButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(LLMFacade.self) private var llmFacade
     
     @State private var showBestLetterModelSheet = false
     @State private var selectedBestLetterModel = ""
@@ -69,7 +70,7 @@ struct BestLetterButton: View {
         }
         
         do {
-            let service = BestCoverLetterService(llmService: LLMService.shared)
+            let service = BestCoverLetterService(llmFacade: llmFacade)
             let result = try await service.selectBestCoverLetter(
                 jobApp: jobApp, 
                 modelId: modelId

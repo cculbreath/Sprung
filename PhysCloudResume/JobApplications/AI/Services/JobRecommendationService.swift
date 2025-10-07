@@ -13,7 +13,7 @@ import Foundation
 class JobRecommendationService {
     
     // MARK: - Dependencies
-    private let llmService: LLMService
+    private let llm: LLMFacade
     
     // MARK: - Configuration
     private let systemPrompt = """
@@ -24,8 +24,8 @@ class JobRecommendationService {
     IMPORTANT: Output ONLY the JSON object with the fields "recommendedJobId" and "reason". Do not include any additional commentary, explanation, or text outside the JSON.
     """
     
-    init(llmService: LLMService) {
-        self.llmService = llmService
+    init(llmFacade: LLMFacade) {
+        self.llm = llmFacade
     }
     
     // MARK: - Public Interface
@@ -70,8 +70,7 @@ class JobRecommendationService {
             throw JobRecommendationError.noNewJobApplications
         }
         
-        // Validate model capabilities
-        try llmService.validateModel(modelId: modelId, for: [])
+        // Note: Capability gating to be centralized in facade in a later slice
         
         // Build the recommendation prompt
         let prompt = buildPrompt(
@@ -89,10 +88,11 @@ class JobRecommendationService {
         Logger.debug("🎯 Requesting job recommendation with \(newJobApps.count) new jobs")
         
         // Execute structured request
-        let recommendation = try await llmService.executeStructured(
+        let recommendation: JobRecommendation = try await llm.executeStructured(
             prompt: "\(systemPrompt)\n\n\(prompt)",
             modelId: modelId,
-            responseType: JobRecommendation.self
+            as: JobRecommendation.self,
+            temperature: nil
         )
         
         // Validate response

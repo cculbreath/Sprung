@@ -39,7 +39,7 @@ enum BestCoverLetterError: LocalizedError {
 class BestCoverLetterService {
     
     // MARK: - Dependencies
-    private let llmService: LLMService
+    private let llm: LLMFacade
     
     // MARK: - Configuration
     private let systemPrompt = """
@@ -71,8 +71,8 @@ class BestCoverLetterService {
     IMPORTANT: The bestLetterUuid field must contain the exact UUID string from the cover letter you select. Do not modify the UUID format in any way. Output ONLY the JSON object with the specified fields.
     """
     
-    init(llmService: LLMService) {
-        self.llmService = llmService
+    init(llmFacade: LLMFacade) {
+        self.llm = llmFacade
     }
     
     // MARK: - Public Interface
@@ -93,8 +93,7 @@ class BestCoverLetterService {
             throw BestCoverLetterError.notEnoughCoverLetters
         }
         
-        // Validate model capabilities
-        try llmService.validateModel(modelId: modelId, for: [.structuredOutput])
+        // Note: Capability gating to be centralized in facade in a later slice
         
         // Build the selection prompt
         let prompt = buildPrompt(jobApp: jobApp, coverLetters: coverLetters)
@@ -107,10 +106,11 @@ class BestCoverLetterService {
         Logger.debug("🏆 Requesting best cover letter selection from \(coverLetters.count) letters")
         
         // Execute structured request
-        let response = try await llmService.executeStructured(
+        let response: BestCoverLetterResponse = try await llm.executeStructured(
             prompt: "\(systemPrompt)\n\n\(prompt)",
             modelId: modelId,
-            responseType: BestCoverLetterResponse.self
+            as: BestCoverLetterResponse.self,
+            temperature: nil
         )
         
         // Validate response based on voting scheme
