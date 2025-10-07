@@ -17,6 +17,8 @@ struct PhysicsCloudResumeApp: App {
     private let modelContainer: ModelContainer
     
     init() {
+        // Preflight backup before opening/migrating the store
+        SwiftDataBackupManager.performPreflightBackupIfNeeded()
         // Create the model container with migration support
         do {
             // Use the migration-aware container from SchemaVersioning
