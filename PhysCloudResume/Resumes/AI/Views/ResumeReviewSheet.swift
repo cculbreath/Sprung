@@ -13,6 +13,7 @@ struct ResumeReviewSheet: View {
 
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()
+    @Environment(LLMFacade.self) private var llmFacade
 
     @State private var selectedReviewType: ResumeReviewType = .assessQuality
     @State private var customOptions = CustomReviewOptions()
@@ -207,9 +208,7 @@ struct ResumeReviewSheet: View {
             // Note: Reasoning stream view is now displayed globally in the main app UI
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
-        .onAppear {
-            viewModel.initialize()
-        }
+        .onAppear { viewModel.initialize(llmFacade: llmFacade) }
     }
 
     // View for custom options (extracted for clarity) - Unchanged

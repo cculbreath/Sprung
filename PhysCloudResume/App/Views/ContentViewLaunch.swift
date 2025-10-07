@@ -21,6 +21,7 @@ struct ContentViewLaunch: View {
                     .environment(deps.coverLetterStore)
                     .environment(deps.enabledLLMStore)
                     .environment(deps.dragInfo)
+                    .environment(deps.llmFacade)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

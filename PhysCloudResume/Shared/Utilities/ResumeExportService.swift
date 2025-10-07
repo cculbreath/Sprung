@@ -52,61 +52,10 @@ class ResumeExportService: ObservableObject {
     
     @MainActor
     private func handleMissingTemplate(for resume: Resume) async throws {
-        // Show alert to user about missing template
-        let alert = NSAlert()
-        alert.messageText = "Template Not Found"
-        alert.informativeText = "The selected template could not be found. Please select custom template files to continue with native PDF generation."
-        alert.addButton(withTitle: "Select Templates")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .informational
-        
-        let response = alert.runModal()
-        guard response == .alertFirstButtonReturn else {
-            throw ResumeExportError.userCancelled
-        }
-        
-        // Prompt for HTML template
-        let htmlPanel = NSOpenPanel()
-        htmlPanel.title = "Select HTML Template"
-        htmlPanel.message = "Choose an HTML template file for PDF generation"
-        htmlPanel.allowedContentTypes = [UTType.html, UTType.text]
-        htmlPanel.allowsMultipleSelection = false
-        
-        guard htmlPanel.runModal() == .OK,
-              let htmlURL = htmlPanel.url,
-              let htmlContent = try? String(contentsOf: htmlURL, encoding: .utf8) else {
-            throw ResumeExportError.templateSelectionFailed
-        }
-        
-        // Prompt for CSS file (optional)
-        let cssAlert = NSAlert()
-        cssAlert.messageText = "CSS File"
-        cssAlert.informativeText = "Would you like to include a separate CSS file, or is the styling embedded in the HTML?"
-        cssAlert.addButton(withTitle: "Select CSS File")
-        cssAlert.addButton(withTitle: "Skip (Use Embedded CSS)")
-        cssAlert.addButton(withTitle: "Cancel")
-        
-        let cssResponse = cssAlert.runModal()
-        var finalHTMLContent = htmlContent
-        
-        if cssResponse == .alertFirstButtonReturn {
-            // User wants to select CSS file
-            let cssPanel = NSOpenPanel()
-            cssPanel.title = "Select CSS File"
-            cssPanel.message = "Choose a CSS file to include with the template"
-            cssPanel.allowedContentTypes = [UTType.text]
-            cssPanel.allowsMultipleSelection = false
-            
-            if cssPanel.runModal() == .OK,
-               let cssURL = cssPanel.url,
-               let cssContent = try? String(contentsOf: cssURL, encoding: .utf8) {
-                // Embed CSS into HTML
-                finalHTMLContent = embedCSSIntoHTML(html: htmlContent, css: cssContent)
-            }
-        } else if cssResponse == .alertThirdButtonReturn {
-            throw ResumeExportError.userCancelled
-        }
-        
+        // Use UI helper to request files
+        let selection = try ExportTemplateSelection.requestTemplateHTMLAndOptionalCSS()
+        var finalHTMLContent = ExportTemplateSelection.embedCSSIntoHTML(html: selection.html, css: selection.css)
+
         // Save the custom template to the resume model
         if resume.model == nil {
             // Create a new ResModel if none exists
@@ -129,19 +78,6 @@ class ResumeExportService: ObservableObject {
         // Generate text version (simplified)
         let textContent = try textGenerator.generateTextFromCustomTemplate(for: resume, customText: generateBasicTextTemplate())
         resume.textRes = textContent
-    }
-    
-    private func embedCSSIntoHTML(html: String, css: String) -> String {
-        // Look for </head> tag and insert CSS before it
-        let cssTag = "<style>\n\(css)\n</style>"
-        if let headEndRange = html.range(of: "</head>", options: .caseInsensitive) {
-            var modifiedHTML = html
-            modifiedHTML.insert(contentsOf: "\n\(cssTag)\n", at: headEndRange.lowerBound)
-            return modifiedHTML
-        } else {
-            // If no </head> found, prepend CSS in a style tag
-            return "<style>\n\(css)\n</style>\n\(html)"
-        }
     }
     
     private func generateBasicTextTemplate() -> String {
@@ -185,4 +121,3 @@ enum ResumeExportError: Error, LocalizedError {
         }
     }
 }
-

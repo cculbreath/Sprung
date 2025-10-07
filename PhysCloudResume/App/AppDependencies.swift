@@ -29,6 +29,7 @@ final class AppDependencies {
     // MARK: - Singletons (kept for now; refactor in later phases)
     private let appState: AppState
     private let llmService: LLMService
+    let llmFacade: LLMFacade
 
     // MARK: - Init
     init(modelContext: ModelContext) {
@@ -51,6 +52,9 @@ final class AppDependencies {
         // Singletons (Phase 6 refactor target)
         self.appState = AppState.shared
         self.llmService = LLMService.shared
+        // Phase 6: Introduce facade backed by SwiftOpenAI adapter
+        let client = SwiftOpenAIClient(executor: LLMRequestExecutor())
+        self.llmFacade = LLMFacade(client: client)
 
         // Bootstrap sequence
         DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
@@ -61,4 +65,3 @@ final class AppDependencies {
         Logger.debug("✅ AppDependencies: ready")
     }
 }
-

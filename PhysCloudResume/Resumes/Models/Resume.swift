@@ -82,9 +82,13 @@ class Resume: Identifiable, Hashable {
     @Transient
     var isExporting: Bool = false
     var jsonTxt: String {
-        if let myRoot = rootNode, let json = TreeToJson(rootNode: myRoot)?.buildJsonString() {
-            return json
-        } else { return "" }
+        guard let myRoot = rootNode, let builder = TreeToJson(rootNode: myRoot) else { return "" }
+        // Build via JSONSerialization for correctness
+        if let context = builder.buildContextDictionary(),
+           let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
+            return String(data: data, encoding: .utf8) ?? ""
+        }
+        return ""
     }
 
     func getUpdatableNodes() -> [[String: Any]] {

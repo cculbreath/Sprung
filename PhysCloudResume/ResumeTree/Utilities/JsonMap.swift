@@ -34,5 +34,24 @@ enum JsonMap {
         "more-info": .string,
         "include-fonts": .string,
     ]
+    /// Deterministic order for section emission
+    static let orderedSectionKeys: [String] = [
+        "meta",
+        "font-sizes",
+        "include-fonts",
+        "section-labels",
+        "contact",
+        "summary",
+        "job-titles",
+        "employment",
+        "education",
+        "skills-and-expertise",
+        "languages",
+        "projects-highlights",
+        "projects-and-hobbies",
+        "publications",
+        "keys-in-editor",
+        "more-info",
+    ]
     static let specialKeys: [String] = ["font-sizes", "include-fonts"]
 }
