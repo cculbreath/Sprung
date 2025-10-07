@@ -95,4 +95,21 @@ Phase 1 objective preview:
 - [ ] LLM streaming/structured output smoke captured (optional baseline; can defer to Phase 6)
 - [x] Tag created: `phase-0-checkpoint`
 
+## Phase 0 Complete ✅
+
+**Status**: Complete
+**Branch**: `refactor/phase-0-baseline`
+**Checkpoint Tag**: `phase-0-checkpoint` (commit bed0d70)
+**Completion Date**: 2025-10-07
+
+Phase 0 successfully established the baseline and prepared the project for systematic refactoring:
+- ✅ Codebase oriented and key architectural patterns identified
+- ✅ Build configuration verified (Xcode 16, macOS 26.0 deployment)
+- ✅ Baseline artifacts captured for regression testing
+- ✅ Entry points for all 9 refactor phases validated
+
+**Next Phase**: Phase 1 — Stabilize Store Lifetimes and DI Skeleton
+
+See `RefactorNotes/Phase1Progress.md` for Phase 1 implementation details.
+
 — End of Phase 0 progress —
