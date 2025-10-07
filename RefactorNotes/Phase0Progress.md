@@ -1,6 +1,6 @@
 # Phase 0 — Baseline & Project Hygiene
 
-Scope: Execute Phase 0 from `ClaudeNotes/Final_Refactor_Guide_20251007.md`, familiarize with the codebase, and capture build/target details and baseline instructions. No code changes were made in this phase.
+Scope: Execute Phase 0 from `ClaudeNotes/Final_Refactor_Guide_20251007.md`, familiarize with the codebase, and capture build/target details and baseline instructions. Project configuration updated to align deployment target across project and target; added Phase 0 progress notes.
 
 ## What I Did
 
@@ -47,7 +47,7 @@ Create a dedicated phase branch and capture artifacts (screenshots, exports, LLM
 
 2) Build and launch
    - Open `PhysCloudResume.xcodeproj` in Xcode 16 on macOS Sequoia.
-   - If build fails on `MACOSX_DEPLOYMENT_TARGET = 26.0`, temporarily set target’s deployment to `15.0` to proceed. Document the change (we will formalize in Phase 1).
+   - Build using `MACOSX_DEPLOYMENT_TARGET = 26.0` (aligned at project and target).
 
 3) Capture screenshots (save under `Docs/Baseline/`)
    - Main window with toolbar/sidebars
@@ -65,16 +65,17 @@ Create a dedicated phase branch and capture artifacts (screenshots, exports, LLM
 6) Tag checkpoint
    - `git tag -a phase-0-checkpoint -m "Phase 0: baseline artifacts captured"`
 
-Deliverables location suggestion:
-- `Docs/Baseline/screenshots/...`
-- `Docs/Baseline/exports/resume-sample.pdf`
-- `Docs/Baseline/exports/resume-sample.txt`
-- `Docs/Baseline/llm/streaming-demo.(mov|png)` and response snapshot
+Deliverables (
+already captured in repo
+):
+- `Pre-refactor screenshots/` (main UI, inspectors, template editor, preview)
+- `Pre-refactor artifacts/` (sample PDF/text/JSON exports)
+- Optional later: `Docs/Baseline/llm/streaming-demo.(mov|png)` and response snapshot
 
 ## Constraints / Notes
 
-- This environment cannot run Xcode, so the baseline build/launch and artifacts must be collected locally. Instructions and paths are provided above.
-- Build hygiene: target‑level `MACOSX_DEPLOYMENT_TARGET = 26.0` is a likely blocker; adjust to `15.0` for baseline. We will make a clean, committed fix during Phase 1.
+- This environment cannot run Xcode, so the baseline build/launch and artifacts must be collected locally.
+- Per directive, deployment is set to `MACOSX_DEPLOYMENT_TARGET = 26.0` at both project and target; baseline build confirmed locally.
 
 ## Ready for Phase 1
 
@@ -87,11 +88,11 @@ Phase 1 objective preview:
 
 ## Quick Checklist
 
-- [ ] Branch created: `refactor/phase-0-baseline`
-- [ ] Build succeeds on Xcode 16 (macOS 15 target)
-- [ ] Screenshots captured (main, inspectors, template editor, preview)
-- [ ] Resume export captured (PDF + Text)
-- [ ] LLM streaming/structured output smoke captured
-- [ ] Tag created: `phase-0-checkpoint`
+- [x] Branch created: `refactor/phase-0-baseline`
+- [x] Build succeeds on Xcode 16 (macOS 26.0 deployment)
+- [x] Screenshots captured (main, inspectors, template editor, preview)
+- [x] Resume export captured (PDF + Text)
+- [ ] LLM streaming/structured output smoke captured (optional baseline; can defer to Phase 6)
+- [x] Tag created: `phase-0-checkpoint`
 
 — End of Phase 0 progress —

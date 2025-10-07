@@ -7,42 +7,30 @@ struct ContentViewLaunch: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
 
-    // Create DragInfo instance here
-    @State private var dragInfo = DragInfo() // Use @State for Observable objects owned by the view
+    @State private var deps: AppDependencies?
 
     var body: some View {
-        // Initialise all stores once per scene.
-        let resStore = ResStore(context: modelContext)
-        let resRefStore = ResRefStore(context: modelContext)
-        let coverRefStore = CoverRefStore(context: modelContext)
-        let coverLetterStore = CoverLetterStore(context: modelContext, refStore: coverRefStore)
-        let jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
-        let resModelStore = ResModelStore(context: modelContext, resStore: resStore)
-        let enabledLLMStore = EnabledLLMStore(modelContext: modelContext)
-
-        // Inject all stores AND DragInfo into the environment
-        return ContentView()
-            .environment(jobAppStore)
-            .environment(resRefStore)
-            .environment(resModelStore)
-            .environment(resStore)
-            .environment(coverRefStore)
-            .environment(coverLetterStore)
-            .environment(enabledLLMStore)
-            .environment(dragInfo) // Inject DragInfo here
-            .onAppear {
-                // Check and migrate database if needed
-                DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
-                
-                // Initialize AppState with EnabledLLMStore and ModelContext
-                appState.initializeWithModelContext(modelContext, enabledLLMStore: enabledLLMStore)
-                
-                // Initialize LLMService with ModelContext
-                LLMService.shared.initialize(appState: appState, modelContext: modelContext)
-                
-                // Force reconfiguration to ensure API key is picked up
-                LLMService.shared.reconfigureClient()
+        Group {
+            if let deps {
+                ContentView()
+                    .environment(deps.jobAppStore)
+                    .environment(deps.resRefStore)
+                    .environment(deps.resModelStore)
+                    .environment(deps.resStore)
+                    .environment(deps.coverRefStore)
+                    .environment(deps.coverLetterStore)
+                    .environment(deps.enabledLLMStore)
+                    .environment(deps.dragInfo)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .task {
+            if deps == nil {
+                deps = AppDependencies(modelContext: modelContext)
+            }
+        }
         // Note: AppState is already injected via .environment(appState) in PhysicsCloudResumeApp
     }
 }
