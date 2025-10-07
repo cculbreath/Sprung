@@ -326,7 +326,7 @@ struct ResumeExportView: View {
         }
 
         let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
         // Create unique filename using the job position: e.g. "Software Engineer Resume.pdf"
         let (fileURL, filename) = createUniqueFileURL(
@@ -362,7 +362,7 @@ struct ResumeExportView: View {
             },
             onFinish: { [self] in
                 let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
-                let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+                let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
                 // Create unique filename using the job position: e.g. "Software Engineer Resume.txt"
                 let (fileURL, filename) = createUniqueFileURL(
@@ -390,7 +390,7 @@ struct ResumeExportView: View {
         }
 
         let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
         // Create unique filename using the job position: e.g. "Software Engineer Resume.json"
         let (fileURL, filename) = createUniqueFileURL(
@@ -417,7 +417,7 @@ struct ResumeExportView: View {
         }
 
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
         // Create unique filename using the job position: e.g. "Software Engineer Cover Letter.txt"
         let (fileURL, filename) = createUniqueFileURL(
@@ -443,7 +443,7 @@ struct ResumeExportView: View {
         }
 
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
         // Create unique filename using the job position: e.g. "Software Engineer Cover Letter.pdf"
         let (fileURL, filename) = createUniqueFileURL(
@@ -477,7 +477,7 @@ struct ResumeExportView: View {
         }
 
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
         // Create unique filename using the job position: e.g. "Software Engineer Application.pdf"
         let (fileURL, filename) = createUniqueFileURL(
@@ -516,7 +516,7 @@ struct ResumeExportView: View {
         }
 
         let jobPosition = jobApp.jobPosition
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
 
         // Create unique filename using the job position: e.g. "Software Engineer All Cover Letters.txt"
         let (textFileURL, textFilename) = createUniqueFileURL(

@@ -61,7 +61,7 @@ enum LeafStatus: String, Codable, Hashable {
         self.parent = parent
         self.status = status
         includeInEditor = inEditor
-        depth = parent != nil ? parent!.depth + 1 : 0
+        depth = parent.map { $0.depth + 1 } ?? 0
         self.resume = resume
         self.isTitleNode = isTitleNode // Initialize isTitleNode
     }

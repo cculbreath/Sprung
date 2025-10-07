@@ -36,7 +36,12 @@ class ImageConversionService {
         NSGraphicsContext.current?.imageInterpolation = .high
         NSColor.white.set() // Ensure a white background
         NSRect(origin: .zero, size: pageRect.size).fill()
-        pdfPage.draw(with: .mediaBox, to: NSGraphicsContext.current!.cgContext)
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            pdfPage.draw(with: .mediaBox, to: ctx)
+        } else {
+            renderer.unlockFocus()
+            return nil
+        }
         renderer.unlockFocus()
 
         guard let tiffData = renderer.tiffRepresentation,

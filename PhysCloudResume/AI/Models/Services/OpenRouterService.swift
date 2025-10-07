@@ -182,7 +182,9 @@ final class OpenRouterService {
         
         let count = pricingData.count
         Logger.debug("📊 Calculating pricing thresholds from \(count) models")
-        Logger.debug("💰 Price range: $\(String(format: "%.6f", pricingData.first!)) - $\(String(format: "%.6f", pricingData.last!))")
+        if let first = pricingData.first, let last = pricingData.last {
+            Logger.debug("💰 Price range: $\(String(format: "%.6f", first)) - $\(String(format: "%.6f", last))")
+        }
         
         // Use percentiles to create meaningful thresholds
         // Free models (0 cost) get their own tier

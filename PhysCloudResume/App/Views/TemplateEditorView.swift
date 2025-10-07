@@ -314,17 +314,17 @@ struct TemplateEditorView: View {
         let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
         
         // Try to load from Documents directory first (user modifications)
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let templatePath = documentsPath
-            .appendingPathComponent("PhysCloudResume")
-            .appendingPathComponent("Templates")
-            .appendingPathComponent(selectedTemplate)
-            .appendingPathComponent("\(resourceName).\(fileExtension)")
-        
-        if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
-            templateContent = content
-            hasChanges = false
-            return
+        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let templatePath = documentsPath
+                .appendingPathComponent("PhysCloudResume")
+                .appendingPathComponent("Templates")
+                .appendingPathComponent(selectedTemplate)
+                .appendingPathComponent("\(resourceName).\(fileExtension)")
+            if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
+                templateContent = content
+                hasChanges = false
+                return
+            }
         }
         
         // Debug: List bundle contents
@@ -388,7 +388,10 @@ struct TemplateEditorView: View {
         let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
         
         // Save to Documents directory
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            saveError = "Unable to locate Documents directory."
+            return
+        }
         let templateDir = documentsPath
             .appendingPathComponent("PhysCloudResume")
             .appendingPathComponent("Templates")
@@ -503,13 +506,14 @@ struct TemplateEditorView: View {
         guard availableTemplates.count > 1 else { return }
         
         // Remove from Documents directory if it exists
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let templateDir = documentsPath
-            .appendingPathComponent("PhysCloudResume")
-            .appendingPathComponent("Templates")
-            .appendingPathComponent(selectedTemplate)
+        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let templateDir = documentsPath
+                .appendingPathComponent("PhysCloudResume")
+                .appendingPathComponent("Templates")
+                .appendingPathComponent(selectedTemplate)
+            try? FileManager.default.removeItem(at: templateDir)
+        }
         
-        try? FileManager.default.removeItem(at: templateDir)
         
         // Remove from available templates
         availableTemplates.removeAll { $0 == selectedTemplate }

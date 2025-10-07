@@ -15,12 +15,14 @@ class FileHandler {
         // Ensure the Application Support directory exists
         let appSupportDirectory = fileManager.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
-        ).first!
+        ).first ?? FileManager.default.temporaryDirectory
         do {
             try fileManager.createDirectory(
                 at: appSupportDirectory, withIntermediateDirectories: true, attributes: nil
             )
-        } catch {}
+        } catch {
+            Logger.error("Failed to create Application Support directory: \(error)")
+        }
         return appSupportDirectory
     }()
 

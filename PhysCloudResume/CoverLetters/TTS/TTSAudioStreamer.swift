@@ -254,16 +254,17 @@ final class TTSAudioStreamer {
             currentStream = stream
         }
         // If still buffering initial chunks, accumulate until threshold reached
-        else if let currentInitialChunks = initialChunks {
-            initialChunks!.append(data)
-            Logger.debug("TTSAudioStreamer: Added chunk to buffer, now have \(currentInitialChunks.count + 1)/\(initialBufferChunkCount), total size: \(totalBufferedSize)")
+        else if var currentInitialChunks = initialChunks {
+            currentInitialChunks.append(data)
+            initialChunks = currentInitialChunks
+            Logger.debug("TTSAudioStreamer: Added chunk to buffer, now have \(currentInitialChunks.count)/\(initialBufferChunkCount), total size: \(totalBufferedSize)")
 
-            if currentInitialChunks.count + 1 >= initialBufferChunkCount {
+            if currentInitialChunks.count >= initialBufferChunkCount {
                 // Ready to start playback with buffered data
                 guard let cont = continuation, let stream = currentStream else {
                     return
                 }
-                let buffered = initialChunks!
+                let buffered = currentInitialChunks
                 initialChunks = nil
 
                 // Signal that we're done buffering

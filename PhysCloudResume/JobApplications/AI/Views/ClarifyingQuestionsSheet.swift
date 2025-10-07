@@ -216,17 +216,20 @@ struct TabNavigableTextEditor: NSViewRepresentable {
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
-        let textView = scrollView.documentView as! NSTextView
-        textView.delegate = context.coordinator
-        textView.string = text
-        textView.isRichText = false
-        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        textView.allowsUndo = true
+        if let textView = scrollView.documentView as? NSTextView {
+            textView.delegate = context.coordinator
+            textView.string = text
+            textView.isRichText = false
+            textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            textView.allowsUndo = true
+        } else {
+            Logger.error("ClarifyingQuestionsSheet: Expected NSTextView documentView not found")
+        }
         return scrollView
     }
     
     func updateNSView(_ nsView: NSScrollView, context: Context) {
-        let textView = nsView.documentView as! NSTextView
+        guard let textView = nsView.documentView as? NSTextView else { return }
         if textView.string != text {
             textView.string = text
         }

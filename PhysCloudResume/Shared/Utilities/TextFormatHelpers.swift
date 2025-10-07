@@ -122,7 +122,12 @@ struct TextFormatHelpers {
         var output = ""
         
         let trailingIndentMatch = separator.range(of: #"\s+$"#, options: .regularExpression)
-        let trailingIndent = trailingIndentMatch != nil ? String(separator[trailingIndentMatch!]) : ""
+        let trailingIndent: String
+        if let match = trailingIndentMatch {
+            trailingIndent = String(separator[match])
+        } else {
+            trailingIndent = ""
+        }
         
         for skill in skills {
             guard let title = skill["title"] as? String,

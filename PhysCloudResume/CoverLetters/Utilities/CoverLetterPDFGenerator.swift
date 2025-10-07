@@ -338,14 +338,22 @@ enum CoverLetterPDFGenerator {
 
         // Apply ultra-tight spacing between address and email lines
         if let addressRange = addressLineRange {
-            let addressPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
+            let addressPS = (paragraphStyle.copy() as? NSMutableParagraphStyle) ?? {
+                let s = NSMutableParagraphStyle()
+                s.setParagraphStyle(paragraphStyle)
+                return s
+            }()
             addressPS.paragraphSpacing = signatureSpacing // Remove paragraph spacing after address line
             attributedString.addAttribute(.paragraphStyle, value: addressPS, range: addressRange)
         }
 
         // Apply tight line spacing to the email/website line
         if let emailRange = emailLineRange {
-            let emailPS = paragraphStyle.mutableCopy() as! NSMutableParagraphStyle
+            let emailPS = (paragraphStyle.copy() as? NSMutableParagraphStyle) ?? {
+                let s = NSMutableParagraphStyle()
+                s.setParagraphStyle(paragraphStyle)
+                return s
+            }()
             emailPS.lineSpacing = contactLineSpacing // Much tighter line spacing
             attributedString.addAttribute(.paragraphStyle, value: emailPS, range: emailRange)
         }

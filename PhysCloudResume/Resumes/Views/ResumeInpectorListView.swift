@@ -83,7 +83,7 @@ struct ResumeRowView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
 
-            Text(resume.model!.name)
+            Text(resume.model?.name ?? "-")
                 .frame(width: 50, alignment: .trailing)
                 .lineLimit(1)
                 .truncationMode(.tail)

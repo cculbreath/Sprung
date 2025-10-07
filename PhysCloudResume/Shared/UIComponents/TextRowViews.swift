@@ -30,7 +30,7 @@ struct AlignedTextRow: View {
                 .foregroundColor(nodeStatus == .aiToReplace ? .accentColor : .secondary)
                 .fontWeight(nodeStatus == .aiToReplace ? .medium : .regular)
                 .frame(
-                    width: (trailingText == nil || trailingText!.isEmpty) ? nil : (leadingText.isEmpty ? 15 : indent),
+                    width: ((trailingText?.isEmpty ?? true) ? nil : (leadingText.isEmpty ? 15 : indent)),
                     alignment: .leading
                 )
             if let trailingText = trailingText, !trailingText.isEmpty {
