@@ -18,11 +18,16 @@ class CoverLetterService: ObservableObject {
     
     /// Conversation tracking
     internal var conversations: [UUID: UUID] = [:] // coverLetterId -> conversationId
+    private var llmFacade: LLMFacade?
     
     
     // MARK: - Initialization
     
     private init() {}
+
+    func configure(llmFacade: LLMFacade) {
+        self.llmFacade = llmFacade
+    }
     
     // MARK: - Cover Letter Generation
     
@@ -115,23 +120,38 @@ class CoverLetterService: ObservableObject {
         
         let response: String
         if isO1Model {
-            // For o1 models, combine system and user messages
             let combinedMessage = systemPrompt + "\n\n" + userMessage
-            response = try await LLMService.shared.execute(
-                prompt: combinedMessage,
-                modelId: modelId
-            )
+            if let facade = llmFacade {
+                response = try await facade.executeText(
+                    prompt: combinedMessage,
+                    modelId: modelId,
+                    temperature: nil
+                )
+            } else {
+                response = try await LLMService.shared.execute(
+                    prompt: combinedMessage,
+                    modelId: modelId
+                )
+            }
         } else {
-            // Start new conversation
-            let (conversationId, initialResponse) = try await LLMService.shared.startConversation(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId
-            )
-            
-            // Store conversation ID for this cover letter
-            conversations[coverLetter.id] = conversationId
-            response = initialResponse
+            if let facade = llmFacade {
+                let (conversationId, initialResponse) = try await facade.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userMessage,
+                    modelId: modelId,
+                    temperature: nil
+                )
+                conversations[coverLetter.id] = conversationId
+                response = initialResponse
+            } else {
+                let (conversationId, initialResponse) = try await LLMService.shared.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userMessage,
+                    modelId: modelId
+                )
+                conversations[coverLetter.id] = conversationId
+                response = initialResponse
+            }
         }
         
         // Extract cover letter content from response
@@ -182,24 +202,41 @@ class CoverLetterService: ObservableObject {
         // Check if we have an existing conversation
         let response: String
         if let conversationId = conversations[coverLetter.id] {
-            // Continue existing conversation
-            response = try await LLMService.shared.continueConversation(
-                userMessage: userMessage,
-                modelId: modelId,
-                conversationId: conversationId
-            )
+            if let facade = llmFacade {
+                response = try await facade.continueConversation(
+                    userMessage: userMessage,
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    images: [],
+                    temperature: nil
+                )
+            } else {
+                response = try await LLMService.shared.continueConversation(
+                    userMessage: userMessage,
+                    modelId: modelId,
+                    conversationId: conversationId
+                )
+            }
         } else {
-            // Start new conversation if needed (shouldn't normally happen for revisions)
             let systemPrompt = query.systemPrompt(for: modelId)
-            
-            let (conversationId, initialResponse) = try await LLMService.shared.startConversation(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId
-            )
-            
-            conversations[coverLetter.id] = conversationId
-            response = initialResponse
+            if let facade = llmFacade {
+                let (conversationId, initialResponse) = try await facade.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userMessage,
+                    modelId: modelId,
+                    temperature: nil
+                )
+                conversations[coverLetter.id] = conversationId
+                response = initialResponse
+            } else {
+                let (conversationId, initialResponse) = try await LLMService.shared.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: userMessage,
+                    modelId: modelId
+                )
+                conversations[coverLetter.id] = conversationId
+                response = initialResponse
+            }
         }
         
         // Extract cover letter content from response

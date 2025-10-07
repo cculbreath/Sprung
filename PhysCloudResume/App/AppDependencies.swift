@@ -61,6 +61,7 @@ final class AppDependencies {
         appState.initializeWithModelContext(modelContext, enabledLLMStore: enabledLLMStore)
         llmService.initialize(appState: appState, modelContext: modelContext)
         llmService.reconfigureClient()
+        CoverLetterService.shared.configure(llmFacade: llmFacade)
 
         Logger.debug("✅ AppDependencies: ready")
     }

@@ -8,6 +8,11 @@
 import Foundation
 
 class CoverLetterCommitteeSummaryGenerator {
+    private var llmFacade: LLMFacade?
+    
+    func configure(llmFacade: LLMFacade) {
+        self.llmFacade = llmFacade
+    }
     
     @MainActor
     func generateSummary(
@@ -101,17 +106,26 @@ class CoverLetterCommitteeSummaryGenerator {
             selectedVotingScheme: selectedVotingScheme
         )
         
-        let llmService = LLMService.shared
-        
         let jsonSchema = createJSONSchema()
-        
-        let summaryResponse = try await llmService.executeStructured(
-            prompt: summaryPrompt,
-            modelId: "openai/o3",
-            responseType: CommitteeSummaryResponse.self,
-            temperature: 0.7,
-            jsonSchema: jsonSchema
-        )
+        let summaryResponse: CommitteeSummaryResponse
+        if let facade = llmFacade {
+            summaryResponse = try await facade.executeStructured(
+                prompt: summaryPrompt,
+                modelId: "openai/o3",
+                as: CommitteeSummaryResponse.self,
+                temperature: 0.7,
+                jsonSchema: jsonSchema
+            )
+        } else {
+            let llmService = LLMService.shared
+            summaryResponse = try await llmService.executeStructured(
+                prompt: summaryPrompt,
+                modelId: "openai/o3",
+                responseType: CommitteeSummaryResponse.self,
+                temperature: 0.7,
+                jsonSchema: jsonSchema
+            )
+        }
         
         Logger.debug("🔍 Processing \(summaryResponse.letterAnalyses.count) letter analyses")
         for analysis in summaryResponse.letterAnalyses {

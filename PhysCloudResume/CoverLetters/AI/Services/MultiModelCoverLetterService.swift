@@ -38,17 +38,20 @@ class MultiModelCoverLetterService {
     private weak var jobAppStore: JobAppStore?
     private weak var coverLetterStore: CoverLetterStore?
     private weak var enabledLLMStore: EnabledLLMStore?
+    private var llmFacade: LLMFacade?
     private var modelContext: ModelContext?
     
     // MARK: - Initialization
     init() {}
     
-    func configure(appState: AppState, jobAppStore: JobAppStore, coverLetterStore: CoverLetterStore, enabledLLMStore: EnabledLLMStore) {
+    func configure(appState: AppState, jobAppStore: JobAppStore, coverLetterStore: CoverLetterStore, enabledLLMStore: EnabledLLMStore, llmFacade: LLMFacade) {
         self.appState = appState
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.enabledLLMStore = enabledLLMStore
         self.modelContext = coverLetterStore.modelContext
+        self.llmFacade = llmFacade
+        summaryGenerator.configure(llmFacade: llmFacade)
     }
     
     // MARK: - Public Methods
@@ -248,14 +251,24 @@ class MultiModelCoverLetterService {
                             // Check for cancellation before starting this model
                             try Task.checkCancellation()
                             
-                            let response = try await LLMService.shared.executeFlexibleJSON(
-                                prompt: prompt,
-                                modelId: modelId,
-                                responseType: BestCoverLetterResponse.self,
-                                temperature: nil,
-                                jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
-                            )
-                            return (modelId, .success(response))
+                    guard let facade = llmFacade else {
+                        let response = try await LLMService.shared.executeFlexibleJSON(
+                            prompt: prompt,
+                            modelId: modelId,
+                            responseType: BestCoverLetterResponse.self,
+                            temperature: nil,
+                            jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
+                        )
+                        return (modelId, .success(response))
+                    }
+                    let response = try await facade.executeFlexibleJSON(
+                        prompt: prompt,
+                        modelId: modelId,
+                        as: BestCoverLetterResponse.self,
+                        temperature: nil,
+                        jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
+                    )
+                    return (modelId, .success(response))
                         } catch {
                             return (modelId, .failure(error))
                         }
