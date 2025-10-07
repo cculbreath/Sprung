@@ -65,10 +65,10 @@ struct AppWindowView: View {
             
             // Initialize ResumeReviseViewModel if not already created
             if resumeReviseViewModel == nil {
-                resumeReviseViewModel = ResumeReviseViewModel(
-                    llmService: LLMService.shared,
-                    appState: appState
-                )
+                // Use the instance initialized in ContentView via AppState if available
+                if let existing = appState.resumeReviseViewModel {
+                    resumeReviseViewModel = existing
+                }
             }
         }
         .modifier(AppWindowViewModifiers(
@@ -335,6 +335,5 @@ struct AppWindowViewModifiers: ViewModifier {
         return step3
     }
 }
-
 
 
