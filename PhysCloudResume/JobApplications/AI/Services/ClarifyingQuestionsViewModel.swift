@@ -15,7 +15,7 @@ import SwiftUI
 class ClarifyingQuestionsViewModel {
     
     // MARK: - Dependencies
-    private let llmService: LLMService
+    private let llm: LLMFacade
     private let appState: AppState
     
     // MARK: - UI State
@@ -31,8 +31,8 @@ class ClarifyingQuestionsViewModel {
     var lastError: String?
     var showError: Bool = false
     
-    init(llmService: LLMService, appState: AppState) {
-        self.llmService = llmService
+    init(llmFacade: LLMFacade, appState: AppState) {
+        self.llm = llmFacade
         self.appState = appState
     }
     
@@ -79,7 +79,7 @@ class ClarifyingQuestionsViewModel {
                 )
                 
                 // Start streaming conversation with reasoning
-                let (conversationId, stream) = try await llmService.startConversationStreaming(
+                let (conversationId, stream) = try await llm.startConversationStreaming(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
                     modelId: modelId,
@@ -207,7 +207,7 @@ class ClarifyingQuestionsViewModel {
             appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
             
             // Stream the answer processing
-            let stream = llmService.continueConversationStreaming(
+            let stream = llm.continueConversationStreaming(
                 userMessage: answerPrompt,
                 modelId: modelId,
                 conversationId: conversationId,
@@ -231,7 +231,7 @@ class ClarifyingQuestionsViewModel {
             // Use non-streaming for models without reasoning
             Logger.info("📝 Using non-streaming for clarifying question answers: \(modelId)")
             
-            let _ = try await llmService.continueConversation(
+            let _ = try await llm.continueConversation(
                 userMessage: answerPrompt,
                 modelId: modelId,
                 conversationId: conversationId

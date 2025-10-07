@@ -4,6 +4,7 @@ import SwiftUI
 struct ClarifyingQuestionsButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(AppState.self) private var appState: AppState
+    @Environment(LLMFacade.self) private var llmFacade
     
     @Binding var selectedTab: TabList
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
@@ -90,10 +91,7 @@ struct ClarifyingQuestionsButton: View {
         }
         
         do {
-            let clarifyingViewModel = ClarifyingQuestionsViewModel(
-                llmService: LLMService.shared,
-                appState: appState
-            )
+            let clarifyingViewModel = ClarifyingQuestionsViewModel(llmFacade: llmFacade, appState: appState)
             clarifyingQuestionsViewModel = clarifyingViewModel
             
             try await clarifyingViewModel.startClarifyingQuestionsWorkflow(
