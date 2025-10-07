@@ -64,4 +64,7 @@ extension Notification.Name {
     static let exportCoverLetterText = Notification.Name("exportCoverLetterText")
     static let exportAllCoverLetters = Notification.Name("exportAllCoverLetters")
     static let exportApplicationPacket = Notification.Name("exportApplicationPacket")
+
+    // Settings/Configuration
+    static let apiKeysChanged = Notification.Name("apiKeysChanged")
 }

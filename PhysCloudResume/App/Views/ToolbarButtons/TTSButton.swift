@@ -14,7 +14,6 @@ struct TTSButton: View {
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
-    @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
     
     @State private var ttsViewModel: TTSViewModel?
     @State private var ttsProvider: OpenAITTSProvider?
@@ -89,7 +88,10 @@ struct TTSButton: View {
         .onAppear {
             setupTTS()
         }
-        .onChange(of: openAiApiKey) { _, _ in
+        .onChange(of: ttsEnabled) { _, _ in
+            setupTTS()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
             setupTTS()
         }
         .onReceive(NotificationCenter.default.publisher(for: .triggerTTSButton)) { _ in
@@ -132,14 +134,14 @@ struct TTSButton: View {
     }
     
     private func setupTTS() {
-        guard ttsEnabled, !openAiApiKey.isEmpty, openAiApiKey != "none" else {
+        guard ttsEnabled, appState.hasValidOpenAiKey, let key = APIKeyManager.get(.openAI), !key.isEmpty else {
             ttsProvider = nil
             ttsViewModel = nil
             return
         }
         
         // Create TTS provider and view model
-        let provider = OpenAITTSProvider(apiKey: openAiApiKey)
+        let provider = OpenAITTSProvider(apiKey: key)
         let viewModel = TTSViewModel(ttsProvider: provider)
         
         ttsProvider = provider
