@@ -4,6 +4,7 @@ import SwiftUI
 struct BestJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(AppState.self) private var appState: AppState
+    @Environment(LLMFacade.self) private var llmFacade
     
     @State private var showBestJobModelSheet = false
     @State private var selectedBestJobModel = ""
@@ -69,7 +70,7 @@ struct BestJobButton: View {
         includeCoverLetterBackground: Bool
     ) async {
         do {
-            let service = JobRecommendationService(llmService: LLMService.shared)
+            let service = JobRecommendationService(llmFacade: llmFacade)
             
             let (jobId, reason) = try await service.fetchRecommendation(
                 jobApps: jobAppStore.jobApps,
