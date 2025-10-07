@@ -26,12 +26,20 @@ struct ImageButton: View {
         action: @escaping () -> Void
     ) {
         // Validation: Ensure either systemName or name is provided, but not both or none
-        if (systemName == nil && name == nil) || (systemName != nil && name != nil) {
-            fatalError("You must provide either `systemName` or `name`, but not both or none.")
+        let hasSystem = (systemName != nil)
+        let hasName = (name != nil)
+        var resolvedSystemName = systemName
+        var resolvedName = name
+        if (!hasSystem && !hasName) || (hasSystem && hasName) {
+            Logger.error("ImageButton misconfigured: provide either `systemName` or `name` (but not both)")
+            // Fallback to a safe system image
+            resolvedSystemName = "questionmark.circle"
+            resolvedName = nil
         }
+
         self.imageSize = imageSize
-        self.systemName = systemName
-        self.name = name
+        self.systemName = resolvedSystemName
+        self.name = resolvedName
         self.defaultColor = defaultColor
         self.activeColor = activeColor
         self.externalIsActive = isActive
