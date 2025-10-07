@@ -12,9 +12,11 @@ import Observation
 @Observable
 final class LLMFacade {
     private let client: LLMClient
+    private let llmService: LLMService // temporary bridge for conversation flows
 
-    init(client: LLMClient) {
+    init(client: LLMClient, llmService: LLMService) {
         self.client = client
+        self.llmService = llmService
     }
 
     // Text
@@ -39,5 +41,90 @@ final class LLMFacade {
     func startStreaming(prompt: String, modelId: String, temperature: Double? = nil) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
         return client.startStreaming(prompt: prompt, modelId: modelId, temperature: temperature)
     }
-}
 
+    // MARK: - Conversation (temporary pass-through to LLMService)
+
+    func startConversationStreaming(
+        systemPrompt: String? = nil,
+        userMessage: String,
+        modelId: String,
+        temperature: Double? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> (UUID, AsyncThrowingStream<LLMStreamChunkDTO, Error>) {
+        let (id, stream) = try await llmService.startConversationStreaming(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: modelId,
+            temperature: temperature,
+            reasoning: reasoning,
+            jsonSchema: jsonSchema
+        )
+        let mapped = AsyncThrowingStream<LLMStreamChunkDTO, Error> { continuation in
+            Task {
+                do {
+                    for try await c in stream {
+                        let dto = LLMStreamChunkDTO(
+                            content: c.content,
+                            reasoning: c.reasoningContent,
+                            isFinished: c.isFinished,
+                            finishReason: c.finishReason
+                        )
+                        continuation.yield(dto)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+        return (id, mapped)
+    }
+
+    func continueConversationStreaming(
+        userMessage: String,
+        modelId: String,
+        conversationId: UUID,
+        reasoning: OpenRouterReasoning? = nil
+    ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
+        let stream = llmService.continueConversationStreaming(
+            userMessage: userMessage,
+            modelId: modelId,
+            conversationId: conversationId,
+            reasoning: reasoning
+        )
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    for try await c in stream {
+                        continuation.yield(LLMStreamChunkDTO(
+                            content: c.content,
+                            reasoning: c.reasoningContent,
+                            isFinished: c.isFinished,
+                            finishReason: c.finishReason
+                        ))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    func continueConversation(
+        userMessage: String,
+        modelId: String,
+        conversationId: UUID,
+        images: [Data] = [],
+        temperature: Double? = nil
+    ) async throws -> String {
+        return try await llmService.continueConversation(
+            userMessage: userMessage,
+            modelId: modelId,
+            conversationId: conversationId,
+            images: images,
+            temperature: temperature
+        )
+    }
+}
