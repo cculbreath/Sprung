@@ -54,7 +54,7 @@ final class AppDependencies {
         self.llmService = LLMService.shared
         // Phase 6: Introduce facade backed by SwiftOpenAI adapter and temporarily bridge conversation flows
         let client = SwiftOpenAIClient(executor: LLMRequestExecutor())
-        self.llmFacade = LLMFacade(client: client, llmService: llmService)
+        self.llmFacade = LLMFacade(client: client, llmService: llmService, appState: appState, enabledLLMStore: enabledLLMStore)
 
         // Bootstrap sequence
         DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)

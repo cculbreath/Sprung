@@ -15,8 +15,8 @@ import SwiftUI
 class ApplicationReviewService: @unchecked Sendable {
     // MARK: - Properties
     
-    /// The LLM service for AI operations
-    private let llmService: LLMService
+    /// The LLM facade for AI operations
+    private let llm: LLMFacade
     
     /// The query service for prompts
     private let query = ApplicationReviewQuery()
@@ -27,14 +27,8 @@ class ApplicationReviewService: @unchecked Sendable {
     // MARK: - Initialization
     
     /// Initialize with LLM service
-    init(llmService: LLMService) {
-        self.llmService = llmService
-    }
-    
-    /// Convenience initializer that uses the shared LLM service
-    @MainActor
-    convenience init() {
-        self.init(llmService: LLMService.shared)
+    init(llmFacade: LLMFacade) {
+        self.llm = llmFacade
     }
     
 
@@ -125,7 +119,7 @@ class ApplicationReviewService: @unchecked Sendable {
                 if !imageData.isEmpty {
                     // Image request requires multimodal handling
                     Logger.debug("📸 [ApplicationReview] Using image-based request path")
-                    response = try await llmService.executeWithImages(
+                    response = try await llm.executeTextWithImages(
                         prompt: fullPrompt,
                         modelId: modelId,
                         images: imageData
@@ -133,7 +127,7 @@ class ApplicationReviewService: @unchecked Sendable {
                 } else {
                     // Text-only request
                     Logger.debug("📤 [ApplicationReview] Sending text-only request")
-                    response = try await llmService.execute(
+                    response = try await llm.executeText(
                         prompt: fullPrompt,
                         modelId: modelId
                     )
@@ -168,7 +162,7 @@ class ApplicationReviewService: @unchecked Sendable {
     /// Cancel the current request
     func cancelRequest() {
         if let requestID = currentRequestID {
-            llmService.cancelAllRequests()
+            llm.cancelAllRequests()
             Logger.debug("🚫 [ApplicationReview] Cancelled request: \(requestID)")
         }
         currentRequestID = nil
