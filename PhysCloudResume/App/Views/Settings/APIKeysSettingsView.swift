@@ -95,6 +95,7 @@ struct APIKeysSettingsView: View {
                             }
                         }
                         updateLLMClient()
+                        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
                     }
                 )
                 
@@ -121,7 +122,17 @@ struct APIKeysSettingsView: View {
                     isEditing: $isEditingOpenAITTS,
                     editedValue: $editedOpenAiTTSApiKey,
                     isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark
+                    isHoveringXmark: $isHoveringXmark,
+                    onSave: {
+                        // Persist OpenAI key to Keychain
+                        let keyToStore = openAiTTSApiKey == "none" ? "" : openAiTTSApiKey
+                        if !keyToStore.isEmpty {
+                            _ = APIKeyManager.set(.openAI, value: keyToStore)
+                        } else {
+                            APIKeyManager.delete(.openAI)
+                        }
+                        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
+                    }
                 )
                 
                 Divider()

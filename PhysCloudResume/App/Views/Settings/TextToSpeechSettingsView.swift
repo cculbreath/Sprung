@@ -10,7 +10,7 @@ import SwiftUI
 
 struct TextToSpeechSettingsView: View {
     // AppStorage properties specific to this view
-    @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
+    @Environment(\.appState) private var appState
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
@@ -40,10 +40,10 @@ struct TextToSpeechSettingsView: View {
             // Enable TTS Toggle
             Toggle("Enable Text-to-Speech", isOn: $ttsEnabled)
                 .toggleStyle(.switch)
-                .disabled(openAiApiKey == "none") // Disable if no API key
+                .disabled(!appState.hasValidOpenAiKey) // Disable if no API key
                 .onChange(of: ttsEnabled) { _, newValue in
                     // Initialize or deinitialize TTS provider based on toggle
-                    if newValue && openAiApiKey != "none" {
+                    if newValue && appState.hasValidOpenAiKey {
                         initializeTTSProvider()
                     } else {
                         ttsProvider = nil // Release provider if disabled or key removed
@@ -51,14 +51,14 @@ struct TextToSpeechSettingsView: View {
                 }
 
             // Show message if API key is missing
-            if openAiApiKey == "none" {
+            if !appState.hasValidOpenAiKey {
                 Text("Add OpenAI API key to enable TTS.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
 
             // Show TTS options only if enabled
-            if ttsEnabled && openAiApiKey != "none" {
+            if ttsEnabled && appState.hasValidOpenAiKey {
                 Divider().padding(.vertical, 5)
 
                 // Voice Selection
@@ -131,18 +131,16 @@ struct TextToSpeechSettingsView: View {
                 .stroke(Color.gray.opacity(0.7), lineWidth: 1)
         )
         .onAppear {
-            // Initialize TTS provider on appear if enabled and key exists
-            if ttsEnabled && openAiApiKey != "none" {
-                initializeTTSProvider()
-            }
+            if ttsEnabled && appState.hasValidOpenAiKey { initializeTTSProvider() }
         }
-        .onChange(of: openAiApiKey) { _, newKey in
-            // Re-initialize provider if key changes and TTS is enabled
-            if ttsEnabled && newKey != "none" {
+        .onChange(of: ttsEnabled) { _, enabled in
+            if enabled { initializeTTSProvider() } else { ttsProvider = nil }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
+            if ttsEnabled && appState.hasValidOpenAiKey {
                 initializeTTSProvider()
             } else {
-                ttsProvider = nil // Deinitialize if key becomes invalid
-                ttsEnabled = false // Disable TTS if key removed
+                ttsProvider = nil
             }
         }
         .alert("TTS Error", isPresented: $showTTSErrorAlert) { // Use unique binding name
@@ -155,8 +153,10 @@ struct TextToSpeechSettingsView: View {
     // Initialize or update the TTS provider
     private func initializeTTSProvider() {
         // Avoid re-initializing if the key hasn't changed
-        if ttsProvider?.apiKey != openAiApiKey {
-            ttsProvider = OpenAITTSProvider(apiKey: openAiApiKey)
+        if let key = APIKeyManager.get(.openAI) {
+            if ttsProvider?.apiKey != key { ttsProvider = OpenAITTSProvider(apiKey: key) }
+        } else {
+            ttsProvider = nil
         }
     }
 
