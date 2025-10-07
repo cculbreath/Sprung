@@ -30,8 +30,8 @@ class ResumeReviewViewModel {
     
     // MARK: - Initialization
     
-    func initialize() {
-        reviewService = ResumeReviewService(llmService: LLMService.shared)
+    func initialize(llmFacade: LLMFacade) {
+        reviewService = ResumeReviewService(llmFacade: llmFacade)
         reviewService?.initialize()
         if let svc = reviewService {
             fixOverflowService = FixOverflowService(reviewService: svc)

@@ -22,7 +22,7 @@ class TreeToJson {
 
     func buildJsonString() -> String {
         var jsonComponents: [String] = []
-        for sectionKey in JsonMap.sectionKeyToTypeDict.keys {
+        for sectionKey in JsonMap.orderedSectionKeys {
             guard let sectionType = JsonMap.sectionKeyToTypeDict[sectionKey] else {
                 return ""
             }

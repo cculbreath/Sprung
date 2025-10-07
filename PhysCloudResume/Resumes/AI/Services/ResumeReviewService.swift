@@ -10,7 +10,7 @@ class ResumeReviewService: @unchecked Sendable {
     // MARK: - Properties
     
     /// The LLM service for AI operations
-    private let llmService: LLMService
+    private let llm: LLMFacade
     
     /// The query service for prompts
     private let query = ResumeReviewQuery()
@@ -19,8 +19,8 @@ class ResumeReviewService: @unchecked Sendable {
     private var currentRequestID: UUID?
     
     /// Initialize with LLM service
-    init(llmService: LLMService) {
-        self.llmService = llmService
+    init(llmFacade: LLMFacade) {
+        self.llm = llmFacade
     }
     
     // MARK: - Initialization
@@ -84,17 +84,10 @@ class ResumeReviewService: @unchecked Sendable {
                 let response: String
                 if imageData.isEmpty {
                     // Text-only request
-                    response = try await llmService.execute(
-                        prompt: promptText,
-                        modelId: modelId
-                    )
+                    response = try await llm.executeText(prompt: promptText, modelId: modelId, temperature: nil)
                 } else {
-                    // Multimodal request  
-                    response = try await llmService.executeWithImages(
-                        prompt: promptText,
-                        modelId: modelId,
-                        images: imageData
-                    )
+                    // Multimodal request
+                    response = try await llm.executeTextWithImages(prompt: promptText, modelId: modelId, images: imageData, temperature: nil)
                 }
                 
                 // Check if request was cancelled
@@ -183,11 +176,7 @@ class ResumeReviewService: @unchecked Sendable {
                         )
                         
                         // Text-only structured request for Grok
-                        response = try await llmService.executeStructured(
-                            prompt: grokPrompt,
-                            modelId: modelId,
-                            responseType: FixFitsResponseContainer.self
-                        )
+                        response = try await llm.executeStructured(prompt: grokPrompt, modelId: modelId, as: FixFitsResponseContainer.self, temperature: nil)
                     } else {
                         Logger.debug("Using standard image-based approach for fix fits request")
                         
@@ -203,12 +192,7 @@ class ResumeReviewService: @unchecked Sendable {
                         }
                         
                         // Multimodal structured request
-                        response = try await llmService.executeStructuredWithImages(
-                            prompt: prompt,
-                            modelId: modelId,
-                            images: [imageData],
-                            responseType: FixFitsResponseContainer.self
-                        )
+                        response = try await llm.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: [imageData], as: FixFitsResponseContainer.self, temperature: nil)
                     }
                 }
                 
