@@ -71,6 +71,23 @@ final class LLMFacade {
         return try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
     }
 
+    func executeFlexibleJSON<T: Decodable & Sendable>(
+        prompt: String,
+        modelId: String,
+        as type: T.Type,
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> T {
+        try validate(modelId: modelId, requires: [])
+        return try await llmService.executeFlexibleJSON(
+            prompt: prompt,
+            modelId: modelId,
+            responseType: type,
+            temperature: temperature,
+            jsonSchema: jsonSchema
+        )
+    }
+
     // Streaming
     func startStreaming(prompt: String, modelId: String, temperature: Double? = nil) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
         do {

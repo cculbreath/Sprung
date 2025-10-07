@@ -6,11 +6,39 @@ class BatchCoverLetterGenerator {
     private let appState: AppState
     private let jobAppStore: JobAppStore
     private let coverLetterStore: CoverLetterStore
+    private let llmFacade: LLMFacade
     
-    init(appState: AppState, jobAppStore: JobAppStore, coverLetterStore: CoverLetterStore) {
+    init(appState: AppState, jobAppStore: JobAppStore, coverLetterStore: CoverLetterStore, llmFacade: LLMFacade) {
         self.appState = appState
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
+        self.llmFacade = llmFacade
+    }
+
+    private func executeText(_ prompt: String, modelId: String) async throws -> String {
+        if let facade = Optional(llmFacade) {
+            return try await facade.executeText(prompt: prompt, modelId: modelId, temperature: nil)
+        }
+        return try await LLMService.shared.execute(prompt: prompt, modelId: modelId)
+    }
+
+    private func startConversation(systemPrompt: String?, userMessage: String, modelId: String) async throws -> (UUID, String) {
+        return try await llmFacade.startConversation(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: modelId,
+            temperature: nil
+        )
+    }
+
+    private func continueConversation(userMessage: String, modelId: String, conversationId: UUID) async throws -> String {
+        return try await llmFacade.continueConversation(
+            userMessage: userMessage,
+            modelId: modelId,
+            conversationId: conversationId,
+            images: [],
+            temperature: nil
+        )
     }
     
     /// Generates cover letters in batch for multiple models and revisions
@@ -285,15 +313,14 @@ class BatchCoverLetterGenerator {
             
             // Check if we have an existing conversation for revisions
             if let conversationId = CoverLetterService.shared.conversations[baseCoverLetter.id] {
-                responseText = try await LLMService.shared.continueConversation(
+                responseText = try await continueConversation(
                     userMessage: userMessage,
                     modelId: model,
                     conversationId: conversationId
                 )
             } else {
-                // Start new conversation for revision
                 let systemPrompt = query.systemPrompt(for: model)
-                let (_, initialResponse) = try await LLMService.shared.startConversation(
+                let (_, initialResponse) = try await startConversation(
                     systemPrompt: systemPrompt,
                     userMessage: userMessage,
                     modelId: model
@@ -319,15 +346,10 @@ class BatchCoverLetterGenerator {
             let isO1Model = CoverLetterService.shared.isReasoningModel(model)
             
             if isO1Model {
-                // For o1 models, combine system and user messages
                 let combinedMessage = systemPrompt + "\n\n" + userMessage
-                responseText = try await LLMService.shared.execute(
-                    prompt: combinedMessage,
-                    modelId: model
-                )
+                responseText = try await executeText(combinedMessage, modelId: model)
             } else {
-                // Start new conversation
-                let (_, initialResponse) = try await LLMService.shared.startConversation(
+                let (_, initialResponse) = try await startConversation(
                     systemPrompt: systemPrompt,
                     userMessage: userMessage,
                     modelId: model
@@ -420,4 +442,3 @@ private struct GenerationResult {
         self.generatedLetter = generatedLetter
     }
 }
-
