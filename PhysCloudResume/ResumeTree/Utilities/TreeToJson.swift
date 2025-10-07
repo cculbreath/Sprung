@@ -39,6 +39,19 @@ class TreeToJson {
         return "{\n\(jsonComponents.joined(separator: ",\n"))\n}"
     }
 
+    /// Build a template context dictionary suitable for JSONSerialization and Mustache rendering.
+    /// This leverages the existing JSON assembly but returns a parsed [String: Any] instead of a string.
+    func buildContextDictionary() -> [String: Any]? {
+        let json = buildJsonString()
+        guard let data = json.data(using: .utf8) else { return nil }
+        do {
+            return try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+        } catch {
+            Logger.error("TreeToJson: Failed to parse assembled JSON: \(error)")
+            return nil
+        }
+    }
+
     private func stringifySection(
         sectionName: String, stringFn: (String) -> String?, keyOne _: String = "title",
         keyTwo _: String = "description"

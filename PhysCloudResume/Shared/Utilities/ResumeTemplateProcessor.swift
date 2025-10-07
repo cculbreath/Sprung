@@ -19,23 +19,14 @@ class ResumeTemplateProcessor {
                          userInfo: [NSLocalizedDescriptionKey: "No root node found in resume"])
         }
         
-        // Generate JSON using TreeToJson system
-        guard let treeToJson = TreeToJson(rootNode: rootNode) else {
+        // Generate context using TreeToJson builder (avoid stringly JSON round-trip)
+        guard let treeToJson = TreeToJson(rootNode: rootNode),
+              let context = treeToJson.buildContextDictionary()
+        else {
             throw NSError(domain: "ResumeTemplateProcessor", code: 1001,
-                         userInfo: [NSLocalizedDescriptionKey: "Failed to initialize TreeToJson"])
+                         userInfo: [NSLocalizedDescriptionKey: "Failed to build template context from resume"])
         }
-        
-        let jsonString = treeToJson.buildJsonString()
-        Logger.debug("Generated JSON for template: \(jsonString)")
-        
-        // Parse the generated JSON
-        guard let data = jsonString.data(using: String.Encoding.utf8),
-              let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw NSError(domain: "ResumeTemplateProcessor", code: 1001,
-                         userInfo: [NSLocalizedDescriptionKey: "Failed to parse generated JSON"])
-        }
-        
-        return jsonObject
+        return context
     }
     
     /// Load template content from various sources

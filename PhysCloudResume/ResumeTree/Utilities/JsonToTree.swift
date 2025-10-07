@@ -30,21 +30,22 @@ class JsonToTree {
     }
 
     private static func parseUnwrapJson(_ rawJson: String) -> OrderedDictionary<String, Any>? {
-        guard let jsonData = rawJson.data(using: .utf8) else {
-            return nil
-        }
-
-        var parser = JSONParser(bytes: Array(jsonData))
-
+        guard let data = rawJson.data(using: .utf8) else { return nil }
         do {
-            let jsonValue = try parser.parse()
-            let unwrappedJson = try jsonValue.unwrap()
-            if let orderedJsonDict = unwrappedJson as? OrderedDictionary<String, Any> {
-                return orderedJsonDict
-            } else {
-                return nil
+            let obj = try JSONSerialization.jsonObject(with: data, options: [])
+            guard let dict = obj as? [String: Any] else { return nil }
+
+            // Build an OrderedDictionary using the preferred section order first,
+            // then append any extra keys in alphabetical order to keep determinism.
+            var ordered: OrderedDictionary<String, Any> = [:]
+            for key in JsonMap.sectionKeyToTypeDict.keys {
+                if let value = dict[key] { ordered[key] = value }
             }
+            let extraKeys = dict.keys.filter { ordered[$0] == nil }.sorted()
+            for k in extraKeys { ordered[k] = dict[k] }
+            return ordered
         } catch {
+            Logger.error("JsonToTree: Failed to parse model JSON: \(error)")
             return nil
         }
     }
