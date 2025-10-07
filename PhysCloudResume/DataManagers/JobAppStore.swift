@@ -89,7 +89,8 @@ final class JobAppStore: SwiftDataStore {
 
     func deleteSelected() {
         guard let deleteMe = selectedApp else {
-            fatalError("No job application available to delete.")
+            Logger.error("No job application available to delete.")
+            return
         }
 
         deleteJobApp(deleteMe)
@@ -121,7 +122,8 @@ final class JobAppStore: SwiftDataStore {
     func editWithForm(_ jobApp: JobApp? = nil) {
         let jobAppEditing = jobApp ?? selectedApp
         guard let jobAppEditing = jobAppEditing else {
-            fatalError("No job application available to edit.")
+            Logger.error("No job application available to edit.")
+            return
         }
         populateFormFromObj(jobAppEditing)
     }
@@ -129,7 +131,8 @@ final class JobAppStore: SwiftDataStore {
     func cancelFormEdit(_ jobApp: JobApp? = nil) {
         let jobAppEditing = jobApp ?? selectedApp
         guard let jobAppEditing = jobAppEditing else {
-            fatalError("No job application available to restore state.")
+            Logger.error("No job application available to restore state.")
+            return
         }
         populateFormFromObj(jobAppEditing)
     }
@@ -137,7 +140,8 @@ final class JobAppStore: SwiftDataStore {
     func saveForm(_ jobApp: JobApp? = nil) {
         let jobAppToSave = jobApp ?? selectedApp
         guard let jobAppToSave = jobAppToSave else {
-            fatalError("No job application available to save.")
+            Logger.error("No job application available to save.")
+            return
         }
         // Directly assign properties from form
         jobAppToSave.jobPosition = form.jobPosition

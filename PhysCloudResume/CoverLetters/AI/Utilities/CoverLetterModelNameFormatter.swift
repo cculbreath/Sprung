@@ -27,7 +27,11 @@ class CoverLetterModelNameFormatter {
             return "\(displayNames[0]) and \(displayNames[1])"
         } else {
             let allButLast = displayNames.dropLast().joined(separator: ", ")
-            return "\(allButLast), and \(displayNames.last!)"
+            if let last = displayNames.last {
+                return "\(allButLast), and \(last)"
+            } else {
+                return allButLast
+            }
         }
     }
 }

@@ -550,14 +550,15 @@ extension NativePDFGenerator: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         // Wait a bit for any dynamic content to load
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            Task {
+            Task { @MainActor in
+                guard let strongSelf = self else { return }
                 do {
-                    let pdfData = try await self?.generatePDFFromWebView()
-                    self?.currentCompletion?(.success(pdfData!))
+                    let pdfData = try await strongSelf.generatePDFFromWebView()
+                    strongSelf.currentCompletion?(.success(pdfData))
                 } catch {
-                    self?.currentCompletion?(.failure(error))
+                    strongSelf.currentCompletion?(.failure(error))
                 }
-                self?.currentCompletion = nil
+                strongSelf.currentCompletion = nil
             }
         }
     }

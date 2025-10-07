@@ -155,7 +155,14 @@ struct NewAppSheetView: View {
             ) {
                 // After successful login, retry the job import
                 Task {
-                    await handleLinkedInJob(url: URL(string: urlText)!)
+                    guard let retryURL = URL(string: urlText) else {
+                        await MainActor.run {
+                            errorMessage = "Invalid URL format. Please check and try again."
+                            showError = true
+                        }
+                        return
+                    }
+                    await handleLinkedInJob(url: retryURL)
                 }
             }
         }
@@ -212,6 +219,11 @@ struct NewAppSheetView: View {
                 baddomain = true
             }
             return
+        }
+        // Invalid URL path
+        await MainActor.run {
+            errorMessage = "Invalid URL format. Please enter a valid job listing URL."
+            showError = true
         }
     }
     
