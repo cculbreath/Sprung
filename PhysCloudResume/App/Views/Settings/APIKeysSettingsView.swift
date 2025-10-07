@@ -80,9 +80,16 @@ struct APIKeysSettingsView: View {
                     isHoveringXmark: $isHoveringXmark,
                     onSave: {
                         // Reconfigure the OpenRouter service with the new API key
+                        // Persist key to Keychain
+                        let keyToStore = openRouterApiKey == "none" ? "" : openRouterApiKey
+                        if !keyToStore.isEmpty {
+                            _ = APIKeyManager.set(.openRouter, value: keyToStore)
+                        } else {
+                            APIKeyManager.delete(.openRouter)
+                        }
                         appState.reconfigureOpenRouterService()
                         
-                        if !openRouterApiKey.isEmpty {
+                        if appState.hasValidOpenRouterKey {
                             Task {
                                 await appState.openRouterService.fetchModels()
                             }
@@ -161,11 +168,11 @@ struct APIKeysSettingsView: View {
                         appState.reconfigureOpenRouterService()
                         showModelSelectionSheet = true
                     }
-                    .disabled(openRouterApiKey.isEmpty)
+                    .disabled(!appState.hasValidOpenRouterKey)
                     
                     Spacer()
                     
-                    if !openRouterApiKey.isEmpty {
+                    if appState.hasValidOpenRouterKey {
                         HStack(spacing: 4) {
                             Circle()
                                 .fill(.green)

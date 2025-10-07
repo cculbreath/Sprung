@@ -53,7 +53,8 @@ class JsonToTree {
         let rootNode = TreeNode(name: "root", value: "", inEditor: true, status: .isNotLeaf, resume: res)
         // Child indices start fresh for every new tree build.
         guard res.needToTree else {
-            fatalError("Extra run attempted – why is there an extra tree rebuild")
+            Logger.warning("JsonToTree.buildTree() called redundantly; returning existing root if available")
+            return res.rootNode
         }
         res.needToTree = false
         parseSpecialKeys()
@@ -94,7 +95,8 @@ class JsonToTree {
 
     private func parseFontSizeSection(key: String) -> [FontSizeNode] {
         guard res.needToFont else {
-            fatalError("Extra font size run attempted – unexpected redundant execution")
+            Logger.warning("JsonToTree.parseFontSizeSection() called redundantly; returning existing font sizes")
+            return res.fontSizeNodes
         }
         res.needToFont = false
         guard let fontArray = json[key] as? OrderedDictionary<String, Any>

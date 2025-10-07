@@ -174,7 +174,9 @@ class AppState {
     }
     
     private func configureOpenRouterService() {
-        let openRouterApiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        // Ensure migration from UserDefaults to Keychain (one-time, idempotent)
+        APIKeyManager.migrateFromUserDefaults()
+        let openRouterApiKey = APIKeyManager.get(.openRouter) ?? ""
         if !openRouterApiKey.isEmpty {
             openRouterService.configure(apiKey: openRouterApiKey)
         }

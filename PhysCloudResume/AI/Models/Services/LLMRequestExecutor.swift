@@ -27,9 +27,9 @@ class LLMRequestExecutor {
     
     // MARK: - Client Configuration
     
-    /// Configure the OpenRouter client with the current API key from UserDefaults
+    /// Configure the OpenRouter client with the current API key from Keychain
     func configureClient() {
-        let apiKey = UserDefaults.standard.string(forKey: "openRouterApiKey") ?? ""
+        let apiKey = APIKeyManager.get(.openRouter) ?? ""
         Logger.debug("🔑 LLMRequestExecutor API key length: \(apiKey.count) chars")
         if !apiKey.isEmpty {
             // Log first/last 4 chars for debugging (same as SettingsView does)
@@ -38,7 +38,7 @@ class LLMRequestExecutor {
                 "***masked***"
             Logger.debug("🔑 Using API key: \(maskedKey)")
             
-            Logger.debug("🔧 Creating OpenRouter client with baseURL: https://openrouter.ai")
+            Logger.debug("🔧 Creating OpenRouter client with baseURL: \(AppConfig.openRouterBaseURL)")
             
             // Only enable verbose SwiftOpenAI debug logging when user has set debug level to Verbose (2)
             let enableSwiftOpenAIDebug = UserDefaults.standard.integer(forKey: "debugLogLevel") == 2
@@ -46,17 +46,14 @@ class LLMRequestExecutor {
             
             self.openRouterClient = OpenAIServiceFactory.service(
                 apiKey: apiKey,
-                overrideBaseURL: "https://openrouter.ai",
-                proxyPath: "api",
-                overrideVersion: "v1",
-                extraHeaders: [
-                    "HTTP-Referer": "https://github.com/cculbreath/PhysCloudResume",
-                    "X-Title": "Physics Cloud Resume"
-                ],
+                overrideBaseURL: AppConfig.openRouterBaseURL,
+                proxyPath: AppConfig.openRouterAPIPath,
+                overrideVersion: AppConfig.openRouterVersion,
+                extraHeaders: AppConfig.openRouterHeaders,
                 debugEnabled: enableSwiftOpenAIDebug
             )
             Logger.info("🔄 LLMRequestExecutor configured OpenRouter client with key")
-            Logger.debug("🌐 Expected URL: https://openrouter.ai/api/v1/chat/completions")
+            Logger.debug("🌐 Expected URL: \(AppConfig.openRouterBaseURL)/\(AppConfig.openRouterAPIPath)/\(AppConfig.openRouterVersion)/chat/completions")
             
             // Debug the actual client configuration
             if let client = self.openRouterClient {
