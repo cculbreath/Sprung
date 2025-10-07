@@ -9,13 +9,15 @@ import WebKit // Required for the MarkdownView
 struct ApplicationReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
+    @Environment(LLMFacade.self) private var llmFacade
+
     let jobApp: JobApp
     let resume: Resume
     let availableCoverLetters: [CoverLetter]
 
     // MARK: State
 
-    @State private var reviewService = ApplicationReviewService()
+    @State private var reviewService: ApplicationReviewService?
     @State private var selectedType: ApplicationReviewType = .assessQuality
     @State private var customOptions: CustomApplicationReviewOptions
     @State private var responseText: String = ""
@@ -142,7 +144,7 @@ struct ApplicationReviewSheet: View {
             // Fixed buttons at bottom
             HStack {
                 if isProcessing {
-                    Button("Stop") { reviewService.cancelRequest(); isProcessing = false }
+                    Button("Stop") { reviewService?.cancelRequest(); isProcessing = false }
                     Spacer()
                     Button("Close") { dismiss() }
                 } else {
@@ -157,6 +159,11 @@ struct ApplicationReviewSheet: View {
         .padding()
         .frame(width: 700)
         .frame(minHeight: 600, maxHeight: 800)
+        .onAppear {
+            if reviewService == nil {
+                reviewService = ApplicationReviewService(llmFacade: llmFacade)
+            }
+        }
     }
 
     // Model selection state
@@ -271,7 +278,12 @@ struct ApplicationReviewSheet: View {
         Logger.debug("🚀 [ApplicationReviewSheet] Has custom options: \(selectedType == .custom)")
         
         Task { @MainActor in
-            reviewService.sendReviewRequest(
+            guard let service = reviewService else {
+                self.isProcessing = false
+                self.errorMessage = "Review service unavailable."
+                return
+            }
+            service.sendReviewRequest(
                 reviewType: selectedType,
                 jobApp: jobApp,
                 resume: resume,

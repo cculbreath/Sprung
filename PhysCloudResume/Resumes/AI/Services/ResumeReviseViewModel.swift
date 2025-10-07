@@ -175,7 +175,7 @@ class ResumeReviseViewModel {
                 
                 for try await chunk in stream {
                     // Handle reasoning content
-                    if let reasoningContent = chunk.reasoning {
+                    if let reasoningContent = chunk.reasoningContent {
                         appState.globalReasoningStreamManager.reasoningText += reasoningContent
                     }
                     
@@ -996,7 +996,7 @@ class ResumeReviseViewModel {
         
         for try await chunk in stream {
             // Handle reasoning content
-            if let reasoningContent = chunk.reasoning {
+            if let reasoningContent = chunk.reasoningContent {
                 appState.globalReasoningStreamManager.reasoningText += reasoningContent
             }
             
