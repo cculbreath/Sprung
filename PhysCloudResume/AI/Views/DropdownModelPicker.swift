@@ -133,7 +133,8 @@ struct DropdownModelPicker: View {
                     .foregroundColor(.secondary)
                     .tag("")
             } else if requiredCapability != nil {
-                Text("No selected models support \(requiredCapability!.displayName)")
+                let capName = requiredCapability?.displayName ?? "required capability"
+                Text("No selected models support \(capName)")
                     .foregroundColor(.secondary)
                     .tag("")
             } else {

@@ -49,16 +49,16 @@ class TextResumeGenerator {
         var templateContent: String?
         
         // Strategy 0: Check Documents directory first for user modifications
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let userTemplatePath = documentsPath
-            .appendingPathComponent("PhysCloudResume")
-            .appendingPathComponent("Templates")
-            .appendingPathComponent(template)
-            .appendingPathComponent("\(resourceName).txt")
-        
-        if let content = try? String(contentsOf: userTemplatePath, encoding: .utf8) {
-            templateContent = content
-            Logger.debug("Using user-modified text template from: \(userTemplatePath.path)")
+        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let userTemplatePath = documentsPath
+                .appendingPathComponent("PhysCloudResume")
+                .appendingPathComponent("Templates")
+                .appendingPathComponent(template)
+                .appendingPathComponent("\(resourceName).txt")
+            if let content = try? String(contentsOf: userTemplatePath, encoding: .utf8) {
+                templateContent = content
+                Logger.debug("Using user-modified text template from: \(userTemplatePath.path)")
+            }
         }
         
         // Strategy 1: Look in Templates/template subdirectory

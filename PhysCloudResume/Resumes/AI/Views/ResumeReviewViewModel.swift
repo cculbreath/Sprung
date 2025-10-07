@@ -33,8 +33,12 @@ class ResumeReviewViewModel {
     func initialize() {
         reviewService = ResumeReviewService(llmService: LLMService.shared)
         reviewService?.initialize()
-        fixOverflowService = FixOverflowService(reviewService: reviewService!)
-        reorderSkillsService = ReorderSkillsService(reviewService: reviewService!)
+        if let svc = reviewService {
+            fixOverflowService = FixOverflowService(reviewService: svc)
+            reorderSkillsService = ReorderSkillsService(reviewService: svc)
+        } else {
+            Logger.error("ResumeReviewViewModel: reviewService not initialized; dependent services unavailable")
+        }
         resetChangeMessage()
     }
     

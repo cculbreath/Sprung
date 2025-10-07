@@ -173,8 +173,12 @@ class JobRecommendationService {
         }
         
         // Convert to JSON string
-        let jsonData = try? JSONSerialization.data(withJSONObject: jobsArray, options: [.prettyPrinted])
-        let jsonString = jsonData != nil ? String(data: jsonData!, encoding: .utf8) ?? "" : ""
+        let jsonString: String
+        if let jsonData = try? JSONSerialization.data(withJSONObject: jobsArray, options: [.prettyPrinted]) {
+            jsonString = String(data: jsonData, encoding: .utf8) ?? "[]"
+        } else {
+            jsonString = "[]"
+        }
         
         let prompt = """
         TASK:

@@ -170,8 +170,6 @@ extension JobApp {
                     // Prefer the first location.
                     if let first = locArray.first {
                         locationString = extractAddress(from: first)
-                    } else {
-                        locationString = nil
                     }
                 } else {
                     locationString = extractAddress(from: jobLocation)

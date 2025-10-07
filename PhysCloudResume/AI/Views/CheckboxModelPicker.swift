@@ -106,7 +106,8 @@ struct CheckboxModelPicker: View {
                         .foregroundColor(.secondary)
                         .italic()
                 } else if requiredCapability != nil {
-                    Text("No selected models support \(requiredCapability!.displayName)")
+                    let capName = requiredCapability?.displayName ?? "required capability"
+                    Text("No selected models support \(capName)")
                         .foregroundColor(.secondary)
                         .italic()
                 } else {
@@ -236,4 +237,3 @@ struct CheckboxModelPicker: View {
         .disabled(!appState.hasValidOpenRouterKey)
     }
 }
-

@@ -191,7 +191,11 @@ class TreeToJson {
             }
             .joined(separator: ",\n")
 
-        return (items?.isEmpty == false) ? "[\n" + items! + "\n]" : nil
+        if let items, !items.isEmpty {
+            return "[\n" + items + "\n]"
+        } else {
+            return nil
+        }
     }
 
     /// Builds a dictionary representation from a node’s name and children.

@@ -33,7 +33,11 @@ struct FontNodeView: View {
                         .frame(width: 50, alignment: .trailing).multilineTextAlignment(.trailing)
                         .onSubmit {
                             isEditing = false
-                            jobAppStore.selectedApp!.selectedRes!.debounceExport()
+                            if let res = jobAppStore.selectedApp?.selectedRes {
+                                res.debounceExport()
+                            } else {
+                                Logger.debug("FontNodeView: No selected resume to export after edit submission")
+                            }
                         }.padding(.trailing, 0)
 
                         Text("pt") // Postfix text (unit)
@@ -49,7 +53,13 @@ struct FontNodeView: View {
         }
         .padding(.horizontal, 5)
         .onChange(of: node.fontValue) {
-            if !isEditing { jobAppStore.selectedApp!.selectedRes!.debounceExport() }
+            if !isEditing {
+                if let res = jobAppStore.selectedApp?.selectedRes {
+                    res.debounceExport()
+                } else {
+                    Logger.debug("FontNodeView: No selected resume to export on value change")
+                }
+            }
         }
 
         .cornerRadius(5)

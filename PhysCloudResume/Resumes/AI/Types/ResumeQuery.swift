@@ -148,12 +148,12 @@ import SwiftUI
     var resumeText: String {
         if res.textRes == "" {
             Logger.debug("⚠️BLANK TEXT RES⚠️")
-            return res.model!.renderedResumeText
+            return res.model?.renderedResumeText ?? ""
         } else { return res.textRes }
     }
 
     var resumeJson: String {
-        return res.model!.json
+        return res.model?.json ?? "{}"
     }
 
     var jobListing: String {

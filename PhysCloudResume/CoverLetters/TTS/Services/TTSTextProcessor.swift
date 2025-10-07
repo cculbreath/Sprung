@@ -124,7 +124,7 @@ class TTSTextProcessor {
             currentSentence.append(char)
             
             // Check if this is a sentence ender
-            if sentenceEnders.contains(char.unicodeScalars.first!) {
+            if let scalar = char.unicodeScalars.first, sentenceEnders.contains(scalar) {
                 // Look ahead to see if there's more content
                 let nextIndex = text.index(after: i)
                 if nextIndex < text.endIndex {

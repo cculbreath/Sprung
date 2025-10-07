@@ -118,9 +118,13 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
 
     /// Directory where cookies are stored as plist files under Application Support.
     private static func cookieDirectoryURL() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("CloudflareCookieManager", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            Logger.error("Failed to create cookie directory: \(error)")
+        }
         return dir
     }
 
