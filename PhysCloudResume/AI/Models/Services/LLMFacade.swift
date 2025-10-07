@@ -127,4 +127,46 @@ final class LLMFacade {
             temperature: temperature
         )
     }
+
+    func continueConversationStructured<T: Decodable & Sendable>(
+        userMessage: String,
+        modelId: String,
+        conversationId: UUID,
+        as type: T.Type,
+        images: [Data] = [],
+        temperature: Double? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> T {
+        return try await llmService.continueConversationStructured(
+            userMessage: userMessage,
+            modelId: modelId,
+            conversationId: conversationId,
+            responseType: type,
+            images: images,
+            temperature: temperature,
+            jsonSchema: jsonSchema
+        )
+    }
+
+    func startConversation(
+        systemPrompt: String? = nil,
+        userMessage: String,
+        modelId: String,
+        temperature: Double? = nil
+    ) async throws -> (UUID, String) {
+        return try await llmService.startConversation(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: modelId,
+            temperature: temperature
+        )
+    }
+
+    func clearConversation(id: UUID) {
+        llmService.clearConversation(id: id)
+    }
+
+    func cancelAllRequests() {
+        llmService.cancelAllRequests()
+    }
 }

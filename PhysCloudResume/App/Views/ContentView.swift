@@ -9,6 +9,7 @@ struct ContentView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(AppState.self) private var appState
+    @Environment(LLMFacade.self) private var llmFacade
     // DragInfo is inherited from ContentViewLaunch
 
     // States managed by ContentView
@@ -128,10 +129,7 @@ struct ContentView: View {
             
             // Initialize Resume Revise View Model
             Logger.debug("🔍 [ContentView] Creating ResumeReviseViewModel with appState: \(String(describing: Unmanaged.passUnretained(appState).toOpaque()))")
-            let newViewModel = ResumeReviseViewModel(
-                llmService: LLMService.shared,
-                appState: appState
-            )
+            let newViewModel = ResumeReviseViewModel(llmFacade: llmFacade, appState: appState)
             Logger.debug("🔍 [ContentView] Created ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(newViewModel).toOpaque()))")
             appState.resumeReviseViewModel = newViewModel
             Logger.debug("🔍 [ContentView] Set appState.resumeReviseViewModel to new instance")

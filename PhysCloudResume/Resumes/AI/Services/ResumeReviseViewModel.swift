@@ -16,7 +16,7 @@ import SwiftData
 class ResumeReviseViewModel {
     
     // MARK: - Dependencies
-    private let llmService: LLMService
+    private let llm: LLMFacade
     let appState: AppState // Make appState accessible to views
     
     // MARK: - UI State (ViewModel Layer)
@@ -65,8 +65,8 @@ class ResumeReviseViewModel {
     // MARK: - Configuration
     private let revisionTimeout: TimeInterval = 180.0 // 3 minutes
     
-    init(llmService: LLMService, appState: AppState) {
-        self.llmService = llmService
+    init(llmFacade: LLMFacade, appState: AppState) {
+        self.llm = llmFacade
         self.appState = appState
         
         // Watch for aiResubmit changes to trigger resubmission workflow
@@ -154,7 +154,7 @@ class ResumeReviseViewModel {
                 )
                 
                 // Start streaming conversation with reasoning
-                let (conversationId, stream) = try await llmService.startConversationStreaming(
+                let (conversationId, stream) = try await llm.startConversationStreaming(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
                     modelId: modelId,
@@ -175,7 +175,7 @@ class ResumeReviseViewModel {
                 
                 for try await chunk in stream {
                     // Handle reasoning content
-                    if let reasoningContent = chunk.reasoningContent {
+                    if let reasoningContent = chunk.reasoning {
                         appState.globalReasoningStreamManager.reasoningText += reasoningContent
                     }
                     
@@ -207,7 +207,7 @@ class ResumeReviseViewModel {
                 Logger.info("📝 Using non-streaming structured output for revision generation: \(modelId)")
                 
                 // Start conversation to maintain state for potential resubmission
-                let (conversationId, _) = try await llmService.startConversation(
+                let (conversationId, _) = try await llm.startConversation(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
                     modelId: modelId
@@ -217,11 +217,11 @@ class ResumeReviseViewModel {
                 self.currentModelId = modelId
                 
                 // Get structured response from the conversation
-                revisions = try await llmService.continueConversationStructured(
+                revisions = try await llm.continueConversationStructured(
                     userMessage: "Please provide the revision suggestions in the specified JSON format.",
                     modelId: modelId,
                     conversationId: conversationId,
-                    responseType: RevisionsContainer.self,
+                    as: RevisionsContainer.self,
                     jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
             }
@@ -305,11 +305,11 @@ class ResumeReviseViewModel {
                 // Use non-streaming for models without reasoning
                 Logger.info("📝 Using non-streaming structured output for revision continuation: \(modelId)")
                 
-                revisions = try await llmService.continueConversationStructured(
+                revisions = try await llm.continueConversationStructured(
                     userMessage: revisionRequestPrompt,
                     modelId: modelId,
                     conversationId: conversationId,
-                    responseType: RevisionsContainer.self,
+                    as: RevisionsContainer.self,
                     jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
             }
@@ -380,18 +380,18 @@ class ResumeReviseViewModel {
         
         Logger.debug("❓ Requesting clarifying questions")
         
-        // Validate model capabilities
-        try llmService.validateModel(modelId: modelId, for: [])
+        // Capability gating centralized in facade (handled elsewhere)
         
         // Create clarifying questions prompt using the generic system message
         let systemPrompt = query.genericSystemMessage.textContent
         let userContext = await query.wholeResumeQueryString()
         
         // Request clarifying questions
-        let questionsRequest = try await llmService.executeStructured(
+        let questionsRequest: ClarifyingQuestionsRequest = try await llm.executeStructured(
             prompt: "\(systemPrompt)\n\nResume Context:\n\(userContext)",
             modelId: modelId,
-            responseType: ClarifyingQuestionsRequest.self
+            as: ClarifyingQuestionsRequest.self,
+            temperature: nil
         )
         
         Logger.debug("📋 Generated \(questionsRequest.questions.count) clarifying questions")
@@ -979,7 +979,7 @@ class ResumeReviseViewModel {
     ) async throws -> RevisionsContainer {
         
         // Start streaming
-        let stream = llmService.continueConversationStreaming(
+        let stream = llm.continueConversationStreaming(
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
@@ -996,7 +996,7 @@ class ResumeReviseViewModel {
         
         for try await chunk in stream {
             // Handle reasoning content
-            if let reasoningContent = chunk.reasoningContent {
+            if let reasoningContent = chunk.reasoning {
                 appState.globalReasoningStreamManager.reasoningText += reasoningContent
             }
             
