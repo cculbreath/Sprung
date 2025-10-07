@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ contact.name }}</title>
+    <style>
+        /* Font definitions using system-installed fonts */
+        @font-face {
+            font-family: "CourierNewBold";
+            src: local("Courier New Bold"), local("Courier-New-Bold");
+            font-weight: bold;
+            font-style: normal;
+        }
+        
+        @font-face {
+            font-family: "CooperBlack";
+            src: local("Cooper Black"), local("Cooper-Black");
+            font-weight: 900;
+            font-style: normal;
+        }
+        
+        /* Typewriter CSS styles from typewriter-html.css */
+        @page {
+            size: letter;
+            margin-top: 0.125in;
+            margin-bottom: 0.1in;
+            margin-left: 0.4in;
+            margin-right: 0.4in;
+        }
+        
+        :root {
+            --debug-border-color: transparent;
+            --debug-border-color-secondary: transparent;
+            --debug-border-width: 0;
+        }
+        
+        body {
+            font-family: 'Courier New', 'Courier', monospace;
+            font-size: 10pt;
+            line-height: 1.3;
+            margin: 0;
+            padding: 0;
+        }
+        
+        main {
+            max-width: 7.5in;
+            margin: 0 auto;
+            padding: 0;
+        }
+        
+        .container-head {
+            text-align: center;
+            margin-bottom: 20pt;
+        }
+        
+        .title-head {
+            font-family: 'CooperBlack', serif;
+            font-size: 24pt;
+            font-weight: 900;
+            margin-bottom: 8pt;
+        }
+        
+        .sub-head {
+            font-family: 'Courier New', monospace;
+            font-size: 12pt;
+            font-weight: normal;
+        }
+        
+        #summary {
+            font-family: 'Courier New', monospace;
+            font-size: 10pt;
+            line-height: 1.4;
+            text-align: justify;
+            margin-bottom: 20pt;
+            border: 1px solid #000;
+            padding: 8pt;
+        }
+        
+        section {
+            margin-bottom: 15pt;
+            page-break-inside: avoid;
+        }
+        
+        .section-header {
+            font-family: 'CourierNewBold', monospace;
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 1px solid #000;
+            margin-bottom: 8pt;
+            padding-bottom: 2pt;
+        }
+        
+        .content {
+            font-family: 'Courier New', monospace;
+            font-size: 10pt;
+        }
+        
+        .custom-bullets {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .custom-bullets li {
+            margin-bottom: 4pt;
+        }
+        
+        .employment-item {
+            margin-bottom: 12pt;
+        }
+        
+        .employment-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-weight: bold;
+        }
+        
+        .employment-title {
+            font-weight: bold;
+        }
+        
+        .employment-date {
+            font-weight: bold;
+        }
+        
+        .employment-position {
+            font-style: italic;
+            margin: 2pt 0 4pt 0;
+        }
+        
+        .employment-highlights ul {
+            padding-left: 20pt;
+        }
+        
+        .degree {
+            margin-bottom: 4pt;
+        }
+        
+        .heavy {
+            font-weight: bold;
+        }
+        
+        .lightitalic {
+            font-style: italic;
+            font-weight: normal;
+        }
+        
+        .hanging-indent {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+        }
+
+        .title {
+            font-weight: bold;
+            white-space: nowrap;
+            margin-right: 4px;
+        }
+
+        .description {
+            flex: 1;
+            display: block;
+            padding-left: 0;
+            margin-left: 4px;
+        }
+        
+        .hidden-combo {
+            position: relative;
+        }
+        
+        .langbar {
+            width: 100%;
+            height: 20pt;
+        }
+        
+        .hidden-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            padding-top: 2pt;
+            font-size: 8pt;
+        }
+        
+        a {
+            color: black;
+            text-decoration: none;
+        }
+        
+        .w-100 {
+            width: 100%;
+        }
+    </style>
+    
+    <!-- Dynamic footer styles -->
+    <style>
+        @page {
+            @bottom-center {
+                content: "{{contact.location.city}}, {{contact.location.state}} • {{contact.phone}} • {{contact.email}} • {{contact.website}}";
+                font-size: 8pt;
+                font-family: 'Courier New', monospace;
+            }
+        }
+    </style>
+    
+    <style>
+        .hanging-indent {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+        }
+
+        .title {
+            font-weight: bold;
+            white-space: nowrap;
+            margin-right: 4px;
+        }
+
+        .description {
+            flex: 1;
+            display: block;
+            padding-left: 0;
+            margin-left: 4px;
+        }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="top-box">
+        <div class="container-head">
+          <div class="title-head">{{{contact.name}}}</div>
+          <div class="sub-head">
+            {{{jobTitlesJoined}}}
+          </div>
+        </div>
+      </header>
+
+	  
+      <div id="summary">{{{ summary }}}</div>
+
+      <section id="expertise">
+        <div class="section-header">{{sectionLabels.skillsAndExpertise}}</div>
+        <div class="content">
+			 <ul class="custom-bullets">
+	       {{#skillsAndExpertise}} 
+			<div class="hanging-indent"> <div class="title heavy">* {{{title}}}:</div><div class="description"> {{{description}}}</div></div>
+	        {{/skillsAndExpertise}}
+		</ul>
+      </div>
+      </section>
+      
+<section id="employment">
+  <div class="section-header">{{sectionLabels.employment}}</div>
+  {{#employment}}
+  <div class="employment-item content">
+    <div class="employment-heading">
+      <div class="employment-title">
+        {{employer}} | {{location}}
+      </div>
+      <div class="employment-date">
+        {{start}} &ndash; {{end}}
+      </div>
+    </div>
+    <div class="employment-position">{{{position}}}</div>
+    {{#highlights}}
+      <div class="employment-highlights">
+        <ul class="custom-bullets">
+          {{#.}}
+            <li>{{.}}</li>
+          {{/.}}
+        </ul>
+      </div>
+    {{/highlights}}
+  </div>
+  {{/employment}}
+</section>
+
+      <section id="education">
+        <div class="section-header">{{sectionLabels.education}}</div>
+          <div class="content">
+          {{#education}}
+          <div class="degree">{{end}} | <span style="font-style: italic">{{title}}</span> | {{{institution}}}</div><br/>
+          {{/education}}
+        </div>
+        </section>
+        
+        <section id="languages">
+          <div class="section-header">{{sectionLabels.languages}}</div>
+          <div class="hidden-combo w-100">
+            <div class="hidden-content">{{#languages}}{{.}}{{^@last}}, {{/@last}}{{/languages}}</div>
+          </div>
+        </section>
+        
+        <section id="projects-and-hobbies">
+          <div class="section-header">{{sectionLabels.hobbies}}</div>
+         
+            <div class="content" style="font-weight: 100;">
+	            {{#projectsAndHobbies}}
+				<span class="heavy">[{{{title}}}]</span> {{#examples}} <span class="lightitalic">{{{name}}} </span> {{{description}}} {{/examples}}
+	            {{/projectsAndHobbies}}				
+          </div>
+          </section>
+
+          <section id="publications">
+            <div class="section-header">{{sectionLabels.publications}}</div>
+            <div class="content">
+              <ul class="custom-bullets">
+                <!-- Citations would go here -->
+            </div>
+          </section>
+          
+          <section id="more-info">
+			  <br/>
+		  
+            <div class="section-header">{{footerText}}, <a href="{{contact.website}}" style="font-weight: bold; color: black; text-decoration: none;">visit {{contact.website}}&#x21D7;</a></div>
+          </section>
+    </main>
+ 
+   
+  </body>
+
+</html>
