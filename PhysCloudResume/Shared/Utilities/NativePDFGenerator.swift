@@ -169,17 +169,10 @@ class NativePDFGenerator: NSObject, ObservableObject {
             throw PDFGeneratorError.invalidResumeData
         }
         
-        // Generate JSON using TreeToJson system
-        guard let treeToJson = TreeToJson(rootNode: rootNode) else {
-            throw PDFGeneratorError.invalidResumeData
-        }
-        
-        let jsonString = treeToJson.buildJsonString()
-        Logger.debug("Generated JSON for template: \(jsonString)")
-        
-        // Parse the generated JSON
-        guard let jsonData = jsonString.data(using: .utf8),
-              let resumeData = try? JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any] else {
+        // Build structured context using TreeToJson (no stringly JSON round-trip)
+        guard let treeToJson = TreeToJson(rootNode: rootNode),
+              let resumeData = treeToJson.buildContextDictionary()
+        else {
             throw PDFGeneratorError.invalidResumeData
         }
         
