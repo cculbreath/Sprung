@@ -28,7 +28,10 @@ struct ContentViewLaunch: View {
         }
         .task {
             if deps == nil {
+                Logger.debug("🔧 ContentViewLaunch: Creating AppDependencies (once) with environment ModelContext")
                 deps = AppDependencies(modelContext: modelContext)
+            } else {
+                Logger.debug("ℹ️ ContentViewLaunch: AppDependencies already initialized; skipping re-init")
             }
         }
         // Note: AppState is already injected via .environment(appState) in PhysicsCloudResumeApp
