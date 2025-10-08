@@ -9,9 +9,7 @@ import Foundation
 import SwiftOpenAI
 
 /// Network layer for executing LLM requests with retry logic
-@MainActor
-@Observable
-class LLMRequestExecutor {
+actor LLMRequestExecutor {
     
     // OpenRouter client
     private var openRouterClient: OpenAIService?
@@ -24,7 +22,7 @@ class LLMRequestExecutor {
     private let baseRetryDelay: TimeInterval = 1.0
     
     init() {}
-    
+
     // MARK: - Client Configuration
     
     /// Configure the OpenRouter client with the current API key from Keychain

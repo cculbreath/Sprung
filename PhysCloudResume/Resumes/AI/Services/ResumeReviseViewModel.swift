@@ -50,6 +50,7 @@ class ResumeReviseViewModel {
     private var currentConversationId: UUID?
     var currentModelId: String? // Make currentModelId accessible to views
     private(set) var isProcessingRevisions: Bool = false
+    private var activeStreamingHandle: LLMStreamingHandle?
     
     // AI Resubmission handling (from AiCommsView)
     private var isWaitingForResubmission: Bool = false
@@ -68,7 +69,6 @@ class ResumeReviseViewModel {
     init(llmFacade: LLMFacade, appState: AppState) {
         self.llm = llmFacade
         self.appState = appState
-        
         // Watch for aiResubmit changes to trigger resubmission workflow
         // This replicates the onChange(of: aiResub) logic from AiCommsView
         setupAIResubmitWatcher()
@@ -154,16 +154,20 @@ class ResumeReviseViewModel {
                 )
                 
                 // Start streaming conversation with reasoning
-                let (conversationId, stream) = try await llm.startConversationStreaming(
+                cancelActiveStreaming()
+                let handle = try await llm.startConversationStreaming(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
                     modelId: modelId,
                     reasoning: reasoning,
                     jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
-                
+                guard let conversationId = handle.conversationId else {
+                    throw LLMError.clientError("Failed to establish conversation for revision streaming")
+                }
                 self.currentConversationId = conversationId
                 self.currentModelId = modelId
+                activeStreamingHandle = handle
                 
                 // Process stream and collect full response
                 // Clear any previous reasoning text before starting
@@ -173,9 +177,9 @@ class ResumeReviseViewModel {
                 var collectingJSON = false
                 var jsonResponse = ""
                 
-                for try await chunk in stream {
+                for try await chunk in handle.stream {
                     // Handle reasoning content
-                    if let reasoningContent = chunk.reasoningContent {
+                    if let reasoningContent = chunk.reasoning {
                         appState.globalReasoningStreamManager.reasoningText += reasoningContent
                     }
                     
@@ -197,6 +201,7 @@ class ResumeReviseViewModel {
                         appState.globalReasoningStreamManager.isVisible = false
                     }
                 }
+                cancelActiveStreaming()
                 
                 // Parse the JSON response
                 let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
@@ -572,11 +577,11 @@ class ResumeReviseViewModel {
                 )
             } else {
                 // Use non-streaming for models without reasoning
-                revisions = try await llmService.continueConversationStructured(
+                revisions = try await llm.continueConversationStructured(
                     userMessage: revisionPrompt,
                     modelId: modelId,
                     conversationId: conversationId,
-                    responseType: RevisionsContainer.self,
+                    as: RevisionsContainer.self,
                     jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
             }
@@ -798,7 +803,7 @@ class ResumeReviseViewModel {
         Logger.debug("🔄 Resetting revision workflow state")
         
         if let conversationId = currentConversationId {
-            llmService.clearConversation(id: conversationId)
+            llm.clearConversation(id: conversationId)
         }
         
         currentConversationId = nil
@@ -806,6 +811,7 @@ class ResumeReviseViewModel {
         retryCount = 0
         lastError = nil
         isProcessingRevisions = false
+        cancelActiveStreaming()
     }
     
     // MARK: - Private Helpers
@@ -979,13 +985,17 @@ class ResumeReviseViewModel {
     ) async throws -> RevisionsContainer {
         
         // Start streaming
-        let stream = llm.continueConversationStreaming(
+        cancelActiveStreaming()
+        let handle = try await llm.continueConversationStreaming(
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
+            images: [],
+            temperature: nil,
             reasoning: reasoning,
             jsonSchema: ResumeApiQuery.revNodeArraySchema
         )
+        activeStreamingHandle = handle
         
         // Process stream and collect full response
         // Start reasoning stream (content already cleared in parent method)
@@ -994,9 +1004,9 @@ class ResumeReviseViewModel {
         var collectingJSON = false
         var jsonResponse = ""
         
-        for try await chunk in stream {
+        for try await chunk in handle.stream {
             // Handle reasoning content
-            if let reasoningContent = chunk.reasoningContent {
+            if let reasoningContent = chunk.reasoning {
                 appState.globalReasoningStreamManager.reasoningText += reasoningContent
             }
             
@@ -1018,12 +1028,18 @@ class ResumeReviseViewModel {
                 appState.globalReasoningStreamManager.isVisible = false
             }
         }
+        cancelActiveStreaming()
         
         // Parse the JSON response
         let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
         return try parseJSONFromText(responseText, as: RevisionsContainer.self)
     }
-    
+
+    private func cancelActiveStreaming() {
+        activeStreamingHandle?.cancel()
+        activeStreamingHandle = nil
+    }
+
     /// Parse JSON from text content with fallback strategies
     private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
         Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")

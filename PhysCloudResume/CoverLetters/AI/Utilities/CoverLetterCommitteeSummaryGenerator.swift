@@ -7,6 +7,14 @@
 
 import Foundation
 
+enum CoverLetterCommitteeSummaryError: LocalizedError {
+    case facadeUnavailable
+
+    var errorDescription: String? {
+        "CoverLetterCommitteeSummaryGenerator is not configured with an LLMFacade"
+    }
+}
+
 class CoverLetterCommitteeSummaryGenerator {
     private var llmFacade: LLMFacade?
     
@@ -107,25 +115,17 @@ class CoverLetterCommitteeSummaryGenerator {
         )
         
         let jsonSchema = createJSONSchema()
-        let summaryResponse: CommitteeSummaryResponse
-        if let facade = llmFacade {
-            summaryResponse = try await facade.executeStructured(
+        guard let llm = llmFacade else {
+            throw CoverLetterCommitteeSummaryError.facadeUnavailable
+        }
+
+        let summaryResponse: CommitteeSummaryResponse = try await llm.executeFlexibleJSON(
                 prompt: summaryPrompt,
                 modelId: "openai/o3",
                 as: CommitteeSummaryResponse.self,
                 temperature: 0.7,
                 jsonSchema: jsonSchema
-            )
-        } else {
-            let llmService = LLMService.shared
-            summaryResponse = try await llmService.executeStructured(
-                prompt: summaryPrompt,
-                modelId: "openai/o3",
-                responseType: CommitteeSummaryResponse.self,
-                temperature: 0.7,
-                jsonSchema: jsonSchema
-            )
-        }
+        )
         
         Logger.debug("🔍 Processing \(summaryResponse.letterAnalyses.count) letter analyses")
         for analysis in summaryResponse.letterAnalyses {

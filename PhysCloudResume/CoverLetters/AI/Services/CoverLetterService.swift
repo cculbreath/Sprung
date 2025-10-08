@@ -9,6 +9,14 @@
 import Foundation
 import SwiftUI
 
+enum CoverLetterServiceError: LocalizedError {
+    case facadeUnavailable
+
+    var errorDescription: String? {
+        "CoverLetterService is not configured with an LLMFacade instance"
+    }
+}
+
 @MainActor
 class CoverLetterService: ObservableObject {
     // MARK: - Properties
@@ -95,6 +103,9 @@ class CoverLetterService: ObservableObject {
         modelId: String,
         includeResumeRefs: Bool = true
     ) async throws -> String {
+        guard let llm = llmFacade else {
+            throw CoverLetterServiceError.facadeUnavailable
+        }
         // Ensure cover letter has an associated job application
         guard let jobApp = coverLetter.jobApp else {
             throw NSError(domain: "CoverLetterService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application"])
@@ -121,37 +132,20 @@ class CoverLetterService: ObservableObject {
         let response: String
         if isO1Model {
             let combinedMessage = systemPrompt + "\n\n" + userMessage
-            if let facade = llmFacade {
-                response = try await facade.executeText(
-                    prompt: combinedMessage,
-                    modelId: modelId,
-                    temperature: nil
-                )
-            } else {
-                response = try await LLMService.shared.execute(
-                    prompt: combinedMessage,
-                    modelId: modelId
-                )
-            }
+            response = try await llm.executeText(
+                prompt: combinedMessage,
+                modelId: modelId,
+                temperature: nil
+            )
         } else {
-            if let facade = llmFacade {
-                let (conversationId, initialResponse) = try await facade.startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: userMessage,
-                    modelId: modelId,
-                    temperature: nil
-                )
-                conversations[coverLetter.id] = conversationId
-                response = initialResponse
-            } else {
-                let (conversationId, initialResponse) = try await LLMService.shared.startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: userMessage,
-                    modelId: modelId
-                )
-                conversations[coverLetter.id] = conversationId
-                response = initialResponse
-            }
+            let (conversationId, initialResponse) = try await llm.startConversation(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId,
+                temperature: nil
+            )
+            conversations[coverLetter.id] = conversationId
+            response = initialResponse
         }
         
         // Extract cover letter content from response
@@ -180,6 +174,9 @@ class CoverLetterService: ObservableObject {
         feedback: String? = nil,
         editorPrompt: CoverLetterPrompts.EditorPrompts = .improve
     ) async throws -> String {
+        guard let llm = llmFacade else {
+            throw CoverLetterServiceError.facadeUnavailable
+        }
         // Ensure cover letter has an associated job application
         guard let jobApp = coverLetter.jobApp else {
             throw NSError(domain: "CoverLetterService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application for revision"])
@@ -202,41 +199,23 @@ class CoverLetterService: ObservableObject {
         // Check if we have an existing conversation
         let response: String
         if let conversationId = conversations[coverLetter.id] {
-            if let facade = llmFacade {
-                response = try await facade.continueConversation(
-                    userMessage: userMessage,
-                    modelId: modelId,
-                    conversationId: conversationId,
-                    images: [],
-                    temperature: nil
-                )
-            } else {
-                response = try await LLMService.shared.continueConversation(
-                    userMessage: userMessage,
-                    modelId: modelId,
-                    conversationId: conversationId
-                )
-            }
+            response = try await llm.continueConversation(
+                userMessage: userMessage,
+                modelId: modelId,
+                conversationId: conversationId,
+                images: [],
+                temperature: nil
+            )
         } else {
             let systemPrompt = query.systemPrompt(for: modelId)
-            if let facade = llmFacade {
-                let (conversationId, initialResponse) = try await facade.startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: userMessage,
-                    modelId: modelId,
-                    temperature: nil
-                )
-                conversations[coverLetter.id] = conversationId
-                response = initialResponse
-            } else {
-                let (conversationId, initialResponse) = try await LLMService.shared.startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: userMessage,
-                    modelId: modelId
-                )
-                conversations[coverLetter.id] = conversationId
-                response = initialResponse
-            }
+            let (conversationId, initialResponse) = try await llm.startConversation(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId,
+                temperature: nil
+            )
+            conversations[coverLetter.id] = conversationId
+            response = initialResponse
         }
         
         // Extract cover letter content from response

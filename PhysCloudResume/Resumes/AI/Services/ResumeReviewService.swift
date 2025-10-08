@@ -17,6 +17,7 @@ class ResumeReviewService: @unchecked Sendable {
     
     /// The current request ID for tracking active requests
     private var currentRequestID: UUID?
+    private var activeStreamingHandle: LLMStreamingHandle?
     
     /// Initialize with LLM service
     init(llmFacade: LLMFacade) {
@@ -252,11 +253,11 @@ class ResumeReviewService: @unchecked Sendable {
                 
                 // ContentsFit always uses images, so no streaming support
                 // Multimodal structured request
-                let response = try await llmService.executeStructuredWithImages(
+                let response: ContentsFitResponse = try await llm.executeStructuredWithImages(
                     prompt: prompt,
                     modelId: modelId,
                     images: [imageData],
-                    responseType: ContentsFitResponse.self
+                    as: ContentsFitResponse.self
                 )
                 
                 // Check if request was cancelled
@@ -327,7 +328,7 @@ class ResumeReviewService: @unchecked Sendable {
         
         Task { @MainActor in
             do {
-                let service = SkillReorderService(llmService: llmService)
+                let service = SkillReorderService(llmFacade: llm)
                 
                 let reorderedNodes = try await service.fetchReorderedSkills(
                     resume: resume,
@@ -347,6 +348,8 @@ class ResumeReviewService: @unchecked Sendable {
     /// Cancels the current review request
     func cancelRequest() {
         currentRequestID = nil
+        activeStreamingHandle?.cancel()
+        activeStreamingHandle = nil
         Logger.debug("ResumeReviewService: Request cancelled by setting currentRequestID to nil")
     }
     
@@ -447,20 +450,23 @@ class ResumeReviewService: @unchecked Sendable {
         )
         
         // Start streaming
-        let stream = llmService.executeStructuredStreaming(
+        activeStreamingHandle?.cancel()
+        let handle = try await llm.executeStructuredStreaming(
             prompt: prompt,
             modelId: modelId,
-            responseType: FixFitsResponseContainer.self,
+            as: FixFitsResponseContainer.self,
             reasoning: reasoning
         )
+        activeStreamingHandle = handle
+        defer { activeStreamingHandle = nil }
         
-        return try await processStream(stream, onReasoningUpdate: onReasoningUpdate)
+        return try await processStream(handle.stream, onReasoningUpdate: onReasoningUpdate)
     }
     
     /// Process streaming response and extract structured data
     @MainActor
     private func processStream<T: Codable>(
-        _ stream: AsyncThrowingStream<LLMStreamChunk, Error>,
+        _ stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>,
         onReasoningUpdate: ((String) -> Void)?
     ) async throws -> T {
         
@@ -470,7 +476,7 @@ class ResumeReviewService: @unchecked Sendable {
         
         for try await chunk in stream {
             // Handle reasoning content
-            if let reasoningContent = chunk.reasoningContent {
+            if let reasoningContent = chunk.reasoning {
                 onReasoningUpdate?(reasoningContent)
             }
             

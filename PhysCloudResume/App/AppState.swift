@@ -50,6 +50,7 @@ class AppState {
     
     // EnabledLLM store for persistent model management
     var enabledLLMStore: EnabledLLMStore?
+    weak var llmService: LLMService?
     
     // Model validation service
     let modelValidationService = ModelValidationService.shared
@@ -185,7 +186,7 @@ class AppState {
     func reconfigureOpenRouterService() {
         configureOpenRouterService()
         // Also reconfigure LLMService to use the updated API key
-        LLMService.shared.reconfigureClient()
+        llmService?.reconfigureClient()
     }
     
     /// Save the selected job app ID for persistence
@@ -242,7 +243,8 @@ class AppState {
                     store.updateModelCapabilities(
                         modelId: modelId,
                         supportsJSONSchema: capabilities.supportsStructuredOutputs || capabilities.supportsResponseFormat,
-                        supportsImages: capabilities.supportsImages
+                        supportsImages: capabilities.supportsImages,
+                        supportsReasoning: capabilities.supportedParameters.contains { $0.lowercased().contains("reasoning") }
                     )
                     Logger.debug("✅ Model \(modelId) validated successfully")
                 }

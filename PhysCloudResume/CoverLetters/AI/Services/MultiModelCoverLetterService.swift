@@ -236,7 +236,14 @@ class MultiModelCoverLetterService {
             )
             return (modelId, prompt)
         })
-        
+        guard let llm = llmFacade else {
+            await MainActor.run {
+                errorMessage = "LLM service is not configured"
+                isProcessing = false
+            }
+            return
+        }
+
         // Execute models in parallel with real-time result processing
         do {
             try await withThrowingTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in
@@ -251,24 +258,14 @@ class MultiModelCoverLetterService {
                             // Check for cancellation before starting this model
                             try Task.checkCancellation()
                             
-                    guard let facade = llmFacade else {
-                        let response = try await LLMService.shared.executeFlexibleJSON(
-                            prompt: prompt,
-                            modelId: modelId,
-                            responseType: BestCoverLetterResponse.self,
-                            temperature: nil,
-                            jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
-                        )
-                        return (modelId, .success(response))
-                    }
-                    let response = try await facade.executeFlexibleJSON(
-                        prompt: prompt,
-                        modelId: modelId,
-                        as: BestCoverLetterResponse.self,
-                        temperature: nil,
-                        jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
-                    )
-                    return (modelId, .success(response))
+                            let response = try await llm.executeFlexibleJSON(
+                                prompt: prompt,
+                                modelId: modelId,
+                                as: BestCoverLetterResponse.self,
+                                temperature: nil,
+                                jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
+                            )
+                            return (modelId, .success(response))
                         } catch {
                             return (modelId, .failure(error))
                         }
