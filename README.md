@@ -28,39 +28,39 @@ place **and** adds an opinionated AI layer so you can
 ## High-level architecture
 
 ```
-┌──────────────────┐   Swift Package   ┌────────────────────┐
-│     SwiftUI      │ ───────────────▶ │   AI Module (LLM)  │
-│  (macOS target)  │                  │ • Client layer      │
-│                  │                  │ • Services &        │
-└────────┬─────────┘                  │   Providers        │
-         │                           └────────┬───────────┘
-         │  Observable objects                 │
-         ▼                                      │  async/await
-┌──────────────────┐                    ┌───────▼───────────┐
-│   SwiftData      │  persistence      │ REST / OpenAI /   │
-│  (Model layer)   │ ─────────────────▶ │ Gemini / TTS APIs │
-└──────────────────┘                    └───────────────────┘
+┌──────────────────┐    Dependency container    ┌────────────────────┐
+│     SwiftUI      │ ─────────────────────────▶ │  LLM Facade + DTOs │
+│  (macOS target)  │  `.environment(AppDeps)`   │  (streaming/JSON)   │
+│                  │                            │                    │
+└────────┬─────────┘                            └────────┬───────────┘
+         │ observation                                async services
+         ▼                                               │
+┌──────────────────┐  SwiftData stores (JobApp, …) ┌──────▼───────────┐
+│   SwiftData      │ ─────────────────────────────▶│ Resume export &  │
+│  (Model layer)   │                               │ template builder │
+└──────────────────┘                               └──────────────────┘
 ```
 
 Key points
 
+• **AppDependencies** – A lightweight DI container constructed once per scene
+  ensures stores (`JobAppStore`, `EnabledLLMStore`, …) and services (`LLMFacade`,
+  `LLMService`) have stable lifetimes. Views receive them via
+  `.environment(deps.someStore)`.
+
 • **SwiftData first** – All primary entities (`JobApp`, `Resume`, `CoverLetter`,
-  …) are `@Model` types persisted with SwiftData.  Dedicated stores such as
-  `JobAppStore` and `ResRefStore` expose *computed* collections so the UI stays
-  in sync automatically.
+  …) are `@Model` types. Their stores expose computed collections so SwiftUI
+  always reflects persistent state without manual refreshes.
 
-• **Pluggable AI clients** – `OpenAIClientProtocol` defines a thin facade that
-  is currently implemented by both `SwiftOpenAIClient` and the MacPaw
-  `OpenAI` SDK.  A factory decides which backend to use at runtime.
+• **LLM facade & adapters** – Feature code talks to a small DTO-based facade.
+  Vendor SDK types are contained in adapters (`SwiftOpenAIClient`) so switching
+  providers only touches the boundary layer.
 
-• **Service / provider split** –  Pure
-  networking & prompt-building logic lives in the **Services** folder while
-  higher-level, domain-specific operations are handled by **Providers** such as
-  `ResumeChatProvider` or `CoverLetterRecommendationProvider`.
-
-• **JSON → PDF pipeline** –  Résumé tree nodes are serialised to JSON, posted
-  to `resume.physicscloud.net/build-resume-file` and the resulting PDF is
-  downloaded back into the model (`ApiResumeExportService`).
+• **Export pipeline** – `ResumeTemplateProcessor` builds Mustache contexts from
+  the resume tree. `ResumeExportService` orchestrates template selection and
+  file I/O, while `NativePDFGenerator` and `TextResumeGenerator` focus purely on
+  rendering. UI sheets (menu commands, toolbar actions) invoke these services
+  through the injected dependencies.
 
 For a deep dive into the AI sub-system take a look at
 `PhysCloudResume/AI/README.md`.
@@ -85,8 +85,8 @@ Tests/                  XCTRuntimeAssertions based unit tests
 * Xcode 15 or newer (Swift 5.9)
 * API keys
   * `OPENAI_API_KEY` / `GEMINI_API_KEY` (environment or Keychain)
-  * Physics Cloud résumé export key – **currently hard-coded** in
-    `ResumeExportService.swift` (TODO: move to secure storage)
+  * OpenRouter (or compatible) key stored via the in-app settings UI. Keys are
+    persisted with `APIKeyManager` which wraps the macOS Keychain.
 
 ## Getting started
 
@@ -106,13 +106,28 @@ Tests/                  XCTRuntimeAssertions based unit tests
 3. Add your API keys to the *Physics Cloud Résumé* target → *Signing & 
    Capabilities* → *Environment Variables* (or export them in your shell).
 
-4. Build & run – the app is sandboxed and uses the *Documents* directory to
-   store exported PDFs.
+4. Build & run. The app stores exports alongside the résumé record and exposes
+   a quick preview inside the Resume Export panel.
 
 ## Running tests
 
-`⌘` + `U` will run the test suite.  The current focus is on the pure-Swift AI
-helpers – UI tests are planned but not yet implemented.
+`⌘` + `U` runs `xcodebuild test` for the `PhysCloudResume` scheme. Current
+coverage focuses on template builders and AI DTO transforms; UI coverage is
+manual for now.
+
+## Manual smoke checklist
+
+1. Launch the app, confirm the sidebar loads job applications, and switch tabs
+   (Listing → Resume → Cover Letters) to verify SwiftData-backed stores persist
+   selection state.
+2. Open **Clarify & Customize** from the toolbar, select a model, and ensure the
+   clarifying question sheet appears. Submit answers and confirm the revision
+   review sheet opens with streaming output when supported by the model.
+3. Export a résumé as PDF from the Résumé menu, verify the export succeeds, and
+   open the generated file from the export panel.
+4. Update the OpenRouter key in Settings → Debug Settings, then trigger a basic
+   AI action (e.g., résumé review) to confirm the facade reconfigures without a
+   restart.
 
 ## Contributing
 
@@ -128,8 +143,8 @@ Pull requests are welcome!  Please follow the existing code style
 See `Docs/plan-and-progress.md` for the full migration checklist.  Short-term
 goals include
 
-• Swap the remaining SwiftOpenAI code for the MacPaw client
-• Add streaming TTS controls
+• Expand integration tests around the resume export pipeline and template builder
+• Add streaming TTS controls with structured logging
 • Harden the résumé export API and move the key out of source-control
 
 ## License
