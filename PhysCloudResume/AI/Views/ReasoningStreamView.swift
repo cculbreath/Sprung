@@ -24,8 +24,6 @@ struct ReasoningStreamView: View {
     var body: some View {
         ZStack {
             if isVisible {
-                let _ = Logger.debug("🧠 [ReasoningStreamView] Rendering modal with text length: \(reasoningText.count)")
-                
                 // Semi-transparent backdrop
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
@@ -149,8 +147,6 @@ struct ReasoningStreamView: View {
                                     .padding(.vertical, 40)
                                 } else {
                                     VStack(alignment: .leading, spacing: 8) {
-                                        let _ = Logger.debug("🧠 [ReasoningStreamView] Rendering reasoning text - first 200 chars: \(reasoningText.prefix(200))")
-                                        
                                         // Use Text view with basic markdown parsing
                                         Text(parseBasicMarkdown(reasoningText))
                                             .font(.system(.body, design: .default))
@@ -245,7 +241,7 @@ struct ReasoningStreamView: View {
             }
         } catch {
             // If regex fails, return plain text
-            Logger.debug("Failed to parse markdown: \(error)")
+            Logger.debug("Failed to parse markdown: \(error)", category: .ui)
         }
         
         return attributedString
@@ -260,17 +256,17 @@ struct ReasoningStreamView: View {
 class ReasoningStreamManager {
     var isVisible: Bool = false {
         didSet {
-            Logger.debug("🧠 [ReasoningStreamManager] isVisible changed to: \(isVisible)")
+            Logger.verbose("🧠 [ReasoningStreamManager] isVisible changed to: \(isVisible)", category: .ui)
         }
     }
     var reasoningText: String = "" {
         didSet {
-            Logger.debug("🧠 [ReasoningStreamManager] reasoningText updated, length: \(reasoningText.count)")
+            Logger.verbose("🧠 [ReasoningStreamManager] reasoningText updated, length: \(reasoningText.count)", category: .ui)
         }
     }
     var modelName: String = "" {
         didSet {
-            Logger.debug("🧠 [ReasoningStreamManager] modelName changed to: \(modelName)")
+            Logger.verbose("🧠 [ReasoningStreamManager] modelName changed to: \(modelName)", category: .ui)
         }
     }
     var isStreaming: Bool = false
@@ -295,7 +291,12 @@ class ReasoningStreamManager {
                     
                     // Append reasoning content
                     if let reasoning = chunk.reasoningContent {
-                        Logger.debug("🧠 [ReasoningStreamManager] Appending reasoning: \(reasoning.prefix(100))...")
+                        if Logger.isVerboseEnabled {
+                            Logger.verbose(
+                                "🧠 [ReasoningStreamManager] Appending reasoning: \(reasoning.prefix(100))...",
+                                category: .ui
+                            )
+                        }
                         reasoningText += reasoning
                     }
                     
@@ -305,7 +306,7 @@ class ReasoningStreamManager {
                     }
                 }
             } catch {
-                Logger.error("🚨 Error in reasoning stream: \(error)")
+                Logger.error("🚨 Error in reasoning stream: \(error)", category: .ai)
                 isStreaming = false
             }
         }

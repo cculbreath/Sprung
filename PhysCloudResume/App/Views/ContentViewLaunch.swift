@@ -13,6 +13,7 @@ struct ContentViewLaunch: View {
         Group {
             if let deps {
                 ContentView()
+                    .environment(deps.debugSettingsStore)
                     .environment(deps.jobAppStore)
                     .environment(deps.resRefStore)
                     .environment(deps.resModelStore)
@@ -30,10 +31,16 @@ struct ContentViewLaunch: View {
         }
         .task {
             if deps == nil {
-                Logger.debug("🔧 ContentViewLaunch: Creating AppDependencies (once) with environment ModelContext")
+                Logger.debug(
+                    "🔧 ContentViewLaunch: Creating AppDependencies (once) with environment ModelContext",
+                    category: .appLifecycle
+                )
                 deps = AppDependencies(modelContext: modelContext)
             } else {
-                Logger.debug("ℹ️ ContentViewLaunch: AppDependencies already initialized; skipping re-init")
+                Logger.debug(
+                    "ℹ️ ContentViewLaunch: AppDependencies already initialized; skipping re-init",
+                    category: .appLifecycle
+                )
             }
         }
         // Note: AppState is already injected via .environment(appState) in PhysicsCloudResumeApp
