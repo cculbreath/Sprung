@@ -22,14 +22,10 @@ class ResumeReviseViewModel {
     // MARK: - UI State (ViewModel Layer)
     var showResumeRevisionSheet: Bool = false {
         didSet {
-            Logger.debug("🔍 [ResumeReviseViewModel] showResumeRevisionSheet changed from \(oldValue) to \(showResumeRevisionSheet)")
-            if showResumeRevisionSheet {
-                Logger.debug("🔍 [ResumeReviseViewModel] Posting showResumeRevisionSheet notification")
-                NotificationCenter.default.post(name: .showResumeRevisionSheet, object: nil)
-            } else {
-                Logger.debug("🔍 [ResumeReviseViewModel] Posting hideResumeRevisionSheet notification")
-                NotificationCenter.default.post(name: .hideResumeRevisionSheet, object: nil)
-            }
+            Logger.debug(
+                "🔍 [ResumeReviseViewModel] showResumeRevisionSheet changed from \(oldValue) to \(showResumeRevisionSheet)",
+                category: .ui
+            )
         }
     }
     var resumeRevisions: [ProposedRevisionNode] = []

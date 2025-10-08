@@ -10,6 +10,7 @@ import SwiftUI
 import SwiftData
 
 // MARK: - Menu Command Notifications
+/// Central list of notifications bridging AppKit menu/toolbar commands into the SwiftUI layer.
 extension Notification.Name {
     // Job Application Commands
     static let newJobApp = Notification.Name("newJobApp")
@@ -21,8 +22,6 @@ extension Notification.Name {
     static let clarifyCustomize = Notification.Name("clarifyCustomize")
     static let optimizeResume = Notification.Name("optimizeResume")
     static let showResumeInspector = Notification.Name("showResumeInspector")
-    static let showResumeRevisionSheet = Notification.Name("showResumeRevisionSheet")
-    static let hideResumeRevisionSheet = Notification.Name("hideResumeRevisionSheet")
     
     // Cover Letter Commands
     static let generateCoverLetter = Notification.Name("generateCoverLetter")

@@ -6,7 +6,6 @@
 //
 
 import SwiftData
-import Combine
 import Foundation
 
 // Shared helper for SwiftData persistence.
@@ -30,8 +29,6 @@ final class JobAppStore: SwiftDataStore {
     var resStore: ResStore
     var coverLetterStore: CoverLetterStore
     
-    private var cancellables = Set<AnyCancellable>()
-
     // MARK: - Initialiser
 
     init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
@@ -39,14 +36,6 @@ final class JobAppStore: SwiftDataStore {
         self.resStore = resStore
         self.coverLetterStore = coverLetterStore
         
-        // Listen for refresh notifications
-        NotificationCenter.default.publisher(for: NSNotification.Name("RefreshJobApps"))
-            .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.refreshJobApps()
-                }
-            }
-            .store(in: &cancellables)
     }
 
     // MARK: - Methods

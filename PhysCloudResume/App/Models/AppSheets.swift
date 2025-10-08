@@ -34,8 +34,15 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
     
-    // State to control RevisionReviewView sheet via notifications
-    @State private var showRevisionReviewSheet = false
+    private var revisionSheetBinding: Binding<Bool> {
+        Binding(
+            get: { appState.resumeReviseViewModel?.showResumeRevisionSheet ?? false },
+            set: { newValue in
+                guard let viewModel = appState.resumeReviseViewModel else { return }
+                viewModel.showResumeRevisionSheet = newValue
+            }
+        )
+    }
     
     func body(content: Content) -> some View {
         content
@@ -51,7 +58,7 @@ struct AppSheetsModifier: ViewModifier {
                     ResumeReviewSheet(selectedResume: .constant(selectedResume))
                 }
             }
-            .sheet(isPresented: $showRevisionReviewSheet) {
+            .sheet(isPresented: revisionSheetBinding) {
                 if let selectedResume = jobAppStore.selectedApp?.selectedRes,
                    let viewModel = appState.resumeReviseViewModel {
                     RevisionReviewView(
@@ -84,21 +91,6 @@ struct AppSheetsModifier: ViewModifier {
                                 )
                             }
                         }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .showResumeRevisionSheet)) { _ in
-                Logger.debug("🔍 [AppSheets] Received showResumeRevisionSheet notification", category: .ui)
-                showRevisionReviewSheet = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .hideResumeRevisionSheet)) { _ in
-                Logger.debug("🔍 [AppSheets] Received hideResumeRevisionSheet notification", category: .ui)
-                showRevisionReviewSheet = false
-            }
-            .onChange(of: showRevisionReviewSheet) { _, newValue in
-                // Sync sheet state back to ViewModel when manually closed
-                if !newValue {
-                    Logger.debug("🔍 [AppSheets] Sheet dismissed, syncing back to ViewModel", category: .ui)
-                    appState.resumeReviseViewModel?.showResumeRevisionSheet = false
                 }
             }
             .sheet(isPresented: $sheets.showMultiModelChooseBest) {
