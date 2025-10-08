@@ -69,7 +69,6 @@ enum LLMError: LocalizedError {
 @MainActor
 @Observable
 class LLMService {
-    static let shared = LLMService()
     
     // Dependencies
     private var appState: AppState?
@@ -77,12 +76,14 @@ class LLMService {
     private var enabledLLMStore: EnabledLLMStore?
     
     // Components
-    private let requestExecutor = LLMRequestExecutor()
+    private let requestExecutor: LLMRequestExecutor
     
     // Configuration
     private let defaultTemperature: Double = 1.0
     
-    private init() {}
+    init(requestExecutor: LLMRequestExecutor = LLMRequestExecutor()) {
+        self.requestExecutor = requestExecutor
+    }
     
     // MARK: - Initialization
     
@@ -92,29 +93,33 @@ class LLMService {
         self.conversationManager = ConversationManager(modelContext: modelContext)
         self.enabledLLMStore = appState.enabledLLMStore
         
-        // Configure request executor with current API key
-        reconfigureClient()
-        
-        Logger.info("🔄 LLMService initialized with OpenRouter client")
+        // Configure request executor with current API key off the main actor
+        Task { [weak self] in
+            guard let self else { return }
+            await self.requestExecutor.configureClient()
+            Logger.info("🔄 LLMService initialized with OpenRouter client")
+        }
     }
     
     /// Reconfigure the OpenRouter client with the current API key from UserDefaults
     func reconfigureClient() {
-        requestExecutor.configureClient()
-        Logger.info("🔄 LLMService reconfigured OpenRouter client")
+        Task.detached { [requestExecutor] in
+            await requestExecutor.configureClient()
+            Logger.info("🔄 LLMService reconfigured OpenRouter client")
+        }
     }
     
-    private func ensureInitialized() throws {
+    private func ensureInitialized() async throws {
         guard appState != nil else {
             throw LLMError.clientError("LLMService not initialized - call initialize() first")
         }
         
         // Ensure client is configured with current API key
-        if !requestExecutor.isConfigured() {
-            reconfigureClient()
+        if !(await requestExecutor.isConfigured()) {
+            await requestExecutor.configureClient()
         }
         
-        guard requestExecutor.isConfigured() else {
+        guard await requestExecutor.isConfigured() else {
             throw LLMError.clientError("OpenRouter API key not configured")
         }
         
@@ -131,7 +136,7 @@ class LLMService {
         modelId: String,
         temperature: Double? = nil
     ) async throws -> String {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         // Validate model
         try validateModel(modelId: modelId, for: [])
@@ -161,7 +166,7 @@ class LLMService {
         images: [Data],
         temperature: Double? = nil
     ) async throws -> String {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         // Validate model supports vision
         try validateModel(modelId: modelId, for: [.vision])
@@ -193,7 +198,7 @@ class LLMService {
         temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         // Validate model
         try validateModel(modelId: modelId, for: [])
@@ -222,7 +227,7 @@ class LLMService {
         responseType: T.Type,
         temperature: Double? = nil
     ) async throws -> T {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         // Validate model supports vision
         try validateModel(modelId: modelId, for: [.vision])
@@ -255,7 +260,7 @@ class LLMService {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    try ensureInitialized()
+                    try await ensureInitialized()
                     
                     // Validate model
                     try validateModel(modelId: modelId, for: [])
@@ -333,7 +338,7 @@ class LLMService {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    try ensureInitialized()
+                    try await ensureInitialized()
                     
                     // Validate model
                     try validateModel(modelId: modelId, for: [])
@@ -414,7 +419,7 @@ class LLMService {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    try ensureInitialized()
+                    try await ensureInitialized()
                     
                     guard let conversationManager = conversationManager else {
                         throw LLMError.clientError("Conversation manager not available")
@@ -550,7 +555,7 @@ class LLMService {
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> (conversationId: UUID, stream: AsyncThrowingStream<LLMStreamChunk, Error>) {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         guard let conversationManager = conversationManager else {
             throw LLMError.clientError("Conversation manager not available")
@@ -675,7 +680,7 @@ class LLMService {
         modelId: String,
         temperature: Double? = nil
     ) async throws -> (conversationId: UUID, response: String) {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         guard let conversationManager = conversationManager else {
             throw LLMError.clientError("Conversation manager not available")
@@ -732,7 +737,7 @@ class LLMService {
         images: [Data] = [],
         temperature: Double? = nil
     ) async throws -> String {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         guard let conversationManager = conversationManager else {
             throw LLMError.clientError("Conversation manager not available")
@@ -806,7 +811,7 @@ class LLMService {
         temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         guard let conversationManager = conversationManager else {
             throw LLMError.clientError("Conversation manager not available")
@@ -885,7 +890,7 @@ class LLMService {
         responseType: T.Type,
         temperature: Double? = nil
     ) async throws -> [String: T] {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         Logger.info("🚀 Starting parallel execution across \(modelIds.count) models")
         var results: [String: T] = [:]
@@ -932,7 +937,7 @@ class LLMService {
         temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> ParallelExecutionResult<T> {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         Logger.info("🚀 Starting flexible parallel execution across \(modelIds.count) models")
         var results: [String: T] = [:]
@@ -990,7 +995,7 @@ class LLMService {
         jsonSchema: JSONSchema? = nil,
         onProgress: @MainActor @escaping (Int, Int) -> Void
     ) async throws -> ParallelExecutionResult<T> {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         Logger.info("🚀 Starting flexible parallel execution with progress across \(modelIds.count) models")
         var results: [String: T] = [:]
@@ -1070,7 +1075,7 @@ class LLMService {
         temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
-        try ensureInitialized()
+        try await ensureInitialized()
         
         // Validate model exists
         try validateModel(modelId: modelId, for: [])
@@ -1157,7 +1162,9 @@ class LLMService {
     
     /// Cancel all current requests
     func cancelAllRequests() {
-        requestExecutor.cancelAllRequests()
-        Logger.info("🛑 Cancelled all LLM requests")
+        Task.detached { [requestExecutor] in
+            await requestExecutor.cancelAllRequests()
+            Logger.info("🛑 Cancelled all LLM requests")
+        }
     }
 }

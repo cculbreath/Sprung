@@ -7,13 +7,13 @@
 
 import Foundation
 
-/// Service for skill reordering using the unified LLM architecture
-/// Replaces ReorderSkillsProvider with cleaner LLMService integration
+/// Service for skill reordering using the unified LLM facade
+/// Replaces ReorderSkillsProvider with cleaner LLM integration
 @MainActor
 class SkillReorderService {
     
     // MARK: - Dependencies
-    private let llmService: LLMService
+    private let llm: LLMFacade
     
     // MARK: - Configuration
     private let systemPrompt = """
@@ -24,13 +24,13 @@ class SkillReorderService {
     IMPORTANT: Output ONLY the JSON object with the "reordered_skills_and_expertise" array. Do not include any additional commentary, explanation, or text outside the JSON.
     """
     
-    init(llmService: LLMService) {
-        self.llmService = llmService
+    init(llmFacade: LLMFacade) {
+        self.llm = llmFacade
     }
     
     // MARK: - Public Interface
     
-    /// Fetch skill reordering recommendations using LLMService
+    /// Fetch skill reordering recommendations using LLMFacade
     /// - Parameters:
     ///   - resume: The resume containing skills to reorder
     ///   - jobDescription: The job description to match against
@@ -46,9 +46,6 @@ class SkillReorderService {
         guard !jobDescription.isEmpty else {
             throw SkillReorderError.noJobDescription
         }
-        
-        // Validate model capabilities
-        try llmService.validateModel(modelId: modelId, for: [])
         
         // Extract skills JSON from resume tree
         guard let skillsJsonString = extractSkillsForReordering(resume: resume) else {
@@ -66,10 +63,10 @@ class SkillReorderService {
         Logger.debug("🎯 Requesting skill reordering with model: \(modelId)")
         
         // Execute structured request
-        let response = try await llmService.executeStructured(
+        let response: ReorderSkillsResponse = try await llm.executeStructured(
             prompt: "\(systemPrompt)\n\n\(prompt)",
             modelId: modelId,
-            responseType: ReorderSkillsResponse.self
+            as: ReorderSkillsResponse.self
         )
         
         // Validate response

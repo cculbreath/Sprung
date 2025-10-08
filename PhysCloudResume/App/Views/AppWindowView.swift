@@ -13,6 +13,7 @@ struct AppWindowView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(\.appState) private var appState: AppState
+    @Environment(LLMFacade.self) private var llmFacade: LLMFacade
 
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
@@ -158,7 +159,7 @@ struct AppWindowView: View {
         
         do {
             let clarifyingViewModel = ClarifyingQuestionsViewModel(
-                llmService: LLMService.shared,
+                llmFacade: llmFacade,
                 appState: appState
             )
             
@@ -210,7 +211,7 @@ struct AppWindowView: View {
         }
         
         do {
-            let service = BestCoverLetterService(llmService: LLMService.shared)
+            let service = BestCoverLetterService(llmFacade: llmFacade)
             let result = try await service.selectBestCoverLetter(
                 jobApp: jobApp, 
                 modelId: modelId
@@ -335,5 +336,4 @@ struct AppWindowViewModifiers: ViewModifier {
         return step3
     }
 }
-
 

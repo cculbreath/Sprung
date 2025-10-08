@@ -15,7 +15,9 @@ final class SwiftOpenAIClient: LLMClient {
     init(executor: LLMRequestExecutor = LLMRequestExecutor()) {
         self.executor = executor
         // Ensure client is configured
-        self.executor.configureClient()
+        Task {
+            await self.executor.configureClient()
+        }
     }
 
     func executeText(prompt: String, modelId: String, temperature: Double? = nil) async throws -> String {
@@ -45,7 +47,7 @@ final class SwiftOpenAIClient: LLMClient {
         return content
     }
 
-    func executeStructured<T: Decodable & Sendable>(prompt: String, modelId: String, as: T.Type, temperature: Double? = nil) async throws -> T {
+    func executeStructured<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, temperature: Double? = nil) async throws -> T {
         let params = LLMRequestBuilder.buildStructuredRequest(
             prompt: prompt,
             modelId: modelId,
@@ -57,7 +59,7 @@ final class SwiftOpenAIClient: LLMClient {
         return try JSONResponseParser.parseStructured(response, as: T.self)
     }
 
-    func executeStructuredWithImages<T: Decodable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type, temperature: Double? = nil) async throws -> T {
+    func executeStructuredWithImages<T: Codable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type, temperature: Double? = nil) async throws -> T {
         let params = LLMRequestBuilder.buildStructuredVisionRequest(
             prompt: prompt,
             modelId: modelId,
@@ -103,4 +105,3 @@ final class SwiftOpenAIClient: LLMClient {
         }
     }
 }
-

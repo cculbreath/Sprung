@@ -16,10 +16,7 @@ class BatchCoverLetterGenerator {
     }
 
     private func executeText(_ prompt: String, modelId: String) async throws -> String {
-        if let facade = Optional(llmFacade) {
-            return try await facade.executeText(prompt: prompt, modelId: modelId, temperature: nil)
-        }
-        return try await LLMService.shared.execute(prompt: prompt, modelId: modelId)
+        return try await llmFacade.executeText(prompt: prompt, modelId: modelId, temperature: nil)
     }
 
     private func startConversation(systemPrompt: String?, userMessage: String, modelId: String) async throws -> (UUID, String) {

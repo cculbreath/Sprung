@@ -35,6 +35,7 @@ struct APIKeysSettingsView: View {
     // Environment
     @Environment(\.appState) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    @Environment(LLMService.self) private var llmService
     
     // App Storage for API keys
     @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
@@ -51,7 +52,7 @@ struct APIKeysSettingsView: View {
     private func updateLLMClient() {
         Task { @MainActor in
             // Reinitialize the LLM service with updated API keys
-            LLMService.shared.initialize(appState: appState)
+            llmService.initialize(appState: appState)
             
             // Fetch OpenRouter models if the OpenRouter API key was changed
             if !openRouterApiKey.isEmpty {

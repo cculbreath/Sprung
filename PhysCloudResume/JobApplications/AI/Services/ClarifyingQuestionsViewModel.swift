@@ -17,6 +17,7 @@ class ClarifyingQuestionsViewModel {
     // MARK: - Dependencies
     private let llm: LLMFacade
     private let appState: AppState
+    private var activeStreamingHandle: LLMStreamingHandle?
     
     // MARK: - UI State
     var isGeneratingQuestions: Bool = false
@@ -79,16 +80,20 @@ class ClarifyingQuestionsViewModel {
                 )
                 
                 // Start streaming conversation with reasoning
-                let (conversationId, stream) = try await llm.startConversationStreaming(
+                cancelActiveStreaming()
+                let handle = try await llm.startConversationStreaming(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
                     modelId: modelId,
                     reasoning: reasoning,
                     jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
                 )
-                
+                guard let conversationId = handle.conversationId else {
+                    throw LLMError.clientError("Failed to establish conversation for clarifying questions")
+                }
                 // Store the conversation ID
                 currentConversationId = conversationId
+                activeStreamingHandle = handle
                 
                 // Clear any previous reasoning content and start fresh
                 appState.globalReasoningStreamManager.clear()
@@ -97,9 +102,9 @@ class ClarifyingQuestionsViewModel {
                 var collectingJSON = false
                 var jsonResponse = ""
                 
-                for try await chunk in stream {
+                for try await chunk in handle.stream {
                     // Handle reasoning content
-                    if let reasoningContent = chunk.reasoningContent {
+                    if let reasoningContent = chunk.reasoning {
                         Logger.debug("🧠 [ClarifyingQuestionsViewModel] Adding reasoning content: \(reasoningContent.prefix(100))...")
                         appState.globalReasoningStreamManager.reasoningText += reasoningContent
                     }
@@ -120,6 +125,7 @@ class ClarifyingQuestionsViewModel {
                         appState.globalReasoningStreamManager.isStreaming = false
                     }
                 }
+                cancelActiveStreaming()
                 
                 // Parse the JSON response
                 let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
@@ -131,7 +137,7 @@ class ClarifyingQuestionsViewModel {
             } else {
                 // Use non-streaming for models without reasoning support
                 // Start conversation
-                let (conversationId, _) = try await llmService.startConversation(
+                let (conversationId, _) = try await llm.startConversation(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
                     modelId: modelId
@@ -140,11 +146,11 @@ class ClarifyingQuestionsViewModel {
                 // Store the conversation ID
                 currentConversationId = conversationId
                 
-                let questionsRequest = try await llmService.continueConversationStructured(
+                let questionsRequest = try await llm.continueConversationStructured(
                     userMessage: "Please provide clarifying questions in the specified JSON format.",
                     modelId: modelId,
                     conversationId: conversationId,
-                    responseType: ClarifyingQuestionsRequest.self,
+                    as: ClarifyingQuestionsRequest.self,
                     jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
                 )
                 
@@ -206,18 +212,22 @@ class ClarifyingQuestionsViewModel {
             appState.globalReasoningStreamManager.isVisible = true
             appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
             
-            // Stream the answer processing
-            let stream = llm.continueConversationStreaming(
+            cancelActiveStreaming()
+            let handle = try await llm.continueConversationStreaming(
                 userMessage: answerPrompt,
                 modelId: modelId,
                 conversationId: conversationId,
-                reasoning: reasoning
+                images: [],
+                temperature: nil,
+                reasoning: reasoning,
+                jsonSchema: nil
             )
+            activeStreamingHandle = handle
             
             // Process the stream
-            for try await chunk in stream {
+            for try await chunk in handle.stream {
                 // Handle reasoning content
-                if let reasoningContent = chunk.reasoningContent {
+                if let reasoningContent = chunk.reasoning {
                     appState.globalReasoningStreamManager.reasoningText += reasoningContent
                 }
                 
@@ -227,6 +237,7 @@ class ClarifyingQuestionsViewModel {
                     // Keep modal visible - it will be handled by revision generation
                 }
             }
+            cancelActiveStreaming()
         } else {
             // Use non-streaming for models without reasoning
             Logger.info("📝 Using non-streaming for clarifying question answers: \(modelId)")
@@ -246,6 +257,11 @@ class ClarifyingQuestionsViewModel {
             conversationId: conversationId,
             resume: resume
         )
+    }
+    
+    private func cancelActiveStreaming() {
+        activeStreamingHandle?.cancel()
+        activeStreamingHandle = nil
     }
     
     // MARK: - ResumeReviseViewModel Handoff
@@ -400,7 +416,7 @@ class ClarifyingQuestionsViewModel {
         let initialUserMessage = await query.wholeResumeQueryString()
         
         // Start conversation
-        let (conversationId, _) = try await llmService.startConversation(
+        let (conversationId, _) = try await llm.startConversation(
             systemPrompt: systemPrompt,
             userMessage: initialUserMessage,
             modelId: modelId

@@ -99,16 +99,37 @@ class EnabledLLMStore: SwiftDataStore {
     }
     
     /// Update model capabilities from validation results
-    func updateModelCapabilities(modelId: String, supportsJSONSchema: Bool, supportsImages: Bool) {
-        if let model = enabledModels.first(where: { $0.modelId == modelId }) {
-            model.supportsJSONSchema = supportsJSONSchema
-            model.supportsImages = supportsImages
-            model.supportsStructuredOutput = supportsJSONSchema  // JSON schema implies structured output
-            model.lastUsed = Date()
-            
-            try? modelContext.save()
-            Logger.debug("📊 Updated capabilities for \(modelId): JSON Schema=\(supportsJSONSchema), Images=\(supportsImages)")
+    func updateModelCapabilities(
+        modelId: String,
+        supportsJSONSchema: Bool? = nil,
+        supportsImages: Bool? = nil,
+        supportsReasoning: Bool? = nil,
+        isTextToText: Bool? = nil
+    ) {
+        guard let model = enabledModels.first(where: { $0.modelId == modelId }) else {
+            return
         }
+        
+        if let supportsJSONSchema {
+            model.supportsJSONSchema = supportsJSONSchema
+            model.supportsStructuredOutput = supportsJSONSchema
+        }
+        if let supportsImages {
+            model.supportsImages = supportsImages
+        }
+        if let supportsReasoning {
+            model.supportsReasoning = supportsReasoning
+        }
+        if let isTextToText {
+            model.isTextToText = isTextToText
+        }
+        
+        model.lastUsed = Date()
+        try? modelContext.save()
+        refreshEnabledModels()
+        let schemaDescription = supportsJSONSchema.map { "\($0)" } ?? "<unchanged>"
+        let imagesDescription = supportsImages.map { "\($0)" } ?? "<unchanged>"
+        Logger.debug("📊 Updated capabilities for \(modelId): JSON Schema=\(schemaDescription), Images=\(imagesDescription)")
     }
     
     /// Disable a model by ID
@@ -140,5 +161,13 @@ class EnabledLLMStore: SwiftDataStore {
     /// Get all enabled model IDs
     var enabledModelIds: [String] {
         return enabledModels.map(\.modelId)
+    }
+    
+    /// Returns true if the provided model ID is marked as enabled
+    func isModelEnabled(_ modelId: String) -> Bool {
+        guard let model = enabledModels.first(where: { $0.modelId == modelId }) else {
+            return true
+        }
+        return model.isEnabled
     }
 }
