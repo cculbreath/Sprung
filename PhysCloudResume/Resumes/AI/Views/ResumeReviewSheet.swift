@@ -9,7 +9,7 @@ import Foundation
 
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
 
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()

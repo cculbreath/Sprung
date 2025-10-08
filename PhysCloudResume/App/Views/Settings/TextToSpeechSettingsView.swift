@@ -10,7 +10,7 @@ import SwiftUI
 
 struct TextToSpeechSettingsView: View {
     // AppStorage properties specific to this view
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""

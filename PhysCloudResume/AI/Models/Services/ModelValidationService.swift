@@ -11,8 +11,6 @@ import SwiftUI
 @MainActor
 @Observable
 class ModelValidationService {
-    static let shared = ModelValidationService()
-    
     private let baseURL = "https://openrouter.ai/api/v1"
     
     // Validation state
@@ -20,7 +18,7 @@ class ModelValidationService {
     var validationResults: [String: ModelValidationResult] = [:]
     var failedModels: [String] = []
     
-    private init() {}
+    init() {}
     
     /// Result of model endpoint validation
     struct ModelValidationResult {

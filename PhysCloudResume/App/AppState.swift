@@ -12,11 +12,9 @@ import SwiftData
 @Observable
 @MainActor
 class AppState {
-    // Singleton instance
-    static let shared = AppState()
-    
-    // Private initializer to prevent external instantiation
-    private init() {
+    init(openRouterService: OpenRouterService, modelValidationService: ModelValidationService) {
+        self.openRouterService = openRouterService
+        self.modelValidationService = modelValidationService
         configureOpenRouterService()
         restoreSelectedTab()
     }
@@ -41,19 +39,20 @@ class AppState {
     var selectedResume: Resume? {
         selectedJobApp?.selectedRes
     }
+    var isReadOnlyMode = false
     
     // Persistent selected job app UUID
     @ObservationIgnored @AppStorage("selectedJobAppId") private var selectedJobAppId: String = ""
     
     // OpenRouter service
-    let openRouterService = OpenRouterService.shared
+    let openRouterService: OpenRouterService
     
     // EnabledLLM store for persistent model management
     var enabledLLMStore: EnabledLLMStore?
-    weak var llmService: LLMService?
+    var llmService: LLMService?
     
     // Model validation service
-    let modelValidationService = ModelValidationService.shared
+    let modelValidationService: ModelValidationService
 
     // Debug/diagnostics settings
     var debugSettingsStore: DebugSettingsStore?

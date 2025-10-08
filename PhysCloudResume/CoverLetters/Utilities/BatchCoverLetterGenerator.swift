@@ -7,12 +7,20 @@ class BatchCoverLetterGenerator {
     private let jobAppStore: JobAppStore
     private let coverLetterStore: CoverLetterStore
     private let llmFacade: LLMFacade
-    
-    init(appState: AppState, jobAppStore: JobAppStore, coverLetterStore: CoverLetterStore, llmFacade: LLMFacade) {
+    private let coverLetterService: CoverLetterService
+
+    init(
+        appState: AppState,
+        jobAppStore: JobAppStore,
+        coverLetterStore: CoverLetterStore,
+        llmFacade: LLMFacade,
+        coverLetterService: CoverLetterService
+    ) {
         self.appState = appState
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.llmFacade = llmFacade
+        self.coverLetterService = coverLetterService
     }
 
     private func executeText(_ prompt: String, modelId: String) async throws -> String {
@@ -291,9 +299,11 @@ class BatchCoverLetterGenerator {
         
         // Set up mode
         let mode: CoverAiMode = revision != nil ? .rewrite : .generate
-        
+
         // Generate content using direct LLM calls (no temporary CoverLetter objects)
         let responseText: String
+        var conversationIdForNewLetter: UUID?
+        var usesReasoningModelForNewLetter = false
         if let revision = revision {
             // This is a revision - build prompt and call LLM directly
             let query = CoverLetterQuery(
@@ -309,7 +319,7 @@ class BatchCoverLetterGenerator {
             )
             
             // Check if we have an existing conversation for revisions
-            if let conversationId = CoverLetterService.shared.conversations[baseCoverLetter.id] {
+            if let conversationId = coverLetterService.conversations[baseCoverLetter.id] {
                 responseText = try await continueConversation(
                     userMessage: userMessage,
                     modelId: model,
@@ -317,11 +327,12 @@ class BatchCoverLetterGenerator {
                 )
             } else {
                 let systemPrompt = query.systemPrompt(for: model)
-                let (_, initialResponse) = try await startConversation(
+                let (conversationId, initialResponse) = try await startConversation(
                     systemPrompt: systemPrompt,
                     userMessage: userMessage,
                     modelId: model
                 )
+                coverLetterService.conversations[baseCoverLetter.id] = conversationId
                 responseText = initialResponse
             }
         } else {
@@ -338,25 +349,27 @@ class BatchCoverLetterGenerator {
                 mode: .generate,
                 includeResumeRefs: baseCoverLetter.includeResumeRefs
             )
-            
+
             // Check if this is an o1 model that doesn't support system messages
-            let isO1Model = CoverLetterService.shared.isReasoningModel(model)
+            let isO1Model = coverLetterService.isReasoningModel(model)
+            usesReasoningModelForNewLetter = isO1Model
             
             if isO1Model {
                 let combinedMessage = systemPrompt + "\n\n" + userMessage
                 responseText = try await executeText(combinedMessage, modelId: model)
             } else {
-                let (_, initialResponse) = try await startConversation(
+                let (newConversationId, initialResponse) = try await startConversation(
                     systemPrompt: systemPrompt,
                     userMessage: userMessage,
                     modelId: model
                 )
+                conversationIdForNewLetter = newConversationId
                 responseText = initialResponse
             }
         }
-        
+
         // Extract cover letter content from response
-        let content = CoverLetterService.shared.extractCoverLetterContent(from: responseText)
+        let content = coverLetterService.extractCoverLetterContent(from: responseText)
         
         // Validate that the content is not empty
         guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -398,6 +411,9 @@ class BatchCoverLetterGenerator {
         // Persist the letter after it's fully populated
         // Note: jobApp is guaranteed to exist due to guard statement above
         coverLetterStore.addLetter(letter: newLetter, to: jobApp)
+        if let conversationIdForNewLetter, !usesReasoningModelForNewLetter {
+            coverLetterService.conversations[newLetter.id] = conversationIdForNewLetter
+        }
         
         Logger.debug("📝 Created cover letter: \(newLetter.name) for model: \(model)")
         

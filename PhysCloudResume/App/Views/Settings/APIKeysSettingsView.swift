@@ -33,7 +33,7 @@ struct APIKeysSettingsView: View {
     @State private var isHoveringXmark = false
     
     // Environment
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(LLMService.self) private var llmService
     

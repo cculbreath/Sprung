@@ -4,6 +4,7 @@ import SwiftUI
 struct CoverLetterGenerateButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+    @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     
     @State private var showCoverLetterModelSheet = false
     @State private var selectedCoverLetterModel = ""
@@ -63,7 +64,7 @@ struct CoverLetterGenerateButton: View {
         }
         
         do {
-            try await CoverLetterService.shared.generateNewCoverLetter(
+            try await coverLetterService.generateNewCoverLetter(
                 jobApp: jobApp,
                 resume: resume,
                 modelId: modelId,

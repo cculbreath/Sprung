@@ -12,7 +12,8 @@ import AppKit
 struct AppWindowView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @Environment(\.appState) private var appState: AppState
+    @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
+    @Environment(AppState.self) private var appState: AppState
     @Environment(LLMFacade.self) private var llmFacade: LLMFacade
 
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
@@ -190,7 +191,7 @@ struct AppWindowView: View {
         }
         
         do {
-            try await CoverLetterService.shared.generateNewCoverLetter(
+            try await coverLetterService.generateNewCoverLetter(
                 jobApp: jobApp,
                 resume: resume,
                 modelId: modelId,
@@ -336,4 +337,3 @@ struct AppWindowViewModifiers: ViewModifier {
         return step3
     }
 }
-

@@ -13,48 +13,52 @@ import SwiftUI
 @main
 struct PhysicsCloudResumeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @Bindable private var appState = AppState.shared
     private let modelContainer: ModelContainer
+    private let appDependencies: AppDependencies
+    private let appEnvironment: AppEnvironment
     
     init() {
         // Preflight backup before opening/migrating the store
         SwiftDataBackupManager.performPreflightBackupIfNeeded()
-        // Create the model container with migration support
+        var resolvedContainer: ModelContainer
+        var launchState: AppEnvironment.LaunchState = .ready
+
+        // Attempt to create the migration-aware container first
         do {
-            // Use the migration-aware container from SchemaVersioning
-            let container = try ModelContainer.createWithMigration()
-            self.modelContainer = container
+            resolvedContainer = try ModelContainer.createWithMigration()
             Logger.debug("✅ ModelContainer created with migration support (Schema V3)", category: .appLifecycle)
         } catch {
             Logger.error("❌ Failed to create ModelContainer with migrations: \(error)", category: .appLifecycle)
-            
-            // Fallback to direct container creation (for debugging only)
+
             do {
-                let fallbackContainer = try ModelContainer(for: 
-                    JobApp.self,
-                    Resume.self,
-                    ResRef.self,
-                    TreeNode.self,
-                    FontSizeNode.self,
-                    CoverLetter.self,
-                    MessageParams.self,
-                    CoverRef.self,
-                    ApplicantProfile.self,
-                    ResModel.self,
-                    ConversationContext.self,
-                    ConversationMessage.self,
-                    EnabledLLM.self
-                )
-                self.modelContainer = fallbackContainer
-                Logger.warning("⚠️ Using fallback ModelContainer without migration plan", category: .appLifecycle)
+                resolvedContainer = try Self.makeDirectModelContainer()
+                launchState = .readOnly(message: Self.migrationFailureMessage(from: error))
+                Logger.warning("⚠️ Running in read-only mode using fallback ModelContainer without migration plan", category: .appLifecycle)
             } catch {
                 Logger.error("❌ Failed to create fallback ModelContainer: \(error)", category: .appLifecycle)
-                fatalError("Failed to create ModelContainer: \(error)")
+                do {
+                    let inMemoryConfig = ModelConfiguration(isStoredInMemoryOnly: true)
+                    resolvedContainer = try Self.makeDirectModelContainer(configuration: inMemoryConfig)
+                    launchState = .readOnly(message: Self.backupRestoreRequiredMessage(from: error))
+                    Logger.error("🚨 Using in-memory ModelContainer; user data unavailable until restore completes", category: .appLifecycle)
+                } catch {
+                    Logger.error("❌ Failed to create temporary in-memory ModelContainer: \(error)", category: .appLifecycle)
+                    let inMemoryConfig = ModelConfiguration(isStoredInMemoryOnly: true)
+                    resolvedContainer = try! Self.makeDirectModelContainer(configuration: inMemoryConfig)
+                    launchState = .readOnly(message: Self.backupRestoreRequiredMessage(from: error))
+                }
             }
         }
+
+        self.modelContainer = resolvedContainer
+        let dependencies = AppDependencies(modelContext: resolvedContainer.mainContext)
+        dependencies.appEnvironment.launchState = launchState
+        dependencies.appEnvironment.appState.isReadOnlyMode = launchState.isReadOnly
+        self.appDependencies = dependencies
+        self.appEnvironment = dependencies.appEnvironment
         // Log after all properties are initialized
         Logger.debug(
-            "🔴 PhysicsCloudResumeApp init - appState address: \(Unmanaged.passUnretained(appState).toOpaque())",
+            "🔴 PhysicsCloudResumeApp init - appState address: \(Unmanaged.passUnretained(appEnvironment.appState).toOpaque())",
             category: .appLifecycle
         )
     
@@ -62,11 +66,12 @@ struct PhysicsCloudResumeApp: App {
     }
     var body: some Scene {
         Window("", id: "myApp") {
-            ContentViewLaunch() // ContentView handles its own JobAppStore initialization
-                .environment(appState)
+            ContentViewLaunch(deps: appDependencies)
+                .environment(appEnvironment)
+                .environment(appEnvironment.appState)
                 .onAppear {
                     // Pass appState and modelContainer to AppDelegate so it can use them for windows
-                    appDelegate.appState = appState
+                    appDelegate.appState = appEnvironment.appState
                     appDelegate.modelContainer = modelContainer
                 }
         }
@@ -253,20 +258,59 @@ struct PhysicsCloudResumeApp: App {
     }
 }
 
-// Environment key for accessing AppState singleton
-struct AppStateKey: EnvironmentKey {
-    nonisolated static let defaultValue: AppState = MainActor.assumeIsolated { AppState.shared }
-}
+private extension PhysicsCloudResumeApp {
+    static func makeDirectModelContainer(configuration: ModelConfiguration? = nil) throws -> ModelContainer {
+        if let configuration {
+            return try ModelContainer(
+                for:
+                    JobApp.self,
+                    Resume.self,
+                    ResRef.self,
+                    TreeNode.self,
+                    FontSizeNode.self,
+                    CoverLetter.self,
+                    MessageParams.self,
+                    CoverRef.self,
+                    ApplicantProfile.self,
+                    ResModel.self,
+                    ConversationContext.self,
+                    ConversationMessage.self,
+                    EnabledLLM.self,
+                configurations: configuration
+            )
+        } else {
+            return try ModelContainer(
+                for:
+                    JobApp.self,
+                    Resume.self,
+                    ResRef.self,
+                    TreeNode.self,
+                    FontSizeNode.self,
+                    CoverLetter.self,
+                    MessageParams.self,
+                    CoverRef.self,
+                    ApplicantProfile.self,
+                    ResModel.self,
+                    ConversationContext.self,
+                    ConversationMessage.self,
+                    EnabledLLM.self
+            )
+        }
+    }
 
-extension EnvironmentValues {
-    var appState: AppState {
-        get { 
-            // Always return the singleton instance
-            return MainActor.assumeIsolated { AppState.shared }
-        }
-        set { 
-            // Singleton can't be replaced, but we maintain the interface for compatibility
-            // In practice, this setter should never be called
-        }
+    static func migrationFailureMessage(from error: Error) -> String {
+        """
+        PhysCloudResume couldn't prepare its data store (migration error: \(error.localizedDescription)).
+        The app is running in read-only mode so you can review existing information.
+        Try restoring the latest backup below, then quit and relaunch the app to resume editing.
+        """
+    }
+
+    static func backupRestoreRequiredMessage(from error: Error) -> String {
+        """
+        PhysCloudResume couldn't open its data files (error: \(error.localizedDescription)).
+        The app is showing temporary in-memory data only. Restore the most recent backup below, then quit and relaunch to reload your information.
+        Backups live in ~/Library/Application Support/PhysCloudResume_Backups.
+        """
     }
 }

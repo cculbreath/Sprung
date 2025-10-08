@@ -4,6 +4,7 @@ import SwiftUI
 struct CoverLetterReviseButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+    @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     
     @State private var showReviseCoverLetterSheet = false
     
@@ -79,7 +80,7 @@ struct CoverLetterReviseButton: View {
             }
             
             // Try to generate the revision
-            let generatedContent = try await CoverLetterService.shared.reviseCoverLetter(
+            let generatedContent = try await coverLetterService.reviseCoverLetter(
                 coverLetter: targetLetter,
                 resume: resume,
                 modelId: modelId,
