@@ -54,37 +54,50 @@ struct AppSheetsModifier: ViewModifier {
             .sheet(isPresented: $showRevisionReviewSheet) {
                 if let selectedResume = jobAppStore.selectedApp?.selectedRes,
                    let viewModel = appState.resumeReviseViewModel {
-                    let _ = Logger.debug("🔍 [AppSheets] Creating RevisionReviewView with resume: \(selectedResume.id.uuidString)")
-                    let _ = Logger.debug("🔍 [AppSheets] ViewModel has \(viewModel.resumeRevisions.count) revisions")
                     RevisionReviewView(
                         viewModel: viewModel,
                         resume: .constant(selectedResume)
                     )
                     .frame(minWidth: 650)
-                } else {
-                    let _ = Logger.debug("🔍 [AppSheets] Failed to get selectedResume or viewModel")
-                    let _ = Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp: \(jobAppStore.selectedApp?.id.uuidString ?? "nil")")
-                    let _ = Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp?.selectedRes: \(jobAppStore.selectedApp?.selectedRes?.id.uuidString ?? "nil")")
-                    let _ = Logger.debug("🔍 [AppSheets] appState.resumeReviseViewModel: \(appState.resumeReviseViewModel != nil ? "exists" : "nil")")
-                    if let vm = appState.resumeReviseViewModel {
-                        let _ = Logger.debug("🔍 [AppSheets] ViewModel revisions count: \(vm.resumeRevisions.count)")
+                    .onAppear {
+                        Logger.debug(
+                            "🔍 [AppSheets] Creating RevisionReviewView with resume: \(selectedResume.id.uuidString)",
+                            category: .ui
+                        )
+                        Logger.debug(
+                            "🔍 [AppSheets] ViewModel has \(viewModel.resumeRevisions.count) revisions",
+                            category: .ui
+                        )
                     }
+                } else {
                     Text("Error: Missing resume or viewModel")
                         .frame(width: 400, height: 300)
+                        .onAppear {
+                            Logger.debug("🔍 [AppSheets] Failed to get selectedResume or viewModel", category: .ui)
+                            Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp: \(jobAppStore.selectedApp?.id.uuidString ?? "nil")", category: .ui)
+                            Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp?.selectedRes: \(jobAppStore.selectedApp?.selectedRes?.id.uuidString ?? "nil")", category: .ui)
+                            Logger.debug("🔍 [AppSheets] appState.resumeReviseViewModel: \(appState.resumeReviseViewModel != nil ? "exists" : "nil")", category: .ui)
+                            if let vm = appState.resumeReviseViewModel {
+                                Logger.debug(
+                                    "🔍 [AppSheets] ViewModel revisions count: \(vm.resumeRevisions.count)",
+                                    category: .ui
+                                )
+                            }
+                        }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .showResumeRevisionSheet)) { _ in
-                Logger.debug("🔍 [AppSheets] Received showResumeRevisionSheet notification")
+                Logger.debug("🔍 [AppSheets] Received showResumeRevisionSheet notification", category: .ui)
                 showRevisionReviewSheet = true
             }
             .onReceive(NotificationCenter.default.publisher(for: .hideResumeRevisionSheet)) { _ in
-                Logger.debug("🔍 [AppSheets] Received hideResumeRevisionSheet notification")
+                Logger.debug("🔍 [AppSheets] Received hideResumeRevisionSheet notification", category: .ui)
                 showRevisionReviewSheet = false
             }
             .onChange(of: showRevisionReviewSheet) { _, newValue in
                 // Sync sheet state back to ViewModel when manually closed
                 if !newValue {
-                    Logger.debug("🔍 [AppSheets] Sheet dismissed, syncing back to ViewModel")
+                    Logger.debug("🔍 [AppSheets] Sheet dismissed, syncing back to ViewModel", category: .ui)
                     appState.resumeReviseViewModel?.showResumeRevisionSheet = false
                 }
             }

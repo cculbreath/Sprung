@@ -85,7 +85,6 @@ struct ContentView: View {
         // Add reasoning stream view as overlay modal for AI thinking display
         .overlay {
             if appState.globalReasoningStreamManager.isVisible {
-                let _ = Logger.debug("🧠 [ContentView] About to render ReasoningStreamView modal")
                 ReasoningStreamView(
                     isVisible: Binding(
                         get: { appState.globalReasoningStreamManager.isVisible },
@@ -102,6 +101,12 @@ struct ContentView: View {
                     modelName: appState.globalReasoningStreamManager.modelName
                 )
                 .zIndex(1000) // Ensure it's above all other content
+                .onAppear {
+                    Logger.verbose(
+                        "🧠 [ContentView] Preparing ReasoningStreamView modal",
+                        category: .ui
+                    )
+                }
             }
         }
         // Apply sheet modifier
@@ -122,17 +127,26 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            Logger.debug("🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
+            Logger.debug(
+                "🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())",
+                category: .ui
+            )
             
             // Restore persistent state
             appState.restoreSelectedJobApp(from: jobAppStore)
             
             // Initialize Resume Revise View Model
-            Logger.debug("🔍 [ContentView] Creating ResumeReviseViewModel with appState: \(String(describing: Unmanaged.passUnretained(appState).toOpaque()))")
+            Logger.debug(
+                "🔍 [ContentView] Creating ResumeReviseViewModel with appState: \(String(describing: Unmanaged.passUnretained(appState).toOpaque()))",
+                category: .ai
+            )
             let newViewModel = ResumeReviseViewModel(llmFacade: llmFacade, appState: appState)
-            Logger.debug("🔍 [ContentView] Created ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(newViewModel).toOpaque()))")
+            Logger.debug(
+                "🔍 [ContentView] Created ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(newViewModel).toOpaque()))",
+                category: .ai
+            )
             appState.resumeReviseViewModel = newViewModel
-            Logger.debug("🔍 [ContentView] Set appState.resumeReviseViewModel to new instance")
+            Logger.debug("🔍 [ContentView] Set appState.resumeReviseViewModel to new instance", category: .ai)
             
             // Initialize cover letter state
             updateMyLetter()

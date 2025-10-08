@@ -24,9 +24,9 @@ struct PhysicsCloudResumeApp: App {
             // Use the migration-aware container from SchemaVersioning
             let container = try ModelContainer.createWithMigration()
             self.modelContainer = container
-            Logger.debug("✅ ModelContainer created with migration support (Schema V3)")
+            Logger.debug("✅ ModelContainer created with migration support (Schema V3)", category: .appLifecycle)
         } catch {
-            Logger.error("❌ Failed to create ModelContainer with migrations: \(error)")
+            Logger.error("❌ Failed to create ModelContainer with migrations: \(error)", category: .appLifecycle)
             
             // Fallback to direct container creation (for debugging only)
             do {
@@ -46,14 +46,17 @@ struct PhysicsCloudResumeApp: App {
                     EnabledLLM.self
                 )
                 self.modelContainer = fallbackContainer
-                Logger.warning("⚠️ Using fallback ModelContainer without migration plan")
+                Logger.warning("⚠️ Using fallback ModelContainer without migration plan", category: .appLifecycle)
             } catch {
-                Logger.error("❌ Failed to create fallback ModelContainer: \(error)")
+                Logger.error("❌ Failed to create fallback ModelContainer: \(error)", category: .appLifecycle)
                 fatalError("Failed to create ModelContainer: \(error)")
             }
         }
         // Log after all properties are initialized
-        Logger.debug("🔴 PhysicsCloudResumeApp init - appState address: \(Unmanaged.passUnretained(appState).toOpaque())")
+        Logger.debug(
+            "🔴 PhysicsCloudResumeApp init - appState address: \(Unmanaged.passUnretained(appState).toOpaque())",
+            category: .appLifecycle
+        )
     
 
     }

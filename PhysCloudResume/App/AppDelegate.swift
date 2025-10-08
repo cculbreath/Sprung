@@ -119,15 +119,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let appState = self.appState, let container = self.modelContainer {
                 // Create EnabledLLMStore for the Settings window
                 let enabledLLMStore = EnabledLLMStore(modelContext: container.mainContext)
-                
-                hostingView = NSHostingView(rootView: AnyView(settingsView
+                let root = settingsView
                     .environment(appState)
                     .environment(enabledLLMStore)
+                    .environment(appState.debugSettingsStore ?? DebugSettingsStore())
                     .modelContainer(container)
-                ))
+
+                hostingView = NSHostingView(rootView: AnyView(root))
             } else {
                 // Fallback if appState or modelContainer is not available
-                hostingView = NSHostingView(rootView: AnyView(settingsView))
+                hostingView = NSHostingView(
+                    rootView: AnyView(
+                        settingsView.environment(DebugSettingsStore())
+                    )
+                )
             }
             
             settingsWindow = NSWindow(

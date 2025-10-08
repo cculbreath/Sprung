@@ -54,6 +54,9 @@ class AppState {
     
     // Model validation service
     let modelValidationService = ModelValidationService.shared
+
+    // Debug/diagnostics settings
+    var debugSettingsStore: DebugSettingsStore?
     
     // Resume revision view model
     var resumeReviseViewModel: ResumeReviseViewModel?
@@ -67,7 +70,7 @@ class AppState {
         if let savedTabRawValue = UserDefaults.standard.object(forKey: "selectedTab") as? String,
            let savedTab = TabList(rawValue: savedTabRawValue) {
             selectedTab = savedTab
-            Logger.debug("✅ Restored selected tab: \(savedTab.rawValue)")
+            Logger.debug("✅ Restored selected tab: \(savedTab.rawValue)", category: .appLifecycle)
         }
     }
     
@@ -99,7 +102,7 @@ class AppState {
         
         do {
             let oldSelectedModels = try JSONDecoder().decode(Set<String>.self, from: data)
-            Logger.debug("🔄 Migrating \(oldSelectedModels.count) models from UserDefaults to EnabledLLM")
+            Logger.debug("🔄 Migrating \(oldSelectedModels.count) models from UserDefaults to EnabledLLM", category: .migration)
             
             // Create EnabledLLM entries for each model
             for modelId in oldSelectedModels {
@@ -116,7 +119,7 @@ class AppState {
             Logger.debug("✅ Migration completed, UserDefaults cleared")
             
         } catch {
-            Logger.error("❌ Failed to migrate from UserDefaults: \(error)")
+            Logger.error("❌ Failed to migrate from UserDefaults: \(error)", category: .migration)
         }
     }
     
@@ -132,13 +135,13 @@ class AppState {
         // Use a versioned flag to check if migration has been performed (v2 includes thinking models)
         let migrationKey = "enabledLLMReasoningMigrationCompleted_v2"
         guard !UserDefaults.standard.bool(forKey: migrationKey) else {
-            Logger.debug("🔄 Reasoning capabilities migration already completed")
+        Logger.debug("🔄 Reasoning capabilities migration already completed", category: .migration)
             return
         }
         
         var migrationCount = 0
         
-        Logger.debug("🔄 Starting reasoning capabilities migration for \(models.count) models...")
+        Logger.debug("🔄 Starting reasoning capabilities migration for \(models.count) models...", category: .migration)
         
         for enabledModel in models {
             // Find the corresponding OpenRouter model
@@ -153,10 +156,10 @@ class AppState {
                 
                 if oldSupportsReasoning != enabledModel.supportsReasoning {
                     migrationCount += 1
-                    Logger.debug("📊 Updated \(enabledModel.modelId): reasoning \(oldSupportsReasoning) → \(enabledModel.supportsReasoning)")
+                    Logger.debug("📊 Updated \(enabledModel.modelId): reasoning \(oldSupportsReasoning) → \(enabledModel.supportsReasoning)", category: .migration)
                 }
             } else {
-                Logger.debug("⚠️ Could not find OpenRouter model for \(enabledModel.modelId) during migration")
+                Logger.debug("⚠️ Could not find OpenRouter model for \(enabledModel.modelId) during migration", category: .migration)
             }
         }
         
@@ -168,9 +171,9 @@ class AppState {
             // Mark migration as completed
             UserDefaults.standard.set(true, forKey: migrationKey)
             
-            Logger.debug("✅ Reasoning capabilities migration completed: \(migrationCount) models updated")
+            Logger.debug("✅ Reasoning capabilities migration completed: \(migrationCount) models updated", category: .migration)
         } catch {
-            Logger.error("❌ Failed to save reasoning capabilities migration: \(error)")
+            Logger.error("❌ Failed to save reasoning capabilities migration: \(error)", category: .migration)
         }
     }
     

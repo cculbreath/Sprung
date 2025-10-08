@@ -2,26 +2,83 @@
 //  Logger.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 5/13/25.
-//
 
 import Foundation
-import SwiftUI
+import os
 
-/// Simple logging utility for PhysCloudResume
-/// Integrates with app debug settings in UserDefaults
+/// Backend protocol that funnels log events to the desired sink.
+protocol Logging {
+    func log(
+        level: Logger.Level,
+        category: Logger.Category,
+        message: String,
+        metadata: [String: String],
+        file: String,
+        function: String,
+        line: Int
+    )
+}
+
+/// Default backend that bridges to Apple's os.Logger.
+final class OSLoggerBackend: Logging {
+    private let subsystem: String
+    private var cachedLoggers: [Logger.Category: os.Logger] = [:]
+    private let lock = NSLock()
+
+    init(subsystem: String = Bundle.main.bundleIdentifier ?? "PhysCloudResume") {
+        self.subsystem = subsystem
+    }
+
+    func log(
+        level: Logger.Level,
+        category: Logger.Category,
+        message: String,
+        metadata: [String: String],
+        file: String,
+        function: String,
+        line: Int
+    ) {
+        let osLogger = logger(for: category)
+        let combinedMessage = OSLoggerBackend.composeMessage(message, metadata: metadata)
+        osLogger.log(level: level.osLogType, "\(combinedMessage, privacy: .public)")
+    }
+
+    private func logger(for category: Logger.Category) -> os.Logger {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = cachedLoggers[category] {
+            return existing
+        }
+        let newlyCreated = os.Logger(subsystem: subsystem, category: category.rawValue)
+        cachedLoggers[category] = newlyCreated
+        return newlyCreated
+    }
+
+    private static func composeMessage(_ message: String, metadata: [String: String]) -> String {
+        guard !metadata.isEmpty else {
+            return message
+        }
+        let sorted = metadata
+            .map { "\($0.key)=\($0.value)" }
+            .sorted()
+            .joined(separator: " ")
+        return "\(message) [\(sorted)]"
+    }
+}
+
+/// Lightweight logging facade with configurable backends and debug settings.
 final class Logger {
-    // MARK: - Log Levels
-    
-    /// Defines available log levels in increasing order of severity
+    // MARK: - Nested Types
+
+    /// Defines available log levels in increasing order of severity.
     enum Level: Int, CaseIterable {
         case verbose = 0
         case debug = 1
         case info = 2
         case warning = 3
         case error = 4
-        
-        /// Returns a string representation of the log level
+
+        /// Returns a string representation of the log level.
         var label: String {
             switch self {
             case .verbose:  return "VERBOSE"
@@ -31,8 +88,8 @@ final class Logger {
             case .error:    return "ERROR"
             }
         }
-        
-        /// Returns an emoji for the log level for visual distinction
+
+        /// Emoji for quick visual scanning in debug logs.
         var emoji: String {
             switch self {
             case .verbose:  return "📋"
@@ -43,131 +100,277 @@ final class Logger {
             }
         }
     }
-    
-    // MARK: - Properties
-    
-    /// The minimum log level to display. 
-    /// Defaults to UserDefaults setting or .info if not found
+
+    /// High-level domains to keep log output organized.
+    enum Category: String, CaseIterable {
+        case general = "General"
+        case appLifecycle = "AppLifecycle"
+        case ai = "AI"
+        case data = "Data"
+        case diagnostics = "Diagnostics"
+        case export = "Export"
+        case migration = "Migration"
+        case networking = "Networking"
+        case storage = "Storage"
+        case ui = "UI"
+    }
+
+    struct Configuration {
+        var minimumLevel: Level
+        var enableFileLogging: Bool
+        var enableConsoleOutput: Bool
+        var subsystem: String
+    }
+
+    // MARK: - Static State
+
+    private static let configurationQueue = DispatchQueue(label: "Logger.configuration.queue", attributes: .concurrent)
+    private static let backendLock = NSLock()
+    private static var configuration: Configuration = Logger.makeDefaultConfiguration()
+    private static var backend: Logging = OSLoggerBackend(subsystem: configuration.subsystem)
+    private static let newlineStripper = CharacterSet.newlines
+
+    // MARK: - Public Configuration Accessors
+
     static var minimumLevel: Level {
-        // Map the UserDefaults integer to corresponding log level
-        // 0=None, 1=Basic, 2=Verbose from DebugSettingsView
-        let rawValue = UserDefaults.standard.integer(forKey: "debugLogLevel")
-        switch rawValue {
-        case 0:  return .error     // None = only errors
-        case 1:  return .info      // Basic = info and above
-        case 2:  return .verbose   // Verbose = all logs
-        default: return .info      // Default to info
+        configurationQueue.sync { configuration.minimumLevel }
+    }
+
+    static var isVerboseEnabled: Bool {
+        minimumLevel == .verbose
+    }
+
+    static var shouldSaveDebugFiles: Bool {
+        #if DEBUG
+        return configurationQueue.sync { configuration.enableFileLogging }
+        #else
+        return false
+        #endif
+    }
+
+    static func updateMinimumLevel(_ level: Level) {
+        configurationQueue.async(flags: .barrier) {
+            configuration.minimumLevel = level
         }
     }
-    
-    /// Check if debug files should be saved
-    static var shouldSaveDebugFiles: Bool {
-        UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+
+    static func updateFileLogging(isEnabled: Bool) {
+        #if DEBUG
+        configurationQueue.async(flags: .barrier) {
+            configuration.enableFileLogging = isEnabled
+        }
+        #endif
     }
-    
+
+    static func setConsoleOutput(enabled: Bool) {
+        configurationQueue.async(flags: .barrier) {
+            configuration.enableConsoleOutput = enabled
+        }
+    }
+
+    static func configure(subsystem: String) {
+        configurationQueue.async(flags: .barrier) {
+            configuration.subsystem = subsystem
+            backendLock.lock()
+            backend = OSLoggerBackend(subsystem: subsystem)
+            backendLock.unlock()
+        }
+    }
+
+    static func setBackend(_ backend: Logging) {
+        backendLock.lock()
+        self.backend = backend
+        backendLock.unlock()
+    }
+
     // MARK: - Logging Methods
-    
-    /// Log a message at the specified level
-    /// - Parameters:
-    ///   - level: The log level
-    ///   - message: The message to log
-    ///   - file: The file where the log call originated
-    ///   - function: The function where the log call originated
-    ///   - line: The line where the log call originated
+
     static func log(
         _ level: Level,
         _ message: String,
-        file: String = #file,
+        category: Category = .general,
+        metadata: [String: String] = [:],
+        file: String = #fileID,
         function: String = #function,
         line: Int = #line
     ) {
-        // Only log if the level is at or above the minimum
         guard level.rawValue >= minimumLevel.rawValue else {
             return
         }
-        
-        // Get file name from path
+
+        let sanitizedMessage = sanitize(message)
         let fileName = (file as NSString).lastPathComponent
-        
-        // Format the log message
-        let formattedMessage = "\(level.emoji) [\(level.label)] [\(fileName):\(line)] \(function): \(message)"
-        
-        // Print to console
-        print(formattedMessage)
-        
-        // Save to file if it's a high-priority log or if saveDebugFiles is enabled
+        let formattedMessage = "\(level.emoji) [\(level.label)] [\(category.rawValue)] [\(fileName):\(line)] \(function): \(sanitizedMessage)"
+
+        let shouldPrint = configurationQueue.sync { configuration.enableConsoleOutput }
+        if shouldPrint {
+            print(formattedMessage)
+        }
+
+        let backend = currentBackend()
+        backend.log(
+            level: level,
+            category: category,
+            message: sanitizedMessage,
+            metadata: metadata,
+            file: file,
+            function: function,
+            line: line
+        )
+
         if shouldSaveDebugFiles && (level == .error || level == .warning) {
             saveLogToFile(message: formattedMessage)
         }
     }
-    
-    // MARK: - Convenience Methods
-    
-    /// Log a verbose message
-    static func verbose(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(.verbose, message, file: file, function: function, line: line)
+
+    static func verbose(
+        _ message: String,
+        category: Category = .general,
+        metadata: [String: String] = [:],
+        file: String = #fileID,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.verbose, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-    
-    /// Log a debug message
-    static func debug(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(.debug, message, file: file, function: function, line: line)
+
+    static func debug(
+        _ message: String,
+        category: Category = .general,
+        metadata: [String: String] = [:],
+        file: String = #fileID,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.debug, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-    
-    /// Log an info message
-    static func info(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(.info, message, file: file, function: function, line: line)
+
+    static func info(
+        _ message: String,
+        category: Category = .general,
+        metadata: [String: String] = [:],
+        file: String = #fileID,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.info, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-    
-    /// Log a warning message
-    static func warning(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(.warning, message, file: file, function: function, line: line)
+
+    static func warning(
+        _ message: String,
+        category: Category = .general,
+        metadata: [String: String] = [:],
+        file: String = #fileID,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.warning, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-    
-    /// Log an error message
-    static func error(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        log(.error, message, file: file, function: function, line: line)
+
+    static func error(
+        _ message: String,
+        category: Category = .general,
+        metadata: [String: String] = [:],
+        file: String = #fileID,
+        function: String = #function,
+        line: Int = #line
+    ) {
+        log(.error, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-    
-    /// Saves important logs to file
-    /// - Parameters:
-    ///   - message: The formatted message to save
+
+    // MARK: - Helpers
+
+    private static func currentBackend() -> Logging {
+        backendLock.lock()
+        defer { backendLock.unlock() }
+        return backend
+    }
+
+    private static func sanitize(_ message: String) -> String {
+        guard message.rangeOfCharacter(from: newlineStripper) != nil else {
+            return message
+        }
+        return message.components(separatedBy: newlineStripper).filter { !$0.isEmpty }.joined(separator: " ⏎ ")
+    }
+
+    private static func makeDefaultConfiguration() -> Configuration {
+        #if DEBUG
+        let defaults = UserDefaults.standard
+        let storedLevel = defaults.integer(forKey: DefaultsKeys.debugLogLevel)
+        let minimumLevel = mapStoredLevel(storedLevel)
+        let fileLogging = defaults.bool(forKey: DefaultsKeys.saveDebugPrompts)
+        #else
+        let minimumLevel: Level = .info
+        let fileLogging = false
+        #endif
+        let subsystem = Bundle.main.bundleIdentifier ?? "PhysCloudResume"
+        return Configuration(
+            minimumLevel: minimumLevel,
+            enableFileLogging: fileLogging,
+            enableConsoleOutput: true,
+            subsystem: subsystem
+        )
+    }
+
+    private static func mapStoredLevel(_ rawValue: Int) -> Level {
+        switch rawValue {
+        case 0: return .error
+        case 2: return .verbose
+        default: return .info
+        }
+    }
+
+    /// Saves important logs to file in Downloads (debug builds only).
     private static func saveLogToFile(message: String) {
+        #if DEBUG
         let fileManager = FileManager.default
-        let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
-        let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
-        
-        // Create a timestamped filename
+        let downloadsURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
+
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         let dateString = dateFormatter.string(from: Date())
-        
+
         let logFileName = "PhysCloudResume_\(dateString)_log.txt"
         let fileURL = downloadsURL.appendingPathComponent(logFileName)
-        
-        // Create timestamp for this log entry
+
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
         let timestamp = dateFormatter.string(from: Date())
-        
-        // Format the log entry with timestamp
-        let logEntry = "[\(timestamp)] \(message)\n"
-        
+        let entry = "[\(timestamp)] \(message)\n"
+
         do {
-            // Check if file exists
             if fileManager.fileExists(atPath: fileURL.path) {
-                // Append to existing file
-                let fileHandle = try FileHandle(forWritingTo: fileURL)
-                fileHandle.seekToEndOfFile()
-                if let data = logEntry.data(using: .utf8) {
-                    fileHandle.write(data)
+                let handle = try FileHandle(forWritingTo: fileURL)
+                defer { try? handle.close() }
+                if let data = entry.data(using: .utf8) {
+                    try handle.seekToEnd()
+                    handle.write(data)
                 }
-                fileHandle.closeFile()
             } else {
-                // Create new file
-                try logEntry.write(to: fileURL, atomically: true, encoding: .utf8)
+                try entry.write(to: fileURL, atomically: true, encoding: .utf8)
             }
         } catch {
-            // Just print to console if file operations fail
-            Logger.debug("📝 Failed to write log to file: \(error.localizedDescription)")
+            print("Logger: Failed to write log to file: \(error)")
+        }
+        #endif
+    }
+
+    private enum DefaultsKeys {
+        static let debugLogLevel = "debugLogLevel"
+        static let saveDebugPrompts = "saveDebugPrompts"
+    }
+}
+
+private extension Logger.Level {
+    var osLogType: OSLogType {
+        switch self {
+        case .verbose, .debug:
+            return .debug
+        case .info:
+            return .info
+        case .warning:
+            return .error
+        case .error:
+            return .fault
         }
     }
 }
