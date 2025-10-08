@@ -20,10 +20,9 @@ protocol LLMClient {
     func executeTextWithImages(prompt: String, modelId: String, images: [Data], temperature: Double?) async throws -> String
 
     // Structured
-    func executeStructured<T: Decodable & Sendable>(prompt: String, modelId: String, as: T.Type, temperature: Double?) async throws -> T
-    func executeStructuredWithImages<T: Decodable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type, temperature: Double?) async throws -> T
+    func executeStructured<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, temperature: Double?) async throws -> T
+    func executeStructuredWithImages<T: Codable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type, temperature: Double?) async throws -> T
 
     // Streaming
     func startStreaming(prompt: String, modelId: String, temperature: Double?) -> AsyncThrowingStream<LLMStreamChunkDTO, Error>
 }
-
