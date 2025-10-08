@@ -27,10 +27,14 @@ final class AppDependencies {
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
 
-    // MARK: - Singletons (kept for now; refactor in later phases)
-    private let appState: AppState
+    // MARK: - Core Services
+    let appState: AppState
+    let openRouterService: OpenRouterService
+    let modelValidationService: ModelValidationService
+    let coverLetterService: CoverLetterService
     let llmService: LLMService
     let llmFacade: LLMFacade
+    let appEnvironment: AppEnvironment
 
     // MARK: - Init
     init(modelContext: ModelContext) {
@@ -52,9 +56,20 @@ final class AppDependencies {
         // UI state
         self.dragInfo = DragInfo()
 
-        // Singletons (Phase 6 refactor target)
-        self.appState = AppState.shared
-        self.appState.debugSettingsStore = debugSettingsStore
+        // Core services
+        let openRouterService = OpenRouterService()
+        self.openRouterService = openRouterService
+
+        let modelValidationService = ModelValidationService()
+        self.modelValidationService = modelValidationService
+
+        let appState = AppState(
+            openRouterService: openRouterService,
+            modelValidationService: modelValidationService
+        )
+        self.appState = appState
+        appState.debugSettingsStore = debugSettingsStore
+
         let requestExecutor = LLMRequestExecutor()
         self.llmService = LLMService(requestExecutor: requestExecutor)
         // Phase 6: Introduce facade backed by SwiftOpenAI adapter and temporarily bridge conversation flows
@@ -67,13 +82,26 @@ final class AppDependencies {
             modelValidationService: appState.modelValidationService
         )
 
+        let coverLetterService = CoverLetterService(llmFacade: llmFacade)
+        self.coverLetterService = coverLetterService
+
+        self.appEnvironment = AppEnvironment(
+            appState: appState,
+            openRouterService: openRouterService,
+            coverLetterService: coverLetterService,
+            llmService: llmService,
+            llmFacade: llmFacade,
+            modelValidationService: modelValidationService,
+            debugSettingsStore: debugSettingsStore,
+            launchState: .ready
+        )
+
         // Bootstrap sequence
         DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
         appState.initializeWithModelContext(modelContext, enabledLLMStore: enabledLLMStore)
         appState.llmService = llmService
         llmService.initialize(appState: appState, modelContext: modelContext)
         llmService.reconfigureClient()
-        CoverLetterService.shared.configure(llmFacade: llmFacade)
 
         Logger.debug("✅ AppDependencies: ready", category: .appLifecycle)
     }

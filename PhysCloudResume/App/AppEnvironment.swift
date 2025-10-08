@@ -1,0 +1,57 @@
+//
+//  AppEnvironment.swift
+//  PhysCloudResume
+//
+//  Defines the core long-lived services that are injected through the SwiftUI
+//  environment. Owned and assembled by AppDependencies to keep construction
+//  centralized and explicit.
+//
+
+import Observation
+
+@MainActor
+@Observable
+final class AppEnvironment {
+    let appState: AppState
+    let openRouterService: OpenRouterService
+    let coverLetterService: CoverLetterService
+    let llmService: LLMService
+    let llmFacade: LLMFacade
+    let modelValidationService: ModelValidationService
+    let debugSettingsStore: DebugSettingsStore
+    var launchState: LaunchState
+
+    init(
+        appState: AppState,
+        openRouterService: OpenRouterService,
+        coverLetterService: CoverLetterService,
+        llmService: LLMService,
+        llmFacade: LLMFacade,
+        modelValidationService: ModelValidationService,
+        debugSettingsStore: DebugSettingsStore,
+        launchState: LaunchState
+    ) {
+        self.appState = appState
+        self.openRouterService = openRouterService
+        self.coverLetterService = coverLetterService
+        self.llmService = llmService
+        self.llmFacade = llmFacade
+        self.modelValidationService = modelValidationService
+        self.debugSettingsStore = debugSettingsStore
+        self.launchState = launchState
+    }
+}
+
+extension AppEnvironment {
+    enum LaunchState: Equatable {
+        case ready
+        case readOnly(message: String)
+
+        var isReadOnly: Bool {
+            if case .readOnly = self {
+                return true
+            }
+            return false
+        }
+    }
+}

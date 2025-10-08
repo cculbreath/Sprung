@@ -7,8 +7,6 @@ import Observation
 @MainActor
 @Observable
 final class OpenRouterService {
-    static let shared = OpenRouterService()
-    
     var availableModels: [OpenRouterModel] = []
     var isLoading = false
     var lastError: String?
@@ -25,7 +23,7 @@ final class OpenRouterService {
     private var openRouterClient: OpenAIService?
     private var apiKey: String = ""
     
-    private init() {
+    init() {
         loadCachedModels()
     }
     

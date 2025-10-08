@@ -16,7 +16,7 @@ struct ClarifyingQuestionsSheet: View {
     @State private var declinedQuestions: Set<String> = []
     @FocusState private var focusedQuestionId: String?
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
 
     
     var body: some View {

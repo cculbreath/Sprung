@@ -14,6 +14,7 @@ struct BatchCoverLetterView: View {
     @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
     @Environment(EnabledLLMStore.self) private var enabledLLMStore: EnabledLLMStore
     @Environment(LLMFacade.self) private var llmFacade: LLMFacade
+    @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     @Environment(\.modelContext) private var modelContext
     
     // Live SwiftData query to automatically refresh on model changes
@@ -368,7 +369,8 @@ struct BatchCoverLetterView: View {
                 appState: appState,
                 jobAppStore: jobAppStore,
                 coverLetterStore: coverLetterStore,
-                llmFacade: llmFacade
+                llmFacade: llmFacade,
+                coverLetterService: coverLetterService
             )
             
             do {

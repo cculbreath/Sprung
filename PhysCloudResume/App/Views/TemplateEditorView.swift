@@ -13,7 +13,7 @@ import Combine
 
 struct TemplateEditorView: View {
     @Query private var resumes: [Resume]
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
     
     @State private var selectedTemplate: String = "archer"
     @State private var selectedFormat: String = "pdf"

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct LLMProviderSettingsView: View {
-    @Environment(\.appState) private var appState
+    @Environment(AppState.self) private var appState
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

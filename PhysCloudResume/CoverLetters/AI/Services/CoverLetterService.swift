@@ -9,31 +9,18 @@
 import Foundation
 import SwiftUI
 
-enum CoverLetterServiceError: LocalizedError {
-    case facadeUnavailable
-
-    var errorDescription: String? {
-        "CoverLetterService is not configured with an LLMFacade instance"
-    }
-}
-
 @MainActor
-class CoverLetterService: ObservableObject {
+@Observable
+final class CoverLetterService {
     // MARK: - Properties
-    
-    /// Shared instance for global access
-    static let shared = CoverLetterService()
     
     /// Conversation tracking
     internal var conversations: [UUID: UUID] = [:] // coverLetterId -> conversationId
-    private var llmFacade: LLMFacade?
-    
-    
-    // MARK: - Initialization
-    
-    private init() {}
+    private let llmFacade: LLMFacade
 
-    func configure(llmFacade: LLMFacade) {
+    // MARK: - Initialization
+
+    init(llmFacade: LLMFacade) {
         self.llmFacade = llmFacade
     }
     
@@ -103,9 +90,7 @@ class CoverLetterService: ObservableObject {
         modelId: String,
         includeResumeRefs: Bool = true
     ) async throws -> String {
-        guard let llm = llmFacade else {
-            throw CoverLetterServiceError.facadeUnavailable
-        }
+        let llm = llmFacade
         // Ensure cover letter has an associated job application
         guard let jobApp = coverLetter.jobApp else {
             throw NSError(domain: "CoverLetterService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application"])
@@ -174,9 +159,7 @@ class CoverLetterService: ObservableObject {
         feedback: String? = nil,
         editorPrompt: CoverLetterPrompts.EditorPrompts = .improve
     ) async throws -> String {
-        guard let llm = llmFacade else {
-            throw CoverLetterServiceError.facadeUnavailable
-        }
+        let llm = llmFacade
         // Ensure cover letter has an associated job application
         guard let jobApp = coverLetter.jobApp else {
             throw NSError(domain: "CoverLetterService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application for revision"])
