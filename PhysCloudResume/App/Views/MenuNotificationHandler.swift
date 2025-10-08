@@ -4,7 +4,15 @@ import SwiftUI
 import Foundation
 import AppKit
 
-/// Handles menu command notifications and delegates to appropriate UI actions
+/// Handles menu command notifications and delegates to appropriate UI actions.
+/// 
+/// ## Architecture Note
+/// macOS menu and toolbar commands originate in AppKit and cannot access SwiftUI
+/// bindings directly. We intentionally use `NotificationCenter` here as a bridge
+/// between those command sources and the SwiftUI view hierarchy. Only the
+/// notifications listed in `MenuCommands.swift` should be observed, and they map
+/// 1:1 with menu or toolbar items. View-local interactions should prefer SwiftUI
+/// bindings rather than introducing new notifications.
 @Observable
 class MenuNotificationHandler {
     private weak var jobAppStore: JobAppStore?
