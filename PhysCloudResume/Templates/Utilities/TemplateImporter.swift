@@ -5,24 +5,30 @@ enum TemplateImporter {
     static func ensureInitialTemplates(context: ModelContext) throws {
         var descriptor = FetchDescriptor<Template>()
         descriptor.fetchLimit = 1
-        guard (try context.fetch(descriptor)).isEmpty else { return }
+        let needsBootstrap = (try context.fetch(descriptor)).isEmpty
 
         let importer = Worker(context: context)
-        importer.importBundleTemplates()
-        importer.importUserTemplates()
-        try context.save()
+        if needsBootstrap {
+            importer.importBundleTemplates()
+            importer.importUserTemplates()
+            try context.save()
+        }
+
+        try backfillManifests(context: context, using: importer)
     }
 
     private final class Worker {
         private let context: ModelContext
         private var importedSlugs: Set<String> = []
+        let bundleTemplatesURL: URL?
 
         init(context: ModelContext) {
             self.context = context
+            bundleTemplatesURL = Bundle.main.resourceURL?.appendingPathComponent("Templates", isDirectory: true)
         }
 
         func importBundleTemplates() {
-            guard let templatesURL = Bundle.main.resourceURL?.appendingPathComponent("Templates", isDirectory: true) else {
+            guard let templatesURL = bundleTemplatesURL else {
                 return
             }
             importTemplates(at: templatesURL, isCustom: false)
@@ -113,5 +119,50 @@ enum TemplateImporter {
 
             return nil
         }
+    }
+
+    private static func backfillManifests(context: ModelContext, using importer: Worker) throws {
+        let templates = try context.fetch(FetchDescriptor<Template>())
+        guard !templates.isEmpty else { return }
+
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("PhysCloudResume", isDirectory: true)
+            .appendingPathComponent("Templates", isDirectory: true)
+
+        var didUpdate = false
+        for template in templates where template.manifestData == nil {
+            if let data = manifestData(for: template.slug, bundleBaseURL: importer.bundleTemplatesURL, documentsBaseURL: documents) {
+                template.manifestData = data
+                didUpdate = true
+            } else {
+                Logger.warning("TemplateImporter: No manifest found for template slug \(template.slug)")
+            }
+        }
+
+        if didUpdate {
+            try context.save()
+        }
+    }
+
+    private static func manifestData(for slug: String, bundleBaseURL: URL?, documentsBaseURL: URL?) -> Data? {
+        let normalized = slug.lowercased()
+        let manifestName = "\(normalized)-manifest.json"
+
+        if let docsURL = documentsBaseURL?.appendingPathComponent(normalized, isDirectory: true)
+            .appendingPathComponent(manifestName),
+           FileManager.default.fileExists(atPath: docsURL.path),
+           let data = try? Data(contentsOf: docsURL) {
+            return data
+        }
+
+        if let bundleURL = bundleBaseURL?
+            .appendingPathComponent(normalized, isDirectory: true)
+            .appendingPathComponent(manifestName),
+           FileManager.default.fileExists(atPath: bundleURL.path),
+           let data = try? Data(contentsOf: bundleURL) {
+            return data
+        }
+
+        return nil
     }
 }

@@ -7,6 +7,7 @@ struct TemplateManifest: Decodable {
             case string
             case array
             case object
+            case mapOfStrings
             case objectOfObjects
             case arrayOfObjects
             case fontSizes
@@ -23,6 +24,8 @@ struct TemplateManifest: Decodable {
                 return [Any]()
             case .object, .objectOfObjects:
                 return [String: Any]()
+            case .mapOfStrings:
+                return [String: String]()
             case .fontSizes:
                 return [String: String]()
             }
@@ -30,7 +33,21 @@ struct TemplateManifest: Decodable {
 
         func defaultContextValue() -> Any? {
             guard let value = defaultValue?.value else { return nil }
-            return TemplateManifest.normalize(value)
+            switch type {
+            case .mapOfStrings:
+                if let dict = value as? [String: Any] {
+                    var result: [String: String] = [:]
+                    for (key, inner) in dict {
+                        if let stringValue = inner as? String {
+                            result[key] = stringValue
+                        }
+                    }
+                    return result
+                }
+                return nil
+            default:
+                return TemplateManifest.normalize(value)
+            }
         }
     }
 
