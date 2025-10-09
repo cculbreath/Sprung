@@ -50,10 +50,13 @@ struct NodeLeafView: View {
                         ),
                         tempName: Binding(get: { vm.tempName }, set: { vm.tempName = $0 }),
                         tempValue: Binding(get: { vm.tempValue }, set: { vm.tempValue = $0 }),
+                        node: node,
+                        validationError: vm.validationError,
                         allowNameEditing: !isSectionLabelEntry,
                         saveChanges: { vm.saveEdits() },
                         cancelChanges: { vm.cancelEditing() },
-                        deleteNode: { deleteNode(node: node) }
+                        deleteNode: { deleteNode(node: node) },
+                        clearValidation: { vm.validationError = nil }
                     )
                 } else {
                     if isSectionLabelEntry {

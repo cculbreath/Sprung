@@ -87,21 +87,29 @@ final class ResumeDetailVM {
     private(set) var editingNodeID: String?
     var tempName: String = ""
     var tempValue: String = ""
+    var validationError: String?
 
     func startEditing(node: TreeNode) {
         editingNodeID = node.id
         tempName = node.name
         tempValue = node.value
+        validationError = nil
     }
 
     func cancelEditing() {
         editingNodeID = nil
+        validationError = nil
     }
 
     /// Save edits currently in `tempName` / `tempValue` back to the node and
     /// refresh the PDF.
     func saveEdits() {
         guard let id = editingNodeID, let node = resume.nodes.first(where: { $0.id == id }) else { return }
+
+        if let error = validate(node: node, proposedName: tempName, proposedValue: tempValue) {
+            validationError = error
+            return
+        }
 
         if node.parent?.name == "section-labels" {
             resume.keyLabels[node.name] = tempValue
@@ -112,6 +120,7 @@ final class ResumeDetailVM {
         }
 
         editingNodeID = nil
+        validationError = nil
 
         // Trigger PDF export and view refresh
         refreshPDF()
@@ -148,5 +157,54 @@ final class ResumeDetailVM {
             child.status = .saved
         }
         refreshPDF()
+    }
+
+    // MARK: - Validation -------------------------------------------------
+
+    private func validate(node: TreeNode, proposedName: String, proposedValue: String) -> String? {
+        let trimmed = proposedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if node.schemaRequired && trimmed.isEmpty {
+            return node.schemaValidationMessage ?? "This field is required."
+        }
+
+        guard let rule = node.schemaValidationRule else { return nil }
+
+        switch rule {
+        case "minLength":
+            if let min = node.schemaValidationMin,
+               Double(trimmed.count) < min {
+                return node.schemaValidationMessage ?? "Please provide more detail."
+            }
+        case "regex":
+            if let pattern = node.schemaValidationPattern,
+               let regex = try? NSRegularExpression(pattern: pattern),
+               regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) == nil {
+                return node.schemaValidationMessage ?? "Value does not match the expected format."
+            }
+        case "email":
+            let pattern = node.schemaValidationPattern ?? "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+               regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) == nil {
+                return node.schemaValidationMessage ?? "Enter a valid email address."
+            }
+        case "url":
+            guard let url = URL(string: trimmed), url.scheme != nil else {
+                return node.schemaValidationMessage ?? "Enter a valid URL."
+            }
+        case "phone":
+            let pattern = node.schemaValidationPattern ?? "^[0-9+()\\-\\s]{7,}$"
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) == nil {
+                return node.schemaValidationMessage ?? "Enter a valid phone number."
+            }
+        case "enumeration":
+            if !node.schemaValidationOptions.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+                return node.schemaValidationMessage ?? "Value must match one of the allowed options."
+            }
+        default:
+            break
+        }
+
+        return nil
     }
 }
