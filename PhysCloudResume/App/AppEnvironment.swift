@@ -19,6 +19,8 @@ final class AppEnvironment {
     let llmFacade: LLMFacade
     let modelValidationService: ModelValidationService
     let debugSettingsStore: DebugSettingsStore
+    let templateStore: TemplateStore
+    let resumeExportCoordinator: ResumeExportCoordinator
     var launchState: LaunchState
 
     init(
@@ -29,6 +31,8 @@ final class AppEnvironment {
         llmFacade: LLMFacade,
         modelValidationService: ModelValidationService,
         debugSettingsStore: DebugSettingsStore,
+        templateStore: TemplateStore,
+        resumeExportCoordinator: ResumeExportCoordinator,
         launchState: LaunchState
     ) {
         self.appState = appState
@@ -38,6 +42,8 @@ final class AppEnvironment {
         self.llmFacade = llmFacade
         self.modelValidationService = modelValidationService
         self.debugSettingsStore = debugSettingsStore
+        self.templateStore = templateStore
+        self.resumeExportCoordinator = resumeExportCoordinator
         self.launchState = launchState
     }
 }

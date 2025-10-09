@@ -14,6 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var applicantProfileWindow: NSWindow?
     var templateEditorWindow: NSWindow?
     var appState: AppState?
+    var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -203,11 +204,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let editorView = TemplateEditorView()
             let hostingView: NSHostingView<AnyView>
             
-            if let modelContainer = self.modelContainer, let appState = self.appState {
+            if let modelContainer = self.modelContainer,
+               let appEnvironment = self.appEnvironment {
                 hostingView = NSHostingView(rootView: AnyView(
                     editorView
                         .modelContainer(modelContainer)
-                        .environment(appState)
+                        .environment(appEnvironment)
+                        .environment(appEnvironment.appState)
                 ))
             } else if let modelContainer = self.modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(editorView.modelContainer(modelContainer)))

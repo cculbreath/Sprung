@@ -4,7 +4,6 @@ import SwiftUI
 import os.log
 import Observation
 
-@MainActor
 @Observable
 final class OpenRouterService {
     var availableModels: [OpenRouterModel] = []
@@ -43,14 +42,18 @@ final class OpenRouterService {
     
     func fetchModels() async {
         guard openRouterClient != nil else {
-            lastError = "OpenRouter client not configured"
+            await MainActor.run {
+                self.lastError = "OpenRouter client not configured"
+            }
             Logger.error("🔴 OpenRouter client not configured")
             return
         }
-        
-        isLoading = true
-        lastError = nil
-        
+
+        await MainActor.run {
+            self.isLoading = true
+            self.lastError = nil
+        }
+
         do {
             Logger.info("🌐 Fetching models from OpenRouter")
             
@@ -76,10 +79,10 @@ final class OpenRouterService {
                 let modelsResponse = try JSONDecoder().decode(OpenRouterModelsResponse.self, from: data)
                 
                 await MainActor.run {
-                    availableModels = modelsResponse.data.sorted { $0.name < $1.name }
-                    calculatePricingThresholds()
+                    self.availableModels = modelsResponse.data.sorted { $0.name < $1.name }
+                    self.calculatePricingThresholds()
                     Logger.info("✅ Fetched \(availableModels.count) models from OpenRouter")
-                    cacheModels()
+                    self.cacheModels()
                 }
             } catch let decodingError as DecodingError {
                 await MainActor.run {
@@ -109,11 +112,14 @@ final class OpenRouterService {
                 Logger.error("🔴 Failed to fetch OpenRouter models: \(error.localizedDescription)")
             }
         }
-        
-        isLoading = false
+
+        await MainActor.run {
+            self.isLoading = false
+        }
     }
     
     
+    @MainActor
     func findModel(id: String) -> OpenRouterModel? {
         availableModels.first { $0.id == id }
     }
@@ -121,6 +127,7 @@ final class OpenRouterService {
     /// Returns a friendly display name for a model ID
     /// - Parameter modelId: The model ID to look up
     /// - Returns: The display name if found, otherwise the original ID
+    @MainActor
     func friendlyModelName(for modelId: String) -> String {
         if let model = findModel(id: modelId) {
             return model.displayName
@@ -128,6 +135,7 @@ final class OpenRouterService {
         return modelId
     }
     
+    @MainActor
     private func cacheModels() {
         do {
             let data = try JSONEncoder().encode(availableModels)
@@ -154,15 +162,20 @@ final class OpenRouterService {
         }
         
         do {
-            availableModels = try JSONDecoder().decode([OpenRouterModel].self, from: data)
-            calculatePricingThresholds()
-            Logger.info("📦 Loaded \(availableModels.count) cached models")
+            let models = try JSONDecoder().decode([OpenRouterModel].self, from: data)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.availableModels = models.sorted { $0.name < $1.name }
+                self.calculatePricingThresholds()
+                Logger.info("📦 Loaded \(models.count) cached models")
+            }
         } catch {
             Logger.error("🔴 Failed to load cached models: \(error.localizedDescription)")
         }
     }
     
     /// Calculates dynamic pricing thresholds based on actual model pricing distribution
+    @MainActor
     private func calculatePricingThresholds() {
         // Collect all valid pricing data (average of prompt + completion costs)
         let pricingData: [Double] = availableModels.compactMap { model in

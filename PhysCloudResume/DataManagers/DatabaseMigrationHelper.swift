@@ -75,7 +75,8 @@ class DatabaseMigrationHelper {
     private static func attemptSchemaCreation(modelContext: ModelContext) {
         // SwiftData should automatically create tables when we insert the first object
         // Create dummy objects to force table creation
-        let dummyContext = ConversationContext(objectId: UUID(), objectType: .resume)
+        let dummyConversationId = UUID()
+        let dummyContext = ConversationContext(conversationId: dummyConversationId, objectId: nil, objectType: .resume)
         let dummyMessage = ConversationMessage(role: .system, content: "dummy")
         
         // Link them to ensure both tables are created with proper relationships

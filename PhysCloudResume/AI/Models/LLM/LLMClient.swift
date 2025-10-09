@@ -7,13 +7,6 @@
 
 import Foundation
 
-struct LLMStreamChunkDTO: Sendable {
-    let content: String?
-    let reasoning: String?
-    let isFinished: Bool
-    let finishReason: String?
-}
-
 protocol LLMClient {
     // Text
     func executeText(prompt: String, modelId: String, temperature: Double?) async throws -> String

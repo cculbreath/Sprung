@@ -10,6 +10,7 @@ struct ApplicationReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @Environment(LLMFacade.self) private var llmFacade
+    @Environment(AppEnvironment.self) private var appEnvironment
 
     let jobApp: JobApp
     let resume: Resume
@@ -161,7 +162,10 @@ struct ApplicationReviewSheet: View {
         .frame(minHeight: 600, maxHeight: 800)
         .onAppear {
             if reviewService == nil {
-                reviewService = ApplicationReviewService(llmFacade: llmFacade)
+                reviewService = ApplicationReviewService(
+                    llmFacade: llmFacade,
+                    exportCoordinator: appEnvironment.resumeExportCoordinator
+                )
             }
         }
     }

@@ -6,14 +6,12 @@
 //
 
 import Foundation
-import SwiftOpenAI
-
 /// Data transformer for converting LLM responses to structured objects
 struct JSONResponseParser {
     
     /// Parse structured response with fallback strategies
-    static func parseStructured<T: Codable>(_ response: LLMResponse, as type: T.Type) throws -> T {
-        guard let content = response.choices?.first?.message?.content else {
+    static func parseStructured<T: Codable>(_ response: LLMResponseDTO, as type: T.Type) throws -> T {
+        guard let content = response.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
         
@@ -22,8 +20,8 @@ struct JSONResponseParser {
     }
     
     /// Parse flexible JSON response with enhanced error handling and recovery strategies
-    static func parseFlexible<T: Codable>(from response: LLMResponse, as type: T.Type) throws -> T {
-        guard let content = response.choices?.first?.message?.content else {
+    static func parseFlexible<T: Codable>(from response: LLMResponseDTO, as type: T.Type) throws -> T {
+        guard let content = response.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
         

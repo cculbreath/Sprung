@@ -99,8 +99,6 @@ struct CreateNewResumeView: View {
             sources: resRefStore.defaultSources,
             model: selectedModel
         ) {
-            newResume.debounceExport()
-
             // Update UI
             refresh.toggle()
 

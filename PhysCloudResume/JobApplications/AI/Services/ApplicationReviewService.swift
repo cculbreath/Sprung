@@ -17,6 +17,7 @@ class ApplicationReviewService: @unchecked Sendable {
     
     /// The LLM facade for AI operations
     private let llm: LLMFacade
+    private let exportCoordinator: ResumeExportCoordinator
     
     /// The query service for prompts
     private let query = ApplicationReviewQuery()
@@ -27,8 +28,9 @@ class ApplicationReviewService: @unchecked Sendable {
     // MARK: - Initialization
     
     /// Initialize with LLM service
-    init(llmFacade: LLMFacade) {
+    init(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
         self.llm = llmFacade
+        self.exportCoordinator = exportCoordinator
     }
     
 
@@ -49,7 +51,7 @@ class ApplicationReviewService: @unchecked Sendable {
         // Ensure fresh text resume is rendered before making LLM request
         Task {
             do {
-                try await resume.ensureFreshRenderedText()
+                try await exportCoordinator.ensureFreshRenderedText(for: resume)
                 await performReviewRequest(
                     reviewType: reviewType,
                     jobApp: jobApp,

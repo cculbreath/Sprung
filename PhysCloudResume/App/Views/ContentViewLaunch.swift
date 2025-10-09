@@ -9,6 +9,7 @@ struct ContentViewLaunch: View {
 
     @State private var restoreStatus: RestoreStatus?
     @State private var isRestoring = false
+    @State private var isResetting = false
 
     var body: some View {
         ZStack {
@@ -20,9 +21,11 @@ struct ContentViewLaunch: View {
                 LaunchStateOverlay(
                     message: message,
                     isRestoring: isRestoring,
+                    isResetting: isResetting,
                     status: restoreStatus,
                     restoreAction: restoreLatestBackup,
-                    openBackupsAction: openBackupFolder
+                    openBackupsAction: openBackupFolder,
+                    resetAction: resetDataStore
                 )
                 .padding()
                 .transition(.opacity)
@@ -82,6 +85,29 @@ struct ContentViewLaunch: View {
         restoreStatus = .success("Opened backup folder in Finder.")
     }
 
+    private func resetDataStore() {
+        guard !isResetting else { return }
+        isResetting = true
+        restoreStatus = nil
+
+        Task {
+            do {
+                try SwiftDataBackupManager.destroyCurrentStore()
+                await MainActor.run {
+                    restoreStatus = .success("Data store removed. Quit and relaunch PhysCloudResume to start fresh.")
+                }
+            } catch {
+                await MainActor.run {
+                    restoreStatus = .failure(error.localizedDescription)
+                }
+            }
+
+            await MainActor.run {
+                isResetting = false
+            }
+        }
+    }
+
     private func backupRootURL() -> URL? {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
@@ -118,11 +144,15 @@ private enum RestoreStatus {
 private struct LaunchStateOverlay: View {
     let message: String
     let isRestoring: Bool
+    let isResetting: Bool
     let status: RestoreStatus?
     let restoreAction: () -> Void
     let openBackupsAction: () -> Void
+    let resetAction: () -> Void
 
     var body: some View {
+        let isBusy = isRestoring || isResetting
+
         VStack(spacing: 16) {
             Text("Read-Only Mode")
                 .font(.title2)
@@ -139,7 +169,7 @@ private struct LaunchStateOverlay: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if isRestoring {
+            if isBusy {
                 ProgressView()
                     .progressViewStyle(.circular)
             }
@@ -147,15 +177,25 @@ private struct LaunchStateOverlay: View {
             VStack(alignment: .leading, spacing: 12) {
                 Button("Restore Latest Backup", action: restoreAction)
                     .buttonStyle(.borderedProminent)
-                    .disabled(isRestoring)
+                    .disabled(isBusy)
 
                 Button("Open Backup Folder", action: openBackupsAction)
                     .buttonStyle(.bordered)
-                    .disabled(isRestoring)
+                    .disabled(isBusy)
+
+                Button {
+                    resetAction()
+                } label: {
+                    Text("Reset Data Store")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .disabled(isBusy)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("After restoring, quit and relaunch PhysCloudResume to reload your data.")
+            Text("After restoring or resetting, quit and relaunch PhysCloudResume.")
                 .font(.footnote)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

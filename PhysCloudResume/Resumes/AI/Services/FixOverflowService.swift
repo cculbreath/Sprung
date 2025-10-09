@@ -11,9 +11,11 @@ struct FixOverflowStatus {
 @MainActor
 class FixOverflowService {
     private let reviewService: ResumeReviewService
+    private let exportCoordinator: ResumeExportCoordinator
     
-    init(reviewService: ResumeReviewService) {
+    init(reviewService: ResumeReviewService, exportCoordinator: ResumeExportCoordinator) {
         self.reviewService = reviewService
+        self.exportCoordinator = exportCoordinator
     }
     
     func performFixOverflow(
@@ -154,7 +156,7 @@ class FixOverflowService {
             statusMessage: statusMessage
         )
         
-        resume.debounceExport()
+        exportCoordinator.debounceExport(resume: resume)
         return .success(finalStatus)
     }
     
@@ -164,7 +166,7 @@ class FixOverflowService {
         if resume.pdfData == nil {
             onStatusUpdate(FixOverflowStatus(statusMessage: "Generating initial PDF for analysis...", changeMessage: "", overflowLineCount: 0))
             Logger.debug("FixOverflow: No PDF data, generating...")
-            try await resume.ensureFreshRenderedText()
+            try await exportCoordinator.ensureFreshRenderedText(for: resume)
             guard resume.pdfData != nil else {
                 Logger.debug("FixOverflow: Failed to generate initial PDF")
                 throw FixOverflowError.pdfGenerationFailed
@@ -287,7 +289,7 @@ class FixOverflowService {
     
     private func reRenderPDF(resume: Resume, iteration: Int, onStatusUpdate: @escaping (FixOverflowStatus) -> Void) async throws {
         onStatusUpdate(FixOverflowStatus(statusMessage: "Re-rendering resume with changes...", changeMessage: "", overflowLineCount: 0))
-        try await resume.ensureFreshRenderedText()
+        try await exportCoordinator.ensureFreshRenderedText(for: resume)
         guard resume.pdfData != nil else {
             throw FixOverflowError.pdfReRenderFailed(iteration: iteration)
         }

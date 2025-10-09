@@ -5,6 +5,7 @@ struct ClarifyingQuestionsButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(AppState.self) private var appState: AppState
     @Environment(LLMFacade.self) private var llmFacade
+    @Environment(AppEnvironment.self) private var appEnvironment
     
     @Binding var selectedTab: TabList
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
@@ -91,7 +92,11 @@ struct ClarifyingQuestionsButton: View {
         }
         
         do {
-            let clarifyingViewModel = ClarifyingQuestionsViewModel(llmFacade: llmFacade, appState: appState)
+            let clarifyingViewModel = ClarifyingQuestionsViewModel(
+                llmFacade: llmFacade,
+                appState: appState,
+                exportCoordinator: appEnvironment.resumeExportCoordinator
+            )
             clarifyingQuestionsViewModel = clarifyingViewModel
             
             try await clarifyingViewModel.startClarifyingQuestionsWorkflow(

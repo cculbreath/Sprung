@@ -2,29 +2,29 @@
 //  ConversationModels.swift
 //  PhysCloudResume
 //
-//  Created by Assistant on 5/19/25.
+//  SwiftData persistence for LLM conversations using domain DTOs.
 //
 
 import SwiftData
 import Foundation
 
-// MARK: - SwiftData Models for Conversational AI Context
-// Note: Type aliases for SwiftOpenAI types are defined in ConversationTypes.swift
-
 @Model
 class ConversationContext {
     var id: UUID
-    var objectId: UUID  // References Resume or CoverLetter UUID
-    var objectType: String  // "resume" or "coverLetter"
+    var objectId: UUID
+    var objectType: String
     var lastUpdated: Date
-    
-    // Relationship to messages
+
     @Relationship(deleteRule: .cascade, inverse: \ConversationMessage.context)
     var messages: [ConversationMessage] = []
-    
-    init(objectId: UUID, objectType: ConversationType) {
-        self.id = UUID()
-        self.objectId = objectId
+
+    init(
+        conversationId: UUID,
+        objectId: UUID? = nil,
+        objectType: ConversationType = .general
+    ) {
+        self.id = conversationId
+        self.objectId = objectId ?? conversationId
         self.objectType = objectType.rawValue
         self.lastUpdated = Date()
     }
@@ -33,27 +33,65 @@ class ConversationContext {
 @Model
 class ConversationMessage {
     var id: UUID
-    var role: String        // "system", "user", "assistant"
+    var role: String
     var content: String
-    var imageData: String?  // Base64-encoded image data for vision models
+    var imageData: String?
     var timestamp: Date
-    
-    // Relationship to context
-    var context: ConversationContext?
-    
-    init(role: ChatCompletionParameters.Message.Role, content: String, imageData: String? = nil) {
+
+    @Relationship var context: ConversationContext?
+
+    init(role: LLMRole, content: String, imageData: String? = nil) {
         self.id = UUID()
         self.role = role.rawValue
         self.content = content
         self.imageData = imageData
         self.timestamp = Date()
     }
-    
 }
 
-// MARK: - Supporting Types
-
 enum ConversationType: String, CaseIterable {
-    case resume = "resume"
-    case coverLetter = "coverLetter"
+    case general
+    case resume
+    case coverLetter
+
+    init(rawValue: String, fallback: ConversationType) {
+        self = ConversationType(rawValue: rawValue) ?? fallback
+    }
+}
+
+extension ConversationMessage {
+    var dto: LLMMessageDTO {
+        var attachments: [LLMAttachment] = []
+        if let imageData,
+           let data = Data(base64Encoded: imageData) {
+            attachments.append(LLMAttachment(data: data, mimeType: "image/png"))
+        }
+        let roleEnum = LLMRole(rawValue: role) ?? .assistant
+        return LLMMessageDTO(
+            id: id,
+            role: roleEnum,
+            text: content.isEmpty ? nil : content,
+            attachments: attachments,
+            createdAt: timestamp
+        )
+    }
+
+    func apply(dto: LLMMessageDTO) {
+        id = dto.id
+        role = dto.role.rawValue
+        content = dto.text ?? ""
+        imageData = dto.attachments.first?.data.base64EncodedString()
+        timestamp = dto.createdAt ?? Date()
+    }
+
+    static func fromDTO(_ dto: LLMMessageDTO) -> ConversationMessage {
+        let message = ConversationMessage(
+            role: dto.role,
+            content: dto.text ?? "",
+            imageData: dto.attachments.first?.data.base64EncodedString()
+        )
+        message.id = dto.id
+        message.timestamp = dto.createdAt ?? Date()
+        return message
+    }
 }

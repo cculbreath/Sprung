@@ -15,6 +15,7 @@ struct AppWindowView: View {
     @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     @Environment(AppState.self) private var appState: AppState
     @Environment(LLMFacade.self) private var llmFacade: LLMFacade
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
 
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
@@ -161,7 +162,8 @@ struct AppWindowView: View {
         do {
             let clarifyingViewModel = ClarifyingQuestionsViewModel(
                 llmFacade: llmFacade,
-                appState: appState
+                appState: appState,
+                exportCoordinator: appEnvironment.resumeExportCoordinator
             )
             
             try await clarifyingViewModel.startClarifyingQuestionsWorkflow(

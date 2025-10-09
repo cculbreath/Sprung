@@ -216,11 +216,20 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     
     // MARK: - Initialization
     
-    init(coverLetter: CoverLetter, resume: Resume, jobApp: JobApp, saveDebugPrompt: Bool = false) {
+    private let exportCoordinator: ResumeExportCoordinator
+
+    init(
+        coverLetter: CoverLetter,
+        resume: Resume,
+        jobApp: JobApp,
+        exportCoordinator: ResumeExportCoordinator,
+        saveDebugPrompt: Bool = false
+    ) {
         self.coverLetter = coverLetter
         self.resume = resume
         self.jobApp = jobApp
         self.saveDebugPrompt = saveDebugPrompt
+        self.exportCoordinator = exportCoordinator
         
         // Create a complete applicant profile with default values
         let profile = ApplicantProfile()
@@ -263,7 +272,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     @MainActor
     func generationPrompt(mode: CoverAiMode = .generate, includeResumeRefs: Bool = true) async -> String {
         // Ensure resume text is fresh
-        try? await resume.ensureFreshRenderedText()
+        try? await exportCoordinator.ensureFreshRenderedText(for: resume)
         
         let prompt = """
         ================================================================================
@@ -312,7 +321,7 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
         feedback: String,
         editorPrompt: CoverLetterPrompts.EditorPrompts = .improve
     ) async -> String {
-        try? await resume.ensureFreshRenderedText()
+        try? await exportCoordinator.ensureFreshRenderedText(for: resume)
         
         let prompt: String
         if editorPrompt == .custom {

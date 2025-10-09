@@ -4,10 +4,12 @@ import Mustache
 
 @MainActor
 class NativePDFGenerator: NSObject, ObservableObject {
+    private let templateStore: TemplateStore
     private var webView: WKWebView?
     private var currentCompletion: ((Result<Data, Error>) -> Void)?
     
-    override init() {
+    init(templateStore: TemplateStore) {
+        self.templateStore = templateStore
         super.init()
         setupWebView()
     }
@@ -48,7 +50,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
             Task { @MainActor in
                 do {
                     let context = try createTemplateContext(from: resume)
-                    let mustacheTemplate = try Template(string: customHTML)
+                    let mustacheTemplate = try Mustache.Template(string: customHTML)
                     let htmlContent = try mustacheTemplate.render(context)
                     
                     currentCompletion = { result in
@@ -67,13 +69,20 @@ class NativePDFGenerator: NSObject, ObservableObject {
     
     @MainActor
     private func renderTemplate(for resume: Resume, template: String, format: String) throws -> String {
+        let normalizedTemplate = template.lowercased()
         // Load template from bundle with template-specific naming (case-insensitive)
-        let resourceName = "\(template.lowercased())-template"
+        let resourceName = "\(normalizedTemplate)-template"
         
         // Try multiple path strategies to find the template
         var templatePath: String?
         var templateContent: String?
-        
+
+        if format == "html", let stored = templateStore.htmlTemplateContent(slug: normalizedTemplate) {
+            templateContent = stored
+        } else if format == "txt", let stored = templateStore.textTemplateContent(slug: normalizedTemplate) {
+            templateContent = stored
+        }
+
         // Strategy 0: Check Documents directory first for user modifications
         if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             let userTemplatePath = documentsPath
@@ -148,10 +157,13 @@ class NativePDFGenerator: NSObject, ObservableObject {
         let processedContext = preprocessContextForTemplate(rawContext, from: resume)
         
         // Fix font URLs for macOS system fonts and preprocess helpers
-        let finalContent = preprocessTemplateForGRMustache(fixFontReferences(content))
+        var finalContent = preprocessTemplateForGRMustache(fixFontReferences(content))
+        if format == "html", let css = templateStore.cssTemplateContent(slug: normalizedTemplate), !css.isEmpty {
+            finalContent = "<style>\n\(css)\n</style>\n" + finalContent
+        }
         
         // Use GRMustache to render the template
-        let mustacheTemplate = try Template(string: finalContent)
+        let mustacheTemplate = try Mustache.Template(string: finalContent)
         let renderedContent = try mustacheTemplate.render(processedContext)
         
         // For HTML format, save debug output
@@ -164,17 +176,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
     
     @MainActor
     private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
-        // Use the TreeToJson system to generate proper JSON structure
-        guard let rootNode = resume.rootNode else {
-            throw PDFGeneratorError.invalidResumeData
-        }
-        
-        // Build structured context using TreeToJson (no stringly JSON round-trip)
-        guard let treeToJson = TreeToJson(rootNode: rootNode),
-              let resumeData = treeToJson.buildContextDictionary()
-        else {
-            throw PDFGeneratorError.invalidResumeData
-        }
+        let resumeData = try ResumeTemplateDataBuilder.buildContext(from: resume)
         
         // Get applicant profile for contact information
         let applicant = ApplicantProfileManager.shared.getProfile()

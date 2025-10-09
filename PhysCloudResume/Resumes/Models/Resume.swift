@@ -26,6 +26,8 @@ class Resume: Identifiable, Hashable {
     @Relationship(deleteRule: .cascade, inverse: \FontSizeNode.resume)
     var fontSizeNodes: [FontSizeNode] = []
     var includeFonts: Bool = false
+    @Relationship(deleteRule: .nullify, inverse: \Template.resumes)
+    var template: Template?
     // Labels for keys previously imported; persisted as keyLabels map
     var keyLabels: [String: String] = [:]
     // Stored raw JSON data for imported editor keys; persisted as Data
@@ -82,13 +84,14 @@ class Resume: Identifiable, Hashable {
     @Transient
     var isExporting: Bool = false
     var jsonTxt: String {
-        guard let myRoot = rootNode, let builder = TreeToJson(rootNode: myRoot) else { return "" }
-        // Build via JSONSerialization for correctness
-        if let context = builder.buildContextDictionary(),
-           let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
+        do {
+            let context = try ResumeTemplateDataBuilder.buildContext(from: self)
+            let data = try JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted])
             return String(data: data, encoding: .utf8) ?? ""
+        } catch {
+            Logger.error("Failed to build resume JSON: \(error)")
+            return ""
         }
-        return ""
     }
 
     func getUpdatableNodes() -> [[String: Any]] {
@@ -118,26 +121,6 @@ class Resume: Identifiable, Hashable {
         self.enabledSources = enabledSources
     }
 
-    func generateQuery() -> ResumeApiQuery {
-        // Instead of using an empty profile and updating it later asynchronously,
-        // create a complete profile with default values so that the query has valid data
-        // This avoids the race condition where the query is used before the Task updates it
-        let profile = ApplicantProfile() // Uses default values from ApplicantProfile init
-        let applicant = Applicant(
-            name: profile.name,
-            address: profile.address,
-            city: profile.city,
-            state: profile.state,
-            zip: profile.zip,
-            websites: profile.websites,
-            email: profile.email,
-            phone: profile.phone
-        )
-        let query = ResumeApiQuery(resume: self)
-        query.updateApplicant(applicant)
-        return query
-    }
-
     func loadPDF(from fileURL: URL = FileHandler.pdfUrl(),
                  completion: (() -> Void)? = nil)
     {
@@ -150,68 +133,6 @@ class Resume: Identifiable, Hashable {
                 Logger.debug("Error loading PDF from \(fileURL): \(error)")
                 DispatchQueue.main.async {}
             }
-        }
-    }
-
-    @Transient private var exportWorkItem: DispatchWorkItem?
-
-    func debounceExport(onStart: (() -> Void)? = nil,
-                        onFinish: (() -> Void)? = nil)
-    {
-        exportWorkItem?.cancel()
-        isExporting = true
-        onStart?()
-
-        exportWorkItem = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            if let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonTxt) {
-                Task { @MainActor in // Ensure export service call and property updates are on MainActor
-                    do {
-                        // This now calls the async version of export which updates pdfData and textRes
-                        try await ResumeExportService().export(jsonURL: jsonFile, for: self)
-                    } catch {
-                        Logger.debug("Error during debounced export: \(error)")
-                    }
-                    self.isExporting = false
-                    onFinish?()
-                }
-            } else {
-                Logger.debug("Failed to save JSON to file for debounced export.")
-                Task { @MainActor in // Ensure UI updates are on MainActor
-                    self.isExporting = false
-                    onFinish?()
-                }
-            }
-        }
-        if let workItem = exportWorkItem {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
-        }
-    }
-
-    // MARK: - Async Rendering and Export (Modified for Fix Overflow)
-
-    @MainActor // Ensure this function and its mutations run on the main actor
-    func ensureFreshRenderedText() async throws {
-        // Cancel any ongoing debounced export as we want a direct, awaitable one.
-        exportWorkItem?.cancel()
-
-        isExporting = true
-        defer { isExporting = false }
-
-        guard let jsonFile = FileHandler.saveJSONToFile(jsonString: jsonTxt) else {
-            throw NSError(domain: "ResumeRender", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to save JSON to file for rendering."])
-        }
-
-        // Directly call the export service and await its completion.
-        // The ApiResumeExportService().export function is already async
-        // and should update self.pdfData and self.textRes upon completion.
-        do {
-            try await ResumeExportService().export(jsonURL: jsonFile, for: self)
-            Logger.debug("ensureFreshRenderedText: Successfully exported and updated resume data.")
-            Logger.debug(textRes)
-        } catch {
-            Logger.debug("ensureFreshRenderedText: Failed to export resume - \(error.localizedDescription)")
-            throw error // Re-throw the error to be caught by the caller
         }
     }
 

@@ -13,6 +13,7 @@ struct DraggableNodeWrapper<Content: View>: View {
     let content: Content
     
     @Environment(DragInfo.self) private var dragInfo
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @State private var isDropTargeted: Bool = false
     
     init(node: TreeNode, siblings: [TreeNode], @ViewBuilder content: () -> Content) {
@@ -65,6 +66,7 @@ struct DraggableNodeWrapper<Content: View>: View {
             node: node,
             siblings: siblings,
             dragInfo: dragInfo,
+            appEnvironment: appEnvironment,
             isDropTargeted: $isDropTargeted,
             isDraggable: isDraggable
         ))
@@ -75,6 +77,7 @@ struct NodeDropDelegate: DropDelegate {
     let node: TreeNode
     var siblings: [TreeNode]
     var dragInfo: DragInfo
+    let appEnvironment: AppEnvironment
     @Binding var isDropTargeted: Bool
     let isDraggable: Bool
     
@@ -153,7 +156,7 @@ struct NodeDropDelegate: DropDelegate {
             try parent.resume.modelContext?.save()
         } catch {}
         
-        parent.resume.debounceExport()
+        appEnvironment.resumeExportCoordinator.debounceExport(resume: parent.resume)
     }
     
     private func haveSameParent(_ n1: TreeNode, _ n2: TreeNode) -> Bool {

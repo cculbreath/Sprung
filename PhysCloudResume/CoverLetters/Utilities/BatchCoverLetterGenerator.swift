@@ -8,19 +8,22 @@ class BatchCoverLetterGenerator {
     private let coverLetterStore: CoverLetterStore
     private let llmFacade: LLMFacade
     private let coverLetterService: CoverLetterService
+    private let exportCoordinator: ResumeExportCoordinator
 
     init(
         appState: AppState,
         jobAppStore: JobAppStore,
         coverLetterStore: CoverLetterStore,
         llmFacade: LLMFacade,
-        coverLetterService: CoverLetterService
+        coverLetterService: CoverLetterService,
+        exportCoordinator: ResumeExportCoordinator
     ) {
         self.appState = appState
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.llmFacade = llmFacade
         self.coverLetterService = coverLetterService
+        self.exportCoordinator = exportCoordinator
     }
 
     private func executeText(_ prompt: String, modelId: String) async throws -> String {
@@ -310,6 +313,7 @@ class BatchCoverLetterGenerator {
                 coverLetter: baseCoverLetter,
                 resume: resume,
                 jobApp: jobApp,
+                exportCoordinator: exportCoordinator,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             
@@ -341,6 +345,7 @@ class BatchCoverLetterGenerator {
                 coverLetter: baseCoverLetter,
                 resume: resume,
                 jobApp: jobApp,
+                exportCoordinator: exportCoordinator,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             

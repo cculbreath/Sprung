@@ -16,6 +16,7 @@ struct RevisionReviewView: View {
     @Binding var resume: Resume?
     @State private var showExitConfirmation = false
     @State private var eventMonitor: Any? = nil
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     
     // Computed property to check if reasoning modal should be used instead of loading sheet
     private var isUsingReasoningModal: Bool {
@@ -183,7 +184,10 @@ struct RevisionReviewView: View {
         if let resume = resume {
             // Apply all feedback (both approved from previous rounds and current)
             let allFeedbackNodes = viewModel.approvedFeedbackNodes + viewModel.feedbackNodes
-            allFeedbackNodes.applyAcceptedChanges(to: resume)
+            allFeedbackNodes.applyAcceptedChanges(
+                to: resume,
+                exportCoordinator: appEnvironment.resumeExportCoordinator
+            )
         }
         
         // Clear all state

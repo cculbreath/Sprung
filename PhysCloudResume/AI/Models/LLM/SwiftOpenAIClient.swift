@@ -27,7 +27,8 @@ final class SwiftOpenAIClient: LLMClient {
             temperature: temperature ?? defaultTemperature
         )
         let response = try await executor.execute(parameters: params)
-        guard let content = response.choices?.first?.message?.content else {
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        guard let content = dto.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
         return content
@@ -41,7 +42,8 @@ final class SwiftOpenAIClient: LLMClient {
             temperature: temperature ?? defaultTemperature
         )
         let response = try await executor.execute(parameters: params)
-        guard let content = response.choices?.first?.message?.content else {
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        guard let content = dto.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
         return content
@@ -56,7 +58,8 @@ final class SwiftOpenAIClient: LLMClient {
             jsonSchema: nil
         )
         let response = try await executor.execute(parameters: params)
-        return try JSONResponseParser.parseStructured(response, as: T.self)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
 
     func executeStructuredWithImages<T: Codable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type, temperature: Double? = nil) async throws -> T {
@@ -68,7 +71,8 @@ final class SwiftOpenAIClient: LLMClient {
             temperature: temperature ?? defaultTemperature
         )
         let response = try await executor.execute(parameters: params)
-        return try JSONResponseParser.parseStructured(response, as: T.self)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
 
     func startStreaming(prompt: String, modelId: String, temperature: Double? = nil) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
@@ -84,18 +88,8 @@ final class SwiftOpenAIClient: LLMClient {
                 do {
                     let stream = try await executor.executeStreaming(parameters: params)
                     for try await chunk in stream {
-                        if let ch = chunk.choices?.first {
-                            let dto = LLMStreamChunkDTO(
-                                content: ch.delta?.content,
-                                reasoning: ch.delta?.reasoningContent,
-                                isFinished: ch.finishReason != nil,
-                                finishReason: {
-                                    guard let finish = ch.finishReason else { return nil }
-                                    switch finish { case .string(let s): return s; case .int(let i): return String(i) }
-                                }()
-                            )
-                            continuation.yield(dto)
-                        }
+                        let chunkDTO = LLMVendorMapper.streamChunkDTO(from: chunk)
+                        continuation.yield(chunkDTO)
                     }
                     continuation.finish()
                 } catch {

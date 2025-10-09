@@ -53,9 +53,9 @@ enum SchemaV2: VersionedSchema {
     }
 }
 
-// MARK: - Schema V3 (Added EnabledLLM Model)
+// MARK: - Schema V3 (EnabledLLM + Template Library)
 enum SchemaV3: VersionedSchema {
-    static var versionIdentifier = Schema.Version(3, 0, 0)
+    static var versionIdentifier = Schema.Version(4, 0, 0)
     
     static var models: [any PersistentModel.Type] {
         [
@@ -71,8 +71,9 @@ enum SchemaV3: VersionedSchema {
             ResModel.self,
             ConversationContext.self,
             ConversationMessage.self,
-            // New models added in V3
-            EnabledLLM.self
+            EnabledLLM.self,
+            Template.self,
+            TemplateAsset.self
         ]
     }
 }
@@ -82,7 +83,7 @@ enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [SchemaV1.self, SchemaV2.self, SchemaV3.self]
     }
-    
+
     static var stages: [MigrationStage] {
         [migrateV1toV2, migrateV2toV3]
     }
@@ -181,6 +182,7 @@ enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
             Logger.debug("✅ EnabledLLM model migration completed successfully")
         }
     )
+
 }
 
 // MARK: - Model Container Factory
@@ -192,7 +194,7 @@ extension ModelContainer {
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
-        
+
         return try ModelContainer(
             for: Schema(SchemaV3.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
@@ -208,7 +210,7 @@ extension ModelContainer {
             allowsSave: true,
             cloudKitDatabase: .none
         )
-        
+
         return try ModelContainer(
             for: Schema(SchemaV3.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,

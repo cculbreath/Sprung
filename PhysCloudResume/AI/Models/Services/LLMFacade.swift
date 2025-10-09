@@ -232,12 +232,7 @@ final class LLMFacade {
                 do {
                     for try await chunk in sourceStream {
                         if Task.isCancelled { break }
-                        continuation.yield(LLMStreamChunkDTO(
-                            content: chunk.content,
-                            reasoning: chunk.reasoningContent,
-                            isFinished: chunk.isFinished,
-                            finishReason: chunk.finishReason
-                        ))
+                        continuation.yield(chunk)
                     }
                     continuation.finish()
                 } catch {
@@ -291,13 +286,7 @@ final class LLMFacade {
                 do {
                     for try await chunk in sourceStream {
                         if Task.isCancelled { break }
-                        let dto = LLMStreamChunkDTO(
-                            content: chunk.content,
-                            reasoning: chunk.reasoningContent,
-                            isFinished: chunk.isFinished,
-                            finishReason: chunk.finishReason
-                        )
-                        continuation.yield(dto)
+                        continuation.yield(chunk)
                     }
                     continuation.finish()
                 } catch {
@@ -351,12 +340,7 @@ final class LLMFacade {
                 do {
                     for try await chunk in sourceStream {
                         if Task.isCancelled { break }
-                        continuation.yield(LLMStreamChunkDTO(
-                            content: chunk.content,
-                            reasoning: chunk.reasoningContent,
-                            isFinished: chunk.isFinished,
-                            finishReason: chunk.finishReason
-                        ))
+                        continuation.yield(chunk)
                     }
                     continuation.finish()
                 } catch {

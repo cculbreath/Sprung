@@ -30,12 +30,12 @@ class ResumeReviewViewModel {
     
     // MARK: - Initialization
     
-    func initialize(llmFacade: LLMFacade) {
+    func initialize(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
         reviewService = ResumeReviewService(llmFacade: llmFacade)
         reviewService?.initialize()
         if let svc = reviewService {
-            fixOverflowService = FixOverflowService(reviewService: svc)
-            reorderSkillsService = ReorderSkillsService(reviewService: svc)
+            fixOverflowService = FixOverflowService(reviewService: svc, exportCoordinator: exportCoordinator)
+            reorderSkillsService = ReorderSkillsService(reviewService: svc, exportCoordinator: exportCoordinator)
         } else {
             Logger.error("ResumeReviewViewModel: reviewService not initialized; dependent services unavailable")
         }

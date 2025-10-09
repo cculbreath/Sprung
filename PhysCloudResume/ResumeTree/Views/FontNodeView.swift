@@ -10,6 +10,7 @@ import SwiftUI
 
 struct FontNodeView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
 
     @State var node: FontSizeNode
 
@@ -34,7 +35,7 @@ struct FontNodeView: View {
                         .onSubmit {
                             isEditing = false
                             if let res = jobAppStore.selectedApp?.selectedRes {
-                                res.debounceExport()
+                                appEnvironment.resumeExportCoordinator.debounceExport(resume: res)
                             } else {
                                 Logger.debug("FontNodeView: No selected resume to export after edit submission")
                             }
@@ -55,7 +56,7 @@ struct FontNodeView: View {
         .onChange(of: node.fontValue) {
             if !isEditing {
                 if let res = jobAppStore.selectedApp?.selectedRes {
-                    res.debounceExport()
+                    appEnvironment.resumeExportCoordinator.debounceExport(resume: res)
                 } else {
                     Logger.debug("FontNodeView: No selected resume to export on value change")
                 }

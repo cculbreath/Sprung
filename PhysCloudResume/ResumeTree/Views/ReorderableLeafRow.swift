@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ReorderableLeafRow: View {
     @Environment(DragInfo.self) private var dragInfo
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
 
     let node: TreeNode
     var siblings: [TreeNode]
@@ -51,6 +52,7 @@ struct ReorderableLeafRow: View {
             node: node,
             siblings: siblings,
             dragInfo: dragInfo,
+            appEnvironment: appEnvironment,
             isDropTargeted: $isDropTargeted // Pass state to the delegate
         ))
     }
@@ -61,6 +63,7 @@ struct LeafDropDelegate: DropDelegate {
     let node: TreeNode
     var siblings: [TreeNode]
     var dragInfo: DragInfo
+    let appEnvironment: AppEnvironment
     @Binding var isDropTargeted: Bool // Accept the binding for isDropTargeted
 
     func validateDrop(info _: DropInfo) -> Bool {
@@ -145,7 +148,7 @@ struct LeafDropDelegate: DropDelegate {
         } catch {}
 
         // Notify the Resume model
-        parent.resume.debounceExport()
+        appEnvironment.resumeExportCoordinator.debounceExport(resume: parent.resume)
     }
 
     private func haveSameParent(_ n1: TreeNode, _ n2: TreeNode) -> Bool {

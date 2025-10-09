@@ -274,7 +274,7 @@ class ReasoningStreamManager {
     private var currentTask: Task<Void, Never>?
     
     /// Start processing a reasoning stream
-    func startStream<T: AsyncSequence & Sendable>(_ stream: T) where T.Element == LLMStreamChunk, T.AsyncIterator: Sendable {
+    func startStream<T: AsyncSequence & Sendable>(_ stream: T) where T.Element == LLMStreamChunkDTO, T.AsyncIterator: Sendable {
         // Cancel any existing stream
         currentTask?.cancel()
         
@@ -290,7 +290,7 @@ class ReasoningStreamManager {
                     if Task.isCancelled { break }
                     
                     // Append reasoning content
-                    if let reasoning = chunk.reasoningContent {
+                    if let reasoning = chunk.reasoning {
                         if Logger.isVerboseEnabled {
                             Logger.verbose(
                                 "🧠 [ReasoningStreamManager] Appending reasoning: \(reasoning.prefix(100))...",

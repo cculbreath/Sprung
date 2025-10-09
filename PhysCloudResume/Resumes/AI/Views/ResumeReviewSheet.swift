@@ -10,6 +10,7 @@ import Foundation
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
+    @Environment(AppEnvironment.self) private var appEnvironment
 
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()
@@ -208,7 +209,7 @@ struct ResumeReviewSheet: View {
             // Note: Reasoning stream view is now displayed globally in the main app UI
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
-        .onAppear { viewModel.initialize(llmFacade: llmFacade) }
+        .onAppear { viewModel.initialize(llmFacade: llmFacade, exportCoordinator: appEnvironment.resumeExportCoordinator) }
     }
 
     // View for custom options (extracted for clarity) - Unchanged

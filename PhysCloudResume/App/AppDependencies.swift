@@ -22,6 +22,8 @@ final class AppDependencies {
     let jobAppStore: JobAppStore
     let resModelStore: ResModelStore
     let enabledLLMStore: EnabledLLMStore
+    let resumeExportCoordinator: ResumeExportCoordinator
+    let templateStore: TemplateStore
 
     // MARK: - UI State
     let dragInfo: DragInfo
@@ -43,7 +45,17 @@ final class AppDependencies {
         Logger.debug("🏗️ AppDependencies: initializing with shared ModelContext", category: .appLifecycle)
 
         // Base stores
-        self.resStore = ResStore(context: modelContext)
+        let templateStore = TemplateStore(context: modelContext)
+        self.templateStore = templateStore
+
+        // Core export orchestration
+        let resumeExportService = ResumeExportService(templateStore: templateStore)
+        let resumeExportCoordinator = ResumeExportCoordinator(
+            exportService: resumeExportService
+        )
+        self.resumeExportCoordinator = resumeExportCoordinator
+
+        self.resStore = ResStore(context: modelContext, exportCoordinator: resumeExportCoordinator, templateStore: templateStore)
         self.resRefStore = ResRefStore(context: modelContext)
         self.coverRefStore = CoverRefStore(context: modelContext)
 
@@ -82,7 +94,10 @@ final class AppDependencies {
             modelValidationService: appState.modelValidationService
         )
 
-        let coverLetterService = CoverLetterService(llmFacade: llmFacade)
+        let coverLetterService = CoverLetterService(
+            llmFacade: llmFacade,
+            exportCoordinator: resumeExportCoordinator
+        )
         self.coverLetterService = coverLetterService
 
         self.appEnvironment = AppEnvironment(
@@ -93,6 +108,8 @@ final class AppDependencies {
             llmFacade: llmFacade,
             modelValidationService: modelValidationService,
             debugSettingsStore: debugSettingsStore,
+            templateStore: templateStore,
+            resumeExportCoordinator: resumeExportCoordinator,
             launchState: .ready
         )
 

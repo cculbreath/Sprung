@@ -16,8 +16,15 @@ import UniformTypeIdentifiers
 
 @MainActor
 class ResumeExportService: ObservableObject {
-    private let nativeGenerator = NativePDFGenerator()
-    private let textGenerator = TextResumeGenerator()
+    private let nativeGenerator: NativePDFGenerator
+    private let textGenerator: TextResumeGenerator
+    private let templateStore: TemplateStore
+    
+    init(templateStore: TemplateStore) {
+        self.templateStore = templateStore
+        self.nativeGenerator = NativePDFGenerator(templateStore: templateStore)
+        self.textGenerator = TextResumeGenerator(templateStore: templateStore)
+    }
     
     func export(jsonURL: URL, for resume: Resume) async throws {
         do {
@@ -29,7 +36,11 @@ class ResumeExportService: ObservableObject {
     }
     
     private func exportNatively(jsonURL: URL, for resume: Resume) async throws {
-        let template = resume.model?.templateName ?? resume.model?.style ?? "archer"
+        let template = resume.template?.slug ?? resume.model?.templateName ?? resume.model?.style ?? "archer"
+        if resume.template == nil,
+           let entity = templateStore.template(slug: template.lowercased()) {
+            resume.template = entity
+        }
         
         // Generate PDF from HTML template (custom or bundled)
         let pdfData: Data

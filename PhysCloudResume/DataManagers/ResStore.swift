@@ -21,11 +21,15 @@ final class ResStore: SwiftDataStore {
     // MARK: - Properties
 
     unowned let modelContext: ModelContext
+    private let exportCoordinator: ResumeExportCoordinator
+    private let templateStore: TemplateStore
 
     // MARK: - Initialiser
 
-    init(context: ModelContext) {
+    init(context: ModelContext, exportCoordinator: ResumeExportCoordinator, templateStore: TemplateStore) {
         modelContext = context
+        self.exportCoordinator = exportCoordinator
+        self.templateStore = templateStore
     }
 
     @discardableResult
@@ -50,12 +54,19 @@ final class ResStore: SwiftDataStore {
         resume.rootNode = builder.buildTree()
 //                Logger.debug(builder.json)
 
+        let normalizedStyle = model.style.lowercased()
+        if let templateEntity = templateStore.template(slug: normalizedStyle) {
+            resume.template = templateEntity
+        } else if let fallbackTemplate = templateStore.template(slug: "archer") {
+            resume.template = fallbackTemplate
+        }
+
         // Persist new resume (and trigger observers)
         jobApp.addResume(resume)
         modelContext.insert(resume)
         saveContext()
 
-        resume.debounceExport()
+        exportCoordinator.debounceExport(resume: resume)
 
         return resume
     }
@@ -76,6 +87,7 @@ final class ResStore: SwiftDataStore {
         newResume.includeFonts = originalResume.includeFonts
         newResume.keyLabels = originalResume.keyLabels
         newResume.importedEditorKeysData = originalResume.importedEditorKeysData
+        newResume.template = originalResume.template
         
         // Deep copy the tree structure
         if let originalRoot = originalResume.rootNode {
@@ -95,7 +107,7 @@ final class ResStore: SwiftDataStore {
         saveContext()
         
         // Trigger export for the new resume
-        newResume.debounceExport()
+        exportCoordinator.debounceExport(resume: newResume)
         
         return newResume
     }

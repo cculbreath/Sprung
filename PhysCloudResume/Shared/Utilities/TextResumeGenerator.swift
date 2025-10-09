@@ -11,6 +11,11 @@ import Mustache
 /// Handles generation of plain text resumes from Resume data
 @MainActor
 class TextResumeGenerator {
+    private let templateStore: TemplateStore
+
+    init(templateStore: TemplateStore) {
+        self.templateStore = templateStore
+    }
     
     // MARK: - Public Methods
     
@@ -23,7 +28,7 @@ class TextResumeGenerator {
     func generateTextFromCustomTemplate(for resume: Resume, customText: String) throws -> String {
         let context = try createTemplateContext(from: resume)
         let processedContext = preprocessContextForText(context, from: resume)
-        let mustacheTemplate = try Template(string: customText)
+        let mustacheTemplate = try Mustache.Template(string: customText)
         return try mustacheTemplate.render(processedContext)
     }
     
@@ -38,7 +43,7 @@ class TextResumeGenerator {
         let processedContext = preprocessContextForText(context, from: resume)
         
         // Render with Mustache
-        let mustacheTemplate = try Template(string: templateContent)
+        let mustacheTemplate = try Mustache.Template(string: templateContent)
         return try mustacheTemplate.render(processedContext)
     }
     
@@ -48,6 +53,10 @@ class TextResumeGenerator {
         // Try multiple path strategies to find the template
         var templateContent: String?
         
+        if let stored = templateStore.textTemplateContent(slug: template.lowercased()) {
+            templateContent = stored
+        }
+
         // Strategy 0: Check Documents directory first for user modifications
         if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             let userTemplatePath = documentsPath

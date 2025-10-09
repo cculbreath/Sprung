@@ -115,6 +115,6 @@ struct NodeLeafView: View {
     private func deleteNode(node: TreeNode) {
         let resume = node.resume
         TreeNode.deleteTreeNode(node: node, context: context)
-        resume.debounceExport()
+        vm.refreshPDF()
     }
 }

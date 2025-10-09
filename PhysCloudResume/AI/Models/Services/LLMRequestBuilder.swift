@@ -69,9 +69,10 @@ struct LLMRequestBuilder {
         
         // Add images
         for imageData in images {
-            let base64Image = imageData.base64EncodedString()
-            let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
-            let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
+            guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
+                Logger.warning("⚠️ Skipping image attachment: failed to create data URL", category: .networking)
+                continue
+            }
             contentParts.append(.imageUrl(imageDetail))
         }
         
@@ -137,9 +138,10 @@ struct LLMRequestBuilder {
         
         // Add images
         for imageData in images {
-            let base64Image = imageData.base64EncodedString()
-            let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
-            let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
+            guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
+                Logger.warning("⚠️ Skipping image attachment: failed to create data URL", category: .networking)
+                continue
+            }
             contentParts.append(.imageUrl(imageDetail))
         }
         
@@ -208,6 +210,19 @@ struct LLMRequestBuilder {
     
     /// Build parameters for conversation requests
     static func buildConversationRequest(
+        messages: [LLMMessageDTO],
+        modelId: String,
+        temperature: Double
+    ) -> ChatCompletionParameters {
+        let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
+        return ChatCompletionParameters(
+            messages: vendorMessages,
+            model: .custom(modelId),
+            temperature: temperature
+        )
+    }
+
+    static func buildConversationRequest(
         messages: [LLMMessage],
         modelId: String,
         temperature: Double
@@ -218,8 +233,40 @@ struct LLMRequestBuilder {
             temperature: temperature
         )
     }
-    
+
     /// Build parameters for structured conversation requests
+    static func buildStructuredConversationRequest<T: Codable>(
+        messages: [LLMMessageDTO],
+        modelId: String,
+        responseType: T.Type,
+        temperature: Double,
+        jsonSchema: JSONSchema? = nil
+    ) -> ChatCompletionParameters {
+        let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
+        if let schema = jsonSchema {
+            let responseFormatSchema = JSONSchemaResponseFormat(
+                name: String(describing: responseType).lowercased(),
+                strict: true,
+                schema: schema
+            )
+            Logger.debug("📝 Conversation using structured output with JSON Schema enforcement")
+            return ChatCompletionParameters(
+                messages: vendorMessages,
+                model: .custom(modelId),
+                responseFormat: .jsonSchema(responseFormatSchema),
+                temperature: temperature
+            )
+        } else {
+            Logger.debug("📝 Conversation using basic JSON object mode (no schema enforcement)")
+            return ChatCompletionParameters(
+                messages: vendorMessages,
+                model: .custom(modelId),
+                responseFormat: .jsonObject,
+                temperature: temperature
+            )
+        }
+    }
+
     static func buildStructuredConversationRequest<T: Codable>(
         messages: [LLMMessage],
         modelId: String,

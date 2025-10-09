@@ -91,5 +91,30 @@ struct SwiftDataBackupManager {
         }
         Logger.info("♻️ SwiftData store restored from backup \(latest.lastPathComponent)")
     }
-}
 
+    /// Permanently deletes the active SwiftData store files so the app can start fresh.
+    /// Caller must quit/relaunch afterwards.
+    static func destroyCurrentStore() throws {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            throw SwiftDataBackupError.appSupportNotFound
+        }
+
+        let contents = try FileManager.default.contentsOfDirectory(at: appSupport, includingPropertiesForKeys: nil)
+        let candidates = contents.filter { url in
+            let name = url.lastPathComponent.lowercased()
+            return name.hasSuffix(".sqlite")
+                || name.hasSuffix(".sqlite-shm")
+                || name.hasSuffix(".sqlite-wal")
+                || name.contains("default.store")
+        }
+
+        for file in candidates {
+            do {
+                try FileManager.default.removeItem(at: file)
+                Logger.debug("🗑️ Removed store artifact: \(file.lastPathComponent)")
+            } catch {
+                throw SwiftDataBackupError.copyFailed("Failed to remove \(file.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+    }
+}
