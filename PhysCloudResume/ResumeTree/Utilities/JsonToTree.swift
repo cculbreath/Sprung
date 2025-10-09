@@ -294,13 +294,39 @@ class JsonToTree {
         let inEditor = isInEditor(key)
         if let flatArray = json[key] as? [String] {
             let groupNode = parent.addChild(TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
-            treeNodesStringArray(strings: flatArray, parent: groupNode, inEditor: inEditor)
+            let descriptor = manifest?.section(for: key)
+            let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+            let entryDescriptor = usesDescriptor
+                ? descriptor?.fields.first(where: { $0.key == "*" || $0.key == key })
+                : nil
+            if let entryDescriptor {
+                groupNode.applyDescriptor(entryDescriptor)
+            }
+            treeNodesStringArray(
+                strings: flatArray,
+                parent: groupNode,
+                inEditor: inEditor,
+                descriptor: entryDescriptor
+            )
         }
     }
 
-    private func treeNodesStringArray(strings: [String], parent: TreeNode, inEditor: Bool) {
+    private func treeNodesStringArray(
+        strings: [String],
+        parent: TreeNode,
+        inEditor: Bool,
+        descriptor: TemplateManifest.Section.FieldDescriptor? = nil
+    ) {
+        if let descriptor {
+            parent.applyDescriptor(descriptor)
+        }
         for element in strings {
-            parent.addChild(TreeNode(name: "", value: element, inEditor: inEditor, status: .saved, resume: res))
+            let child = parent.addChild(
+                TreeNode(name: "", value: element, inEditor: inEditor, status: .saved, resume: res)
+            )
+            if let descriptor {
+                child.applyDescriptor(descriptor)
+            }
         }
     }
 
@@ -380,11 +406,17 @@ class JsonToTree {
         let orderedKeys = orderedKeys(in: dict, descriptors: descriptors)
         for subKey in orderedKeys {
             guard let subValue = dict[subKey] else { continue }
+            let childDescriptor = matchingDescriptor(
+                forKey: subKey,
+                in: descriptors,
+                parentName: parent.name
+            )
             if let subDict = asOrderedDictionary(subValue) {
-                let childDescriptors = descriptors?.first(where: { $0.key == subKey })?.children
+                let childDescriptors = childDescriptor?.children
                 let childNode = parent.addChild(
                     TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                 )
+                childNode.applyDescriptor(childDescriptor)
                 buildSubtree(
                     from: subDict,
                     parent: childNode,
@@ -392,22 +424,32 @@ class JsonToTree {
                     descriptors: childDescriptors
                 )
             } else if let subArray = subValue as? [String] {
-                let arrayTitleNode = parent.addChild(TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res))
-                treeNodesStringArray(strings: subArray, parent: arrayTitleNode, inEditor: inEditor)
+                let arrayTitleNode = parent.addChild(
+                    TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                )
+                arrayTitleNode.applyDescriptor(childDescriptor)
+                treeNodesStringArray(
+                    strings: subArray,
+                    parent: arrayTitleNode,
+                    inEditor: inEditor,
+                    descriptor: childDescriptor
+                )
             } else if let nestedArray = subValue as? [Any] {
                 let arrayTitleNode = parent.addChild(
                     TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                 )
-                let childDescriptor = descriptors?.first(where: { $0.key == subKey })
+                arrayTitleNode.applyDescriptor(childDescriptor)
                 for element in nestedArray {
                     if let stringElement = element as? String {
-                        arrayTitleNode.addChild(
+                        let leaf = arrayTitleNode.addChild(
                             TreeNode(name: "", value: stringElement, inEditor: inEditor, status: .saved, resume: res)
                         )
+                        leaf.applyDescriptor(childDescriptor)
                     } else if let nestedDict = asOrderedDictionary(element) {
                         let childNode = arrayTitleNode.addChild(
                             TreeNode(name: "", value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                         )
+                        childNode.applyDescriptor(childDescriptor)
                         buildSubtree(
                             from: nestedDict,
                             parent: childNode,
@@ -450,6 +492,9 @@ class JsonToTree {
             let entryNode = sectionNode.addChild(
                 TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
             )
+            if let entryDescriptor {
+                entryNode.applyDescriptor(entryDescriptor)
+            }
             buildSubtree(
                 from: element,
                 parent: entryNode,
@@ -488,7 +533,18 @@ class JsonToTree {
         if let sectionString = json[key] as? String {
             let sectionNode = parent.addChild(
                 TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
-            sectionNode.addChild(TreeNode(name: "", value: sectionString, inEditor: isInEditor(key), status: .saved, resume: res))
+            let descriptor = manifest?.section(for: key)
+            let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+            let fieldDescriptor = usesDescriptor
+                ? descriptor?.fields.first(where: { $0.key == key || $0.key == "*" })
+                : nil
+            let child = sectionNode.addChild(
+                TreeNode(name: "", value: sectionString, inEditor: isInEditor(key), status: .saved, resume: res)
+            )
+            if let fieldDescriptor {
+                child.applyDescriptor(fieldDescriptor)
+                sectionNode.applyDescriptor(fieldDescriptor)
+            }
         }
     }
 
@@ -498,12 +554,18 @@ class JsonToTree {
                 TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
             let descriptor = manifest?.section(for: key)
             let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
-            let ordered = orderedKeys(in: sectionDict, descriptors: usesDescriptor ? descriptor?.fields : nil)
+            let descriptorFields = usesDescriptor ? descriptor?.fields : nil
+            let ordered = orderedKeys(in: sectionDict, descriptors: descriptorFields)
 
             for entryKey in ordered {
                 guard let entryValue = sectionDict[entryKey] else { continue }
+                let childDescriptor = matchingDescriptor(
+                    forKey: entryKey,
+                    in: descriptorFields,
+                    parentName: key
+                )
                 if let stringValue = entryValue as? String {
-                    sectionNode.addChild(
+                    let child = sectionNode.addChild(
                         TreeNode(
                             name: entryKey,
                             value: stringValue,
@@ -512,6 +574,7 @@ class JsonToTree {
                             resume: res
                         )
                     )
+                    child.applyDescriptor(childDescriptor)
                 } else if let dictValue = asOrderedDictionary(entryValue) {
                     let childNode = sectionNode.addChild(
                         TreeNode(
@@ -522,7 +585,8 @@ class JsonToTree {
                             resume: res
                         )
                     )
-                    let childDescriptors = descriptor?.fields.first(where: { $0.key == entryKey })?.children
+                    childNode.applyDescriptor(childDescriptor)
+                    let childDescriptors = childDescriptor?.children
                     buildSubtree(
                         from: dictValue,
                         parent: childNode,
@@ -539,7 +603,12 @@ class JsonToTree {
                             resume: res
                         )
                     )
-                    treeNodesStringArray(strings: stringArray, parent: childNode, inEditor: isInEditor(key))
+                    treeNodesStringArray(
+                        strings: stringArray,
+                        parent: childNode,
+                        inEditor: isInEditor(key),
+                        descriptor: childDescriptor
+                    )
                 }
             }
         } else {}
@@ -551,15 +620,16 @@ class JsonToTree {
         let sectionNode = parent.addChild(
             TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
         )
-        let descriptor = manifest?.section(for: key)
+        let sectionDescriptor = manifest?.section(for: key)
         let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
-        let ordered = orderedKeys(in: sectionDict, descriptors: usesDescriptor ? descriptor?.fields : nil)
+        let descriptorFields = usesDescriptor ? sectionDescriptor?.fields : nil
+        let ordered = orderedKeys(in: sectionDict, descriptors: descriptorFields)
 
         for entryKey in ordered {
             guard let entryValue = sectionDict[entryKey] else { continue }
             guard let label = entryValue as? String else { continue }
             res.keyLabels[entryKey] = label
-            sectionNode.addChild(
+            let child = sectionNode.addChild(
                 TreeNode(
                     name: entryKey,
                     value: label,
@@ -568,6 +638,12 @@ class JsonToTree {
                     resume: res
                 )
             )
+            let childDescriptor = matchingDescriptor(
+                forKey: entryKey,
+                in: descriptorFields,
+                parentName: key
+            )
+            child.applyDescriptor(childDescriptor)
         }
     }
 
@@ -588,6 +664,25 @@ class JsonToTree {
             ordered.append(key)
         }
         return ordered
+    }
+
+    private func matchingDescriptor(
+        forKey key: String,
+        in descriptors: [TemplateManifest.Section.FieldDescriptor]?,
+        parentName: String?
+    ) -> TemplateManifest.Section.FieldDescriptor? {
+        guard let descriptors else { return nil }
+        if let exact = descriptors.first(where: { $0.key == key }) {
+            return exact
+        }
+        if let parentName,
+           let parentMatch = descriptors.first(where: { $0.key == parentName }) {
+            return parentMatch
+        }
+        if key.isEmpty, let wildcard = descriptors.first(where: { $0.key == "*" }) {
+            return wildcard
+        }
+        return descriptors.first(where: { $0.key == "*" })
     }
 
     private func renderTitleTemplate(
