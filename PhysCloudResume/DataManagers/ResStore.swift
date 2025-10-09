@@ -23,13 +23,20 @@ final class ResStore: SwiftDataStore {
     unowned let modelContext: ModelContext
     private let exportCoordinator: ResumeExportCoordinator
     private let templateStore: TemplateStore
+    private let templateSeedStore: TemplateSeedStore
 
     // MARK: - Initialiser
 
-    init(context: ModelContext, exportCoordinator: ResumeExportCoordinator, templateStore: TemplateStore) {
+    init(
+        context: ModelContext,
+        exportCoordinator: ResumeExportCoordinator,
+        templateStore: TemplateStore,
+        templateSeedStore: TemplateSeedStore
+    ) {
         modelContext = context
         self.exportCoordinator = exportCoordinator
         self.templateStore = templateStore
+        self.templateSeedStore = templateSeedStore
     }
 
     @discardableResult
@@ -48,18 +55,25 @@ final class ResStore: SwiftDataStore {
             jobApp.status = .inProgress
         }
 
-        guard let builder = JsonToTree(resume: resume, rawJson: model.json) else {
+        guard let template = resolveTemplate(for: model) else {
+            Logger.error("ResStore.create: Unable to resolve template for style \(model.style)")
             return nil
         }
-        resume.rootNode = builder.buildTree()
-//                Logger.debug(builder.json)
+        resume.template = template
 
-        let normalizedStyle = model.style.lowercased()
-        if let templateEntity = templateStore.template(slug: normalizedStyle) {
-            resume.template = templateEntity
-        } else if let fallbackTemplate = templateStore.template(slug: "archer") {
-            resume.template = fallbackTemplate
+        let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: templateSeedStore)
+        let applicantProfile = ApplicantProfileManager.shared.getProfile()
+        let seededJSON = contextBuilder.buildJSONString(
+            for: template,
+            fallbackJSON: model.json,
+            applicantProfile: applicantProfile
+        ) ?? model.json
+
+        guard let rootNode = buildTree(for: resume, jsonString: seededJSON) else {
+            Logger.error("ResStore.create: Failed to build resume tree for template \(template.slug)")
+            return nil
         }
+        resume.rootNode = rootNode
 
         // Persist new resume (and trigger observers)
         jobApp.addResume(resume)
@@ -69,6 +83,21 @@ final class ResStore: SwiftDataStore {
         exportCoordinator.debounceExport(resume: resume)
 
         return resume
+    }
+
+    private func resolveTemplate(for model: ResModel) -> Template? {
+        let normalizedStyle = model.style.lowercased()
+        if let templateEntity = templateStore.template(slug: normalizedStyle) {
+            return templateEntity
+        }
+        return templateStore.template(slug: "archer")
+    }
+
+    private func buildTree(for resume: Resume, jsonString: String) -> TreeNode? {
+        guard let builder = JsonToTree(resume: resume, rawJson: jsonString) else {
+            return nil
+        }
+        return builder.buildTree()
     }
 
     @discardableResult

@@ -63,7 +63,12 @@ final class AppDependencies {
         )
         self.resumeExportCoordinator = resumeExportCoordinator
 
-        self.resStore = ResStore(context: modelContext, exportCoordinator: resumeExportCoordinator, templateStore: templateStore)
+        self.resStore = ResStore(
+            context: modelContext,
+            exportCoordinator: resumeExportCoordinator,
+            templateStore: templateStore,
+            templateSeedStore: templateSeedStore
+        )
         self.resRefStore = ResRefStore(context: modelContext)
         self.coverRefStore = CoverRefStore(context: modelContext)
 
