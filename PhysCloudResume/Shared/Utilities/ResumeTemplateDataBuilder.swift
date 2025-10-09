@@ -69,6 +69,13 @@ private struct Implementation {
     }
 
     private func buildSection(named sectionName: String) -> Any? {
+        if let manifest,
+           let section = manifest.section(for: sectionName),
+           manifest.isFieldMetadataSynthesized(for: sectionName) == false,
+           let value = buildSectionUsingDescriptors(named: sectionName, section: section) {
+            return value
+        }
+
         if let manifestKind = manifest?.section(for: sectionName)?.type,
            let sectionType = SectionType(manifestKind: manifestKind, key: sectionName) {
             return buildSection(named: sectionName, type: sectionType)
@@ -214,6 +221,150 @@ private struct Implementation {
         for node in sortedNodes {
             result[node.key] = node.fontString
         }
+        return result
+    }
+
+    // MARK: - Descriptor Helpers
+
+    private func buildSectionUsingDescriptors(
+        named sectionName: String,
+        section: TemplateManifest.Section
+    ) -> Any? {
+        let sectionNode = sectionNode(named: sectionName)
+        let descriptors = section.fields
+
+        switch section.type {
+        case .string:
+            guard let descriptor = descriptors.first else {
+                return buildStringSection(named: sectionName)
+            }
+            let valueNode = node(for: descriptor, in: sectionNode)
+            return buildValue(for: descriptor, node: valueNode)
+
+        case .array, .arrayOfObjects:
+            guard let descriptor = descriptors.first else {
+                return buildArraySection(named: sectionName)
+            }
+            let arrayNode = node(for: descriptor, in: sectionNode)
+            return buildValue(for: descriptor, node: arrayNode)
+
+        case .mapOfStrings, .fontSizes:
+            guard let sectionNode else { return nil }
+            var result: [String: String] = [:]
+            for descriptor in descriptors where descriptor.key != "*" {
+                let childNode = node(for: descriptor, in: sectionNode)
+                if let value = buildValue(for: descriptor, node: childNode) as? String {
+                    result[descriptor.key] = value
+                }
+            }
+            return result.isEmpty ? nil : result
+
+        case .object:
+            guard let sectionNode else { return nil }
+            var result: [String: Any] = [:]
+            for descriptor in descriptors where descriptor.key != "*" {
+                let childNode = node(for: descriptor, in: sectionNode)
+                if let value = buildValue(for: descriptor, node: childNode) {
+                    result[descriptor.key] = value
+                }
+            }
+            return result.isEmpty ? nil : result
+
+        case .objectOfObjects:
+            guard let sectionNode else { return nil }
+            let entryDescriptor = descriptors.first(where: { $0.key == "*" })
+            var dictionary: [String: Any] = [:]
+            for child in sectionNode.orderedChildren {
+                let key = child.name.isEmpty ? child.value : child.name
+                guard !key.isEmpty else { continue }
+                if let entryDescriptor,
+                   let children = entryDescriptor.children,
+                   !children.isEmpty,
+                   let entry = buildObject(using: children, node: child) {
+                    dictionary[key] = entry
+                } else if let entry = buildNodeValue(child) {
+                    dictionary[key] = entry
+                }
+            }
+            if !dictionary.isEmpty {
+                return dictionary
+            }
+            if let entryDescriptor {
+                return buildValue(for: entryDescriptor, node: sectionNode)
+            }
+            return nil
+        }
+    }
+
+    private func node(
+        for descriptor: TemplateManifest.Section.FieldDescriptor,
+        in parent: TreeNode?
+    ) -> TreeNode? {
+        guard let parent else { return nil }
+        if descriptor.key == "*" {
+            return parent
+        }
+        if let match = parent.orderedChildren.first(where: { $0.name == descriptor.key }) {
+            return match
+        }
+        if descriptor.key == parent.name {
+            return parent.orderedChildren.first
+        }
+        return nil
+    }
+
+    private func buildValue(
+        for descriptor: TemplateManifest.Section.FieldDescriptor,
+        node: TreeNode?
+    ) -> Any? {
+        guard let node else { return nil }
+
+        if descriptor.repeatable {
+            if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
+                var items: [Any] = []
+                for child in node.orderedChildren {
+                    if let object = buildObject(using: childrenDescriptors, node: child) {
+                        items.append(object)
+                    } else if let fallback = buildNodeValue(child) {
+                        items.append(fallback)
+                    }
+                }
+                return items.isEmpty ? nil : items
+            } else {
+                let values = node.orderedChildren
+                    .map(\.value)
+                    .filter { !$0.isEmpty }
+                return values.isEmpty ? nil : values
+            }
+        }
+
+        if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
+            return buildObject(using: childrenDescriptors, node: node)
+        }
+
+        if node.hasChildren {
+            return buildNodeValue(node)
+        }
+
+        return node.value.isEmpty ? nil : node.value
+    }
+
+    private func buildObject(
+        using descriptors: [TemplateManifest.Section.FieldDescriptor],
+        node: TreeNode
+    ) -> [String: Any]? {
+        var result: [String: Any] = [:]
+        for descriptor in descriptors where descriptor.key != "*" {
+            let childNode = node.orderedChildren.first(where: { $0.name == descriptor.key })
+            if let value = buildValue(for: descriptor, node: childNode) {
+                result[descriptor.key] = value
+            }
+        }
+
+        if result.isEmpty {
+            return buildNodeValue(node) as? [String: Any]
+        }
+
         return result
     }
 
