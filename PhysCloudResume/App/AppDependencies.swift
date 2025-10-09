@@ -50,6 +50,11 @@ final class AppDependencies {
         self.templateStore = templateStore
         let templateSeedStore = TemplateSeedStore(context: modelContext)
         self.templateSeedStore = templateSeedStore
+        TemplateSeedMigration.runIfNeeded(
+            context: modelContext,
+            templateStore: templateStore,
+            templateSeedStore: templateSeedStore
+        )
 
         // Core export orchestration
         let resumeExportService = ResumeExportService(templateStore: templateStore)

@@ -17,8 +17,8 @@ final class Template {
     @Relationship(deleteRule: .cascade, inverse: \TemplateAsset.template)
     var assets: [TemplateAsset]
 
-    @Relationship(deleteRule: .cascade, inverse: \TemplateSeed.template)
-    var seed: TemplateSeed?
+    @Relationship(deleteRule: .cascade)
+    var seeds: [TemplateSeed]
 
     @Relationship(deleteRule: .nullify)
     var resumes: [Resume]
@@ -35,7 +35,7 @@ final class Template {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         assets: [TemplateAsset] = [],
-        seed: TemplateSeed? = nil
+        seeds: [TemplateSeed] = []
     ) {
         self.id = id
         self.name = name
@@ -49,6 +49,6 @@ final class Template {
         self.updatedAt = updatedAt
         self.assets = assets
         self.resumes = []
-        self.seed = seed
+        self.seeds = seeds
     }
 }
