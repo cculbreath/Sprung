@@ -118,82 +118,18 @@ struct TemplateEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
-            HStack {
-                // Template picker
-                Picker("Template:", selection: $selectedTemplate) {
-                    ForEach(availableTemplates, id: \.self) { template in
-                        Text(template.capitalized).tag(template)
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-                .frame(width: 150)
-                
-                // Add template button
-                Button(action: { showingAddTemplate = true }) {
-                    Image(systemName: "plus.circle")
-                        .foregroundColor(.green)
-                }
-                .help("Add new template")
-                
-                // Delete template button
-                Button(action: { showingDeleteConfirmation = true }) {
-                    Image(systemName: "minus.circle")
-                        .foregroundColor(.red)
-                }
-                .disabled(availableTemplates.count <= 1)
-                .help("Delete current template")
-                
-                // Format picker
-                Picker("Format:", selection: $selectedFormat) {
-                    ForEach(formats, id: \.self) { format in
-                        Text(format.uppercased()).tag(format)
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-                .frame(width: 120)
-
-                Picker("Editor:", selection: $selectedTab) {
-                    ForEach(TemplateEditorTab.allCases) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .frame(width: 260)
-
-                Spacer()
-
-                Button("Revert") {
-                    revertCurrentTab()
-                }
-                .disabled(!currentHasChanges)
-
-                Button("Save & Close") {
-                    if saveCurrentTab(closeAfter: true) {
-                        closeEditor()
-                    }
-                }
-                .disabled(!currentHasChanges)
-
-                Button("Cancel") {
-                    closeEditor()
-                }
-
-                if selectedTab == .assets {
-                    Button("Preview PDF") {
-                        previewPDF()
-                    }
-                    .disabled(selectedFormat != "pdf" || isGeneratingPreview || !hasSelectedResume)
-                    .help(!hasSelectedResume ? "No resume selected in main window" : "Generate and preview a PDF using the current template")
-                }
-            }
-            .padding()
-            .background(Color(NSColor.windowBackgroundColor))
-            
+            topToolbar()
             Divider()
-            editorContent()
+            HSplitView {
+                sidebarContent()
+                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 320, maxHeight: .infinity)
+                editorContent()
+                    .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+                inspectorContent()
+                    .frame(minWidth: 240, idealWidth: 280, maxWidth: 340, maxHeight: .infinity)
+            }
         }
-        .frame(minWidth: 800, minHeight: 600)
+        .frame(minWidth: 960, minHeight: 600)
         .onAppear {
             loadAvailableTemplates()
             loadTemplate()
@@ -306,22 +242,131 @@ struct TemplateEditorView: View {
         }
     }
 
-    @ViewBuilder
-    private func assetsEditor() -> some View {
-        HSplitView {
-            TemplateTextEditor(text: $templateContent) {
-                assetHasChanges = true
-                if selectedFormat == "pdf" && selectedTab == .assets {
-                    scheduleLivePreviewUpdate()
+    private func topToolbar() -> some View {
+        HStack(spacing: 12) {
+            Picker("Editor:", selection: $selectedTab) {
+                ForEach(TemplateEditorTab.allCases) { tab in
+                    Text(tab.rawValue).tag(tab)
                 }
             }
-            .frame(minWidth: 400)
+            .pickerStyle(SegmentedPickerStyle())
+            .frame(maxWidth: 300)
 
-            VStack(spacing: 0) {
+            if hasAnyUnsavedChanges {
+                Text("Unsaved changes")
+                    .font(.callout)
+                    .foregroundColor(.orange)
+            }
+
+            Spacer()
+
+            Button("Revert") {
+                revertCurrentTab()
+            }
+            .disabled(!currentHasChanges)
+
+            Button("Save & Close") {
+                if saveCurrentTab(closeAfter: true) {
+                    closeEditor()
+                }
+            }
+            .disabled(!currentHasChanges)
+
+            Button("Cancel") {
+                closeEditor()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    @ViewBuilder
+    private func sidebarContent() -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Template")
+                        .font(.headline)
+                    Picker("Template", selection: $selectedTemplate) {
+                        ForEach(availableTemplates, id: \.self) { template in
+                            Text(template.capitalized).tag(template)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(MenuPickerStyle())
+                    .frame(maxWidth: .infinity)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button {
+                            showingAddTemplate = true
+                        } label: {
+                            Label("New Template", systemImage: "plus.circle")
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help("Add new template")
+
+                        Button {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete Template", systemImage: "minus.circle")
+                        }
+                        .foregroundColor(.red)
+                        .buttonStyle(BorderlessButtonStyle())
+                        .disabled(availableTemplates.count <= 1)
+                        .help("Delete current template")
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Format")
+                        .font(.headline)
+                    Picker("Format", selection: $selectedFormat) {
+                        ForEach(formats, id: \.self) { format in
+                            Text(format.uppercased()).tag(format)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(MenuPickerStyle())
+                    .frame(maxWidth: .infinity)
+                }
+
+                if let resume = selectedResume {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current Resume")
+                            .font(.headline)
+                        Text(resume.jobApp?.jobPosition ?? "Untitled Resume")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    @ViewBuilder
+    private func inspectorContent() -> some View {
+        switch selectedTab {
+        case .assets:
+            previewInspector()
+        case .manifest:
+            manifestInspector()
+        case .seed:
+            seedInspector()
+        }
+    }
+
+    private func previewInspector() -> some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Preview")
                         .font(.headline)
-
                     if isEditingCurrentTemplate {
                         Text("(Live)")
                             .font(.caption)
@@ -331,35 +376,49 @@ struct TemplateEditorView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-
                     Spacer()
+                    if isGeneratingLivePreview || isGeneratingPreview {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    }
+                }
 
-                    Toggle("Overlay", isOn: $showOverlay)
-                        .disabled(overlayPDFData == nil)
-
-                    if showOverlay && overlayPDFData != nil {
-                        Slider(value: $overlayOpacity, in: 0...1) {
-                            Text("Opacity")
+                if selectedFormat == "pdf" {
+                    HStack(spacing: 12) {
+                        Button("Refresh Preview") {
+                            previewPDF()
                         }
-                        .frame(width: 100)
+                        .disabled(isGeneratingPreview || !hasSelectedResume)
+
+                        Toggle("Overlay", isOn: $showOverlay)
+                            .disabled(overlayPDFData == nil)
+
+                        if showOverlay && overlayPDFData != nil {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Opacity")
+                                    .font(.caption)
+                                Slider(value: $overlayOpacity, in: 0...1)
+                                    .frame(width: 120)
+                            }
+                        }
                     }
 
                     Button("Select Overlay PDF") {
                         showingOverlayPicker = true
                     }
-                    .buttonStyle(.bordered)
-
-                    if isGeneratingLivePreview {
-                        ProgressView()
-                            .scaleEffect(0.5)
-                    }
+                    .disabled(isGeneratingPreview)
+                } else {
+                    Text("Preview is available for PDF templates only.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(Color(NSColor.controlBackgroundColor))
+            }
+            .padding(16)
+            .background(Color(NSColor.controlBackgroundColor))
 
-                Divider()
+            Divider()
 
+            Group {
                 if selectedFormat == "pdf" {
                     if let pdfData = previewPDFData {
                         PDFPreviewView(
@@ -367,16 +426,17 @@ struct TemplateEditorView: View {
                             overlayPDFData: showOverlay ? overlayPDFData : nil,
                             overlayOpacity: overlayOpacity
                         )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        VStack {
+                        VStack(spacing: 8) {
                             Text("PDF preview will appear here")
                                 .foregroundColor(.secondary)
                             if !hasSelectedResume {
-                                Text("Select a resume in the main window to enable preview")
+                                Text("Select a resume in the main window to enable preview.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             } else {
-                                Text("Export the resume in the main window to see PDF")
+                                Text("Export the resume in the main window to see PDF output.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -384,13 +444,81 @@ struct TemplateEditorView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 } else {
-                    Text("PDF preview only available for HTML templates")
+                    Text("Switch to PDF format to enable live preview.")
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 400)
+            .background(Color(NSColor.textBackgroundColor))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func manifestInspector() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Manifest Status")
+                .font(.headline)
+
+            if let message = manifestValidationMessage {
+                Text(message)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("Validate manifests before saving seeds to ensure schema completeness.")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
+
+            if manifestHasChanges {
+                Text("Unsaved edits in manifest tab.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .background(Color(NSColor.controlBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func seedInspector() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Seed Status")
+                .font(.headline)
+
+            if let message = seedValidationMessage {
+                Text(message)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("Promote a resume to seed, then review and save changes.")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
+
+            if seedHasChanges {
+                Text("Unsaved edits in seed tab.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .background(Color(NSColor.controlBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func assetsEditor() -> some View {
+        TemplateTextEditor(text: $templateContent) {
+            assetHasChanges = true
+            if selectedFormat == "pdf" && selectedTab == .assets {
+                scheduleLivePreviewUpdate()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

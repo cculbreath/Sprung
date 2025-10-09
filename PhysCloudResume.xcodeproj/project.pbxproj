@@ -17,7 +17,6 @@
 
 /* Begin PBXFileReference section */
 		570FEC682C855BF50074D1E0 /* PhysCloudResume.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhysCloudResume.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		572326752DDE2CF90039462B /* PhysCloudResume.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = PhysCloudResume.xctestplan; sourceTree = "<group>"; };
 		57306AFA2DDE6B630053246D /* SwiftData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftData.framework; path = System/Library/Frameworks/SwiftData.framework; sourceTree = SDKROOT; };
 		57306AFC2DDE6B730053246D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -25,9 +24,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		570FEC6A2C855BF50074D1E0 /* PhysCloudResume */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFolders = (
-				Scripts,
-			);
 			path = PhysCloudResume;
 			sourceTree = "<group>";
 		};
@@ -51,7 +47,6 @@
 		570FEC5F2C855BF50074D1E0 = {
 			isa = PBXGroup;
 			children = (
-				572326752DDE2CF90039462B /* PhysCloudResume.xctestplan */,
 				570FEC6A2C855BF50074D1E0 /* PhysCloudResume */,
 				57DC4F252DBA356C000F1A48 /* Frameworks */,
 				570FEC692C855BF50074D1E0 /* Products */,
