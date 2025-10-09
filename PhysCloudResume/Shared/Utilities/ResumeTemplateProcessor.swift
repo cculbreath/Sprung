@@ -13,20 +13,17 @@ class ResumeTemplateProcessor {
     
     /// Create template context from Resume data
     static func createTemplateContext(from resume: Resume) throws -> [String: Any] {
-        // Use the TreeToJson system to generate proper JSON structure
-        guard let rootNode = resume.rootNode else {
-            throw NSError(domain: "ResumeTemplateProcessor", code: 1001,
-                         userInfo: [NSLocalizedDescriptionKey: "No root node found in resume"])
+        do {
+            return try ResumeTemplateDataBuilder.buildContext(from: resume)
+        } catch {
+            throw NSError(
+                domain: "ResumeTemplateProcessor",
+                code: 1001,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Failed to build template context from resume: \(error)"
+                ]
+            )
         }
-        
-        // Generate context using TreeToJson builder (avoid stringly JSON round-trip)
-        guard let treeToJson = TreeToJson(rootNode: rootNode),
-              let context = treeToJson.buildContextDictionary()
-        else {
-            throw NSError(domain: "ResumeTemplateProcessor", code: 1001,
-                         userInfo: [NSLocalizedDescriptionKey: "Failed to build template context from resume"])
-        }
-        return context
     }
     
     /// Load template content from various sources

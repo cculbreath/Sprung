@@ -14,6 +14,7 @@ import Combine
 struct TemplateEditorView: View {
     @Query private var resumes: [Resume]
     @Environment(AppState.self) private var appState
+    @Environment(AppEnvironment.self) private var appEnvironment
     
     @State private var selectedTemplate: String = "archer"
     @State private var selectedFormat: String = "pdf"
@@ -312,7 +313,20 @@ struct TemplateEditorView: View {
     private func loadTemplate() {
         let resourceName = "\(selectedTemplate)-template"
         let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
-        
+
+        // Prefer SwiftData-stored templates when available
+        let storedSlug = selectedTemplate.lowercased()
+        if fileExtension == "html", let stored = appEnvironment.templateStore.htmlTemplateContent(slug: storedSlug) {
+            templateContent = stored
+            hasChanges = false
+            return
+        }
+        if fileExtension == "txt", let stored = appEnvironment.templateStore.textTemplateContent(slug: storedSlug) {
+            templateContent = stored
+            hasChanges = false
+            return
+        }
+
         // Try to load from Documents directory first (user modifications)
         if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             let templatePath = documentsPath
@@ -405,6 +419,25 @@ struct TemplateEditorView: View {
             let templatePath = templateDir.appendingPathComponent("\(resourceName).\(fileExtension)")
             try templateContent.write(to: templatePath, atomically: true, encoding: .utf8)
             
+            let slug = selectedTemplate.lowercased()
+            if fileExtension == "html" {
+                appEnvironment.templateStore.upsertTemplate(
+                    slug: slug,
+                    name: selectedTemplate.capitalized,
+                    htmlContent: templateContent,
+                    textContent: nil,
+                    isCustom: true
+                )
+            } else if fileExtension == "txt" {
+                appEnvironment.templateStore.upsertTemplate(
+                    slug: slug,
+                    name: selectedTemplate.capitalized,
+                    htmlContent: nil,
+                    textContent: templateContent,
+                    isCustom: true
+                )
+            }
+            
             hasChanges = false
         } catch {
             saveError = "Failed to save template: \(error.localizedDescription)"
@@ -428,14 +461,14 @@ struct TemplateEditorView: View {
                 
                 if isEditingCurrentTemplate && hasChanges {
                     // User is editing the template that the resume uses, so preview with custom content
-                    let generator = NativePDFGenerator()
+                    let generator = NativePDFGenerator(templateStore: appEnvironment.templateStore)
                     pdfData = try await generator.generatePDFFromCustomTemplate(
                         for: resume,
                         customHTML: templateContent
                     )
                 } else {
                     // Use the same export logic as the normal flow
-                    try await resume.ensureFreshRenderedText()
+                    try await appEnvironment.resumeExportCoordinator.ensureFreshRenderedText(for: resume)
                     pdfData = resume.pdfData ?? Data()
                 }
                 
@@ -500,6 +533,13 @@ struct TemplateEditorView: View {
         let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
         templateContent = createEmptyTemplate(name: trimmedName, format: fileExtension)
         hasChanges = true
+        appEnvironment.templateStore.upsertTemplate(
+            slug: trimmedName,
+            name: trimmedName.capitalized,
+            htmlContent: fileExtension == "html" ? templateContent : nil,
+            textContent: fileExtension == "txt" ? templateContent : nil,
+            isCustom: true
+        )
     }
     
     private func deleteCurrentTemplate() {
@@ -639,7 +679,7 @@ struct TemplateEditorView: View {
         
         do {
             // Use the normal TreeNode→JSON→export flow for consistency
-            try await resume.ensureFreshRenderedText()
+            try await appEnvironment.resumeExportCoordinator.ensureFreshRenderedText(for: resume)
             previewPDFData = resume.pdfData
         } catch {
             // Don't show error for live preview, just log it

@@ -15,6 +15,7 @@ struct MultiModelProgressSheet: View {
     @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
     @Environment(EnabledLLMStore.self) var enabledLLMStore: EnabledLLMStore
     @Environment(LLMFacade.self) var llmFacade: LLMFacade
+    @Environment(AppEnvironment.self) var appEnvironment: AppEnvironment
     
     @Binding var coverLetter: CoverLetter
     let selectedModels: Set<String>
@@ -58,7 +59,8 @@ struct MultiModelProgressSheet: View {
                 jobAppStore: jobAppStore,
                 coverLetterStore: coverLetterStore,
                 enabledLLMStore: enabledLLMStore,
-                llmFacade: llmFacade
+                llmFacade: llmFacade,
+                exportCoordinator: appEnvironment.resumeExportCoordinator
             )
             service.startMultiModelSelection(
                 coverLetter: coverLetter,

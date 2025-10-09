@@ -69,9 +69,12 @@ struct PhysicsCloudResumeApp: App {
             ContentViewLaunch(deps: appDependencies)
                 .environment(appEnvironment)
                 .environment(appEnvironment.appState)
+                .environment(appDependencies.resumeExportCoordinator)
+                .environment(appDependencies.templateStore)
                 .onAppear {
                     // Pass appState and modelContainer to AppDelegate so it can use them for windows
                     appDelegate.appState = appEnvironment.appState
+                    appDelegate.appEnvironment = appEnvironment
                     appDelegate.modelContainer = modelContainer
                 }
         }

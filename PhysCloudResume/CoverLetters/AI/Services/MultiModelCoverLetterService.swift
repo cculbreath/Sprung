@@ -40,17 +40,26 @@ class MultiModelCoverLetterService {
     private weak var enabledLLMStore: EnabledLLMStore?
     private var llmFacade: LLMFacade?
     private var modelContext: ModelContext?
+    private var exportCoordinator: ResumeExportCoordinator?
     
     // MARK: - Initialization
     init() {}
     
-    func configure(appState: AppState, jobAppStore: JobAppStore, coverLetterStore: CoverLetterStore, enabledLLMStore: EnabledLLMStore, llmFacade: LLMFacade) {
+    func configure(
+        appState: AppState,
+        jobAppStore: JobAppStore,
+        coverLetterStore: CoverLetterStore,
+        enabledLLMStore: EnabledLLMStore,
+        llmFacade: LLMFacade,
+        exportCoordinator: ResumeExportCoordinator
+    ) {
         self.appState = appState
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.enabledLLMStore = enabledLLMStore
         self.modelContext = coverLetterStore.modelContext
         self.llmFacade = llmFacade
+        self.exportCoordinator = exportCoordinator
         summaryGenerator.configure(llmFacade: llmFacade)
     }
     
@@ -207,10 +216,19 @@ class MultiModelCoverLetterService {
             return
         }
         
+        guard let exportCoordinator else {
+            await MainActor.run {
+                errorMessage = "Export coordinator unavailable"
+                isProcessing = false
+            }
+            return
+        }
+
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
             jobApp: jobApp,
+            exportCoordinator: exportCoordinator,
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         

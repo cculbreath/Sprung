@@ -2,34 +2,13 @@
 //  LLMService.swift
 //  PhysCloudResume
 //
-//  Created by Christopher Culbreath on 6/4/25.
+//  Unified service that coordinates LLM operations while isolating vendor SDK
+//  types behind adapter helpers.
 //
 
 import Foundation
-import SwiftUI
+import Observation
 import SwiftData
-import SwiftOpenAI
-
-// MARK: - Streaming Response Types
-
-/// Represents a chunk of streamed content from the LLM
-public struct LLMStreamChunk {
-    /// Regular content from the response
-    public let content: String?
-    /// Reasoning content (thinking tokens) if available
-    public let reasoningContent: String?
-    /// Whether this is the final chunk
-    public let isFinished: Bool
-    /// The finish reason if applicable
-    public let finishReason: String?
-    
-    init(content: String? = nil, reasoningContent: String? = nil, isFinished: Bool = false, finishReason: String? = nil) {
-        self.content = content
-        self.reasoningContent = reasoningContent
-        self.isFinished = isFinished
-        self.finishReason = finishReason
-    }
-}
 
 // MARK: - LLM Error Types
 
@@ -40,7 +19,7 @@ enum LLMError: LocalizedError {
     case rateLimited(retryAfter: TimeInterval?)
     case timeout
     case unauthorized(String)
-    
+
     var errorDescription: String? {
         switch self {
         case .clientError(let message):
@@ -63,103 +42,189 @@ enum LLMError: LocalizedError {
     }
 }
 
-/// Unified LLM service that acts as a facade/coordinator for all LLM operations
-/// Supports text-only, multimodal, structured output, and conversational requests
-/// Uses OpenRouter as the provider but designed for easy migration to other providers
-@MainActor
+// MARK: - Conversation Cache
+
+private actor ConversationCache {
+    private var storage: [UUID: [LLMMessageDTO]] = [:]
+
+    func messages(for conversationId: UUID) -> [LLMMessageDTO]? {
+        storage[conversationId]
+    }
+
+    func setMessages(_ messages: [LLMMessageDTO], for conversationId: UUID) {
+        storage[conversationId] = messages
+    }
+
+    func clear(_ conversationId: UUID) {
+        storage.removeValue(forKey: conversationId)
+    }
+}
+
+// MARK: - LLM Service
+
 @Observable
-class LLMService {
-    
+final class LLMService {
+
     // Dependencies
     private var appState: AppState?
-    private var conversationManager: ConversationManager?
     private var enabledLLMStore: EnabledLLMStore?
-    
+    private var conversationStore: LLMConversationStore?
+
     // Components
     private let requestExecutor: LLMRequestExecutor
-    
+    private let conversationCache = ConversationCache()
+
     // Configuration
     private let defaultTemperature: Double = 1.0
-    
+
     init(requestExecutor: LLMRequestExecutor = LLMRequestExecutor()) {
         self.requestExecutor = requestExecutor
     }
-    
+
     // MARK: - Initialization
-    
-    /// Initialize the service with AppState and conversation manager
+
+    @MainActor
     func initialize(appState: AppState, modelContext: ModelContext? = nil) {
         self.appState = appState
-        self.conversationManager = ConversationManager(modelContext: modelContext)
         self.enabledLLMStore = appState.enabledLLMStore
-        
-        // Configure request executor with current API key off the main actor
+        if let modelContext {
+            self.conversationStore = LLMConversationStore(modelContext: modelContext)
+        } else if conversationStore == nil {
+            self.conversationStore = LLMConversationStore(modelContext: nil)
+        }
+
         Task { [weak self] in
             guard let self else { return }
             await self.requestExecutor.configureClient()
             Logger.info("🔄 LLMService initialized with OpenRouter client")
         }
     }
-    
-    /// Reconfigure the OpenRouter client with the current API key from UserDefaults
+
     func reconfigureClient() {
         Task.detached { [requestExecutor] in
             await requestExecutor.configureClient()
             Logger.info("🔄 LLMService reconfigured OpenRouter client")
         }
     }
-    
+
     private func ensureInitialized() async throws {
-        guard appState != nil else {
+        let hasAppState = await MainActor.run { self.appState != nil }
+        guard hasAppState else {
             throw LLMError.clientError("LLMService not initialized - call initialize() first")
         }
-        
-        // Ensure client is configured with current API key
+
         if !(await requestExecutor.isConfigured()) {
             await requestExecutor.configureClient()
         }
-        
+
         guard await requestExecutor.isConfigured() else {
             throw LLMError.clientError("OpenRouter API key not configured")
         }
-        
-        if conversationManager == nil {
-            conversationManager = ConversationManager(modelContext: nil)
+
+        await MainActor.run {
+            if self.conversationStore == nil {
+                self.conversationStore = LLMConversationStore(modelContext: nil)
+            }
         }
     }
-    
+
+    // MARK: - Helpers
+
+    private func loadMessages(conversationId: UUID) async -> [LLMMessageDTO] {
+        if let cached = await conversationCache.messages(for: conversationId) {
+            return cached
+        }
+        let persisted = await conversationStore?.loadMessages(conversationId: conversationId) ?? []
+        if !persisted.isEmpty {
+            await conversationCache.setMessages(persisted, for: conversationId)
+        }
+        return persisted
+    }
+
+    private func persistConversation(
+        conversationId: UUID,
+        messages: [LLMMessageDTO],
+        objectId: UUID? = nil,
+        objectType: ConversationType? = nil
+    ) async {
+        await conversationCache.setMessages(messages, for: conversationId)
+        await conversationStore?.saveMessages(
+            conversationId: conversationId,
+            objectId: objectId,
+            objectType: objectType,
+            messages: messages
+        )
+    }
+
+    private func clearConversationCache(_ conversationId: UUID) async {
+        await conversationCache.clear(conversationId)
+    }
+
+    private func makeUserMessage(_ text: String, images: [Data]) -> LLMMessageDTO {
+        guard !images.isEmpty else {
+            return .text(text, role: .user)
+        }
+
+        let attachments = images.map { LLMAttachment(data: $0, mimeType: "image/png") }
+        return LLMMessageDTO(role: .user, text: text, attachments: attachments)
+    }
+
+    private func assistantMessage(from text: String) -> LLMMessageDTO {
+        LLMMessageDTO(role: .assistant, text: text, attachments: [])
+    }
+
+    private func applyReasoning(
+        _ reasoning: OpenRouterReasoning?,
+        to parameters: inout ChatCompletionParameters
+    ) {
+        guard let reasoning else { return }
+        var reasoningDict: [String: Any] = [:]
+        if let effort = reasoning.effort {
+            reasoningDict["effort"] = effort
+        }
+        if let maxTokens = reasoning.maxTokens {
+            reasoningDict["max_tokens"] = maxTokens
+        }
+        if let exclude = reasoning.exclude {
+            reasoningDict["exclude"] = exclude
+        }
+        if !reasoningDict.isEmpty {
+            parameters.reasoning = reasoningDict
+            Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
+        }
+    }
+
+    private func parseResponseText(from response: LLMResponseDTO) throws -> String {
+        guard let text = response.choices.first?.message?.text else {
+            throw LLMError.unexpectedResponseFormat
+        }
+        return text
+    }
+
+    private func fetchAppState() async -> AppState? {
+        await MainActor.run { self.appState }
+    }
+
     // MARK: - Core Operations
-    
-    /// Simple text-only request
+
     func execute(
         prompt: String,
         modelId: String,
         temperature: Double? = nil
     ) async throws -> String {
         try await ensureInitialized()
-        
-        // Validate model
-        try validateModel(modelId: modelId, for: [])
-        
-        // 1. Build
+        try await validateModel(modelId: modelId, for: [])
+
         let parameters = LLMRequestBuilder.buildTextRequest(
             prompt: prompt,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
-        
-        // 2. Execute
         let response = try await requestExecutor.execute(parameters: parameters)
-        
-        // 3. Parse
-        guard let content = response.choices?.first?.message?.content else {
-            throw LLMError.unexpectedResponseFormat
-        }
-        
-        return content
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try parseResponseText(from: dto)
     }
-    
-    /// Request with image inputs
+
     func executeWithImages(
         prompt: String,
         modelId: String,
@@ -167,30 +232,19 @@ class LLMService {
         temperature: Double? = nil
     ) async throws -> String {
         try await ensureInitialized()
-        
-        // Validate model supports vision
-        try validateModel(modelId: modelId, for: [.vision])
-        
-        // 1. Build
+        try await validateModel(modelId: modelId, for: [.vision])
+
         let parameters = LLMRequestBuilder.buildVisionRequest(
             prompt: prompt,
             modelId: modelId,
             images: images,
             temperature: temperature ?? defaultTemperature
         )
-        
-        // 2. Execute
         let response = try await requestExecutor.execute(parameters: parameters)
-        
-        // 3. Parse
-        guard let content = response.choices?.first?.message?.content else {
-            throw LLMError.unexpectedResponseFormat
-        }
-        
-        return content
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try parseResponseText(from: dto)
     }
-    
-    /// Request with structured JSON output
+
     func executeStructured<T: Codable>(
         prompt: String,
         modelId: String,
@@ -199,11 +253,8 @@ class LLMService {
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
         try await ensureInitialized()
-        
-        // Validate model
-        try validateModel(modelId: modelId, for: [])
-        
-        // 1. Build
+        try await validateModel(modelId: modelId, for: [])
+
         let parameters = LLMRequestBuilder.buildStructuredRequest(
             prompt: prompt,
             modelId: modelId,
@@ -211,15 +262,11 @@ class LLMService {
             temperature: temperature ?? defaultTemperature,
             jsonSchema: jsonSchema
         )
-        
-        // 2. Execute
         let response = try await requestExecutor.execute(parameters: parameters)
-        
-        // 3. Parse
-        return try JSONResponseParser.parseStructured(response, as: responseType)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try JSONResponseParser.parseStructured(dto, as: responseType)
     }
-    
-    /// Request with both image inputs and structured output
+
     func executeStructuredWithImages<T: Codable>(
         prompt: String,
         modelId: String,
@@ -228,11 +275,8 @@ class LLMService {
         temperature: Double? = nil
     ) async throws -> T {
         try await ensureInitialized()
-        
-        // Validate model supports vision
-        try validateModel(modelId: modelId, for: [.vision])
-        
-        // 1. Build
+        try await validateModel(modelId: modelId, for: [.vision])
+
         let parameters = LLMRequestBuilder.buildStructuredVisionRequest(
             prompt: prompt,
             modelId: modelId,
@@ -240,84 +284,39 @@ class LLMService {
             responseType: responseType,
             temperature: temperature ?? defaultTemperature
         )
-        
-        // 2. Execute
         let response = try await requestExecutor.execute(parameters: parameters)
-        
-        // 3. Parse
-        return try JSONResponseParser.parseStructured(response, as: responseType)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try JSONResponseParser.parseStructured(dto, as: responseType)
     }
-    
+
     // MARK: - Streaming Operations
-    
-    /// Execute a streaming request with optional reasoning
+
     func executeStreaming(
         prompt: String,
         modelId: String,
         temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil
-    ) -> AsyncThrowingStream<LLMStreamChunk, Error> {
+    ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    try await ensureInitialized()
-                    
-                    // Validate model
-                    try validateModel(modelId: modelId, for: [])
-                    
-                    // Build parameters with reasoning if provided
+                    try await self.ensureInitialized()
+                    try await self.validateModel(modelId: modelId, for: [])
+
                     var parameters = LLMRequestBuilder.buildTextRequest(
                         prompt: prompt,
                         modelId: modelId,
-                        temperature: temperature ?? defaultTemperature
+                        temperature: temperature ?? self.defaultTemperature
                     )
-                    
-                    // Add reasoning parameters if provided
-                    if let reasoning = reasoning {
-                        var reasoningDict: [String: Any] = [:]
-                        if let effort = reasoning.effort {
-                            reasoningDict["effort"] = effort
-                        }
-                        if let maxTokens = reasoning.maxTokens {
-                            reasoningDict["max_tokens"] = maxTokens
-                        }
-                        if let exclude = reasoning.exclude {
-                            reasoningDict["exclude"] = exclude
-                        }
-                        parameters.reasoning = reasoningDict
-                        Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
-                    }
-                    
-                    // Enable streaming
+                    self.applyReasoning(reasoning, to: &parameters)
                     parameters.stream = true
-                    
-                    // Execute streaming request
-                    let stream = try await requestExecutor.executeStreaming(parameters: parameters)
-                    
-                    // Process stream chunks
+
+                    let stream = try await self.requestExecutor.executeStreaming(parameters: parameters)
                     for try await chunk in stream {
-                        if let firstChoice = chunk.choices?.first {
-                            // Debug logging for reasoning content
-                            if let reasoning = firstChoice.delta?.reasoningContent {
-                                Logger.debug("🧠 [LLMService] Reasoning content found: \(reasoning.prefix(100))...")
-                            }
-                            
-                            let streamChunk = LLMStreamChunk(
-                                content: firstChoice.delta?.content,
-                                reasoningContent: firstChoice.delta?.reasoningContent,
-                                isFinished: firstChoice.finishReason != nil,
-                                finishReason: {
-                                    guard let finishReason = firstChoice.finishReason else { return nil }
-                                    switch finishReason {
-                                    case .string(let str): return str
-                                    case .int(let int): return String(int)
-                                    }
-                                }()
-                            )
-                            continuation.yield(streamChunk)
-                        }
+                        if Task.isCancelled { break }
+                        let dto = LLMVendorMapper.streamChunkDTO(from: chunk)
+                        continuation.yield(dto)
                     }
-                    
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -325,8 +324,7 @@ class LLMService {
             }
         }
     }
-    
-    /// Execute a structured streaming request with optional reasoning
+
     func executeStructuredStreaming<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
@@ -334,70 +332,29 @@ class LLMService {
         temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
-    ) -> AsyncThrowingStream<LLMStreamChunk, Error> {
+    ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    try await ensureInitialized()
-                    
-                    // Validate model
-                    try validateModel(modelId: modelId, for: [])
-                    
-                    // Build structured parameters
+                    try await self.ensureInitialized()
+                    try await self.validateModel(modelId: modelId, for: [])
+
                     var parameters = LLMRequestBuilder.buildStructuredRequest(
                         prompt: prompt,
                         modelId: modelId,
                         responseType: responseType,
-                        temperature: temperature ?? defaultTemperature,
+                        temperature: temperature ?? self.defaultTemperature,
                         jsonSchema: jsonSchema
                     )
-                    
-                    // Add reasoning parameters if provided
-                    if let reasoning = reasoning {
-                        var reasoningDict: [String: Any] = [:]
-                        if let effort = reasoning.effort {
-                            reasoningDict["effort"] = effort
-                        }
-                        if let maxTokens = reasoning.maxTokens {
-                            reasoningDict["max_tokens"] = maxTokens
-                        }
-                        if let exclude = reasoning.exclude {
-                            reasoningDict["exclude"] = exclude
-                        }
-                        parameters.reasoning = reasoningDict
-                        Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
-                    }
-                    
-                    // Enable streaming
+                    self.applyReasoning(reasoning, to: &parameters)
                     parameters.stream = true
-                    
-                    // Execute streaming request
-                    let stream = try await requestExecutor.executeStreaming(parameters: parameters)
-                    
-                    // Process stream chunks
+
+                    let stream = try await self.requestExecutor.executeStreaming(parameters: parameters)
                     for try await chunk in stream {
-                        if let firstChoice = chunk.choices?.first {
-                            // Debug logging for reasoning content
-                            if let reasoning = firstChoice.delta?.reasoningContent {
-                                Logger.debug("🧠 [LLMService] Reasoning content found: \(reasoning.prefix(100))...")
-                            }
-                            
-                            let streamChunk = LLMStreamChunk(
-                                content: firstChoice.delta?.content,
-                                reasoningContent: firstChoice.delta?.reasoningContent,
-                                isFinished: firstChoice.finishReason != nil,
-                                finishReason: {
-                                    guard let finishReason = firstChoice.finishReason else { return nil }
-                                    switch finishReason {
-                                    case .string(let str): return str
-                                    case .int(let int): return String(int)
-                                    }
-                                }()
-                            )
-                            continuation.yield(streamChunk)
-                        }
+                        if Task.isCancelled { break }
+                        let dto = LLMVendorMapper.streamChunkDTO(from: chunk)
+                        continuation.yield(dto)
                     }
-                    
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -405,8 +362,71 @@ class LLMService {
             }
         }
     }
-    
-    /// Continue conversation with streaming response
+
+    // MARK: - Conversation Streaming
+
+    func startConversationStreaming(
+        systemPrompt: String? = nil,
+        userMessage: String,
+        modelId: String,
+        temperature: Double? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        jsonSchema: JSONSchema? = nil
+    ) async throws -> (conversationId: UUID, stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>) {
+        try await ensureInitialized()
+        try await validateModel(modelId: modelId, for: [])
+
+        let conversationId = UUID()
+        var messages: [LLMMessageDTO] = []
+        if let systemPrompt {
+            messages.append(.text(systemPrompt, role: .system))
+        }
+        messages.append(makeUserMessage(userMessage, images: []))
+        await persistConversation(conversationId: conversationId, messages: messages)
+
+        var parameters = LLMRequestBuilder.buildConversationRequest(
+            messages: messages,
+            modelId: modelId,
+            temperature: temperature ?? defaultTemperature
+        )
+        if let jsonSchema = jsonSchema {
+            let responseFormatSchema = JSONSchemaResponseFormat(
+                name: "structured_response",
+                strict: true,
+                schema: jsonSchema
+            )
+            parameters.responseFormat = .jsonSchema(responseFormatSchema)
+            Logger.debug("📝 Streaming conversation using structured output with JSON Schema enforcement")
+        }
+        applyReasoning(reasoning, to: &parameters)
+        parameters.stream = true
+
+        let stream = AsyncThrowingStream<LLMStreamChunkDTO, Error> { continuation in
+            Task {
+                var accumulated = ""
+                do {
+                    let rawStream = try await self.requestExecutor.executeStreaming(parameters: parameters)
+                    for try await chunk in rawStream {
+                        if Task.isCancelled { break }
+                        let dto = LLMVendorMapper.streamChunkDTO(from: chunk)
+                        if let content = dto.content {
+                            accumulated += content
+                        }
+                        continuation.yield(dto)
+                    }
+                    messages.append(self.assistantMessage(from: accumulated))
+                    await self.persistConversation(conversationId: conversationId, messages: messages)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+
+        Logger.info("🗣️ Started streaming conversation: \(conversationId) with model: \(modelId)")
+        return (conversationId: conversationId, stream: stream)
+    }
+
     func continueConversationStreaming(
         userMessage: String,
         modelId: String,
@@ -415,54 +435,24 @@ class LLMService {
         temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
-    ) -> AsyncThrowingStream<LLMStreamChunk, Error> {
+    ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    try await ensureInitialized()
-                    
-                    guard let conversationManager = conversationManager else {
-                        throw LLMError.clientError("Conversation manager not available")
-                    }
-                    
-                    // Validate model (require vision if images provided)
+                    try await self.ensureInitialized()
+
                     let requiredCapabilities: [ModelCapability] = images.isEmpty ? [] : [.vision]
-                    try validateModel(modelId: modelId, for: requiredCapabilities)
-                    
-                    // Get conversation history
-                    var messages = conversationManager.getConversation(id: conversationId)
-                    Logger.info("🗣️ Continuing streaming conversation: \(conversationId) with model: \(modelId)")
-                    
-                    // Build user message content
-                    if images.isEmpty {
-                        messages.append(LLMMessage.text(role: .user, content: userMessage))
-                    } else {
-                        var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
-                            .text(userMessage)
-                        ]
-                        
-                        for imageData in images {
-                            let base64Image = imageData.base64EncodedString()
-                            let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
-                            let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
-                            contentParts.append(.imageUrl(imageDetail))
-                        }
-                        
-                        let userMessage = ChatCompletionParameters.Message(
-                            role: .user,
-                            content: .contentArray(contentParts)
-                        )
-                        messages.append(userMessage)
-                    }
-                    
-                    // Build parameters
+                    try await self.validateModel(modelId: modelId, for: requiredCapabilities)
+
+                    var messages = await self.loadMessages(conversationId: conversationId)
+                    messages.append(self.makeUserMessage(userMessage, images: images))
+                    await self.persistConversation(conversationId: conversationId, messages: messages)
+
                     var parameters = LLMRequestBuilder.buildConversationRequest(
                         messages: messages,
                         modelId: modelId,
-                        temperature: temperature ?? defaultTemperature
+                        temperature: temperature ?? self.defaultTemperature
                     )
-                    
-                    // Add JSON schema if provided
                     if let jsonSchema = jsonSchema {
                         let responseFormatSchema = JSONSchemaResponseFormat(
                             name: "structured_response",
@@ -472,69 +462,21 @@ class LLMService {
                         parameters.responseFormat = .jsonSchema(responseFormatSchema)
                         Logger.debug("📝 Streaming conversation using structured output with JSON Schema enforcement")
                     }
-                    
-                    // Add reasoning parameters if provided
-                    if let reasoning = reasoning {
-                        var reasoningDict: [String: Any] = [:]
-                        if let effort = reasoning.effort {
-                            reasoningDict["effort"] = effort
-                        }
-                        if let maxTokens = reasoning.maxTokens {
-                            reasoningDict["max_tokens"] = maxTokens
-                        }
-                        if let exclude = reasoning.exclude {
-                            reasoningDict["exclude"] = exclude
-                        }
-                        parameters.reasoning = reasoningDict
-                        Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
-                    }
-                    
-                    // Enable streaming
+                    self.applyReasoning(reasoning, to: &parameters)
                     parameters.stream = true
-                    
-                    // Execute streaming request
-                    let stream = try await requestExecutor.executeStreaming(parameters: parameters)
-                    
-                    // Accumulate response for conversation history
-                    var fullResponse = ""
-                    
-                    // Process stream chunks
-                    for try await chunk in stream {
-                        if let firstChoice = chunk.choices?.first {
-                            // Accumulate content (both regular content and reasoning content)
-                            if let content = firstChoice.delta?.content {
-                                fullResponse += content
-                            }
-                            
-                            // Also accumulate reasoning content for reasoning models
-                            if let reasoningContent = firstChoice.delta?.reasoningContent {
-                                fullResponse += reasoningContent
-                                Logger.debug("🧠 [LLMService] Accumulated reasoning content: \(reasoningContent.count) characters")
-                            }
-                            
-                            let streamChunk = LLMStreamChunk(
-                                content: firstChoice.delta?.content,
-                                reasoningContent: firstChoice.delta?.reasoningContent,
-                                isFinished: firstChoice.finishReason != nil,
-                                finishReason: {
-                                    guard let finishReason = firstChoice.finishReason else { return nil }
-                                    switch finishReason {
-                                    case .string(let str): return str
-                                    case .int(let int): return String(int)
-                                    }
-                                }()
-                            )
-                            continuation.yield(streamChunk)
-                            
-                            // When finished, update conversation history
-                            if firstChoice.finishReason != nil {
-                                messages.append(LLMMessage.text(role: .assistant, content: fullResponse))
-                                conversationManager.storeConversation(id: conversationId, messages: messages)
-                                Logger.info("✅ Streaming conversation updated: \(conversationId)")
-                            }
+
+                    let rawStream = try await self.requestExecutor.executeStreaming(parameters: parameters)
+                    var accumulated = ""
+                    for try await chunk in rawStream {
+                        if Task.isCancelled { break }
+                        let dto = LLMVendorMapper.streamChunkDTO(from: chunk)
+                        if let content = dto.content {
+                            accumulated += content
                         }
+                        continuation.yield(dto)
                     }
-                    
+                    messages.append(self.assistantMessage(from: accumulated))
+                    await self.persistConversation(conversationId: conversationId, messages: messages)
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -542,138 +484,9 @@ class LLMService {
             }
         }
     }
-    
-    // MARK: - Conversation Operations
-    
-    /// Start a new conversation with streaming support
-    /// Returns a tuple with conversation ID and the streaming response
-    func startConversationStreaming(
-        systemPrompt: String? = nil,
-        userMessage: String,
-        modelId: String,
-        temperature: Double? = nil,
-        reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil
-    ) async throws -> (conversationId: UUID, stream: AsyncThrowingStream<LLMStreamChunk, Error>) {
-        try await ensureInitialized()
-        
-        guard let conversationManager = conversationManager else {
-            throw LLMError.clientError("Conversation manager not available")
-        }
-        
-        // Validate model
-        try validateModel(modelId: modelId, for: [])
-        
-        // Create conversation
-        let conversationId = UUID()
-        Logger.info("🗣️ Starting new streaming conversation: \(conversationId) with model: \(modelId)")
-        
-        // Build messages
-        var messages: [LLMMessage] = []
-        
-        // Add system prompt if provided
-        if let systemPrompt = systemPrompt {
-            messages.append(LLMMessage.text(role: .system, content: systemPrompt))
-        }
-        
-        // Add user message
-        messages.append(LLMMessage.text(role: .user, content: userMessage))
-        
-        // Build parameters
-        var parameters = LLMRequestBuilder.buildConversationRequest(
-            messages: messages,
-            modelId: modelId,
-            temperature: temperature ?? defaultTemperature
-        )
-        
-        // Add JSON schema if provided
-        if let jsonSchema = jsonSchema {
-            let responseFormatSchema = JSONSchemaResponseFormat(
-                name: "structured_response",
-                strict: true,
-                schema: jsonSchema
-            )
-            parameters.responseFormat = .jsonSchema(responseFormatSchema)
-            Logger.debug("📝 Starting streaming conversation using structured output with JSON Schema enforcement")
-        }
-        
-        // Add reasoning parameters if provided
-        if let reasoning = reasoning {
-            var reasoningDict: [String: Any] = [:]
-            if let effort = reasoning.effort {
-                reasoningDict["effort"] = effort
-            }
-            if let maxTokens = reasoning.maxTokens {
-                reasoningDict["max_tokens"] = maxTokens
-            }
-            if let exclude = reasoning.exclude {
-                reasoningDict["exclude"] = exclude
-            }
-            parameters.reasoning = reasoningDict
-            Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
-        }
-        
-        // Enable streaming
-        parameters.stream = true
-        
-        // Execute streaming request
-        let stream = try await requestExecutor.executeStreaming(parameters: parameters)
-        
-        // Create wrapper stream that handles conversation management
-        let managedStream = AsyncThrowingStream<LLMStreamChunk, Error> { continuation in
-            Task {
-                do {
-                    // Accumulate response for conversation history
-                    var fullResponse = ""
-                    
-                    // Process stream chunks
-                    for try await chunk in stream {
-                        if let firstChoice = chunk.choices?.first {
-                            // Accumulate content (both regular content and reasoning content)
-                            if let content = firstChoice.delta?.content {
-                                fullResponse += content
-                            }
-                            
-                            // Also accumulate reasoning content for reasoning models
-                            if let reasoningContent = firstChoice.delta?.reasoningContent {
-                                fullResponse += reasoningContent
-                                Logger.debug("🧠 [LLMService] Accumulated reasoning content: \(reasoningContent.count) characters")
-                            }
-                            
-                            let streamChunk = LLMStreamChunk(
-                                content: firstChoice.delta?.content,
-                                reasoningContent: firstChoice.delta?.reasoningContent,
-                                isFinished: firstChoice.finishReason != nil,
-                                finishReason: {
-                                    guard let finishReason = firstChoice.finishReason else { return nil }
-                                    switch finishReason {
-                                    case .string(let str): return str
-                                    case .int(let int): return String(int)
-                                    }
-                                }()
-                            )
-                            continuation.yield(streamChunk)
-                            
-                            // When finished, update conversation history
-                            if firstChoice.finishReason != nil {
-                                messages.append(LLMMessage.text(role: .assistant, content: fullResponse))
-                                conversationManager.storeConversation(id: conversationId, messages: messages)
-                                Logger.info("✅ Streaming conversation started: \(conversationId)")
-                            }
-                        }
-                    }
-                    
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-        }
-        
-        return (conversationId: conversationId, stream: managedStream)
-    }
-    
-    /// Start a new conversation
+
+    // MARK: - Conversation (non-streaming)
+
     func startConversation(
         systemPrompt: String? = nil,
         userMessage: String,
@@ -681,55 +494,31 @@ class LLMService {
         temperature: Double? = nil
     ) async throws -> (conversationId: UUID, response: String) {
         try await ensureInitialized()
-        
-        guard let conversationManager = conversationManager else {
-            throw LLMError.clientError("Conversation manager not available")
+        try await validateModel(modelId: modelId, for: [])
+
+        var messages: [LLMMessageDTO] = []
+        if let systemPrompt {
+            messages.append(.text(systemPrompt, role: .system))
         }
-        
-        // Validate model
-        try validateModel(modelId: modelId, for: [])
-        
-        // Create conversation
-        let conversationId = UUID()
-        Logger.info("🗣️ Starting new conversation: \(conversationId) with model: \(modelId)")
-        
-        // Build messages
-        var messages: [LLMMessage] = []
-        
-        // Add system prompt if provided
-        if let systemPrompt = systemPrompt {
-            messages.append(LLMMessage.text(role: .system, content: systemPrompt))
-        }
-        
-        // Add user message
-        messages.append(LLMMessage.text(role: .user, content: userMessage))
-        
-        // 1. Build
+        messages.append(makeUserMessage(userMessage, images: []))
+
         let parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
-        
-        // 2. Execute
         let response = try await requestExecutor.execute(parameters: parameters)
-        
-        // 3. Parse
-        guard let responseText = response.choices?.first?.message?.content else {
-            throw LLMError.unexpectedResponseFormat
-        }
-        
-        // Add assistant response to messages
-        messages.append(LLMMessage.text(role: .assistant, content: responseText))
-        
-        // Store conversation
-        conversationManager.storeConversation(id: conversationId, messages: messages)
-        
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        let responseText = try parseResponseText(from: dto)
+
+        messages.append(assistantMessage(from: responseText))
+
+        let conversationId = UUID()
+        await persistConversation(conversationId: conversationId, messages: messages)
         Logger.info("✅ Conversation started successfully: \(conversationId)")
         return (conversationId: conversationId, response: responseText)
     }
-    
-    /// Continue an existing conversation
+
     func continueConversation(
         userMessage: String,
         modelId: String,
@@ -738,70 +527,28 @@ class LLMService {
         temperature: Double? = nil
     ) async throws -> String {
         try await ensureInitialized()
-        
-        guard let conversationManager = conversationManager else {
-            throw LLMError.clientError("Conversation manager not available")
-        }
-        
-        // Validate model (require vision if images provided)
+
         let requiredCapabilities: [ModelCapability] = images.isEmpty ? [] : [.vision]
-        try validateModel(modelId: modelId, for: requiredCapabilities)
-        
-        // Get conversation history
-        var messages = conversationManager.getConversation(id: conversationId)
-        Logger.info("🗣️ Continuing conversation: \(conversationId) with model: \(modelId)")
-        
-        // Build user message content
-        if images.isEmpty {
-            // Simple text message
-            messages.append(LLMMessage.text(role: .user, content: userMessage))
-        } else {
-            // Message with images
-            var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
-                .text(userMessage)
-            ]
-            
-            // Add images
-            for imageData in images {
-                let base64Image = imageData.base64EncodedString()
-                let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
-                let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
-                contentParts.append(.imageUrl(imageDetail))
-            }
-            
-            let userMessage = ChatCompletionParameters.Message(
-                role: .user,
-                content: .contentArray(contentParts)
-            )
-            messages.append(userMessage)
-        }
-        
-        // 1. Build
+        try await validateModel(modelId: modelId, for: requiredCapabilities)
+
+        var messages = await loadMessages(conversationId: conversationId)
+        messages.append(self.makeUserMessage(userMessage, images: images))
+
         let parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
-        
-        // 2. Execute
         let response = try await requestExecutor.execute(parameters: parameters)
-        
-        // 3. Parse
-        guard let responseText = response.choices?.first?.message?.content else {
-            throw LLMError.unexpectedResponseFormat
-        }
-        
-        // Add assistant response
-        messages.append(LLMMessage.text(role: .assistant, content: responseText))
-        
-        // Update conversation
-        conversationManager.storeConversation(id: conversationId, messages: messages)
-        
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        let responseText = try parseResponseText(from: dto)
+
+        messages.append(self.assistantMessage(from: responseText))
+        await persistConversation(conversationId: conversationId, messages: messages)
         Logger.info("✅ Conversation continued successfully: \(conversationId)")
         return responseText
     }
-    
-    /// Continue conversation with structured output
+
     func continueConversationStructured<T: Codable>(
         userMessage: String,
         modelId: String,
@@ -812,45 +559,14 @@ class LLMService {
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
         try await ensureInitialized()
-        
-        guard let conversationManager = conversationManager else {
-            throw LLMError.clientError("Conversation manager not available")
-        }
-        
-        // Validate model (require vision if images provided)
-        let requiredCapabilities: [ModelCapability] = images.isEmpty ? [] : [.vision]
-        try validateModel(modelId: modelId, for: requiredCapabilities)
-        
-        // Get conversation history
-        var messages = conversationManager.getConversation(id: conversationId)
-        Logger.info("🗣️ Continuing structured conversation: \(conversationId) with model: \(modelId)")
-        
-        // Build user message content
-        if images.isEmpty {
-            // Simple text message
-            messages.append(LLMMessage.text(role: .user, content: userMessage))
-        } else {
-            // Message with images
-            var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
-                .text(userMessage)
-            ]
-            
-            // Add images
-            for imageData in images {
-                let base64Image = imageData.base64EncodedString()
-                let imageURL = URL(string: "data:image/png;base64,\(base64Image)")!
-                let imageDetail = ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
-                contentParts.append(.imageUrl(imageDetail))
-            }
-            
-            let userMessage = ChatCompletionParameters.Message(
-                role: .user,
-                content: .contentArray(contentParts)
-            )
-            messages.append(userMessage)
-        }
-        
-        // 1. Build
+
+        var required: [ModelCapability] = [.structuredOutput]
+        if !images.isEmpty { required.append(.vision) }
+        try await validateModel(modelId: modelId, for: required)
+
+        var messages = await loadMessages(conversationId: conversationId)
+        messages.append(self.makeUserMessage(userMessage, images: images))
+
         let parameters = LLMRequestBuilder.buildStructuredConversationRequest(
             messages: messages,
             modelId: modelId,
@@ -858,32 +574,24 @@ class LLMService {
             temperature: temperature ?? defaultTemperature,
             jsonSchema: jsonSchema
         )
-        
-        // 2. Execute
         let response = try await requestExecutor.execute(parameters: parameters)
-        
-        // 3. Parse
-        let result = try JSONResponseParser.parseStructured(response, as: responseType)
-        
-        // Add assistant response (convert result back to text for conversation history)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        let result = try JSONResponseParser.parseStructured(dto, as: responseType)
+
         let responseText: String
         if let data = try? JSONEncoder().encode(result) {
             responseText = String(data: data, encoding: .utf8) ?? "Structured response"
         } else {
             responseText = "Structured response"
         }
-        messages.append(LLMMessage.text(role: .assistant, content: responseText))
-        
-        // Update conversation
-        conversationManager.storeConversation(id: conversationId, messages: messages)
-        
+        messages.append(self.assistantMessage(from: responseText))
+        await persistConversation(conversationId: conversationId, messages: messages)
         Logger.info("✅ Structured conversation continued successfully: \(conversationId)")
         return result
     }
-    
+
     // MARK: - Multi-Model Operations
-    
-    /// Execute request across multiple models in parallel
+
     func executeParallelStructured<T: Codable & Sendable>(
         prompt: String,
         modelIds: [String],
@@ -891,11 +599,10 @@ class LLMService {
         temperature: Double? = nil
     ) async throws -> [String: T] {
         try await ensureInitialized()
-        
+
         Logger.info("🚀 Starting parallel execution across \(modelIds.count) models")
         var results: [String: T] = [:]
-        
-        // Execute in parallel using TaskGroup
+
         try await withThrowingTaskGroup(of: (String, T).self) { group in
             for modelId in modelIds {
                 group.addTask {
@@ -908,28 +615,23 @@ class LLMService {
                     return (modelId, result)
                 }
             }
-            
-            // Collect results
+
             for try await (modelId, result) in group {
                 results[modelId] = result
             }
         }
-        
+
         Logger.info("✅ Parallel execution completed: \(results.count)/\(modelIds.count) models succeeded")
         return results
     }
-    
-    /// Result containing both successful and failed model results
+
     struct ParallelExecutionResult<T: Codable & Sendable> {
         let successes: [String: T]
         let failures: [String: String]
-        
+
         var hasSuccesses: Bool { !successes.isEmpty }
-        var hasFailures: Bool { !failures.isEmpty }
-        var totalModels: Int { successes.count + failures.count }
     }
-    
-    /// Execute request across multiple models in parallel with flexible JSON handling
+
     func executeParallelFlexibleJSONWithFailures<T: Codable & Sendable>(
         prompt: String,
         modelIds: [String],
@@ -938,32 +640,29 @@ class LLMService {
         jsonSchema: JSONSchema? = nil
     ) async throws -> ParallelExecutionResult<T> {
         try await ensureInitialized()
-        
+
         Logger.info("🚀 Starting flexible parallel execution across \(modelIds.count) models")
         var results: [String: T] = [:]
         var failures: [String: String] = [:]
-        
-        // Execute in parallel using TaskGroup, collecting both successes and failures
+
         await withTaskGroup(of: (String, Result<T, Error>).self) { group in
             for modelId in modelIds {
                 group.addTask {
                     do {
-                        let result = try await self.executeFlexibleJSON(
+                        let value = try await self.executeFlexibleJSON(
                             prompt: prompt,
                             modelId: modelId,
                             responseType: responseType,
                             temperature: temperature,
                             jsonSchema: jsonSchema
                         )
-                        return (modelId, .success(result))
+                        return (modelId, .success(value))
                     } catch {
-                        Logger.debug("❌ Model \(modelId) failed: \(error.localizedDescription)")
                         return (modelId, .failure(error))
                     }
                 }
             }
-            
-            // Collect results
+
             for await (modelId, result) in group {
                 switch result {
                 case .success(let value):
@@ -973,83 +672,18 @@ class LLMService {
                 }
             }
         }
-        
-        // Log failure summary
+
         if !failures.isEmpty {
-            Logger.debug("⚠️ \(failures.count) of \(modelIds.count) models failed:")
+            Logger.warning("⚠️ Flexible parallel execution encountered \(failures.count) failures")
             for (modelId, error) in failures {
                 Logger.debug("  - \(modelId): \(error)")
             }
         }
-        
+
         Logger.info("✅ Flexible parallel execution completed: \(results.count)/\(modelIds.count) models succeeded, \(failures.count) failed")
         return ParallelExecutionResult(successes: results, failures: failures)
     }
-    
-    /// Execute request across multiple models in parallel with flexible JSON handling and progress reporting
-    func executeParallelFlexibleJSONWithProgress<T: Codable & Sendable>(
-        prompt: String,
-        modelIds: [String],
-        responseType: T.Type,
-        temperature: Double? = nil,
-        jsonSchema: JSONSchema? = nil,
-        onProgress: @MainActor @escaping (Int, Int) -> Void
-    ) async throws -> ParallelExecutionResult<T> {
-        try await ensureInitialized()
-        
-        Logger.info("🚀 Starting flexible parallel execution with progress across \(modelIds.count) models")
-        var results: [String: T] = [:]
-        var failures: [String: String] = [:]
-        var completedCount = 0
-        let totalCount = modelIds.count
-        
-        // Execute in parallel using TaskGroup, collecting both successes and failures
-        await withTaskGroup(of: (String, Result<T, Error>).self) { group in
-            for modelId in modelIds {
-                group.addTask {
-                    do {
-                        let result = try await self.executeFlexibleJSON(
-                            prompt: prompt,
-                            modelId: modelId,
-                            responseType: responseType,
-                            temperature: temperature,
-                            jsonSchema: jsonSchema
-                        )
-                        return (modelId, .success(result))
-                    } catch {
-                        Logger.debug("❌ Model \(modelId) failed: \(error.localizedDescription)")
-                        return (modelId, .failure(error))
-                    }
-                }
-            }
-            
-            // Collect results and report progress
-            for await (modelId, result) in group {
-                switch result {
-                case .success(let value):
-                    results[modelId] = value
-                case .failure(let error):
-                    failures[modelId] = error.localizedDescription
-                }
-                
-                completedCount += 1
-                onProgress(completedCount, totalCount)
-            }
-        }
-        
-        // Log failure summary
-        if !failures.isEmpty {
-            Logger.debug("⚠️ \(failures.count) of \(modelIds.count) models failed:")
-            for (modelId, error) in failures {
-                Logger.debug("  - \(modelId): \(error)")
-            }
-        }
-        
-        Logger.info("✅ Flexible parallel execution completed: \(results.count)/\(modelIds.count) models succeeded, \(failures.count) failed")
-        return ParallelExecutionResult(successes: results, failures: failures)
-    }
-    
-    /// Execute request across multiple models in parallel with flexible JSON handling (legacy method)
+
     func executeParallelFlexibleJSON<T: Codable & Sendable>(
         prompt: String,
         modelIds: [String],
@@ -1066,7 +700,7 @@ class LLMService {
         )
         return result.successes
     }
-    
+
     /// Request with flexible JSON output - uses structured output when available, basic JSON mode otherwise
     func executeFlexibleJSON<T: Codable>(
         prompt: String,
@@ -1076,16 +710,14 @@ class LLMService {
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
         try await ensureInitialized()
-        
-        // Validate model exists
-        try validateModel(modelId: modelId, for: [])
-        
-        // Check if model supports structured output and should use JSON schema
-        let model = appState?.openRouterService.findModel(id: modelId)
+        try await validateModel(modelId: modelId, for: [])
+
+        let model = await MainActor.run { self.appState?.openRouterService.findModel(id: modelId) }
         let supportsStructuredOutput = model?.supportsStructuredOutput ?? false
-        let shouldAvoidJSONSchema = enabledLLMStore?.shouldAvoidJSONSchema(modelId: modelId) ?? false
-        
-        // 1. Build
+        let shouldAvoidJSONSchema = await MainActor.run {
+            self.enabledLLMStore?.shouldAvoidJSONSchema(modelId: modelId) ?? false
+        }
+
         let parameters = LLMRequestBuilder.buildFlexibleJSONRequest(
             prompt: prompt,
             modelId: modelId,
@@ -1095,45 +727,44 @@ class LLMService {
             supportsStructuredOutput: supportsStructuredOutput,
             shouldAvoidJSONSchema: shouldAvoidJSONSchema
         )
-        
-        // 2. Execute and parse with flexible strategies
+
         do {
             let response = try await requestExecutor.execute(parameters: parameters)
-            let result = try JSONResponseParser.parseFlexible(from: response, as: responseType)
-            
-            // Record success if we used JSON schema
+            let dto = LLMVendorMapper.responseDTO(from: response)
+            let result = try JSONResponseParser.parseFlexible(from: dto, as: responseType)
+
             if supportsStructuredOutput && !shouldAvoidJSONSchema && jsonSchema != nil {
-                enabledLLMStore?.recordJSONSchemaSuccess(modelId: modelId)
+                await MainActor.run {
+                    self.enabledLLMStore?.recordJSONSchemaSuccess(modelId: modelId)
+                }
                 Logger.info("✅ JSON schema validation successful for model: \(modelId)")
             }
-            
+
             return result
         } catch {
-            // Record failure if it was related to JSON schema
-            if let apiError = error as? SwiftOpenAI.APIError,
-               apiError.displayDescription.contains("response_format") ||
-               apiError.displayDescription.contains("json_schema") {
-                enabledLLMStore?.recordJSONSchemaFailure(modelId: modelId, reason: apiError.displayDescription)
-                Logger.debug("🚫 Recorded JSON schema failure for \(modelId): \(apiError.displayDescription)")
+            let description = error.localizedDescription.lowercased()
+            if description.contains("response_format") || description.contains("json_schema") {
+                await MainActor.run {
+                    self.enabledLLMStore?.recordJSONSchemaFailure(modelId: modelId, reason: error.localizedDescription)
+                }
+                Logger.debug("🚫 Recorded JSON schema failure for \(modelId): \(error.localizedDescription)")
             }
             throw error
         }
     }
-    
+
     // MARK: - Model Management
-    
-    /// Validate that a model exists and has required capabilities
-    func validateModel(modelId: String, for capabilities: [ModelCapability]) throws {
-        guard let appState = appState else {
+
+    func validateModel(modelId: String, for capabilities: [ModelCapability]) async throws {
+        guard let appState = await fetchAppState() else {
             throw LLMError.clientError("LLMService not properly initialized")
         }
-        
-        // Check if model exists in available models
-        guard let model = appState.openRouterService.findModel(id: modelId) else {
+
+        let resolvedModel = await MainActor.run { appState.openRouterService.findModel(id: modelId) }
+        guard let model = resolvedModel else {
             throw LLMError.clientError("Model '\(modelId)' not found")
         }
-        
-        // Check required capabilities
+
         for capability in capabilities {
             let hasCapability: Bool
             switch capability {
@@ -1146,21 +777,22 @@ class LLMService {
             case .textOnly:
                 hasCapability = model.isTextToText && !model.supportsImages
             }
-            
+
             if !hasCapability {
                 throw LLMError.clientError("Model '\(modelId)' does not support \(capability.displayName)")
             }
         }
     }
-    
+
     // MARK: - Conversation Management
-    
-    /// Clear a conversation
+
     func clearConversation(id conversationId: UUID) {
-        conversationManager?.clearConversation(id: conversationId)
+        Task {
+            await self.clearConversationCache(conversationId)
+            await self.conversationStore?.clearConversation(conversationId: conversationId)
+        }
     }
-    
-    /// Cancel all current requests
+
     func cancelAllRequests() {
         Task.detached { [requestExecutor] in
             await requestExecutor.cancelAllRequests()

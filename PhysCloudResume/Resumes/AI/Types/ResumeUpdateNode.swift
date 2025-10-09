@@ -355,11 +355,12 @@ func fbToJson(_ feedbackNodes: [FeedbackNode]) -> String? {
 
 // MARK: - Collection Extensions for Review Workflow Logic
 
+@MainActor
 extension Array where Element == FeedbackNode {
     
     /// Apply all accepted changes to the resume
     /// Moved from ReviewView for better encapsulation
-    func applyAcceptedChanges(to resume: Resume) {
+    func applyAcceptedChanges(to resume: Resume, exportCoordinator: ResumeExportCoordinator) {
         Logger.debug("✅ Applying accepted changes to resume")
         
         let acceptedNodes = filter { $0.shouldBeApplied }
@@ -397,7 +398,7 @@ extension Array where Element == FeedbackNode {
         }
         
         // Trigger PDF refresh
-        resume.debounceExport()
+        exportCoordinator.debounceExport(resume: resume)
         Logger.debug("✅ Applied \(acceptedNodes.count) accepted changes")
     }
     

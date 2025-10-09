@@ -18,6 +18,7 @@ class ResumeReviseViewModel {
     // MARK: - Dependencies
     private let llm: LLMFacade
     let appState: AppState // Make appState accessible to views
+    private let exportCoordinator: ResumeExportCoordinator
     
     // MARK: - UI State (ViewModel Layer)
     var showResumeRevisionSheet: Bool = false {
@@ -62,9 +63,10 @@ class ResumeReviseViewModel {
     // MARK: - Configuration
     private let revisionTimeout: TimeInterval = 180.0 // 3 minutes
     
-    init(llmFacade: LLMFacade, appState: AppState) {
+    init(llmFacade: LLMFacade, appState: AppState, exportCoordinator: ResumeExportCoordinator) {
         self.llm = llmFacade
         self.appState = appState
+        self.exportCoordinator = exportCoordinator
         // Watch for aiResubmit changes to trigger resubmission workflow
         // This replicates the onChange(of: aiResub) logic from AiCommsView
         setupAIResubmitWatcher()
@@ -114,7 +116,11 @@ class ResumeReviseViewModel {
         
         do {
             // Create query for revision workflow
-            let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
+            let query = ResumeApiQuery(
+                resume: resume,
+                exportCoordinator: exportCoordinator,
+                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+            )
             
             // Start conversation with system prompt and user query
             let systemPrompt = query.genericSystemMessage.textContent
@@ -257,7 +263,11 @@ class ResumeReviseViewModel {
         
         do {
             // Create revision request with editable nodes only (context already established)
-            let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
+            let query = ResumeApiQuery(
+                resume: resume,
+                exportCoordinator: exportCoordinator,
+                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+            )
             let revisionRequestPrompt = await query.multiTurnRevisionPrompt()
             
             // Check if model supports reasoning for streaming
@@ -404,7 +414,7 @@ class ResumeReviseViewModel {
     /// Apply only accepted changes to the resume tree structure
     /// Delegates to the FeedbackNode collection extension
     func applyAcceptedChanges(feedbackNodes: [FeedbackNode], to resume: Resume) {
-        feedbackNodes.applyAcceptedChanges(to: resume)
+        feedbackNodes.applyAcceptedChanges(to: resume, exportCoordinator: exportCoordinator)
     }
     
     // MARK: - Review Workflow Navigation (Moved from ReviewView)
@@ -456,7 +466,7 @@ class ResumeReviseViewModel {
         
         // Log statistics and apply changes using all feedback
         allFeedbackNodes.logFeedbackStatistics()
-        allFeedbackNodes.applyAcceptedChanges(to: resume)
+        allFeedbackNodes.applyAcceptedChanges(to: resume, exportCoordinator: exportCoordinator)
         
         // Check for resubmission using all feedback
         let nodesToResubmit = allFeedbackNodes.nodesRequiringAIResubmission
@@ -496,7 +506,7 @@ class ResumeReviseViewModel {
         Task {
             do {
                 Logger.debug("Starting PDF re-rendering for AI resubmission...")
-                try await resume.ensureFreshRenderedText()
+                try await exportCoordinator.ensureFreshRenderedText(for: resume)
                 Logger.debug("PDF rendering complete for AI resubmission")
                 
                 // Actually perform the AI resubmission

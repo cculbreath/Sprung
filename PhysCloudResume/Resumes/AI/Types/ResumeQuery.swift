@@ -133,6 +133,7 @@ import SwiftUI
     var applicant: Applicant
     var queryString: String = ""
     let res: Resume
+    private let exportCoordinator: ResumeExportCoordinator
 
     // MARK: - Derived Properties
 
@@ -199,9 +200,10 @@ import SwiftUI
 
     // MARK: - Initialization
 
-    init(resume: Resume, saveDebugPrompt: Bool = true) {
+    init(resume: Resume, exportCoordinator: ResumeExportCoordinator, saveDebugPrompt: Bool = true) {
         // Optionally let users pass in the debug flag during initialization
         res = resume
+        self.exportCoordinator = exportCoordinator
         
         // Create a complete applicant profile with default values to avoid @MainActor issues
         let profile = ApplicantProfile() // Uses default values from ApplicantProfile init
@@ -231,7 +233,7 @@ import SwiftUI
     func revisionPrompt(_ fb: [FeedbackNode]) async -> String {
         // Resume text should already be up-to-date from the rendering called in aiResubmit
         // but we'll ensure it again as a safety measure
-        try? await res.ensureFreshRenderedText()
+        try? await exportCoordinator.ensureFreshRenderedText(for: res)
 
         // At this point, fb should already contain only nodes that need revision
         // due to our filtering in ReviewView's nextNode method
@@ -265,8 +267,7 @@ import SwiftUI
     @MainActor
     func wholeResumeQueryString() async -> String {
         // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
-        // This assumes res.ensureFreshRenderedText() will update res.model.renderedResumeText.
-        try? await res.ensureFreshRenderedText()
+        try? await exportCoordinator.ensureFreshRenderedText(for: res)
         
 
         // Generate language that controls how strongly we emphasize achievements
@@ -396,7 +397,7 @@ import SwiftUI
     @MainActor
     func clarifyingQuestionsContextString() async -> String {
         // Ensure the resume's rendered text is up-to-date
-        try? await res.ensureFreshRenderedText()
+        try? await exportCoordinator.ensureFreshRenderedText(for: res)
         
         // Build context prompt without JSON or editable nodes
         let prompt = """
@@ -435,7 +436,7 @@ import SwiftUI
     @MainActor
     func multiTurnRevisionPrompt() async -> String {
         // Ensure the resume's rendered text is up-to-date
-        try? await res.ensureFreshRenderedText()
+        try? await exportCoordinator.ensureFreshRenderedText(for: res)
         
         // Build prompt with only editable nodes and instructions (context already established)
         let prompt = """

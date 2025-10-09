@@ -17,6 +17,7 @@ class ClarifyingQuestionsViewModel {
     // MARK: - Dependencies
     private let llm: LLMFacade
     private let appState: AppState
+    private let exportCoordinator: ResumeExportCoordinator
     private var activeStreamingHandle: LLMStreamingHandle?
     
     // MARK: - UI State
@@ -32,9 +33,10 @@ class ClarifyingQuestionsViewModel {
     var lastError: String?
     var showError: Bool = false
     
-    init(llmFacade: LLMFacade, appState: AppState) {
+    init(llmFacade: LLMFacade, appState: AppState, exportCoordinator: ResumeExportCoordinator) {
         self.llm = llmFacade
         self.appState = appState
+        self.exportCoordinator = exportCoordinator
     }
     
     // MARK: - Public Interface
@@ -62,7 +64,11 @@ class ClarifyingQuestionsViewModel {
             let supportsReasoning = model?.supportsReasoning ?? false
             
             // Create the query for clarifying questions
-            let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
+            let query = ResumeApiQuery(
+                resume: resume,
+                exportCoordinator: exportCoordinator,
+                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+            )
             
             // Start a new conversation with background docs and clarifying questions request
             let systemPrompt = query.genericSystemMessage.textContent
@@ -411,7 +417,11 @@ class ClarifyingQuestionsViewModel {
     ) async throws -> [ProposedRevisionNode] {
         
         // Create initial conversation with system prompt
-        let query = ResumeApiQuery(resume: resume, saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts"))
+        let query = ResumeApiQuery(
+            resume: resume,
+            exportCoordinator: exportCoordinator,
+            saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+        )
         let systemPrompt = query.genericSystemMessage.textContent
         let initialUserMessage = await query.wholeResumeQueryString()
         

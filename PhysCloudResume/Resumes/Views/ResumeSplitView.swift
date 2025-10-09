@@ -10,6 +10,7 @@ import SwiftUI
 struct ResumeSplitView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResStore.self) private var resStore: ResStore
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     
     @Binding var isWide: Bool
     @Binding var tab: TabList
@@ -29,7 +30,8 @@ struct ResumeSplitView: View {
                         resume: selRes,
                         tab: $tab,
                         isWide: $isWide,
-                        resStore: resStore
+                        resStore: resStore,
+                        exportCoordinator: appEnvironment.resumeExportCoordinator
                     )
                     .frame(
                         minWidth: isWide ? 350 : 200,

@@ -40,10 +40,12 @@ final class ResumeDetailVM {
     // MARK: - Dependencies --------------------------------------------------
 
     private let resStore: ResStore
+    private let exportCoordinator: ResumeExportCoordinator
 
-    init(resume: Resume, resStore: ResStore) {
+    init(resume: Resume, resStore: ResStore, exportCoordinator: ResumeExportCoordinator) {
         self.resume = resume
         self.resStore = resStore
+        self.exportCoordinator = exportCoordinator
     }
 
     // MARK: - Intents -------------------------------------------------------
@@ -76,7 +78,9 @@ final class ResumeDetailVM {
     }
 
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
-    func refreshPDF() { resume.debounceExport() }
+    func refreshPDF() {
+        exportCoordinator.debounceExport(resume: resume)
+    }
 
     // MARK: - Editing -------------------------------------------------------
 

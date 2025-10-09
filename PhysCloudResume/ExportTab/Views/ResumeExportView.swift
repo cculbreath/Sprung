@@ -11,6 +11,7 @@ import SwiftUI
 struct ResumeExportView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
 
     // Local state for controlling the status picker
     @State private var selectedStatus: Statuses = .new
@@ -307,7 +308,8 @@ struct ResumeExportView: View {
         showToastNotification("Generating fresh PDF...")
         
         // Trigger debounced export to ensure fresh PDF data before exporting
-        resume.debounceExport(
+        appEnvironment.resumeExportCoordinator.debounceExport(
+            resume: resume,
             onStart: {
                 // Optional: Update UI to show export in progress
             },
@@ -356,7 +358,8 @@ struct ResumeExportView: View {
         showToastNotification("Generating fresh text resume...")
         
         // Trigger debounced export to ensure fresh text data before exporting
-        resume.debounceExport(
+        appEnvironment.resumeExportCoordinator.debounceExport(
+            resume: resume,
             onStart: {
                 // Optional: Update UI to show export in progress
             },

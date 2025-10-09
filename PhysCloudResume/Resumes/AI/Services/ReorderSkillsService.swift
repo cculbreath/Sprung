@@ -10,9 +10,11 @@ struct ReorderSkillsStatus {
 @MainActor
 class ReorderSkillsService {
     private let reviewService: ResumeReviewService
+    private let exportCoordinator: ResumeExportCoordinator
     
-    init(reviewService: ResumeReviewService) {
+    init(reviewService: ResumeReviewService, exportCoordinator: ResumeExportCoordinator) {
         self.reviewService = reviewService
+        self.exportCoordinator = exportCoordinator
     }
     
     func performReorderSkills(
@@ -54,9 +56,9 @@ class ReorderSkillsService {
             // Re-render the resume with the new order
             onStatusUpdate(ReorderSkillsStatus(statusMessage: "Re-rendering resume with new skill order...", changeMessage: changeMessage))
             do {
-                try await resume.ensureFreshRenderedText()
+                try await exportCoordinator.ensureFreshRenderedText(for: resume)
                 onStatusUpdate(ReorderSkillsStatus(statusMessage: statusMessage, changeMessage: changeMessage))
-                resume.debounceExport()
+                exportCoordinator.debounceExport(resume: resume)
                 return .success(statusMessage)
             } catch {
                 return .failure(ReorderSkillsError.pdfReRenderFailed(error: error))

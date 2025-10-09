@@ -22,9 +22,15 @@ struct ResumeDetailView: View {
 
     private var externalIsWide: Binding<Bool>?
 
-    init(resume: Resume, tab: Binding<TabList>, isWide: Binding<Bool>, resStore: ResStore) {
+    init(
+        resume: Resume,
+        tab: Binding<TabList>,
+        isWide: Binding<Bool>,
+        resStore: ResStore,
+        exportCoordinator: ResumeExportCoordinator
+    ) {
         _tab = tab
-        _vm = State(wrappedValue: ResumeDetailVM(resume: resume, resStore: resStore))
+        _vm = State(wrappedValue: ResumeDetailVM(resume: resume, resStore: resStore, exportCoordinator: exportCoordinator))
         externalIsWide = isWide
     }
 

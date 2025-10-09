@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>SecondPassRefactoring.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="second-pass-refactoring-plan">Second Pass Refactoring Plan</h1>
+<p><strong>Purpose</strong><br>
+Address the gaps surfaced by the external code review (CodeReviewFindings/
+reports) in alignment with <code>ClaudeNotes/Final_Refactor_Guide_20251007.md</code>, and
+fold them into the existing deferred initiatives (<code>RefactorNotes/ deferred_backup_implementation.md</code>, <code>RefactorNotes/deferred_data_restructuring.md</code>).
+This plan assumes Phases 0–9 are complete and defines a follow-up roadmap
+focused on architectural hardening, vendor isolation, data safety, and export
+modernization.</p>
+<hr>
+<h2 id="verified-issue-summary-by-report">Verified Issue Summary (by report)</h2>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>Legitimate Findings</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01_CoreAppLayer</td>
+<td><code>AppState</code> remains a singleton; <code>PhysicsCloudResumeApp</code> still calls <code>fatalError</code> on container failure; <code>AppDependencies</code> wires singletons (<code>AppState.shared</code>, <code>CoverLetterService.shared</code>); menu commands rely entirely on NotificationCenter.</td>
+<td>All issues confirmed in source. NotificationCenter is now documented but still extensive; keep scoped to menu/toolbar in follow-up.</td>
+</tr>
+<tr>
+<td>02_DataManagement</td>
+<td><code>SwiftDataStore.saveContext()</code> swallows errors; <code>ImportJobAppsScript</code> reads Proxycurl key from <code>UserDefaults</code>; <code>JobAppStore</code> notification listener already removed (resolved).</td>
+<td>Two actionable items remain.</td>
+</tr>
+<tr>
+<td>03_AIServices</td>
+<td>Public SwiftOpenAI typealiases (<code>ConversationTypes.swift</code>); services/classes annotated <code>@MainActor</code> unnecessarily (<code>ConversationManager</code>, <code>OpenRouterService</code>); singleton services (<code>OpenRouterService</code>, <code>CoverLetterService.shared</code> usage); force unwraps for data URLs (<code>LLMRequestBuilder</code>, <code>LLMService</code>); adapter boundary leaks.</td>
+<td>Represents largest remaining Phase 6 gap.</td>
+</tr>
+<tr>
+<td>04_AIViews</td>
+<td>No blocking issues. Minor task: convert <code>.onAppear { Task { … } }</code> to <code>.task</code> in model pickers.</td>
+<td>Track as polish.</td>
+</tr>
+<tr>
+<td>05_ResumeTree</td>
+<td><code>TreeToJson</code> still performs manual JSON string building; <code>Resume</code> model bridges via <code>TreeToJson</code> before <code>JSONSerialization</code>.</td>
+<td>Confirms Phase 4 work still outstanding.</td>
+</tr>
+<tr>
+<td>06_ResumesManagement</td>
+<td><code>Resume</code> model contains throttle/export orchestration and legacy documentation; uses TreeToJson.</td>
+<td>Must migrate export logic to service layer and update comments.</td>
+</tr>
+<tr>
+<td>07_JobApplications</td>
+<td><code>IndeedJobScrape</code> mixes parsing and store mutation; silent error handling; direct <code>UserDefaults</code> usage. Presentation helper in <code>JobApp</code> model.</td>
+<td>Parsing/service boundary needs clean split.</td>
+</tr>
+<tr>
+<td>08_CoverLetters</td>
+<td>Continued reliance on <code>CoverLetterService.shared</code>; similar throttle/export logic in view models.</td>
+<td>Address alongside DI cleanup.</td>
+</tr>
+<tr>
+<td>09_ReferenceManagement</td>
+<td>No critical issues; mostly documentation pointers.</td>
+<td>–</td>
+</tr>
+<tr>
+<td>10_SharedUtilities</td>
+<td>Highlighted lack of logging in shared helpers (already covered via <code>SwiftDataStore</code>) and lingering TODOs.</td>
+<td>Fold into observability tasks.</td>
+</tr>
+<tr>
+<td>11_SharedUIComponents</td>
+<td>No blocking issues.</td>
+<td>–</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="phased-roadmap">Phased Roadmap</h2>
+<h3 id="phase-sp1-%E2%80%93-core-lifecycle--di-hardening">Phase SP1 – Core Lifecycle &amp; DI Hardening</h3>
+<p><strong>Objectives</strong></p>
+<ul>
+<li>Eliminate singleton ownership of <code>AppState</code>, <code>OpenRouterService</code>, and
+<code>CoverLetterService</code>, instantiating them through <code>AppDependencies</code>.</li>
+<li>Replace <code>fatalError</code> fallback in <code>PhysicsCloudResumeApp</code> with user-visible
+error handling and backup restore guidance (ties into deferred backup plan).</li>
+<li>Narrow NotificationCenter usage to documented menu/toolbar bridges with clear
+environment-based bindings for sheet toggles (already started in Phase 8).</li>
+</ul>
+<p><strong>Key Tasks</strong></p>
+<ol>
+<li>Introduce an <code>AppEnvironment</code> struct owned by <code>AppDependencies</code> containing
+<code>AppState</code>, <code>OpenRouterService</code>, <code>CoverLetterService</code>, and any other
+long-lived services. Inject through <code>.environment</code>.</li>
+<li>Remove <code>AppState.shared</code>; convert to standard class initialized by
+<code>AppDependencies</code> with explicit dependencies (<code>OpenRouterService</code>,
+<code>ModelValidationService</code>). Replace weak <code>llmService</code> references with strong
+references or delegate protocols.</li>
+<li>Refactor <code>CoverLetterService</code> (and related batch/best-of services) from
+singleton to DI-friendly instances. Update all call sites (toolbar buttons,
+batch generator, AppWindowView).</li>
+<li>Replace <code>fatalError</code> in <code>PhysicsCloudResumeApp</code> with recoverable flows: show
+alert, offer backup restore (Phase SP4), and fall back to read-only mode if
+migration fails.</li>
+<li>Ensure NotificationCenter posts are limited to the documented set in
+<code>MenuCommands.swift</code>; migrate any remaining view-local toggles to bindings.</li>
+</ol>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li><code>AppDependencies</code> no longer references <code>.shared</code> singletons.</li>
+<li><code>AppState</code> loses singleton constructor; initialization becomes explicit.</li>
+<li>Cover letter workflows consume injected coordinator/service instances.</li>
+<li>Graceful ModelContainer failure handling with UI alert and logging.</li>
+<li>Updated architecture notes in <code>MenuNotificationHandler</code>/README.</li>
+</ul>
+<p><strong>Dependencies</strong></p>
+<ul>
+<li>Must precede LLM vendor isolation (Phase SP2) so new services can be passed
+through DI graph cleanly.</li>
+</ul>
+<p><strong>Validation</strong></p>
+<ul>
+<li><code>xcodebuild</code> build + manual smoke checklist (selection persistence, cover
+letter generation) using injected services.</li>
+<li>Unit tests (or targeted integration tests) confirming non-crashing startup
+path when ModelContainer creation fails.</li>
+</ul>
+<hr>
+<h3 id="phase-sp2-%E2%80%93-llm-vendor-isolation--concurrency-cleanup">Phase SP2 – LLM Vendor Isolation &amp; Concurrency Cleanup</h3>
+<p><strong>Objectives</strong></p>
+<ul>
+<li>Conform fully to the Phase 6 mandate: confine SwiftOpenAI types to adapter
+boundaries, replace typealiases with domain DTOs, and remove unnecessary
+<code>@MainActor</code> annotations.</li>
+</ul>
+<p><strong>Key Tasks</strong></p>
+<ol>
+<li>Add domain types (<code>LLMMessageDTO</code>, <code>LLMResponseDTO</code>, <code>LLMRole</code>, <code>LLMStreamChunkDTO</code>)
+and update persistence (<code>ConversationContext</code>, <code>ConversationMessage</code>) to use
+them. Provide conversion extensions inside adapter layer only.</li>
+<li>Rework <code>LLMRequestBuilder</code>, <code>LLMRequestExecutor</code>, and <code>LLMService</code> APIs to
+consume/emit domain types. Keep SwiftOpenAI-specific structs internal to a
+<code>SwiftOpenAIClient</code> adapter module.</li>
+<li>Convert <code>ConversationManager</code> into an <code>actor</code> (or background queue) without
+<code>@MainActor</code>. Add persistence bridging into SwiftData as part of this work or
+remove the class if redundant with SwiftData persistence.</li>
+<li>Remove <code>@MainActor</code> from <code>OpenRouterService</code>; expose main-actor properties
+via <code>@MainActor</code> computed wrappers while running network calls off the main
+thread.</li>
+<li>Replace all force unwraps constructing data URLs (<code>URL(string: …)!</code>) with
+guarded fallbacks that return <code>LLMError.clientError</code>/<code>resumeReviseError</code> on
+failure.</li>
+<li>Update tests and manual smoke flows to exercise streaming, reasoning overlay,
+and structured output with new DTO pipeline.</li>
+</ol>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li>Public surface area for AI services no longer depends on SwiftOpenAI types.</li>
+<li>Conversations stored as domain roles/strings; adapters perform conversion.</li>
+<li>All <code>@MainActor</code> usage justified per Final Refactor Guide.</li>
+<li>Force unwraps removed from LLM request/image handling paths.</li>
+</ul>
+<p><strong>Dependencies</strong></p>
+<ul>
+<li>Requires Phase SP1 DI work to ensure services are injectable before API
+surface changes propagate.</li>
+</ul>
+<p><strong>Validation</strong></p>
+<ul>
+<li>CI/unit coverage for DTO conversions and JSON parsing.</li>
+<li>Manual smoke checklist items 2 and 4 (clarifying questions, key update) pass.</li>
+</ul>
+<hr>
+<h3 id="phase-sp3-%E2%80%93-export-pipeline--template-data-modernization">Phase SP3 – Export Pipeline &amp; Template Data Modernization</h3>
+<p><strong>Objectives</strong></p>
+<ul>
+<li>Complete the remaining Phase 4/5 work: retire <code>TreeToJson</code>, move export
+orchestration out of models, and execute the SwiftData template plan captured
+in <code>deferred_data_restructuring.md</code>.</li>
+</ul>
+<p><strong>Key Tasks</strong></p>
+<ol>
+<li>Implement <code>ResumeTemplateDataBuilder</code> (or equivalent) that transforms
+<code>TreeNode</code> + metadata into <code>[String: Any]</code> using standard JSON facilities.
+Update resume export/text flows to consume the builder directly.</li>
+<li>Delete <code>TreeToJson.swift</code> and update <code>Resume.jsonTxt</code> (and any other callers)
+to use the new builder. Ensure deterministic ordering via <code>OrderedDictionary</code>
+or sorted arrays.</li>
+<li>Extract export throttling (<code>debounceExport</code>, etc.) from <code>Resume</code> into a
+dedicated <code>ResumeExportCoordinator</code> that lives in the ViewModel/service
+layer. Models become pure data holders.</li>
+<li>Kick off <strong>Phase A</strong> from <code>deferred_data_restructuring.md</code>: introduce
+SwiftData <code>Template</code>/<code>TemplateAsset</code> models, import existing templates from
+the Documents override path, and persist active template selection per
+resume.</li>
+<li>Document the new manifest/context pipeline in README and developer docs.</li>
+</ol>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li>No references to <code>TreeToJson</code>; new builder validated with existing templates.</li>
+<li>Export orchestration encapsulated in services; models remain slim.</li>
+<li>SwiftData stores hold template artifacts; override precedence maintained.</li>
+<li>Updated docstrings + README architecture diagram already reflects DI/export
+boundary.</li>
+</ul>
+<p><strong>Dependencies</strong></p>
+<ul>
+<li>DTO-focused changes in Phase SP2 should land first so export coordinator can
+consume updated services without rework.</li>
+</ul>
+<p><strong>Validation</strong></p>
+<ul>
+<li>Unit tests for <code>ResumeTemplateDataBuilder</code> ensuring parity with existing
+contexts.</li>
+<li>Manual export smoke (checklist item 3) comparing PDF/text outputs before vs.
+after refactor.</li>
+</ul>
+<hr>
+<h3 id="phase-sp4-%E2%80%93-data-safety-logging-and-tooling">Phase SP4 – Data Safety, Logging, and Tooling</h3>
+<p><strong>Objectives</strong></p>
+<ul>
+<li>Finish the backup UI and retention work and address logging/configuration
+gaps identified in the DataManagers review.</li>
+</ul>
+<p><strong>Key Tasks</strong></p>
+<ol>
+<li>Implement Phase B/C items from <code>deferred_backup_implementation.md</code>:
+<ul>
+<li>Settings “Data Safety” section with backup/restore buttons,
+confirmations, and last-backup metadata.</li>
+<li>Finder shortcut and retention policy management.</li>
+</ul>
+</li>
+<li>Enhance <code>SwiftDataStore.saveContext</code> to log errors using <code>Logger.error</code> and
+optionally throw or surface errors to callers.</li>
+<li>Refactor <code>ImportJobAppsScript</code> (and any other utilities) to obtain API keys
+via <code>APIKeyManager</code> rather than <code>UserDefaults</code>.</li>
+<li>Split <code>IndeedJobScrape.parseIndeedJobListing</code> into pure parsing plus store
+orchestration; add <code>Logger</code> calls for failure cases.</li>
+<li>Audit other shared utilities for TODO/empty logging blocks and address them
+as part of observability improvements.</li>
+</ol>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li>User-facing backup controls and retention policy.</li>
+<li>Error logging in all save paths; ability to trace failures in production.</li>
+<li>Import scripts and scrapers use central key management and structured logs.</li>
+</ul>
+<p><strong>Dependencies</strong></p>
+<ul>
+<li>None strictly, but benefits from Phase SP1 (DI) for injecting configuration
+services.</li>
+</ul>
+<p><strong>Validation</strong></p>
+<ul>
+<li>Manual backup/restore test using temporary data set.</li>
+<li>Logging smoke tests (induce save failure via temporary directory sandbox).</li>
+</ul>
+<hr>
+<h3 id="phase-sp5-%E2%80%93-advanced-data--llm-roadmap">Phase SP5 – Advanced Data &amp; LLM Roadmap</h3>
+<p><strong>Objectives</strong></p>
+<ul>
+<li>Pursue the longer-term restructuring captured under “Deferred Data
+Restructuring” once core architecture is stabilized.</li>
+</ul>
+<p><strong>Key Tasks</strong></p>
+<ol>
+<li><strong>Template Manifest &amp; Context Builder (Phase B in deferred notes):</strong> Add
+manifest-driven context construction and <code>JSONValue</code> extensions bag for
+schemaless resume data.</li>
+<li><strong>LLM Edit Mask &amp; Patch Applier (Phase C):</strong> Define mask semantics, implement
+patch application with audit trail, and integrate with the structured output
+pipeline created in Phase SP2.</li>
+<li><strong>Order Preservation Tests:</strong> Introduce integration tests ensuring ordering
+is maintained across context building, patching, and export.</li>
+<li><strong>Documentation &amp; Tooling:</strong> Provide developer docs for manifest authoring
+and mask configuration. Optionally supply a CLI or preview tool.</li>
+</ol>
+<p><strong>Deliverables</strong></p>
+<ul>
+<li>New SwiftData models (<code>Template</code>, <code>TemplateAsset</code>, optional <code>TemplateManifest</code>)
+fully adopted; manifest-driven context builder in production.</li>
+<li>LLM edit mask enforced end-to-end with undo/audit capabilities.</li>
+<li>Comprehensive tests covering ordering and patch safety.</li>
+</ul>
+<p><strong>Dependencies</strong></p>
+<ul>
+<li>Requires completion of Phases SP1–SP3 to ensure DI and export pipelines are
+ready for advanced features.</li>
+</ul>
+<p><strong>Validation</strong></p>
+<ul>
+<li>Regression tests for context builder and patching logic.</li>
+<li>Manual QA for template switching, manifest validation, and LLM write safety.</li>
+</ul>
+<hr>
+<h2 id="cross-cutting-considerations">Cross-Cutting Considerations</h2>
+<ul>
+<li><strong>Documentation:</strong> Continue updating README, <code>agents.md</code>, and in-code
+comments as each phase completes. Phase SP3 already refreshed README; treat
+subsequent documentation updates as acceptance criteria.</li>
+<li><strong>Testing:</strong> Introduce targeted unit tests where gaps were observed (e.g.,
+DTO adapters, data builder). Consider adding integration smoke suites using
+the existing manual checklist items as scripts.</li>
+<li><strong>Observability:</strong> Ensure each phase leaves behind meaningful logging for new
+error surfaces (ModelContainer fallback, save failures, import scripts).</li>
+<li><strong>Risk Mitigation:</strong> Sequence phases to minimize churn—address DI singleton
+removal before overhauling LLM APIs, since adapter changes will ripple through
+the same files.</li>
+</ul>
+<hr>
+<h2 id="next-steps">Next Steps</h2>
+<ol>
+<li>Socialize this plan with stakeholders; confirm prioritization/order.</li>
+<li>Create feature branches per phase (<code>refactor/core-di-hardening</code>, etc.).</li>
+<li>Track progress in <code>RefactorNotes/</code> (e.g., add Phase SP1 progress log).</li>
+<li>Update manual smoke checklist as new features are validated.</li>
+</ol>
+<p>This second-pass roadmap closes the remaining gaps highlighted in the external
+review while integrating outstanding deferred work. Completing Phases SP1–SP5
+will fully align the codebase with the architectural goals defined in the
+Final Refactor Guide and prepare the project for future extensibility.</p>
+
+</body>
+</html>
