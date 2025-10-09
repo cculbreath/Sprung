@@ -22,8 +22,10 @@ struct NodeLeafView: View {
     private var isEditing: Bool { vm.editingNodeID == node.id }
 
     var body: some View {
+        let isSectionLabelEntry = node.parent?.name == "section-labels"
+
         HStack(spacing: 5) {
-            if node.value.isEmpty {
+            if node.value.isEmpty && !isSectionLabelEntry {
                 Spacer().frame(width: 50)
                 Text(node.name)
                     .foregroundColor(.gray)
@@ -48,12 +50,17 @@ struct NodeLeafView: View {
                         ),
                         tempName: Binding(get: { vm.tempName }, set: { vm.tempName = $0 }),
                         tempValue: Binding(get: { vm.tempValue }, set: { vm.tempValue = $0 }),
+                        allowNameEditing: !isSectionLabelEntry,
                         saveChanges: { vm.saveEdits() },
                         cancelChanges: { vm.cancelEditing() },
                         deleteNode: { deleteNode(node: node) }
                     )
                 } else {
-                    if !node.name.isEmpty && !node.value.isEmpty {
+                    if isSectionLabelEntry {
+                        Text(node.label)
+                            .foregroundColor(.primary)
+                        Spacer()
+                    } else if !node.name.isEmpty && !node.value.isEmpty {
                         StackedTextRow(
                             title: node.name,
                             description: node.value,

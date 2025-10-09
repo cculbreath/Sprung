@@ -18,7 +18,8 @@ struct ResumeTemplateDataBuilder {
         guard let rootNode = resume.rootNode else {
             throw BuilderError.missingRootNode
         }
-        let implementation = Implementation(resume: resume, rootNode: rootNode)
+        let manifest = resume.template.flatMap { TemplateManifestLoader.manifest(for: $0) }
+        let implementation = Implementation(resume: resume, rootNode: rootNode, manifest: manifest)
         return implementation.buildContext()
     }
 }
@@ -28,16 +29,14 @@ struct ResumeTemplateDataBuilder {
 private struct Implementation {
     let resume: Resume
     let rootNode: TreeNode
+    let manifest: TemplateManifest?
 
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
 
-        for sectionKey in JsonMap.orderedSectionKeys {
-            guard let sectionType = JsonMap.sectionKeyToTypeDict[sectionKey],
-                  let value = buildSection(named: sectionKey, type: sectionType)
-            else {
-                continue
-            }
+        let orderedKeys = manifest?.sectionOrder ?? JsonMap.orderedSectionKeys
+        for sectionKey in orderedKeys {
+            guard let value = buildSection(named: sectionKey) else { continue }
             context[sectionKey] = value
         }
 
@@ -47,6 +46,19 @@ private struct Implementation {
         }
 
         return context
+    }
+
+    private func buildSection(named sectionName: String) -> Any? {
+        if let manifestKind = manifest?.section(for: sectionName)?.type,
+           let sectionType = SectionType(manifestKind: manifestKind, key: sectionName) {
+            return buildSection(named: sectionName, type: sectionType)
+        }
+
+        if let fallbackType = JsonMap.sectionKeyToTypeDict[sectionName] {
+            return buildSection(named: sectionName, type: fallbackType)
+        }
+
+        return nodeValue(named: sectionName)
     }
 
     private func buildSection(named sectionName: String, type: SectionType) -> Any? {
@@ -59,6 +71,8 @@ private struct Implementation {
             return buildComplexSection(named: sectionName)
         case .string:
             return buildStringSection(named: sectionName)
+        case .mapOfStrings:
+            return buildMapOfStringsSection(named: sectionName)
         case let .twoKeyObjectArray(keyOne, keyTwo):
             return buildTwoKeyObjectArray(named: sectionName, keyOne: keyOne, keyTwo: keyTwo)
         case .fontSizes:
@@ -82,6 +96,16 @@ private struct Implementation {
             }
         }
 
+        return result.isEmpty ? nil : result
+    }
+
+    private func buildMapOfStringsSection(named sectionName: String) -> [String: String]? {
+        guard let sectionNode = sectionNode(named: sectionName) else { return nil }
+        var result: [String: String] = [:]
+        for child in sectionNode.orderedChildren {
+            let label = resume.keyLabels[child.name] ?? (child.value.isEmpty ? child.name : child.value)
+            result[child.name] = label
+        }
         return result.isEmpty ? nil : result
     }
 
@@ -188,6 +212,14 @@ private struct Implementation {
 
     private func sectionNode(named name: String) -> TreeNode? {
         rootNode.children?.first(where: { $0.name == name })
+    }
+
+    private func nodeValue(named sectionName: String) -> Any? {
+        guard let node = sectionNode(named: sectionName) else { return nil }
+        if node.orderedChildren.isEmpty {
+            return node.value.isEmpty ? nil : node.value
+        }
+        return buildNodeValue(node)
     }
 
     private func buildNodeValue(_ node: TreeNode) -> Any? {
