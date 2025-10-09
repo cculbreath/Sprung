@@ -60,11 +60,6 @@ class JobRecommendationService {
             }
         }
         
-        // Validate resume if we have one
-        if let resume = resume, resume.model == nil {
-            throw JobRecommendationError.noResumeAvailable
-        }
-        
         let newJobApps = jobApps.filter { $0.status == .new }
         guard !newJobApps.isEmpty else {
             throw JobRecommendationError.noNewJobApplications
@@ -119,12 +114,9 @@ class JobRecommendationService {
         
         for jobApp in jobApps {
             for resume in jobApp.resumes {
-                if let model = resume.model {
-                    let lastModified = model.dateCreated
-                    // Get priority score (lower is better)
-                    let priorityScore = statusPriority.firstIndex(of: jobApp.status) ?? Int.max
-                    candidateResumes.append((resume, lastModified, priorityScore))
-                }
+                let lastModified = resume.dateCreated
+                let priorityScore = statusPriority.firstIndex(of: jobApp.status) ?? Int.max
+                candidateResumes.append((resume, lastModified, priorityScore))
             }
         }
         
@@ -148,9 +140,14 @@ class JobRecommendationService {
     ) -> String {
         let resumeText: String
         if let resume = resume {
-            resumeText = resume.textRes.isEmpty ? 
-                resume.model?.renderedResumeText ?? "" : 
-                resume.textRes
+            if !resume.textRes.isEmpty {
+                resumeText = resume.textRes
+            } else if let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
+                      let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
+                resumeText = String(data: data, encoding: .utf8) ?? ""
+            } else {
+                resumeText = ""
+            }
         } else {
             resumeText = ""
         }

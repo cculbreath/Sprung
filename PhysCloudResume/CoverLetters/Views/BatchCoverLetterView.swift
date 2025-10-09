@@ -269,7 +269,7 @@ struct BatchCoverLetterView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if mode == .generate {
                         if let app = jobAppStore.selectedApp {
-                            Text("Selected Resume: \(app.selectedRes?.model?.name ?? "None")")
+                            Text("Selected Resume: \(app.selectedRes?.template?.name ?? app.selectedRes?.template?.slug.capitalized ?? "None")")
                         }
                         Text("Selected Models: \(selectedModels.count)")
                         Text("Selected Revisions: \(selectedRevisions.count)")
@@ -284,7 +284,7 @@ struct BatchCoverLetterView: View {
                         }
                     } else {
                         if let app = jobAppStore.selectedApp {
-                            Text("Selected Resume: \(app.selectedRes?.model?.name ?? "None")")
+                            Text("Selected Resume: \(app.selectedRes?.template?.name ?? app.selectedRes?.template?.slug.capitalized ?? "None")")
                         }
                         Text("Selected Letters: \(selectedLetters.count)")
                         Text("Selected Revisions: \(selectedRevisions.count)")

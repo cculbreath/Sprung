@@ -40,11 +40,11 @@ final class ResStore: SwiftDataStore {
     }
 
     @discardableResult
-    func create(jobApp: JobApp, sources: [ResRef], model: ResModel) -> Resume? {
+    func create(jobApp: JobApp, sources: [ResRef], template: Template) -> Resume? {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
 
-        let resume = Resume(jobApp: jobApp, enabledSources: sources, model: model)
+        let resume = Resume(jobApp: jobApp, enabledSources: sources)
 
         if jobApp.selectedRes == nil {
             jobApp.selectedRes = resume
@@ -55,17 +55,13 @@ final class ResStore: SwiftDataStore {
             jobApp.status = .inProgress
         }
 
-        guard let template = resolveTemplate(for: model) else {
-            Logger.error("ResStore.create: Unable to resolve template for style \(model.style)")
-            return nil
-        }
         resume.template = template
 
         let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: templateSeedStore)
         let applicantProfile = ApplicantProfileManager.shared.getProfile()
         guard let context = contextBuilder.buildContext(
             for: template,
-            fallbackJSON: model.json,
+            fallbackJSON: nil,
             applicantProfile: applicantProfile
         ) else {
             Logger.error("ResStore.create: Failed to build resume context dictionary for template \(template.slug)")
@@ -92,14 +88,6 @@ final class ResStore: SwiftDataStore {
         exportCoordinator.debounceExport(resume: resume)
 
         return resume
-    }
-
-    private func resolveTemplate(for model: ResModel) -> Template? {
-        let normalizedStyle = model.style.lowercased()
-        if let templateEntity = templateStore.template(slug: normalizedStyle) {
-            return templateEntity
-        }
-        return templateStore.template(slug: "archer")
     }
 
     private func buildTree(

@@ -113,7 +113,7 @@ class Resume: Identifiable, Hashable {
     init(
         jobApp: JobApp,
         enabledSources: [ResRef],
-        model: ResModel
+        model: ResModel? = nil
     ) {
         self.model = model
         self.jobApp = jobApp

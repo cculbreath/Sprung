@@ -54,7 +54,7 @@ struct TemplateEditorView: View {
     
     private var isEditingCurrentTemplate: Bool {
         guard let resume = selectedResume else { return false }
-        let resumeTemplate = resume.model?.templateName ?? resume.model?.style ?? "archer"
+        let resumeTemplate = resume.template?.slug ?? resume.template?.name ?? "archer"
         return selectedTemplate.lowercased() == resumeTemplate.lowercased() && selectedFormat == "pdf"
     }
     

@@ -46,7 +46,15 @@ import Foundation
         prompt = prompt.replacingOccurrences(of: "{coverLetterText}", with: coverText)
 
         // Resume text replacement
-        let resumeText = resume.textRes.isEmpty ? (resume.model?.renderedResumeText ?? "") : resume.textRes
+        let resumeText: String
+        if !resume.textRes.isEmpty {
+            resumeText = resume.textRes
+        } else if let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
+                  let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
+            resumeText = String(data: data, encoding: .utf8) ?? ""
+        } else {
+            resumeText = ""
+        }
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resumeText)
 
         // Background docs placeholder
