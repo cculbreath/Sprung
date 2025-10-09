@@ -63,13 +63,22 @@ final class ResStore: SwiftDataStore {
 
         let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: templateSeedStore)
         let applicantProfile = ApplicantProfileManager.shared.getProfile()
-        let seededJSON = contextBuilder.buildJSONString(
+        guard let context = contextBuilder.buildContext(
             for: template,
             fallbackJSON: model.json,
             applicantProfile: applicantProfile
-        ) ?? model.json
+        ) else {
+            Logger.error("ResStore.create: Failed to build resume context dictionary for template \(template.slug)")
+            return nil
+        }
 
-        guard let rootNode = buildTree(for: resume, jsonString: seededJSON) else {
+        let manifest = TemplateManifestLoader.manifest(for: template)
+
+        guard let rootNode = buildTree(
+            for: resume,
+            context: context,
+            manifest: manifest
+        ) else {
             Logger.error("ResStore.create: Failed to build resume tree for template \(template.slug)")
             return nil
         }
@@ -93,11 +102,20 @@ final class ResStore: SwiftDataStore {
         return templateStore.template(slug: "archer")
     }
 
-    private func buildTree(for resume: Resume, jsonString: String) -> TreeNode? {
-        guard let builder = JsonToTree(resume: resume, rawJson: jsonString) else {
+    private func buildTree(
+        for resume: Resume,
+        context: [String: Any],
+        manifest: TemplateManifest?
+    ) -> TreeNode? {
+        let builder = JsonToTree(
+            resume: resume,
+            context: context,
+            manifest: manifest
+        )
+        guard let root = builder.buildTree() else {
             return nil
         }
-        return builder.buildTree()
+        return root
     }
 
     @discardableResult
