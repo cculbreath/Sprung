@@ -36,30 +36,6 @@ struct ResumeTemplateContextBuilder {
         }
     }
 
-    @MainActor
-    func buildContext(
-        for template: Template,
-        fallbackJSON: String,
-        applicantProfile: ApplicantProfile
-    ) -> [String: Any]? {
-        let manifest = TemplateManifestLoader.manifest(for: template)
-        let fallback = Self.parseJSON(from: fallbackJSON)
-
-        let seedJSON = templateSeedStore.seed(for: template)?.jsonString ?? ""
-        let seed = Self.parseJSON(from: seedJSON)
-
-        var context = manifest?.makeDefaultContext() ?? [:]
-        merge(into: &context, with: fallback)
-        merge(into: &context, with: seed)
-        merge(into: &context, with: profileContext(from: applicantProfile))
-
-        // Ensure we carry over any additional keys not present in the manifest order
-        addMissingKeys(from: fallback, to: &context)
-        addMissingKeys(from: seed, to: &context)
-
-        return context
-    }
-
     // MARK: - Private helpers
 
     private func profileContext(from profile: ApplicantProfile) -> [String: Any] {

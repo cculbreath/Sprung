@@ -15,39 +15,83 @@ class JsonToTree {
     /// Supplies monotonically increasing indexes during this tree build.
     private var indexCounter: Int = 0
 
-    init?(resume: Resume, rawJson: String) {
+    private init(resume: Resume, orderedContext: OrderedDictionary<String, Any>) {
         res = resume
-        guard let orderedDictJson = JsonToTree.parseUnwrapJson(rawJson) else {
+        json = orderedContext
+        treeKeys = json.keys.filter { !JsonMap.specialKeys.contains($0) }
+    }
+
+    convenience init?(resume: Resume, rawJson: String, manifest: TemplateManifest? = nil) {
+        guard let orderedDictJson = JsonToTree.parseUnwrapJson(rawJson, manifest: manifest) else {
             return nil
         }
+        self.init(resume: resume, orderedContext: orderedDictJson)
+    }
 
-        json = orderedDictJson
-        treeKeys = json.keys.filter { !JsonMap.specialKeys.contains($0) }
+    convenience init(resume: Resume, context: [String: Any], manifest: TemplateManifest?) {
+        self.init(resume: resume, orderedContext: JsonToTree.makeOrderedContext(from: context, manifest: manifest))
     }
 
     private func isInEditor(_ key: String) -> Bool {
         return res.importedEditorKeys.contains(key)
     }
 
-    private static func parseUnwrapJson(_ rawJson: String) -> OrderedDictionary<String, Any>? {
+    private static func parseUnwrapJson(_ rawJson: String, manifest: TemplateManifest?) -> OrderedDictionary<String, Any>? {
         guard let data = rawJson.data(using: .utf8) else { return nil }
         do {
             let obj = try JSONSerialization.jsonObject(with: data, options: [])
             guard let dict = obj as? [String: Any] else { return nil }
 
-            // Build an OrderedDictionary using the preferred section order first,
-            // then append any extra keys in alphabetical order to keep determinism.
-            var ordered: OrderedDictionary<String, Any> = [:]
-            for key in JsonMap.sectionKeyToTypeDict.keys {
-                if let value = dict[key] { ordered[key] = value }
-            }
-            let extraKeys = dict.keys.filter { ordered[$0] == nil }.sorted()
-            for k in extraKeys { ordered[k] = dict[k] }
-            return ordered
+            return makeOrderedContext(from: dict, manifest: manifest)
         } catch {
             Logger.error("JsonToTree: Failed to parse model JSON: \(error)")
             return nil
         }
+    }
+
+    private static func makeOrderedContext(
+        from context: [String: Any],
+        manifest: TemplateManifest?
+    ) -> OrderedDictionary<String, Any> {
+        var ordered: OrderedDictionary<String, Any> = [:]
+        let preferredOrder = manifest?.sectionOrder ?? JsonMap.orderedSectionKeys
+
+        for key in preferredOrder {
+            if let value = context[key] {
+                ordered[key] = convertToOrderedStructure(value)
+            }
+        }
+
+        let extraKeys = context.keys.filter { ordered[$0] == nil }.sorted()
+        for key in extraKeys {
+            ordered[key] = convertToOrderedStructure(context[key] as Any)
+        }
+
+        return ordered
+    }
+
+    private static func convertToOrderedStructure(_ value: Any) -> Any {
+        if let orderedDict = value as? OrderedDictionary<String, Any> {
+            var result: OrderedDictionary<String, Any> = [:]
+            for (key, inner) in orderedDict {
+                result[key] = convertToOrderedStructure(inner)
+            }
+            return result
+        }
+
+        if let dict = value as? [String: Any] {
+            var ordered: OrderedDictionary<String, Any> = [:]
+            for (key, inner) in dict {
+                ordered[key] = convertToOrderedStructure(inner)
+            }
+            return ordered
+        }
+
+        if let array = value as? [Any] {
+            return array.map { convertToOrderedStructure($0) }
+        }
+
+        return value
     }
 
     func buildTree() -> TreeNode? {
@@ -100,13 +144,17 @@ class JsonToTree {
             return res.fontSizeNodes
         }
         res.needToFont = false
-        guard let fontArray = json[key] as? OrderedDictionary<String, Any>
-        else {
+        let orderedFonts: OrderedDictionary<String, Any>
+        if let fontArray = json[key] as? OrderedDictionary<String, Any> {
+            orderedFonts = fontArray
+        } else if let dict = json[key] as? [String: Any] {
+            orderedFonts = OrderedDictionary(uniqueKeysWithValues: dict.map { ($0.key, $0.value) })
+        } else {
             return []
         }
 
         var nodes: [FontSizeNode] = []
-        for (myKey, myValue) in fontArray {
+        for (myKey, myValue) in orderedFonts {
             let fontString = myValue as? String ?? ""
             let idx = indexCounter
             indexCounter += 1
@@ -165,15 +213,14 @@ class JsonToTree {
         )
 
         // 1) If the value is an OrderedDictionary<String, Any> (a single dictionary).
-        if let dict = json[key] as? OrderedDictionary<String, Any> {
+        if let dict = asOrderedDictionary(json[key]) {
             buildSubtree(from: dict, parent: sectionNode, inEditor: inEditor)
             return
         }
 
-        // 2) If the value is an array of OrderedDictionary<String, Any>.
-        if let arrayOfODicts = json[key] as? [OrderedDictionary<String, Any>] {
-            for (index, subDict) in arrayOfODicts.enumerated() {
-                let itemTitle = "\(subDict["journal"] ?? key) · \(subDict["year"] ?? String(index + 1))" // or pick a field from subDict if you prefer
+        if let arrayOfDicts = asOrderedArrayOfDictionaries(json[key]) {
+            for (index, subDict) in arrayOfDicts.enumerated() {
+                let itemTitle = "\(subDict["journal"] ?? key) · \(subDict["year"] ?? String(index + 1))"
                 let itemNode = sectionNode.addChild(
                     TreeNode(name: itemTitle, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                 )
@@ -187,14 +234,30 @@ class JsonToTree {
 
     private func buildSubtree(from dict: OrderedDictionary<String, Any>, parent: TreeNode, inEditor: Bool) {
         for (subKey, subValue) in dict {
-            if let subDict = subValue as? OrderedDictionary<String, Any> {
+            if let subDict = asOrderedDictionary(subValue) {
                 let childNode = parent.addChild(
                     TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                 )
-                buildSubtree(from: subDict, parent: childNode, inEditor: inEditor) // 🔥 Recursive helper function call
+                buildSubtree(from: subDict, parent: childNode, inEditor: inEditor)
             } else if let subArray = subValue as? [String] {
                 let arrayTitleNode = parent.addChild(TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res))
                 treeNodesStringArray(strings: subArray, parent: arrayTitleNode, inEditor: inEditor)
+            } else if let nestedArray = subValue as? [Any] {
+                let arrayTitleNode = parent.addChild(
+                    TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                )
+                for element in nestedArray {
+                    if let stringElement = element as? String {
+                        arrayTitleNode.addChild(
+                            TreeNode(name: "", value: stringElement, inEditor: inEditor, status: .saved, resume: res)
+                        )
+                    } else if let nestedDict = asOrderedDictionary(element) {
+                        let childNode = arrayTitleNode.addChild(
+                            TreeNode(name: "", value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                        )
+                        buildSubtree(from: nestedDict, parent: childNode, inEditor: inEditor)
+                    }
+                }
             } else if let subString = subValue as? String {
                 parent.addChild(
                     TreeNode(
@@ -209,7 +272,7 @@ class JsonToTree {
     }
 
     private func treeTwoKeyObjectsSection(key: String, parent: TreeNode, keyOne: String, keyTwo: String) {
-        guard let sectionArray = json[key] as? [OrderedDictionary<String, Any>] else {
+        guard let sectionArray = asOrderedArrayOfDictionaries(json[key]) else {
             return
         }
 
@@ -239,7 +302,7 @@ class JsonToTree {
     }
 
     private func treeStringObjectSection(key: String, parent: TreeNode) {
-        if let sectionDict = json[key] as? OrderedDictionary<String, Any> {
+        if let sectionDict = asOrderedDictionary(json[key]) {
             let sectionNode = parent.addChild(
                 TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
             for (key, myValue) in sectionDict {
@@ -247,8 +310,54 @@ class JsonToTree {
                     return
                 }
                 sectionNode.addChild(
-                    TreeNode(name: key, value: valueString, inEditor: isInEditor(key), status: .saved, resume: res))
+                TreeNode(name: key, value: valueString, inEditor: isInEditor(key), status: .saved, resume: res))
             }
         } else {}
+    }
+
+    private func asOrderedDictionary(_ value: Any?) -> OrderedDictionary<String, Any>? {
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return ordered
+        }
+        if let dict = value as? [String: Any] {
+            var ordered: OrderedDictionary<String, Any> = [:]
+            for (key, inner) in dict {
+                ordered[key] = JsonToTree.convertToOrderedStructure(inner)
+            }
+            return ordered
+        }
+        return nil
+    }
+
+    private func asOrderedArrayOfDictionaries(_ value: Any?) -> [OrderedDictionary<String, Any>]? {
+        if let ordered = value as? [OrderedDictionary<String, Any>] {
+            return ordered
+        }
+        if let array = value as? [[String: Any]] {
+            return array.map { dict in
+                var ordered: OrderedDictionary<String, Any> = [:]
+                for (key, inner) in dict {
+                    ordered[key] = JsonToTree.convertToOrderedStructure(inner)
+                }
+                return ordered
+            }
+        }
+        if let array = value as? [Any] {
+            return array.compactMap { element -> OrderedDictionary<String, Any>? in
+                if let dict = element as? [String: Any] {
+                    return asOrderedDictionary(dict)
+                }
+                return element as? OrderedDictionary<String, Any>
+            }
+        }
+        return nil
+    }
+
+    private func asOrderedDictionary(_ dict: [String: Any]) -> OrderedDictionary<String, Any> {
+        var ordered: OrderedDictionary<String, Any> = [:]
+        for (key, value) in dict {
+            ordered[key] = JsonToTree.convertToOrderedStructure(value)
+        }
+        return ordered
     }
 }
