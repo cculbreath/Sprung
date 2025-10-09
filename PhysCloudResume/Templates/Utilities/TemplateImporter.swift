@@ -27,6 +27,18 @@ enum TemplateImporter {
             bundleTemplatesURL = Bundle.main.resourceURL?.appendingPathComponent("Templates", isDirectory: true)
         }
 
+        private func upgradedManifestData(for slug: String, data: Data) -> Data? {
+            guard let manifest = TemplateManifestLoader.decode(from: data, slug: slug) else {
+                return nil
+            }
+            do {
+                return try manifest.upgradingSchemaVersionIfNeeded().encode()
+            } catch {
+                Logger.error("TemplateImporter: Failed to upgrade manifest for slug \(slug): \(error)")
+                return nil
+            }
+        }
+
         func importBundleTemplates() {
             guard let templatesURL = bundleTemplatesURL else {
                 return
@@ -72,13 +84,25 @@ enum TemplateImporter {
                 return
             }
 
+            let manifestData: Data?
+            if let manifestURL {
+                if let rawData = try? Data(contentsOf: manifestURL),
+                   let upgraded = upgradedManifestData(for: normalizedSlug, data: rawData) {
+                    manifestData = upgraded
+                } else {
+                    manifestData = try? Data(contentsOf: manifestURL)
+                }
+            } else {
+                manifestData = nil
+            }
+
             let template = Template(
                 name: normalizedSlug.capitalized,
                 slug: normalizedSlug,
                 htmlContent: htmlURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) },
                 textContent: textURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) },
                 cssContent: cssURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) },
-                manifestData: manifestURL.flatMap { try? Data(contentsOf: $0) },
+                manifestData: manifestData,
                 isCustom: isCustom
             )
 
@@ -130,12 +154,26 @@ enum TemplateImporter {
             .appendingPathComponent("Templates", isDirectory: true)
 
         var didUpdate = false
-        for template in templates where template.manifestData == nil {
-            if let data = manifestData(for: template.slug, bundleBaseURL: importer.bundleTemplatesURL, documentsBaseURL: documents) {
-                template.manifestData = data
+        for template in templates {
+            let slug = template.slug
+            if let currentData = template.manifestData,
+               let upgraded = importer.upgradedManifestData(for: slug, data: currentData),
+               upgraded != currentData {
+                template.manifestData = upgraded
                 didUpdate = true
-            } else {
-                Logger.warning("TemplateImporter: No manifest found for template slug \(template.slug)")
+                continue
+            }
+
+            if template.manifestData == nil,
+               let data = manifestData(for: slug, bundleBaseURL: importer.bundleTemplatesURL, documentsBaseURL: documents) {
+                if let upgraded = importer.upgradedManifestData(for: slug, data: data) {
+                    template.manifestData = upgraded
+                } else {
+                    template.manifestData = data
+                }
+                didUpdate = true
+            } else if template.manifestData == nil {
+                Logger.warning("TemplateImporter: No manifest found for template slug \(slug)")
             }
         }
 

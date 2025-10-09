@@ -1,5 +1,6 @@
 {
   "slug": "archer",
+  "schemaVersion": 2,
   "sectionOrder": [
     "meta",
     "font-sizes",
@@ -24,7 +25,21 @@
       "default": {
         "format": "FRESH@0.6.0",
         "version": "0.1.0"
-      }
+      },
+      "fields": [
+        {
+          "key": "format",
+          "title": "Format",
+          "input": "text",
+          "required": true
+        },
+        {
+          "key": "version",
+          "title": "Version",
+          "input": "text",
+          "required": true
+        }
+      ]
     },
     "font-sizes": {
       "type": "fontSizes",
@@ -44,11 +59,99 @@
         "employment-highlights": "9pt",
         "projects": "9.5pt",
         "website-box": "11pt"
-      }
+      },
+      "fields": [
+        {
+          "key": "name",
+          "title": "Name",
+          "input": "text"
+        },
+        {
+          "key": "job-titles",
+          "title": "Job Titles",
+          "input": "text"
+        },
+        {
+          "key": "objective",
+          "title": "Objective",
+          "input": "text"
+        },
+        {
+          "key": "box-titles",
+          "title": "Box Titles",
+          "input": "text"
+        },
+        {
+          "key": "skill-names",
+          "title": "Skill Names",
+          "input": "text"
+        },
+        {
+          "key": "skill-descriptions",
+          "title": "Skill Descriptions",
+          "input": "text"
+        },
+        {
+          "key": "degree-names",
+          "title": "Degree Names",
+          "input": "text"
+        },
+        {
+          "key": "graduation-date",
+          "title": "Graduation Date",
+          "input": "text"
+        },
+        {
+          "key": "schools",
+          "title": "Schools",
+          "input": "text"
+        },
+        {
+          "key": "section-title",
+          "title": "Section Title",
+          "input": "text"
+        },
+        {
+          "key": "employment-dates",
+          "title": "Employment Dates",
+          "input": "text"
+        },
+        {
+          "key": "employer-name",
+          "title": "Employer Name",
+          "input": "text"
+        },
+        {
+          "key": "employment-highlights",
+          "title": "Employment Highlights",
+          "input": "text"
+        },
+        {
+          "key": "projects",
+          "title": "Projects",
+          "input": "text"
+        },
+        {
+          "key": "website-box",
+          "title": "Website Box",
+          "input": "text",
+          "validation": {
+            "rule": "url",
+            "message": "Enter a valid URL"
+          }
+        }
+      ]
     },
     "include-fonts": {
       "type": "string",
-      "default": "true"
+      "default": "true",
+      "fields": [
+        {
+          "key": "include-fonts",
+          "title": "Include Fonts",
+          "input": "text"
+        }
+      ]
     },
     "section-labels": {
       "type": "mapOfStrings",
@@ -64,7 +167,64 @@
         "projects-highlights": "Projects",
         "job-titles": "Job Titles",
         "section-labels": "Section Labels"
-      }
+      },
+      "fields": [
+        {
+          "key": "languages",
+          "title": "Languages",
+          "input": "text"
+        },
+        {
+          "key": "hobbies",
+          "title": "Hobbies",
+          "input": "text"
+        },
+        {
+          "key": "skills-and-expertise",
+          "title": "Skills And Expertise",
+          "input": "text"
+        },
+        {
+          "key": "publications",
+          "title": "Publications",
+          "input": "text"
+        },
+        {
+          "key": "more-info",
+          "title": "More Info",
+          "input": "text"
+        },
+        {
+          "key": "summary",
+          "title": "Summary",
+          "input": "text"
+        },
+        {
+          "key": "education",
+          "title": "Education",
+          "input": "text"
+        },
+        {
+          "key": "employment",
+          "title": "Employment",
+          "input": "text"
+        },
+        {
+          "key": "projects-highlights",
+          "title": "Projects Highlights",
+          "input": "text"
+        },
+        {
+          "key": "job-titles",
+          "title": "Job Titles",
+          "input": "text"
+        },
+        {
+          "key": "section-labels",
+          "title": "Section Labels",
+          "input": "text"
+        }
+      ]
     },
     "contact": {
       "type": "object",
@@ -80,11 +240,92 @@
           "state": "Texas",
           "city": "Austin"
         }
-      }
+      },
+      "fields": [
+        {
+          "key": "phone",
+          "title": "Phone",
+          "input": "text",
+          "required": true,
+          "validation": {
+            "rule": "phone",
+            "message": "Enter a valid phone number"
+          }
+        },
+        {
+          "key": "name",
+          "title": "Name",
+          "input": "text",
+          "required": true
+        },
+        {
+          "key": "email",
+          "title": "Email",
+          "input": "text",
+          "required": true,
+          "validation": {
+            "rule": "email",
+            "message": "Enter a valid email address"
+          }
+        },
+        {
+          "key": "website",
+          "title": "Website",
+          "input": "text",
+          "required": true,
+          "validation": {
+            "rule": "url",
+            "message": "Enter a valid URL"
+          }
+        },
+        {
+          "key": "location",
+          "title": "Location",
+          "children": [
+            {
+              "key": "country",
+              "title": "Country",
+              "input": "text"
+            },
+            {
+              "key": "address",
+              "title": "Address",
+              "input": "text"
+            },
+            {
+              "key": "code",
+              "title": "Code",
+              "input": "text"
+            },
+            {
+              "key": "state",
+              "title": "State",
+              "input": "text"
+            },
+            {
+              "key": "city",
+              "title": "City",
+              "input": "text"
+            }
+          ]
+        }
+      ]
     },
     "summary": {
       "type": "string",
-      "default": "Experienced Engineer with a PhD in Chemical Physics, offering a unique combination of expertise in materials science, electrical engineering, and electromechanical systems. Proficient in integrating electronics with mechanical systems, fostering innovation and tackling complex engineering challenges through first-principles thinking. Seeking to collaborate with talented colleagues on projects that advance robotics technology and exceed expectations."
+      "default": "Experienced Engineer with a PhD in Chemical Physics, offering a unique combination of expertise in materials science, electrical engineering, and electromechanical systems. Proficient in integrating electronics with mechanical systems, fostering innovation and tackling complex engineering challenges through first-principles thinking. Seeking to collaborate with talented colleagues on projects that advance robotics technology and exceed expectations.",
+      "fields": [
+        {
+          "key": "summary",
+          "title": "Summary",
+          "input": "textarea",
+          "validation": {
+            "rule": "minLength",
+            "min": 120,
+            "message": "Provide additional detail (at least 120 characters)"
+          }
+        }
+      ]
     },
     "job-titles": {
       "type": "array",
@@ -93,6 +334,14 @@
         "Educator",
         "Programmer",
         "Machinist"
+      ],
+      "fields": [
+        {
+          "key": "*",
+          "title": "Job Title",
+          "repeatable": true,
+          "input": "text"
+        }
       ]
     },
     "employment": {
@@ -135,7 +384,44 @@
           "location": "San Luis Obispo, CA",
           "end": "2024-06"
         }
-      }
+      },
+      "fields": [
+        {
+          "key": "*",
+          "title": "Employment",
+          "repeatable": true,
+          "children": [
+            {
+              "key": "start",
+              "title": "Start",
+              "input": "text"
+            },
+            {
+              "key": "end",
+              "title": "End",
+              "input": "text"
+            },
+            {
+              "key": "position",
+              "title": "Position",
+              "input": "text",
+              "required": true
+            },
+            {
+              "key": "location",
+              "title": "Location",
+              "input": "text"
+            },
+            {
+              "key": "highlights",
+              "title": "Highlights",
+              "repeatable": true,
+              "input": "text"
+            }
+          ],
+          "titleTemplate": "{{position}} \u00b7 {{employer}}"
+        }
+      ]
     },
     "education": {
       "type": "objectOfObjects",
@@ -150,7 +436,38 @@
           "title": "BS Physics",
           "url": "https://calpoly.edu"
         }
-      }
+      },
+      "fields": [
+        {
+          "key": "*",
+          "title": "Education",
+          "repeatable": true,
+          "children": [
+            {
+              "key": "end",
+              "title": "End",
+              "input": "text"
+            },
+            {
+              "key": "title",
+              "title": "Title",
+              "input": "text",
+              "required": true
+            },
+            {
+              "key": "url",
+              "title": "Url",
+              "input": "text",
+              "required": true,
+              "validation": {
+                "rule": "url",
+                "message": "Enter a valid URL"
+              }
+            }
+          ],
+          "titleTemplate": "{{degree}} \u00b7 {{school}}"
+        }
+      ]
     },
     "skills-and-expertise": {
       "type": "arrayOfObjects",
@@ -183,6 +500,26 @@
           "title": "Data Analysis",
           "description": "MATLAB, Mathematica, Python, LabVIEW, signal processing, time-series & statistical analysis, dynamic system modeling"
         }
+      ],
+      "fields": [
+        {
+          "key": "*",
+          "title": "Skills And Expertise",
+          "repeatable": true,
+          "children": [
+            {
+              "key": "title",
+              "title": "Title",
+              "input": "text",
+              "required": true
+            },
+            {
+              "key": "description",
+              "title": "Description",
+              "input": "text"
+            }
+          ]
+        }
       ]
     },
     "languages": {
@@ -205,6 +542,14 @@
         "Mathematica",
         "LaTeX",
         "Bootstrap"
+      ],
+      "fields": [
+        {
+          "key": "*",
+          "title": "Language",
+          "repeatable": true,
+          "input": "text"
+        }
       ]
     },
     "projects-highlights": {
@@ -223,19 +568,48 @@
           "description": "Created a mobile-friendly chore and allowance management app with an intuitive user interface."
         },
         {
-          "name": "Physics Cloud Résumé",
+          "name": "Physics Cloud R\u00e9sum\u00e9",
           "description": "A macOS app (SwiftUI) for job tracking, featuring AI-assisted per-application customization."
+        }
+      ],
+      "fields": [
+        {
+          "key": "*",
+          "title": "Projects Highlight",
+          "repeatable": true,
+          "children": [
+            {
+              "key": "name",
+              "title": "Name",
+              "input": "text",
+              "required": true
+            },
+            {
+              "key": "description",
+              "title": "Description",
+              "input": "text"
+            }
+          ],
+          "titleTemplate": "{{title}}"
         }
       ]
     },
     "projects-and-hobbies": {
       "type": "arrayOfObjects",
-      "default": []
+      "default": [],
+      "fields": [
+        {
+          "key": "*",
+          "title": "Projects And Hobbie",
+          "repeatable": true,
+          "titleTemplate": "{{title}}"
+        }
+      ]
     },
     "publications": {
       "type": "objectOfObjects",
       "default": {
-        "Phys. Rev. X · 2024": {
+        "Phys. Rev. X \u00b7 2024": {
           "month": "Mar",
           "title": "Frank-Read Mechanism in Nematic Liquid Crystals",
           "type": "article",
@@ -257,7 +631,7 @@
             "Robin L. B. Selinger"
           ]
         },
-        "Molecular Crystals and Liquid Crystals · 2017": {
+        "Molecular Crystals and Liquid Crystals \u00b7 2017": {
           "year": "2017",
           "journal": "Molecular Crystals and Liquid Crystals",
           "issue": "1",
@@ -275,13 +649,13 @@
           "title": "Breaking planar liquid crystal anchoring to form controllable twist disclination loops",
           "type": "article"
         },
-        "Applied Physics Express · 2015": {
+        "Applied Physics Express \u00b7 2015": {
           "title": "Switchable liquid-crystal phase-shift mask for super-resolution photolithography based on Pancharatnam-Berry phase",
           "volume": "8",
           "journal": "Applied Physics Express",
           "issue": "11",
           "year": "2015",
-          "url": "https://ui.adsabs.harvard.edu/abs/2015APExp…8k6501G",
+          "url": "https://ui.adsabs.harvard.edu/abs/2015APExp\u20268k6501G",
           "type": "article",
           "adsnote": "Provided by the SAO/NASA Astrophysics Data System",
           "month": "Nov",
@@ -294,7 +668,7 @@
             "Hiroshi Yokoyama"
           ]
         },
-        "Kent State University · 2015": {
+        "Kent State University \u00b7 2015": {
           "type": "dissertation",
           "title": "Artificial Microscopic Structures in Nematic Liquid Crystals Created by Patterned Photoalignment and Controlled Confinement: Instrumentation, Fabrication, and Characterization",
           "journal": "Kent State University",
@@ -303,10 +677,10 @@
           ],
           "year": "2015"
         },
-        "Review of Scientific Instruments · 2011": {
+        "Review of Scientific Instruments \u00b7 2011": {
           "pages": "126107",
           "year": "2011",
-          "abstract": "We present a fully automated maskless exposure system for the fabrication of microscopic orientational surface alignment patterns. The maskless system allows us to fabricate arbitrary surface patterns over a 2 mm × 2 mm area with a resolution of 2.2 μm. A confocal autofocus system ensures accurate and repeatable focus. Microscopic orientational surface patterns have been demonstrated to exhibit a variety of novel functionalities, such as surface alignment multi-stability.",
+          "abstract": "We present a fully automated maskless exposure system for the fabrication of microscopic orientational surface alignment patterns. The maskless system allows us to fabricate arbitrary surface patterns over a 2 mm \u00d7 2 mm area with a resolution of 2.2 \u03bcm. A confocal autofocus system ensures accurate and repeatable focus. Microscopic orientational surface patterns have been demonstrated to exhibit a variety of novel functionalities, such as surface alignment multi-stability.",
           "authors": [
             "Christopher Culbreath",
             "Nikolaus Glazar",
@@ -323,7 +697,84 @@
           "issn": "0034-6748",
           "url": "https://doi.org/10.1063/1.3669528"
         }
-      }
+      },
+      "fields": [
+        {
+          "key": "*",
+          "title": "Publication",
+          "repeatable": true,
+          "children": [
+            {
+              "key": "month",
+              "title": "Month",
+              "input": "text"
+            },
+            {
+              "key": "title",
+              "title": "Title",
+              "input": "text",
+              "required": true
+            },
+            {
+              "key": "type",
+              "title": "Type",
+              "input": "text"
+            },
+            {
+              "key": "publisher",
+              "title": "Publisher",
+              "input": "text"
+            },
+            {
+              "key": "doi",
+              "title": "Doi",
+              "input": "text"
+            },
+            {
+              "key": "issue",
+              "title": "Issue",
+              "input": "text"
+            },
+            {
+              "key": "pages",
+              "title": "Pages",
+              "input": "text"
+            },
+            {
+              "key": "journal",
+              "title": "Journal",
+              "input": "text"
+            },
+            {
+              "key": "year",
+              "title": "Year",
+              "input": "text"
+            },
+            {
+              "key": "url",
+              "title": "Url",
+              "input": "text",
+              "required": true,
+              "validation": {
+                "rule": "url",
+                "message": "Enter a valid URL"
+              }
+            },
+            {
+              "key": "volume",
+              "title": "Volume",
+              "input": "text"
+            },
+            {
+              "key": "authors",
+              "title": "Authors",
+              "repeatable": true,
+              "input": "text"
+            }
+          ],
+          "titleTemplate": "{{title}}"
+        }
+      ]
     },
     "keys-in-editor": {
       "type": "array",
@@ -338,11 +789,31 @@
         "job-titles",
         "more-info",
         "contact"
+      ],
+      "fields": [
+        {
+          "key": "*",
+          "title": "Keys In Editor",
+          "repeatable": true,
+          "input": "text"
+        }
       ]
     },
     "more-info": {
       "type": "string",
-      "default": "For Project photos, Research Papers, and more, <a href=\"https://culbreath.net\" style=\"font-weight: bold; color: black; text-decoration: none;\">visit culbreath.net↪︎</a>"
+      "default": "For Project photos, Research Papers, and more, <a href=\"https://culbreath.net\" style=\"font-weight: bold; color: black; text-decoration: none;\">visit culbreath.net\u21aa\ufe0e</a>",
+      "fields": [
+        {
+          "key": "more-info",
+          "title": "More Info",
+          "input": "textarea",
+          "validation": {
+            "rule": "minLength",
+            "min": 120,
+            "message": "Provide additional detail (at least 120 characters)"
+          }
+        }
+      ]
     }
   }
 }
