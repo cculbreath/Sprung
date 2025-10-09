@@ -59,21 +59,9 @@ enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
     // MARK: - Migration Stages
     
     /// Single-step migration that brings the legacy store forward to include template seeds
-    static let migrateLegacyToCurrent = MigrationStage.custom(
+    static let migrateLegacyToCurrent = MigrationStage.lightweight(
         fromVersion: SchemaLegacy.self,
-        toVersion: SchemaCurrent.self,
-        willMigrate: { context in
-            Logger.debug("🔄 Starting migration to template-seed-aware schema...")
-        },
-        didMigrate: { context in
-            do {
-                cleanupTemporaryFixes(context: context)
-                let seeds = try context.fetch(FetchDescriptor<TemplateSeed>())
-                Logger.debug("✅ TemplateSeed table ready with \(seeds.count) records")
-            } catch {
-                Logger.warning("⚠️ Could not verify TemplateSeed table: \(error)")
-            }
-        }
+        toVersion: SchemaCurrent.self
     )
     
     /// Removes any temporary objects that were created by DatabaseMigrationHelper
