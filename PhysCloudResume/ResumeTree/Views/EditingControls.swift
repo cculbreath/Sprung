@@ -13,6 +13,7 @@ struct EditingControls: View {
     @Binding var tempValue: String
     @State var isHoveringSave: Bool = false
     @State var isHoveringCancel: Bool = false
+    var allowNameEditing: Bool = true
 
     var saveChanges: () -> Void
     var cancelChanges: () -> Void
@@ -29,7 +30,7 @@ struct EditingControls: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
-                if !tempValue.isEmpty && !tempName.isEmpty {
+                if allowNameEditing {
                     VStack {
                         TextField("Name", text: $tempName)
                         TextEditor(text: $tempValue)

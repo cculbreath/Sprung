@@ -21,7 +21,7 @@ enum JsonMap {
         "font-sizes": .fontSizes,
         "keys-in-editor": .array,
         "job-titles": .array,
-        "section-labels": .object,
+        "section-labels": .mapOfStrings,
         "contact": .complex,
         "summary": .string,
         "employment": .complex,

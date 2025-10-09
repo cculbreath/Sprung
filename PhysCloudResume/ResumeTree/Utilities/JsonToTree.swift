@@ -11,25 +11,30 @@ import OrderedCollections
 class JsonToTree {
     private let res: Resume
     var json: OrderedDictionary<String, Any>
-    private var treeKeys: [String] = []
+    private let manifest: TemplateManifest?
+    private static let specialKeys: Set<String> = ["font-sizes", "include-fonts"]
     /// Supplies monotonically increasing indexes during this tree build.
     private var indexCounter: Int = 0
 
-    private init(resume: Resume, orderedContext: OrderedDictionary<String, Any>) {
+    private init(resume: Resume, orderedContext: OrderedDictionary<String, Any>, manifest: TemplateManifest?) {
         res = resume
         json = orderedContext
-        treeKeys = json.keys.filter { !JsonMap.specialKeys.contains($0) }
+        self.manifest = manifest
     }
 
     convenience init?(resume: Resume, rawJson: String, manifest: TemplateManifest? = nil) {
         guard let orderedDictJson = JsonToTree.parseUnwrapJson(rawJson, manifest: manifest) else {
             return nil
         }
-        self.init(resume: resume, orderedContext: orderedDictJson)
+        self.init(resume: resume, orderedContext: orderedDictJson, manifest: manifest)
     }
 
     convenience init(resume: Resume, context: [String: Any], manifest: TemplateManifest?) {
-        self.init(resume: resume, orderedContext: JsonToTree.makeOrderedContext(from: context, manifest: manifest))
+        self.init(
+            resume: resume,
+            orderedContext: JsonToTree.makeOrderedContext(from: context, manifest: manifest),
+            manifest: manifest
+        )
     }
 
     private func isInEditor(_ key: String) -> Bool {
@@ -103,14 +108,27 @@ class JsonToTree {
         }
         res.needToTree = false
         parseSpecialKeys()
-        for key in treeKeys {
-            if let sectionType = JsonMap.sectionKeyToTypeDict[key] {
-                let function = treeFunction(for: sectionType)
-                function(key, rootNode)
-            } else {}
+        var processed: Set<String> = []
+        let orderedKeys = manifest?.sectionOrder ?? JsonMap.orderedSectionKeys
+
+        for key in orderedKeys {
+            guard json[key] != nil else { continue }
+            processSectionIfNeeded(named: key, rootNode: rootNode)
+            processed.insert(key)
+        }
+
+        // Include any remaining keys that were not part of the manifest order
+        for key in json.keys where !processed.contains(key) {
+            processSectionIfNeeded(named: key, rootNode: rootNode)
         }
         processKeyLabels()
         return rootNode
+    }
+
+    private func processSectionIfNeeded(named key: String, rootNode: TreeNode) {
+        guard JsonToTree.specialKeys.contains(key) == false else { return }
+        guard let handler = treeFunction(for: key) else { return }
+        handler(key, rootNode)
     }
 
     private func parseInclude(key: String) -> Bool {
@@ -175,12 +193,60 @@ class JsonToTree {
             return treeComplexSection
         case .string:
             return treeStringSection
+        case .mapOfStrings:
+            return treeMapOfStringsSection
         case let .twoKeyObjectArray(keyOne, keyTwo):
             return { sectionName, parent in
                 self.treeTwoKeyObjectsSection(key: sectionName, parent: parent, keyOne: keyOne, keyTwo: keyTwo)
             }
         case .fontSizes:
             return { _, _ in }
+        }
+    }
+
+    private func treeFunction(for key: String) -> ((String, TreeNode) -> Void)? {
+        guard let sectionType = sectionType(for: key) else { return nil }
+        return treeFunction(for: sectionType)
+    }
+
+    private func sectionType(for key: String) -> SectionType? {
+        if let manifestKind = manifest?.section(for: key)?.type,
+           let mapped = SectionType(manifestKind: manifestKind, key: key) {
+            return mapped
+        }
+        return JsonMap.sectionKeyToTypeDict[key] ?? inferredSectionType(for: key)
+    }
+
+    private func inferredSectionType(for key: String) -> SectionType? {
+        guard let value = json[key] else { return nil }
+        switch value {
+        case is String:
+            return .string
+        case is [String]:
+            return .array
+        case let dict as [String: Any]:
+            if dict.values.allSatisfy({ $0 is String }) {
+                return .mapOfStrings
+            }
+            if dict.values.allSatisfy({ $0 is [String: Any] }) {
+                return .complex
+            }
+            return .object
+        case let ordered as OrderedDictionary<String, Any>:
+            if ordered.values.allSatisfy({ $0 is String }) {
+                return .mapOfStrings
+            }
+            if ordered.values.allSatisfy({ $0 is OrderedDictionary<String, Any> }) {
+                return .complex
+            }
+            return .object
+        case let array as [Any]:
+            if array.allSatisfy({ $0 is [String: Any] || $0 is OrderedDictionary<String, Any> }) {
+                return .complex
+            }
+            return .array
+        default:
+            return nil
         }
     }
 
@@ -313,6 +379,28 @@ class JsonToTree {
                 TreeNode(name: key, value: valueString, inEditor: isInEditor(key), status: .saved, resume: res))
             }
         } else {}
+    }
+
+    private func treeMapOfStringsSection(key: String, parent: TreeNode) {
+        guard let sectionDict = asOrderedDictionary(json[key]) else { return }
+        let inEditor = isInEditor(key)
+        let sectionNode = parent.addChild(
+            TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+        )
+
+        for (entryKey, entryValue) in sectionDict {
+            guard let label = entryValue as? String else { continue }
+            res.keyLabels[entryKey] = label
+            sectionNode.addChild(
+                TreeNode(
+                    name: entryKey,
+                    value: label,
+                    inEditor: inEditor,
+                    status: .saved,
+                    resume: res
+                )
+            )
+        }
     }
 
     private func asOrderedDictionary(_ value: Any?) -> OrderedDictionary<String, Any>? {

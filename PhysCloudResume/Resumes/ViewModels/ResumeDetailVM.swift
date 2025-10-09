@@ -103,8 +103,13 @@ final class ResumeDetailVM {
     func saveEdits() {
         guard let id = editingNodeID, let node = resume.nodes.first(where: { $0.id == id }) else { return }
 
-        node.name = tempName
-        node.value = tempValue
+        if node.parent?.name == "section-labels" {
+            resume.keyLabels[node.name] = tempValue
+            node.value = tempValue
+        } else {
+            node.name = tempName
+            node.value = tempValue
+        }
 
         editingNodeID = nil
 
