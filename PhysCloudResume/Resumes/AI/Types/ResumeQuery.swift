@@ -147,14 +147,18 @@ import SwiftUI
     }
 
     var resumeText: String {
-        if res.textRes == "" {
-            Logger.debug("⚠️BLANK TEXT RES⚠️")
-            return res.model?.renderedResumeText ?? ""
-        } else { return res.textRes }
+        res.textRes
     }
 
     var resumeJson: String {
-        return res.model?.json ?? "{}"
+        do {
+            let context = try ResumeTemplateDataBuilder.buildContext(from: res)
+            let data = try JSONSerialization.data(withJSONObject: context, options: [])
+            return String(data: data, encoding: .utf8) ?? "{}"
+        } catch {
+            Logger.warning("ResumeQuery.resumeJson: Failed to build context: \(error)")
+            return "{}"
+        }
     }
 
     var jobListing: String {

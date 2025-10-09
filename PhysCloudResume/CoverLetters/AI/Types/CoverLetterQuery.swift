@@ -193,12 +193,15 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     }
     
     var resumeText: String {
-        if resume.textRes.isEmpty {
-            Logger.debug("⚠️BLANK TEXT RES⚠️")
-            return resume.model?.renderedResumeText ?? ""
-        } else {
+        if !resume.textRes.isEmpty {
             return resume.textRes
         }
+        Logger.debug("⚠️BLANK TEXT RES⚠️")
+        if let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
+           let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
+            return String(data: data, encoding: .utf8) ?? ""
+        }
+        return ""
     }
     
     var backgroundDocs: String {

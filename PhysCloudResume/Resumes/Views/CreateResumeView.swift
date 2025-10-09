@@ -12,17 +12,18 @@ import Foundation
 
 // Helper view for creating a resume
 struct CreateResumeView: View {
-    @Environment(ResModelStore.self) private var resModelStore: ResModelStore
+    @Environment(TemplateStore.self) private var templateStore: TemplateStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     
     var jobApp: JobApp
-    var onCreateResume: (ResModel, [ResRef]) -> Void
+    var onCreateResume: (Template, [ResRef]) -> Void
     
-    @State private var selectedModelId: UUID?
+    @State private var selectedTemplateID: UUID?
     
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
+        let templates = templateStore.templates()
         VStack(alignment: .leading, spacing: 20) {
             Text("Create Resume")
                 .font(.title)
@@ -35,10 +36,10 @@ struct CreateResumeView: View {
                     .font(.headline)
                     
                 HStack {
-                    Picker("Select Template", selection: $selectedModelId) {
+                    Picker("Select Template", selection: $selectedTemplateID) {
                         Text("Select a template").tag(nil as UUID?)
-                        ForEach(resModelStore.resModels) { model in
-                            Text(model.name).tag(model.id as UUID?)
+                        ForEach(templates) { template in
+                            Text(template.name).tag(template.id as UUID?)
                         }
                     }
                     .frame(minWidth: 200)
@@ -53,12 +54,12 @@ struct CreateResumeView: View {
                     .help("Add new resume template")
                 }
                 
-                if let selectedModelId = selectedModelId, 
-                   let selectedModel = resModelStore.resModels.first(where: { $0.id == selectedModelId }) {
+                if let templateID = selectedTemplateID,
+                   let selectedTemplate = templates.first(where: { $0.id == templateID }) {
                     HStack {
                         Text("Style:")
                             .fontWeight(.semibold)
-                        Text(selectedModel.style)
+                        Text(selectedTemplate.name)
                             .foregroundColor(.gray)
                     }
                 }
@@ -77,11 +78,12 @@ struct CreateResumeView: View {
                 Spacer()
                 
                 Button(action: {
-                    if let selectedModelId = selectedModelId,
-                       let selectedModel = resModelStore.resModels.first(where: { $0.id == selectedModelId }) {
-                        // Pass all sources since they're global and used for AI operations
-                        onCreateResume(selectedModel, resRefStore.resRefs)
+                    if let templateID = selectedTemplateID,
+                       let selectedTemplate = templates.first(where: { $0.id == templateID }) {
+                        onCreateResume(selectedTemplate, resRefStore.resRefs)
                         dismiss()
+                    } else {
+                        // No template selected; allow user to try again
                     }
                 }) {
                     HStack {
@@ -92,15 +94,15 @@ struct CreateResumeView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(selectedModelId == nil)
+                .disabled(selectedTemplateID == nil)
             }
         }
         .padding()
         .frame(minWidth: 500, minHeight: 300)
         .onAppear {
             // Default model selection
-            if selectedModelId == nil, let firstModel = resModelStore.resModels.first {
-                selectedModelId = firstModel.id
+            if selectedTemplateID == nil, let firstTemplate = templates.first {
+                selectedTemplateID = firstTemplate.id
             }
         }
     }

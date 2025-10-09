@@ -10,13 +10,13 @@ import SwiftUI
 
 struct CreateNewResumeView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(ResModelStore.self) private var resModelStore: ResModelStore
+    @Environment(TemplateStore.self) private var templateStore: TemplateStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     @Environment(ResStore.self) private var resStore: ResStore
     @Binding var refresh: Bool
 
     // State variables
-    @State private var selectedJsonModel: ResModel? = nil
+    @State private var selectedTemplateID: UUID?
     @State private var showErrorMessage = false
     @State private var errorMessage = ""
 
@@ -29,29 +29,34 @@ struct CreateNewResumeView: View {
                     .padding(.top)
 
                 // Standard SwiftUI Picker - going back to basics
-                Picker("Select Template", selection: $selectedJsonModel) {
-                    Text("Select a template").tag(nil as ResModel?)
-                    ForEach(resModelStore.resModels) { model in
-                        Text(model.name).tag(model as ResModel?)
+                let templates = templateStore.templates()
+                Picker("Select Template", selection: $selectedTemplateID) {
+                    Text("Select a template").tag(nil as UUID?)
+                    ForEach(templates) { template in
+                        Text(template.name).tag(template.id as UUID?)
                     }
                 }
                 .pickerStyle(.menu)
                 .padding()
 
                 // Display selected model info
-                if let selectedModel = selectedJsonModel {
-                    Text("Selected: \(selectedModel.style)")
+                if let template = templates.first(where: { $0.id == selectedTemplateID }) {
+                    Text("Selected: \(template.name)")
                         .font(.subheadline)
                         .foregroundColor(.gray)
-                } else {
+                } else if !templates.isEmpty {
                     Text("No template selected")
                         .font(.subheadline)
                         .foregroundColor(.red)
+                } else {
+                    Text("No templates available")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
                 }
 
                 // Standard SwiftUI Button - using the original approach
                 Button(action: {
-                    createResume(with: selApp)
+                    createResume(with: selApp, templates: templates)
                 }) {
                     Text("Create Résumé")
                         .fontWeight(.semibold)
@@ -75,8 +80,9 @@ struct CreateNewResumeView: View {
             .padding()
             .onAppear {
                 // Set default selection
-                if selectedJsonModel == nil, let firstModel = resModelStore.resModels.first {
-                    selectedJsonModel = firstModel
+                let templates = templateStore.templates()
+                if selectedTemplateID == nil, let first = templates.first {
+                    selectedTemplateID = first.id
                 }
             }
         } else {
@@ -87,18 +93,19 @@ struct CreateNewResumeView: View {
     }
 
     // Separate function to handle resume creation
-    private func createResume(with jobApp: JobApp) {
-        guard let selectedModel = selectedJsonModel else {
+    private func createResume(with jobApp: JobApp, templates: [Template]) {
+        guard let templateID = selectedTemplateID,
+              let template = templates.first(where: { $0.id == templateID }) else {
             errorMessage = "Please select a template first"
             showErrorMessage = true
             return
         }
 
-        if let newResume = resStore.create(
+        if resStore.create(
             jobApp: jobApp,
             sources: resRefStore.defaultSources,
-            model: selectedModel
-        ) {
+            template: template
+        ) != nil {
             // Update UI
             refresh.toggle()
 
@@ -106,6 +113,7 @@ struct CreateNewResumeView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 refresh.toggle()
             }
+            showErrorMessage = false
         } else {
             errorMessage = "Failed to create resume"
             showErrorMessage = true

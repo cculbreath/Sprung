@@ -36,18 +36,19 @@ class ResumeExportService: ObservableObject {
     }
     
     private func exportNatively(jsonURL: URL, for resume: Resume) async throws {
-        let template = resume.template?.slug ?? resume.model?.templateName ?? resume.model?.style ?? "archer"
+        let fallbackSlug = resume.model?.templateName ?? resume.model?.style ?? "archer"
         if resume.template == nil,
-           let entity = templateStore.template(slug: template.lowercased()) {
+           let entity = templateStore.template(slug: fallbackSlug.lowercased()) {
             resume.template = entity
         }
+        let templateSlug = resume.template?.slug ?? fallbackSlug
         
         // Generate PDF from HTML template (custom or bundled)
         let pdfData: Data
         if let customHTML = resume.model?.customTemplateHTML {
             pdfData = try await nativeGenerator.generatePDFFromCustomTemplate(for: resume, customHTML: customHTML)
         } else {
-            pdfData = try await nativeGenerator.generatePDF(for: resume, template: template, format: "html")
+            pdfData = try await nativeGenerator.generatePDF(for: resume, template: templateSlug, format: "html")
         }
         resume.pdfData = pdfData
         
@@ -56,7 +57,7 @@ class ResumeExportService: ObservableObject {
         if let customText = resume.model?.customTemplateText {
             textContent = try textGenerator.generateTextFromCustomTemplate(for: resume, customText: customText)
         } else {
-            textContent = try textGenerator.generateTextResume(for: resume, template: template)
+            textContent = try textGenerator.generateTextResume(for: resume, template: templateSlug)
         }
         resume.textRes = textContent
     }

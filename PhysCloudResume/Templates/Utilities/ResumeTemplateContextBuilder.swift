@@ -14,11 +14,7 @@ struct ResumeTemplateContextBuilder {
         fallbackJSON: String,
         applicantProfile: ApplicantProfile
     ) -> String? {
-        guard let context = buildContext(
-            for: template,
-            fallbackJSON: fallbackJSON,
-            applicantProfile: applicantProfile
-        ) else {
+        guard let context = buildContext(for: template, fallbackJSON: fallbackJSON, applicantProfile: applicantProfile) else {
             return nil
         }
 
@@ -34,6 +30,28 @@ struct ResumeTemplateContextBuilder {
             Logger.warning("ResumeTemplateContextBuilder: Failed to encode context: \(error)")
             return nil
         }
+    }
+
+    @MainActor
+    func buildContext(
+        for template: Template,
+        fallbackJSON: String?,
+        applicantProfile: ApplicantProfile
+    ) -> [String: Any]? {
+        let manifest = TemplateManifestLoader.manifest(for: template)
+        let fallback = fallbackJSON.flatMap { Self.parseJSON(from: $0) } ?? [:]
+        let seedJSON = templateSeedStore.seed(for: template)?.jsonString ?? ""
+        let seed = Self.parseJSON(from: seedJSON)
+
+        var context = manifest?.makeDefaultContext() ?? [:]
+        merge(into: &context, with: fallback)
+        merge(into: &context, with: seed)
+        merge(into: &context, with: profileContext(from: applicantProfile))
+
+        addMissingKeys(from: fallback, to: &context)
+        addMissingKeys(from: seed, to: &context)
+
+        return context
     }
 
     // MARK: - Private helpers

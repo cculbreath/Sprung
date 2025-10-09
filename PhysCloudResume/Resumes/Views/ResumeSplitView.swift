@@ -78,11 +78,11 @@ struct ResumeSplitView: View {
                     // Basic resume creation sheet
                     CreateResumeView(
                         jobApp: selApp,
-                        onCreateResume: { model, sources in
+                        onCreateResume: { template, sources in
                             if resStore.create(
                                 jobApp: selApp,
                                 sources: sources,
-                                model: model
+                                template: template
                             ) != nil {
                                 // Force refresh of the view
                                 refresh.toggle()
