@@ -27,7 +27,7 @@ enum TemplateImporter {
             bundleTemplatesURL = Bundle.main.resourceURL?.appendingPathComponent("Templates", isDirectory: true)
         }
 
-        private func upgradedManifestData(for slug: String, data: Data) -> Data? {
+        func upgradedManifestData(for slug: String, data: Data) -> Data? {
             guard let manifest = TemplateManifestLoader.decode(from: data, slug: slug) else {
                 return nil
             }
