@@ -43,7 +43,6 @@ struct ContentViewLaunch: View {
             .environment(deps.debugSettingsStore)
             .environment(deps.jobAppStore)
             .environment(deps.resRefStore)
-            .environment(deps.resModelStore)
             .environment(deps.resStore)
             .environment(deps.coverRefStore)
             .environment(deps.coverLetterStore)

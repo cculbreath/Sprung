@@ -11,6 +11,19 @@ import AppKit
 import PDFKit
 import Combine
 
+private enum TemplateEditorTab: String, CaseIterable, Identifiable {
+    case assets = "Assets"
+    case manifest = "Manifest"
+    case seed = "Seed"
+
+    var id: String { rawValue }
+}
+
+private enum PendingTemplateChange {
+    case template
+    case format
+}
+
 struct TemplateEditorView: View {
     @Query private var resumes: [Resume]
     @Environment(AppState.self) private var appState
@@ -18,14 +31,22 @@ struct TemplateEditorView: View {
     
     @State private var selectedTemplate: String = "archer"
     @State private var selectedFormat: String = "pdf"
+    @State private var selectedTab: TemplateEditorTab = .assets
     @State private var templateContent: String = ""
-    @State private var hasChanges: Bool = false
+    @State private var assetHasChanges: Bool = false
     @State private var showingSaveAlert: Bool = false
     @State private var saveError: String?
     @State private var isGeneratingPreview: Bool = false
     @State private var showingAddTemplate: Bool = false
     @State private var showingDeleteConfirmation: Bool = false
     @State private var newTemplateName: String = ""
+    @State private var manifestContent: String = ""
+    @State private var manifestHasChanges: Bool = false
+    @State private var manifestValidationMessage: String?
+    @State private var seedContent: String = ""
+    @State private var seedHasChanges: Bool = false
+    @State private var seedValidationMessage: String?
+    @State private var pendingTemplateChange: PendingTemplateChange?
     
     // Live preview state
     @State private var previewPDFData: Data?
@@ -57,7 +78,44 @@ struct TemplateEditorView: View {
         let resumeTemplate = resume.template?.slug ?? resume.template?.name ?? "archer"
         return selectedTemplate.lowercased() == resumeTemplate.lowercased() && selectedFormat == "pdf"
     }
-    
+
+    private var currentHasChanges: Bool {
+        switch selectedTab {
+        case .assets:
+            return assetHasChanges
+        case .manifest:
+            return manifestHasChanges
+        case .seed:
+            return seedHasChanges
+        }
+    }
+
+    private var hasAnyUnsavedChanges: Bool {
+        assetHasChanges || manifestHasChanges || seedHasChanges
+    }
+
+    private var unsavedTabNames: String {
+        var names: [String] = []
+        if assetHasChanges { names.append(TemplateEditorTab.assets.rawValue) }
+        if manifestHasChanges { names.append(TemplateEditorTab.manifest.rawValue) }
+        if seedHasChanges { names.append(TemplateEditorTab.seed.rawValue) }
+        return names.joined(separator: ", ")
+    }
+
+    private var pendingChangeDescription: String {
+        switch pendingTemplateChange {
+        case .format:
+            return "changing formats"
+        default:
+            return "switching templates"
+        }
+    }
+
+    private var unsavedChangesAlertMessage: String {
+        let tabs = unsavedTabNames.isEmpty ? "current editor" : unsavedTabNames
+        return "Unsaved changes detected in \(tabs). Save them before \(pendingChangeDescription)?"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
@@ -94,156 +152,82 @@ struct TemplateEditorView: View {
                 }
                 .pickerStyle(MenuPickerStyle())
                 .frame(width: 120)
-                
+
+                Picker("Editor:", selection: $selectedTab) {
+                    ForEach(TemplateEditorTab.allCases) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .frame(width: 260)
+
                 Spacer()
-                
-                // Revert button
+
                 Button("Revert") {
-                    loadTemplate()
-                    hasChanges = false
+                    revertCurrentTab()
                 }
-                .disabled(!hasChanges)
-                
-                // Save button
+                .disabled(!currentHasChanges)
+
                 Button("Save & Close") {
-                    saveTemplate()
-                    closeEditor()
+                    if saveCurrentTab(closeAfter: true) {
+                        closeEditor()
+                    }
                 }
-                .disabled(!hasChanges)
-                
-                // Cancel button
+                .disabled(!currentHasChanges)
+
                 Button("Cancel") {
                     closeEditor()
                 }
-                
-                // Preview button
-                Button("Preview PDF") {
-                    previewPDF()
+
+                if selectedTab == .assets {
+                    Button("Preview PDF") {
+                        previewPDF()
+                    }
+                    .disabled(selectedFormat != "pdf" || isGeneratingPreview || !hasSelectedResume)
+                    .help(!hasSelectedResume ? "No resume selected in main window" : "Generate and preview a PDF using the current template")
                 }
-                .disabled(selectedFormat != "pdf" || isGeneratingPreview || !hasSelectedResume)
-                .help(!hasSelectedResume ? "No resume selected in main window" : "Generate and preview a PDF using the current template")
             }
             .padding()
             .background(Color(NSColor.windowBackgroundColor))
             
             Divider()
-            
-            // Main content area with split view
-            HSplitView {
-                // Template editor with find functionality
-                TemplateTextEditor(text: $templateContent) {
-                    hasChanges = true
-                    if selectedFormat == "pdf" {
-                        scheduleLivePreviewUpdate()
-                    }
-                }
-                .frame(minWidth: 400)
-                
-                // PDF Preview
-                VStack(spacing: 0) {
-                    // Preview controls toolbar
-                    HStack {
-                        Text("Preview")
-                            .font(.headline)
-                        
-                        if isEditingCurrentTemplate {
-                            Text("(Live)")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                        } else {
-                            Text("(Current Resume)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        // Overlay controls
-                        Toggle("Overlay", isOn: $showOverlay)
-                            .disabled(overlayPDFData == nil)
-                        
-                        if showOverlay && overlayPDFData != nil {
-                            Slider(value: $overlayOpacity, in: 0...1) {
-                                Text("Opacity")
-                            }
-                            .frame(width: 100)
-                        }
-                        
-                        Button("Select Overlay PDF") {
-                            showingOverlayPicker = true
-                        }
-                        .buttonStyle(.bordered)
-                        
-                        if isGeneratingLivePreview {
-                            ProgressView()
-                                .scaleEffect(0.5)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    
-                    Divider()
-                    
-                    // PDF viewer
-                    if selectedFormat == "pdf" {
-                        if let pdfData = previewPDFData {
-                            PDFPreviewView(
-                                pdfData: pdfData,
-                                overlayPDFData: showOverlay ? overlayPDFData : nil,
-                                overlayOpacity: overlayOpacity
-                            )
-                        } else {
-                            VStack {
-                                Text("PDF preview will appear here")
-                                    .foregroundColor(.secondary)
-                                if !hasSelectedResume {
-                                    Text("Select a resume in the main window to enable preview")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                } else {
-                                    Text("Export the resume in the main window to see PDF")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                    } else {
-                        Text("PDF preview only available for HTML templates")
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-                .frame(minWidth: 400)
-            }
+            editorContent()
         }
         .frame(minWidth: 800, minHeight: 600)
         .onAppear {
             loadAvailableTemplates()
             loadTemplate()
+            loadManifest()
+            loadSeed()
+            manifestHasChanges = false
+            seedHasChanges = false
             if selectedFormat == "pdf" {
                 generateInitialPreview()
             }
         }
-        .onChange(of: selectedTemplate) {
-            if hasChanges {
+        .onChange(of: selectedTemplate) { _ in
+            if hasAnyUnsavedChanges {
+                pendingTemplateChange = .template
                 showingSaveAlert = true
             } else {
-                loadTemplate()
-                if selectedFormat == "pdf" {
-                    generateInitialPreview()
-                }
+                pendingTemplateChange = .template
+                applyPendingTemplateChange()
             }
         }
-        .onChange(of: selectedFormat) {
-            if hasChanges {
+        .onChange(of: selectedFormat) { _ in
+            if assetHasChanges {
+                pendingTemplateChange = .format
                 showingSaveAlert = true
             } else {
-                loadTemplate()
-                if selectedFormat == "pdf" {
-                    generateInitialPreview()
-                }
+                pendingTemplateChange = .format
+                applyPendingTemplateChange()
+            }
+        }
+        .onChange(of: selectedTab) { newTab in
+            if newTab == .manifest && manifestContent.isEmpty {
+                loadManifest()
+            } else if newTab == .seed && seedContent.isEmpty {
+                loadSeed()
             }
         }
         .onChange(of: selectedResume?.id) {
@@ -254,19 +238,19 @@ struct TemplateEditorView: View {
         }
         .alert("Unsaved Changes", isPresented: $showingSaveAlert) {
             Button("Save") {
-                saveTemplate()
-                loadTemplate()
+                if savePendingChanges() {
+                    applyPendingTemplateChange()
+                }
             }
             Button("Don't Save") {
-                hasChanges = false
-                loadTemplate()
+                discardPendingChanges()
+                applyPendingTemplateChange()
             }
             Button("Cancel", role: .cancel) {
-                // Revert the selection
-                // This is a bit tricky with SwiftUI, so we'll just leave it
+                pendingTemplateChange = nil
             }
         } message: {
-            Text("You have unsaved changes. Do you want to save them before switching templates?")
+            Text(unsavedChangesAlertMessage)
         }
         .alert("Save Error", isPresented: .constant(saveError != nil)) {
             Button("OK") {
@@ -310,6 +294,251 @@ struct TemplateEditorView: View {
         }
     }
     
+    @ViewBuilder
+    private func editorContent() -> some View {
+        switch selectedTab {
+        case .assets:
+            assetsEditor()
+        case .manifest:
+            manifestEditor()
+        case .seed:
+            seedEditor()
+        }
+    }
+
+    @ViewBuilder
+    private func assetsEditor() -> some View {
+        HSplitView {
+            TemplateTextEditor(text: $templateContent) {
+                assetHasChanges = true
+                if selectedFormat == "pdf" && selectedTab == .assets {
+                    scheduleLivePreviewUpdate()
+                }
+            }
+            .frame(minWidth: 400)
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Preview")
+                        .font(.headline)
+
+                    if isEditingCurrentTemplate {
+                        Text("(Live)")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    } else {
+                        Text("(Current Resume)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("Overlay", isOn: $showOverlay)
+                        .disabled(overlayPDFData == nil)
+
+                    if showOverlay && overlayPDFData != nil {
+                        Slider(value: $overlayOpacity, in: 0...1) {
+                            Text("Opacity")
+                        }
+                        .frame(width: 100)
+                    }
+
+                    Button("Select Overlay PDF") {
+                        showingOverlayPicker = true
+                    }
+                    .buttonStyle(.bordered)
+
+                    if isGeneratingLivePreview {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor))
+
+                Divider()
+
+                if selectedFormat == "pdf" {
+                    if let pdfData = previewPDFData {
+                        PDFPreviewView(
+                            pdfData: pdfData,
+                            overlayPDFData: showOverlay ? overlayPDFData : nil,
+                            overlayOpacity: overlayOpacity
+                        )
+                    } else {
+                        VStack {
+                            Text("PDF preview will appear here")
+                                .foregroundColor(.secondary)
+                            if !hasSelectedResume {
+                                Text("Select a resume in the main window to enable preview")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("Export the resume in the main window to see PDF")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                } else {
+                    Text("PDF preview only available for HTML templates")
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .frame(minWidth: 400)
+        }
+    }
+
+    @ViewBuilder
+    private func manifestEditor() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Button("Validate") {
+                    validateManifest()
+                }
+                Button("Save") {
+                    saveManifest()
+                }
+                .disabled(!manifestHasChanges)
+                Button("Reload") {
+                    loadManifest()
+                }
+                Spacer()
+                if let message = manifestValidationMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding([.top, .horizontal])
+
+            TemplateTextEditor(text: $manifestContent) {
+                manifestHasChanges = true
+                manifestValidationMessage = nil
+            }
+            .frame(minWidth: 600, minHeight: 400)
+        }
+    }
+
+    @ViewBuilder
+    private func seedEditor() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Button("Promote Current Resume") {
+                    promoteCurrentResumeToSeed()
+                }
+                .disabled(selectedResume == nil)
+                Button("Save") {
+                    saveSeed()
+                }
+                .disabled(!seedHasChanges)
+                Button("Reload") {
+                    loadSeed()
+                }
+                Spacer()
+                if let message = seedValidationMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding([.top, .horizontal])
+
+            TemplateTextEditor(text: $seedContent) {
+                seedHasChanges = true
+                seedValidationMessage = nil
+            }
+            .frame(minWidth: 600, minHeight: 400)
+        }
+    }
+
+    private func revertCurrentTab() {
+        switch selectedTab {
+        case .assets:
+            loadTemplate()
+        case .manifest:
+            loadManifest()
+        case .seed:
+            loadSeed()
+        }
+    }
+
+    @discardableResult
+    private func saveCurrentTab(closeAfter: Bool = false) -> Bool {
+        let success: Bool
+        switch selectedTab {
+        case .assets:
+            success = saveTemplate()
+        case .manifest:
+            success = saveManifest()
+        case .seed:
+            success = saveSeed()
+        }
+        if success && closeAfter {
+            return true
+        }
+        return success
+    }
+
+    @discardableResult
+    private func savePendingChanges() -> Bool {
+        var success = true
+        if assetHasChanges {
+            success = saveTemplate() && success
+        }
+        if manifestHasChanges {
+            success = saveManifest() && success
+        }
+        if seedHasChanges {
+            success = saveSeed() && success
+        }
+        return success
+    }
+
+    private func discardPendingChanges() {
+        assetHasChanges = false
+        manifestHasChanges = false
+        seedHasChanges = false
+        manifestValidationMessage = nil
+        seedValidationMessage = nil
+    }
+
+    private func applyPendingTemplateChange() {
+        switch pendingTemplateChange {
+        case .format:
+            reloadForFormatChange()
+        case .template:
+            reloadForTemplateChange()
+        case .none:
+            reloadForTemplateChange()
+        }
+        pendingTemplateChange = nil
+    }
+
+    private func reloadForTemplateChange() {
+        loadTemplate()
+        loadManifest()
+        loadSeed()
+        if selectedFormat == "pdf" {
+            generateInitialPreview()
+        } else {
+            previewPDFData = nil
+        }
+    }
+
+    private func reloadForFormatChange() {
+        loadTemplate()
+        if selectedFormat == "pdf" {
+            generateInitialPreview()
+        } else {
+            previewPDFData = nil
+        }
+    }
+
     private func loadTemplate() {
         let resourceName = "\(selectedTemplate)-template"
         let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
@@ -318,12 +547,12 @@ struct TemplateEditorView: View {
         let storedSlug = selectedTemplate.lowercased()
         if fileExtension == "html", let stored = appEnvironment.templateStore.htmlTemplateContent(slug: storedSlug) {
             templateContent = stored
-            hasChanges = false
+            assetHasChanges = false
             return
         }
         if fileExtension == "txt", let stored = appEnvironment.templateStore.textTemplateContent(slug: storedSlug) {
             templateContent = stored
-            hasChanges = false
+            assetHasChanges = false
             return
         }
 
@@ -336,7 +565,7 @@ struct TemplateEditorView: View {
                 .appendingPathComponent("\(resourceName).\(fileExtension)")
             if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
                 templateContent = content
-                hasChanges = false
+                assetHasChanges = false
                 return
             }
         }
@@ -387,30 +616,241 @@ struct TemplateEditorView: View {
         if let path = bundlePath,
            let content = try? String(contentsOfFile: path, encoding: .utf8) {
             templateContent = content
-            hasChanges = false
+            assetHasChanges = false
         } else if let embeddedContent = BundledTemplates.getTemplate(name: selectedTemplate, format: fileExtension) {
             templateContent = embeddedContent
-            hasChanges = false
+            assetHasChanges = false
         } else {
             templateContent = "// Template not found: \(resourceName).\(fileExtension)\n// Bundle path: \(Bundle.main.bundlePath)\n// Resource path: \(Bundle.main.resourcePath ?? "nil")"
-            hasChanges = false
+            assetHasChanges = false
         }
     }
-    
-    private func saveTemplate() {
+
+    private func loadManifest() {
+        manifestValidationMessage = nil
+        let slug = selectedTemplate.lowercased()
+
+        if let template = appEnvironment.templateStore.template(slug: slug),
+           let data = template.manifestData,
+           let formatted = prettyJSONString(from: data) {
+            manifestContent = formatted
+            manifestHasChanges = false
+            return
+        }
+
+        if let documentsContent = manifestStringFromDocuments(slug: slug) {
+            manifestContent = documentsContent
+            manifestHasChanges = false
+            return
+        }
+
+        if let bundleContent = manifestStringFromBundle(slug: slug) {
+            manifestContent = bundleContent
+            manifestHasChanges = false
+            return
+        }
+
+        manifestContent = """
+{
+  \"slug\": \"\(slug)\",
+  \"sectionOrder\": [],
+  \"sections\": {}
+}
+"""
+        manifestHasChanges = false
+    }
+
+    @discardableResult
+    private func saveManifest() -> Bool {
+        manifestValidationMessage = nil
+        let slug = selectedTemplate.lowercased()
+
+        guard let rawData = manifestContent.data(using: .utf8) else {
+            manifestValidationMessage = "Unable to encode manifest text."
+            return false
+        }
+
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: rawData)
+            guard let formatted = prettyJSONString(from: jsonObject),
+                  let data = formatted.data(using: .utf8) else {
+                manifestValidationMessage = "Manifest must be a valid JSON object."
+                return false
+            }
+
+            // Decode to ensure it matches expected manifest structure
+            _ = try JSONDecoder().decode(TemplateManifest.self, from: data)
+
+            try appEnvironment.templateStore.updateManifest(slug: slug, manifestData: data)
+            manifestContent = formatted
+            manifestHasChanges = false
+            manifestValidationMessage = "Manifest saved."
+            return true
+        } catch {
+            manifestValidationMessage = "Manifest validation failed: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func validateManifest() {
+        manifestValidationMessage = nil
+        guard let data = manifestContent.data(using: .utf8) else {
+            manifestValidationMessage = "Unable to encode manifest text."
+            return
+        }
+
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: data)
+            guard let formatted = prettyJSONString(from: jsonObject),
+                  let normalized = formatted.data(using: .utf8) else {
+                manifestValidationMessage = "Manifest must be a valid JSON object."
+                return
+            }
+            _ = try JSONDecoder().decode(TemplateManifest.self, from: normalized)
+            manifestContent = formatted
+            manifestValidationMessage = "Manifest is valid."
+        } catch {
+            manifestValidationMessage = "Validation failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func loadSeed() {
+        seedValidationMessage = nil
+        let slug = selectedTemplate.lowercased()
+
+        if let template = appEnvironment.templateStore.template(slug: slug),
+           let seed = appEnvironment.templateSeedStore.seed(for: template),
+           let formatted = prettyJSONString(from: seed.seedData) {
+            seedContent = formatted
+            seedHasChanges = false
+            return
+        }
+
+        seedContent = "{}"
+        seedHasChanges = false
+    }
+
+    @discardableResult
+    private func saveSeed() -> Bool {
+        seedValidationMessage = nil
+        let slug = selectedTemplate.lowercased()
+
+        guard let template = appEnvironment.templateStore.template(slug: slug) else {
+            seedValidationMessage = "Template not found."
+            return false
+        }
+
+        guard let data = seedContent.data(using: .utf8) else {
+            seedValidationMessage = "Unable to encode seed JSON."
+            return false
+        }
+
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: data)
+            guard let formatted = prettyJSONString(from: jsonObject) else {
+                seedValidationMessage = "Seed must be valid JSON."
+                return false
+            }
+
+            appEnvironment.templateSeedStore.upsertSeed(
+                slug: slug,
+                jsonString: formatted,
+                attachTo: template
+            )
+            seedContent = formatted
+            seedHasChanges = false
+            seedValidationMessage = "Seed saved."
+            return true
+        } catch {
+            seedValidationMessage = "Seed validation failed: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func promoteCurrentResumeToSeed() {
+        seedValidationMessage = nil
+        guard let resume = selectedResume else { return }
+
+        do {
+            let context = try ResumeTemplateDataBuilder.buildContext(from: resume)
+            guard let formatted = prettyJSONString(from: context) else {
+                seedValidationMessage = "Unable to serialize resume context."
+                return
+            }
+            seedContent = formatted
+            seedHasChanges = true
+            seedValidationMessage = "Seed staged from selected resume."
+        } catch {
+            seedValidationMessage = "Failed to build context: \(error.localizedDescription)"
+        }
+    }
+
+    private func manifestStringFromDocuments(slug: String) -> String? {
+        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let manifestURL = documentsPath
+            .appendingPathComponent("PhysCloudResume")
+            .appendingPathComponent("Templates")
+            .appendingPathComponent(slug)
+            .appendingPathComponent("\(slug)-manifest.json")
+        return try? String(contentsOf: manifestURL, encoding: .utf8)
+    }
+
+    private func manifestStringFromBundle(slug: String) -> String? {
+        let resourceName = "\(slug)-manifest"
+        let candidates: [URL?] = [
+            Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "json",
+                subdirectory: "Resources/Templates/\(slug)"
+            ),
+            Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "json",
+                subdirectory: "Templates/\(slug)"
+            ),
+            Bundle.main.url(forResource: resourceName, withExtension: "json")
+        ]
+
+        for candidate in candidates {
+            if let url = candidate, let content = try? String(contentsOf: url, encoding: .utf8) {
+                return content
+            }
+        }
+        return nil
+    }
+
+    private func prettyJSONString(from data: Data) -> String? {
+        guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
+            return nil
+        }
+        return prettyJSONString(from: jsonObject)
+    }
+
+    private func prettyJSONString(from object: Any) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    private func saveTemplate() -> Bool {
         let resourceName = "\(selectedTemplate)-template"
         let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
-        
+
         // Save to Documents directory
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             saveError = "Unable to locate Documents directory."
-            return
+            return false
         }
         let templateDir = documentsPath
             .appendingPathComponent("PhysCloudResume")
             .appendingPathComponent("Templates")
             .appendingPathComponent(selectedTemplate)
-        
+
         do {
             // Create directory if needed
             try FileManager.default.createDirectory(at: templateDir, withIntermediateDirectories: true)
@@ -438,28 +878,30 @@ struct TemplateEditorView: View {
                 )
             }
             
-            hasChanges = false
+            assetHasChanges = false
+            return true
         } catch {
             saveError = "Failed to save template: \(error.localizedDescription)"
+            return false
         }
     }
     
     @MainActor
     private func previewPDF() {
-        guard let resume = selectedResume else { return }
-        
+        guard selectedTab == .assets, let resume = selectedResume else { return }
+
         // Auto-save if there are changes
-        if hasChanges {
-            saveTemplate()
+        if assetHasChanges {
+            _ = saveTemplate()
         }
-        
+
         isGeneratingPreview = true
         
         Task {
             do {
                 let pdfData: Data
                 
-                if isEditingCurrentTemplate && hasChanges {
+                if isEditingCurrentTemplate && assetHasChanges {
                     // User is editing the template that the resume uses, so preview with custom content
                     let generator = NativePDFGenerator(templateStore: appEnvironment.templateStore)
                     pdfData = try await generator.generatePDFFromCustomTemplate(
@@ -491,29 +933,17 @@ struct TemplateEditorView: View {
     // MARK: - Template Management
     
     private func loadAvailableTemplates() {
-        availableTemplates = availableStylesString
-            .components(separatedBy: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        
-        // Ensure defaults are present
-        let defaults = ["archer", "typewriter"]
-        for defaultTemplate in defaults {
-            if !availableTemplates.contains(defaultTemplate) {
-                availableTemplates.append(defaultTemplate)
-            }
+        let templates = appEnvironment.templateStore.templates()
+        if templates.isEmpty {
+            availableTemplates = ["archer", "typewriter"]
+        } else {
+            availableTemplates = templates.map { $0.slug }.sorted()
         }
-        
-        // If no templates, add defaults
-        if availableTemplates.isEmpty {
-            availableTemplates = defaults
-        }
-        
-        // Ensure selected template is valid
+
         if !availableTemplates.contains(selectedTemplate) {
             selectedTemplate = availableTemplates.first ?? "archer"
         }
-        
+
         saveAvailableTemplates()
     }
     
@@ -524,24 +954,26 @@ struct TemplateEditorView: View {
             return
         }
         
-        availableTemplates.append(trimmedName)
-        saveAvailableTemplates()
-        selectedTemplate = trimmedName
-        newTemplateName = ""
-        
-        // Create initial empty template content
         let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
-        templateContent = createEmptyTemplate(name: trimmedName, format: fileExtension)
-        hasChanges = true
+        let initialContent = createEmptyTemplate(name: trimmedName, format: fileExtension)
         appEnvironment.templateStore.upsertTemplate(
             slug: trimmedName,
             name: trimmedName.capitalized,
-            htmlContent: fileExtension == "html" ? templateContent : nil,
-            textContent: fileExtension == "txt" ? templateContent : nil,
+            htmlContent: fileExtension == "html" ? initialContent : nil,
+            textContent: fileExtension == "txt" ? initialContent : nil,
             isCustom: true
         )
+
+        loadAvailableTemplates()
+        selectedTemplate = trimmedName
+        newTemplateName = ""
+
+        templateContent = initialContent
+        assetHasChanges = true
+        loadManifest()
+        loadSeed()
     }
-    
+
     private func deleteCurrentTemplate() {
         guard availableTemplates.count > 1 else { return }
         
@@ -558,12 +990,18 @@ struct TemplateEditorView: View {
         // Remove from available templates
         availableTemplates.removeAll { $0 == selectedTemplate }
         saveAvailableTemplates()
-        
+
+        appEnvironment.templateStore.deleteTemplate(slug: selectedTemplate.lowercased())
+        appEnvironment.templateSeedStore.deleteSeed(forSlug: selectedTemplate.lowercased())
+
         // Switch to first available template
         selectedTemplate = availableTemplates.first ?? "archer"
         loadTemplate()
+        loadManifest()
+        loadSeed()
+        loadAvailableTemplates()
     }
-    
+
     private func saveAvailableTemplates() {
         availableStylesString = availableTemplates.joined(separator: ", ")
     }
@@ -641,6 +1079,7 @@ struct TemplateEditorView: View {
     // MARK: - Live Preview Methods
     
     private func scheduleLivePreviewUpdate() {
+        guard selectedTab == .assets else { return }
         // Cancel existing timer
         debounceTimer?.invalidate()
         
@@ -654,17 +1093,18 @@ struct TemplateEditorView: View {
     
     @MainActor
     private func generateInitialPreview() {
+        guard selectedTab == .assets else { return }
         Task {
             await generateLivePreview()
         }
     }
-    
+
     @MainActor
     private func generateLivePreview() async {
-        guard let resume = selectedResume else { return }
-        
+        guard selectedTab == .assets, let resume = selectedResume else { return }
+
         // If we're not editing the current template, just show the existing PDF
-        if !isEditingCurrentTemplate || !hasChanges {
+        if !isEditingCurrentTemplate || !assetHasChanges {
             previewPDFData = resume.pdfData
             return
         }
@@ -673,8 +1113,8 @@ struct TemplateEditorView: View {
         isGeneratingLivePreview = true
         
         // Auto-save template changes and use normal export flow
-        if hasChanges {
-            saveTemplate()
+        if assetHasChanges {
+            _ = saveTemplate()
         }
         
         do {

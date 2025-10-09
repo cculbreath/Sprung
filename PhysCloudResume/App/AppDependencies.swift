@@ -20,7 +20,6 @@ final class AppDependencies {
     let coverRefStore: CoverRefStore
     let coverLetterStore: CoverLetterStore
     let jobAppStore: JobAppStore
-    let resModelStore: ResModelStore
     let enabledLLMStore: EnabledLLMStore
     let resumeExportCoordinator: ResumeExportCoordinator
     let templateStore: TemplateStore
@@ -75,7 +74,6 @@ final class AppDependencies {
         // Dependent stores
         self.coverLetterStore = CoverLetterStore(context: modelContext, refStore: coverRefStore)
         self.jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
-        self.resModelStore = ResModelStore(context: modelContext, resStore: resStore)
         self.enabledLLMStore = EnabledLLMStore(modelContext: modelContext)
 
         // UI state
