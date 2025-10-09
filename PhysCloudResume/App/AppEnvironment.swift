@@ -20,6 +20,7 @@ final class AppEnvironment {
     let modelValidationService: ModelValidationService
     let debugSettingsStore: DebugSettingsStore
     let templateStore: TemplateStore
+    let templateSeedStore: TemplateSeedStore
     let resumeExportCoordinator: ResumeExportCoordinator
     var launchState: LaunchState
 
@@ -32,6 +33,7 @@ final class AppEnvironment {
         modelValidationService: ModelValidationService,
         debugSettingsStore: DebugSettingsStore,
         templateStore: TemplateStore,
+        templateSeedStore: TemplateSeedStore,
         resumeExportCoordinator: ResumeExportCoordinator,
         launchState: LaunchState
     ) {
@@ -43,6 +45,7 @@ final class AppEnvironment {
         self.modelValidationService = modelValidationService
         self.debugSettingsStore = debugSettingsStore
         self.templateStore = templateStore
+        self.templateSeedStore = templateSeedStore
         self.resumeExportCoordinator = resumeExportCoordinator
         self.launchState = launchState
     }

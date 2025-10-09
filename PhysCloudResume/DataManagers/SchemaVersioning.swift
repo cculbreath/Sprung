@@ -78,14 +78,40 @@ enum SchemaV3: VersionedSchema {
     }
 }
 
+// MARK: - Schema V4 (Template Seeds)
+enum SchemaV4: VersionedSchema {
+    static var versionIdentifier = Schema.Version(5, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [
+            JobApp.self,
+            Resume.self,
+            ResRef.self,
+            TreeNode.self,
+            FontSizeNode.self,
+            CoverLetter.self,
+            MessageParams.self,
+            CoverRef.self,
+            ApplicantProfile.self,
+            ResModel.self,
+            ConversationContext.self,
+            ConversationMessage.self,
+            EnabledLLM.self,
+            Template.self,
+            TemplateAsset.self,
+            TemplateSeed.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self, SchemaV3.self]
+        [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4]
     }
     
     // MARK: - Migration Stages
@@ -183,6 +209,23 @@ enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
         }
     )
 
+    static let migrateV3toV4 = MigrationStage.custom(
+        fromVersion: SchemaV3.self,
+        toVersion: SchemaV4.self,
+        willMigrate: { _ in
+            Logger.debug("🔄 Starting migration from Schema V3 to V4...")
+        },
+        didMigrate: { context in
+            Logger.debug("✅ Completed migration from Schema V3 to V4")
+            do {
+                let seeds = try context.fetch(FetchDescriptor<TemplateSeed>())
+                Logger.debug("✅ TemplateSeed table ready with \(seeds.count) records")
+            } catch {
+                Logger.warning("⚠️ Could not verify TemplateSeed table: \(error)")
+            }
+        }
+    )
+
 }
 
 // MARK: - Model Container Factory
@@ -190,13 +233,13 @@ extension ModelContainer {
     /// Creates a model container with the migration plan
     static func createWithMigration() throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV3.models),
+            schema: Schema(SchemaV4.models),
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
 
         return try ModelContainer(
-            for: Schema(SchemaV3.models),
+            for: Schema(SchemaV4.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )
@@ -205,14 +248,14 @@ extension ModelContainer {
     /// Creates a model container for a specific URL with migration support
     static func createWithMigration(url: URL) throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV3.models),
+            schema: Schema(SchemaV4.models),
             url: url,
             allowsSave: true,
             cloudKitDatabase: .none
         )
 
         return try ModelContainer(
-            for: Schema(SchemaV3.models),
+            for: Schema(SchemaV4.models),
             migrationPlan: PhysCloudResumeMigrationPlan.self,
             configurations: configuration
         )
