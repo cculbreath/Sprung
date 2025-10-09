@@ -2,19 +2,17 @@
 //  SchemaVersioning.swift
 //  PhysCloudResume
 //
-//  Created on 5/24/25.
+//  Maintains the canonical list of SwiftData models used by the app.
+//  We rely on SwiftData's built-in lightweight migration when the model
+//  set changes (e.g. adding TemplateSeed). No custom migration plan is
+//  required while we're only adding new entities.
 //
-//  Implements SwiftData schema versioning and migration plan
-//  to enable automatic database migrations.
 
 import Foundation
 import SwiftData
 
-// MARK: - SwiftData Schema Versions
-enum SchemaV1: VersionedSchema {
-    static var versionIdentifier = Schema.Version(1, 0, 0)
-
-    static var models: [any PersistentModel.Type] = [
+enum PhysCloudSchema {
+    static let models: [any PersistentModel.Type] = [
         JobApp.self,
         Resume.self,
         ResRef.self,
@@ -29,64 +27,42 @@ enum SchemaV1: VersionedSchema {
         ConversationMessage.self,
         EnabledLLM.self,
         Template.self,
-        TemplateAsset.self
+        TemplateAsset.self,
+        TemplateSeed.self
     ]
-}
 
-enum SchemaV2: VersionedSchema {
-    static var versionIdentifier = Schema.Version(1, 0, 1)
-
-    static var models: [any PersistentModel.Type] = SchemaV1.models + [TemplateSeed.self]
-}
-
-// MARK: - Migration Plan
-enum PhysCloudResumeMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self]
+    static var schema: Schema {
+        Schema(models)
     }
-
-    static var stages: [MigrationStage] {
-        [migrateV1toV2]
-    }
-    
-    // MARK: - Migration Stages
-    
-    /// Single-step migration that brings the legacy store forward to include template seeds
-    static let migrateV1toV2: MigrationStage = .lightweight(
-        fromVersion: SchemaV1.self,
-        toVersion: SchemaV2.self
-    )
 }
 
-// MARK: - Model Container Factory
 extension ModelContainer {
-    /// Creates a model container with the migration plan
+    /// Creates a model container using the canonical schema. SwiftData will
+    /// automatically perform lightweight migration when we add new models.
     static func createWithMigration() throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV2.models),
+            schema: PhysCloudSchema.schema,
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
 
         return try ModelContainer(
-            for: Schema(SchemaV2.models),
-            migrationPlan: PhysCloudResumeMigrationPlan.self,
+            for: PhysCloudSchema.schema,
             configurations: configuration
         )
     }
-    
-    /// Creates a model container for a specific URL with migration support
+
+    /// Convenience initializer that targets a specific store URL.
     static func createWithMigration(url: URL) throws -> ModelContainer {
         let configuration = ModelConfiguration(
-            schema: Schema(SchemaV2.models),
+            schema: PhysCloudSchema.schema,
             url: url,
             allowsSave: true,
             cloudKitDatabase: .none
         )
 
         return try ModelContainer(
-            for: Schema(SchemaV2.models),
-            migrationPlan: PhysCloudResumeMigrationPlan.self,
+            for: PhysCloudSchema.schema,
             configurations: configuration
         )
     }
