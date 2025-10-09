@@ -14,6 +14,7 @@ class JobRecommendationService {
     
     // MARK: - Dependencies
     private let llm: LLMFacade
+    private var resumeContextCache: [UUID: String] = [:]
     
     // MARK: - Configuration
     private let systemPrompt = """
@@ -23,6 +24,7 @@ class JobRecommendationService {
 
     IMPORTANT: Output ONLY the JSON object with the fields "recommendedJobId" and "reason". Do not include any additional commentary, explanation, or text outside the JSON.
     """
+    private let maxResumeContextBytes = 120_000
     
     init(llmFacade: LLMFacade) {
         self.llm = llmFacade
@@ -138,19 +140,7 @@ class JobRecommendationService {
         includeResumeBackground: Bool,
         includeCoverLetterBackground: Bool
     ) -> String {
-        let resumeText: String
-        if let resume = resume {
-            if !resume.textRes.isEmpty {
-                resumeText = resume.textRes
-            } else if let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
-                      let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
-                resumeText = String(data: data, encoding: .utf8) ?? ""
-            } else {
-                resumeText = ""
-            }
-        } else {
-            resumeText = ""
-        }
+        let resumeText = resume.flatMap { resumeContextString(for: $0) } ?? ""
         
         // Build background documentation
         let backgroundDocs = includeResumeBackground ? buildBackgroundDocs(from: resume) : ""
@@ -218,6 +208,58 @@ class JobRecommendationService {
         return prompt
     }
     
+    private func resumeContextString(for resume: Resume) -> String {
+        if let cached = resumeContextCache[resume.id] {
+            return cached
+        }
+
+        if !resume.textRes.isEmpty {
+            resumeContextCache[resume.id] = resume.textRes
+            return resume.textRes
+        }
+
+        guard let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
+              let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]),
+              let string = String(data: data, encoding: .utf8) else {
+            resumeContextCache[resume.id] = ""
+            return ""
+        }
+
+        let byteCount = string.utf8.count
+        if byteCount > maxResumeContextBytes {
+            Logger.warning("JobRecommendationService: resume context for \(resume.id) is \(byteCount) bytes; truncating to \(maxResumeContextBytes).")
+            let truncated = truncateContext(string, maxBytes: maxResumeContextBytes)
+            let annotated = truncated + "\n\n/* truncated resume context to fit job recommendation prompt */"
+            resumeContextCache[resume.id] = annotated
+            return annotated
+        }
+
+        resumeContextCache[resume.id] = string
+        return string
+    }
+
+    private func truncateContext(_ string: String, maxBytes: Int) -> String {
+        var consumedBytes = 0
+        var index = string.startIndex
+
+        while index < string.endIndex {
+            let character = string[index]
+            let characterBytes = character.utf8.count
+            if consumedBytes + characterBytes > maxBytes {
+                break
+            }
+            consumedBytes += characterBytes
+            index = string.index(after: index)
+        }
+
+        var truncated = String(string[string.startIndex..<index])
+        if truncated.last?.isWhitespace == false {
+            truncated.append(" ")
+        }
+        truncated.append(contentsOf: "...")
+        return truncated
+    }
+
     /// Build background documentation from resume sources
     private func buildBackgroundDocs(from resume: Resume?) -> String {
         guard let resume = resume else { return "" }

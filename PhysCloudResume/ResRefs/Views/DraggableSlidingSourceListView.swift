@@ -52,11 +52,10 @@ struct DraggableSlidingSourceListView: View {
                     .customCursor(NSCursor.resizeUpDown)
 
                 ScrollView {
-                    VStack {
+                    VStack(spacing: 12) {
                         ResRefView()
                         Divider()
-                        Divider()
-                        ResModelView(refresh: $refresh)
+                        TemplateQuickActionsView()
                     }
                     .padding(.horizontal, 0)
                     .frame(maxWidth: .infinity)

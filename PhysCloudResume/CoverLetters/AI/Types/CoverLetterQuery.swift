@@ -182,9 +182,11 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     // MARK: - Core Data
     
     var applicant: Applicant
-    let coverLetter: CoverLetter
-    let resume: Resume
-    let jobApp: JobApp
+   let coverLetter: CoverLetter
+   let resume: Resume
+   let jobApp: JobApp
+
+    private static let maxResumeContextBytes = 120_000
     
     // MARK: - Derived Properties
     
@@ -197,11 +199,20 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
             return resume.textRes
         }
         Logger.debug("⚠️BLANK TEXT RES⚠️")
-        if let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
-           let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
-            return String(data: data, encoding: .utf8) ?? ""
+        guard let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
+              let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]),
+              let string = String(data: data, encoding: .utf8) else {
+            return ""
         }
-        return ""
+
+        let byteCount = string.utf8.count
+        guard byteCount > Self.maxResumeContextBytes else {
+            return string
+        }
+
+        Logger.warning("CoverLetterQuery: resume context is \(byteCount) bytes; truncating to \(Self.maxResumeContextBytes) bytes to avoid prompt overflow.")
+        let truncated = truncateContext(string, maxBytes: Self.maxResumeContextBytes)
+        return truncated + "\n\n/* truncated resume context to fit cover letter prompt */"
     }
     
     var backgroundDocs: String {
@@ -215,6 +226,28 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
     
     var writingSamples: String {
         return coverLetter.writingSamplesString
+    }
+
+    private func truncateContext(_ string: String, maxBytes: Int) -> String {
+        var count = 0
+        var index = string.startIndex
+
+        while index < string.endIndex {
+            let character = string[index]
+            let characterBytes = character.utf8.count
+            if count + characterBytes > maxBytes {
+                break
+            }
+            count += characterBytes
+            index = string.index(after: index)
+        }
+
+        var truncated = String(string[string.startIndex..<index])
+        if truncated.last?.isWhitespace == false {
+            truncated.append(" ")
+        }
+        truncated.append(contentsOf: "...")
+        return truncated
     }
     
     // MARK: - Initialization

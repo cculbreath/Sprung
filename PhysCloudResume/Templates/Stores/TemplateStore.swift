@@ -67,4 +67,27 @@ final class TemplateStore {
         }
         try? context.save()
     }
+
+    func updateManifest(slug: String, manifestData: Data?) throws {
+        guard let template = template(slug: slug) else {
+            throw TemplateStoreError.templateNotFound(slug)
+        }
+        template.manifestData = manifestData
+        template.updatedAt = Date()
+        try context.save()
+    }
+
+    func saveContext() {
+        try? context.save()
+    }
+
+    func deleteTemplate(slug: String) {
+        guard let template = template(slug: slug) else { return }
+        context.delete(template)
+        try? context.save()
+    }
+}
+
+enum TemplateStoreError: Error {
+    case templateNotFound(String)
 }
