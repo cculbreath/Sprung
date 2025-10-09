@@ -195,10 +195,8 @@ class JsonToTree {
             return treeStringSection
         case .mapOfStrings:
             return treeMapOfStringsSection
-        case let .twoKeyObjectArray(keyOne, keyTwo):
-            return { sectionName, parent in
-                self.treeTwoKeyObjectsSection(key: sectionName, parent: parent, keyOne: keyOne, keyTwo: keyTwo)
-            }
+        case .arrayOfObjects:
+            return treeArrayOfObjectsSection
         case .fontSizes:
             return { _, _ in }
         }
@@ -242,7 +240,7 @@ class JsonToTree {
             return .object
         case let array as [Any]:
             if array.allSatisfy({ $0 is [String: Any] || $0 is OrderedDictionary<String, Any> }) {
-                return .complex
+                return .arrayOfObjects
             }
             return .array
         default:
@@ -337,26 +335,35 @@ class JsonToTree {
         }
     }
 
-    private func treeTwoKeyObjectsSection(key: String, parent: TreeNode, keyOne: String, keyTwo: String) {
-        guard let sectionArray = asOrderedArrayOfDictionaries(json[key]) else {
-            return
-        }
-
+    private func treeArrayOfObjectsSection(key: String, parent: TreeNode) {
+        guard let sectionArray = asOrderedArrayOfDictionaries(json[key]) else { return }
+        let inEditor = isInEditor(key)
         let sectionNode = parent.addChild(
-            TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res)
+            TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
         )
 
-        for element in sectionArray {
-            guard let valueOne = element[keyOne] as? String,
-                  let valueTwo = element[keyTwo] as? String
-            else {
-                continue
-            }
-            // Add the node with name = valueOne, value = valueTwo
-            sectionNode.addChild(
-                TreeNode(name: valueOne, value: valueTwo, inEditor: isInEditor(key), status: .saved, resume: res)
+        for (index, element) in sectionArray.enumerated() {
+            let title = displayTitle(for: element, defaultTitle: "\(key.capitalized) \(index + 1)")
+            let entryNode = sectionNode.addChild(
+                TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
             )
+            buildSubtree(from: element, parent: entryNode, inEditor: inEditor)
         }
+    }
+
+    private func displayTitle(for element: OrderedDictionary<String, Any>, defaultTitle: String) -> String {
+        let titleKeys = ["title", "name", "position", "employer"]
+        for key in titleKeys {
+            if let value = element[key] as? String, !value.isEmpty {
+                return value
+            }
+        }
+        for value in element.values {
+            if let string = value as? String, !string.isEmpty {
+                return string
+            }
+        }
+        return defaultTitle
     }
 
     private func treeStringSection(key: String, parent: TreeNode) {

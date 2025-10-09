@@ -21,7 +21,7 @@ enum SectionType {
     case complex
     case string
     case mapOfStrings
-    case twoKeyObjectArray(keyOne: String, keyTwo: String)
+    case arrayOfObjects
     case fontSizes
 }
 
@@ -39,12 +39,7 @@ extension SectionType {
         case .objectOfObjects:
             self = .complex
         case .arrayOfObjects:
-            // Prefer specialized handling for known two-key sections
-            if key == "skills-and-expertise" || key == "projects-highlights" {
-                self = .twoKeyObjectArray(keyOne: "title", keyTwo: "description")
-            } else {
-                self = .complex
-            }
+            self = .arrayOfObjects
         case .fontSizes:
             self = .fontSizes
         }
