@@ -312,19 +312,58 @@ class JsonToTree {
             TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
         )
 
+        let sectionDescriptor = manifest?.section(for: key)
+        let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+        let descriptorFields = usesDescriptor ? sectionDescriptor?.fields : nil
+
         // 1) If the value is an OrderedDictionary<String, Any> (a single dictionary).
         if let dict = asOrderedDictionary(json[key]) {
-            buildSubtree(from: dict, parent: sectionNode, inEditor: inEditor)
+            if let entryDescriptor = descriptorFields?.first(where: { $0.key == "*" }) {
+                for (entryKey, entryValue) in dict {
+                    guard let entryDict = asOrderedDictionary(entryValue) else { continue }
+                    let title = displayTitle(
+                        for: entryDict,
+                        defaultTitle: entryKey,
+                        descriptor: entryDescriptor
+                    )
+                    let itemNode = sectionNode.addChild(
+                        TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                    )
+                    buildSubtree(
+                        from: entryDict,
+                        parent: itemNode,
+                        inEditor: inEditor,
+                        descriptors: entryDescriptor.children
+                    )
+                }
+            } else {
+                buildSubtree(
+                    from: dict,
+                    parent: sectionNode,
+                    inEditor: inEditor,
+                    descriptors: descriptorFields
+                )
+            }
             return
         }
 
         if let arrayOfDicts = asOrderedArrayOfDictionaries(json[key]) {
             for (index, subDict) in arrayOfDicts.enumerated() {
-                let itemTitle = "\(subDict["journal"] ?? key) · \(subDict["year"] ?? String(index + 1))"
+                let defaultTitle = "\(key.capitalized) \(index + 1)"
+                let itemTitle = displayTitle(
+                    for: subDict,
+                    defaultTitle: defaultTitle,
+                    descriptor: descriptorFields?.first(where: { $0.key == "*" })
+                )
                 let itemNode = sectionNode.addChild(
                     TreeNode(name: itemTitle, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                 )
-                buildSubtree(from: subDict, parent: itemNode, inEditor: inEditor)
+                buildSubtree(
+                    from: subDict,
+                    parent: itemNode,
+                    inEditor: inEditor,
+                    descriptors: descriptorFields?.first(where: { $0.key == "*" })?.children
+                )
             }
             return
         }
@@ -332,13 +371,26 @@ class JsonToTree {
         // 3) Catch-all / fallback so you actually see a console message if everything else fails.
     }
 
-    private func buildSubtree(from dict: OrderedDictionary<String, Any>, parent: TreeNode, inEditor: Bool) {
-        for (subKey, subValue) in dict {
+    private func buildSubtree(
+        from dict: OrderedDictionary<String, Any>,
+        parent: TreeNode,
+        inEditor: Bool,
+        descriptors: [TemplateManifest.Section.FieldDescriptor]? = nil
+    ) {
+        let orderedKeys = orderedKeys(in: dict, descriptors: descriptors)
+        for subKey in orderedKeys {
+            guard let subValue = dict[subKey] else { continue }
             if let subDict = asOrderedDictionary(subValue) {
+                let childDescriptors = descriptors?.first(where: { $0.key == subKey })?.children
                 let childNode = parent.addChild(
                     TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                 )
-                buildSubtree(from: subDict, parent: childNode, inEditor: inEditor)
+                buildSubtree(
+                    from: subDict,
+                    parent: childNode,
+                    inEditor: inEditor,
+                    descriptors: childDescriptors
+                )
             } else if let subArray = subValue as? [String] {
                 let arrayTitleNode = parent.addChild(TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res))
                 treeNodesStringArray(strings: subArray, parent: arrayTitleNode, inEditor: inEditor)
@@ -346,6 +398,7 @@ class JsonToTree {
                 let arrayTitleNode = parent.addChild(
                     TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                 )
+                let childDescriptor = descriptors?.first(where: { $0.key == subKey })
                 for element in nestedArray {
                     if let stringElement = element as? String {
                         arrayTitleNode.addChild(
@@ -355,7 +408,12 @@ class JsonToTree {
                         let childNode = arrayTitleNode.addChild(
                             TreeNode(name: "", value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                         )
-                        buildSubtree(from: nestedDict, parent: childNode, inEditor: inEditor)
+                        buildSubtree(
+                            from: nestedDict,
+                            parent: childNode,
+                            inEditor: inEditor,
+                            descriptors: childDescriptor?.children
+                        )
                     }
                 }
             } else if let subString = subValue as? String {
@@ -378,16 +436,40 @@ class JsonToTree {
             TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
         )
 
+        let descriptor = manifest?.section(for: key)
+        let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+        let entryDescriptor = usesDescriptor ? descriptor?.fields.first(where: { $0.key == "*" }) : nil
+
         for (index, element) in sectionArray.enumerated() {
-            let title = displayTitle(for: element, defaultTitle: "\(key.capitalized) \(index + 1)")
+            let defaultTitle = "\(key.capitalized) \(index + 1)"
+            let title = displayTitle(
+                for: element,
+                defaultTitle: defaultTitle,
+                descriptor: entryDescriptor
+            )
             let entryNode = sectionNode.addChild(
                 TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
             )
-            buildSubtree(from: element, parent: entryNode, inEditor: inEditor)
+            buildSubtree(
+                from: element,
+                parent: entryNode,
+                inEditor: inEditor,
+                descriptors: entryDescriptor?.children
+            )
         }
     }
 
-    private func displayTitle(for element: OrderedDictionary<String, Any>, defaultTitle: String) -> String {
+    private func displayTitle(
+        for element: OrderedDictionary<String, Any>,
+        defaultTitle: String,
+        descriptor: TemplateManifest.Section.FieldDescriptor?
+    ) -> String {
+        if let descriptor,
+           let template = descriptor.titleTemplate,
+           let rendered = renderTitleTemplate(template, element: element) {
+            return rendered
+        }
+
         let titleKeys = ["title", "name", "position", "employer"]
         for key in titleKeys {
             if let value = element[key] as? String, !value.isEmpty {
@@ -414,12 +496,51 @@ class JsonToTree {
         if let sectionDict = asOrderedDictionary(json[key]) {
             let sectionNode = parent.addChild(
                 TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
-            for (key, myValue) in sectionDict {
-                guard let valueString = myValue as? String else {
-                    return
+            let descriptor = manifest?.section(for: key)
+            let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+            let ordered = orderedKeys(in: sectionDict, descriptors: usesDescriptor ? descriptor?.fields : nil)
+
+            for entryKey in ordered {
+                guard let entryValue = sectionDict[entryKey] else { continue }
+                if let stringValue = entryValue as? String {
+                    sectionNode.addChild(
+                        TreeNode(
+                            name: entryKey,
+                            value: stringValue,
+                            inEditor: isInEditor(key),
+                            status: .saved,
+                            resume: res
+                        )
+                    )
+                } else if let dictValue = asOrderedDictionary(entryValue) {
+                    let childNode = sectionNode.addChild(
+                        TreeNode(
+                            name: entryKey,
+                            value: "",
+                            inEditor: isInEditor(key),
+                            status: .isNotLeaf,
+                            resume: res
+                        )
+                    )
+                    let childDescriptors = descriptor?.fields.first(where: { $0.key == entryKey })?.children
+                    buildSubtree(
+                        from: dictValue,
+                        parent: childNode,
+                        inEditor: isInEditor(key),
+                        descriptors: childDescriptors
+                    )
+                } else if let stringArray = entryValue as? [String] {
+                    let childNode = sectionNode.addChild(
+                        TreeNode(
+                            name: entryKey,
+                            value: "",
+                            inEditor: isInEditor(key),
+                            status: .isNotLeaf,
+                            resume: res
+                        )
+                    )
+                    treeNodesStringArray(strings: stringArray, parent: childNode, inEditor: isInEditor(key))
                 }
-                sectionNode.addChild(
-                TreeNode(name: key, value: valueString, inEditor: isInEditor(key), status: .saved, resume: res))
             }
         } else {}
     }
@@ -430,8 +551,12 @@ class JsonToTree {
         let sectionNode = parent.addChild(
             TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
         )
+        let descriptor = manifest?.section(for: key)
+        let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+        let ordered = orderedKeys(in: sectionDict, descriptors: usesDescriptor ? descriptor?.fields : nil)
 
-        for (entryKey, entryValue) in sectionDict {
+        for entryKey in ordered {
+            guard let entryValue = sectionDict[entryKey] else { continue }
             guard let label = entryValue as? String else { continue }
             res.keyLabels[entryKey] = label
             sectionNode.addChild(
@@ -444,6 +569,51 @@ class JsonToTree {
                 )
             )
         }
+    }
+
+    private func orderedKeys(
+        in dict: OrderedDictionary<String, Any>,
+        descriptors: [TemplateManifest.Section.FieldDescriptor]?
+    ) -> [String] {
+        guard let descriptors, !descriptors.isEmpty else {
+            return Array(dict.keys)
+        }
+        var ordered: [String] = []
+        for descriptor in descriptors where descriptor.key != "*" {
+            if dict.keys.contains(descriptor.key) {
+                ordered.append(descriptor.key)
+            }
+        }
+        for key in dict.keys where !ordered.contains(key) {
+            ordered.append(key)
+        }
+        return ordered
+    }
+
+    private func renderTitleTemplate(
+        _ template: String,
+        element: OrderedDictionary<String, Any>
+    ) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "\\{\\{\\s*([^}]+)\\s*\\}\\}") else {
+            return nil
+        }
+        var result = template
+        let matches = regex.matches(
+            in: template,
+            range: NSRange(template.startIndex..., in: template)
+        )
+        for match in matches.reversed() {
+            guard match.numberOfRanges >= 2,
+                  let range = Range(match.range(at: 1), in: template) else { continue }
+            let key = String(template[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let replacement = element[key] as? String, replacement.isEmpty == false else {
+                return nil
+            }
+            if let fullRange = Range(match.range, in: result) {
+                result.replaceSubrange(fullRange, with: replacement)
+            }
+        }
+        return result
     }
 
     private func asOrderedDictionary(_ value: Any?) -> OrderedDictionary<String, Any>? {
