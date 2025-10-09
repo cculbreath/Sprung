@@ -9,7 +9,7 @@ final class TemplateSeed {
     var createdAt: Date
     var updatedAt: Date
 
-    @Relationship(deleteRule: .cascade, inverse: \Template.seed)
+    @Relationship(deleteRule: .nullify, inverse: \Template.seeds)
     var template: Template?
 
     init(

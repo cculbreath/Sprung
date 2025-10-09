@@ -12,8 +12,8 @@ final class TemplateSeedStore {
     }
 
     func seed(for template: Template) -> TemplateSeed? {
-        if let seed = template.seed {
-            return seed
+        if !template.seeds.isEmpty {
+            return template.seeds.sorted(by: { $0.updatedAt > $1.updatedAt }).first
         }
         return seed(forSlug: template.slug)
     }
@@ -42,7 +42,6 @@ final class TemplateSeedStore {
             existing.updatedAt = now
             if let template {
                 existing.template = template
-                template.seed = existing
             }
             try? context.save()
             return existing
@@ -56,9 +55,6 @@ final class TemplateSeedStore {
             template: template
         )
         context.insert(seed)
-        if let template {
-            template.seed = seed
-        }
         try? context.save()
         return seed
     }
@@ -70,9 +66,7 @@ final class TemplateSeedStore {
     }
 
     func deleteSeed(_ seed: TemplateSeed) {
-        if let template = seed.template, template.seed?.id == seed.id {
-            template.seed = nil
-        }
+        seed.template = nil
         context.delete(seed)
         try? context.save()
     }
