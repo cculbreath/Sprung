@@ -73,8 +73,8 @@ private struct Implementation {
             return buildStringSection(named: sectionName)
         case .mapOfStrings:
             return buildMapOfStringsSection(named: sectionName)
-        case let .twoKeyObjectArray(keyOne, keyTwo):
-            return buildTwoKeyObjectArray(named: sectionName, keyOne: keyOne, keyTwo: keyTwo)
+        case .arrayOfObjects:
+            return buildArrayOfObjectsSection(named: sectionName)
         case .fontSizes:
             return buildFontSizesSection()
         }
@@ -135,35 +135,28 @@ private struct Implementation {
         return value.isEmpty ? nil : value
     }
 
-    private func buildTwoKeyObjectArray(
-        named sectionName: String,
-        keyOne: String,
-        keyTwo: String
-    ) -> [Any]? {
+    private func buildArrayOfObjectsSection(named sectionName: String) -> [Any]? {
         guard let sectionNode = sectionNode(named: sectionName) else { return nil }
 
-        var items: [Any] = []
+        var items: [[String: Any]] = []
         for child in sectionNode.orderedChildren {
-            if child.name.isEmpty {
-                if !child.value.isEmpty {
-                    items.append(child.value)
+            var entry: [String: Any] = [:]
+            for grandchild in child.orderedChildren {
+                if let nested = buildNodeValue(grandchild) {
+                    entry[grandchild.name] = nested
+                } else if !grandchild.value.isEmpty {
+                    entry[grandchild.name] = grandchild.value
                 }
-                continue
             }
 
-            var entry: [String: Any] = [
-                keyOne: child.name
-            ]
-            if !child.value.isEmpty {
-                entry[keyTwo] = child.value
+            if entry.isEmpty {
+                if !child.value.isEmpty { entry["value"] = child.value }
+                if !child.name.isEmpty { entry["title"] = child.name }
             }
 
-            // Preserve any nested content (rare, but future-proofed)
-            if let nested = buildNodeValue(child) as? [String: Any] {
-                entry.merge(nested, uniquingKeysWith: { _, new in new })
+            if !entry.isEmpty {
+                items.append(entry)
             }
-
-            items.append(entry)
         }
 
         return items.isEmpty ? nil : items
