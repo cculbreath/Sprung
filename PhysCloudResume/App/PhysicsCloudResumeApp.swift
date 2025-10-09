@@ -26,7 +26,7 @@ struct PhysicsCloudResumeApp: App {
         // Attempt to create the migration-aware container first
         do {
             resolvedContainer = try ModelContainer.createWithMigration()
-            Logger.debug("✅ ModelContainer created with migration support (Schema V3)", category: .appLifecycle)
+            Logger.debug("✅ ModelContainer created with migration support (Schema V4)", category: .appLifecycle)
         } catch {
             Logger.error("❌ Failed to create ModelContainer with migrations: \(error)", category: .appLifecycle)
 
@@ -71,6 +71,7 @@ struct PhysicsCloudResumeApp: App {
                 .environment(appEnvironment.appState)
                 .environment(appDependencies.resumeExportCoordinator)
                 .environment(appDependencies.templateStore)
+                .environment(appDependencies.templateSeedStore)
                 .onAppear {
                     // Pass appState and modelContainer to AppDelegate so it can use them for windows
                     appDelegate.appState = appEnvironment.appState

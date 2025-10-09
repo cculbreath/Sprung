@@ -1,0 +1,85 @@
+import Foundation
+import Observation
+import SwiftData
+
+@MainActor
+@Observable
+final class TemplateSeedStore {
+    private let context: ModelContext
+
+    init(context: ModelContext) {
+        self.context = context
+    }
+
+    func seed(for template: Template) -> TemplateSeed? {
+        if let seed = template.seed {
+            return seed
+        }
+        return seed(forSlug: template.slug)
+    }
+
+    func seed(forSlug slug: String) -> TemplateSeed? {
+        let normalized = slug.lowercased()
+        let descriptor = FetchDescriptor<TemplateSeed>(
+            predicate: #Predicate { $0.slug == normalized },
+            sortBy: [SortDescriptor(\TemplateSeed.updatedAt, order: .reverse)]
+        )
+        return (try? context.fetch(descriptor))?.first
+    }
+
+    @discardableResult
+    func upsertSeed(
+        slug: String,
+        jsonString: String,
+        attachTo template: Template? = nil
+    ) -> TemplateSeed {
+        let normalized = slug.lowercased()
+        let data = jsonString.data(using: .utf8) ?? Data()
+        let now = Date()
+
+        if let existing = seed(forSlug: normalized) {
+            existing.seedData = data
+            existing.updatedAt = now
+            if let template {
+                existing.template = template
+                template.seed = existing
+            }
+            try? context.save()
+            return existing
+        }
+
+        let seed = TemplateSeed(
+            slug: normalized,
+            seedData: data,
+            createdAt: now,
+            updatedAt: now,
+            template: template
+        )
+        context.insert(seed)
+        if let template {
+            template.seed = seed
+        }
+        try? context.save()
+        return seed
+    }
+
+    func updateSeed(_ seed: TemplateSeed, jsonString: String) {
+        seed.jsonString = jsonString
+        seed.updatedAt = Date()
+        try? context.save()
+    }
+
+    func deleteSeed(_ seed: TemplateSeed) {
+        if let template = seed.template, template.seed?.id == seed.id {
+            template.seed = nil
+        }
+        context.delete(seed)
+        try? context.save()
+    }
+
+    func deleteSeed(forSlug slug: String) {
+        if let existing = seed(forSlug: slug) {
+            deleteSeed(existing)
+        }
+    }
+}

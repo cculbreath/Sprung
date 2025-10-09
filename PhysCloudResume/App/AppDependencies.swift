@@ -24,6 +24,7 @@ final class AppDependencies {
     let enabledLLMStore: EnabledLLMStore
     let resumeExportCoordinator: ResumeExportCoordinator
     let templateStore: TemplateStore
+    let templateSeedStore: TemplateSeedStore
 
     // MARK: - UI State
     let dragInfo: DragInfo
@@ -47,6 +48,8 @@ final class AppDependencies {
         // Base stores
         let templateStore = TemplateStore(context: modelContext)
         self.templateStore = templateStore
+        let templateSeedStore = TemplateSeedStore(context: modelContext)
+        self.templateSeedStore = templateSeedStore
 
         // Core export orchestration
         let resumeExportService = ResumeExportService(templateStore: templateStore)
@@ -109,6 +112,7 @@ final class AppDependencies {
             modelValidationService: modelValidationService,
             debugSettingsStore: debugSettingsStore,
             templateStore: templateStore,
+            templateSeedStore: templateSeedStore,
             resumeExportCoordinator: resumeExportCoordinator,
             launchState: .ready
         )
