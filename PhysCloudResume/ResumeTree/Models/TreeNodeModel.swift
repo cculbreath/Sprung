@@ -24,6 +24,23 @@ enum LeafStatus: String, Codable, Hashable {
     var status: LeafStatus
     var depth: Int = 0
 
+    // Schema metadata (optional, derived from manifest descriptors)
+    var schemaKey: String?
+    var schemaInputKindRaw: String?
+    var schemaRequired: Bool = false
+    var schemaRepeatable: Bool = false
+    var schemaPlaceholder: String?
+    var schemaTitleTemplate: String?
+    var schemaValidationRule: String?
+    var schemaValidationMessage: String?
+    var schemaValidationPattern: String?
+    var schemaValidationMin: Double?
+    var schemaValidationMax: Double?
+    var schemaValidationOptions: [String] = []
+
+    @Transient
+    var validationError: String?
+
     // This property should be explicitly set when a node is created or its role changes.
     // It's not reliably computable based on name/value alone.
     // For the "Fix Overflow" feature, we will pass this to the LLM and expect it back.
@@ -31,6 +48,10 @@ enum LeafStatus: String, Codable, Hashable {
 
     var hasChildren: Bool {
         return !(children?.isEmpty ?? true)
+    }
+
+    var schemaInputKind: TemplateManifest.Section.FieldDescriptor.InputKind? {
+        schemaInputKindRaw.flatMap { TemplateManifest.Section.FieldDescriptor.InputKind(rawValue: $0) }
     }
 
     var orderedChildren: [TreeNode] {
@@ -194,6 +215,33 @@ enum LeafStatus: String, Codable, Hashable {
             currentNode = node.parent
         }
         return pathComponents.joined(separator: " > ")
+    }
+}
+
+extension TreeNode {
+    func applyDescriptor(_ descriptor: TemplateManifest.Section.FieldDescriptor?) {
+        schemaKey = descriptor?.key
+        schemaInputKindRaw = descriptor?.input?.rawValue
+        schemaRequired = descriptor?.required ?? false
+        schemaRepeatable = descriptor?.repeatable ?? false
+        schemaPlaceholder = descriptor?.placeholder
+        schemaTitleTemplate = descriptor?.titleTemplate
+
+        if let validation = descriptor?.validation {
+            schemaValidationRule = validation.rule.rawValue
+            schemaValidationMessage = validation.message
+            schemaValidationPattern = validation.pattern
+            schemaValidationMin = validation.min
+            schemaValidationMax = validation.max
+            schemaValidationOptions = validation.options ?? []
+        } else {
+            schemaValidationRule = nil
+            schemaValidationMessage = nil
+            schemaValidationPattern = nil
+            schemaValidationMin = nil
+            schemaValidationMax = nil
+            schemaValidationOptions = []
+        }
     }
 }
 

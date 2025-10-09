@@ -44,7 +44,7 @@ final class ResStore: SwiftDataStore {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
 
-        let resume = Resume(jobApp: jobApp, enabledSources: sources)
+        let resume = Resume(jobApp: jobApp, enabledSources: sources, template: template)
 
         if jobApp.selectedRes == nil {
             jobApp.selectedRes = resume
@@ -54,8 +54,6 @@ final class ResStore: SwiftDataStore {
         if jobApp.status == .new {
             jobApp.status = .inProgress
         }
-
-        resume.template = template
 
         let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: templateSeedStore)
         let applicantProfile = ApplicantProfileManager.shared.getProfile()
@@ -108,14 +106,13 @@ final class ResStore: SwiftDataStore {
 
     @discardableResult
     func duplicate(_ originalResume: Resume) -> Resume? {
-        guard let jobApp = originalResume.jobApp,
-              let model = originalResume.model else { return nil }
+        guard let jobApp = originalResume.jobApp else { return nil }
         
-        // Create new resume with same sources and model
+        // Create new resume with same sources and template
         let newResume = Resume(
             jobApp: jobApp,
             enabledSources: originalResume.enabledSources,
-            model: model
+            template: originalResume.template
         )
         
         // Copy basic properties
@@ -161,7 +158,19 @@ final class ResStore: SwiftDataStore {
         
         newNode.myIndex = original.myIndex
         newNode.depth = original.depth
-        
+        newNode.schemaKey = original.schemaKey
+        newNode.schemaInputKindRaw = original.schemaInputKindRaw
+        newNode.schemaRequired = original.schemaRequired
+        newNode.schemaRepeatable = original.schemaRepeatable
+        newNode.schemaPlaceholder = original.schemaPlaceholder
+        newNode.schemaTitleTemplate = original.schemaTitleTemplate
+        newNode.schemaValidationRule = original.schemaValidationRule
+        newNode.schemaValidationMessage = original.schemaValidationMessage
+        newNode.schemaValidationPattern = original.schemaValidationPattern
+        newNode.schemaValidationMin = original.schemaValidationMin
+        newNode.schemaValidationMax = original.schemaValidationMax
+        newNode.schemaValidationOptions = original.schemaValidationOptions
+
         // Recursively duplicate children
         if let originalChildren = original.children {
             newNode.children = originalChildren.map { child in
@@ -199,7 +208,6 @@ final class ResStore: SwiftDataStore {
         // Clear references to prevent potential access to deleted objects
         res.rootNode = nil
         res.enabledSources = []
-        res.model = nil
 
         // Delete the resume and save
         modelContext.delete(res)
