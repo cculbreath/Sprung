@@ -5,6 +5,7 @@
 //  Created by Codex Agent on 10/27/25.
 //
 
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -109,7 +110,9 @@ struct TemplateQuickActionsView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Text("Promote Selected Resume to Seed")
+                        Text("Promote Resume\nTo Seed")
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
                     }
                 }
                 .buttonStyle(.bordered)
@@ -138,8 +141,13 @@ struct TemplateQuickActionsView: View {
     }
 
     private func openTemplateEditor() {
-        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
-        setStatus("Template Editor opened.", kind: .info)
+        if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+            appDelegate.showTemplateEditorWindow()
+            setStatus("Template Editor opened.", kind: .info)
+        } else {
+            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+            setStatus("Opening Template Editor...", kind: .info)
+        }
     }
 
     @MainActor
