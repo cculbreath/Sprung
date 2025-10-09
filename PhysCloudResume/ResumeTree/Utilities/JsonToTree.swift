@@ -13,6 +13,24 @@ class JsonToTree {
     var json: OrderedDictionary<String, Any>
     private let manifest: TemplateManifest?
     private static let specialKeys: Set<String> = ["font-sizes", "include-fonts"]
+    private static let fallbackSectionOrder: [String] = [
+        "meta",
+        "font-sizes",
+        "include-fonts",
+        "section-labels",
+        "contact",
+        "summary",
+        "job-titles",
+        "employment",
+        "education",
+        "skills-and-expertise",
+        "languages",
+        "projects-highlights",
+        "projects-and-hobbies",
+        "publications",
+        "keys-in-editor",
+        "more-info"
+    ]
     /// Supplies monotonically increasing indexes during this tree build.
     private var indexCounter: Int = 0
 
@@ -59,7 +77,7 @@ class JsonToTree {
         manifest: TemplateManifest?
     ) -> OrderedDictionary<String, Any> {
         var ordered: OrderedDictionary<String, Any> = [:]
-        let preferredOrder = manifest?.sectionOrder ?? JsonMap.orderedSectionKeys
+        let preferredOrder = orderedKeys(from: Array(context.keys), manifest: manifest)
 
         for key in preferredOrder {
             if let value = context[key] {
@@ -109,9 +127,7 @@ class JsonToTree {
         res.needToTree = false
         parseSpecialKeys()
         var processed: Set<String> = []
-        let orderedKeys = manifest?.sectionOrder ?? JsonMap.orderedSectionKeys
-
-        for key in orderedKeys {
+        for key in orderedKeys(forKeys: Array(json.keys)) {
             guard json[key] != nil else { continue }
             processSectionIfNeeded(named: key, rootNode: rootNode)
             processed.insert(key)
@@ -212,7 +228,11 @@ class JsonToTree {
            let mapped = SectionType(manifestKind: manifestKind, key: key) {
             return mapped
         }
-        return JsonMap.sectionKeyToTypeDict[key] ?? inferredSectionType(for: key)
+        return inferredSectionType(for: key)
+    }
+
+    private func orderedKeys(forKeys keys: [String]) -> [String] {
+        JsonToTree.orderedKeys(from: keys, manifest: manifest)
     }
 
     private func inferredSectionType(for key: String) -> SectionType? {
@@ -246,6 +266,22 @@ class JsonToTree {
         default:
             return nil
         }
+    }
+
+    private static func orderedKeys(from keys: [String], manifest: TemplateManifest?) -> [String] {
+        var ordered: [String] = []
+        if let manifestOrder = manifest?.sectionOrder {
+            for key in manifestOrder where keys.contains(key) {
+                ordered.append(key)
+            }
+        } else {
+            for key in fallbackSectionOrder where keys.contains(key) {
+                ordered.append(key)
+            }
+        }
+        let extras = keys.filter { !ordered.contains($0) }.sorted()
+        ordered.append(contentsOf: extras)
+        return ordered
     }
 
     private func parseStringArray(key: String) -> [String] {

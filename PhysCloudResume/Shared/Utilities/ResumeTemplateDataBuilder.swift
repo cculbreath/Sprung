@@ -31,10 +31,30 @@ private struct Implementation {
     let rootNode: TreeNode
     let manifest: TemplateManifest?
 
+    private static let fallbackSectionOrder: [String] = [
+        "meta",
+        "font-sizes",
+        "include-fonts",
+        "section-labels",
+        "contact",
+        "summary",
+        "job-titles",
+        "employment",
+        "education",
+        "skills-and-expertise",
+        "languages",
+        "projects-highlights",
+        "projects-and-hobbies",
+        "publications",
+        "keys-in-editor",
+        "more-info"
+    ]
+
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
 
-        let orderedKeys = manifest?.sectionOrder ?? JsonMap.orderedSectionKeys
+        let orderedKeys = Self.orderedKeys(from: rootNode.orderedChildren.map { $0.name }, manifest: manifest)
+
         for sectionKey in orderedKeys {
             guard let value = buildSection(named: sectionKey) else { continue }
             context[sectionKey] = value
@@ -52,10 +72,6 @@ private struct Implementation {
         if let manifestKind = manifest?.section(for: sectionName)?.type,
            let sectionType = SectionType(manifestKind: manifestKind, key: sectionName) {
             return buildSection(named: sectionName, type: sectionType)
-        }
-
-        if let fallbackType = JsonMap.sectionKeyToTypeDict[sectionName] {
-            return buildSection(named: sectionName, type: fallbackType)
         }
 
         return nodeValue(named: sectionName)
@@ -248,5 +264,21 @@ private struct Implementation {
             return arrayElements.isEmpty ? nil : arrayElements
         }
         return dictionary.isEmpty ? nil : dictionary
+    }
+
+    private static func orderedKeys(from keys: [String], manifest: TemplateManifest?) -> [String] {
+        var ordered: [String] = []
+        if let manifestOrder = manifest?.sectionOrder {
+            for key in manifestOrder where keys.contains(key) {
+                ordered.append(key)
+            }
+        } else {
+            for key in fallbackSectionOrder where keys.contains(key) {
+                ordered.append(key)
+            }
+        }
+        let extras = keys.filter { !ordered.contains($0) }.sorted()
+        ordered.append(contentsOf: extras)
+        return ordered
     }
 }
