@@ -125,10 +125,6 @@ final class LLMService {
         )
     }
 
-    private func clearConversationCache(_ conversationId: UUID) async {
-        await conversationCoordinator.clear(conversationId: conversationId)
-    }
-
     private func makeUserMessage(_ text: String, images: [Data]) -> LLMMessageDTO {
         guard !images.isEmpty else {
             return .text(text, role: .user)
@@ -457,14 +453,6 @@ final class LLMService {
             recordSchemaSuccess: recordSchemaSuccess,
             recordSchemaFailure: recordSchemaFailure
         )
-    }
-
-    // MARK: - Conversation Management
-
-    func clearConversation(id conversationId: UUID) {
-        Task {
-            await self.clearConversationCache(conversationId)
-        }
     }
 
     func cancelAllRequests() {

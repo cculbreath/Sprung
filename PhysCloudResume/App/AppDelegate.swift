@@ -13,7 +13,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var applicantProfileWindow: NSWindow?
     var templateEditorWindow: NSWindow?
-    var appState: AppState?
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
 

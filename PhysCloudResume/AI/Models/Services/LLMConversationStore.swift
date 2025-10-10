@@ -67,12 +67,4 @@ actor LLMConversationStore {
         }
     }
 
-    func clearConversation(conversationId: UUID) async {
-        guard let context = modelContext else { return }
-        let descriptor = FetchDescriptor<ConversationContext>(predicate: #Predicate { $0.id == conversationId }, sortBy: [])
-        if let stored = try? context.fetch(descriptor).first {
-            context.delete(stored)
-            try? context.save()
-        }
-    }
 }
