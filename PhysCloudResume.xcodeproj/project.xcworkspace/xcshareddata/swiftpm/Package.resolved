@@ -33,7 +33,6 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/cculbreath/SwiftOpenAI.git",
       "state" : {
-        "branch" : "main",
         "revision" : "fe1562c533bffe5ff3b4d225c834dd98c128560d"
       }
     },
