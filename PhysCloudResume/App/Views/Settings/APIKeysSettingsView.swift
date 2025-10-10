@@ -10,7 +10,6 @@ import SwiftUI
 struct APIKeysSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    @Environment(LLMService.self) private var llmService
 
     @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
     @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
@@ -96,7 +95,6 @@ struct APIKeysSettingsView: View {
         }
 
         appState.reconfigureOpenRouterService()
-        llmService.reconfigureClient()
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
 

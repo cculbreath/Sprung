@@ -116,7 +116,6 @@ final class AppDependencies {
             appState: appState,
             openRouterService: openRouterService,
             coverLetterService: coverLetterService,
-            llmService: llmService,
             llmFacade: llmFacade,
             modelValidationService: modelValidationService,
             debugSettingsStore: debugSettingsStore,

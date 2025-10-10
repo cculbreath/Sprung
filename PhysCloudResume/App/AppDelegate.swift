@@ -137,7 +137,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appState)
                     .environment(enabledLLMStore)
                     .environment(debugSettingsStore)
-                    .environment(appEnvironment.llmService)
                     .modelContainer(container)
 
                 hostingView = NSHostingView(rootView: AnyView(root))

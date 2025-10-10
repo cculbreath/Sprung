@@ -15,7 +15,6 @@ final class AppEnvironment {
     let appState: AppState
     let openRouterService: OpenRouterService
     let coverLetterService: CoverLetterService
-    let llmService: LLMService
     let llmFacade: LLMFacade
     let modelValidationService: ModelValidationService
     let debugSettingsStore: DebugSettingsStore
@@ -28,7 +27,6 @@ final class AppEnvironment {
         appState: AppState,
         openRouterService: OpenRouterService,
         coverLetterService: CoverLetterService,
-        llmService: LLMService,
         llmFacade: LLMFacade,
         modelValidationService: ModelValidationService,
         debugSettingsStore: DebugSettingsStore,
@@ -40,7 +38,6 @@ final class AppEnvironment {
         self.appState = appState
         self.openRouterService = openRouterService
         self.coverLetterService = coverLetterService
-        self.llmService = llmService
         self.llmFacade = llmFacade
         self.modelValidationService = modelValidationService
         self.debugSettingsStore = debugSettingsStore
