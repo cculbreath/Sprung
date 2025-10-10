@@ -54,6 +54,7 @@ final class AppDependencies {
             templateStore: templateStore,
             templateSeedStore: templateSeedStore
         )
+        TemplateTextResetMigration.runIfNeeded(templateStore: templateStore)
 
         // Core export orchestration
         let resumeExportService = ResumeExportService(templateStore: templateStore)

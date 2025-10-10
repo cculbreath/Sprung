@@ -117,21 +117,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             // Create hosting view with proper environment objects
             let hostingView: NSHostingView<AnyView>
-            if let appState = self.appState, let container = self.modelContainer {
-                // Create EnabledLLMStore for the Settings window
-                let enabledLLMStore = EnabledLLMStore(modelContext: container.mainContext)
+            if let appEnvironment = self.appEnvironment, let container = self.modelContainer {
+                let appState = appEnvironment.appState
+
+                // Reuse the shared EnabledLLMStore when available to keep selections in sync
+                let enabledLLMStore: EnabledLLMStore
+                if let existingStore = appState.enabledLLMStore {
+                    enabledLLMStore = existingStore
+                } else {
+                    let newStore = EnabledLLMStore(modelContext: container.mainContext)
+                    appState.enabledLLMStore = newStore
+                    enabledLLMStore = newStore
+                }
+
+                let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
+
                 let root = settingsView
+                    .environment(appEnvironment)
                     .environment(appState)
                     .environment(enabledLLMStore)
-                    .environment(appState.debugSettingsStore ?? DebugSettingsStore())
+                    .environment(debugSettingsStore)
+                    .environment(appEnvironment.llmService)
                     .modelContainer(container)
 
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {
                 // Fallback if appState or modelContainer is not available
+                Logger.warning("⚠️ Settings window requested before environment is fully configured", category: .appLifecycle)
                 hostingView = NSHostingView(
                     rootView: AnyView(
-                        settingsView.environment(DebugSettingsStore())
+                        VStack(spacing: 16) {
+                            Text("Settings Unavailable")
+                                .font(.headline)
+                            Text("App services are still loading. Please try opening Settings again in a moment.")
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(minWidth: 320, minHeight: 160)
+                        .padding()
                     )
                 )
             }

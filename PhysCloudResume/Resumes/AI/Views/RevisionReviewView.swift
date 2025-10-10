@@ -8,6 +8,7 @@
 
 import SwiftData
 import SwiftUI
+import AppKit
 
 /// Clean, focused view for reviewing AI revision proposals with a professional, polished UI
 /// All business logic delegated to ResumeReviseViewModel and enhanced node classes
@@ -17,6 +18,14 @@ struct RevisionReviewView: View {
     @State private var showExitConfirmation = false
     @State private var eventMonitor: Any? = nil
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
+    
+    private var maxContentHeight: CGFloat {
+        let defaultHeight: CGFloat = 720
+        if let screenHeight = NSScreen.main?.visibleFrame.height {
+            return min(defaultHeight, screenHeight * 0.85)
+        }
+        return defaultHeight
+    }
     
     // Computed property to check if reasoning modal should be used instead of loading sheet
     private var isUsingReasoningModal: Bool {
@@ -45,11 +54,13 @@ struct RevisionReviewView: View {
                             .symbolEffect(.pulse, options: .speed(1.2))
                             .padding(.vertical, 20)
                     }
-                    .frame(maxWidth: .infinity)
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
+                    .frame(maxWidth: 420)
+                    .frame(maxHeight: maxContentHeight, alignment: .center)
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 } else {
                     // Main review interface
                     ScrollView {
@@ -117,7 +128,9 @@ struct RevisionReviewView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
                     .padding(.horizontal, 24)
-                    .background(Color(NSColor.windowBackgroundColor     ))
+                    .frame(maxWidth: 820)
+                    .frame(maxHeight: maxContentHeight)
+                    .background(Color(NSColor.windowBackgroundColor))
                     .onAppear {
                         setupView(for: resume)
                     }
@@ -125,7 +138,10 @@ struct RevisionReviewView: View {
                         cleanupEventMonitor()
                     }
                     .onChange(of: viewModel.aiResubmit) { _, newValue in
-                        if !newValue {
+                        if newValue, !isUsingReasoningModal {
+                            // Close the sheet while we wait for the LLM to respond
+                            viewModel.showResumeRevisionSheet = false
+                        } else if !newValue {
                             resetToFirstNode()
                         }
                     }
@@ -145,6 +161,7 @@ struct RevisionReviewView: View {
                     .padding()
             }
         }
+        .frame(maxWidth: 860)
     }
 
     // MARK: - View Setup and Cleanup
@@ -259,9 +276,6 @@ struct RevisionReviewHeader: View {
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 20)
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 8)
     }
 }
 

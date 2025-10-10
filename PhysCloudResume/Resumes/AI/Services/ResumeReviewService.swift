@@ -98,7 +98,8 @@ class ResumeReviewService: @unchecked Sendable {
                 }
                 
                 Logger.debug("✅ ResumeReviewService: Review completed successfully")
-                onComplete(.success(response))
+                onProgress(response)
+                onComplete(.success("Done"))
                 
             } catch {
                 // Check if request was cancelled
@@ -115,7 +116,6 @@ class ResumeReviewService: @unchecked Sendable {
     
     /// Sends a request to the LLM to revise skills for fitting
     /// - Parameters:
-    ///   - resume: The resume containing the skills
     ///   - skillsJsonString: JSON string representation of skills
     ///   - base64Image: Base64 encoded image of the resume
     ///   - overflowLineCount: Number of lines overflowing from previous contentsFit check
@@ -125,7 +125,6 @@ class ResumeReviewService: @unchecked Sendable {
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendFixFitsRequest(
-        resume: Resume,
         skillsJsonString: String,
         base64Image: String,
         overflowLineCount: Int = 0,
@@ -221,18 +220,12 @@ class ResumeReviewService: @unchecked Sendable {
     
     /// Sends a request to the LLM to check if content fits
     /// - Parameters:
-    ///   - resume: The resume to check
     ///   - base64Image: Base64 encoded image of the resume
-    ///   - supportsReasoning: Whether the model supports reasoning (for streaming)
-    ///   - onReasoningUpdate: Optional callback for reasoning content streaming
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendContentsFitRequest(
-        resume: Resume,
         base64Image: String,
         modelId: String,
-        supportsReasoning: Bool = false,
-        onReasoningUpdate: ((String) -> Void)? = nil,
         onComplete: @escaping (Result<ContentsFitResponse, Error>) -> Void
     ) {
         let requestID = UUID()
@@ -309,13 +302,11 @@ class ResumeReviewService: @unchecked Sendable {
     /// Sends a request to reorder skills based on job relevance
     /// - Parameters:
     ///   - resume: The resume containing the skills
-    ///   - appState: The application state for creating the LLM client
     ///   - modelId: The model to use for skill reordering
     ///   - onComplete: Completion callback with result
     @MainActor
     func sendReorderSkillsRequest(
         resume: Resume,
-        appState: AppState,
         modelId: String,
         onComplete: @escaping (Result<ReorderSkillsResponseContainer, Error>) -> Void
     ) {
@@ -354,28 +345,6 @@ class ResumeReviewService: @unchecked Sendable {
     }
     
     // MARK: - Helper Methods
-    
-    /// Extracts overflow line count from JSON content string
-    /// - Parameter content: The JSON content string
-    /// - Returns: The overflow line count, or nil if not found
-    private func extractOverflowLineCount(from content: String) -> Int? {
-        // Try to find overflow_line_count in the JSON string
-        let patterns = [
-            "\"overflow_line_count\"\\s*:\\s*(\\d+)",
-            "\"overflow_line_count\":(\\d+)"
-        ]
-        
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-               let match = regex.firstMatch(in: content, options: [], range: NSRange(content.startIndex..., in: content)),
-               let numberRange = Range(match.range(at: 1), in: content) {
-                let numberString = String(content[numberRange])
-                return Int(numberString)
-            }
-        }
-        
-        return nil
-    }
     
     /// Apply skill reordering to the resume's tree structure
     @MainActor

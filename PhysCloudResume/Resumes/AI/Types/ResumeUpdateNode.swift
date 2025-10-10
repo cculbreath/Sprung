@@ -210,23 +210,6 @@ struct RevisionsContainer: Codable, StructuredOutput {
         try container.encode(revArray, forKey: .revArray)
     }
     
-    /// Validate the revisions container
-    /// - Returns: True if valid, false otherwise
-    func validate() -> Bool {
-        // Check if we have any revisions
-        guard !revArray.isEmpty else {
-            return false
-        }
-        
-        // Basic validation of revision nodes
-        for revision in revArray {
-            if revision.id.isEmpty || revision.oldValue.isEmpty || revision.newValue.isEmpty {
-                return false
-            }
-        }
-        
-        return true
-    }
 }
 
 enum PostReviewAction: String, Codable {

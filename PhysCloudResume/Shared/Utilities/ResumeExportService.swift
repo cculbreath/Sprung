@@ -57,6 +57,11 @@ class ResumeExportService: ObservableObject {
             return template
         }
 
+        if let fallback = defaultTemplate() {
+            resume.template = fallback
+            return fallback
+        }
+
         do {
             return try await promptForCustomTemplate(for: resume)
         } catch let error as ExportTemplateSelectionError {
@@ -103,27 +108,45 @@ class ResumeExportService: ObservableObject {
         return generateBasicTextTemplate()
     }
 
+    private func defaultTemplate() -> Template? {
+        if let archer = templateStore.template(slug: "archer") {
+            return archer
+        }
+        if let typewriter = templateStore.template(slug: "typewriter") {
+            return typewriter
+        }
+        return templateStore.templates().first
+    }
+
     private func generateBasicTextTemplate() -> String {
         return """
-{{{centeredName}}}
-{{{centeredJobTitles}}}
-{{{centeredContact}}}
+{{{ center(contact.name, 80) }}}
 
-{{{sectionLine_summary}}}
-{{{wrappedSummary}}}
+{{{ center(join(job-titles), 80) }}}
 
-{{{sectionLine_employment}}}
+{{#contactLine}}
+{{{ center(contactLine, 80) }}}
+{{/contactLine}}
+
+{{{ wrap(summary, 80, 6, 6) }}}
+
+{{#section-labels.employment}}
+{{{ sectionLine(section-labels.employment, 80) }}}
+{{/section-labels.employment}}
+
 {{#employment}}
-{{{employmentFormatted}}}
-{{#highlights}}
-{{#.}}
-* {{.}}
-{{/.}}
-{{/highlights}}
+{{ employer }}{{#location}} | {{{.}}}{{/location}}
+{{#position}}
+{{ position }}
+{{/position}}
+{{ formatDate(start) }} – {{ formatDate(end) }}
+{{{ bulletList(highlights, 80, 2, "•") }}}
 
 {{/employment}}
 
-{{{footerTextFormatted}}}
+{{#more-info}}
+{{{ wrap(uppercase(more-info), 80, 0, 0) }}}
+{{/more-info}}
 """
     }
 }

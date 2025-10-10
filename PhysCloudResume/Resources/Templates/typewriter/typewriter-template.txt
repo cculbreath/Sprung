@@ -1,38 +1,56 @@
-{{{centeredName}}}
+{{{ center(contact.name, 80) }}}
 
-{{{centeredJobTitles}}}
+{{{ center(join(job-titles), 80) }}}
 
-{{{centeredContact}}}
+{{#contactLine}}
+{{{ center(contactLine, 80) }}}
+{{/contactLine}}
 
-{{{wrappedSummary}}}
+{{{ wrap(summary, 80, 6, 6) }}}
 
-{{{sectionLine_skillsAndExpertise}}}
+{{#section-labels.skills-and-expertise}}
+{{{ sectionLine(., 80) }}}
+{{/section-labels.skills-and-expertise}}
 
-{{{skillsAndExpertiseFormatted}}}
+{{#skills-and-expertise}}
+{{title}}
+{{{ wrap(description, 80, 3, 0) }}}
 
-{{{sectionLine_employment}}}
+{{/skills-and-expertise}}
+
+{{#section-labels.employment}}
+{{{ sectionLine(., 80) }}}
+{{/section-labels.employment}}
 
 {{#employment}}
-{{{employmentFormatted}}}
-{{{position}}}
-{{#highlights}}
-{{#.}}
-  • {{.}}
-{{/.}}
-{{/highlights}}
+{{ employer }}{{#location}} | {{{.}}}{{/location}}
+{{#position}}
+{{ position }}
+{{/position}}
+{{ formatDate(start) }} – {{ formatDate(end) }}
+{{{ bulletList(highlights, 80, 2, "•") }}}
 
 {{/employment}}
 
-{{{sectionLine_education}}}
+{{#section-labels.education}}
+{{{ sectionLine(., 80) }}}
+{{/section-labels.education}}
 
 {{#education}}
-    {{end}} | {{title}}
-         | {{institution}}
+{{ formatDate(start) }} – {{ formatDate(end) }} | {{ title }}
+         | {{ institution }}
 
 {{/education}}
 
-{{{sectionLine_hobbies}}}
+{{#section-labels.hobbies}}
+{{{ sectionLine(., 80) }}}
+{{/section-labels.hobbies}}
 
-{{{projectsHighlightsFormatted}}}
+{{#projects-highlights}}
+{{ name }}: {{{ wrap(description, 80, 2, 0) }}}
 
-{{{footerTextFormatted}}}
+{{/projects-highlights}}
+
+{{#more-info}}
+{{{ wrap(uppercase(more-info), 80, 0, 0) }}}
+{{/more-info}}

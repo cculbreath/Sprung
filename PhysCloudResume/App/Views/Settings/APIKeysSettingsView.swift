@@ -8,210 +8,76 @@
 import SwiftUI
 
 struct APIKeysSettingsView: View {
-    // AppStorage properties specific to this view
-    @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
-    @AppStorage("openAiApiKey") private var openAiApiKey: String = "none"
-    @AppStorage("proxycurlApiKey") private var proxycurlApiKey: String = "none"
-    @AppStorage("openAiTTSApiKey") private var openAiTTSApiKey: String = "none"
-
-    // State for managing editing mode for each key
-    @State private var isEditingScrapingDog = false
-    @State private var isEditingOpenAI = false
-    @State private var isEditingProxycurl = false
-    @State private var isEditingOpenAITTS = false
-    @State private var isEditingOpenRouter = false
-
-    // State for holding the edited value temporarily
-    @State private var editedScrapingDogApiKey = ""
-    @State private var editedOpenAiApiKey = ""
-    @State private var editedProxycurlApiKey = ""
-    @State private var editedOpenAiTTSApiKey = ""
-    @State private var editedOpenRouterApiKey = ""
-
-    // State for hover effects on save/cancel buttons
-    @State private var isHoveringCheckmark = false
-    @State private var isHoveringXmark = false
-    
-    // Environment
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(LLMService.self) private var llmService
-    
-    // App Storage for API keys
+
+    @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
     @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
-    
-    // State for managing the Choose Models sheet
+    @AppStorage("openAiTTSApiKey") private var openAiTTSApiKey: String = "none"
+
     @State private var showModelSelectionSheet = false
 
-    // Action to trigger model fetch when keys change
-    var onOpenAIKeyUpdate: () -> Void = {} // Callback
-    
-    // Note: API validation can be implemented per-service as needed
-    
-    // Update LLM client when keys change
-    private func updateLLMClient() {
-        Task { @MainActor in
-            // Reinitialize the LLM service with updated API keys
-            llmService.initialize(appState: appState)
-            
-            // Fetch OpenRouter models if the OpenRouter API key was changed
-            if !openRouterApiKey.isEmpty {
-                Task {
-                    await appState.openRouterService.fetchModels()
-                }
-            }
-        }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("API Keys")
-                .font(.headline)
-                .padding(.bottom, 5)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Manage credentials used for importing jobs and accessing external AI services. Leave a field blank to remove the saved key.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
 
-            VStack(spacing: 0) {
-                // OpenRouter API Key Row
-                apiKeyRow(
-                    label: "OpenRouter",
-                    icon: "globe",
-                    value: $openRouterApiKey,
-                    isEditing: $isEditingOpenRouter,
-                    editedValue: $editedOpenRouterApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark,
-                    onSave: {
-                        // Reconfigure the OpenRouter service with the new API key
-                        // Persist key to Keychain
-                        let keyToStore = openRouterApiKey == "none" ? "" : openRouterApiKey
-                        if !keyToStore.isEmpty {
-                            _ = APIKeyManager.set(.openRouter, value: keyToStore)
-                        } else {
-                            APIKeyManager.delete(.openRouter)
-                        }
-                        appState.reconfigureOpenRouterService()
-                        
-                        if appState.hasValidOpenRouterKey {
-                            Task {
-                                await appState.openRouterService.fetchModels()
-                            }
-                        }
-                        updateLLMClient()
-                        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
-                    }
-                )
-                
-                Divider()
-                
-                // Scraping Dog API Key Row
-                apiKeyRow(
-                    label: "Scraping Dog",
-                    icon: "dog.fill",
-                    value: $scrapingDogApiKey,
-                    isEditing: $isEditingScrapingDog,
-                    editedValue: $editedScrapingDogApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark
-                )
-                
-                Divider()
-                
-                // OpenAI TTS API Key Row
-                apiKeyRow(
-                    label: "OpenAI TTS",
-                    icon: "speaker.wave.2",
-                    value: $openAiTTSApiKey,
-                    isEditing: $isEditingOpenAITTS,
-                    editedValue: $editedOpenAiTTSApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark,
-                    onSave: {
-                        // Persist OpenAI key to Keychain
-                        let keyToStore = openAiTTSApiKey == "none" ? "" : openAiTTSApiKey
-                        if !keyToStore.isEmpty {
-                            _ = APIKeyManager.set(.openAI, value: keyToStore)
-                        } else {
-                            APIKeyManager.delete(.openAI)
-                        }
-                        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
-                    }
-                )
-                
-                Divider()
-                
-                // Proxycurl API Key Row
-                apiKeyRow(
-                    label: "Proxycurl",
-                    icon: "link.circle.fill",
-                    value: $proxycurlApiKey,
-                    isEditing: $isEditingProxycurl,
-                    editedValue: $editedProxycurlApiKey,
-                    isHoveringCheckmark: $isHoveringCheckmark,
-                    isHoveringXmark: $isHoveringXmark
-                )
-                
-            }
-            .padding(10)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.7), lineWidth: 1)
+            APIKeyEditor(
+                title: "OpenRouter",
+                systemImage: "globe",
+                value: $openRouterApiKey,
+                placeholder: "sk-or-…",
+                help: "Required for multi-model résumé reasoning and OpenRouter integrations.",
+                onSave: handleOpenRouterSave
             )
-        }
-        
-        // LLM Model Selection Section
-        VStack(alignment: .leading, spacing: 10) {
-            Text("LLM Model Selection")
-                .font(.headline)
-                .padding(.bottom, 5)
-            
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Configure which AI models are available for use")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
+
+            APIKeyEditor(
+                title: "Scraping Dog",
+                systemImage: "dog.fill",
+                value: $scrapingDogApiKey,
+                placeholder: "sdg-…",
+                help: "Optional fallback scraper for LinkedIn job imports.",
+                normalizesNoneValue: true
+            )
+
+            APIKeyEditor(
+                title: "OpenAI (Voice)",
+                systemImage: "speaker.wave.2",
+                value: $openAiTTSApiKey,
+                placeholder: "sk-…",
+                help: "Used for text-to-speech previews when narrating résumés.",
+                normalizesNoneValue: true,
+                onSave: handleOpenAITTSSave
+            )
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button("Choose OpenRouter Models…") {
+                    appState.reconfigureOpenRouterService()
+                    showModelSelectionSheet = true
                 }
-                
-                HStack {
-                    Button("Choose Models...") {
-                        // Ensure OpenRouter service is configured before showing the sheet
-                        appState.reconfigureOpenRouterService()
-                        showModelSelectionSheet = true
-                    }
-                    .disabled(!appState.hasValidOpenRouterKey)
-                    
-                    Spacer()
-                    
-                    if appState.hasValidOpenRouterKey {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.green)
-                                .frame(width: 8, height: 8)
-                            Text("\(appState.openRouterService.availableModels.count) available, \(enabledLLMStore.enabledModelIds.count) selected")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    } else {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.red)
-                                .frame(width: 8, height: 8)
-                            Text("OpenRouter API key required")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+                .disabled(!appState.hasValidOpenRouterKey)
+
+                if appState.hasValidOpenRouterKey {
+                    Label(
+                        "\(appState.openRouterService.availableModels.count) available, \(enabledLLMStore.enabledModelIds.count) selected",
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .labelStyle(.titleAndIcon)
+                    .symbolRenderingMode(.hierarchical)
+                } else {
+                    Label("OpenRouter key required", systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                        .symbolRenderingMode(.hierarchical)
                 }
             }
-            .padding(10)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.7), lineWidth: 1)
-            )
         }
         .sheet(isPresented: $showModelSelectionSheet) {
             OpenRouterModelSelectionSheet()
@@ -219,111 +85,125 @@ struct APIKeysSettingsView: View {
         }
     }
 
-    // Reusable view builder for each API key row
-    @ViewBuilder
-    private func apiKeyRow(
-        label: String,
-        icon: String,
-        value: Binding<String>,
-        isEditing: Binding<Bool>,
-        editedValue: Binding<String>,
-        isHoveringCheckmark: Binding<Bool>, // Pass hover state bindings
-        isHoveringXmark: Binding<Bool>,
-        onSave: (() -> Void)? = nil // Optional save action callback
-    ) -> some View {
-        HStack {
-            // Label and Icon
-            HStack {
-                Image(systemName: icon)
-                    .foregroundColor(.secondary) // Use secondary color for icon
-                Text(label)
-                    .fontWeight(.medium)
-            }
-            .frame(width: 120, alignment: .leading) // Align label width
-
-            Spacer()
-
-            // Editing State: TextField and Save/Cancel Buttons
-            if isEditing.wrappedValue {
-                HStack(spacing: 8) {
-                    // Use SecureField for API keys
-                    SecureField("Enter API Key", text: editedValue)
-                        .textFieldStyle(PlainTextFieldStyle()) // Keep it simple
-                        .padding(.vertical, 4) // Add some padding
-                        .background(Color(NSColor.textBackgroundColor)) // Standard background
-                        .cornerRadius(4)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.gray.opacity(0.5)))
-
-                    // Save Button
-                    Button {
-                        // Trim the key to remove any whitespace
-                        let cleanKey = editedValue.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                        value.wrappedValue = cleanKey.isEmpty ? "none" : cleanKey
-                        isEditing.wrappedValue = false
-                        
-                        // Log key update (without revealing the entire key)
-                        if cleanKey != "none" && !cleanKey.isEmpty {
-                            let firstChars = String(cleanKey.prefix(4))
-                            let length = cleanKey.count
-                            Logger.debug("🔑 Updated API key for \(label): First chars: \(firstChars), Length: \(length)")
-                        }
-                        
-                        onSave?() // Call the save callback if provided
-                        updateLLMClient() // Update the LLM client when any API key changes
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(isHoveringCheckmark.wrappedValue ? .green : .gray)
-                    }
-                    .buttonStyle(BorderlessButtonStyle())
-                    .onHover { hovering in isHoveringCheckmark.wrappedValue = hovering }
-
-                    // Cancel Button
-                    Button {
-                        isEditing.wrappedValue = false // Just cancel editing
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(isHoveringXmark.wrappedValue ? .red : .gray)
-                    }
-                    .buttonStyle(BorderlessButtonStyle())
-                    .onHover { hovering in isHoveringXmark.wrappedValue = hovering }
-                }
-                .frame(maxWidth: .infinity) // Allow editing controls to take space
-
-                // Display State: Masked Key and Edit Button
-            } else {
-                HStack {
-                    // Mask the API key for display
-                    Text(maskApiKey(value.wrappedValue))
-                        .italic()
-                        .foregroundColor(.gray)
-                        .fontWeight(.light)
-                        .lineLimit(1)
-                        .truncationMode(.middle) // Show middle part if too long
-
-                    Spacer() // Push edit button to the right
-
-                    // Edit Button
-                    Button {
-                        editedValue.wrappedValue = (value.wrappedValue == "none" ? "" : value.wrappedValue)
-                        isEditing.wrappedValue = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .buttonStyle(BorderlessButtonStyle())
-                    .foregroundColor(.gray) // Subtle edit icon color
-                }
-                .frame(maxWidth: .infinity) // Allow display controls to take space
-            }
+    private func handleOpenRouterSave(_ newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            APIKeyManager.delete(.openRouter)
+            openRouterApiKey = ""
+        } else {
+            _ = APIKeyManager.set(.openRouter, value: trimmed)
+            openRouterApiKey = trimmed
         }
-        .padding(.vertical, 8)
+
+        appState.reconfigureOpenRouterService()
+        llmService.reconfigureClient()
+        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
 
-    // Helper function to mask API keys
-    private func maskApiKey(_ key: String) -> String {
-        guard key != "none", key.count > 8 else {
-            return key // Show "none" or short keys as is
+    private func handleOpenAITTSSave(_ newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            APIKeyManager.delete(.openAI)
+            openAiTTSApiKey = "none"
+        } else {
+            _ = APIKeyManager.set(.openAI, value: trimmed)
+            openAiTTSApiKey = trimmed
         }
-        // Show first 4 and last 4 characters
-        return "\(key.prefix(4))...\(key.suffix(4))"
+        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
+    }
+}
+
+private struct APIKeyEditor: View {
+    let title: String
+    let systemImage: String
+    @Binding var value: String
+    var placeholder: String = "API Key"
+    var help: String?
+    var normalizesNoneValue: Bool = false
+    var onSave: ((String) -> Void)?
+
+    @State private var isEditing = false
+    @State private var draft: String = ""
+
+    private var displayValue: String {
+        normalizesNoneValue && value == "none" ? "" : value
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(title, systemImage: systemImage)
+                    .labelStyle(.titleAndIcon)
+
+                Spacer()
+
+                if isEditing {
+                    HStack(spacing: 8) {
+                        Button("Save") {
+                            commit()
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button("Cancel") {
+                            cancel()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                } else {
+                    Button("Edit") {
+                        startEditing()
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+
+            if isEditing {
+                SecureField(placeholder, text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        commit()
+                    }
+            } else if !displayValue.isEmpty {
+                Text(mask(displayValue))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Not configured")
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+            }
+
+            if let help {
+                Text(help)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func startEditing() {
+        draft = displayValue
+        isEditing = true
+    }
+
+    private func cancel() {
+        isEditing = false
+        draft = displayValue
+    }
+
+    private func commit() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored = trimmed.isEmpty && normalizesNoneValue ? "none" : trimmed
+
+        value = stored
+        onSave?(trimmed)
+        isEditing = false
+    }
+
+    private func mask(_ raw: String) -> String {
+        guard raw.count > 8 else { return raw }
+        let prefix = raw.prefix(4)
+        let suffix = raw.suffix(4)
+        return "\(prefix)…\(suffix)"
     }
 }

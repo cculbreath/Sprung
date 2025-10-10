@@ -178,19 +178,23 @@ final class LLMService {
         to parameters: inout ChatCompletionParameters
     ) {
         guard let reasoning else { return }
-        var reasoningDict: [String: Any] = [:]
-        if let effort = reasoning.effort {
-            reasoningDict["effort"] = effort
-        }
-        if let maxTokens = reasoning.maxTokens {
-            reasoningDict["max_tokens"] = maxTokens
-        }
-        if let exclude = reasoning.exclude {
-            reasoningDict["exclude"] = exclude
-        }
-        if !reasoningDict.isEmpty {
-            parameters.reasoning = reasoningDict
-            Logger.debug("🧠 Configured reasoning parameters: \(reasoningDict)")
+        let hasOverride =
+            reasoning.maxTokens != nil ||
+            (reasoning.exclude != nil && reasoning.exclude != false)
+
+        if hasOverride {
+            parameters.reasoningEffort = nil
+            parameters.reasoning = ChatCompletionParameters.ReasoningOverrides(
+                effort: reasoning.effort,
+                exclude: reasoning.exclude,
+                maxTokens: reasoning.maxTokens
+            )
+            Logger.debug(
+                "🧠 Configured reasoning override: effort=\(reasoning.effort ?? "nil"), exclude=\(String(describing: reasoning.exclude)), max_tokens=\(String(describing: reasoning.maxTokens))"
+            )
+        } else {
+            parameters.reasoning = nil
+            parameters.reasoningEffort = reasoning.effort
         }
     }
 

@@ -24,43 +24,29 @@ struct DebugSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Debug Settings")
-                .font(.headline)
-                .padding(.bottom, 5)
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle("Save debug files to Downloads", isOn: saveDebugPromptsBinding)
+                .toggleStyle(.switch)
+                .help("When enabled, key debug transcripts and payloads are written to ~/Downloads for later analysis.")
 
-            HStack {
-                Toggle("Save Debug Files to Downloads", isOn: saveDebugPromptsBinding)
-                    .toggleStyle(SwitchToggleStyle())
-                    .help("When enabled, debug files will be saved to your Downloads folder")
-            }
-            .padding(.horizontal, 10)
-
-            HStack {
-                Text("Debug Log Level:")
-                Picker("Log Level", selection: logLevelBinding) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Debug Log Level")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Picker("Debug Log Level", selection: logLevelBinding) {
                     ForEach(DebugSettingsStore.LogLevelSetting.allCases) { level in
                         Text(level.title).tag(level)
                     }
                 }
-                .pickerStyle(SegmentedPickerStyle())
-                .frame(width: 240)
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 260)
             }
-            .padding(.horizontal, 10)
 
-            Text("These settings control debug output and file saving. Debug files may contain sensitive information such as API requests and responses.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.top, 5)
+            Text("These controls adjust diagnostic output and optional log file saving. Debug files can include sensitive request payloads.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
-        .padding(10)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.7), lineWidth: 1)
-        )
     }
 }
 

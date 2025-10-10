@@ -46,7 +46,7 @@ struct ApplicantProfileView: View {
                             .textFieldStyle(.roundedBorder)
                     }
 
-                    Section("Address") {
+                    Section("Mailing Address") {
                         TextField("Street Address", text: $profile.address)
                             .onChange(of: profile.address) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)

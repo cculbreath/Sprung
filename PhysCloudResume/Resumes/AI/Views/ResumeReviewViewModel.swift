@@ -61,7 +61,7 @@ class ResumeReviewViewModel {
             }
         case .reorderSkills:
             Task {
-                await performReorderSkills(resume: resume, selectedModel: selectedModel, appState: appState)
+                await performReorderSkills(resume: resume, selectedModel: selectedModel)
             }
         default:
             performGeneralReview(
@@ -214,14 +214,13 @@ class ResumeReviewViewModel {
         isProcessingFixOverflow = false
     }
     
-    private func performReorderSkills(resume: Resume, selectedModel: String, appState: AppState) async {
+    private func performReorderSkills(resume: Resume, selectedModel: String) async {
         isProcessingFixOverflow = true
         fixOverflowStatusMessage = "Starting skills reordering..."
         
         let result = await reorderSkillsService?.performReorderSkills(
             resume: resume,
-            selectedModel: selectedModel,
-            appState: appState
+            selectedModel: selectedModel
         ) { [weak self] status in
             Task { @MainActor in
                 self?.fixOverflowStatusMessage = status.statusMessage
