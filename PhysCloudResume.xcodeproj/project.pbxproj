@@ -291,8 +291,8 @@
 		570FEC7A2C855BF80074D1E0 /* Debug configuration for PBXNativeTarget "PhysCloudResume" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = ResumeComposer;
-				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = ResumeComposer;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Sprung;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = Sprung;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = PhysCloudResume/PhysCloudResume.entitlements;
@@ -330,8 +330,8 @@
 		570FEC7B2C855BF80074D1E0 /* Release configuration for PBXNativeTarget "PhysCloudResume" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = ResumeComposer;
-				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = ResumeComposer;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Sprung;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = Sprung;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = PhysCloudResume/PhysCloudResume.entitlements;
@@ -419,7 +419,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/cculbreath/SwiftOpenAI.git";
 			requirement = {
-				branch = main;
+				branch = "feature/streaming-tts-v4";
 				kind = branch;
 			};
 		};

@@ -48,51 +48,15 @@ class ResumeReviseViewModel {
     var currentModelId: String? // Make currentModelId accessible to views
     private(set) var isProcessingRevisions: Bool = false
     private var activeStreamingHandle: LLMStreamingHandle?
-    
-    // AI Resubmission handling (from AiCommsView)
-    private var isWaitingForResubmission: Bool = false
+    private var isCompletingReview: Bool = false
     
     // MARK: - Reasoning Stream State (now uses global manager)
     // reasoningStreamManager is accessed via appState.globalReasoningStreamManager
-    
-    // MARK: - Error Handling
-    private(set) var lastError: String?
-    private(set) var retryCount: Int = 0
-    private let maxRetries: Int = 2
-    
-    // MARK: - Configuration
-    private let revisionTimeout: TimeInterval = 180.0 // 3 minutes
     
     init(llmFacade: LLMFacade, appState: AppState, exportCoordinator: ResumeExportCoordinator) {
         self.llm = llmFacade
         self.appState = appState
         self.exportCoordinator = exportCoordinator
-        // Watch for aiResubmit changes to trigger resubmission workflow
-        // This replicates the onChange(of: aiResub) logic from AiCommsView
-        setupAIResubmitWatcher()
-    }
-    
-    /// Set up the aiResubmit watcher to trigger resubmission workflow
-    /// This replicates the onChange(of: aiResub) functionality from AiCommsView
-    private func setupAIResubmitWatcher() {
-        // Note: In SwiftUI @Observable, we can observe changes via Combine or manual checking
-        // For now, the aiResubmit change will be handled by calling processAIResubmissionWorkflow directly
-        // when ReviewView sets aiResubmit = true
-    }
-    
-    /// Handle aiResubmit workflow changes
-    /// Called when RevisionReviewView sets aiResubmit = true
-    /// The actual AI resubmission will be handled by UnifiedToolbar through existing workflows
-    func handleAIResubmitChange() {
-        guard aiResubmit else { return }
-        
-        Logger.debug("🔄 AI resubmit triggered - state updated for UI")
-        
-        // The aiResubmit = true state will trigger the resubmission workflow
-        // through UnifiedToolbar's existing clarifying questions workflow
-        // This maintains compatibility with the existing architecture
-        
-        isProcessingRevisions = true
     }
     
     // MARK: - Public Interface
@@ -377,46 +341,6 @@ class ResumeReviseViewModel {
     
     
     
-    /// Generate clarifying questions for the resume revision
-    /// - Parameters:
-    ///   - resume: The resume to analyze
-    ///   - query: The revision query
-    ///   - modelId: The model to use for question generation
-    /// - Returns: Clarifying questions request or nil if no questions needed
-    func requestClarifyingQuestions(
-        resume: Resume,
-        query: ResumeApiQuery,
-        modelId: String
-    ) async throws -> ClarifyingQuestionsRequest? {
-        
-        Logger.debug("❓ Requesting clarifying questions")
-        
-        // Capability gating centralized in facade (handled elsewhere)
-        
-        // Create clarifying questions prompt using the generic system message
-        let systemPrompt = query.genericSystemMessage.textContent
-        let userContext = await query.wholeResumeQueryString()
-        
-        // Request clarifying questions
-        let questionsRequest: ClarifyingQuestionsRequest = try await llm.executeStructured(
-            prompt: "\(systemPrompt)\n\nResume Context:\n\(userContext)",
-            modelId: modelId,
-            as: ClarifyingQuestionsRequest.self,
-            temperature: nil
-        )
-        
-        Logger.debug("📋 Generated \(questionsRequest.questions.count) clarifying questions")
-        Logger.debug("🎯 Proceed with revisions: \(questionsRequest.proceedWithRevisions)")
-        
-        return questionsRequest
-    }
-    
-    /// Apply only accepted changes to the resume tree structure
-    /// Delegates to the FeedbackNode collection extension
-    func applyAcceptedChanges(feedbackNodes: [FeedbackNode], to resume: Resume) {
-        feedbackNodes.applyAcceptedChanges(to: resume, exportCoordinator: exportCoordinator)
-    }
-    
     // MARK: - Review Workflow Navigation (Moved from ReviewView)
     
     /// Save the current feedback and move to next node
@@ -437,30 +361,57 @@ class ResumeReviseViewModel {
             break
         }
         
-        nextNode(resume: resume)
+        let hasMore = nextNode(resume: resume)
+        if hasMore {
+            attemptAutomaticCompletionIfReady(resume: resume)
+        }
     }
     
     /// Move to the next revision node in the workflow
-    func nextNode(resume: Resume) {
+    @discardableResult
+    func nextNode(resume: Resume) -> Bool {
         // Add current feedback node to array
         if let currentFeedbackNode = currentFeedbackNode {
-            feedbackNodes.append(currentFeedbackNode)
-            feedbackIndex += 1
-            Logger.debug("Added node to feedbackNodes. New index: \(feedbackIndex)/\(resumeRevisions.count)")
+            if feedbackIndex < feedbackNodes.count {
+                feedbackNodes[feedbackIndex] = currentFeedbackNode
+            } else {
+                feedbackNodes.append(currentFeedbackNode)
+            }
+            Logger.debug("Recorded feedback for node index \(feedbackIndex + 1) of \(resumeRevisions.count)")
+        } else {
+            Logger.warning("⚠️ Tried to advance without a currentFeedbackNode at index \(feedbackIndex)")
         }
+
+        feedbackIndex += 1
 
         if feedbackIndex < resumeRevisions.count {
             Logger.debug("Moving to next node at index \(feedbackIndex)")
             currentRevisionNode = resumeRevisions[feedbackIndex]
-            currentFeedbackNode = currentRevisionNode?.createFeedbackNode()
+            
+            if feedbackIndex < feedbackNodes.count {
+                currentFeedbackNode = feedbackNodes[feedbackIndex]
+                restoreUIStateFromFeedbackNode(feedbackNodes[feedbackIndex])
+            } else {
+                currentFeedbackNode = currentRevisionNode?.createFeedbackNode()
+                resetUIState()
+            }
+            return true
         } else {
             Logger.debug("Reached end of revisionArray. Processing completion...")
             completeReviewWorkflow(with: resume)
+            return false
         }
     }
     
     /// Complete the review workflow - apply changes and handle resubmission
     func completeReviewWorkflow(with resume: Resume) {
+        guard !isCompletingReview else {
+            Logger.debug("⚠️ Ignoring re-entrant completeReviewWorkflow call")
+            return
+        }
+        isCompletingReview = true
+        defer { isCompletingReview = false }
+        
         // Merge approved feedback from previous rounds with current feedback
         let allFeedbackNodes = approvedFeedbackNodes + feedbackNodes
         
@@ -492,6 +443,24 @@ class ResumeReviseViewModel {
             showResumeRevisionSheet = false
             Logger.debug("🔍 [completeReviewWorkflow] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
         }
+    }
+    
+    /// Attempt to finish the workflow automatically once every revision has a response
+    private func attemptAutomaticCompletionIfReady(resume: Resume) {
+        guard !resumeRevisions.isEmpty else { return }
+        guard !isCompletingReview else { return }
+        
+        let respondedIds = feedbackNodes
+            .filter { $0.actionRequested != .unevaluated }
+            .map { $0.id }
+        
+        let respondedSet = Set(respondedIds)
+        let expectedSet = Set(resumeRevisions.map { $0.id })
+        
+        guard expectedSet.isSubset(of: respondedSet) else { return }
+        
+        Logger.debug("✅ All revision nodes have responses. Completing workflow automatically.")
+        completeReviewWorkflow(with: resume)
     }
     
     /// Start AI resubmission workflow
@@ -637,9 +606,13 @@ class ResumeReviseViewModel {
             // Clear loading state
             aiResubmit = false
             
-            // For reasoning models, show the review sheet again
-            if supportsReasoning && !resumeRevisions.isEmpty {
-                Logger.debug("🔍 Showing review sheet again after reasoning modal")
+            // Show the review sheet again now that we have updated revisions
+            if !resumeRevisions.isEmpty {
+                if supportsReasoning {
+                    Logger.debug("🔍 Showing review sheet again after reasoning modal")
+                } else {
+                    Logger.debug("🔍 Reopening review sheet after resubmission (non-reasoning model)")
+                }
                 showResumeRevisionSheet = true
             }
             
@@ -649,10 +622,8 @@ class ResumeReviseViewModel {
             Logger.error("Error in AI resubmission: \(error.localizedDescription)")
             aiResubmit = false
             
-            // Ensure sheet is shown again on error for reasoning models
-            if supportsReasoning {
-                showResumeRevisionSheet = true
-            }
+            // Ensure sheet is shown again so the user can recover
+            showResumeRevisionSheet = true
         }
     }
     
@@ -666,6 +637,14 @@ class ResumeReviseViewModel {
         guard feedbackIndex > 0 else { 
             Logger.debug("Cannot navigate to previous: already at first revision")
             return 
+        }
+        
+        if let currentFeedbackNode = currentFeedbackNode {
+            if feedbackIndex < feedbackNodes.count {
+                feedbackNodes[feedbackIndex] = currentFeedbackNode
+            } else {
+                feedbackNodes.append(currentFeedbackNode)
+            }
         }
         
         feedbackIndex -= 1
@@ -701,8 +680,12 @@ class ResumeReviseViewModel {
         }
         
         // Save current feedback node if it exists and isn't already saved
-        if let currentFeedbackNode = currentFeedbackNode, feedbackIndex >= feedbackNodes.count {
-            feedbackNodes.append(currentFeedbackNode)
+        if let currentFeedbackNode = currentFeedbackNode {
+            if feedbackIndex < feedbackNodes.count {
+                feedbackNodes[feedbackIndex] = currentFeedbackNode
+            } else {
+                feedbackNodes.append(currentFeedbackNode)
+            }
         }
         
         feedbackIndex += 1
@@ -782,42 +765,11 @@ class ResumeReviseViewModel {
         return feedbackNode.actionRequested == .acceptedWithChanges
     }
     
-    /// Check if a node had change requested (for unchanged values - pencil button illumination)
-    func isChangeRequested(_ feedbackNode: FeedbackNode?) -> Bool {
-        guard let feedbackNode = feedbackNode else { return false }
-        let changeRequestedActions: Set<PostReviewAction> = [.mandatedChange, .mandatedChangeNoComment]
-        return changeRequestedActions.contains(feedbackNode.actionRequested)
-    }
-    
     /// Reset UI state for new/fresh feedback nodes
     private func resetUIState() {
         isCommenting = false
         isMoreCommenting = false
         isEditingResponse = false
-    }
-    
-    /// Clear all action states (for radio button behavior)
-    func clearActionStates() {
-        isCommenting = false
-        isMoreCommenting = false
-        isEditingResponse = false
-    }
-    
-    
-    /// Clear conversation state and reset workflow
-    func resetWorkflowState() {
-        Logger.debug("🔄 Resetting revision workflow state")
-        
-        if let conversationId = currentConversationId {
-            llm.clearConversation(id: conversationId)
-        }
-        
-        currentConversationId = nil
-        currentModelId = nil
-        retryCount = 0
-        lastError = nil
-        isProcessingRevisions = false
-        cancelActiveStreaming()
     }
     
     // MARK: - Private Helpers
@@ -928,22 +880,6 @@ class ResumeReviseViewModel {
         return validRevisions
     }
     
-    /// Filter feedback nodes to find those requiring AI resubmission
-    private func filterNodesForAIResubmission(_ feedbackNodes: [FeedbackNode]) -> [FeedbackNode] {
-        let aiActions: Set<PostReviewAction> = [
-            .revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment
-        ]
-        
-        let nodesToRevise = feedbackNodes.filter { aiActions.contains($0.actionRequested) }
-        
-        Logger.debug("🔍 Found \(nodesToRevise.count) nodes requiring AI resubmission")
-        for node in nodesToRevise {
-            Logger.debug("  - Node \(node.id): \(node.actionRequested.rawValue)")
-        }
-        
-        return nodesToRevise
-    }
-    
     /// Create a revision prompt from feedback nodes
     private func createRevisionPrompt(feedbackNodes: [FeedbackNode]) -> String {
         var prompt = "Please revise the following items based on the feedback provided:\n\n"
@@ -964,22 +900,6 @@ class ResumeReviseViewModel {
         prompt += "Please provide improved revisions that address the feedback, maintaining the same JSON format as before."
         
         return prompt
-    }
-    
-    /// Format clarifying questions and answers for inclusion in prompt
-    private func formatClarifyingQuestionsAndAnswers(_ qa: [QuestionAnswer]) -> String {
-        var formatted = ""
-        
-        for item in qa {
-            formatted += "Question ID: \(item.questionId)\n"
-            if let answer = item.answer {
-                formatted += "Answer: \(answer)\n\n"
-            } else {
-                formatted += "Answer: [No answer provided]\n\n"
-            }
-        }
-        
-        return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     /// Stream revision generation with reasoning support

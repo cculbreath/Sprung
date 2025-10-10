@@ -31,17 +31,24 @@ private struct TemplateEditorLayout {
     }
 }
 
+private struct TextFilterInfo: Identifiable {
+    let id = UUID()
+    let name: String
+    let signature: String
+    let description: String
+}
+
 private enum TemplateEditorTab: String, CaseIterable, Identifiable {
-    case assets = "Assets"
-    case manifest = "Manifest"
-    case seed = "Seed"
+    case pdfTemplate = "PDF Template"
+    case txtTemplate = "TXT Template"
+    case manifest = "Data Manifest"
+    case seed = "Seed Values"
 
     var id: String { rawValue }
 }
 
 private enum PendingTemplateChange {
     case template
-    case format
 }
 
 struct TemplateEditorView: View {
@@ -50,8 +57,7 @@ struct TemplateEditorView: View {
     @Environment(AppEnvironment.self) private var appEnvironment
     
     @State private var selectedTemplate: String = "archer"
-    @State private var selectedFormat: String = "pdf"
-    @State private var selectedTab: TemplateEditorTab = .assets
+    @State private var selectedTab: TemplateEditorTab = .pdfTemplate
     @State private var templateContent: String = ""
     @State private var assetHasChanges: Bool = false
     @State private var showingSaveAlert: Bool = false
@@ -70,6 +76,7 @@ struct TemplateEditorView: View {
     
     // Live preview state
     @State private var previewPDFData: Data?
+    @State private var showInspector: Bool = true
     @State private var debounceTimer: Timer?
     @State private var isGeneratingLivePreview: Bool = false
     
@@ -83,7 +90,44 @@ struct TemplateEditorView: View {
     @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableTemplates: [String] = []
     
-    let formats = ["pdf", "txt"]
+    @State private var showSidebar: Bool = true
+    private let textFilterReference: [TextFilterInfo] = [
+        TextFilterInfo(
+            name: "center",
+            signature: "center(text, width)",
+            description: "Centers the provided text within the given width."
+        ),
+        TextFilterInfo(
+            name: "wrap",
+            signature: "wrap(text, width, leftMargin, rightMargin)",
+            description: "Wraps text to the specified width with optional margins."
+        ),
+        TextFilterInfo(
+            name: "sectionLine",
+            signature: "sectionLine(label, width)",
+            description: "Builds a decorative section header line."
+        ),
+        TextFilterInfo(
+            name: "join",
+            signature: "join(array, separator)",
+            description: "Joins array elements into a single string using the separator."
+        ),
+        TextFilterInfo(
+            name: "bulletList",
+            signature: "bulletList(array, width, indent, bullet, valueKey)",
+            description: "Formats an array as bullet points. `valueKey` is optional for dictionary arrays."
+        ),
+        TextFilterInfo(
+            name: "formatDate",
+            signature: "formatDate(date, outputFormat, inputFormat)",
+            description: "Formats dates (default input patterns include ISO and yyyy-MM)."
+        ),
+        TextFilterInfo(
+            name: "uppercase",
+            signature: "uppercase(text)",
+            description: "Uppercases the provided text if present."
+        )
+    ]
     
     private var selectedResume: Resume? {
         appState.selectedResume
@@ -96,12 +140,23 @@ struct TemplateEditorView: View {
     private var isEditingCurrentTemplate: Bool {
         guard let resume = selectedResume else { return false }
         let resumeTemplate = resume.template?.slug ?? resume.template?.name ?? "archer"
-        return selectedTemplate.lowercased() == resumeTemplate.lowercased() && selectedFormat == "pdf"
+        return selectedTemplate.lowercased() == resumeTemplate.lowercased() && selectedTab == .pdfTemplate
+    }
+
+    private var currentFormat: String {
+        switch selectedTab {
+        case .pdfTemplate:
+            return "pdf"
+        case .txtTemplate:
+            return "txt"
+        default:
+            return "pdf"
+        }
     }
 
     private var currentHasChanges: Bool {
         switch selectedTab {
-        case .assets:
+        case .pdfTemplate, .txtTemplate:
             return assetHasChanges
         case .manifest:
             return manifestHasChanges
@@ -116,18 +171,24 @@ struct TemplateEditorView: View {
 
     private var unsavedTabNames: String {
         var names: [String] = []
-        if assetHasChanges { names.append(TemplateEditorTab.assets.rawValue) }
-        if manifestHasChanges { names.append(TemplateEditorTab.manifest.rawValue) }
-        if seedHasChanges { names.append(TemplateEditorTab.seed.rawValue) }
+        if assetHasChanges {
+            names.append("Template")
+        }
+        if manifestHasChanges {
+            names.append(TemplateEditorTab.manifest.rawValue)
+        }
+        if seedHasChanges {
+            names.append(TemplateEditorTab.seed.rawValue)
+        }
         return names.joined(separator: ", ")
     }
 
     private var pendingChangeDescription: String {
         switch pendingTemplateChange {
-        case .format:
-            return "changing formats"
+        case .template:
+            return "switching views"
         default:
-            return "switching templates"
+            return "switching views"
         }
     }
 
@@ -144,6 +205,8 @@ struct TemplateEditorView: View {
                 let layout = TemplateEditorLayout(totalWidth: proxy.size.width)
                 columnLayout(for: layout)
             }
+            Divider()
+            bottomToolbar()
         }
         .frame(minWidth: 960, minHeight: 600)
         .onAppear {
@@ -153,7 +216,7 @@ struct TemplateEditorView: View {
             loadSeed()
             manifestHasChanges = false
             seedHasChanges = false
-            if selectedFormat == "pdf" {
+            if selectedTab == .pdfTemplate {
                 generateInitialPreview()
             }
         }
@@ -162,29 +225,35 @@ struct TemplateEditorView: View {
                 pendingTemplateChange = .template
                 showingSaveAlert = true
             } else {
-                pendingTemplateChange = .template
-                applyPendingTemplateChange()
-            }
-        }
-        .onChange(of: selectedFormat) { _ in
-            if assetHasChanges {
-                pendingTemplateChange = .format
-                showingSaveAlert = true
-            } else {
-                pendingTemplateChange = .format
                 applyPendingTemplateChange()
             }
         }
         .onChange(of: selectedTab) { newTab in
-            if newTab == .manifest && manifestContent.isEmpty {
-                loadManifest()
-            } else if newTab == .seed && seedContent.isEmpty {
-                loadSeed()
+            switch newTab {
+            case .pdfTemplate, .txtTemplate:
+                if hasAnyUnsavedChanges {
+                    pendingTemplateChange = .template
+                    showingSaveAlert = true
+                } else {
+                    loadTemplate()
+                    if newTab == .pdfTemplate {
+                        generateInitialPreview()
+                    } else {
+                        previewPDFData = nil
+                    }
+                }
+            case .manifest:
+                if manifestContent.isEmpty {
+                    loadManifest()
+                }
+            case .seed:
+                if seedContent.isEmpty {
+                    loadSeed()
+                }
             }
         }
         .onChange(of: selectedResume?.id) {
-            // When the selected resume changes, update the preview
-            if selectedFormat == "pdf" {
+            if selectedTab == .pdfTemplate {
                 generateInitialPreview()
             }
         }
@@ -248,30 +317,44 @@ struct TemplateEditorView: View {
     
     @ViewBuilder
     private func columnLayout(for layout: TemplateEditorLayout) -> some View {
+        let inspectorVisible = showInspector && selectedTab == .pdfTemplate
+
         HStack(spacing: 0) {
-            sidebarContent()
-                .frame(width: layout.sidebarWidth)
-                .frame(maxHeight: .infinity)
-                .background(layout.sidebarColor)
-                .overlay(Divider(), alignment: .trailing)
+            if showSidebar {
+                sidebarContent()
+                    .frame(width: layout.sidebarWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(layout.sidebarColor)
+                    .overlay(Divider(), alignment: .trailing)
+            }
 
-            editorContent()
-                .frame(width: layout.editorWidth)
-                .frame(maxHeight: .infinity)
-                .background(layout.editorColor)
-
-            inspectorContent()
-                .frame(width: layout.inspectorWidth)
-                .frame(maxHeight: .infinity)
-                .background(layout.inspectorColor)
-                .overlay(Divider(), alignment: .leading)
+            Group {
+                if inspectorVisible {
+                    HSplitView {
+                        editorContent()
+                            .frame(minWidth: 360)
+                            .frame(maxHeight: .infinity)
+                            .background(layout.editorColor)
+                        inspectorContent()
+                            .frame(minWidth: 240, idealWidth: layout.inspectorWidth)
+                            .frame(maxHeight: .infinity)
+                            .background(layout.inspectorColor)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    editorContent()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(layout.editorColor)
+                }
+            }
+            
         }
     }
 
     @ViewBuilder
     private func editorContent() -> some View {
         switch selectedTab {
-        case .assets:
+        case .pdfTemplate, .txtTemplate:
             assetsEditor()
         case .manifest:
             manifestEditor()
@@ -282,14 +365,49 @@ struct TemplateEditorView: View {
 
     private func topToolbar() -> some View {
         HStack(spacing: 12) {
-            Picker("Editor:", selection: $selectedTab) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showSidebar.toggle()
+                }
+            } label: {
+                Image(systemName: "sidebar.leading")
+                    .foregroundStyle(showSidebar ? Color.primary : Color.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(showSidebar ? "Hide Sidebar" : "Show Sidebar")
+
+            Spacer()
+
+            Picker("", selection: $selectedTab) {
                 ForEach(TemplateEditorTab.allCases) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
             }
             .pickerStyle(SegmentedPickerStyle())
-            .frame(maxWidth: 300)
+            .frame(maxWidth: 320)
 
+            Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showInspector.toggle()
+                }
+            } label: {
+                Image(systemName: "sidebar.trailing")
+                    .foregroundStyle((selectedTab == .pdfTemplate && showInspector) ? Color.primary : Color.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(showInspector ? "Hide Preview" : "Show Preview")
+            .disabled(selectedTab != .pdfTemplate)
+            .opacity(selectedTab == .pdfTemplate ? 1 : 0.35)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private func bottomToolbar() -> some View {
+        HStack(spacing: 12) {
             if hasAnyUnsavedChanges {
                 Text("Unsaved changes")
                     .font(.callout)
@@ -310,7 +428,7 @@ struct TemplateEditorView: View {
             }
             .disabled(!currentHasChanges)
 
-            Button("Cancel") {
+            Button("Close") {
                 closeEditor()
             }
         }
@@ -358,17 +476,28 @@ struct TemplateEditorView: View {
 
                 Divider()
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Format")
-                        .font(.headline)
-                    Picker("Format", selection: $selectedFormat) {
-                        ForEach(formats, id: \.self) { format in
-                            Text(format.uppercased()).tag(format)
+                if selectedTab == .txtTemplate {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Text Filters")
+                            .font(.headline)
+                        ForEach(textFilterReference) { filter in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(filter.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text(filter.signature)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text(filter.description)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.vertical, 2)
+                            Divider()
                         }
                     }
-                    .labelsHidden()
-                    .pickerStyle(MenuPickerStyle())
-                    .frame(maxWidth: .infinity)
                 }
 
                 if let resume = selectedResume {
@@ -390,8 +519,10 @@ struct TemplateEditorView: View {
     @ViewBuilder
     private func inspectorContent() -> some View {
         switch selectedTab {
-        case .assets:
+        case .pdfTemplate:
             previewInspector()
+        case .txtTemplate:
+            EmptyView()
         case .manifest:
             manifestInspector()
         case .seed:
@@ -421,7 +552,7 @@ struct TemplateEditorView: View {
                     }
                 }
 
-                if selectedFormat == "pdf" {
+                if selectedTab == .pdfTemplate {
                     HStack(spacing: 12) {
                         Button("Refresh Preview") {
                             previewPDF()
@@ -457,7 +588,7 @@ struct TemplateEditorView: View {
             Divider()
 
             Group {
-                if selectedFormat == "pdf" {
+                if selectedTab == .pdfTemplate {
                     if let pdfData = previewPDFData {
                         PDFPreviewView(
                             pdfData: pdfData,
@@ -488,6 +619,7 @@ struct TemplateEditorView: View {
                 }
             }
             .background(Color(NSColor.textBackgroundColor))
+
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -552,7 +684,7 @@ struct TemplateEditorView: View {
     private func assetsEditor() -> some View {
         TemplateTextEditor(text: $templateContent) {
             assetHasChanges = true
-            if selectedFormat == "pdf" && selectedTab == .assets {
+            if selectedTab == .pdfTemplate {
                 scheduleLivePreviewUpdate()
             }
         }
@@ -624,7 +756,7 @@ struct TemplateEditorView: View {
 
     private func revertCurrentTab() {
         switch selectedTab {
-        case .assets:
+        case .pdfTemplate, .txtTemplate:
             loadTemplate()
         case .manifest:
             loadManifest()
@@ -637,7 +769,7 @@ struct TemplateEditorView: View {
     private func saveCurrentTab(closeAfter: Bool = false) -> Bool {
         let success: Bool
         switch selectedTab {
-        case .assets:
+        case .pdfTemplate, .txtTemplate:
             success = saveTemplate()
         case .manifest:
             success = saveManifest()
@@ -674,14 +806,7 @@ struct TemplateEditorView: View {
     }
 
     private func applyPendingTemplateChange() {
-        switch pendingTemplateChange {
-        case .format:
-            reloadForFormatChange()
-        case .template:
-            reloadForTemplateChange()
-        case .none:
-            reloadForTemplateChange()
-        }
+        reloadForTemplateChange()
         pendingTemplateChange = nil
     }
 
@@ -689,16 +814,7 @@ struct TemplateEditorView: View {
         loadTemplate()
         loadManifest()
         loadSeed()
-        if selectedFormat == "pdf" {
-            generateInitialPreview()
-        } else {
-            previewPDFData = nil
-        }
-    }
-
-    private func reloadForFormatChange() {
-        loadTemplate()
-        if selectedFormat == "pdf" {
+        if selectedTab == .pdfTemplate {
             generateInitialPreview()
         } else {
             previewPDFData = nil
@@ -707,7 +823,7 @@ struct TemplateEditorView: View {
 
     private func loadTemplate() {
         let resourceName = "\(selectedTemplate)-template"
-        let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
+        let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
 
         // Prefer SwiftData-stored templates when available
         let storedSlug = selectedTemplate.lowercased()
@@ -1005,7 +1121,7 @@ struct TemplateEditorView: View {
     @discardableResult
     private func saveTemplate() -> Bool {
         let resourceName = "\(selectedTemplate)-template"
-        let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
+        let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
 
         // Save to Documents directory
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
@@ -1054,7 +1170,7 @@ struct TemplateEditorView: View {
     
     @MainActor
     private func previewPDF() {
-        guard selectedTab == .assets, let resume = selectedResume else { return }
+        guard selectedTab == .pdfTemplate, let resume = selectedResume else { return }
 
         // Auto-save if there are changes
         if assetHasChanges {
@@ -1120,7 +1236,7 @@ struct TemplateEditorView: View {
             return
         }
         
-        let fileExtension = selectedFormat == "pdf" ? "html" : selectedFormat
+        let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
         let initialContent = createEmptyTemplate(name: trimmedName, format: fileExtension)
         appEnvironment.templateStore.upsertTemplate(
             slug: trimmedName,
@@ -1210,25 +1326,32 @@ struct TemplateEditorView: View {
 """
         case "txt":
             return """
-{{{centeredName}}}
-{{{centeredJobTitles}}}
-{{{centeredContact}}}
+{{{ center(contact.name, 80) }}}
 
-{{{sectionLine_summary}}}
-{{{wrappedSummary}}}
+{{{ center(join(job-titles), 80) }}}
 
-{{{sectionLine_employment}}}
+{{#contactLine}}
+{{{ center(contactLine, 80) }}}
+{{/contactLine}}
+
+{{{ wrap(summary, 80, 6, 6) }}}
+
+{{#section-labels.employment}}
+{{{ sectionLine(section-labels.employment, 80) }}}
+{{/section-labels.employment}}
 {{#employment}}
-{{{employmentFormatted}}}
-{{#highlights}}
-{{#.}}
-* {{.}}
-{{/.}}
-{{/highlights}}
+{{ employer }}{{#location}} | {{{.}}}{{/location}}
+{{#position}}
+{{ position }}
+{{/position}}
+{{ formatDate(start) }} – {{ formatDate(end) }}
+{{{ bulletList(highlights, 80, 2, "•") }}}
 
 {{/employment}}
 
-{{{footerTextFormatted}}}
+{{#more-info}}
+{{{ wrap(uppercase(more-info), 80, 0, 0) }}}
+{{/more-info}}
 """
         default:
             return "// New \(name) template in \(format) format"
@@ -1245,7 +1368,7 @@ struct TemplateEditorView: View {
     // MARK: - Live Preview Methods
     
     private func scheduleLivePreviewUpdate() {
-        guard selectedTab == .assets else { return }
+        guard selectedTab == .pdfTemplate else { return }
         // Cancel existing timer
         debounceTimer?.invalidate()
         
@@ -1259,7 +1382,7 @@ struct TemplateEditorView: View {
     
     @MainActor
     private func generateInitialPreview() {
-        guard selectedTab == .assets else { return }
+        guard selectedTab == .pdfTemplate else { return }
         Task {
             await generateLivePreview()
         }
@@ -1267,7 +1390,7 @@ struct TemplateEditorView: View {
 
     @MainActor
     private func generateLivePreview() async {
-        guard selectedTab == .assets, let resume = selectedResume else { return }
+        guard selectedTab == .pdfTemplate, let resume = selectedResume else { return }
 
         // If we're not editing the current template, just show the existing PDF
         if !isEditingCurrentTemplate || !assetHasChanges {

@@ -114,7 +114,7 @@ class FixOverflowService {
             }
             
             // Check if content fits
-            let contentsFitResult = await checkContentFits(resume: resume, selectedModel: selectedModel, iteration: loopCount, supportsReasoning: supportsReasoning, onReasoningUpdate: onReasoningUpdate)
+            let contentsFitResult = await checkContentFits(resume: resume, selectedModel: selectedModel, iteration: loopCount)
             guard case let .success(contentsFitResponse) = contentsFitResult else {
                 if case let .failure(error) = contentsFitResult {
                     return .failure(FixOverflowError.contentsFitCheckFailed(iteration: loopCount, error: error))
@@ -193,7 +193,6 @@ class FixOverflowService {
             let allowMergeForThisIteration = allowEntityMerge && iteration == 1
             
             reviewService.sendFixFitsRequest(
-                resume: resume,
                 skillsJsonString: skillsJsonString,
                 base64Image: currentImageBase64,
                 overflowLineCount: currentOverflowLineCount,
@@ -295,7 +294,7 @@ class FixOverflowService {
         }
     }
     
-    private func checkContentFits(resume: Resume, selectedModel: String, iteration: Int, supportsReasoning: Bool = false, onReasoningUpdate: ((String) -> Void)? = nil) async -> Result<ContentsFitResponse, Error> {
+    private func checkContentFits(resume: Resume, selectedModel: String, iteration: Int) async -> Result<ContentsFitResponse, Error> {
         guard let updatedPdfData = resume.pdfData,
               let updatedImageBase64 = ImageConversionService.shared.convertPDFToBase64Image(pdfData: updatedPdfData)
         else {
@@ -306,11 +305,8 @@ class FixOverflowService {
         return await withCheckedContinuation { continuation in
             Logger.debug("FixOverflow: Inside continuation for contentsFit request")
             reviewService.sendContentsFitRequest(
-                resume: resume,
                 base64Image: updatedImageBase64,
-                modelId: selectedModel,
-                supportsReasoning: supportsReasoning,
-                onReasoningUpdate: onReasoningUpdate
+                modelId: selectedModel
             ) { result in
                 Logger.debug("FixOverflow: Received contentsFit response: \(result)")
                 continuation.resume(returning: result)

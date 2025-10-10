@@ -29,6 +29,7 @@ class TextResumeGenerator {
         let context = try createTemplateContext(from: resume)
         let processedContext = preprocessContextForText(context, from: resume)
         let mustacheTemplate = try Mustache.Template(string: customText)
+        TemplateFilters.register(on: mustacheTemplate)
         return try mustacheTemplate.render(processedContext)
     }
     
@@ -44,6 +45,7 @@ class TextResumeGenerator {
         
         // Render with Mustache
         let mustacheTemplate = try Mustache.Template(string: templateContent)
+        TemplateFilters.register(on: mustacheTemplate)
         return try mustacheTemplate.render(processedContext)
     }
     
@@ -113,7 +115,15 @@ class TextResumeGenerator {
                          userInfo: [NSLocalizedDescriptionKey: "Template not found: \(template)"])
         }
         
-        return content
+        var sanitized = content
+        let legacySnippet = "{{{ center(join(job-titles, \" · \"), 80) }}}"
+        let updatedSnippet = "{{{ center(join(job-titles), 80) }}}"
+        if sanitized.contains(legacySnippet) {
+            Logger.debug("TextResumeGenerator: migrated legacy join syntax in template \(template)")
+            sanitized = sanitized.replacingOccurrences(of: legacySnippet, with: updatedSnippet)
+        }
+        sanitized = Self.migrateLegacyFormatDateCalls(in: sanitized)
+        return sanitized
     }
     
     private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
@@ -124,47 +134,37 @@ class TextResumeGenerator {
     private func preprocessContextForText(_ context: [String: Any], from resume: Resume) -> [String: Any] {
         var processed = context
         
-        // Text-specific preprocessing
-        
-        // Process contact information for text output
+        // Normalize contact values and build contactItems
+        var contactItems: [String] = []
+        if var contact = processed["contact"] as? [String: Any],
+           let name = contact["name"] as? String {
+            contact["name"] = name.decodingHTMLEntities()
+            processed["contact"] = contact
+        }
         if let contact = processed["contact"] as? [String: Any] {
-            if let name = contact["name"] as? String {
-                // Decode HTML entities for text output
-                let cleanName = name.decodingHTMLEntities()
-                processed["centeredName"] = TextFormatHelpers.wrapper(cleanName, width: 80, centered: true)
-            }
-            
             if let location = contact["location"] as? [String: Any] {
-                let city = location["city"] as? String ?? ""
-                let state = location["state"] as? String ?? ""
-                let phone = contact["phone"] as? String ?? ""
-                let email = contact["email"] as? String ?? ""
-                let website = contact["website"] as? String ?? ""
-                
-                let contactLine = "\(city), \(state) * \(phone) * \(email) * \(website)"
-                processed["centeredContact"] = TextFormatHelpers.wrapper(contactLine, width: 80, centered: true)
+                let city = (location["city"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let state = (location["state"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !city.isEmpty || !state.isEmpty {
+                    contactItems.append(state.isEmpty ? city : "\(city), \(state)")
+                }
             }
+            appendIfPresent(contact["phone"], to: &contactItems)
+            appendIfPresent(contact["email"], to: &contactItems)
+            appendIfPresent(contact["website"], to: &contactItems)
         }
-        
-        // Process job titles
-        if let jobTitles = processed["job-titles"] as? [String] {
-            let plainJobTitles = jobTitles.joined(separator: " · ")
-            processed["centeredJobTitles"] = TextFormatHelpers.wrapper(plainJobTitles, width: 80, centered: true)
+        if !contactItems.isEmpty {
+            processed["contactItems"] = contactItems
+            processed["contactLine"] = contactItems.joined(separator: " • ")
         }
-        
-        // Process summary with trimming
-        if let summary = processed["summary"] as? String {
-            let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-            processed["wrappedSummary"] = TextFormatHelpers.wrapper(trimmedSummary, width: 80, leftMargin: 6, rightMargin: 6)
-        }
-        
-        // Convert employment to array format and add text formatting
+
+        // Convert employment data to array preserving order
         if let employment = processed["employment"] as? [String: Any] {
             let employmentArray = convertEmploymentToArray(employment, from: resume)
             processed["employment"] = employmentArray
         }
-        
-        // Handle skills-and-expertise
+
+        // Ensure skills are represented as an array of dictionaries
         if let skillsDict = processed["skills-and-expertise"] as? [String: Any] {
             var skillsArray: [[String: Any]] = []
             for (title, description) in skillsDict {
@@ -174,9 +174,6 @@ class TextResumeGenerator {
                 ])
             }
             processed["skills-and-expertise"] = skillsArray
-            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(skillsArray, width: 80, indent: 3)
-        } else if let skillsArray = processed["skills-and-expertise"] as? [[String: Any]] {
-            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(skillsArray, width: 80, indent: 3)
         }
         
         // Convert education object to array format
@@ -185,53 +182,24 @@ class TextResumeGenerator {
             for (institution, details) in educationDict {
                 if var detailsDict = details as? [String: Any] {
                     detailsDict["institution"] = institution
+                    normalizeLocation(in: &detailsDict)
                     educationArray.append(detailsDict)
                 }
             }
             processed["education"] = educationArray
         }
-        
-        // Handle projects-highlights
-        if let projectsDict = processed["projects-highlights"] as? [String: Any] {
-            var projectsArray: [[String: Any]] = []
-            for (name, description) in projectsDict {
-                projectsArray.append([
-                    "name": name,
-                    "description": description
-                ])
-            }
-            processed["projects-highlights"] = projectsArray
-            processed["projectsHighlightsFormatted"] = TextFormatHelpers.wrapBlurb(projectsArray)
-        } else if let projectsArray = processed["projects-highlights"] as? [[String: Any]] {
-            processed["projectsHighlightsFormatted"] = TextFormatHelpers.wrapBlurb(projectsArray)
-        }
-        
-        // Add section line formatting with camelCase conversion
-        if let sectionLabels = processed["section-labels"] as? [String: Any] {
-            for (key, value) in sectionLabels {
-                if let label = value as? String {
-                    let camelCaseKey = key.split(separator: "-")
-                        .enumerated()
-                        .map { index, word in
-                            index == 0 ? String(word) : word.capitalized
-                        }
-                        .joined()
-                    processed["sectionLine_\(camelCaseKey)"] = TextFormatHelpers.sectionLine(label, width: 80)
-                }
-            }
-        }
-        
-        // Process footer text
+
         if let moreInfo = processed["more-info"] as? String {
-            let cleanFooterText = moreInfo.replacingOccurrences(of: #"<\/?[^>]+(>|$)|↪︎"#, with: "", options: .regularExpression).uppercased()
-            processed["footerTextFormatted"] = TextFormatHelpers.formatFooter(cleanFooterText, width: 80)
+            let cleaned = moreInfo
+                .replacingOccurrences(of: #"<\/?[^>]+(>|$)|↪︎"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            processed["more-info"] = cleaned
         }
-        
+
         return processed
     }
     
     private func convertEmploymentToArray(_ employment: [String: Any], from resume: Resume) -> [[String: Any]] {
-        // Get employment nodes directly from TreeNode structure to preserve sort order
         if let rootNode = resume.rootNode,
            let employmentSection = rootNode.children?.first(where: { $0.name == "employment" }),
            let employmentNodes = employmentSection.children {
@@ -244,25 +212,7 @@ class TextResumeGenerator {
                 if let details = employment[employer] as? [String: Any] {
                     var detailsDict = details
                     detailsDict["employer"] = employer
-                    
-                    // Add formatted employment line for text templates
-                    let location = detailsDict["location"] as? String ?? ""
-                    let start = detailsDict["start"] as? String ?? ""
-                    let end = detailsDict["end"] as? String ?? ""
-                    detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employer, location: location, start: start, end: end, width: 80)
-                    
-                    // Add formatted highlights with proper text wrapping
-                    if let highlights = detailsDict["highlights"] as? [String] {
-                        let formattedHighlights = highlights.map { highlight in
-                            TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
-                        }
-                        detailsDict["highlightsFormatted"] = formattedHighlights
-                    }
-                    
-                    // Add formatted dates for text display
-                    detailsDict["startFormatted"] = formatDateForText(start)
-                    detailsDict["endFormatted"] = formatDateForText(end)
-                    
+                    normalizeLocation(in: &detailsDict)
                     employmentArray.append(detailsDict)
                 }
             }
@@ -274,42 +224,48 @@ class TextResumeGenerator {
         return employment.map { employer, details in
             var detailsDict = details as? [String: Any] ?? [:]
             detailsDict["employer"] = employer
-            
-            let location = detailsDict["location"] as? String ?? ""
-            let start = detailsDict["start"] as? String ?? ""
-            let end = detailsDict["end"] as? String ?? ""
-            detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employer, location: location, start: start, end: end, width: 80)
-            
-            if let highlights = detailsDict["highlights"] as? [String] {
-                let formattedHighlights = highlights.map { highlight in
-                    TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
-                }
-                detailsDict["highlightsFormatted"] = formattedHighlights
-            }
-            
-            detailsDict["startFormatted"] = formatDateForText(start)
-            detailsDict["endFormatted"] = formatDateForText(end)
+            normalizeLocation(in: &detailsDict)
             
             return detailsDict
         }
     }
-    
-    private func formatDateForText(_ dateStr: String) -> String {
-        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        
-        if dateStr.isEmpty || dateStr.trimmingCharacters(in: .whitespaces) == "undefined" {
-            return "Present"
+
+    private func appendIfPresent(_ value: Any?, to array: inout [String]) {
+        guard let value else { return }
+        if let string = value as? String {
+            let cleaned = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.isEmpty {
+                array.append(cleaned)
+            }
+        } else if let number = value as? NSNumber {
+            array.append(number.stringValue)
         }
-        
-        let parts = dateStr.split(separator: "-")
-        if parts.count == 2, 
-           let year = Int(parts[0]),
-           let month = Int(parts[1]), 
-           month >= 1 && month <= 12 {
-            return "\(months[month - 1]) \(year)"
+    }
+
+    private func normalizeLocation(in dict: inout [String: Any]) {
+        if let locationDict = dict["location"] as? [String: Any] {
+            let city = (locationDict["city"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let state = (locationDict["state"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !city.isEmpty || !state.isEmpty {
+                dict["location"] = state.isEmpty ? city : "\(city), \(state)"
+            } else {
+                dict["location"] = nil
+            }
+        } else if let location = dict["location"] as? String {
+            let cleaned = location.trimmingCharacters(in: .whitespacesAndNewlines)
+            dict["location"] = cleaned.isEmpty ? nil : cleaned
         }
-        
-        return dateStr
+    }
+}
+
+private extension TextResumeGenerator {
+    static func migrateLegacyFormatDateCalls(in template: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"formatDate\(\s*([A-Za-z0-9_\.\-]+)\s*,\s*\"MMM yyyy\"\s*\)"#
+        ) else {
+            return template
+        }
+        let range = NSRange(template.startIndex..., in: template)
+        return regex.stringByReplacingMatches(in: template, options: [], range: range, withTemplate: "formatDate($1)")
     }
 }

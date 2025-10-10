@@ -32,104 +32,73 @@ struct TextToSpeechSettingsView: View {
     """
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Text-to-Speech")
-                .font(.headline)
-                .padding(.bottom, 5)
-
-            // Enable TTS Toggle
+        VStack(alignment: .leading, spacing: 12) {
             Toggle("Enable Text-to-Speech", isOn: $ttsEnabled)
                 .toggleStyle(.switch)
-                .disabled(!appState.hasValidOpenAiKey) // Disable if no API key
+                .disabled(!appState.hasValidOpenAiKey)
                 .onChange(of: ttsEnabled) { _, newValue in
-                    // Initialize or deinitialize TTS provider based on toggle
                     if newValue && appState.hasValidOpenAiKey {
                         initializeTTSProvider()
                     } else {
-                        ttsProvider = nil // Release provider if disabled or key removed
+                        ttsProvider = nil
                     }
                 }
 
-            // Show message if API key is missing
             if !appState.hasValidOpenAiKey {
-                Text("Add OpenAI API key to enable TTS.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text("Add an OpenAI API key to enable the résumé narration preview.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
-            // Show TTS options only if enabled
             if ttsEnabled && appState.hasValidOpenAiKey {
-                Divider().padding(.vertical, 5)
-
-                // Voice Selection
-                HStack {
-                    Text("Voice")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Picker("", selection: $ttsVoice) {
-                        // Show all voices from the OpenAITTSProvider
-                        ForEach(OpenAITTSProvider.Voice.allCases, id: \.rawValue) { voice in
-                            Text(voice.displayName).tag(voice.rawValue)
-                        }
+                Picker("Voice", selection: $ttsVoice) {
+                    ForEach(OpenAITTSProvider.Voice.allCases, id: \.rawValue) { voice in
+                        Text(voice.displayName).tag(voice.rawValue)
                     }
-                    .pickerStyle(.menu)
-                    .frame(maxWidth: 250) // Limit picker width
                 }
+                .pickerStyle(.menu)
 
-                // Voice Preview Button
                 HStack {
                     Spacer()
                     Button(action: previewVoice) {
-                        Label(isPreviewingVoice ? "Stop Preview" : "Preview Voice",
-                              systemImage: isPreviewingVoice ? "stop.circle.fill" : "play.circle.fill") // Use stop/play icons
+                        Label(
+                            isPreviewingVoice ? "Stop Preview" : "Preview Voice",
+                            systemImage: isPreviewingVoice ? "stop.circle.fill" : "play.circle.fill"
+                        )
                     }
-                    .disabled(isPreviewingVoice && ttsProvider == nil) // Disable if previewing without provider
+                    .disabled(isPreviewingVoice && ttsProvider == nil)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .help(isPreviewingVoice ? "Stop voice preview" : "Preview the selected voice")
                     Spacer()
                 }
-                .padding(.top, 5)
 
-                // Voice Instructions Section
-                Divider().padding(.vertical, 5)
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Voice Instructions")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.headline)
+                            .fontWeight(.semibold)
                         Spacer()
-                        Button("Reset to Default") {
+                        Button("Reset") {
                             ttsInstructions = defaultInstructions
                         }
-                        .buttonStyle(.link) // Use link style for less emphasis
+                        .buttonStyle(.link)
                         .controlSize(.small)
-                        .font(.caption)
                     }
 
                     TextEditor(text: $ttsInstructions)
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(minHeight: 100, idealHeight: 150, maxHeight: 200) // Constrain height
+                        .font(.system(.callout, design: .monospaced))
+                        .frame(minHeight: 120, maxHeight: 220)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                         )
-                        .scrollContentBackground(.hidden) // Hide default background if needed
 
-                    Text("Instructions guide the AI's voice delivery (affect, tone, pacing).")
-                        .font(.caption2) // Smaller caption
-                        .foregroundColor(.secondary)
+                    Text("Instructions guide the AI narrator’s tone, pacing, and emphasis when generating audio.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(10)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.7), lineWidth: 1)
-        )
         .onAppear {
             if ttsEnabled && appState.hasValidOpenAiKey { initializeTTSProvider() }
         }

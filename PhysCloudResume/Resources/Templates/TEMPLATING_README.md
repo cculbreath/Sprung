@@ -89,14 +89,27 @@ For convenience, the system adds preprocessed formatting:
 - Font size variables: `fontSizes.name`, `fontSizes.jobTitles`, etc.
 
 #### Text Templates  
-- `centeredName`: Name centered to 80 characters
-- `centeredJobTitles`: Job titles centered to 80 characters
-- `centeredContact`: Contact info centered to 80 characters
-- `wrappedSummary`: Summary wrapped with 6-character margins
-- `skillsAndExpertiseFormatted`: Skills formatted in aligned columns
-- `projectsHighlightsFormatted`: Projects formatted as bullet points
-- `sectionLine_*`: Section headers with decorative lines
-- `employmentFormatted`: Employment entries with aligned dates
+- `contact.name`, `job-titles`, `summary`: core resume fields from the SwiftData tree  
+- `contactItems`: array of contact strings (location, phone, email, website)  
+- `employment`: ordered array of dictionaries containing employer, location, position, start/end, highlights  
+- `education`: ordered array of dictionaries with institution, title, start/end  
+- `projects-highlights`: array of project dictionaries (name, description)  
+- `section-labels`: dictionary of localized section labels (access with `section-labels.skills-and-expertise`)  
+- `more-info`: free-form footer text  
+- Other resume properties exposed by `ResumeTemplateDataBuilder` are also available (see manifests)
+
+### Built-in Mustache Filters
+These filters are registered automatically for plain-text templates:
+
+| Filter | Usage | Description |
+| --- | --- | --- |
+| `center(text, width)` | `{{{ center(contact.name, 80) }}}` | Centers text within a width |
+| `wrap(text, width, leftMargin, rightMargin)` | `{{{ wrap(summary, 80, 6, 6) }}}` | Wraps text with optional margins |
+| `sectionLine(label, width)` | `{{{ sectionLine(section-labels.employment, 80) }}}` | Renders a decorative section header |
+| `join(array, separator)` | `{{{ center(join(job-titles), 80) }}}` | Joins array elements using the optional separator (defaults to " · ") |
+| `bulletList(array, width, indent, bullet, valueKey)` | `{{{ bulletList(highlights, 80, 2, "•") }}}` | Formats bullet items; optional `valueKey` for dictionaries |
+| `formatDate(date, outputFormat, inputFormat)` | `{{ formatDate(start) }}` | Formats dates using an optional output format (default `MMM yyyy`) |
+| `uppercase(text)` | `{{ uppercase(more-info) }}` | Uppercases text (returns nothing if empty) |
 
 ## Template Syntax
 
@@ -135,59 +148,6 @@ For convenience, the system adds preprocessed formatting:
   {{/highlights}}
 {{/employment}}
 ```
-
-## Swift Text Formatting Helpers
-
-Located in `TextFormatHelpers.swift`, these functions provide text formatting capabilities:
-
-### `wrapper(_:width:leftMargin:rightMargin:centered:rightFill:)`
-Wraps text to specified width with optional margins and centering.
-
-```swift
-TextFormatHelpers.wrapper("Long text here", width: 80, centered: true)
-```
-
-### `joiner(_:separator:)`
-Joins array elements with separator.
-
-```swift
-TextFormatHelpers.joiner(["A", "B", "C"], separator: " · ")
-// Result: "A · B · C"
-```
-
-### `sectionLine(_:width:)`
-Creates decorative section headers.
-
-```swift
-TextFormatHelpers.sectionLine("EMPLOYMENT", width: 80)
-// Result: "*----- EMPLOYMENT -----*"
-```
-
-### `jobString(_:location:start:end:width:)`
-Formats employment line with aligned dates.
-
-```swift
-TextFormatHelpers.jobString("Apple Inc", location: "Cupertino, CA", 
-                           start: "2020-01", end: "Present", width: 80)
-// Result: "Apple Inc | Cupertino, CA                     Jan 2020 – Present"
-```
-
-### `bulletText(_:marginLeft:width:bullet:)`
-Formats text as bullet points with hanging indent.
-
-```swift
-TextFormatHelpers.bulletText("Long achievement text", marginLeft: 2, bullet: "•")
-```
-
-### `splitAligned(_:width:)`
-Formats skill entries in aligned columns.
-
-```swift
-TextFormatHelpers.splitAligned(skillsArray, width: 80)
-```
-
-### `wrapBlurb(_:)`
-Formats project/hobby entries.
 
 ## Template Examples
 
@@ -232,30 +192,43 @@ Formats project/hobby entries.
 
 ### Text Template Structure
 ```
-{{{centeredName}}}
+{{{ center(contact.name, 80) }}}
 
-{{{centeredJobTitles}}}
+{{{ center(join(job-titles), 80) }}}
 
-{{{centeredContact}}}
+{{#contactLine}}
+{{{ center(contactLine, 80) }}}
+{{/contactLine}}
 
-{{{wrappedSummary}}}
+{{{ wrap(summary, 80, 6, 6) }}}
 
-{{{sectionLine_skillsAndExpertise}}}
+{{#section-labels.skills-and-expertise}}
+{{{ sectionLine(section-labels.skills-and-expertise, 80) }}}
+{{/section-labels.skills-and-expertise}}
 
-{{{skillsAndExpertiseFormatted}}}
+{{#skills-and-expertise}}
+{{ title }}
+{{{ wrap(description, 80, 3, 0) }}}
 
-{{{sectionLine_employment}}}
+{{/skills-and-expertise}}
+
+{{#section-labels.employment}}
+{{{ sectionLine(section-labels.employment, 80) }}}
+{{/section-labels.employment}}
 
 {{#employment}}
-{{{employmentFormatted}}}
-{{{position}}}
-{{#highlights}}
-{{#.}}
-  • {{.}}
-{{/.}}
-{{/highlights}}
+{{ employer }}{{#location}} | {{{.}}}{{/location}}
+{{#position}}
+{{ position }}
+{{/position}}
+{{ formatDate(start) }} – {{ formatDate(end) }}
+{{{ bulletList(highlights, 80, 2, "•") }}}
 
 {{/employment}}
+
+{{#more-info}}
+{{{ wrap(uppercase(more-info), 80, 0, 0) }}}
+{{/more-info}}
 ```
 
 ## System Font References

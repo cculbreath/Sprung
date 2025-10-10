@@ -154,9 +154,7 @@ class ImportJobAppsScript {
         var importedCount = 0
         var skippedCount = 0
         
-        // Get API keys
-        let proxycurlKey = UserDefaults.standard.string(forKey: "proxycurlApiKey") ?? "none"
-        let preferredApi = UserDefaults.standard.string(forKey: "preferredApi") ?? "proxycurl"
+        let scrapingDogKey = UserDefaults.standard.string(forKey: "scrapingDogApiKey") ?? "none"
         
         for jobData in jobAppsData {
             // Get URL
@@ -181,21 +179,19 @@ class ImportJobAppsScript {
             // Handle different URL types
             switch url.host {
             case "www.linkedin.com", "linkedin.com":
-                if preferredApi == "proxycurl" && proxycurlKey != "none" {
-                    // Use Proxycurl to fetch fresh data
-                    importedJobApp = await fetchLinkedInWithProxycurl(
+                if scrapingDogKey != "none" {
+                    importedJobApp = await fetchLinkedInWithScrapingDog(
                         url: url,
                         jobAppStore: jobAppStore,
-                        apiKey: proxycurlKey
+                        apiKey: scrapingDogKey
                     )
                     
                     if importedJobApp == nil {
-                        Logger.debug("⚠️ LinkedIn job no longer available (Proxycurl returned no data)")
+                        Logger.debug("⚠️ LinkedIn job no longer available (ScrapingDog returned no data)")
                         skippedCount += 1
-                        continue // Skip this job entirely
+                        continue
                     }
                 } else {
-                    // No API key, create basic entry
                     importedJobApp = createBasicJobApp(from: jobData, jobAppStore: jobAppStore)
                 }
                 
@@ -257,44 +253,53 @@ class ImportJobAppsScript {
         return importedCount
     }
     
-    /// Fetch LinkedIn job using Proxycurl API
+    /// Fetch LinkedIn job details using ScrapingDog API
     @MainActor
-    private static func fetchLinkedInWithProxycurl(url: URL, jobAppStore: JobAppStore, apiKey: String) async -> JobApp? {
-        let baseURL = "https://nubela.co/proxycurl/api/linkedin/job"
-        var components = URLComponents(string: baseURL)
-        components?.queryItems = [
-            URLQueryItem(name: "url", value: url.absoluteString)
-        ]
-        
-        guard let requestURL = components?.url else { return nil }
-        
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        
+    private static func fetchLinkedInWithScrapingDog(url: URL, jobAppStore: JobAppStore, apiKey: String) async -> JobApp? {
+        guard let jobId = extractLinkedInJobId(from: url) else {
+            Logger.debug("x Unable to parse job ID from LinkedIn URL: \(url.absoluteString)")
+            return nil
+        }
+
+        guard let requestURL = URL(string: "https://api.scrapingdog.com/linkedinjobs?api_key=\(apiKey)&job_id=\(jobId)") else {
+            return nil
+        }
+
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 60
+            config.timeoutIntervalForResource = 60
+            let session = URLSession(configuration: config)
+
+            let (data, response) = try await session.data(from: requestURL)
+
             if let httpResponse = response as? HTTPURLResponse {
-                if httpResponse.statusCode == 200 {
-                    // Parse the response
-                    return JobApp.parseProxycurlJobApp(
-                        jobAppStore: jobAppStore,
-                        jsonData: data,
-                        postingUrl: url.absoluteString
-                    )
-                } else if httpResponse.statusCode == 404 {
-                    Logger.debug("x Job listing not found (404)")
-                    return nil
-                } else {
-                    Logger.debug("x Proxycurl error: HTTP \(httpResponse.statusCode)")
+                guard httpResponse.statusCode == 200 else {
+                    Logger.debug("x ScrapingDog error: HTTP \(httpResponse.statusCode)")
                     return nil
                 }
             }
+
+            let jobDetails = try JSONDecoder().decode([JobApp].self, from: data)
+            if let jobDetail = jobDetails.first {
+                jobDetail.postingURL = url.absoluteString
+                return jobAppStore.addJobApp(jobDetail)
+            }
         } catch {
-            Logger.debug("x Proxycurl request failed: \(error)")
+            Logger.debug("x ScrapingDog request failed: \(error)")
         }
         
+        return nil
+    }
+
+    private static func extractLinkedInJobId(from url: URL) -> String? {
+        let pathComponents = url.pathComponents.reversed()
+        for component in pathComponents {
+            guard component != "view", !component.isEmpty else { continue }
+            if component.allSatisfy(\.isNumber) {
+                return component
+            }
+        }
         return nil
     }
     

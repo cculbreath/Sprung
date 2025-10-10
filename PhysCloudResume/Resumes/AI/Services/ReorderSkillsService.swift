@@ -20,7 +20,6 @@ class ReorderSkillsService {
     func performReorderSkills(
         resume: Resume,
         selectedModel: String,
-        appState: AppState,
         onStatusUpdate: @escaping (ReorderSkillsStatus) -> Void
     ) async -> Result<String, Error> {
         Logger.debug("ReorderSkills: Starting performReorderSkills")
@@ -34,7 +33,7 @@ class ReorderSkillsService {
         onStatusUpdate(ReorderSkillsStatus(statusMessage: "Asking AI to analyze and reorder skills for the target job position...", changeMessage: ""))
         
         // Send request to LLM to reorder skills
-        let reorderResult = await getReorderSuggestions(resume: resume, selectedModel: selectedModel, appState: appState)
+        let reorderResult = await getReorderSuggestions(resume: resume, selectedModel: selectedModel)
         
         guard case let .success(reorderResponse) = reorderResult else {
             if case let .failure(error) = reorderResult {
@@ -70,11 +69,10 @@ class ReorderSkillsService {
     
     // MARK: - Private Helper Methods
     
-    private func getReorderSuggestions(resume: Resume, selectedModel: String, appState: AppState) async -> Result<ReorderSkillsResponseContainer, Error> {
+    private func getReorderSuggestions(resume: Resume, selectedModel: String) async -> Result<ReorderSkillsResponseContainer, Error> {
         await withCheckedContinuation { continuation in
             reviewService.sendReorderSkillsRequest(
                 resume: resume,
-                appState: appState,
                 modelId: selectedModel,
                 onComplete: { result in
                     continuation.resume(returning: result)

@@ -18,6 +18,7 @@ struct PhysicsCloudResumeApp: App {
     private let appEnvironment: AppEnvironment
     
     init() {
+        TransformerRegistry.registerTransformers()
         // Preflight backup before opening/migrating the store
         SwiftDataBackupManager.performPreflightBackupIfNeeded()
         var resolvedContainer: ModelContainer
