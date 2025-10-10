@@ -168,38 +168,6 @@ final class LLMFacade {
         )
     }
 
-    // Streaming
-    func startStreaming(prompt: String, modelId: String, temperature: Double? = nil) async throws -> LLMStreamingHandle {
-        try await validate(modelId: modelId, requires: [])
-        let handleId = UUID()
-        let stream = AsyncThrowingStream<LLMStreamChunkDTO, Error> { continuation in
-            let task = Task {
-                defer {
-                    _ = Task { @MainActor in
-                        self.activeStreamingTasks.removeValue(forKey: handleId)
-                    }
-                }
-                do {
-                    let clientStream = client.startStreaming(prompt: prompt, modelId: modelId, temperature: temperature)
-                    for try await chunk in clientStream {
-                        if Task.isCancelled { break }
-                        continuation.yield(chunk)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            registerStreamingTask(task, for: handleId)
-        }
-        let cancelClosure: @Sendable () -> Void = { [weak self] in
-            Task { @MainActor in
-                self?.cancelStreaming(handleId: handleId)
-            }
-        }
-        return LLMStreamingHandle(id: handleId, conversationId: nil, stream: stream, cancel: cancelClosure)
-    }
-
     func executeStructuredStreaming<T: Codable & Sendable>(
         prompt: String,
         modelId: String,

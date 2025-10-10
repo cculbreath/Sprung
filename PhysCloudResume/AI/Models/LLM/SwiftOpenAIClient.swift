@@ -75,27 +75,4 @@ final class SwiftOpenAIClient: LLMClient {
         return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
 
-    func startStreaming(prompt: String, modelId: String, temperature: Double? = nil) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
-        var params = LLMRequestBuilder.buildTextRequest(
-            prompt: prompt,
-            modelId: modelId,
-            temperature: temperature ?? defaultTemperature
-        )
-        params.stream = true
-
-        return AsyncThrowingStream { continuation in
-            Task {
-                do {
-                    let stream = try await executor.executeStreaming(parameters: params)
-                    for try await chunk in stream {
-                        let chunkDTO = LLMVendorMapper.streamChunkDTO(from: chunk)
-                        continuation.yield(chunkDTO)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-        }
-    }
 }
