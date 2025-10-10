@@ -17,7 +17,8 @@ struct ResumeCustomizeButton: View {
             selectedTab = .resume
             showCustomizeModelSheet = true
         }) {
-            if isGeneratingResume || (resumeReviseViewModel?.aiResubmit ?? false) {
+            let isBusy = isGeneratingResume || (resumeReviseViewModel?.isWorkflowBusy(.customize) ?? false)
+            if isBusy {
                 Label("Customize", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
                     .symbolEffect(.variableColor.iterative.nonReversing)
                     .font(.system(size: 14, weight: .light))
@@ -74,7 +75,8 @@ struct ResumeCustomizeButton: View {
             
             try await viewModel.startFreshRevisionWorkflow(
                 resume: resume,
-                modelId: modelId
+                modelId: modelId,
+                workflow: .customize
             )
             
             isGeneratingResume = false

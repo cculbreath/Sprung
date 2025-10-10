@@ -24,7 +24,8 @@ struct ClarifyingQuestionsButton: View {
             // Don't clear questions here - they might be needed for the sheet
             showClarifyingQuestionsModelSheet = true
         }) {
-            if isGeneratingQuestions || (resumeReviseViewModel?.aiResubmit ?? false) {
+            let isBusy = isGeneratingQuestions || (resumeReviseViewModel?.isWorkflowBusy(.clarifying) ?? false)
+            if isBusy {
                 Label {
                     Text("Clarify & Customize")
                 } icon: {
