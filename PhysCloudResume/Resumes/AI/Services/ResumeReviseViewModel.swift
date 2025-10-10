@@ -14,6 +14,10 @@ import SwiftData
 @MainActor
 @Observable
 class ResumeReviseViewModel {
+    enum RevisionWorkflowKind {
+        case customize
+        case clarifying
+    }
     
     // MARK: - Dependencies
     private let llm: LLMFacade
@@ -35,6 +39,8 @@ class ResumeReviseViewModel {
     var currentRevisionNode: ProposedRevisionNode?
     var currentFeedbackNode: FeedbackNode?
     var aiResubmit: Bool = false
+    private(set) var activeWorkflow: RevisionWorkflowKind?
+    private var workflowInProgress: Bool = false
     
     // Review workflow navigation state (moved from ReviewView)
     var feedbackIndex: Int = 0
@@ -59,6 +65,23 @@ class ResumeReviseViewModel {
         self.exportCoordinator = exportCoordinator
     }
     
+    func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {
+        guard activeWorkflow == kind else { return false }
+        return workflowInProgress || aiResubmit
+    }
+    
+    private func markWorkflowStarted(_ kind: RevisionWorkflowKind) {
+        activeWorkflow = kind
+        workflowInProgress = true
+    }
+    
+    private func markWorkflowCompleted(reset: Bool) {
+        workflowInProgress = false
+        if reset {
+            activeWorkflow = nil
+        }
+    }
+    
     // MARK: - Public Interface
     
     /// Start a fresh revision workflow (without clarifying questions)
@@ -67,8 +90,10 @@ class ResumeReviseViewModel {
     ///   - modelId: The model to use for revisions
     func startFreshRevisionWorkflow(
         resume: Resume,
-        modelId: String
+        modelId: String,
+        workflow: RevisionWorkflowKind
     ) async throws {
+        markWorkflowStarted(workflow)
         
         // Reset UI state
         resumeRevisions = []
@@ -205,6 +230,7 @@ class ResumeReviseViewModel {
             
         } catch {
             isProcessingRevisions = false
+            markWorkflowCompleted(reset: true)
             throw error
         }
     }
@@ -220,6 +246,7 @@ class ResumeReviseViewModel {
         resume: Resume,
         modelId: String
     ) async throws {
+        markWorkflowStarted(.clarifying)
         // Store the conversation context
         currentConversationId = conversationId
         currentModelId = modelId
@@ -300,6 +327,7 @@ class ResumeReviseViewModel {
         } catch {
             Logger.error("Error continuing conversation for revisions: \(error.localizedDescription)")
             isProcessingRevisions = false
+            markWorkflowCompleted(reset: true)
             throw error
         }
     }
@@ -333,6 +361,7 @@ class ResumeReviseViewModel {
         Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
         showResumeRevisionSheet = true
         isProcessingRevisions = false
+        markWorkflowCompleted(reset: false)
         
         Logger.debug("🔍 [ResumeReviseViewModel] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
         Logger.debug("🔍 [ResumeReviseViewModel] Is this instance the same as appState.resumeReviseViewModel? \(appState.resumeReviseViewModel === self)")
@@ -442,6 +471,7 @@ class ResumeReviseViewModel {
             
             showResumeRevisionSheet = false
             Logger.debug("🔍 [completeReviewWorkflow] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
+            markWorkflowCompleted(reset: true)
         }
     }
     
@@ -470,6 +500,7 @@ class ResumeReviseViewModel {
         
         // Show loading UI
         aiResubmit = true
+        workflowInProgress = true
         
         // Ensure PDF is fresh before resubmission
         Task {
@@ -485,6 +516,7 @@ class ResumeReviseViewModel {
                 Logger.debug("Error rendering resume for AI resubmission: \(error)")
                 await MainActor.run {
                     aiResubmit = false
+                    workflowInProgress = false
                 }
             }
         }
@@ -605,6 +637,7 @@ class ResumeReviseViewModel {
             
             // Clear loading state
             aiResubmit = false
+            workflowInProgress = false
             
             // Show the review sheet again now that we have updated revisions
             if !resumeRevisions.isEmpty {
@@ -621,6 +654,7 @@ class ResumeReviseViewModel {
         } catch {
             Logger.error("Error in AI resubmission: \(error.localizedDescription)")
             aiResubmit = false
+            workflowInProgress = false
             
             // Ensure sheet is shown again so the user can recover
             showResumeRevisionSheet = true
@@ -950,8 +984,6 @@ class ResumeReviseViewModel {
             // Handle completion
             if chunk.isFinished {
                 appState.globalReasoningStreamManager.isStreaming = false
-                // Hide the reasoning modal when streaming completes
-                appState.globalReasoningStreamManager.isVisible = false
             }
         }
         cancelActiveStreaming()

@@ -144,7 +144,8 @@ struct AppWindowView: View {
             
             try await viewModel.startFreshRevisionWorkflow(
                 resume: resume,
-                modelId: modelId
+                modelId: modelId,
+                workflow: .customize
             )
             
         } catch {

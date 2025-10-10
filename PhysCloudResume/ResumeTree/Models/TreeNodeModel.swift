@@ -36,9 +36,20 @@ enum LeafStatus: String, Codable, Hashable {
     var schemaValidationPattern: String?
     var schemaValidationMin: Double?
     var schemaValidationMax: Double?
-    static let schemaValidationOptionsTransformerName = NSValueTransformerName("TreeNodeSchemaValidationOptionsTransformer")
-    @Attribute(.transformable(by: schemaValidationOptionsTransformerName.rawValue))
-    var schemaValidationOptions: [String] = []
+    @Attribute(.externalStorage)
+    private var schemaValidationOptionsData: Data?
+    var schemaValidationOptions: [String] {
+        get {
+            guard let schemaValidationOptionsData,
+                  let decoded = try? JSONDecoder().decode([String].self, from: schemaValidationOptionsData) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            schemaValidationOptionsData = try? JSONEncoder().encode(newValue)
+        }
+    }
     var schemaSourceKey: String?
 
     @Transient

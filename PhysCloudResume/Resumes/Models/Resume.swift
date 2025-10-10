@@ -29,9 +29,20 @@ class Resume: Identifiable, Hashable {
     @Relationship(deleteRule: .nullify, inverse: \Template.resumes)
     var template: Template?
     // Labels for keys previously imported; persisted as keyLabels map
-    static let keyLabelsTransformerName = NSValueTransformerName("ResumeKeyLabelsTransformer")
-    @Attribute(.transformable(by: keyLabelsTransformerName.rawValue))
-    var keyLabels: [String: String] = [:]
+    @Attribute(.externalStorage)
+    private var keyLabelsData: Data?
+    var keyLabels: [String: String] {
+        get {
+            guard let keyLabelsData,
+                  let decoded = try? JSONDecoder().decode([String: String].self, from: keyLabelsData) else {
+                return [:]
+            }
+            return decoded
+        }
+        set {
+            keyLabelsData = try? JSONEncoder().encode(newValue)
+        }
+    }
     // Stored raw JSON data for imported editor keys; persisted as Data
     var importedEditorKeysData: Data? = nil
     /// Transient array of editor keys, backed by JSON in importedEditorKeysData

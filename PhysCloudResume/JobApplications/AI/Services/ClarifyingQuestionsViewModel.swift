@@ -375,7 +375,8 @@ class ClarifyingQuestionsViewModel {
             // Start the fresh revision workflow
             try await reviseViewModel.startFreshRevisionWorkflow(
                 resume: resume,
-                modelId: modelId
+                modelId: modelId,
+                workflow: .clarifying
             )
             
             // Update our state to indicate we're showing revisions
