@@ -22,7 +22,6 @@ enum PhysCloudSchema {
         MessageParams.self,
         CoverRef.self,
         ApplicantProfile.self,
-        ResModel.self,
         ConversationContext.self,
         ConversationMessage.self,
         EnabledLLM.self,

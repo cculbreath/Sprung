@@ -118,7 +118,7 @@ struct EditingControls: View {
                 .onChange(of: tempValue) { _, _ in clearValidation() }
         case .select:
             selectionPicker(options: node.schemaValidationOptions)
-            .onChange(of: tempValue) { _, _ in clearValidation() }
+                .onChange(of: tempValue) { _, _ in clearValidation() }
         default:
             TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
                 .textFieldStyle(.roundedBorder)
@@ -153,24 +153,42 @@ struct EditingControls: View {
         ISO8601DateFormatter().string(from: date)
     }
 
-    @ViewBuilder
-    private func selectionPicker(options: [String]) -> some View {
-        if options.count <= 3 {
+    private func selectionPicker(options: [String]) -> AnyView {
+    if options.count <= 3 {
+        return AnyView(
             Picker(node.schemaPlaceholder ?? "Value", selection: $tempValue) {
                 ForEach(options, id: \.self) { option in
                     Text(option).tag(option)
                 }
             }
             .pickerStyle(.segmented)
-        } else {
-            Picker(node.schemaPlaceholder ?? "Value", selection: $tempValue) {
-                ForEach(options, id: \.self) { option in
-                    Text(option).tag(option)
+        )
+    }
+
+    return AnyView(
+        Menu {
+            ForEach(options, id: \.self) { option in
+                Button(option) {
+                    tempValue = option
+                    clearValidation()
                 }
             }
-            .pickerStyle(.menu)
+        } label: {
+            HStack {
+                Text(tempValue.isEmpty ? (node.schemaPlaceholder ?? "Select") : tempValue)
+                    .foregroundColor(tempValue.isEmpty ? .secondary : .primary)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(Color.primary.opacity(0.05))
+            .cornerRadius(6)
         }
-    }
+    )
+}
 }
 
 // MARK: - Supporting Views

@@ -27,95 +27,103 @@ class ResumeExportService: ObservableObject {
     }
     
     func export(jsonURL: URL, for resume: Resume) async throws {
-        do {
-            try await exportNatively(jsonURL: jsonURL, for: resume)
-        } catch PDFGeneratorError.templateNotFound {
-            // Prompt user to select template files
-            try await handleMissingTemplate(for: resume)
-        }
+        try await exportNatively(jsonURL: jsonURL, for: resume)
     }
     
     private func exportNatively(jsonURL: URL, for resume: Resume) async throws {
-        let fallbackSlug = resume.model?.templateName ?? resume.model?.style ?? "archer"
-        if resume.template == nil,
-           let entity = templateStore.template(slug: fallbackSlug.lowercased()) {
-            resume.template = entity
-        }
-        let templateSlug = resume.template?.slug ?? fallbackSlug
-        
-        // Generate PDF from HTML template (custom or bundled)
+        var template = try await ensureTemplate(for: resume)
+        var slug = template.slug
+
+        // Generate PDF from HTML template
         let pdfData: Data
-        if let customHTML = resume.model?.customTemplateHTML {
-            pdfData = try await nativeGenerator.generatePDFFromCustomTemplate(for: resume, customHTML: customHTML)
-        } else {
-            pdfData = try await nativeGenerator.generatePDF(for: resume, template: templateSlug, format: "html")
+        do {
+            pdfData = try await nativeGenerator.generatePDF(for: resume, template: slug, format: "html")
+        } catch PDFGeneratorError.templateNotFound {
+            template = try await promptForCustomTemplate(for: resume)
+            slug = template.slug
+            pdfData = try await nativeGenerator.generatePDF(for: resume, template: slug, format: "html")
         }
         resume.pdfData = pdfData
-        
-        // Generate text version using text template (custom or bundled)
-        let textContent: String
-        if let customText = resume.model?.customTemplateText {
-            textContent = try textGenerator.generateTextFromCustomTemplate(for: resume, customText: customText)
-        } else {
-            textContent = try textGenerator.generateTextResume(for: resume, template: templateSlug)
-        }
+
+        // Generate text version using the template's text content (or fallback)
+        let textContent = try textGenerator.generateTextResume(for: resume, template: slug)
         resume.textRes = textContent
     }
     
     @MainActor
-    private func handleMissingTemplate(for resume: Resume) async throws {
-        // Use UI helper to request files
-        let selection = try ExportTemplateSelection.requestTemplateHTMLAndOptionalCSS()
-        var finalHTMLContent = ExportTemplateSelection.embedCSSIntoHTML(html: selection.html, css: selection.css)
-
-        // Save the custom template to the resume model
-        if resume.model == nil {
-            // Create a new ResModel if none exists
-            let newModel = ResModel(
-                name: "Custom Template - \(Date().formatted())",
-                json: resume.jsonTxt,
-                renderedResumeText: "",
-                style: "custom"
-            )
-            resume.model = newModel
+    private func ensureTemplate(for resume: Resume) async throws -> Template {
+        if let template = resume.template,
+           templateStore.template(slug: template.slug) != nil {
+            return template
         }
-        
-        resume.model?.customTemplateHTML = finalHTMLContent
-        resume.model?.templateName = "custom-\(Date().timeIntervalSince1970)"
-        
-        // Now try export again with custom template
-        let pdfData = try await nativeGenerator.generatePDFFromCustomTemplate(for: resume, customHTML: finalHTMLContent)
-        resume.pdfData = pdfData
-        
-        // Generate text version (simplified)
-        let textContent = try textGenerator.generateTextFromCustomTemplate(for: resume, customText: generateBasicTextTemplate())
-        resume.textRes = textContent
+
+        do {
+            return try await promptForCustomTemplate(for: resume)
+        } catch let error as ExportTemplateSelectionError {
+            switch error {
+            case .userCancelled:
+                throw ResumeExportError.userCancelled
+            case .failedToReadFile:
+                throw ResumeExportError.templateSelectionFailed
+            }
+        } catch {
+            throw ResumeExportError.templateSelectionFailed
+        }
     }
     
+    @MainActor
+    private func promptForCustomTemplate(for resume: Resume) async throws -> Template {
+        let selection = try ExportTemplateSelection.requestTemplateHTMLAndOptionalCSS()
+
+        let slug = "custom-\(Int(Date().timeIntervalSince1970))"
+        let name = "Custom Template - \(Date().formatted(date: .numeric, time: .standard))"
+        let textFallback = defaultTextTemplate(for: resume)
+
+        let template = templateStore.upsertTemplate(
+            slug: slug,
+            name: name,
+            htmlContent: selection.html,
+            textContent: textFallback,
+            cssContent: selection.css,
+            isCustom: true
+        )
+        resume.template = template
+        return template
+    }
+
+    private func defaultTextTemplate(for resume: Resume?) -> String {
+        if let existingSlug = resume?.template?.slug,
+           let existingText = templateStore.textTemplateContent(slug: existingSlug) {
+            return existingText
+        }
+        if let existingSlug = resume?.template?.slug,
+           let bundled = BundledTemplates.getTemplate(name: existingSlug, format: "txt") {
+            return bundled
+        }
+        return generateBasicTextTemplate()
+    }
+
     private func generateBasicTextTemplate() -> String {
         return """
-{{r.contact.name}}
-{{#each r.job-titles}}{{this}}{{#unless @last}} · {{/unless}}{{/each}}
+{{{centeredName}}}
+{{{centeredJobTitles}}}
+{{{centeredContact}}}
 
-{{r.contact.location.city}}, {{r.contact.location.state}} • {{r.contact.phone}} • {{r.contact.email}} • {{r.contact.website}}
+{{{sectionLine_summary}}}
+{{{wrappedSummary}}}
 
-{{r.summary}}
+{{{sectionLine_employment}}}
+{{#employment}}
+{{{employmentFormatted}}}
+{{#highlights}}
+{{#.}}
+* {{.}}
+{{/.}}
+{{/highlights}}
 
-SKILLS AND EXPERTISE
-{{#each r.skills-and-expertise}}
-• {{this.title}}: {{this.description}}
-{{/each}}
+{{/employment}}
 
-EMPLOYMENT
-{{#each r.employment}}
-{{this.start}} - {{this.end}} | {{this.position}}, {{this.employer}}
-{{#if this.highlights}}
-{{#each this.highlights}}
-  • {{this}}
-{{/each}}
-{{/if}}
-
-{{/each}}
+{{{footerTextFormatted}}}
 """
     }
 }

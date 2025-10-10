@@ -39,33 +39,40 @@ final class TemplateStore {
         template(slug: slug)?.cssContent
     }
 
+    @discardableResult
     func upsertTemplate(
         slug: String,
         name: String,
         htmlContent: String? = nil,
         textContent: String? = nil,
+        cssContent: String? = nil,
         isCustom: Bool
-    ) {
+    ) -> Template {
         let normalized = slug.lowercased()
         let now = Date()
         if let existing = template(slug: normalized) {
             if let htmlContent { existing.htmlContent = htmlContent }
             if let textContent { existing.textContent = textContent }
+            if let cssContent { existing.cssContent = cssContent }
             existing.updatedAt = now
             existing.isCustom = isCustom
+            try? context.save()
+            return existing
         } else {
             let template = Template(
                 name: name,
                 slug: normalized,
                 htmlContent: htmlContent,
                 textContent: textContent,
+                cssContent: cssContent,
                 isCustom: isCustom,
                 createdAt: now,
                 updatedAt: now
             )
             context.insert(template)
+            try? context.save()
+            return template
         }
-        try? context.save()
     }
 
     func updateManifest(slug: String, manifestData: Data?) throws {

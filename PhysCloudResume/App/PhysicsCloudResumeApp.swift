@@ -276,7 +276,6 @@ private extension PhysicsCloudResumeApp {
                     MessageParams.self,
                     CoverRef.self,
                     ApplicantProfile.self,
-                    ResModel.self,
                     ConversationContext.self,
                     ConversationMessage.self,
                     EnabledLLM.self,
@@ -294,7 +293,6 @@ private extension PhysicsCloudResumeApp {
                     MessageParams.self,
                     CoverRef.self,
                     ApplicantProfile.self,
-                    ResModel.self,
                     ConversationContext.self,
                     ConversationMessage.self,
                     EnabledLLM.self

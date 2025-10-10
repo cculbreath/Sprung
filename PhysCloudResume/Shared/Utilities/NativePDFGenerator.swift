@@ -414,34 +414,39 @@ class NativePDFGenerator: NSObject, ObservableObject {
         var employmentArray: [[String: Any]] = []
         
         for node in sortedNodes {
-            // Get the employer name from the TreeNode
-            let employer = node.name
-            
-            // Get the details from the parsed JSON data
-            if let details = employment[employer] as? [String: Any] {
-                var detailsDict = details
-                detailsDict["employer"] = employer
-                
-                // Add formatted employment line for text templates
-                let location = detailsDict["location"] as? String ?? ""
-                let start = detailsDict["start"] as? String ?? ""
-                let end = detailsDict["end"] as? String ?? ""
-                detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employer, location: location, start: start, end: end, width: 80)
-                
-                // Add formatted highlights with proper text wrapping
-                if let highlights = detailsDict["highlights"] as? [String] {
-                    let formattedHighlights = highlights.map { highlight in
-                        TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
-                    }
-                    detailsDict["highlightsFormatted"] = formattedHighlights
-                }
-                
-                // Add formatted dates for HTML templates
-                detailsDict["startFormatted"] = formatDateForHTML(start)
-                detailsDict["endFormatted"] = formatDateForHTML(end)
-                
-                employmentArray.append(detailsDict)
+            let canonicalKey = node.schemaSourceKey ?? node.name
+            let fallbackKey = node.name
+            let canonicalLookupKey = canonicalKey.isEmpty ? fallbackKey : canonicalKey
+            let details = employment[canonicalLookupKey] ?? employment[fallbackKey]
+
+            guard var detailsDict = details as? [String: Any] else { continue }
+
+            let employerName = (detailsDict["employer"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? (canonicalLookupKey.isEmpty ? fallbackKey : canonicalLookupKey)
+            detailsDict["employer"] = employerName
+            if detailsDict["__key"] == nil, canonicalLookupKey.isEmpty == false {
+                detailsDict["__key"] = canonicalLookupKey
             }
+
+            // Add formatted employment line for text templates
+            let location = detailsDict["location"] as? String ?? ""
+            let start = detailsDict["start"] as? String ?? ""
+            let end = detailsDict["end"] as? String ?? ""
+            detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employerName, location: location, start: start, end: end, width: 80)
+
+            // Add formatted highlights with proper text wrapping
+            if let highlights = detailsDict["highlights"] as? [String] {
+                let formattedHighlights = highlights.map { highlight in
+                    TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
+                }
+                detailsDict["highlightsFormatted"] = formattedHighlights
+            }
+
+            // Add formatted dates for HTML templates
+            detailsDict["startFormatted"] = formatDateForHTML(start)
+            detailsDict["endFormatted"] = formatDateForHTML(end)
+
+            employmentArray.append(detailsDict)
         }
         
         return employmentArray
@@ -451,29 +456,32 @@ class NativePDFGenerator: NSObject, ObservableObject {
         var employmentArray: [[String: Any]] = []
         
         for (employer, details) in employment {
-            if var detailsDict = details as? [String: Any] {
-                detailsDict["employer"] = employer
-                
-                // Add formatted employment line for text templates
-                let location = detailsDict["location"] as? String ?? ""
-                let start = detailsDict["start"] as? String ?? ""
-                let end = detailsDict["end"] as? String ?? ""
-                detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employer, location: location, start: start, end: end, width: 80)
-                
-                // Add formatted highlights with proper text wrapping
-                if let highlights = detailsDict["highlights"] as? [String] {
-                    let formattedHighlights = highlights.map { highlight in
-                        TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
-                    }
-                    detailsDict["highlightsFormatted"] = formattedHighlights
-                }
-                
-                // Add formatted dates for HTML templates
-                detailsDict["startFormatted"] = formatDateForHTML(start)
-                detailsDict["endFormatted"] = formatDateForHTML(end)
-                
-                employmentArray.append(detailsDict)
+            guard var detailsDict = details as? [String: Any] else { continue }
+            let employerName = (detailsDict["employer"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? employer
+            detailsDict["employer"] = employerName
+            if detailsDict["__key"] == nil {
+                detailsDict["__key"] = employer
             }
+
+            // Add formatted employment line for text templates
+            let location = detailsDict["location"] as? String ?? ""
+            let start = detailsDict["start"] as? String ?? ""
+            let end = detailsDict["end"] as? String ?? ""
+            detailsDict["employmentFormatted"] = TextFormatHelpers.jobString(employerName, location: location, start: start, end: end, width: 80)
+
+            // Add formatted highlights with proper text wrapping
+            if let highlights = detailsDict["highlights"] as? [String] {
+                let formattedHighlights = highlights.map { highlight in
+                    TextFormatHelpers.bulletText(highlight, marginLeft: 2, width: 80, bullet: "•")
+                }
+                detailsDict["highlightsFormatted"] = formattedHighlights
+            }
+
+            // Add formatted dates for HTML templates
+            detailsDict["startFormatted"] = formatDateForHTML(start)
+            detailsDict["endFormatted"] = formatDateForHTML(end)
+
+            employmentArray.append(detailsDict)
         }
         
         return employmentArray

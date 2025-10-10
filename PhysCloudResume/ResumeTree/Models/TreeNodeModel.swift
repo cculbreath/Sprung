@@ -37,6 +37,7 @@ enum LeafStatus: String, Codable, Hashable {
     var schemaValidationMin: Double?
     var schemaValidationMax: Double?
     var schemaValidationOptions: [String] = []
+    var schemaSourceKey: String?
 
     @Transient
     var validationError: String?

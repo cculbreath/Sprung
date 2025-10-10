@@ -355,6 +355,7 @@ class JsonToTree {
                     let itemNode = sectionNode.addChild(
                         TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
                     )
+                    itemNode.schemaSourceKey = entryKey
                     buildSubtree(
                         from: entryDict,
                         parent: itemNode,

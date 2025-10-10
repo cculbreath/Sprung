@@ -70,8 +70,6 @@ class Resume: Identifiable, Hashable {
 
     @Relationship(deleteRule: .nullify, inverse: \ResRef.enabledResumes)
     var enabledSources: [ResRef]
-
-    var model: ResModel? = nil
     var createdDateString: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -113,9 +111,9 @@ class Resume: Identifiable, Hashable {
     init(
         jobApp: JobApp,
         enabledSources: [ResRef],
-        model: ResModel? = nil
+        template: Template? = nil
     ) {
-        self.model = model
+        self.template = template
         self.jobApp = jobApp
         dateCreated = Date()
         self.enabledSources = enabledSources

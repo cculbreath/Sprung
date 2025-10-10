@@ -11,6 +11,26 @@ import AppKit
 import PDFKit
 import Combine
 
+private struct TemplateEditorLayout {
+    let sidebarWidth: CGFloat
+    let editorWidth: CGFloat
+    let inspectorWidth: CGFloat
+    let sidebarColor: Color
+    let editorColor: Color
+    let inspectorColor: Color
+
+    init(totalWidth: CGFloat) {
+        let minimumWidth: CGFloat = 960.0
+        let sanitizedWidth = max(totalWidth, minimumWidth)
+        sidebarWidth = Swift.min(Swift.max(sanitizedWidth * 0.22, 240.0), 320.0)
+        inspectorWidth = Swift.min(Swift.max(sanitizedWidth * 0.22, 240.0), 340.0)
+        editorWidth = max(sanitizedWidth - sidebarWidth - inspectorWidth, 360.0)
+        sidebarColor = Color(NSColor.windowBackgroundColor)
+        editorColor = Color(NSColor.textBackgroundColor)
+        inspectorColor = Color(NSColor.controlBackgroundColor)
+    }
+}
+
 private enum TemplateEditorTab: String, CaseIterable, Identifiable {
     case assets = "Assets"
     case manifest = "Manifest"
@@ -120,13 +140,9 @@ struct TemplateEditorView: View {
         VStack(spacing: 0) {
             topToolbar()
             Divider()
-            HSplitView {
-                sidebarContent()
-                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 320, maxHeight: .infinity)
-                editorContent()
-                    .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
-                inspectorContent()
-                    .frame(minWidth: 240, idealWidth: 280, maxWidth: 340, maxHeight: .infinity)
+            GeometryReader { proxy in
+                let layout = TemplateEditorLayout(totalWidth: proxy.size.width)
+                columnLayout(for: layout)
             }
         }
         .frame(minWidth: 960, minHeight: 600)
@@ -230,6 +246,28 @@ struct TemplateEditorView: View {
         }
     }
     
+    @ViewBuilder
+    private func columnLayout(for layout: TemplateEditorLayout) -> some View {
+        HStack(spacing: 0) {
+            sidebarContent()
+                .frame(width: layout.sidebarWidth)
+                .frame(maxHeight: .infinity)
+                .background(layout.sidebarColor)
+                .overlay(Divider(), alignment: .trailing)
+
+            editorContent()
+                .frame(width: layout.editorWidth)
+                .frame(maxHeight: .infinity)
+                .background(layout.editorColor)
+
+            inspectorContent()
+                .frame(width: layout.inspectorWidth)
+                .frame(maxHeight: .infinity)
+                .background(layout.inspectorColor)
+                .overlay(Divider(), alignment: .leading)
+        }
+    }
+
     @ViewBuilder
     private func editorContent() -> some View {
         switch selectedTab {
@@ -1257,7 +1295,7 @@ struct TemplateEditorView: View {
         isGeneratingLivePreview = false
     }
     
-    private func loadOverlayPDF(from url: URL) {
+private func loadOverlayPDF(from url: URL) {
         guard url.startAccessingSecurityScopedResource() else {
             saveError = "Failed to access overlay PDF"
             return
