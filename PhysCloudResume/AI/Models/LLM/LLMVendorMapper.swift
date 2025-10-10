@@ -49,95 +49,35 @@ enum LLMVendorMapper {
         )
     }
 
-    static func dtoMessages(from vendorMessages: [LLMMessage]) -> [LLMMessageDTO] {
-        vendorMessages.map { dtoMessage(from: $0) }
-    }
-
-    static func dtoMessage(from message: LLMMessage) -> LLMMessageDTO {
-        let role = LLMRole(rawValue: message.role) ?? .assistant
-        var textSegments: [String] = []
-        var attachments: [LLMAttachment] = []
-
-        switch message.content {
-        case .text(let text):
-            textSegments.append(text)
-        case .contentArray(let contents):
-            for item in contents {
-                switch item {
-                case .text(let text):
-                    textSegments.append(text)
-                case .imageUrl(let detail):
-                    if let decoded = decodeDataURL(detail.url) {
-                        attachments.append(LLMAttachment(data: decoded.data, mimeType: decoded.mimeType))
-                    }
-                default:
-                    break
-                }
-            }
-        @unknown default:
-            break
-        }
-
-        let text = textSegments.isEmpty ? nil : textSegments.joined(separator: "\n")
-        return LLMMessageDTO(
-            role: role,
-            text: text,
-            attachments: attachments
-        )
-    }
-
     // MARK: - Response Conversion
 
     static func responseDTO(from response: LLMResponse) -> LLMResponseDTO {
-        let createdDate = response.created.map { Date(timeIntervalSince1970: TimeInterval($0)) }
-        let choices = (response.choices ?? []).enumerated().map { index, choice in
-            LLMResponseChoiceDTO(
-                index: choice.index ?? index,
-                message: choice.message.map { dtoMessage(from: $0) },
-                finishReason: finishReasonString(from: choice.finishReason)
-            )
+        let choices = (response.choices ?? []).map { choice in
+            let messageDTO: LLMMessageDTO? = choice.message.flatMap { message in
+                let role = LLMRole(rawValue: message.role ?? "") ?? .assistant
+                let segments = [message.content, message.reasoningContent]
+                    .compactMap { $0 }
+                    .filter { !$0.isEmpty }
+                let text = segments.isEmpty ? nil : segments.joined(separator: "\n\n")
+                return LLMMessageDTO(role: role, text: text, attachments: [])
+            }
+
+            return LLMResponseChoiceDTO(message: messageDTO)
         }
 
-        let usage = response.usage.map { usage -> LLMUsageDTO in
-            LLMUsageDTO(
-                promptTokens: usage.promptTokens ?? 0,
-                completionTokens: usage.completionTokens ?? 0,
-                totalTokens: usage.totalTokens ?? 0
-            )
-        }
-
-        return LLMResponseDTO(
-            id: response.id,
-            model: response.model,
-            created: createdDate,
-            choices: choices,
-            usage: usage
-        )
+        return LLMResponseDTO(choices: choices)
     }
 
     static func streamChunkDTO(from chunk: ChatCompletionChunkObject) -> LLMStreamChunkDTO {
         guard let firstChoice = chunk.choices?.first else {
-            return LLMStreamChunkDTO(content: nil, reasoning: nil, isFinished: false, finishReason: nil)
+            return LLMStreamChunkDTO(content: nil, reasoning: nil, isFinished: false)
         }
 
         return LLMStreamChunkDTO(
             content: firstChoice.delta?.content,
             reasoning: firstChoice.delta?.reasoningContent,
-            isFinished: firstChoice.finishReason != nil,
-            finishReason: finishReasonString(from: firstChoice.finishReason)
+            isFinished: firstChoice.finishReason != nil
         )
-    }
-
-    // MARK: - Helpers
-
-    private static func finishReasonString(from value: IntOrStringValue?) -> String? {
-        guard let value else { return nil }
-        switch value {
-        case .string(let stringValue):
-            return stringValue
-        case .int(let intValue):
-            return String(intValue)
-        }
     }
 
     static func makeImageDetail(
@@ -151,44 +91,5 @@ enum LLMVendorMapper {
             return nil
         }
         return ChatCompletionParameters.Message.ContentType.MessageContent.ImageDetail(url: imageURL)
-    }
-
-    private static func decodeDataURL(_ url: URL) -> (data: Data, mimeType: String)? {
-        guard url.scheme == "data" else { return nil }
-
-        let absolute = url.absoluteString
-        guard let commaIndex = absolute.firstIndex(of: ",") else { return nil }
-
-        let metadata = String(absolute[..<commaIndex])
-        let base64Part = String(absolute[absolute.index(after: commaIndex)...])
-
-        let mimeType: String
-        if let colonIndex = metadata.firstIndex(of: ":") {
-            let typeSection = metadata[metadata.index(after: colonIndex)...]
-            let components = typeSection.split(separator: ";", omittingEmptySubsequences: true)
-            mimeType = components.first.map(String.init) ?? "application/octet-stream"
-        } else {
-            mimeType = "application/octet-stream"
-        }
-
-        guard let data = Data(base64Encoded: base64Part) else { return nil }
-        return (data, mimeType)
-    }
-
-    private static func dtoMessage(from message: ChatCompletionObject.ChatChoice.ChatMessage) -> LLMMessageDTO {
-        let role = LLMRole(rawValue: message.role ?? "") ?? .assistant
-        var textSegments: [String] = []
-        if let content = message.content, !content.isEmpty {
-            textSegments.append(content)
-        }
-        if let reasoning = message.reasoningContent, !reasoning.isEmpty {
-            textSegments.append(reasoning)
-        }
-
-        return LLMMessageDTO(
-            role: role,
-            text: textSegments.isEmpty ? nil : textSegments.joined(separator: "\n\n"),
-            attachments: []
-        )
     }
 }
