@@ -9,35 +9,24 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     let pricing: Pricing?
     let supportedParameters: [String]? // Legacy field, may be nil
     let endpoints: [Endpoint]?
-    let created: TimeInterval?
     
     struct Architecture: Codable, Hashable {
         let modality: String
         let inputModalities: [String]
-        let outputModalities: [String]
-        let tokenizer: String?
-        let instructType: String?
         
         enum CodingKeys: String, CodingKey {
             case modality
             case inputModalities = "input_modalities"
-            case outputModalities = "output_modalities"
-            case tokenizer
-            case instructType = "instruct_type"
         }
     }
     
     struct Pricing: Codable, Hashable {
         let prompt: String?
         let completion: String?
-        let request: String?
-        let image: String?
-        let webSearch: String?
         let internalReasoning: String?
         
         enum CodingKeys: String, CodingKey {
-            case prompt, completion, request, image
-            case webSearch = "web_search"
+            case prompt, completion
             case internalReasoning = "internal_reasoning"
         }
         
@@ -53,24 +42,17 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     }
     
     struct Endpoint: Codable, Hashable {
-        let name: String?
-        let contextLength: Int?
         let pricing: Pricing?
-        let providerName: String?
-        let tag: String?
         let supportedParameters: [String]?
-        let status: Int?
         
         enum CodingKeys: String, CodingKey {
-            case name, pricing, tag, status
-            case contextLength = "context_length"
-            case providerName = "provider_name"
+            case pricing
             case supportedParameters = "supported_parameters"
         }
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, name, description, created, architecture, pricing, endpoints
+        case id, name, description, architecture, pricing, endpoints
         case contextLength = "context_length"
         case supportedParameters = "supported_parameters"
     }
@@ -152,11 +134,6 @@ extension OpenRouterModel {
     var providerName: String {
         let components = id.split(separator: "/")
         return components.first?.capitalized ?? "Unknown"
-    }
-    
-    var modelName: String {
-        let components = id.split(separator: "/")
-        return components.dropFirst().joined(separator: "/")
     }
     
     var costDescription: String {

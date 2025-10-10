@@ -9,13 +9,9 @@ import Foundation
 
 actor ConversationCoordinator {
     private var cache: [UUID: [LLMMessageDTO]] = [:]
-    private var store: LLMConversationStore?
+    private let store: LLMConversationStore?
 
     init(store: LLMConversationStore? = nil) {
-        self.store = store
-    }
-
-    func updateStore(_ store: LLMConversationStore?) {
         self.store = store
     }
 
@@ -44,10 +40,5 @@ actor ConversationCoordinator {
             objectType: objectType,
             messages: messages
         )
-    }
-
-    func clear(conversationId: UUID) async {
-        cache.removeValue(forKey: conversationId)
-        await store?.clearConversation(conversationId: conversationId)
     }
 }

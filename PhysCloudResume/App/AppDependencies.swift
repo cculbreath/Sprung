@@ -30,12 +30,6 @@ final class AppDependencies {
     let debugSettingsStore: DebugSettingsStore
 
     // MARK: - Core Services
-    let appState: AppState
-    let openRouterService: OpenRouterService
-    let modelValidationService: ModelValidationService
-    let coverLetterService: CoverLetterService
-    let llmService: LLMService
-    let llmFacade: LLMFacade
     let appEnvironment: AppEnvironment
 
     // MARK: - Init
@@ -82,23 +76,19 @@ final class AppDependencies {
 
         // Core services
         let openRouterService = OpenRouterService()
-        self.openRouterService = openRouterService
-
         let modelValidationService = ModelValidationService()
-        self.modelValidationService = modelValidationService
 
         let appState = AppState(
             openRouterService: openRouterService,
             modelValidationService: modelValidationService
         )
-        self.appState = appState
         appState.debugSettingsStore = debugSettingsStore
 
         let requestExecutor = LLMRequestExecutor()
-        self.llmService = LLMService(requestExecutor: requestExecutor)
+        let llmService = LLMService(requestExecutor: requestExecutor)
         // Phase 6: Introduce facade backed by SwiftOpenAI adapter and temporarily bridge conversation flows
         let client = SwiftOpenAIClient(executor: requestExecutor)
-        self.llmFacade = LLMFacade(
+        let llmFacade = LLMFacade(
             client: client,
             llmService: llmService,
             appState: appState,
@@ -110,7 +100,6 @@ final class AppDependencies {
             llmFacade: llmFacade,
             exportCoordinator: resumeExportCoordinator
         )
-        self.coverLetterService = coverLetterService
 
         self.appEnvironment = AppEnvironment(
             appState: appState,

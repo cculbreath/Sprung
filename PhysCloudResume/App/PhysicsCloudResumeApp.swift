@@ -74,7 +74,6 @@ struct PhysicsCloudResumeApp: App {
                 .environment(appDependencies.templateSeedStore)
                 .onAppear {
                     // Pass appState and modelContainer to AppDelegate so it can use them for windows
-                    appDelegate.appState = appEnvironment.appState
                     appDelegate.appEnvironment = appEnvironment
                     appDelegate.modelContainer = modelContainer
                 }

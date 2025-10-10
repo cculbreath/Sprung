@@ -385,10 +385,6 @@ final class LLMFacade {
         )
     }
 
-    func clearConversation(id: UUID) {
-        llmService.clearConversation(id: id)
-    }
-
     func cancelAllRequests() {
         for task in activeStreamingTasks.values {
             task.cancel()

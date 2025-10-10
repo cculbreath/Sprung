@@ -12,10 +12,7 @@ import AppKit
 struct AppWindowView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     @Environment(AppState.self) private var appState: AppState
-    @Environment(LLMFacade.self) private var llmFacade: LLMFacade
-    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
 
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
@@ -27,9 +24,6 @@ struct AppWindowView: View {
     // Centralized sheet state management for all app windows/modals
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
-    
-    // Revision workflow - managed by ResumeReviseViewModel
-    @State private var resumeReviseViewModel: ResumeReviseViewModel?
     
     // Menu notification handler
     @State private var menuHandler = MenuNotificationHandler()
@@ -65,20 +59,11 @@ struct AppWindowView: View {
                 selectedTab: $selectedTab,
                 showSlidingList: $showSlidingList
             )
-            
-            // Initialize ResumeReviseViewModel if not already created
-            if resumeReviseViewModel == nil {
-                // Use the instance initialized in ContentView via AppState if available
-                if let existing = appState.resumeReviseViewModel {
-                    resumeReviseViewModel = existing
-                }
-            }
         }
         .modifier(AppWindowViewModifiers(
             jobAppStore: jobAppStore,
             sheets: $sheets,
             refPopup: $refPopup,
-            resumeReviseViewModel: resumeReviseViewModel,
             coverLetterStore: coverLetterStore,
             appState: appState,
             selectedTab: $selectedTab,
@@ -128,113 +113,6 @@ struct AppWindowView: View {
     
 
     // MARK: - Toolbar Action Methods
-    
-    @MainActor
-    private func startCustomizeWorkflow(modelId: String) async {
-        guard let jobApp = jobAppStore.selectedApp,
-              let resume = jobApp.selectedRes else {
-            return
-        }
-        
-        do {
-            guard let viewModel = resumeReviseViewModel else {
-                Logger.error("ResumeReviseViewModel not available")
-                return
-            }
-            
-            try await viewModel.startFreshRevisionWorkflow(
-                resume: resume,
-                modelId: modelId,
-                workflow: .customize
-            )
-            
-        } catch {
-            Logger.error("Error in customize workflow: \(error.localizedDescription)")
-        }
-    }
-    
-    @MainActor
-    private func startClarifyingQuestionsWorkflow(modelId: String) async {
-        guard let jobApp = jobAppStore.selectedApp,
-              let resume = jobApp.selectedRes else {
-            return
-        }
-        
-        do {
-            let clarifyingViewModel = ClarifyingQuestionsViewModel(
-                llmFacade: llmFacade,
-                appState: appState,
-                exportCoordinator: appEnvironment.resumeExportCoordinator
-            )
-            
-            try await clarifyingViewModel.startClarifyingQuestionsWorkflow(
-                resume: resume,
-                jobApp: jobApp,
-                modelId: modelId
-            )
-            
-            if !clarifyingViewModel.questions.isEmpty {
-                Logger.debug("Showing \(clarifyingViewModel.questions.count) clarifying questions")
-                clarifyingQuestions = clarifyingViewModel.questions
-                sheets.showClarifyingQuestions = true
-            } else {
-                Logger.debug("AI opted to proceed without clarifying questions")
-            }
-
-        } catch {
-            Logger.error("Error starting clarifying questions workflow: \(error.localizedDescription)")
-        }
-    }
-    
-    @MainActor
-    private func generateCoverLetter(modelId: String) async {
-        guard let jobApp = jobAppStore.selectedApp,
-              let resume = jobApp.selectedRes else {
-            return
-        }
-        
-        do {
-            try await coverLetterService.generateNewCoverLetter(
-                jobApp: jobApp,
-                resume: resume,
-                modelId: modelId,
-                coverLetterStore: coverLetterStore,
-                selectedRefs: [],
-                includeResumeRefs: true
-            )
-            
-        } catch {
-            Logger.error("Error generating cover letter: \(error.localizedDescription)")
-        }
-    }
-    
-    @MainActor
-    private func startBestLetterSelection(modelId: String) async {
-        guard let jobApp = jobAppStore.selectedApp else {
-            return
-        }
-        
-        do {
-            let service = BestCoverLetterService(llmFacade: llmFacade)
-            let result = try await service.selectBestCoverLetter(
-                jobApp: jobApp, 
-                modelId: modelId
-            )
-            
-            Logger.debug("✅ Best cover letter selection completed: \(result.bestLetterUuid ?? "score voting mode")")
-            
-            // Update the selected cover letter (only for FPTP mode)
-            if let bestUuid = result.bestLetterUuid,
-               let uuid = UUID(uuidString: bestUuid),
-               let selectedLetter = jobApp.coverLetters.first(where: { $0.id == uuid }) {
-                jobApp.selectedCover = selectedLetter
-                Logger.debug("📝 Updated selected cover letter to: \(selectedLetter.sequencedName)")
-            }
-            
-        } catch {
-            Logger.error("Error in best letter selection: \(error.localizedDescription)")
-        }
-    }
 
     func updateMyLetter() {
         if let selectedApp = jobAppStore.selectedApp {
@@ -266,7 +144,6 @@ struct AppWindowViewModifiers: ViewModifier {
     let jobAppStore: JobAppStore
     @Binding var sheets: AppSheets
     @Binding var refPopup: Bool
-    let resumeReviseViewModel: ResumeReviseViewModel?
     let coverLetterStore: CoverLetterStore
     let appState: AppState
     @Binding var selectedTab: TabList

@@ -48,7 +48,7 @@ struct ContentViewLaunch: View {
             .environment(deps.coverLetterStore)
             .environment(deps.enabledLLMStore)
             .environment(deps.dragInfo)
-            .environment(deps.llmFacade)
+            .environment(deps.appEnvironment.llmFacade)
     }
 
     private func restoreLatestBackup() {
