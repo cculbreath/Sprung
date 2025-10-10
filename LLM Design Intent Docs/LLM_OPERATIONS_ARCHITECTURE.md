@@ -3,6 +3,14 @@
 ================================================================================
 As of 6/11/2025 this document is somewhat out of date.
 
+> **June 2025 refactor note:** The unified LLM surface now flows through `LLMFacade`
+> exclusively. Legacy `LLMService.execute*` entry points have been removed in favor
+> of `LLMClient` primitives plus three focused collaborators:
+> `ConversationCoordinator`, `StreamingExecutor`, and `FlexibleJSONExecutor`.
+> Update any new workflows to consume the facade APIs (`executeText`,
+> `executeStructured`, `executeFlexibleJSON`, conversation streaming helpers) rather
+> than calling the service directly.
+
 OVERVIEW
 --------
 
@@ -97,7 +105,7 @@ CURRENT LLM OPERATION TYPES
 │ Cover Letter Generation     │ CoverLetterService.swift                │ Multi-turn        │ x No     │ x No        │ Plain text              │ UnifiedToolbar "Cover Letter" button       │
 │ Cover Letter Revision       │ CoverLetterService.swift                │ Multi-turn        │ x No     │ x No        │ Plain text              │ CoverLetterInspectorView (Revisions tab)   │
 │ Best Letter Selection       │ BestCoverLetterService.swift            │ One-shot          │ * Yes    │ x No        │ BestCoverLetterResponse │ UnifiedToolbar "Best Letter" button        │
-│ Multi-Model Letter Selection│ LLMService.executeParallelStructured()  │ Parallel one-shot │ * Yes    │ x No        │ BestCoverLetterResponse │ MultiModelChooseBestCoverLetterSheet:102    │
+│ Multi-Model Letter Selection│ MultiModelCoverLetterService.runModelTasks │ Parallel one-shot │ * Yes    │ x No        │ BestCoverLetterResponse │ MultiModelChooseBestCoverLetterSheet:102    │
 │ Batch Generation            │ BatchCoverLetterGenerator.swift         │ Parallel one-shot │ x No     │ x No        │ Plain text              │ BatchCoverLetterView:85 (Checkbox)         │
 └─────────────────────────────┴─────────────────────────────────────────┴───────────────────┴──────────┴─────────────┴─────────────────────────┴─────────────────────────────────────────────┘
 ```
@@ -118,11 +126,10 @@ CURRENT LLM OPERATION TYPES
 ┌─────────────────────────────┬──────────────────────────┬─────────────┬──────────┬─────────────┬───────────────┬──────────────────────────────────────┐
 │ Operation                   │ File                     │ Context     │ Schema   │ Image Input │ Schema Type   │ ModelPicker Location                 │
 ├─────────────────────────────┼──────────────────────────┼─────────────┼──────────┼─────────────┼───────────────┼──────────────────────────────────────┤
-│ Text Request                │ LLMService.swift         │ One-shot    │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
-│ Mixed Request               │ LLMService.swift         │ One-shot    │ x No     │ * Yes       │ Plain text    │ Via ModelSelectionSheet              │
-│ Structured Mixed            │ LLMService.swift         │ One-shot    │ * Yes    │ * Yes       │ Configurable  │ Via ModelSelectionSheet              │
-│ Resume Conversation         │ LLMService.swift         │ Multi-turn  │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
-│ Cover Letter Conversation   │ LLMService.swift         │ Multi-turn  │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
+│ Text Request                │ LLMFacade.executeText    │ One-shot    │ x No     │ x No        │ Plain text    │ Via ModelSelectionSheet              │
+│ Mixed Request               │ LLMFacade.executeTextWithImages │ One-shot │ x No  │ * Yes       │ Plain text    │ Via ModelSelectionSheet              │
+│ Structured / Flexible JSON  │ LLMFacade.executeStructured / executeFlexibleJSON │ One-shot │ * Yes │ optional │ Configurable  │ Via ModelSelectionSheet              │
+│ Conversation Streaming      │ LLMFacade.startConversationStreaming / continueConversationStreaming │ Multi-turn │ optional │ optional │ Plain text / JSON │ Via ModelSelectionSheet              │
 └─────────────────────────────┴──────────────────────────┴─────────────┴──────────┴─────────────┴───────────────┴──────────────────────────────────────┘
 
 ### **Review Services**
@@ -342,20 +349,32 @@ func processRevisionFeedback<T: Codable>(
 
 #### **7. Parallel Multi-Model Query (Text → Multiple JSON → Aggregated Result)**
 ```swift
-func executeParallelStructured<T: Codable>(
-    prompt: String,
-    modelIds: [String],
-    responseType: T.Type,
-    votingScheme: VotingScheme = .firstPastThePost
-) async throws -> MultiModelResult<T>
+try await withThrowingTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in
+    for modelId in selectedModels {
+        let prompt = modelPrompts[modelId]!
+        group.addTask {
+            do {
+                let response = try await llm.executeFlexibleJSON(
+                    prompt: prompt,
+                    modelId: modelId,
+                    as: BestCoverLetterResponse.self,
+                    temperature: nil,
+                    jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
+                )
+                return (modelId, .success(response))
+            } catch {
+                return (modelId, .failure(error))
+            }
+        }
+    }
+    // process results incrementally…
+}
 ```
 - **Use Cases**: Multi-model cover letter selection, consensus-based decision making
 - **Features**: 
-  - Parallel execution across multiple models using TaskGroup
-  - Two voting schemes: First Past The Post (FPTP) and Score Voting (20 points)
-  - Automatic result aggregation and vote tallying
-  - Comprehensive analysis summary generation
-  - Error handling for individual model failures
+  - Parallel execution via `TaskGroup` with per-model schema enforcement
+  - Voting aggregation handled inside `MultiModelCoverLetterService`
+  - Failures captured per model without aborting the overall workflow
 
 ### **Additional Operations**
 
@@ -402,4 +421,3 @@ func validateModel(modelId: String, capability: ModelCapability) -> Bool
 │ ResumeReviewService.sendReviewRequest()            │ executeWithImages()                 │ Image analysis + text   │
 └────────────────────────────────────────────────────┴─────────────────────────────────────┴─────────────────────────┘
 ```
-
