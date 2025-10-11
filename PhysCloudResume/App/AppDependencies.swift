@@ -131,9 +131,14 @@ final class AppDependencies {
             launchState: .ready
         )
 
-        // Bootstrap sequence
-        DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
-        appState.initializeWithModelContext(modelContext, enabledLLMStore: enabledLLMStore)
+        let migrationCoordinator = DatabaseMigrationCoordinator(
+            appState: appState,
+            openRouterService: openRouterService,
+            enabledLLMStore: enabledLLMStore,
+            modelValidationService: modelValidationService
+        )
+        migrationCoordinator.performStartupMigrations(modelContext: modelContext)
+
         llmService.initialize(
             appState: appState,
             modelContext: modelContext,
