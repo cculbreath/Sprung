@@ -2,7 +2,6 @@
 //  AIModels.swift
 //  Sprung
 //
-//  Created by Claude on 5/13/25.
 //
 
 import Foundation

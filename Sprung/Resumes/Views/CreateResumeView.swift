@@ -2,8 +2,6 @@
 //  CreateResumeView.swift
 //  Sprung
 //
-//  Created by Claude on 5/19/25.
-//
 
 import SwiftUI
 import SwiftData

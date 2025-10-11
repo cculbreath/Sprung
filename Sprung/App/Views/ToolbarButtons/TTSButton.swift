@@ -2,7 +2,6 @@
 //  TTSButton.swift
 //  Sprung
 //
-//  Created by Claude Code on 6/10/25.
 //
 
 import SwiftUI
