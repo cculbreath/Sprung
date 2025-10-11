@@ -13,3 +13,4 @@ output.txt
 CLAUDE.md
 **/CLAUDE.local.md
 build/
+clean-commit-msg.sh
