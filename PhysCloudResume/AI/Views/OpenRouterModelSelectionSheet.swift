@@ -4,21 +4,18 @@ struct OpenRouterModelSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    
+    @Environment(OpenRouterService.self) private var openRouterService
+
     @State private var searchText = ""
     @State private var selectedProvider: String?
     @State private var showOnlySelected = false
     @State private var isSearchCollapsed = true
-    
+
     // Capability filters
     @State private var filterStructuredOutput = false
     @State private var filterVision = false
     @State private var filterReasoning = false
     @State private var filterTextOnly = false
-    
-    private var openRouterService: OpenRouterService {
-        appState.openRouterService
-    }
     
     private var availableProviders: [String] {
         let providers = Set(openRouterService.availableModels.map { $0.providerName })

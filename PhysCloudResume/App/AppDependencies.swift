@@ -97,6 +97,7 @@ final class AppDependencies {
             client: client,
             llmService: llmService,
             appState: appState,
+            openRouterService: openRouterService,
             enabledLLMStore: enabledLLMStore,
             modelValidationService: appState.modelValidationService
         )

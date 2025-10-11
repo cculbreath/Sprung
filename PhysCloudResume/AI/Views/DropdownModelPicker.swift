@@ -13,25 +13,22 @@ struct DropdownModelPicker: View {
     /// The currently selected model ID
     @Binding var selectedModel: String
     
-    /// Access to app state and OpenRouter service
+    /// Access to environment services
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    
+    @Environment(OpenRouterService.self) private var openRouterService
+
     /// Optional capability filter for operation-specific requirements
     var requiredCapability: ModelCapability? = nil
-    
+
     /// Title for the GroupBox label
     var title: String = "AI Model"
-    
+
     /// Whether to show inside a GroupBox
     var showInGroupBox: Bool = true
-    
+
     /// Optional special option to show at the top (label, value)
     var includeSpecialOption: (String, String)? = nil
-    
-    private var openRouterService: OpenRouterService {
-        appState.openRouterService
-    }
     
     var body: some View {
         if showInGroupBox {

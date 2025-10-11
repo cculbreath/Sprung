@@ -22,6 +22,7 @@ final class LLMFacade {
     private let client: LLMClient
     private let llmService: LLMService // temporary bridge for conversation flows
     private let appState: AppState
+    private let openRouterService: OpenRouterService
     private let enabledLLMStore: EnabledLLMStore?
     private let modelValidationService: ModelValidationService
     private var activeStreamingTasks: [UUID: Task<Void, Never>] = [:]
@@ -30,12 +31,14 @@ final class LLMFacade {
         client: LLMClient,
         llmService: LLMService,
         appState: AppState,
+        openRouterService: OpenRouterService,
         enabledLLMStore: EnabledLLMStore?,
         modelValidationService: ModelValidationService
     ) {
         self.client = client
         self.llmService = llmService
         self.appState = appState
+        self.openRouterService = openRouterService
         self.enabledLLMStore = enabledLLMStore
         self.modelValidationService = modelValidationService
     }
@@ -90,7 +93,7 @@ final class LLMFacade {
             throw LLMError.clientError("Model '\(modelId)' is disabled. Enable it in AI Settings before use.")
         }
 
-        let metadata = appState.openRouterService.findModel(id: modelId)
+        let metadata = openRouterService.findModel(id: modelId)
         let record = enabledModelRecord(for: modelId)
 
         guard metadata != nil || record != nil else {
@@ -115,7 +118,7 @@ final class LLMFacade {
         }
 
         let refreshedRecord = enabledModelRecord(for: modelId)
-        let refreshedMetadata = appState.openRouterService.findModel(id: modelId)
+        let refreshedMetadata = openRouterService.findModel(id: modelId)
         missing = missingCapabilities(for: modelId, metadata: refreshedMetadata, record: refreshedRecord, requires: capabilities)
 
         guard missing.isEmpty else {

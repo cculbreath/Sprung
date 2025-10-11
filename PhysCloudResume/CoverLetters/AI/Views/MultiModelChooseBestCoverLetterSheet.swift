@@ -13,15 +13,12 @@ struct MultiModelChooseBestCoverLetterSheet: View {
     @Environment(AppState.self) var appState: AppState
     @Environment(JobAppStore.self) var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
-    
+    @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
+
     @State private var selectedModels: Set<String> = []
     @State private var selectedVotingScheme: VotingScheme = .firstPastThePost
     @State private var showProgressSheet = false
-    
-    private var openRouterService: OpenRouterService {
-        appState.openRouterService
-    }
-    
+
     @Binding var coverLetter: CoverLetter
     
     var body: some View {
