@@ -20,8 +20,7 @@ struct NodeChildrenListView: View {
                     } else {
                         ReorderableLeafRow(
                             node: child,
-                            siblings: children,
-                            currentIndex: child.myIndex
+                            siblings: children
                         )
                         .padding(.vertical, 4)
                     }

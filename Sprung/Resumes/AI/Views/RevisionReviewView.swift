@@ -324,8 +324,7 @@ struct RevisionComparisonPanels: View {
                     ComparisonPanel(
                         title: "Original Text",
                         content: revisionNode.originalText(using: updateNodes),
-                        accentColor: .orange,
-                        isOriginal: true
+                        accentColor: .orange
                     )
                     if isEditingResponse {
                         EditableComparisonPanel(
@@ -351,7 +350,6 @@ struct RevisionComparisonPanels: View {
                             title: "Proposed Revision",
                             content: feedbackNode.proposedRevision,
                             accentColor: .blue,
-                            isOriginal: false,
                             showEditButton: true,
                             onEdit: {
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -416,17 +414,15 @@ struct ComparisonPanel: View {
     let title: String
     let content: String
     let accentColor: Color
-    let isOriginal: Bool
     let showEditButton: Bool
     let onEdit: (() -> Void)?
     
     @State private var isHovering = false
 
-    init(title: String, content: String, accentColor: Color, isOriginal: Bool, showEditButton: Bool = false, onEdit: (() -> Void)? = nil) {
+    init(title: String, content: String, accentColor: Color, showEditButton: Bool = false, onEdit: (() -> Void)? = nil) {
         self.title = title
         self.content = content
         self.accentColor = accentColor
-        self.isOriginal = isOriginal
         self.showEditButton = showEditButton
         self.onEdit = onEdit
     }

@@ -184,23 +184,6 @@ import SwiftUI
         }
     }
 
-    var allEditableFieldsString: String {
-        guard let rootNode = res.rootNode else {
-            return ""
-        }
-        let exportDict = TreeNode.traverseAndExportAllEditableNodes(node: rootNode)
-        do {
-            let updatableJsonData = try JSONSerialization.data(
-                withJSONObject: exportDict, options: .prettyPrinted
-            )
-            let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
-            Logger.verbose("🫥🫥🫥🫥🫥🫥 ALL EDITABLE NODES 🫥🫥🫥🫥🫥🫥")
-            Logger.verbose(truncateString(returnString, maxLength: 250))
-            return returnString
-        } catch {
-            return ""
-        }
-    }
 
     // MARK: - Initialization
 
@@ -226,47 +209,9 @@ import SwiftUI
 
 
 
-    // Method to update the applicant data later
-    func updateApplicant(_ newApplicant: Applicant) {
-        applicant = newApplicant
-    }
 
     // MARK: - Prompt Building
 
-    @MainActor
-    func revisionPrompt(_ fb: [FeedbackNode]) async -> String {
-        // Resume text should already be up-to-date from the rendering called in aiResubmit
-        // but we'll ensure it again as a safety measure
-        try? await exportCoordinator.ensureFreshRenderedText(for: res)
-
-        // At this point, fb should already contain only nodes that need revision
-        // due to our filtering in ReviewView's nextNode method
-        let json = fbToJson(fb)
-
-        // Extract node IDs for more explicit instructions
-        let nodeIDs = fb.map { "\($0.id)" }.joined(separator: ", ")
-
-        let prompt = """
-        \(applicant.name) has reviewed your proposed revision and has provided feedback. Please revise and rewrite ONLY the specific nodes listed below. Provide your updated revisions as an array of RevNodes (schema attached).
-
-        IMPORTANT CONSTRAINTS - READ CAREFULLY:
-        • ONLY return nodes for the specific IDs provided in the feedback list below: [\(nodeIDs)]
-        • Do NOT include any nodes that aren't in the feedback list, even if you worked on them previously
-        • Do NOT include nodes that have already been accepted or don't need changes
-        • The resume text below INCLUDES all previously accepted changes
-        • Do NOT change the "id" or "treePath" fields — return them exactly as received
-        • CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. Aim to match character count within ±10% when possible
-
-        The ONLY nodes you should provide revisions for are in this feedback list:
-        \(json ?? "none provided")
-
-        Here is the CURRENT VERSION of the resume with all accepted changes applied:
-        \(resumeText)
-
-        Remember: Your response should ONLY include nodes for the IDs listed above. Do not include any other nodes.
-        """
-        return prompt
-    }
 
     @MainActor
     func wholeResumeQueryString() async -> String {
@@ -474,28 +419,6 @@ import SwiftUI
         return prompt
     }
 
-    // MARK: - Console Print Friendly Methods
-    
-    /// Creates a console-friendly version of the prompt with truncated long strings
-    func consoleFriendlyPrompt(_ fullPrompt: String) -> String {
-        var truncatedPrompt = fullPrompt
-        
-        // Truncate background docs (typically very long)
-        if !backgroundDocs.isEmpty {
-            let truncatedBgDocs = truncateString(backgroundDocs, maxLength: 200)
-            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: backgroundDocs, with: truncatedBgDocs)
-        }
-        
-        // Truncate resume text (can be quite long)
-        if !resumeText.isEmpty {
-            let truncatedResumeText = truncateString(resumeText, maxLength: 300)
-            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: resumeText, with: truncatedResumeText)
-        }
-        
-        // Note: updatableFieldsString is kept in full as it's needed for debugging
-        
-        return truncatedPrompt
-    }
     
     /// Helper method to truncate strings with ellipsis
     private func truncateString(_ string: String, maxLength: Int) -> String {

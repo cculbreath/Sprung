@@ -10,7 +10,6 @@ struct AssessmentData: Codable {
 
 /// Committee feedback summary for a cover letter
 struct CommitteeFeedbackSummary: Codable {
-    let letterId: String
     let summaryOfModelAnalysis: String
     let pointsAwarded: [ModelPointsAwarded]
     let modelVotes: [ModelVote]
@@ -26,7 +25,6 @@ struct ModelPointsAwarded: Codable {
 struct ModelVote: Codable {
     let model: String
     let votedForLetterId: String
-    let reasoning: String?
 }
 
 /// Structured summary response for committee analysis
@@ -47,15 +45,6 @@ class CoverLetter: Identifiable, Hashable {
     var jobApp: JobApp? = nil
     @Attribute(.unique) var id: UUID = UUID() // Explicit id field
 
-    /// Stores the OpenAI response ID for server-side conversation state
-    // MARK: - Conversation Management (ChatCompletions API)
-    
-    /// Clears the conversation context for this cover letter
-    @MainActor
-    func clearConversationContext() {
-        // Note: Conversation management now handled by LLMService.shared
-        Logger.debug("Cover letter conversation context clear requested - handled by LLMService")
-    }
 
     var createdDate: Date = Date()
     var moddedDate: Date = Date()
@@ -68,7 +57,6 @@ class CoverLetter: Identifiable, Hashable {
     // The AI model used to generate this cover letter
     var generationModel: String? = nil
     var encodedEnabledRefs: Data? // Store as Data
-    var encodedMessageHistory: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none
     var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zissner
     
@@ -103,27 +91,6 @@ class CoverLetter: Identifiable, Hashable {
         }
     }
 
-    var messageHistory: [MessageParams] {
-        get {
-            guard let data = encodedMessageHistory else {
-                return []
-            }
-            do {
-                return try JSONDecoder().decode([MessageParams].self, from: data)
-            } catch {
-                Logger.debug("Failed to decode messageHistory: \(error.localizedDescription)")
-                return []
-            }
-        }
-        set {
-            do {
-                encodedMessageHistory = try JSONEncoder().encode(newValue)
-
-            } catch {
-                Logger.debug("Failed to encode messageHistory: \(error.localizedDescription)")
-            }
-        }
-    }
     
     /// Multi-model assessment data computed properties
     var assessmentData: AssessmentData {
@@ -358,10 +325,6 @@ class MessageParams: Identifiable, Codable {
     var content: String
     var role: MessageRole
 
-    init(content: String, role: MessageRole) {
-        self.content = content
-        self.role = role
-    }
 
     // Manual Codable implementation
     enum CodingKeys: String, CodingKey {

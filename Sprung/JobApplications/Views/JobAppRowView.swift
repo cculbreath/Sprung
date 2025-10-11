@@ -10,7 +10,6 @@ import SwiftUI
 struct JobAppRowView: View {
     var jobApp: JobApp
     var deleteAction: () -> Void
-    @Environment(AppState.self) private var appState
 
     var body: some View {
         Text("\(jobApp.companyName): \(jobApp.jobPosition)")

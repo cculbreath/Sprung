@@ -13,7 +13,6 @@ struct ReorderableLeafRow: View {
 
     let node: TreeNode
     var siblings: [TreeNode]
-    let currentIndex: Int
 
     @State private var isDropTargeted: Bool = false // Manage state locally
 

@@ -47,8 +47,7 @@ struct LinkedInLoginView: NSViewRepresentable {
     
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: LinkedInLoginView
-        private var loginCheckTimer: Timer?
-        
+
         init(parent: LinkedInLoginView) {
             self.parent = parent
         }

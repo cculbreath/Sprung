@@ -100,33 +100,4 @@ class DatabaseMigrationHelper {
         }
     }
     
-    /// Forces a fresh migration check on next startup (for debugging)
-    static func resetMigrationCheck() {
-        UserDefaults.standard.removeObject(forKey: "lastDatabaseMigrationCheck")
-        Logger.debug("🔄 Migration check reset - will run on next startup")
-    }
-    
-    /// Resets the conversation context tables if they're corrupted
-    static func resetConversationTables(modelContext: ModelContext) {
-        Logger.warning("🔄 Resetting conversation tables...")
-        
-        do {
-            // Fetch and delete all existing contexts
-            let contexts = try modelContext.fetch(FetchDescriptor<ConversationContext>())
-            for context in contexts {
-                modelContext.delete(context)
-            }
-            
-            // Fetch and delete all orphaned messages (shouldn't be any due to cascade delete)
-            let messages = try modelContext.fetch(FetchDescriptor<ConversationMessage>())
-            for message in messages {
-                modelContext.delete(message)
-            }
-            
-            try modelContext.save()
-            Logger.debug("✅ Conversation tables reset successfully")
-        } catch {
-            Logger.error("x Failed to reset conversation tables: \(error)")
-        }
-    }
 }

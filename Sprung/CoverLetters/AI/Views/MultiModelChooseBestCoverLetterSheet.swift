@@ -11,8 +11,6 @@ import SwiftData
 struct MultiModelChooseBestCoverLetterSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) var appState: AppState
-    @Environment(JobAppStore.self) var jobAppStore: JobAppStore
-    @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
 
     @State private var selectedModels: Set<String> = []

@@ -30,7 +30,6 @@ struct ResumeSplitView: View {
                         resume: selRes,
                         tab: $tab,
                         isWide: $isWide,
-                        resStore: resStore,
                         exportCoordinator: appEnvironment.resumeExportCoordinator
                     )
                     .frame(

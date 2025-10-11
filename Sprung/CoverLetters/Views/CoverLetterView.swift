@@ -11,7 +11,6 @@ import SwiftUI
 struct CoverLetterView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @Environment(AppState.self) private var appState: AppState
     
     @Binding var showCoverLetterInspector: Bool
     @State private var isEditing = false
@@ -32,10 +31,9 @@ struct CoverLetterView: View {
         @Bindable var coverLetterStore = coverLetterStore
         @Bindable var jobAppStore = jobAppStore
 
-        if let jobApp = jobAppStore.selectedApp {
+        if jobAppStore.selectedApp != nil {
             VStack {
                 CoverLetterContentView(
-                    jobApp: jobApp,
                     isEditing: $isEditing
                 )
             }
@@ -53,10 +51,7 @@ struct CoverLetterView: View {
 struct CoverLetterContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(AppState.self) private var appState: AppState
-    @Bindable var jobApp: JobApp
     @Binding var isEditing: Bool
-    @Namespace private var namespace
 
     var body: some View {
         @Bindable var coverLetterStore = coverLetterStore

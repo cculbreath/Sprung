@@ -16,7 +16,6 @@ struct ClarifyingQuestionsSheet: View {
     @State private var declinedQuestions: Set<String> = []
     @FocusState private var focusedQuestionId: String?
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
 
     
     var body: some View {
@@ -62,7 +61,6 @@ struct ClarifyingQuestionsSheet: View {
                                     }
                                 }
                             ),
-                            isFocused: focusedQuestionId == question.id,
                             onTabPressed: {
                                 // Move to next question
                                 if index < questions.count - 1 {
@@ -148,7 +146,6 @@ struct QuestionView: View {
     let question: ClarifyingQuestion
     @Binding var answer: String
     @Binding var isDeclined: Bool
-    let isFocused: Bool
     let onTabPressed: () -> Void
     let onShiftTabPressed: () -> Void
     

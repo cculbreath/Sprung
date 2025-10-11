@@ -40,12 +40,6 @@ class JsonToTree {
         self.manifest = manifest
     }
 
-    convenience init?(resume: Resume, rawJson: String, manifest: TemplateManifest? = nil) {
-        guard let orderedDictJson = JsonToTree.parseUnwrapJson(rawJson, manifest: manifest) else {
-            return nil
-        }
-        self.init(resume: resume, orderedContext: orderedDictJson, manifest: manifest)
-    }
 
     convenience init(resume: Resume, context: [String: Any], manifest: TemplateManifest?) {
         self.init(
@@ -59,18 +53,6 @@ class JsonToTree {
         return res.importedEditorKeys.contains(key)
     }
 
-    private static func parseUnwrapJson(_ rawJson: String, manifest: TemplateManifest?) -> OrderedDictionary<String, Any>? {
-        guard let data = rawJson.data(using: .utf8) else { return nil }
-        do {
-            let obj = try JSONSerialization.jsonObject(with: data, options: [])
-            guard let dict = obj as? [String: Any] else { return nil }
-
-            return makeOrderedContext(from: dict, manifest: manifest)
-        } catch {
-            Logger.error("JsonToTree: Failed to parse model JSON: \(error)")
-            return nil
-        }
-    }
 
     private static func makeOrderedContext(
         from context: [String: Any],
@@ -225,7 +207,7 @@ class JsonToTree {
 
     private func sectionType(for key: String) -> SectionType? {
         if let manifestKind = manifest?.section(for: key)?.type,
-           let mapped = SectionType(manifestKind: manifestKind, key: key) {
+            let mapped = SectionType(manifestKind: manifestKind) {
             return mapped
         }
         return inferredSectionType(for: key)

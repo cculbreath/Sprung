@@ -39,28 +39,6 @@ final class JobAppStore: SwiftDataStore {
     }
 
     // MARK: - Methods
-    
-    func refreshJobApps() {
-        // Force a refresh by triggering change notification
-        Logger.debug("🔄 JobAppStore: Refreshing JobApps...")
-        
-        // The jobApps computed property will automatically refetch from SwiftData
-        // when accessed. With @Observable, we need to trigger a change to force UI updates
-        let count = jobApps.count
-        Logger.debug("✅ JobAppStore: Found \(count) JobApps after refresh")
-        
-        // If we have apps but no selection, select the first one
-        if selectedApp == nil && !jobApps.isEmpty {
-            selectedApp = jobApps.first
-            Logger.debug("📌 JobAppStore: Selected first JobApp after refresh")
-        }
-        
-        // Force a UI update by toggling the selection
-        if let current = selectedApp {
-            selectedApp = nil
-            selectedApp = current
-        }
-    }
 
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus

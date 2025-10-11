@@ -9,7 +9,6 @@ import Foundation
 
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     @Environment(OpenRouterService.self) private var openRouterService

@@ -19,41 +19,15 @@ class LinkedInSessionManager: ObservableObject {
     @Published var sessionExpired = false
     
     private var webView: WKWebView?
-    private let sessionCheckInterval: TimeInterval = 300 // 5 minutes
-    private var sessionTimer: Timer?
-    
+
     private init() {
         setupWebView()
-        startSessionMonitoring()
     }
     
     private func setupWebView() {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         webView = WKWebView(frame: .zero, configuration: config)
-    }
-    
-    private func startSessionMonitoring() {
-        sessionTimer = Timer.scheduledTimer(withTimeInterval: sessionCheckInterval, repeats: true) { _ in
-            Task { await self.checkSession() }
-        }
-    }
-    
-    func checkSession() async {
-        guard let webView = webView else { return }
-        
-        let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
-        let hasLinkedInSession = cookies.contains { cookie in
-            cookie.domain.contains("linkedin.com") && 
-            (cookie.name == "li_at" || cookie.name == "JSESSIONID")
-        }
-        
-        await MainActor.run {
-            isLoggedIn = hasLinkedInSession
-            if !hasLinkedInSession && isLoggedIn {
-                sessionExpired = true
-            }
-        }
     }
     
     func clearSession() {
@@ -471,72 +445,6 @@ extension JobApp {
         }
     }
     
-    /// Test extraction with local HTML file (for debugging)
-    static func testLinkedInExtraction(htmlFilePath: String, jobAppStore: JobAppStore) -> JobApp? {
-        do {
-            let htmlContent = try String(contentsOfFile: htmlFilePath, encoding: .utf8)
-            Logger.info("🧪 Testing LinkedIn extraction with file: \(htmlFilePath)")
-            
-            // Run debug analysis first
-            debugLinkedInPageStructure(html: htmlContent)
-            
-            // Test actual extraction
-            if let jobApp = parseLinkedInJobListing(html: htmlContent, url: "test://local-file") {
-                Logger.info("✅ Test extraction successful: \(jobApp.jobPosition) at \(jobApp.companyName)")
-                return jobApp
-            } else {
-                Logger.warning("⚠️ Test extraction failed")
-                return nil
-            }
-        } catch {
-            Logger.error("🚨 Failed to read test HTML file: \(error)")
-            return nil
-        }
-    }
-    
-    /// Debug function to help test and improve extraction selectors
-    static func debugLinkedInPageStructure(html: String) {
-        do {
-            let doc = try SwiftSoup.parse(html)
-            
-            Logger.debug("🔍 [LinkedIn Debug] Page structure analysis:")
-            
-            // Find all h1 elements (potential job titles)
-            let h1Elements = try doc.select("h1")
-            Logger.debug("🔍 Found \(h1Elements.count) h1 elements:")
-            for (index, element) in h1Elements.enumerated() {
-                let text = try element.text().prefix(50)
-                let classes = try element.attr("class")
-                let dataTest = try element.attr("data-test-id")
-                Logger.debug("   \(index + 1). '\(text)...' | class: '\(classes)' | data-test-id: '\(dataTest)'")
-            }
-            
-            // Find potential company elements
-            let companySelectors = ["a[href*=\"/company/\"]", ".t-black", "[class*=\"company\"]"]
-            for selector in companySelectors {
-                let elements = try doc.select(selector)
-                if !elements.isEmpty() {
-                    Logger.debug("🔍 Found \(elements.count) elements for selector '\(selector)'")
-                    for (index, element) in elements.prefix(3).enumerated() {
-                        let text = try element.text().prefix(30)
-                        Logger.debug("   \(index + 1). '\(text)...'")
-                    }
-                }
-            }
-            
-            // Find job description containers
-            let descSelectors = ["#job-details", "[class*=\"description\"]", "[class*=\"job-details\"]"]
-            for selector in descSelectors {
-                let elements = try doc.select(selector)
-                if !elements.isEmpty() {
-                    Logger.debug("🔍 Found \(elements.count) description elements for selector '\(selector)'")
-                }
-            }
-            
-        } catch {
-            Logger.error("🚨 Debug parsing failed: \(error)")
-        }
-    }
 }
 
 // MARK: - Navigation Delegate Helper
@@ -689,106 +597,4 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
     }
 }
 
-private class LinkedInNavigationDelegate: NSObject, WKNavigationDelegate {
-    let completion: (Result<String, Error>) -> Void
-    private var hasCompleted = false
-    
-    init(completion: @escaping (Result<String, Error>) -> Void) {
-        self.completion = completion
-        super.init()
-        Logger.debug("🔍 [LinkedInNavigationDelegate] Delegate initialized")
-    }
-    
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        Logger.debug("🔍 [LinkedInNavigationDelegate] didStartProvisionalNavigation")
-    }
-    
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        Logger.debug("🔍 [LinkedInNavigationDelegate] didCommit navigation")
-    }
-    
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Logger.debug("🔍 [LinkedInNavigationDelegate] didFinish navigation - page load complete")
-        guard !hasCompleted else {
-            Logger.debug("🔍 [LinkedInNavigationDelegate] Already completed, ignoring duplicate didFinish")
-            return
-        }
-        
-        // Wait a moment for dynamic content to load
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            Logger.debug("🔍 [LinkedInNavigationDelegate] Extracting HTML after 3 second delay...")
-            webView.evaluateJavaScript("document.documentElement.outerHTML") { result, error in
-                guard !self.hasCompleted else {
-                    Logger.debug("🔍 [LinkedInNavigationDelegate] JavaScript completed but already handled")
-                    return
-                }
-                self.hasCompleted = true
-                
-                if let error = error {
-                    Logger.error("🚨 [LinkedInNavigationDelegate] JavaScript evaluation failed: \(error)")
-                    self.completion(.failure(error))
-                } else if let html = result as? String {
-                    Logger.debug("✅ [LinkedInNavigationDelegate] Successfully extracted HTML (\(html.count) characters)")
-                    
-                    // Debug: log the actual HTML if it's suspiciously short
-                    if html.count < 1000 {
-                        Logger.warning("⚠️ [LinkedInNavigationDelegate] HTML content seems too short, here's what we got:")
-                        Logger.warning("   \(html.prefix(200))")
-                    }
-                    
-                    self.completion(.success(html))
-                } else {
-                    Logger.error("🚨 [LinkedInNavigationDelegate] JavaScript returned unexpected result type")
-                    self.completion(.failure(URLError(.cannotDecodeContentData)))
-                }
-            }
-        }
-    }
-    
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        Logger.error("🚨 [LinkedInNavigationDelegate] didFail navigation: \(error)")
-        guard !hasCompleted else { return }
-        hasCompleted = true
-        completion(.failure(error))
-    }
-    
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        Logger.error("🚨 [LinkedInNavigationDelegate] didFailProvisionalNavigation: \(error)")
-        guard !hasCompleted else { return }
-        hasCompleted = true
-        completion(.failure(error))
-    }
-    
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if let url = navigationAction.request.url {
-            Logger.debug("🔍 [LinkedInNavigationDelegate] Navigation policy for: \(url.absoluteString)")
-            
-            // Check for potential security challenges or redirects that might cause blank pages
-            if url.absoluteString.contains("linkedin.com/checkpoint") ||
-               url.absoluteString.contains("linkedin.com/challenge") ||
-               url.absoluteString.contains("linkedin.com/security") {
-                Logger.warning("⚠️ [LinkedInNavigationDelegate] LinkedIn security challenge detected: \(url.absoluteString)")
-            }
-            
-            // Check for external redirects that might indicate bot detection
-            if ((url.host?.contains("linkedin.com")) != nil) == true &&
-               !url.absoluteString.hasPrefix("about:") &&
-               !url.absoluteString.hasPrefix("data:") {
-                Logger.warning("⚠️ [LinkedInNavigationDelegate] External redirect detected (possible bot detection): \(url.absoluteString)")
-            }
-        }
-        decisionHandler(.allow)
-    }
-}
 
-// MARK: - WebKit Extensions
-
-extension WKHTTPCookieStore {
-    func allCookies() async -> [HTTPCookie] {
-        return await withCheckedContinuation { continuation in
-            getAllCookies { cookies in
-                continuation.resume(returning: cookies)
-            }
-        }
-    }
-}

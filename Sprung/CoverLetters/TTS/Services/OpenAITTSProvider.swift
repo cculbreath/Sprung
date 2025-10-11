@@ -70,18 +70,6 @@ class OpenAITTSProvider {
 
     // MARK: - Playback state callbacks (wired to UI)
     
-    /// Get the complete cached audio data from the underlying streamer
-    /// - Returns: The complete audio data that has been cached, or nil if unavailable
-    func getCachedAudio() -> Data? {
-        return streamer.getCachedAudio()
-    }
-    
-    /// Save the complete audio data to a file
-    /// - Parameter url: The URL to save the file to
-    /// - Returns: True if saving was successful
-    func saveAudioToFile(url: URL) -> Bool {
-        return streamer.saveAudioToFile(url: url)
-    }
 
     /// Fires when the first audio buffer starts playing (leaves buffering state).
     var apiKey: String?

@@ -96,8 +96,6 @@ final class TTSAudioStreamer {
     /// Called when playback has finished
     var onFinish: (() -> Void)?
     
-    /// Called when playback actually completes (not from overflow but true end of audio)
-    var onTruePlaybackEnd: (() -> Void)?
 
     /// Called on playback or decoding error
     var onError: ((Error) -> Void)?
@@ -122,7 +120,6 @@ final class TTSAudioStreamer {
             self.onFinish = nil
             self.onError = nil
             self.onBufferingStateChanged = nil
-            self.onTruePlaybackEnd = nil
         }
     }
 
@@ -152,25 +149,6 @@ final class TTSAudioStreamer {
 
     // MARK: - Public Methods
     
-    /// Get the complete cached audio data
-    /// - Returns: The complete audio data that has been cached
-    func getCachedAudio() -> Data {
-        return completeAudioCache
-    }
-    
-    /// Save the complete audio data to a file
-    /// - Parameter url: The URL to save the file to
-    /// - Returns: True if saving was successful
-    func saveAudioToFile(url: URL) -> Bool {
-        do {
-            try completeAudioCache.write(to: url)
-            Logger.debug("TTSAudioStreamer: Successfully saved audio to \(url.path)")
-            return true
-        } catch {
-//            Logger.error("TTSAudioStreamer: Failed to save audio to \(url.path): \(error.localizedDescription)")
-            return false
-        }
-    }
 
     /// Append a new chunk of audio data for playback.
     /// On the first chunk, buffer it before starting the player to ensure initial data is available.

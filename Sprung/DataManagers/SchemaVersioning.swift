@@ -51,18 +51,4 @@ extension ModelContainer {
         )
     }
 
-    /// Convenience initializer that targets a specific store URL.
-    static func createWithMigration(url: URL) throws -> ModelContainer {
-        let configuration = ModelConfiguration(
-            schema: SprungSchema.schema,
-            url: url,
-            allowsSave: true,
-            cloudKitDatabase: .none
-        )
-
-        return try ModelContainer(
-            for: SprungSchema.schema,
-            configurations: configuration
-        )
-    }
 }

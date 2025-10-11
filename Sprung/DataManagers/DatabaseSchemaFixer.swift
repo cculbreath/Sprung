@@ -275,5 +275,4 @@ class DatabaseSchemaFixer {
 enum DatabaseSchemaFixerError: Error {
     case cannotOpenDatabase
     case cannotFindApplicationSupport
-    case schemaMigrationFailed
 }

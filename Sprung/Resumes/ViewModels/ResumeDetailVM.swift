@@ -39,12 +39,10 @@ final class ResumeDetailVM {
 
     // MARK: - Dependencies --------------------------------------------------
 
-    private let resStore: ResStore
     private let exportCoordinator: ResumeExportCoordinator
 
-    init(resume: Resume, resStore: ResStore, exportCoordinator: ResumeExportCoordinator) {
+    init(resume: Resume, exportCoordinator: ResumeExportCoordinator) {
         self.resume = resume
-        self.resStore = resStore
         self.exportCoordinator = exportCoordinator
     }
 
@@ -106,7 +104,7 @@ final class ResumeDetailVM {
     func saveEdits() {
         guard let id = editingNodeID, let node = resume.nodes.first(where: { $0.id == id }) else { return }
 
-        if let error = validate(node: node, proposedName: tempName, proposedValue: tempValue) {
+        if let error = validate(node: node, proposedValue: tempValue) {
             validationError = error
             return
         }
@@ -161,7 +159,7 @@ final class ResumeDetailVM {
 
     // MARK: - Validation -------------------------------------------------
 
-    private func validate(node: TreeNode, proposedName: String, proposedValue: String) -> String? {
+    private func validate(node: TreeNode, proposedValue: String) -> String? {
         let trimmed = proposedValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if node.schemaRequired && trimmed.isEmpty {
             return node.schemaValidationMessage ?? "This field is required."
