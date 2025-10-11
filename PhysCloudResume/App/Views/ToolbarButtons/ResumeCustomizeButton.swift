@@ -3,10 +3,10 @@ import SwiftUI
 
 struct ResumeCustomizeButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(AppState.self) private var appState: AppState
+    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager: ReasoningStreamManager
     
     @Binding var selectedTab: TabList
-    var resumeReviseViewModel: ResumeReviseViewModel?
     
     @State private var isGeneratingResume = false
     @State private var showCustomizeModelSheet = false
@@ -17,7 +17,7 @@ struct ResumeCustomizeButton: View {
             selectedTab = .resume
             showCustomizeModelSheet = true
         }) {
-            let isBusy = isGeneratingResume || (resumeReviseViewModel?.isWorkflowBusy(.customize) ?? false)
+            let isBusy = isGeneratingResume || resumeReviseViewModel.isWorkflowBusy(.customize)
             if isBusy {
                 Label("Customize", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
                     .symbolEffect(.variableColor.iterative.nonReversing)
@@ -62,18 +62,12 @@ struct ResumeCustomizeButton: View {
         }
         
         do {
-            guard let viewModel = resumeReviseViewModel else {
-                Logger.error("ResumeReviseViewModel not available")
-                isGeneratingResume = false
-                return
-            }
-            
             // Defensive check: ensure reasoning modal is not visible before starting workflow
             Logger.debug("🛡️ [ResumeCustomizeButton] Starting fresh workflow with model: \(modelId)")
-            appState.globalReasoningStreamManager.isVisible = false
-            appState.globalReasoningStreamManager.clear()
+            reasoningStreamManager.isVisible = false
+            reasoningStreamManager.clear()
             
-            try await viewModel.startFreshRevisionWorkflow(
+            try await resumeReviseViewModel.startFreshRevisionWorkflow(
                 resume: resume,
                 modelId: modelId,
                 workflow: .customize

@@ -16,7 +16,9 @@ class ClarifyingQuestionsViewModel {
     
     // MARK: - Dependencies
     private let llm: LLMFacade
-    private let appState: AppState
+    private let openRouterService: OpenRouterService
+    private let reasoningStreamManager: ReasoningStreamManager
+    private let defaultResumeReviseViewModel: ResumeReviseViewModel
     private let exportCoordinator: ResumeExportCoordinator
     private var activeStreamingHandle: LLMStreamingHandle?
     
@@ -26,16 +28,21 @@ class ClarifyingQuestionsViewModel {
     var currentConversationId: UUID?
     var currentModelId: String? // Track the model used for conversation continuity
     
-    // MARK: - Reasoning Stream State (now uses global manager)
-    // reasoningStreamManager is accessed via appState.globalReasoningStreamManager
-    
     // MARK: - Error Handling
     var lastError: String?
     var showError: Bool = false
     
-    init(llmFacade: LLMFacade, appState: AppState, exportCoordinator: ResumeExportCoordinator) {
+    init(
+        llmFacade: LLMFacade,
+        openRouterService: OpenRouterService,
+        reasoningStreamManager: ReasoningStreamManager,
+        defaultResumeReviseViewModel: ResumeReviseViewModel,
+        exportCoordinator: ResumeExportCoordinator
+    ) {
         self.llm = llmFacade
-        self.appState = appState
+        self.openRouterService = openRouterService
+        self.reasoningStreamManager = reasoningStreamManager
+        self.defaultResumeReviseViewModel = defaultResumeReviseViewModel
         self.exportCoordinator = exportCoordinator
     }
     
@@ -60,7 +67,7 @@ class ClarifyingQuestionsViewModel {
             currentModelId = modelId
             
             // Check if model supports reasoning
-            let model = appState.openRouterService.findModel(id: modelId)
+            let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
             
             // Create the query for clarifying questions
@@ -102,8 +109,8 @@ class ClarifyingQuestionsViewModel {
                 activeStreamingHandle = handle
                 
                 // Clear any previous reasoning content and start fresh
-                appState.globalReasoningStreamManager.clear()
-                appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
+                reasoningStreamManager.clear()
+                reasoningStreamManager.startReasoning(modelName: modelId)
                 var fullResponse = ""
                 var collectingJSON = false
                 var jsonResponse = ""
@@ -112,7 +119,7 @@ class ClarifyingQuestionsViewModel {
                     // Handle reasoning content
                     if let reasoningContent = chunk.reasoning {
                         Logger.debug("🧠 [ClarifyingQuestionsViewModel] Adding reasoning content: \(reasoningContent.prefix(100))...")
-                        appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                        reasoningStreamManager.reasoningText += reasoningContent
                     }
                     
                     // Collect regular content
@@ -128,7 +135,7 @@ class ClarifyingQuestionsViewModel {
                     
                     // Handle completion
                     if chunk.isFinished {
-                        appState.globalReasoningStreamManager.isStreaming = false
+                        reasoningStreamManager.isStreaming = false
                     }
                 }
                 cancelActiveStreaming()
@@ -195,7 +202,7 @@ class ClarifyingQuestionsViewModel {
         let answerPrompt = createAnswerPrompt(answers: answers)
         
         // Check if model supports reasoning for streaming
-        let model = appState.openRouterService.findModel(id: modelId)
+            let model = openRouterService.findModel(id: modelId)
         let supportsReasoning = model?.supportsReasoning ?? false
         
         Logger.debug("🤖 [processAnswersAndHandoffConversation] Model: \(modelId)")
@@ -213,10 +220,10 @@ class ClarifyingQuestionsViewModel {
             )
             
             // Show reasoning modal for answer processing
-            appState.globalReasoningStreamManager.clear()
-            appState.globalReasoningStreamManager.modelName = modelId
-            appState.globalReasoningStreamManager.isVisible = true
-            appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
+            reasoningStreamManager.clear()
+            reasoningStreamManager.modelName = modelId
+            reasoningStreamManager.isVisible = true
+            reasoningStreamManager.startReasoning(modelName: modelId)
             
             cancelActiveStreaming()
             let handle = try await llm.continueConversationStreaming(
@@ -234,12 +241,12 @@ class ClarifyingQuestionsViewModel {
             for try await chunk in handle.stream {
                 // Handle reasoning content
                 if let reasoningContent = chunk.reasoning {
-                    appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                    reasoningStreamManager.reasoningText += reasoningContent
                 }
                 
                 // Handle completion
                 if chunk.isFinished {
-                    appState.globalReasoningStreamManager.isStreaming = false
+                    reasoningStreamManager.isStreaming = false
                     // Keep modal visible - it will be handled by revision generation
                 }
             }
@@ -360,17 +367,8 @@ class ClarifyingQuestionsViewModel {
         Logger.info("🎯 Proceeding directly to revisions workflow without clarifying questions")
         
         do {
-            // Use the existing ResumeReviseViewModel from appState instead of creating a new one
-            guard let reviseViewModel = appState.resumeReviseViewModel else {
-                Logger.error("❌ No ResumeReviseViewModel available in appState")
-                await MainActor.run {
-                    lastError = "No ResumeReviseViewModel available"
-                    showError = true
-                }
-                return
-            }
-            
-            Logger.debug("🔍 [ClarifyingQuestionsViewModel] Using existing ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(reviseViewModel).toOpaque()))")
+            let reviseViewModel = defaultResumeReviseViewModel
+            Logger.debug("🔍 [ClarifyingQuestionsViewModel] Using shared ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(reviseViewModel).toOpaque()))")
             
             // Start the fresh revision workflow
             try await reviseViewModel.startFreshRevisionWorkflow(
@@ -383,12 +381,10 @@ class ClarifyingQuestionsViewModel {
             Logger.info("✅ Direct revision workflow completed, transitioning to review")
             
             // Signal that revisions are ready (this will be handled by the view layer)
-            await MainActor.run {
-                // Ensure reasoning modal is hidden before transitioning
-                appState.globalReasoningStreamManager.isVisible = false
-                // No need to set appState.resumeReviseViewModel since we're using the existing one
-                // The reviseViewModel.showResumeRevisionSheet = true is already set in startFreshRevisionWorkflow
-            }
+                await MainActor.run {
+                    // Ensure reasoning modal is hidden before transitioning
+                    reasoningStreamManager.isVisible = false
+                }
             
         } catch {
             Logger.error("❌ Direct revision workflow failed: \(error.localizedDescription)")

@@ -11,7 +11,6 @@ func buildUnifiedToolbar(
     refresh: Binding<Bool>,
     sheets: Binding<AppSheets>,
     clarifyingQuestions: Binding<[ClarifyingQuestion]>,
-    resumeReviseViewModel: ResumeReviseViewModel?,
     showNewAppSheet: Binding<Bool>,
     showSlidingList: Binding<Bool>
 ) -> some CustomizableToolbarContent {
@@ -21,7 +20,6 @@ func buildUnifiedToolbar(
         refresh: refresh,
         sheets: sheets,
         clarifyingQuestions: clarifyingQuestions,
-        resumeReviseViewModel: resumeReviseViewModel,
         showNewAppSheet: showNewAppSheet,
         showSlidingList: showSlidingList
     )
@@ -37,7 +35,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     @Binding var refresh: Bool
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
-    var resumeReviseViewModel: ResumeReviseViewModel?
     @Binding var showNewAppSheet: Bool
     @Binding var showSlidingList: Bool
 
@@ -83,8 +80,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             // Resume Operations
             ToolbarItem(id: "customize", placement: .secondaryAction, showsByDefault: true) {
                 ResumeCustomizeButton(
-                    selectedTab: $selectedTab,
-                    resumeReviseViewModel: resumeReviseViewModel
+                    selectedTab: $selectedTab
                 )
             }
             
@@ -92,8 +88,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 ClarifyingQuestionsButton(
                     selectedTab: $selectedTab,
                     clarifyingQuestions: $clarifyingQuestions,
-                    sheets: $sheets,
-                    resumeReviseViewModel: resumeReviseViewModel
+                    sheets: $sheets
                 )
             }
             
@@ -218,4 +213,3 @@ struct UnifiedToolbar: CustomizableToolbarContent {
         }
     }
 }
-

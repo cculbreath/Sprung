@@ -24,6 +24,9 @@ final class AppDependencies {
     let resumeExportCoordinator: ResumeExportCoordinator
     let templateStore: TemplateStore
     let templateSeedStore: TemplateSeedStore
+    let llmService: LLMService
+    let reasoningStreamManager: ReasoningStreamManager
+    let resumeReviseViewModel: ResumeReviseViewModel
 
     // MARK: - UI State
     let dragInfo: DragInfo
@@ -65,6 +68,7 @@ final class AppDependencies {
         )
         self.resRefStore = ResRefStore(context: modelContext)
         self.coverRefStore = CoverRefStore(context: modelContext)
+        self.reasoningStreamManager = ReasoningStreamManager()
 
         // Dependent stores
         self.coverLetterStore = CoverLetterStore(context: modelContext, refStore: coverRefStore)
@@ -86,6 +90,7 @@ final class AppDependencies {
 
         let requestExecutor = LLMRequestExecutor()
         let llmService = LLMService(requestExecutor: requestExecutor)
+        self.llmService = llmService
         // Phase 6: Introduce facade backed by SwiftOpenAI adapter and temporarily bridge conversation flows
         let client = SwiftOpenAIClient(executor: requestExecutor)
         let llmFacade = LLMFacade(
@@ -100,6 +105,14 @@ final class AppDependencies {
             llmFacade: llmFacade,
             exportCoordinator: resumeExportCoordinator
         )
+
+        let resumeReviseViewModel = ResumeReviseViewModel(
+            llmFacade: llmFacade,
+            openRouterService: openRouterService,
+            reasoningStreamManager: reasoningStreamManager,
+            exportCoordinator: resumeExportCoordinator
+        )
+        self.resumeReviseViewModel = resumeReviseViewModel
 
         self.appEnvironment = AppEnvironment(
             appState: appState,
@@ -117,7 +130,6 @@ final class AppDependencies {
         // Bootstrap sequence
         DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
         appState.initializeWithModelContext(modelContext, enabledLLMStore: enabledLLMStore)
-        appState.llmService = llmService
         llmService.initialize(appState: appState, modelContext: modelContext)
         llmService.reconfigureClient()
 

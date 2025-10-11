@@ -30,7 +30,7 @@ struct RevisionReviewView: View {
     // Computed property to check if reasoning modal should be used instead of loading sheet
     private var isUsingReasoningModal: Bool {
         guard let modelId = viewModel.currentModelId else { return false }
-        let model = viewModel.appState.openRouterService.findModel(id: modelId)
+        let model = viewModel.openRouterService.findModel(id: modelId)
         return model?.supportsReasoning ?? false
     }
 

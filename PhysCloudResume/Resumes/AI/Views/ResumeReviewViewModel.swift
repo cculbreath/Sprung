@@ -20,17 +20,20 @@ class ResumeReviewViewModel {
     private(set) var fixOverflowError: String? = nil
     private(set) var currentOverflowLineCount: Int = 0
     
-    // MARK: - Reasoning Stream State (now uses global manager)
-    // reasoningStreamManager is accessed via appState.globalReasoningStreamManager
-    
+    // MARK: - Dependencies
+    private var reasoningStreamManager: ReasoningStreamManager?
+    private var openRouterService: OpenRouterService?
+
     // Services
     private var reviewService: ResumeReviewService?
     private var fixOverflowService: FixOverflowService?
     private var reorderSkillsService: ReorderSkillsService?
-    
+
     // MARK: - Initialization
-    
-    func initialize(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
+
+    func initialize(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator, reasoningStreamManager: ReasoningStreamManager, openRouterService: OpenRouterService) {
+        self.reasoningStreamManager = reasoningStreamManager
+        self.openRouterService = openRouterService
         reviewService = ResumeReviewService(llmFacade: llmFacade)
         reviewService?.initialize()
         if let svc = reviewService {
@@ -49,15 +52,14 @@ class ResumeReviewViewModel {
         resume: Resume,
         selectedModel: String,
         customOptions: CustomReviewOptions?,
-        allowEntityMerge: Bool,
-        appState: AppState
+        allowEntityMerge: Bool
     ) {
         resetState()
         
         switch reviewType {
         case .fixOverflow:
             Task {
-                await performFixOverflow(resume: resume, allowEntityMerge: allowEntityMerge, selectedModel: selectedModel, appState: appState)
+                await performFixOverflow(resume: resume, allowEntityMerge: allowEntityMerge, selectedModel: selectedModel)
             }
         case .reorderSkills:
             Task {
@@ -163,22 +165,28 @@ class ResumeReviewViewModel {
         }
     }
     
-    private func performFixOverflow(resume: Resume, allowEntityMerge: Bool, selectedModel: String, appState: AppState) async {
+    private func performFixOverflow(resume: Resume, allowEntityMerge: Bool, selectedModel: String) async {
         isProcessingFixOverflow = true
         fixOverflowStatusMessage = "Starting skills optimization..."
-        
-        // Check if model supports reasoning and prepare callback  
-        let model = appState.openRouterService.findModel(id: selectedModel)
+
+        guard let openRouterService = openRouterService, let reasoningStreamManager = reasoningStreamManager else {
+            fixOverflowError = "Service dependencies not initialized"
+            isProcessingFixOverflow = false
+            return
+        }
+
+        // Check if model supports reasoning and prepare callback
+        let model = openRouterService.findModel(id: selectedModel)
         let supportsReasoning = model?.supportsReasoning ?? false
         let reasoningCallback: ((String) -> Void)? = supportsReasoning ? { reasoningContent in
             Task { @MainActor in
-                appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                reasoningStreamManager.reasoningText += reasoningContent
             }
         } : nil
-        
+
         // Start reasoning stream if applicable
         if supportsReasoning {
-            appState.globalReasoningStreamManager.startReasoning(modelName: selectedModel)
+            reasoningStreamManager.startReasoning(modelName: selectedModel)
         }
         
         let result = await fixOverflowService?.performFixOverflow(
@@ -208,9 +216,9 @@ class ResumeReviewViewModel {
         
         // Complete reasoning stream
         if supportsReasoning {
-            appState.globalReasoningStreamManager.stopStream()
+            reasoningStreamManager.stopStream()
         }
-        
+
         isProcessingFixOverflow = false
     }
     

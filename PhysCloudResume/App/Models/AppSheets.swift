@@ -33,13 +33,13 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
-    
+    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
+
     private var revisionSheetBinding: Binding<Bool> {
         Binding(
-            get: { appState.resumeReviseViewModel?.showResumeRevisionSheet ?? false },
+            get: { resumeReviseViewModel.showResumeRevisionSheet },
             set: { newValue in
-                guard let viewModel = appState.resumeReviseViewModel else { return }
-                viewModel.showResumeRevisionSheet = newValue
+                resumeReviseViewModel.showResumeRevisionSheet = newValue
             }
         )
     }
@@ -59,10 +59,9 @@ struct AppSheetsModifier: ViewModifier {
                 }
             }
             .sheet(isPresented: revisionSheetBinding) {
-                if let selectedResume = jobAppStore.selectedApp?.selectedRes,
-                   let viewModel = appState.resumeReviseViewModel {
+                if let selectedResume = jobAppStore.selectedApp?.selectedRes {
                     RevisionReviewView(
-                        viewModel: viewModel,
+                        viewModel: resumeReviseViewModel,
                         resume: .constant(selectedResume)
                     )
                     .frame(minWidth: 650)
@@ -72,24 +71,17 @@ struct AppSheetsModifier: ViewModifier {
                             category: .ui
                         )
                         Logger.debug(
-                            "🔍 [AppSheets] ViewModel has \(viewModel.resumeRevisions.count) revisions",
+                            "🔍 [AppSheets] ViewModel has \(resumeReviseViewModel.resumeRevisions.count) revisions",
                             category: .ui
                         )
                     }
                 } else {
-                    Text("Error: Missing resume or viewModel")
+                    Text("Error: Missing resume")
                         .frame(width: 400, height: 300)
                         .onAppear {
-                            Logger.debug("🔍 [AppSheets] Failed to get selectedResume or viewModel", category: .ui)
+                            Logger.debug("🔍 [AppSheets] Failed to get selectedResume", category: .ui)
                             Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp: \(jobAppStore.selectedApp?.id.uuidString ?? "nil")", category: .ui)
                             Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp?.selectedRes: \(jobAppStore.selectedApp?.selectedRes?.id.uuidString ?? "nil")", category: .ui)
-                            Logger.debug("🔍 [AppSheets] appState.resumeReviseViewModel: \(appState.resumeReviseViewModel != nil ? "exists" : "nil")", category: .ui)
-                            if let vm = appState.resumeReviseViewModel {
-                                Logger.debug(
-                                    "🔍 [AppSheets] ViewModel revisions count: \(vm.resumeRevisions.count)",
-                                    category: .ui
-                                )
-                            }
                         }
                 }
             }
