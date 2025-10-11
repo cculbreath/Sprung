@@ -131,7 +131,12 @@ final class AppDependencies {
         // Bootstrap sequence
         DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
         appState.initializeWithModelContext(modelContext, enabledLLMStore: enabledLLMStore)
-        llmService.initialize(appState: appState, modelContext: modelContext)
+        llmService.initialize(
+            appState: appState,
+            modelContext: modelContext,
+            enabledLLMStore: enabledLLMStore,
+            openRouterService: openRouterService
+        )
         llmService.reconfigureClient()
 
         Logger.debug("✅ AppDependencies: ready", category: .appLifecycle)

@@ -11,16 +11,6 @@ import Foundation
 extension AppState {
     /// Application settings manager
     class SettingsManager {
-        /// Gets the preferred LLM provider from UserDefaults
-        var preferredLLMProvider: String {
-            get {
-                UserDefaults.standard.string(forKey: "preferredLLMProvider") ?? AIModels.Provider.openai
-            }
-            set {
-                UserDefaults.standard.set(newValue, forKey: "preferredLLMProvider")
-            }
-        }
-        
         /// Gets the selected models for batch cover letter generation
         var batchCoverLetterModels: Set<String> {
             get {

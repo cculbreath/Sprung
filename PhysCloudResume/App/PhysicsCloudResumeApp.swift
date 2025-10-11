@@ -73,9 +73,10 @@ struct PhysicsCloudResumeApp: App {
                 .environment(appDependencies.templateStore)
                 .environment(appDependencies.templateSeedStore)
                 .onAppear {
-                    // Pass appState and modelContainer to AppDelegate so it can use them for windows
+                    // Pass environment and dependencies to AppDelegate for windows
                     appDelegate.appEnvironment = appEnvironment
                     appDelegate.modelContainer = modelContainer
+                    appDelegate.enabledLLMStore = appDependencies.enabledLLMStore
                 }
         }
         .modelContainer(modelContainer)

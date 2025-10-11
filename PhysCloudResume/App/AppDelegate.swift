@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var templateEditorWindow: NSWindow?
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
+    var enabledLLMStore: EnabledLLMStore?
 
     func applicationDidFinishLaunching(_: Notification) {
         // DEBUG: Remove existing SwiftData SQLite store files to avoid migration errors
@@ -116,19 +117,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             // Create hosting view with proper environment objects
             let hostingView: NSHostingView<AnyView>
-            if let appEnvironment = self.appEnvironment, let container = self.modelContainer {
+            if let appEnvironment = self.appEnvironment, let container = self.modelContainer, let enabledLLMStore = self.enabledLLMStore {
                 let appState = appEnvironment.appState
-
-                // Reuse the shared EnabledLLMStore when available to keep selections in sync
-                let enabledLLMStore: EnabledLLMStore
-                if let existingStore = appState.enabledLLMStore {
-                    enabledLLMStore = existingStore
-                } else {
-                    let newStore = EnabledLLMStore(modelContext: container.mainContext)
-                    appState.enabledLLMStore = newStore
-                    enabledLLMStore = newStore
-                }
-
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
 
                 let root = settingsView

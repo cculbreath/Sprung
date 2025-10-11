@@ -50,6 +50,7 @@ final class LLMService {
     // Dependencies
     private var appState: AppState?
     private var enabledLLMStore: EnabledLLMStore?
+    private var openRouterService: OpenRouterService?
 
     // Components
     private let requestExecutor: LLMRequestExecutor
@@ -70,9 +71,10 @@ final class LLMService {
     // MARK: - Initialization
 
     @MainActor
-    func initialize(appState: AppState, modelContext: ModelContext? = nil) {
+    func initialize(appState: AppState, modelContext: ModelContext? = nil, enabledLLMStore: EnabledLLMStore? = nil, openRouterService: OpenRouterService? = nil) {
         self.appState = appState
-        self.enabledLLMStore = appState.enabledLLMStore
+        self.enabledLLMStore = enabledLLMStore
+        self.openRouterService = openRouterService
         let conversationStore = LLMConversationStore(modelContext: modelContext)
         self.conversationCoordinator = ConversationCoordinator(store: conversationStore)
 
@@ -426,7 +428,7 @@ final class LLMService {
     ) async throws -> T {
         try await ensureInitialized()
 
-        let model = await MainActor.run { self.appState?.openRouterService.findModel(id: modelId) }
+        let model = await MainActor.run { self.openRouterService?.findModel(id: modelId) }
         let supportsStructuredOutput = model?.supportsStructuredOutput ?? false
         let shouldAvoidJSONSchema = await MainActor.run {
             self.enabledLLMStore?.shouldAvoidJSONSchema(modelId: modelId) ?? false
