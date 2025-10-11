@@ -14,3 +14,5 @@ CLAUDE.md
 **/CLAUDE.local.md
 build/
 clean-commit-msg.sh
+
+agents.md

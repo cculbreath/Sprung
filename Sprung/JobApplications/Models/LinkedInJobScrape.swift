@@ -2,8 +2,6 @@
 //  LinkedInJobScrape.swift
 //  Sprung
 //
-//  Created by Claude on 7/12/25.
-//
 
 import Foundation
 import SwiftSoup

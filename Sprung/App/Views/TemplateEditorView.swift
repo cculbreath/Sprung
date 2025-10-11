@@ -11,24 +11,6 @@ import AppKit
 import PDFKit
 import Combine
 
-private struct TemplateEditorLayout {
-    let sidebarWidth: CGFloat
-    let inspectorWidth: CGFloat
-    let sidebarColor: Color
-    let editorColor: Color
-    let inspectorColor: Color
-
-    init(totalWidth: CGFloat) {
-        let minimumWidth: CGFloat = 960.0
-        let sanitizedWidth = max(totalWidth, minimumWidth)
-        sidebarWidth = Swift.min(Swift.max(sanitizedWidth * 0.22, 240.0), 320.0)
-        inspectorWidth = Swift.min(Swift.max(sanitizedWidth * 0.22, 240.0), 340.0)
-        sidebarColor = Color(NSColor.windowBackgroundColor)
-        editorColor = Color(NSColor.textBackgroundColor)
-        inspectorColor = Color(NSColor.controlBackgroundColor)
-    }
-}
-
 private struct TextFilterInfo: Identifiable {
     let id = UUID()
     let name: String
@@ -85,7 +67,7 @@ struct TemplateEditorView: View {
     
     @State private var availableTemplates: [String] = []
     
-    @State private var showSidebar: Bool = true
+    @State private var splitVisibility: NavigationSplitViewVisibility = .all
     private let textFilterReference: [TextFilterInfo] = [
         TextFilterInfo(
             name: "center",
@@ -127,15 +109,62 @@ struct TemplateEditorView: View {
     private var selectedResume: Resume? {
         navigationState.selectedResume
     }
+
+    private func templateDisplayName(_ template: String) -> String {
+        template
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+    }
+
+    private func templateIconName(for template: String) -> String {
+        templateMatchesSelectedResume(template) ? "doc.text.fill" : "doc.text"
+    }
+
+    private func templateMatchesSelectedResume(_ template: String) -> Bool {
+        guard let resumeTemplateIdentifier else { return false }
+        return resumeTemplateIdentifier == template.lowercased()
+    }
+
+    private func toggleInspectorVisibility() {
+        guard selectedTab == .pdfTemplate else { return }
+        showInspector.toggle()
+    }
+
+    private func toggleSidebar() {
+        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+    }
+
+    private func updateSplitVisibility(animated: Bool) {
+        let shouldShowInspector = showInspector && selectedTab == .pdfTemplate
+        let newVisibility: NavigationSplitViewVisibility = shouldShowInspector ? .all : .doubleColumn
+        if animated {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                splitVisibility = newVisibility
+            }
+        } else {
+            splitVisibility = newVisibility
+        }
+    }
     
     private var hasSelectedResume: Bool {
         selectedResume != nil
     }
     
+    private var resumeTemplateIdentifier: String? {
+        guard let resume = selectedResume else { return nil }
+        if let slug = resume.template?.slug, !slug.isEmpty {
+            return slug.lowercased()
+        }
+        if let name = resume.template?.name, !name.isEmpty {
+            return name.lowercased()
+        }
+        return nil
+    }
+    
     private var isEditingCurrentTemplate: Bool {
-        guard let resume = selectedResume else { return false }
-        let resumeTemplate = resume.template?.slug ?? resume.template?.name ?? "archer"
-        return selectedTemplate.lowercased() == resumeTemplate.lowercased() && selectedTab == .pdfTemplate
+        guard let resumeTemplateIdentifier else { return false }
+        return selectedTemplate.lowercased() == resumeTemplateIdentifier && selectedTab == .pdfTemplate
     }
 
     private var currentFormat: String {
@@ -162,6 +191,16 @@ struct TemplateEditorView: View {
 
     private var hasAnyUnsavedChanges: Bool {
         assetHasChanges || manifestHasChanges || seedHasChanges
+    }
+
+    private var templateSelectionBinding: Binding<String?> {
+        Binding<String?>(
+            get: { selectedTemplate },
+            set: { newValue in
+                guard let newValue else { return }
+                selectedTemplate = newValue
+            }
+        )
     }
 
     private var unsavedTabNames: String {
@@ -193,17 +232,15 @@ struct TemplateEditorView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topToolbar()
-            Divider()
-            GeometryReader { proxy in
-                let layout = TemplateEditorLayout(totalWidth: proxy.size.width)
-                columnLayout(for: layout)
-            }
-            Divider()
-            bottomToolbar()
+        NavigationSplitView(columnVisibility: $splitVisibility) {
+            templateSidebar()
+        } content: {
+            editorContainer()
+        } detail: {
+            inspectorContainer()
         }
-        .frame(minWidth: 960, minHeight: 600)
+        .frame(minWidth: 1024, minHeight: 640)
+        .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             loadAvailableTemplates()
             loadTemplate()
@@ -214,6 +251,7 @@ struct TemplateEditorView: View {
             if selectedTab == .pdfTemplate {
                 generateInitialPreview()
             }
+            updateSplitVisibility(animated: false)
         }
         .onChange(of: selectedTemplate) { _ in
             if hasAnyUnsavedChanges {
@@ -246,11 +284,15 @@ struct TemplateEditorView: View {
                     loadSeed()
                 }
             }
+            updateSplitVisibility(animated: true)
         }
         .onChange(of: selectedResume?.id) {
             if selectedTab == .pdfTemplate {
                 generateInitialPreview()
             }
+        }
+        .onChange(of: showInspector) { _ in
+            updateSplitVisibility(animated: true)
         }
         .alert("Unsaved Changes", isPresented: $showingSaveAlert) {
             Button("Save") {
@@ -308,41 +350,85 @@ struct TemplateEditorView: View {
                 saveError = "Failed to load overlay PDF: \(error.localizedDescription)"
             }
         }
-    }
-    
-    @ViewBuilder
-    private func columnLayout(for layout: TemplateEditorLayout) -> some View {
-        let inspectorVisible = showInspector && selectedTab == .pdfTemplate
-
-        HStack(spacing: 0) {
-            if showSidebar {
-                sidebarContent()
-                    .frame(width: layout.sidebarWidth)
-                    .frame(maxHeight: .infinity)
-                    .background(layout.sidebarColor)
-                    .overlay(Divider(), alignment: .trailing)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    toggleSidebar()
+                } label: {
+                    Image(systemName: "sidebar.leading")
+                }
+                .help("Toggle Template List")
             }
 
-            Group {
-                if inspectorVisible {
-                    HSplitView {
-                        editorContent()
-                            .frame(minWidth: 360)
-                            .frame(maxHeight: .infinity)
-                            .background(layout.editorColor)
-                        inspectorContent()
-                            .frame(minWidth: 240, idealWidth: layout.inspectorWidth)
-                            .frame(maxHeight: .infinity)
-                            .background(layout.inspectorColor)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    toggleInspectorVisibility()
+                } label: {
+                    Image(systemName: "sidebar.trailing")
+                        .foregroundStyle((selectedTab == .pdfTemplate && showInspector) ? Color.accentColor : Color.secondary)
+                }
+                .help(showInspector ? "Hide Preview" : "Show Preview")
+                .disabled(selectedTab != .pdfTemplate)
+            }
+
+            ToolbarItem(placement: .principal) {
+                Picker("Editor Section", selection: $selectedTab) {
+                    ForEach(TemplateEditorTab.allCases) { tab in
+                        Text(tab.rawValue).tag(tab)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    editorContent()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(layout.editorColor)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 320)
+            }
+
+            ToolbarItem(placement: .status) {
+                if hasAnyUnsavedChanges {
+                    Label("Unsaved Changes", systemImage: "exclamationmark.triangle.fill")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(.orange)
+                        .font(.callout)
                 }
             }
-            
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button("Revert") {
+                    revertCurrentTab()
+                }
+                .disabled(!currentHasChanges)
+
+                Button("Save") {
+                    _ = saveCurrentTab()
+                }
+                .disabled(!currentHasChanges)
+
+                Button("Save & Close") {
+                    if saveCurrentTab(closeAfter: true) {
+                        closeEditor()
+                    }
+                }
+                .disabled(!currentHasChanges)
+            }
+
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") {
+                    closeEditor()
+                }
+            }
+
+            ToolbarItemGroup(placement: .secondaryAction) {
+                Button {
+                    showingAddTemplate = true
+                } label: {
+                    Label("New Template", systemImage: "plus")
+                }
+
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label("Delete Template", systemImage: "trash")
+                }
+                .disabled(availableTemplates.count <= 1)
+            }
         }
     }
 
@@ -358,157 +444,67 @@ struct TemplateEditorView: View {
         }
     }
 
-    private func topToolbar() -> some View {
-        HStack(spacing: 12) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showSidebar.toggle()
-                }
-            } label: {
-                Image(systemName: "sidebar.leading")
-                    .foregroundStyle(showSidebar ? Color.primary : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .help(showSidebar ? "Hide Sidebar" : "Show Sidebar")
-
-            Spacer()
-
-            Picker("", selection: $selectedTab) {
-                ForEach(TemplateEditorTab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
-                }
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            .frame(maxWidth: 320)
-
-            Spacer()
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showInspector.toggle()
-                }
-            } label: {
-                Image(systemName: "sidebar.trailing")
-                    .foregroundStyle((selectedTab == .pdfTemplate && showInspector) ? Color.primary : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .help(showInspector ? "Hide Preview" : "Show Preview")
-            .disabled(selectedTab != .pdfTemplate)
-            .opacity(selectedTab == .pdfTemplate ? 1 : 0.35)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(NSColor.windowBackgroundColor))
-    }
-
-    private func bottomToolbar() -> some View {
-        HStack(spacing: 12) {
-            if hasAnyUnsavedChanges {
-                Text("Unsaved changes")
-                    .font(.callout)
-                    .foregroundColor(.orange)
-            }
-
-            Spacer()
-
-            Button("Revert") {
-                revertCurrentTab()
-            }
-            .disabled(!currentHasChanges)
-
-            Button("Save & Close") {
-                if saveCurrentTab(closeAfter: true) {
-                    closeEditor()
-                }
-            }
-            .disabled(!currentHasChanges)
-
-            Button("Close") {
-                closeEditor()
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(NSColor.windowBackgroundColor))
+    @ViewBuilder
+    private func editorContainer() -> some View {
+        editorContent()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(NSColor.textBackgroundColor))
     }
 
     @ViewBuilder
-    private func sidebarContent() -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Template")
-                        .font(.headline)
-                    Picker("Template", selection: $selectedTemplate) {
-                        ForEach(availableTemplates, id: \.self) { template in
-                            Text(template.capitalized).tag(template)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(MenuPickerStyle())
-                    .frame(maxWidth: .infinity)
+    private func inspectorContainer() -> some View {
+        inspectorContent()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(NSColor.controlBackgroundColor))
+    }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Button {
-                            showingAddTemplate = true
-                        } label: {
-                            Label("New Template", systemImage: "plus.circle")
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .help("Add new template")
-
-                        Button {
-                            showingDeleteConfirmation = true
-                        } label: {
-                            Label("Delete Template", systemImage: "minus.circle")
-                        }
-                        .foregroundColor(.red)
-                        .buttonStyle(BorderlessButtonStyle())
-                        .disabled(availableTemplates.count <= 1)
-                        .help("Delete current template")
-                    }
-                }
-
-                Divider()
-
-                if selectedTab == .txtTemplate {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Text Filters")
-                            .font(.headline)
-                        ForEach(textFilterReference) { filter in
+    @ViewBuilder
+    private func templateSidebar() -> some View {
+        List(selection: templateSelectionBinding) {
+            Section("Templates") {
+                if availableTemplates.isEmpty {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 24)
+                } else {
+                    ForEach(availableTemplates, id: \.self) { template in
+                        HStack(spacing: 8) {
+                            Image(systemName: templateIconName(for: template))
+                                .foregroundColor(templateMatchesSelectedResume(template) ? .accentColor : .secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(filter.name)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                Text(filter.signature)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text(filter.description)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(templateDisplayName(template))
+                                if templateMatchesSelectedResume(template) {
+                                    Text("Current resume")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
                             }
-                            .padding(.vertical, 2)
-                            Divider()
+                            Spacer()
                         }
-                    }
-                }
-
-                if let resume = selectedResume {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Current Resume")
-                            .font(.headline)
-                        Text(resume.jobApp?.jobPosition ?? "Untitled Resume")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        .padding(.vertical, 4)
+                        .tag(template)
                     }
                 }
             }
-            .padding(16)
+
+            if let resume = selectedResume {
+                Section("Current Resume") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(resume.jobApp?.jobPosition ?? "Untitled Resume")
+                            .font(.body)
+                        if let company = resume.jobApp?.companyName, !company.isEmpty {
+                            Text(company)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .listStyle(.sidebar)
+        .frame(minWidth: 220)
+        .navigationTitle("Templates")
     }
 
     @ViewBuilder
@@ -517,7 +513,7 @@ struct TemplateEditorView: View {
         case .pdfTemplate:
             previewInspector()
         case .txtTemplate:
-            EmptyView()
+            textTemplateInspector()
         case .manifest:
             manifestInspector()
         case .seed:
@@ -549,12 +545,24 @@ struct TemplateEditorView: View {
 
                 if selectedTab == .pdfTemplate {
                     HStack(spacing: 12) {
-                        Button("Refresh Preview") {
+                        Button {
                             previewPDF()
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
                         }
+                        .buttonStyle(.borderedProminent)
                         .disabled(isGeneratingPreview || !hasSelectedResume)
 
+                        Button {
+                            showingOverlayPicker = true
+                        } label: {
+                            Label("Overlay PDF", systemImage: "square.on.square")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isGeneratingPreview)
+
                         Toggle("Overlay", isOn: $showOverlay)
+                            .toggleStyle(.switch)
                             .disabled(overlayPDFData == nil)
 
                         if showOverlay && overlayPDFData != nil {
@@ -562,15 +570,10 @@ struct TemplateEditorView: View {
                                 Text("Opacity")
                                     .font(.caption)
                                 Slider(value: $overlayOpacity, in: 0...1)
-                                    .frame(width: 120)
+                                    .frame(width: 140)
                             }
                         }
                     }
-
-                    Button("Select Overlay PDF") {
-                        showingOverlayPicker = true
-                    }
-                    .disabled(isGeneratingPreview)
                 } else {
                     Text("Preview is available for PDF templates only.")
                         .font(.footnote)
@@ -616,6 +619,35 @@ struct TemplateEditorView: View {
             .background(Color(NSColor.textBackgroundColor))
 
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func textTemplateInspector() -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Available Text Filters")
+                    .font(.headline)
+                ForEach(textFilterReference) { filter in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(filter.name)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Text(filter.signature)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(filter.description)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Divider()
+                }
+                Text("Filters are Mustache helpers available within TXT templates.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(16)
+        }
+        .background(Color(NSColor.controlBackgroundColor))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -693,13 +725,16 @@ struct TemplateEditorView: View {
                 Button("Validate") {
                     validateManifest()
                 }
+                .buttonStyle(.bordered)
                 Button("Save") {
                     saveManifest()
                 }
                 .disabled(!manifestHasChanges)
+                .buttonStyle(.borderedProminent)
                 Button("Reload") {
                     loadManifest()
                 }
+                .buttonStyle(.bordered)
                 Spacer()
                 if let message = manifestValidationMessage {
                     Text(message)
@@ -725,13 +760,16 @@ struct TemplateEditorView: View {
                     promoteCurrentResumeToSeed()
                 }
                 .disabled(selectedResume == nil)
+                .buttonStyle(.bordered)
                 Button("Save") {
                     saveSeed()
                 }
                 .disabled(!seedHasChanges)
+                .buttonStyle(.borderedProminent)
                 Button("Reload") {
                     loadSeed()
                 }
+                .buttonStyle(.bordered)
                 Spacer()
                 if let message = seedValidationMessage {
                     Text(message)

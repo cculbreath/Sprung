@@ -2,8 +2,6 @@
 //  ClarifyingQuestionsSheet.swift
 //  Sprung
 //
-//  Created by Claude on 5/23/25.
-//
 
 import SwiftUI
 
