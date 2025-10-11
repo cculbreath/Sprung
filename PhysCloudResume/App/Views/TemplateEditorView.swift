@@ -13,7 +13,6 @@ import Combine
 
 private struct TemplateEditorLayout {
     let sidebarWidth: CGFloat
-    let editorWidth: CGFloat
     let inspectorWidth: CGFloat
     let sidebarColor: Color
     let editorColor: Color
@@ -24,7 +23,6 @@ private struct TemplateEditorLayout {
         let sanitizedWidth = max(totalWidth, minimumWidth)
         sidebarWidth = Swift.min(Swift.max(sanitizedWidth * 0.22, 240.0), 320.0)
         inspectorWidth = Swift.min(Swift.max(sanitizedWidth * 0.22, 240.0), 340.0)
-        editorWidth = max(sanitizedWidth - sidebarWidth - inspectorWidth, 360.0)
         sidebarColor = Color(NSColor.windowBackgroundColor)
         editorColor = Color(NSColor.textBackgroundColor)
         inspectorColor = Color(NSColor.controlBackgroundColor)
@@ -52,7 +50,6 @@ private enum PendingTemplateChange {
 }
 
 struct TemplateEditorView: View {
-    @Query private var resumes: [Resume]
     @Environment(NavigationStateService.self) private var navigationState
     @Environment(AppEnvironment.self) private var appEnvironment
     
@@ -86,8 +83,6 @@ struct TemplateEditorView: View {
     @State private var overlayOpacity: Double = 0.75
     @State private var showingOverlayPicker: Bool = false
     
-    // AppStorage for available templates (same as styles)
-    @AppStorage("availableStyles") private var availableStylesString: String = "Typewriter"
     @State private var availableTemplates: [String] = []
     
     @State private var showSidebar: Bool = true
@@ -1225,8 +1220,6 @@ struct TemplateEditorView: View {
         if !availableTemplates.contains(selectedTemplate) {
             selectedTemplate = availableTemplates.first ?? "archer"
         }
-
-        saveAvailableTemplates()
     }
     
     private func addNewTemplate() {
@@ -1271,7 +1264,6 @@ struct TemplateEditorView: View {
         
         // Remove from available templates
         availableTemplates.removeAll { $0 == selectedTemplate }
-        saveAvailableTemplates()
 
         appEnvironment.templateStore.deleteTemplate(slug: selectedTemplate.lowercased())
         appEnvironment.templateSeedStore.deleteSeed(forSlug: selectedTemplate.lowercased())
@@ -1284,10 +1276,6 @@ struct TemplateEditorView: View {
         loadAvailableTemplates()
     }
 
-    private func saveAvailableTemplates() {
-        availableStylesString = availableTemplates.joined(separator: ", ")
-    }
-    
     private func createEmptyTemplate(name: String, format: String) -> String {
         switch format {
         case "html":
@@ -1430,12 +1418,5 @@ private func loadOverlayPDF(from url: URL) {
         } catch {
             saveError = "Failed to load overlay PDF: \(error.localizedDescription)"
         }
-    }
-}
-
-struct TemplateEditorWindow: View {
-    var body: some View {
-        TemplateEditorView()
-            .frame(minWidth: 800, minHeight: 600)
     }
 }

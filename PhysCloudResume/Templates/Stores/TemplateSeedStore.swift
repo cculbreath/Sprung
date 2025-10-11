@@ -59,12 +59,6 @@ final class TemplateSeedStore {
         return seed
     }
 
-    func updateSeed(_ seed: TemplateSeed, jsonString: String) {
-        seed.jsonString = jsonString
-        seed.updatedAt = Date()
-        try? context.save()
-    }
-
     func deleteSeed(_ seed: TemplateSeed) {
         seed.template = nil
         context.delete(seed)

@@ -53,10 +53,6 @@ enum ConversationType: String, CaseIterable {
     case general
     case resume
     case coverLetter
-
-    init(rawValue: String, fallback: ConversationType) {
-        self = ConversationType(rawValue: rawValue) ?? fallback
-    }
 }
 
 extension ConversationMessage {
@@ -74,14 +70,6 @@ extension ConversationMessage {
             attachments: attachments,
             createdAt: timestamp
         )
-    }
-
-    func apply(dto: LLMMessageDTO) {
-        id = dto.id
-        role = dto.role.rawValue
-        content = dto.text ?? ""
-        imageData = dto.attachments.first?.data.base64EncodedString()
-        timestamp = dto.createdAt ?? Date()
     }
 
     static func fromDTO(_ dto: LLMMessageDTO) -> ConversationMessage {

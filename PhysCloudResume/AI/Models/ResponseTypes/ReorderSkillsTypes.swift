@@ -16,7 +16,6 @@ struct ReorderedSkillNode: Codable, Equatable {
     
     // For backward compatibility with existing code
     var isTitleNode: Bool = false
-    var treePath: String = ""
 
     // Alternative coding keys for different LLM response formats
     enum CodingKeys: String, CodingKey {
@@ -25,7 +24,6 @@ struct ReorderedSkillNode: Codable, Equatable {
         case newPosition
         case reasonForReordering
         case isTitleNode
-        case treePath
     }
     
     // Custom initializer to handle different field names
@@ -61,7 +59,6 @@ struct ReorderedSkillNode: Codable, Equatable {
         
         // Optional fields with default values
         isTitleNode = (try? container.decodeIfPresent(Bool.self, forKey: .isTitleNode)) ?? false
-        treePath = (try? container.decodeIfPresent(String.self, forKey: .treePath)) ?? ""
     }
     
     // Additional coding keys for alternative field names
@@ -69,17 +66,15 @@ struct ReorderedSkillNode: Codable, Equatable {
         case recommendedPosition
         case reason
         case isTitleNode
-        case treePath
     }
     
     // Standard initializer for creating instances directly
-    init(id: String, originalValue: String, newPosition: Int, reasonForReordering: String, isTitleNode: Bool = false, treePath: String = "") {
+    init(id: String, originalValue: String, newPosition: Int, reasonForReordering: String, isTitleNode: Bool = false) {
         self.id = id
         self.originalValue = originalValue
         self.newPosition = newPosition
         self.reasonForReordering = reasonForReordering
         self.isTitleNode = isTitleNode
-        self.treePath = treePath
     }
 }
 
@@ -119,7 +114,7 @@ struct ReorderSkillsResponseContainer: Codable, Equatable {
 
 /// Simplified response structure for the unified AppLLM system
 /// This follows the same pattern as JobRecommendation in JobRecommendationProvider
-struct ReorderSkillsResponse: Codable, StructuredOutput {
+struct ReorderSkillsResponse: Codable {
     let reorderedSkillsAndExpertise: [SimpleReorderedSkill]
     
     enum CodingKeys: String, CodingKey {

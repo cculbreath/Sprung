@@ -3,7 +3,6 @@ import SwiftUI
 
 struct BestJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(AppState.self) private var appState: AppState
     @Environment(LLMFacade.self) private var llmFacade
     
     @State private var showBestJobModelSheet = false

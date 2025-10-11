@@ -12,14 +12,11 @@ struct ReasoningStreamView: View {
     @Binding var reasoningText: String
     @Binding var isStreaming: Bool
     let modelName: String
-    @State private var isExpanded: Bool = true
-    @State private var scrollToBottom: Bool = false
     
     // Modal appearance
     var modalWidth: CGFloat = 700
     var modalHeight: CGFloat = 500
     var backgroundColor: Color = Color(NSColor.windowBackgroundColor)
-    var textColor: Color = .primary
     
     var body: some View {
         ZStack {

@@ -182,18 +182,6 @@ enum TemplateFilters {
         }
         return nil
     }
-
-    private static func appendIfPresent(_ value: Any?, to array: inout [String]) {
-        guard let value else { return }
-        if let string = value as? String {
-            let cleaned = string.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !cleaned.isEmpty {
-                array.append(cleaned)
-            }
-        } else if let number = value as? NSNumber {
-            array.append(number.stringValue)
-        }
-    }
 }
 
 private extension Array {

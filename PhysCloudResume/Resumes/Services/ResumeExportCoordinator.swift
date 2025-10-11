@@ -36,7 +36,7 @@ final class ResumeExportCoordinator {
         let workItem = DispatchWorkItem { [weak self, weak resume] in
             guard let self, let resume else { return }
 
-            guard let jsonURL = self.saveJSON(for: resume) else {
+            guard self.saveJSON(for: resume) != nil else {
                 resume.isExporting = false
                 onFinish?()
                 return
@@ -49,7 +49,7 @@ final class ResumeExportCoordinator {
                 }
 
                 do {
-                    try await self.exportService.export(jsonURL: jsonURL, for: resume)
+                    try await self.exportService.export(for: resume)
                 } catch {
                     Logger.error("Debounced export failed: \(error)")
                 }
@@ -73,7 +73,7 @@ final class ResumeExportCoordinator {
     func ensureFreshRenderedText(for resume: Resume) async throws {
         cancelPendingExport(for: resume)
 
-        guard let jsonURL = saveJSON(for: resume) else {
+        guard saveJSON(for: resume) != nil else {
             throw NSError(
                 domain: "ResumeExportCoordinator",
                 code: 1,
@@ -85,7 +85,7 @@ final class ResumeExportCoordinator {
         defer { resume.isExporting = false }
 
         do {
-            try await exportService.export(jsonURL: jsonURL, for: resume)
+            try await exportService.export(for: resume)
         } catch {
             Logger.error("Immediate export failed: \(error)")
             throw error

@@ -22,11 +22,9 @@ class ModelValidationService {
     
     /// Result of model endpoint validation
     struct ModelValidationResult {
-        let modelId: String
         let isAvailable: Bool
         let actualCapabilities: ModelCapabilities?
         let error: String?
-        let checkedAt: Date
         
         struct ModelCapabilities {
             let supportsStructuredOutputs: Bool
@@ -41,11 +39,9 @@ class ModelValidationService {
         let apiKey = APIKeyManager.get(.openRouter) ?? ""
         guard !apiKey.isEmpty else {
             return ModelValidationResult(
-                modelId: modelId,
                 isAvailable: false,
                 actualCapabilities: nil,
-                error: "No API key configured",
-                checkedAt: Date()
+                error: "No API key configured"
             )
         }
         
@@ -53,11 +49,9 @@ class ModelValidationService {
         let endpointPath = "/models/\(modelId)/endpoints"
         guard let url = URL(string: baseURL + endpointPath) else {
             return ModelValidationResult(
-                modelId: modelId,
                 isAvailable: false,
                 actualCapabilities: nil,
-                error: "Invalid URL",
-                checkedAt: Date()
+                error: "Invalid URL"
             )
         }
         
@@ -70,32 +64,26 @@ class ModelValidationService {
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 return ModelValidationResult(
-                    modelId: modelId,
-                    isAvailable: false,
-                    actualCapabilities: nil,
-                    error: "Invalid response",
-                    checkedAt: Date()
+                isAvailable: false,
+                actualCapabilities: nil,
+                error: "Invalid response"
                 )
             }
             
             if httpResponse.statusCode == 404 {
                 return ModelValidationResult(
-                    modelId: modelId,
-                    isAvailable: false,
-                    actualCapabilities: nil,
-                    error: "Model not found (404)",
-                    checkedAt: Date()
+                isAvailable: false,
+                actualCapabilities: nil,
+                error: "Model not found (404)"
                 )
             }
             
             guard httpResponse.statusCode == 200 else {
                 let responseBody = String(data: data, encoding: .utf8) ?? "No response body"
                 return ModelValidationResult(
-                    modelId: modelId,
-                    isAvailable: false,
-                    actualCapabilities: nil,
-                    error: "HTTP \(httpResponse.statusCode): \(responseBody)",
-                    checkedAt: Date()
+                isAvailable: false,
+                actualCapabilities: nil,
+                error: "HTTP \(httpResponse.statusCode): \(responseBody)"
                 )
             }
             
@@ -103,20 +91,16 @@ class ModelValidationService {
             let capabilities = try parseEndpointResponse(data)
             
             return ModelValidationResult(
-                modelId: modelId,
                 isAvailable: true,
                 actualCapabilities: capabilities,
-                error: nil,
-                checkedAt: Date()
+                error: nil
             )
             
         } catch {
             return ModelValidationResult(
-                modelId: modelId,
                 isAvailable: false,
                 actualCapabilities: nil,
-                error: error.localizedDescription,
-                checkedAt: Date()
+                error: error.localizedDescription
             )
         }
     }
@@ -174,21 +158,4 @@ class ModelValidationService {
         return results
     }
     
-    /// Get failed models that need user attention
-    var modelsNeedingAttention: [String] {
-        return failedModels.filter { modelId in
-            if let result = validationResults[modelId] {
-                // Consider a model as needing attention if it failed recently
-                let hoursSinceCheck = Date().timeIntervalSince(result.checkedAt) / 3600
-                return !result.isAvailable && hoursSinceCheck < 24
-            }
-            return false
-        }
-    }
-    
-    /// Clear validation state
-    func clearValidationState() {
-        validationResults.removeAll()
-        failedModels.removeAll()
-    }
 }

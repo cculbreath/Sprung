@@ -17,8 +17,6 @@ struct BestJobModelSelectionSheet: View {
     
     // MARK: - Environment
     
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    
     // MARK: - State
     
     @State private var selectedModel: String = ""

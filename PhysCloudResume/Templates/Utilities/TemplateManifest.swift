@@ -49,25 +49,9 @@ struct TemplateManifest: Codable {
                 let options: [String]?
                 let message: String?
 
-                init(
-                    rule: Rule,
-                    pattern: String? = nil,
-                    min: Double? = nil,
-                    max: Double? = nil,
-                    options: [String]? = nil,
-                    message: String? = nil
-                ) {
-                    self.rule = rule
-                    self.pattern = pattern
-                    self.min = min
-                    self.max = max
-                    self.options = options
-                    self.message = message
-                }
             }
 
             let key: String
-            let title: String?
             let input: InputKind?
             let required: Bool
             let repeatable: Bool
@@ -78,7 +62,6 @@ struct TemplateManifest: Codable {
 
             init(
                 key: String,
-                title: String? = nil,
                 input: InputKind? = nil,
                 required: Bool = false,
                 repeatable: Bool = false,
@@ -88,7 +71,6 @@ struct TemplateManifest: Codable {
                 placeholder: String? = nil
             ) {
                 self.key = key
-                self.title = title
                 self.input = input
                 self.required = required
                 self.repeatable = repeatable
@@ -96,18 +78,6 @@ struct TemplateManifest: Codable {
                 self.titleTemplate = titleTemplate
                 self.children = children
                 self.placeholder = placeholder
-            }
-        }
-
-        struct SectionValidation: Codable {
-            let minItems: Int?
-            let maxItems: Int?
-            let message: String?
-
-            init(minItems: Int? = nil, maxItems: Int? = nil, message: String? = nil) {
-                self.minItems = minItems
-                self.maxItems = maxItems
-                self.message = message
             }
         }
 
@@ -120,26 +90,22 @@ struct TemplateManifest: Codable {
             case type
             case defaultValue = "default"
             case fields
-            case validation
         }
 
         let type: Kind
         let defaultValue: JSONValue?
         var fields: [FieldDescriptor]
-        let validation: SectionValidation?
         var fieldMetadataSource: FieldMetadataSource
 
         init(
             type: Kind,
             defaultValue: JSONValue?,
             fields: [FieldDescriptor] = [],
-            validation: SectionValidation? = nil,
             fieldMetadataSource: FieldMetadataSource = .declared
         ) {
             self.type = type
             self.defaultValue = defaultValue
             self.fields = fields
-            self.validation = validation
             self.fieldMetadataSource = fieldMetadataSource
         }
 
@@ -148,7 +114,6 @@ struct TemplateManifest: Codable {
             type = try container.decode(Kind.self, forKey: .type)
             defaultValue = try container.decodeIfPresent(JSONValue.self, forKey: .defaultValue)
             fields = try container.decodeIfPresent([FieldDescriptor].self, forKey: .fields) ?? []
-            validation = try container.decodeIfPresent(SectionValidation.self, forKey: .validation)
             fieldMetadataSource = fields.isEmpty ? .synthesized : .declared
         }
 
@@ -159,7 +124,6 @@ struct TemplateManifest: Codable {
             if !fields.isEmpty {
                 try container.encode(fields, forKey: .fields)
             }
-            try container.encodeIfPresent(validation, forKey: .validation)
         }
 
         mutating func ensureFieldDescriptors(for sectionKey: String) {
@@ -171,21 +135,6 @@ struct TemplateManifest: Codable {
             )
             fields = synthesized
             fieldMetadataSource = .synthesized
-        }
-
-        func emptyValue() -> Any {
-            switch type {
-            case .string:
-                return ""
-            case .array, .arrayOfObjects:
-                return [Any]()
-            case .object, .objectOfObjects:
-                return [String: Any]()
-            case .mapOfStrings:
-                return [String: String]()
-            case .fontSizes:
-                return [String: String]()
-            }
         }
 
         func defaultContextValue() -> Any? {
@@ -361,10 +310,6 @@ struct TemplateManifest: Codable {
         sections[key]
     }
 
-    func fieldDescriptors(for key: String) -> [Section.FieldDescriptor] {
-        sections[key]?.fields ?? []
-    }
-
     func isFieldMetadataSynthesized(for key: String) -> Bool {
         synthesizedSectionKeys.contains(key)
     }
@@ -451,7 +396,6 @@ private enum FieldDescriptorFactory {
             return [
                 TemplateManifest.Section.FieldDescriptor(
                     key: sectionKey,
-                    title: TitleFormatter.displayName(for: sectionKey),
                     input: .text
                 )
             ]
@@ -459,7 +403,6 @@ private enum FieldDescriptorFactory {
             return [
                 TemplateManifest.Section.FieldDescriptor(
                     key: sectionKey,
-                    title: TitleFormatter.displayName(for: sectionKey),
                     input: .chips,
                     repeatable: true
                 )
@@ -471,7 +414,6 @@ private enum FieldDescriptorFactory {
             return dict.map { key, value in
                 TemplateManifest.Section.FieldDescriptor(
                     key: key,
-                    title: TitleFormatter.displayName(for: key),
                     input: .text,
                     required: false,
                     repeatable: false,
@@ -485,7 +427,6 @@ private enum FieldDescriptorFactory {
             return dict.map { key, value in
                 TemplateManifest.Section.FieldDescriptor(
                     key: key,
-                    title: TitleFormatter.displayName(for: key),
                     input: inputKind(for: value),
                     children: childDescriptors(from: value)
                 )
@@ -497,7 +438,6 @@ private enum FieldDescriptorFactory {
                 return [
                     TemplateManifest.Section.FieldDescriptor(
                         key: sectionKey,
-                        title: TitleFormatter.displayName(for: sectionKey),
                         input: nil,
                         repeatable: true,
                         children: children
@@ -507,7 +447,6 @@ private enum FieldDescriptorFactory {
             return [
                 TemplateManifest.Section.FieldDescriptor(
                     key: sectionKey,
-                    title: TitleFormatter.displayName(for: sectionKey),
                     input: nil,
                     repeatable: true
                 )
@@ -519,7 +458,6 @@ private enum FieldDescriptorFactory {
                 return [
                     TemplateManifest.Section.FieldDescriptor(
                         key: sectionKey,
-                        title: TitleFormatter.displayName(for: sectionKey),
                         input: nil,
                         repeatable: true,
                         children: children
@@ -529,7 +467,6 @@ private enum FieldDescriptorFactory {
             return [
                 TemplateManifest.Section.FieldDescriptor(
                     key: sectionKey,
-                    title: TitleFormatter.displayName(for: sectionKey),
                     input: nil,
                     repeatable: true
                 )
@@ -542,7 +479,6 @@ private enum FieldDescriptorFactory {
             return dict.map { key, inner in
                 TemplateManifest.Section.FieldDescriptor(
                     key: key,
-                    title: TitleFormatter.displayName(for: key),
                     input: inputKind(for: inner),
                     repeatable: isRepeatable(inner),
                     children: childDescriptors(from: inner)
@@ -555,7 +491,6 @@ private enum FieldDescriptorFactory {
                 let children = dict.map { key, inner in
                     TemplateManifest.Section.FieldDescriptor(
                         key: key,
-                        title: TitleFormatter.displayName(for: key),
                         input: inputKind(for: inner),
                         children: childDescriptors(from: inner)
                     )
@@ -563,7 +498,6 @@ private enum FieldDescriptorFactory {
                 return [
                     TemplateManifest.Section.FieldDescriptor(
                         key: "items",
-                        title: TitleFormatter.displayName(for: "items"),
                         input: nil,
                         repeatable: true,
                         children: children
@@ -573,7 +507,6 @@ private enum FieldDescriptorFactory {
             return [
                 TemplateManifest.Section.FieldDescriptor(
                     key: "items",
-                    title: TitleFormatter.displayName(for: "items"),
                     input: inputKind(for: first),
                     repeatable: true
                 )
@@ -610,21 +543,5 @@ private enum FieldDescriptorFactory {
         default:
             return .text
         }
-    }
-}
-
-private enum TitleFormatter {
-    static func displayName(for key: String) -> String {
-        guard key.isEmpty == false else { return "Value" }
-        let components = key
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
-            .split(separator: " ")
-        let words = components.map { component -> String in
-            let lower = component.lowercased()
-            guard let first = lower.first else { return "" }
-            return String(first).uppercased() + lower.dropFirst()
-        }
-        return words.joined(separator: " ")
     }
 }

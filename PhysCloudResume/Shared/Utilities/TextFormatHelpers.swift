@@ -117,63 +117,6 @@ struct TextFormatHelpers {
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
-    static func splitAligned(_ skills: [[String: Any]], width: Int = 80) -> String {
-        let separator = " |       "
-        var output = ""
-        
-        let trailingIndentMatch = separator.range(of: #"\s+$"#, options: .regularExpression)
-        let trailingIndent: String
-        if let match = trailingIndentMatch {
-            trailingIndent = String(separator[match])
-        } else {
-            trailingIndent = ""
-        }
-        
-        for skill in skills {
-            guard let title = skill["title"] as? String,
-                  let description = skill["description"] as? String else { continue }
-            
-            let firstLineWidth = width - (title.count + separator.count)
-            
-            let words = description.split(separator: " ").map(String.init)
-            var firstLineWords: [String] = []
-            var currentLength = 0
-            var i = 0
-            
-            for word in words {
-                let extra = firstLineWords.isEmpty ? 0 : 1
-                if currentLength + extra + word.count <= firstLineWidth {
-                    firstLineWords.append(word)
-                    currentLength += extra + word.count
-                    i += 1
-                } else {
-                    break
-                }
-            }
-            
-            let firstLineText = firstLineWords.joined(separator: " ")
-            let remainingText = Array(words[i...]).joined(separator: " ")
-            
-            let subsequentWidth = width - trailingIndent.count
-            var subsequentLines: [String] = []
-            if !remainingText.isEmpty {
-                subsequentLines = wrapText(remainingText, maxWidth: subsequentWidth)
-            }
-            
-            let alignedFirstLine = firstLineText.padding(toLength: firstLineWidth, withPad: " ", startingAt: 0)
-            var entry = title + separator + alignedFirstLine
-            
-            for line in subsequentLines {
-                let alignedLine = line.padding(toLength: subsequentWidth, withPad: " ", startingAt: 0)
-                entry += "\n" + trailingIndent + alignedLine
-            }
-            
-            output += entry + "\n\n"
-        }
-        
-        return output.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    
     static func wrapBlurb(_ projects: [[String: Any]]) -> String {
         var output = ""
         

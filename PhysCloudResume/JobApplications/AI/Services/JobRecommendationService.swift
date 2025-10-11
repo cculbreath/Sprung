@@ -354,7 +354,7 @@ enum JobRecommendationError: LocalizedError {
 }
 
 /// Job recommendation response structure (reusing existing type from JobRecommendationProvider)
-struct JobRecommendation: Codable, StructuredOutput {
+struct JobRecommendation: Codable {
     let recommendedJobId: String
     let reason: String
     

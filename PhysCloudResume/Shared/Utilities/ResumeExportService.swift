@@ -26,11 +26,11 @@ class ResumeExportService: ObservableObject {
         self.textGenerator = TextResumeGenerator(templateStore: templateStore)
     }
     
-    func export(jsonURL: URL, for resume: Resume) async throws {
-        try await exportNatively(jsonURL: jsonURL, for: resume)
+    func export(for resume: Resume) async throws {
+        try await exportNatively(for: resume)
     }
     
-    private func exportNatively(jsonURL: URL, for resume: Resume) async throws {
+    private func exportNatively(for resume: Resume) async throws {
         var template = try await ensureTemplate(for: resume)
         var slug = template.slug
 

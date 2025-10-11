@@ -63,18 +63,4 @@ struct ExportTemplateSelection {
             throw ExportTemplateSelectionError.userCancelled
         }
     }
-
-    /// Embed CSS into HTML content if provided.
-    static func embedCSSIntoHTML(html: String, css: String?) -> String {
-        guard let css, !css.isEmpty else { return html }
-        let cssTag = "<style>\n\(css)\n</style>"
-        if let headEndRange = html.range(of: "</head>", options: .caseInsensitive) {
-            var modifiedHTML = html
-            modifiedHTML.insert(contentsOf: "\n\(cssTag)\n", at: headEndRange.lowerBound)
-            return modifiedHTML
-        } else {
-            return "<style>\n\(css)\n</style>\n\(html)"
-        }
-    }
 }
-
