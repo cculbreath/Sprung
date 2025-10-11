@@ -12,15 +12,12 @@ import SwiftUI
 struct ClarifyingQuestionsModelSheet: View {
     @Binding var isPresented: Bool
     let onModelSelected: (String) -> Void
-    
+
     @State private var selectedModel: String = ""
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @Environment(\.dismiss) private var dismiss
-    
-    private var openRouterService: OpenRouterService {
-        appState.openRouterService
-    }
     
     var body: some View {
         VStack(spacing: 24) {

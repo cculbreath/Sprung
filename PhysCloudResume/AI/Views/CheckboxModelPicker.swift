@@ -13,25 +13,22 @@ struct CheckboxModelPicker: View {
     /// The set of selected model IDs
     @Binding var selectedModels: Set<String>
     
-    /// Access to app state and OpenRouter service
+    /// Access to environment services
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    
+    @Environment(OpenRouterService.self) private var openRouterService
+
     /// Optional capability filter for operation-specific requirements
     var requiredCapability: ModelCapability? = nil
-    
+
     /// Title for the GroupBox
     var title: String = "Select Models"
-    
+
     /// Whether to show inside a GroupBox
     var showInGroupBox: Bool = true
-    
+
     /// Whether to show Select All/None buttons
     var showSelectionButtons: Bool = true
-    
-    private var openRouterService: OpenRouterService {
-        appState.openRouterService
-    }
     
     var body: some View {
         if showInGroupBox {

@@ -11,6 +11,7 @@ struct APIKeysSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(LLMService.self) private var llmService
+    @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
 
     @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
     @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
@@ -63,7 +64,7 @@ struct APIKeysSettingsView: View {
 
                 if appState.hasValidOpenRouterKey {
                     Label(
-                        "\(appState.openRouterService.availableModels.count) available, \(enabledLLMStore.enabledModelIds.count) selected",
+                        "\(openRouterService.availableModels.count) available, \(enabledLLMStore.enabledModelIds.count) selected",
                         systemImage: "checkmark.circle.fill"
                     )
                     .font(.footnote)

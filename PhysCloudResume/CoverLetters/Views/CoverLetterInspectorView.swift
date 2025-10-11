@@ -12,13 +12,10 @@ struct CoverLetterInspectorView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(AppState.self) private var appState: AppState
-    
+    @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
+
     @Binding var isEditing: Bool
     @Namespace private var namespace
-    
-    private var openRouterService: OpenRouterService {
-        appState.openRouterService
-    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
