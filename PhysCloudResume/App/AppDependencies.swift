@@ -21,6 +21,7 @@ final class AppDependencies {
     let coverLetterStore: CoverLetterStore
     let jobAppStore: JobAppStore
     let enabledLLMStore: EnabledLLMStore
+    let navigationState: NavigationStateService
     let resumeExportCoordinator: ResumeExportCoordinator
     let templateStore: TemplateStore
     let templateSeedStore: TemplateSeedStore
@@ -74,6 +75,7 @@ final class AppDependencies {
         self.coverLetterStore = CoverLetterStore(context: modelContext, refStore: coverRefStore)
         self.jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
         self.enabledLLMStore = EnabledLLMStore(modelContext: modelContext)
+        self.navigationState = NavigationStateService()
 
         // UI state
         self.dragInfo = DragInfo()
@@ -117,6 +119,7 @@ final class AppDependencies {
 
         self.appEnvironment = AppEnvironment(
             appState: appState,
+            navigationState: navigationState,
             openRouterService: openRouterService,
             coverLetterService: coverLetterService,
             llmFacade: llmFacade,

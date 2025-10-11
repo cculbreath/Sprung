@@ -54,7 +54,6 @@ struct AppWindowView: View {
             menuHandler.configure(
                 jobAppStore: jobAppStore,
                 coverLetterStore: coverLetterStore,
-                appState: appState,
                 sheets: $sheets,
                 selectedTab: $selectedTab,
                 showSlidingList: $showSlidingList

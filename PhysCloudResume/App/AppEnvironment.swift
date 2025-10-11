@@ -13,6 +13,7 @@ import Observation
 @Observable
 final class AppEnvironment {
     let appState: AppState
+    let navigationState: NavigationStateService
     let openRouterService: OpenRouterService
     let coverLetterService: CoverLetterService
     let llmFacade: LLMFacade
@@ -25,6 +26,7 @@ final class AppEnvironment {
 
     init(
         appState: AppState,
+        navigationState: NavigationStateService,
         openRouterService: OpenRouterService,
         coverLetterService: CoverLetterService,
         llmFacade: LLMFacade,
@@ -36,6 +38,7 @@ final class AppEnvironment {
         launchState: LaunchState
     ) {
         self.appState = appState
+        self.navigationState = navigationState
         self.openRouterService = openRouterService
         self.coverLetterService = coverLetterService
         self.llmFacade = llmFacade

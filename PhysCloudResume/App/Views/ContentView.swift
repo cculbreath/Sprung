@@ -8,7 +8,7 @@ struct ContentView: View {
 
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @Environment(AppState.self) private var appState
+    @Environment(NavigationStateService.self) private var navigationState
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
@@ -32,7 +32,7 @@ struct ContentView: View {
     var body: some View {
         // Bindable references for selection binding
         @Bindable var jobAppStore = jobAppStore
-        @Bindable var appState = appState
+        @Bindable var navigationState = navigationState
 
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             // --- Sidebar Column ---
@@ -49,7 +49,7 @@ struct ContentView: View {
                 if jobAppStore.selectedApp != nil {
                     // Embed AppWindowView directly
                     AppWindowView(
-                        selectedTab: $appState.selectedTab,
+                        selectedTab: $navigationState.selectedTab,
                         refPopup: $refPopup,
                         hasVisitedResumeTab: $hasVisitedResumeTab,
                         tabRefresh: $tabRefresh,
@@ -74,7 +74,7 @@ struct ContentView: View {
             // Main application toolbar is attached here to be visible regardless of job app selection
             .toolbar(id: "mainToolbarV2") {
                 buildUnifiedToolbar(
-                    selectedTab: $appState.selectedTab,
+                    selectedTab: $navigationState.selectedTab,
                     listingButtons: $listingButtons,
                     refresh: $tabRefresh,
                     sheets: $sheets,
@@ -115,12 +115,10 @@ struct ContentView: View {
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             // Sync selected app to AppState for template editor
-            appState.selectedJobApp = newValue
-            // Save selection for persistence
-            appState.saveSelectedJobApp(newValue)
+            navigationState.saveSelectedJobApp(newValue)
             updateMyLetter()
         }
-        .onChange(of: appState.selectedTab) { _, newTab in
+        .onChange(of: navigationState.selectedTab) { _, newTab in
             if newTab == .resume {
                 if !hasVisitedResumeTab {
                     sheets.showResumeInspector = false
@@ -130,12 +128,12 @@ struct ContentView: View {
         }
         .onAppear {
             Logger.debug(
-                "🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())",
+                "🟡 ContentView appeared - restoring navigation state",
                 category: .ui
             )
 
             // Restore persistent state
-            appState.restoreSelectedJobApp(from: jobAppStore)
+            navigationState.restoreSelectedJobApp(from: jobAppStore)
 
             // Initialize cover letter state
             updateMyLetter()

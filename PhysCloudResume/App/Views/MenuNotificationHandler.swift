@@ -17,7 +17,6 @@ import AppKit
 class MenuNotificationHandler {
     private weak var jobAppStore: JobAppStore?
     private weak var coverLetterStore: CoverLetterStore?
-    private weak var appState: AppState?
     private var sheets: Binding<AppSheets>?
     private var selectedTab: Binding<TabList>?
     private var showSlidingList: Binding<Bool>?
@@ -28,14 +27,12 @@ class MenuNotificationHandler {
     func configure(
         jobAppStore: JobAppStore,
         coverLetterStore: CoverLetterStore,
-        appState: AppState,
         sheets: Binding<AppSheets>,
         selectedTab: Binding<TabList>,
         showSlidingList: Binding<Bool>
     ) {
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
-        self.appState = appState
         self.sheets = sheets
         self.selectedTab = selectedTab
         self.showSlidingList = showSlidingList
