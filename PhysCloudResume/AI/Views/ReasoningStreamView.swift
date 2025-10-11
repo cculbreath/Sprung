@@ -254,21 +254,9 @@ struct ReasoningStreamView: View {
 @MainActor
 @Observable
 class ReasoningStreamManager {
-    var isVisible: Bool = false {
-        didSet {
-            Logger.verbose("🧠 [ReasoningStreamManager] isVisible changed to: \(isVisible)", category: .ui)
-        }
-    }
-    var reasoningText: String = "" {
-        didSet {
-            Logger.verbose("🧠 [ReasoningStreamManager] reasoningText updated, length: \(reasoningText.count)", category: .ui)
-        }
-    }
-    var modelName: String = "" {
-        didSet {
-            Logger.verbose("🧠 [ReasoningStreamManager] modelName changed to: \(modelName)", category: .ui)
-        }
-    }
+    var isVisible: Bool = false
+    var reasoningText: String = ""
+    var modelName: String = ""
     var isStreaming: Bool = false
     
     private var currentTask: Task<Void, Never>?

@@ -18,18 +18,12 @@ class AppState {
         configureOpenRouterService()
         restoreSelectedTab()
     }
-    var showNewAppSheet: Bool = false
-    var showSlidingList: Bool = false
     var selectedTab: TabList = .listing {
         didSet {
             // Save to UserDefaults when changed
             UserDefaults.standard.set(selectedTab.rawValue, forKey: "selectedTab")
         }
     }
-    var dragInfo = DragInfo()
-
-    // AI job recommendation properties  
-    var isLoadingRecommendation: Bool = false
     
     // Import job apps sheet (disabled - functionality removed)
     // var showImportJobAppsSheet: Bool = false
@@ -49,19 +43,10 @@ class AppState {
     
     // EnabledLLM store for persistent model management
     var enabledLLMStore: EnabledLLMStore?
-    var llmService: LLMService?
-    
-    // Model validation service
     let modelValidationService: ModelValidationService
 
     // Debug/diagnostics settings
     var debugSettingsStore: DebugSettingsStore?
-    
-    // Resume revision view model
-    var resumeReviseViewModel: ResumeReviseViewModel?
-    
-    // Global reasoning stream manager for AI thinking display
-    var globalReasoningStreamManager = ReasoningStreamManager()
     
     
     /// Restore the selected tab from UserDefaults
@@ -185,10 +170,10 @@ class AppState {
         }
     }
     
-    func reconfigureOpenRouterService() {
+    func reconfigureOpenRouterService(using llmService: LLMService) {
         configureOpenRouterService()
         // Also reconfigure LLMService to use the updated API key
-        llmService?.reconfigureClient()
+        llmService.reconfigureClient()
     }
     
     /// Save the selected job app ID for persistence

@@ -3,20 +3,20 @@ import SwiftUI
 
 struct ClarifyingQuestionsButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(AppState.self) private var appState: AppState
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager: ReasoningStreamManager
+    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
     
     @Binding var selectedTab: TabList
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var sheets: AppSheets
-    var resumeReviseViewModel: ResumeReviseViewModel?
     
     @State private var isGeneratingQuestions = false
     @State private var showClarifyingQuestionsModelSheet = false
     @State private var selectedClarifyingQuestionsModel = ""
     @State private var clarifyingQuestionsViewModel: ClarifyingQuestionsViewModel?
-    @State private var clarifyingQuestionsConversationId: UUID?
     
     var body: some View {
         Button(action: {
@@ -24,7 +24,7 @@ struct ClarifyingQuestionsButton: View {
             // Don't clear questions here - they might be needed for the sheet
             showClarifyingQuestionsModelSheet = true
         }) {
-            let isBusy = isGeneratingQuestions || (resumeReviseViewModel?.isWorkflowBusy(.clarifying) ?? false)
+            let isBusy = isGeneratingQuestions || resumeReviseViewModel.isWorkflowBusy(.clarifying)
             if isBusy {
                 Label {
                     Text("Clarify & Customize")
@@ -95,7 +95,9 @@ struct ClarifyingQuestionsButton: View {
         do {
             let clarifyingViewModel = ClarifyingQuestionsViewModel(
                 llmFacade: llmFacade,
-                appState: appState,
+                openRouterService: openRouterService,
+                reasoningStreamManager: reasoningStreamManager,
+                defaultResumeReviseViewModel: resumeReviseViewModel,
                 exportCoordinator: appEnvironment.resumeExportCoordinator
             )
             clarifyingQuestionsViewModel = clarifyingViewModel
@@ -113,9 +115,6 @@ struct ClarifyingQuestionsButton: View {
             if !clarifyingViewModel.questions.isEmpty {
                 Logger.debug("Showing \(clarifyingViewModel.questions.count) clarifying questions")
                 Logger.debug("🔍 About to set clarifyingQuestions binding...")
-                
-                // Store conversation ID for later use
-                clarifyingQuestionsConversationId = clarifyingViewModel.currentConversationId
                 
                 // Set questions and show sheet
                 clarifyingQuestions = clarifyingViewModel.questions
@@ -148,23 +147,11 @@ struct ClarifyingQuestionsButton: View {
                 return
             }
             
-            // Use the viewModel from appState to ensure we have the correct instance
-            guard let resumeViewModel = appState.resumeReviseViewModel else {
-                Logger.error("ResumeReviseViewModel not available in appState for handoff")
-                return
-            }
-            
-            Logger.debug("🔍 [ClarifyingQuestionsButton] About to handoff to viewModel at address: \(String(describing: Unmanaged.passUnretained(resumeViewModel).toOpaque()))")
-            Logger.debug("🔍 [ClarifyingQuestionsButton] Current showResumeRevisionSheet value: \(resumeViewModel.showResumeRevisionSheet)")
-            
             try await clarifyingViewModel.processAnswersAndHandoffConversation(
                 answers: answers,
                 resume: resume,
-                resumeReviseViewModel: resumeViewModel
+                resumeReviseViewModel: resumeReviseViewModel
             )
-            
-            Logger.debug("🔍 [ClarifyingQuestionsButton] After handoff - showResumeRevisionSheet value: \(resumeViewModel.showResumeRevisionSheet)")
-            Logger.debug("🔍 [ClarifyingQuestionsButton] appState.resumeReviseViewModel is same instance? \(appState.resumeReviseViewModel === resumeViewModel)")
             Logger.debug("✅ Clarifying questions processed and handed off to ResumeReviseViewModel")
             
         } catch {

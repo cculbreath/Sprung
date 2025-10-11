@@ -10,6 +10,7 @@ import SwiftUI
 struct APIKeysSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    @Environment(LLMService.self) private var llmService
 
     @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
     @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
@@ -55,7 +56,7 @@ struct APIKeysSettingsView: View {
 
             HStack(spacing: 12) {
                 Button("Choose OpenRouter Models…") {
-                    appState.reconfigureOpenRouterService()
+                    appState.reconfigureOpenRouterService(using: llmService)
                     showModelSelectionSheet = true
                 }
                 .disabled(!appState.hasValidOpenRouterKey)
@@ -94,7 +95,7 @@ struct APIKeysSettingsView: View {
             openRouterApiKey = trimmed
         }
 
-        appState.reconfigureOpenRouterService()
+        appState.reconfigureOpenRouterService(using: llmService)
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
 

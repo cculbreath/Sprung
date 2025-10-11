@@ -11,6 +11,8 @@ struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(OpenRouterService.self) private var openRouterService
 
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()
@@ -209,7 +211,14 @@ struct ResumeReviewSheet: View {
             // Note: Reasoning stream view is now displayed globally in the main app UI
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
-        .onAppear { viewModel.initialize(llmFacade: llmFacade, exportCoordinator: appEnvironment.resumeExportCoordinator) }
+        .onAppear {
+            viewModel.initialize(
+                llmFacade: llmFacade,
+                exportCoordinator: appEnvironment.resumeExportCoordinator,
+                reasoningStreamManager: reasoningStreamManager,
+                openRouterService: openRouterService
+            )
+        }
     }
 
     // View for custom options (extracted for clarity) - Unchanged
@@ -243,14 +252,13 @@ struct ResumeReviewSheet: View {
 
     func handleSubmit() {
         guard let resume = selectedResume else { return }
-        
+
         viewModel.handleSubmit(
             reviewType: selectedReviewType,
             resume: resume,
             selectedModel: selectedModel,
             customOptions: customOptions,
-            allowEntityMerge: allowEntityMerge,
-            appState: appState
+            allowEntityMerge: allowEntityMerge
         )
     }
 }

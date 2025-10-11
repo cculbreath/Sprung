@@ -21,7 +21,8 @@ class ResumeReviseViewModel {
     
     // MARK: - Dependencies
     private let llm: LLMFacade
-    let appState: AppState // Make appState accessible to views
+    let openRouterService: OpenRouterService
+    private let reasoningStreamManager: ReasoningStreamManager
     private let exportCoordinator: ResumeExportCoordinator
     
     // MARK: - UI State (ViewModel Layer)
@@ -56,12 +57,15 @@ class ResumeReviseViewModel {
     private var activeStreamingHandle: LLMStreamingHandle?
     private var isCompletingReview: Bool = false
     
-    // MARK: - Reasoning Stream State (now uses global manager)
-    // reasoningStreamManager is accessed via appState.globalReasoningStreamManager
-    
-    init(llmFacade: LLMFacade, appState: AppState, exportCoordinator: ResumeExportCoordinator) {
+    init(
+        llmFacade: LLMFacade,
+        openRouterService: OpenRouterService,
+        reasoningStreamManager: ReasoningStreamManager,
+        exportCoordinator: ResumeExportCoordinator
+    ) {
         self.llm = llmFacade
-        self.appState = appState
+        self.openRouterService = openRouterService
+        self.reasoningStreamManager = reasoningStreamManager
         self.exportCoordinator = exportCoordinator
     }
     
@@ -116,7 +120,7 @@ class ResumeReviseViewModel {
             let userPrompt = await query.wholeResumeQueryString()
             
             // Check if model supports reasoning for streaming
-            let model = appState.openRouterService.findModel(id: modelId)
+            let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
             
             // Debug logging to track reasoning interface triggering
@@ -127,8 +131,8 @@ class ResumeReviseViewModel {
             
             // Defensive check: ensure reasoning modal is hidden for non-reasoning models
             if !supportsReasoning {
-                appState.globalReasoningStreamManager.isVisible = false
-                appState.globalReasoningStreamManager.clear()
+                reasoningStreamManager.isVisible = false
+                reasoningStreamManager.clear()
             }
             
             let revisions: RevisionsContainer
@@ -162,8 +166,8 @@ class ResumeReviseViewModel {
                 
                 // Process stream and collect full response
                 // Clear any previous reasoning text before starting
-                appState.globalReasoningStreamManager.clear()
-                appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
+                reasoningStreamManager.clear()
+                reasoningStreamManager.startReasoning(modelName: modelId)
                 var fullResponse = ""
                 var collectingJSON = false
                 var jsonResponse = ""
@@ -171,7 +175,7 @@ class ResumeReviseViewModel {
                 for try await chunk in handle.stream {
                     // Handle reasoning content
                     if let reasoningContent = chunk.reasoning {
-                        appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                        reasoningStreamManager.reasoningText += reasoningContent
                     }
                     
                     // Collect regular content
@@ -187,9 +191,9 @@ class ResumeReviseViewModel {
                     
                     // Handle completion
                     if chunk.isFinished {
-                        appState.globalReasoningStreamManager.isStreaming = false
+                        reasoningStreamManager.isStreaming = false
                         // Hide the reasoning modal when streaming completes
-                        appState.globalReasoningStreamManager.isVisible = false
+                        reasoningStreamManager.isVisible = false
                     }
                 }
                 cancelActiveStreaming()
@@ -262,7 +266,7 @@ class ResumeReviseViewModel {
             let revisionRequestPrompt = await query.multiTurnRevisionPrompt()
             
             // Check if model supports reasoning for streaming
-            let model = appState.openRouterService.findModel(id: modelId)
+            let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
             
             // Debug logging to track reasoning interface triggering
@@ -273,15 +277,15 @@ class ResumeReviseViewModel {
             // Only show reasoning modal for models that support reasoning
             if supportsReasoning {
                 // Clear any previous reasoning content and reset state
-                appState.globalReasoningStreamManager.clear()
+                reasoningStreamManager.clear()
                 
                 // Show reasoning modal for reasoning-enabled models
-                appState.globalReasoningStreamManager.modelName = modelId
-                appState.globalReasoningStreamManager.isVisible = true
+                reasoningStreamManager.modelName = modelId
+                reasoningStreamManager.isVisible = true
             } else {
                 // Defensive check: ensure reasoning modal is hidden for non-reasoning models
-                appState.globalReasoningStreamManager.isVisible = false
-                appState.globalReasoningStreamManager.clear()
+                reasoningStreamManager.isVisible = false
+                reasoningStreamManager.clear()
             }
             
             let revisions: RevisionsContainer
@@ -339,7 +343,6 @@ class ResumeReviseViewModel {
     private func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async {
         Logger.debug("🔍 [ResumeReviseViewModel] setupRevisionsForReview called with \(revisions.count) revisions")
         Logger.debug("🔍 [ResumeReviseViewModel] Current instance address: \(String(describing: Unmanaged.passUnretained(self).toOpaque()))")
-        Logger.debug("🔍 [ResumeReviseViewModel] appState.resumeReviseViewModel address: \(appState.resumeReviseViewModel.map { String(describing: Unmanaged.passUnretained($0).toOpaque()) } ?? "nil")")
         
         // Set up revisions in the UI state
         resumeRevisions = revisions
@@ -354,8 +357,8 @@ class ResumeReviseViewModel {
         
         // Ensure reasoning modal is hidden before showing revision review
         Logger.debug("🔍 [ResumeReviseViewModel] Hiding reasoning modal")
-        appState.globalReasoningStreamManager.isVisible = false
-        appState.globalReasoningStreamManager.clear()
+        reasoningStreamManager.isVisible = false
+        reasoningStreamManager.clear()
         
         // Show the revision review UI
         Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
@@ -364,7 +367,6 @@ class ResumeReviseViewModel {
         markWorkflowCompleted(reset: false)
         
         Logger.debug("🔍 [ResumeReviseViewModel] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
-        Logger.debug("🔍 [ResumeReviseViewModel] Is this instance the same as appState.resumeReviseViewModel? \(appState.resumeReviseViewModel === self)")
     }
     
     
@@ -539,7 +541,7 @@ class ResumeReviseViewModel {
         }
         
         // Check if model supports reasoning to determine UI behavior
-        let model = appState.openRouterService.findModel(id: modelId)
+        let model = openRouterService.findModel(id: modelId)
         let supportsReasoning = model?.supportsReasoning ?? false
         
         // For reasoning models, temporarily hide the review sheet
@@ -560,7 +562,7 @@ class ResumeReviseViewModel {
             let revisionPrompt = createRevisionPrompt(feedbackNodes: nodesToResubmit)
             
             // Check if model supports reasoning for streaming during resubmission
-            let model = appState.openRouterService.findModel(id: modelId)
+            let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
             
             let revisions: RevisionsContainer
@@ -959,7 +961,7 @@ class ResumeReviseViewModel {
         
         // Process stream and collect full response
         // Start reasoning stream (content already cleared in parent method)
-        appState.globalReasoningStreamManager.startReasoning(modelName: modelId)
+        reasoningStreamManager.startReasoning(modelName: modelId)
         var fullResponse = ""
         var collectingJSON = false
         var jsonResponse = ""
@@ -967,7 +969,7 @@ class ResumeReviseViewModel {
         for try await chunk in handle.stream {
             // Handle reasoning content
             if let reasoningContent = chunk.reasoning {
-                appState.globalReasoningStreamManager.reasoningText += reasoningContent
+                reasoningStreamManager.reasoningText += reasoningContent
             }
             
             // Collect regular content
@@ -983,7 +985,7 @@ class ResumeReviseViewModel {
             
             // Handle completion
             if chunk.isFinished {
-                appState.globalReasoningStreamManager.isStreaming = false
+                reasoningStreamManager.isStreaming = false
             }
         }
         cancelActiveStreaming()

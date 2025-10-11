@@ -11,6 +11,8 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     // DragInfo is inherited from ContentViewLaunch
 
     // States managed by ContentView
@@ -77,7 +79,6 @@ struct ContentView: View {
                     refresh: $tabRefresh,
                     sheets: $sheets,
                     clarifyingQuestions: $clarifyingQuestions,
-                    resumeReviseViewModel: appState.resumeReviseViewModel,
                     showNewAppSheet: $sheets.showNewJobApp,
                     showSlidingList: $showSlidingList
                 )
@@ -85,21 +86,21 @@ struct ContentView: View {
         }
         // Add reasoning stream view as overlay modal for AI thinking display
         .overlay {
-            if appState.globalReasoningStreamManager.isVisible {
+            if reasoningStreamManager.isVisible {
                 ReasoningStreamView(
                     isVisible: Binding(
-                        get: { appState.globalReasoningStreamManager.isVisible },
-                        set: { appState.globalReasoningStreamManager.isVisible = $0 }
+                        get: { reasoningStreamManager.isVisible },
+                        set: { reasoningStreamManager.isVisible = $0 }
                     ),
                     reasoningText: Binding(
-                        get: { appState.globalReasoningStreamManager.reasoningText },
-                        set: { appState.globalReasoningStreamManager.reasoningText = $0 }
+                        get: { reasoningStreamManager.reasoningText },
+                        set: { reasoningStreamManager.reasoningText = $0 }
                     ),
                     isStreaming: Binding(
-                        get: { appState.globalReasoningStreamManager.isStreaming },
-                        set: { appState.globalReasoningStreamManager.isStreaming = $0 }
+                        get: { reasoningStreamManager.isStreaming },
+                        set: { reasoningStreamManager.isStreaming = $0 }
                     ),
-                    modelName: appState.globalReasoningStreamManager.modelName
+                    modelName: reasoningStreamManager.modelName
                 )
                 .zIndex(1000) // Ensure it's above all other content
                 .onAppear {
@@ -132,31 +133,14 @@ struct ContentView: View {
                 "🟡 ContentView appeared - appState address: \(Unmanaged.passUnretained(appState).toOpaque())",
                 category: .ui
             )
-            
+
             // Restore persistent state
             appState.restoreSelectedJobApp(from: jobAppStore)
-            
-            // Initialize Resume Revise View Model
-            Logger.debug(
-                "🔍 [ContentView] Creating ResumeReviseViewModel with appState: \(String(describing: Unmanaged.passUnretained(appState).toOpaque()))",
-                category: .ai
-            )
-            let newViewModel = ResumeReviseViewModel(
-                llmFacade: llmFacade,
-                appState: appState,
-                exportCoordinator: appEnvironment.resumeExportCoordinator
-            )
-            Logger.debug(
-                "🔍 [ContentView] Created ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(newViewModel).toOpaque()))",
-                category: .ai
-            )
-            appState.resumeReviseViewModel = newViewModel
-            Logger.debug("🔍 [ContentView] Set appState.resumeReviseViewModel to new instance", category: .ai)
-            
+
             // Initialize cover letter state
             updateMyLetter()
             hasVisitedResumeTab = false
-            
+
             // Initial setup or logging can remain here
             if let storeURL = FileManager.default
                 .urls(for: .applicationSupportDirectory, in: .userDomainMask)
