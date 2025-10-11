@@ -7,15 +7,6 @@ import SwiftData
 class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
 
-    /// Stores the OpenAI response ID for server-side conversation state
-    // MARK: - Conversation Management (ChatCompletions API)
-    
-    /// Clears the conversation context for this resume
-    @MainActor
-    func clearConversationContext() {
-        // Note: Conversation management now handled by LLMService.shared
-        Logger.debug("Resume conversation context clear requested - handled by LLMService")
-    }
 
     var needToTree: Bool = true
     var needToFont: Bool = true

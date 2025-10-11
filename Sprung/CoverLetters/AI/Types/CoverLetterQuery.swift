@@ -73,26 +73,6 @@ struct BestCoverLetterResponse: Codable {
         scoreAllocations = try container.decodeIfPresent([CoverLetterScore].self, forKey: .scoreAllocations)
     }
     
-    // Implement validate for StructuredOutput
-    func validate() -> Bool {
-        // Base validation
-        guard !strengthAndVoiceAnalysis.isEmpty && !verdict.isEmpty else {
-            return false
-        }
-        
-        // Either we need bestLetterUuid (FPTP) or scoreAllocations (score voting)
-        if let uuid = bestLetterUuid {
-            // FPTP mode: need valid UUID, no score allocations
-            return !uuid.isEmpty && scoreAllocations == nil
-        } else if let scores = scoreAllocations {
-            // Score voting mode: need valid score allocations totaling 20
-            let totalScore = scores.reduce(0) { $0 + $1.score }
-            return totalScore == 20 && scores.allSatisfy { $0.score >= 0 }
-        } else {
-            // Must have either bestLetterUuid or scoreAllocations
-            return false
-        }
-    }
     
 }
 
@@ -286,7 +266,7 @@ struct BestCoverLetterResponse: Codable {
     
     /// Generate prompt for cover letter generation
     @MainActor
-    func generationPrompt(mode: CoverAiMode = .generate, includeResumeRefs: Bool = true) async -> String {
+    func generationPrompt(includeResumeRefs: Bool = true) async -> String {
         // Ensure resume text is fresh
         try? await exportCoordinator.ensureFreshRenderedText(for: resume)
         
@@ -559,41 +539,6 @@ struct BestCoverLetterResponse: Codable {
         }
     }
     
-    // MARK: - Console Print Friendly Methods
-    
-    /// Creates a console-friendly version of the prompt with truncated long strings
-    func consoleFriendlyPrompt(_ fullPrompt: String) -> String {
-        var truncatedPrompt = fullPrompt
-        
-        // Truncate background docs (typically very long)
-        if !backgroundDocs.isEmpty {
-            let truncatedBgDocs = truncateString(backgroundDocs, maxLength: 200)
-            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: backgroundDocs, with: truncatedBgDocs)
-        }
-        
-        // Truncate resume text (can be quite long)
-        if !resumeText.isEmpty {
-            let truncatedResumeText = truncateString(resumeText, maxLength: 300)
-            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: resumeText, with: truncatedResumeText)
-        }
-        
-        // Truncate writing samples (can be long)
-        if !writingSamples.isEmpty {
-            let truncatedWritingSamples = truncateString(writingSamples, maxLength: 200)
-            truncatedPrompt = truncatedPrompt.replacingOccurrences(of: writingSamples, with: truncatedWritingSamples)
-        }
-        
-        return truncatedPrompt
-    }
-    
-    /// Helper method to truncate strings with ellipsis
-    private func truncateString(_ string: String, maxLength: Int) -> String {
-        if string.count <= maxLength {
-            return string
-        }
-        let truncated = String(string.prefix(maxLength))
-        return truncated + "..."
-    }
     
     // MARK: - Debugging Helper
     

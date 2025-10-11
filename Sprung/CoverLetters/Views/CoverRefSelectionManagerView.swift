@@ -12,7 +12,6 @@ import SwiftData
 /// Used in both Generate Cover Letter and Batch Generate Cover Letter sheets
 struct CoverRefSelectionManagerView: View {
     @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
-    @Environment(\.modelContext) private var modelContext
     
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
@@ -34,12 +33,6 @@ struct CoverRefSelectionManagerView: View {
         allCoverRefs.filter { $0.type == .writingSample }
     }
     
-    var selectedRefs: [CoverRef] {
-        allCoverRefs.filter { ref in
-            selectedBackgroundFacts.contains(ref.id.description) ||
-            selectedWritingSamples.contains(ref.id.description)
-        }
-    }
     
     var body: some View {
         if showGroupBox {
@@ -184,17 +177,6 @@ struct CoverRefSelectionManagerView: View {
         }
     }
     
-    /// Helper function to pre-select default refs
-    func loadDefaultSelections() {
-        // Pre-select enabled by default refs
-        for ref in backgroundFacts where ref.enabledByDefault {
-            selectedBackgroundFacts.insert(ref.id.description)
-        }
-        
-        for ref in writingSamples where ref.enabledByDefault {
-            selectedWritingSamples.insert(ref.id.description)
-        }
-    }
 }
 
 // MARK: - Add Cover Ref Sheet

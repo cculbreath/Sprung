@@ -79,79 +79,6 @@ struct ProposedRevisionNode: Codable, Equatable {
         )
     }
     
-    // Dictionary initializer for creating from [String: Any]
-    init(from dict: [String: Any]) {
-        // Map common keys with fallbacks
-        if let id = dict["id"] as? String {
-            self.id = id
-        } else if let id = dict["ID"] as? String {
-            self.id = id
-        } else {
-            self.id = UUID().uuidString
-        }
-        
-        // Old value with fallbacks
-        if let oldValue = dict["oldValue"] as? String {
-            self.oldValue = oldValue
-        } else if let oldValue = dict["old_value"] as? String {
-            self.oldValue = oldValue
-        } else if let oldValue = dict["original"] as? String {
-            self.oldValue = oldValue
-        }
-        
-        // New value with fallbacks
-        if let newValue = dict["newValue"] as? String {
-            self.newValue = newValue
-        } else if let newValue = dict["new_value"] as? String {
-            self.newValue = newValue
-        } else if let newValue = dict["value"] as? String {
-            self.newValue = newValue
-        } else if let newValue = dict["revision"] as? String {
-            self.newValue = newValue
-        }
-        
-        // Value changed
-        if let valueChanged = dict["valueChanged"] as? Bool {
-            self.valueChanged = valueChanged
-        } else if let valueChanged = dict["value_changed"] as? Bool {
-            self.valueChanged = valueChanged
-        } else if let valueChanged = dict["changed"] as? Bool {
-            self.valueChanged = valueChanged
-        } else {
-            self.valueChanged = self.oldValue != self.newValue
-        }
-        
-        // Why/explanation
-        if let why = dict["why"] as? String {
-            self.why = why
-        } else if let why = dict["explanation"] as? String {
-            self.why = why
-        } else if let why = dict["reasoning"] as? String {
-            self.why = why
-        } else if let why = dict["reason"] as? String {
-            self.why = why
-        } else {
-            self.why = "No explanation provided"
-        }
-        
-        // Is title node
-        if let isTitleNode = dict["isTitleNode"] as? Bool {
-            self.isTitleNode = isTitleNode
-        } else if let isTitleNode = dict["is_title_node"] as? Bool {
-            self.isTitleNode = isTitleNode
-        } else if let isTitleNode = dict["isTitle"] as? Bool {
-            self.isTitleNode = isTitleNode
-        }
-        
-        // Tree path
-        if let treePath = dict["treePath"] as? String {
-            self.treePath = treePath
-        } else if let treePath = dict["tree_path"] as? String {
-            self.treePath = treePath
-        } else if let treePath = dict["path"] as? String {
-            self.treePath = treePath
-        }
-    }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -210,9 +137,6 @@ struct RevisionsContainer: Codable {
         try container.encode(revArray, forKey: .revArray)
     }
     
-    func validate() -> Bool {
-        !revArray.isEmpty
-    }
 }
 
 enum PostReviewAction: String, Codable {
@@ -324,20 +248,6 @@ extension FeedbackNode: Encodable {
     }
 }
 
-func fbToJson(_ feedbackNodes: [FeedbackNode]) -> String? {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = .prettyPrinted // Optional: makes the JSON output more readable
-    do {
-        let jsonData = try encoder.encode(feedbackNodes)
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-            return jsonString
-        } else {
-            return nil
-        }
-    } catch {
-        return nil
-    }
-}
 
 // MARK: - Collection Extensions for Review Workflow Logic
 

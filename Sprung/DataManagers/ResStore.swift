@@ -22,7 +22,6 @@ final class ResStore: SwiftDataStore {
 
     unowned let modelContext: ModelContext
     private let exportCoordinator: ResumeExportCoordinator
-    private let templateStore: TemplateStore
     private let templateSeedStore: TemplateSeedStore
 
     // MARK: - Initialiser
@@ -30,12 +29,10 @@ final class ResStore: SwiftDataStore {
     init(
         context: ModelContext,
         exportCoordinator: ResumeExportCoordinator,
-        templateStore: TemplateStore,
         templateSeedStore: TemplateSeedStore
     ) {
         modelContext = context
         self.exportCoordinator = exportCoordinator
-        self.templateStore = templateStore
         self.templateSeedStore = templateSeedStore
     }
 

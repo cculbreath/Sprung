@@ -26,7 +26,7 @@ enum SectionType {
 }
 
 extension SectionType {
-    init?(manifestKind: TemplateManifest.Section.Kind, key: String) {
+    init?(manifestKind: TemplateManifest.Section.Kind) {
         switch manifestKind {
         case .string:
             self = .string

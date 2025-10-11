@@ -51,11 +51,9 @@ class ClarifyingQuestionsViewModel {
     /// Start the clarifying questions workflow
     /// - Parameters:
     ///   - resume: The resume to analyze
-    ///   - jobApp: The job application context
     ///   - modelId: The model to use for question generation
     func startClarifyingQuestionsWorkflow(
         resume: Resume,
-        jobApp: JobApp,
         modelId: String
     ) async throws {
         
@@ -145,7 +143,7 @@ class ClarifyingQuestionsViewModel {
                 let questionsRequest = try parseJSONFromText(responseText, as: ClarifyingQuestionsRequest.self)
                 
                 // Continue with the parsed questions
-                await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, query: query, modelId: modelId)
+                await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, modelId: modelId)
                 
             } else {
                 // Use non-streaming for models without reasoning support
@@ -167,7 +165,7 @@ class ClarifyingQuestionsViewModel {
                     jsonSchema: ResumeApiQuery.clarifyingQuestionsSchema
                 )
                 
-                await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, query: query, modelId: modelId)
+                await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, modelId: modelId)
             }
             
             isGeneratingQuestions = false
@@ -330,7 +328,6 @@ class ClarifyingQuestionsViewModel {
     private func handleClarifyingQuestionsResponse(
         _ questionsRequest: ClarifyingQuestionsRequest,
         resume: Resume,
-        query: ResumeApiQuery,
         modelId: String
     ) async {
         Logger.debug("🔍 Parsed clarifying questions response:")
@@ -342,7 +339,7 @@ class ClarifyingQuestionsViewModel {
         if questionsRequest.proceedWithRevisions && questionsRequest.questions.isEmpty {
             // AI decided no questions needed, proceed directly to revisions
             Logger.debug("AI opted to proceed without clarifying questions")
-            await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
+            await proceedDirectlyToRevisions(resume: resume, modelId: modelId)
         } else if !questionsRequest.questions.isEmpty {
             // Store questions for UI - let user decide whether to answer them
             Logger.debug("Generated \(questionsRequest.questions.count) clarifying questions")
@@ -354,14 +351,13 @@ class ClarifyingQuestionsViewModel {
         } else {
             // Edge case: no questions and AI didn't explicitly say to proceed
             Logger.debug("No questions generated and AI didn't explicitly request to proceed - treating as no questions needed")
-            await proceedDirectlyToRevisions(resume: resume, query: query, modelId: modelId)
+            await proceedDirectlyToRevisions(resume: resume, modelId: modelId)
         }
     }
     
     /// Proceed directly to revisions without questions
     private func proceedDirectlyToRevisions(
         resume: Resume,
-        query: ResumeApiQuery,
         modelId: String
     ) async {
         Logger.info("🎯 Proceeding directly to revisions workflow without clarifying questions")
@@ -406,35 +402,6 @@ class ClarifyingQuestionsViewModel {
         }
     }
     
-    /// Start a new conversation with user answers
-    private func startConversationWithAnswers(
-        answers: [QuestionAnswer],
-        resume: Resume,
-        modelId: String
-    ) async throws -> [ProposedRevisionNode] {
-        
-        // Create initial conversation with system prompt
-        let query = ResumeApiQuery(
-            resume: resume,
-            exportCoordinator: exportCoordinator,
-            saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
-        )
-        let systemPrompt = query.genericSystemMessage.textContent
-        let initialUserMessage = await query.wholeResumeQueryString()
-        
-        // Start conversation
-        let (conversationId, _) = try await llm.startConversation(
-            systemPrompt: systemPrompt,
-            userMessage: initialUserMessage,
-            modelId: modelId
-        )
-        
-        self.currentConversationId = conversationId
-        
-        // Now continue with answers - this is a recursive call but now we need resumeReviseViewModel
-        // This path shouldn't be used in normal flow since we should have a conversationId
-        throw ClarifyingQuestionsError.noActiveConversation
-    }
     
     
     /// Create prompt from user answers
@@ -451,14 +418,6 @@ class ClarifyingQuestionsViewModel {
         return prompt
     }
     
-    /// Reset workflow state
-    func resetWorkflow() {
-        questions = []
-        currentConversationId = nil
-        lastError = nil
-        showError = false
-        isGeneratingQuestions = false
-    }
     
     /// Parse JSON from text content with fallback strategies
     private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {

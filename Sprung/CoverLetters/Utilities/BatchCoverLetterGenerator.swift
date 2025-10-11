@@ -3,23 +3,17 @@ import SwiftUI
 
 @MainActor
 class BatchCoverLetterGenerator {
-    private let appState: AppState
-    private let jobAppStore: JobAppStore
     private let coverLetterStore: CoverLetterStore
     private let llmFacade: LLMFacade
     private let coverLetterService: CoverLetterService
     private let exportCoordinator: ResumeExportCoordinator
 
     init(
-        appState: AppState,
-        jobAppStore: JobAppStore,
         coverLetterStore: CoverLetterStore,
         llmFacade: LLMFacade,
         coverLetterService: CoverLetterService,
         exportCoordinator: ResumeExportCoordinator
     ) {
-        self.appState = appState
-        self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.llmFacade = llmFacade
         self.coverLetterService = coverLetterService
@@ -350,10 +344,7 @@ class BatchCoverLetterGenerator {
             )
             
             let systemPrompt = query.systemPrompt(for: model)
-            let userMessage = await query.generationPrompt(
-                mode: .generate,
-                includeResumeRefs: baseCoverLetter.includeResumeRefs
-            )
+            let userMessage = await query.generationPrompt(includeResumeRefs: baseCoverLetter.includeResumeRefs)
 
             // Check if this is an o1 model that doesn't support system messages
             let isO1Model = coverLetterService.isReasoningModel(model)

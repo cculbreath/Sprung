@@ -52,9 +52,6 @@ enum LeafStatus: String, Codable, Hashable {
     }
     var schemaSourceKey: String?
 
-    @Transient
-    var validationError: String?
-
     // This property should be explicitly set when a node is created or its role changes.
     // It's not reliably computable based on name/value alone.
     // For the "Fix Overflow" feature, we will pass this to the LLM and expect it back.

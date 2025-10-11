@@ -26,11 +26,10 @@ struct ResumeDetailView: View {
         resume: Resume,
         tab: Binding<TabList>,
         isWide: Binding<Bool>,
-        resStore: ResStore,
         exportCoordinator: ResumeExportCoordinator
     ) {
         _tab = tab
-        _vm = State(wrappedValue: ResumeDetailVM(resume: resume, resStore: resStore, exportCoordinator: exportCoordinator))
+        _vm = State(wrappedValue: ResumeDetailVM(resume: resume, exportCoordinator: exportCoordinator))
         externalIsWide = isWide
     }
 

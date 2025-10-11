@@ -104,7 +104,6 @@ struct ClarifyingQuestionsButton: View {
             
             try await clarifyingViewModel.startClarifyingQuestionsWorkflow(
                 resume: resume,
-                jobApp: jobApp,
                 modelId: modelId
             )
             

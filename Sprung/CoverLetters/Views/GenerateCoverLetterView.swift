@@ -10,10 +10,6 @@ import SwiftData
 
 /// A unified view for generating cover letters that combines model selection with source management
 struct GenerateCoverLetterView: View {
-    @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
-    @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
-    @Environment(AppState.self) private var appState: AppState
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
     let jobApp: JobApp

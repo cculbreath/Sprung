@@ -410,8 +410,7 @@ class MultiModelCoverLetterService {
                 await generateReasoningSummary(
                     coverLetters: coverLetters,
                     jobApp: jobApp,
-                    selectedVotingScheme: selectedVotingScheme,
-                    selectedModels: selectedModels
+                    selectedVotingScheme: selectedVotingScheme
                 )
             }
         } else {
@@ -430,19 +429,16 @@ class MultiModelCoverLetterService {
     private func generateReasoningSummary(
         coverLetters: [CoverLetter],
         jobApp: JobApp,
-        selectedVotingScheme: VotingScheme,
-        selectedModels: Set<String>
+        selectedVotingScheme: VotingScheme
     ) async {
         do {
             let summary = try await summaryGenerator.generateSummary(
-                coverLetter: coverLetters.first!, // We know there's at least one
                 coverLetters: coverLetters,
                 jobApp: jobApp,
                 modelReasonings: modelReasonings,
                 voteTally: voteTally,
                 scoreTally: scoreTally,
-                selectedVotingScheme: selectedVotingScheme,
-                selectedModels: selectedModels
+                selectedVotingScheme: selectedVotingScheme
             )
             
             self.reasoningSummary = summary

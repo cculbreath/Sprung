@@ -9,9 +9,6 @@ import SwiftUI
 
 /// A sheet for revising cover letters with model and operation selection
 struct ReviseCoverLetterView: View {
-    @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(AppState.self) private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     
     let coverLetter: CoverLetter

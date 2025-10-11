@@ -11,13 +11,10 @@ struct BatchCoverLetterView: View {
     @Environment(AppState.self) var appState: AppState
     @Environment(JobAppStore.self) var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
-    @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore: EnabledLLMStore
     @Environment(LLMFacade.self) private var llmFacade: LLMFacade
     @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
-    @Environment(\.modelContext) private var modelContext
 
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
@@ -37,8 +34,6 @@ struct BatchCoverLetterView: View {
     @State private var includeResumeRefs: Bool = true
     @State private var selectedBackgroundFacts: Set<String> = []
     @State private var selectedWritingSamples: Set<String> = []
-    @State private var showAddSheet = false
-    @State private var newRefType: CoverRefType = .backgroundFact
     
     let availableRevisions: [CoverLetterPrompts.EditorPrompts] = [.improve, .zissner, .mimic]
     
@@ -363,8 +358,6 @@ struct BatchCoverLetterView: View {
         
         Task {
             let generator = BatchCoverLetterGenerator(
-                appState: appState,
-                jobAppStore: jobAppStore,
                 coverLetterStore: coverLetterStore,
                 llmFacade: llmFacade,
                 coverLetterService: coverLetterService,

@@ -109,10 +109,7 @@ final class CoverLetterService {
         
         // Build system and user prompts
         let systemPrompt = query.systemPrompt(for: modelId)
-        let userMessage = await query.generationPrompt(
-            mode: .generate,
-            includeResumeRefs: includeResumeRefs
-        )
+        let userMessage = await query.generationPrompt(includeResumeRefs: includeResumeRefs)
         
         // Check if this is an o1 model that doesn't support system messages
         let isO1Model = isReasoningModel(modelId)

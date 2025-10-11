@@ -77,7 +77,7 @@ private struct Implementation {
         }
 
         if let manifestKind = manifest?.section(for: sectionName)?.type,
-           let sectionType = SectionType(manifestKind: manifestKind, key: sectionName) {
+            let sectionType = SectionType(manifestKind: manifestKind) {
             return buildSection(named: sectionName, type: sectionType)
         }
 

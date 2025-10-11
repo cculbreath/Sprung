@@ -74,7 +74,6 @@ class FixOverflowService {
             
             // Get AI suggestions
             let fixFitsResult = await getAISuggestions(
-                resume: resume,
                 skillsJsonString: skillsJsonString,
                 currentImageBase64: currentImageBase64,
                 currentOverflowLineCount: currentOverflowLineCount,
@@ -178,7 +177,6 @@ class FixOverflowService {
     }
     
     private func getAISuggestions(
-        resume: Resume,
         skillsJsonString: String,
         currentImageBase64: String,
         currentOverflowLineCount: Int,

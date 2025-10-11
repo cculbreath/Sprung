@@ -24,14 +24,12 @@ class CoverLetterCommitteeSummaryGenerator {
     
     @MainActor
     func generateSummary(
-        coverLetter: CoverLetter,
         coverLetters: [CoverLetter],
         jobApp: JobApp,
         modelReasonings: [(model: String, response: BestCoverLetterResponse)],
         voteTally: [UUID: Int],
         scoreTally: [UUID: Int],
-        selectedVotingScheme: VotingScheme,
-        selectedModels: Set<String>
+        selectedVotingScheme: VotingScheme
     ) async throws -> String {
         Logger.info("🧠 Generating reasoning summary...")
         
@@ -56,8 +54,7 @@ class CoverLetterCommitteeSummaryGenerator {
                        bestUuid == letter.id.uuidString {
                         return ModelVote(
                             model: reasoning.model,
-                            votedForLetterId: letter.id.uuidString,
-                            reasoning: reasoning.response.verdict
+                            votedForLetterId: letter.id.uuidString
                         )
                     }
                     return nil
@@ -87,8 +84,7 @@ class CoverLetterCommitteeSummaryGenerator {
                         // Track individual votes for score voting (points allocation)
                         modelVotes.append(ModelVote(
                             model: reasoning.model,
-                            votedForLetterId: letter.id.uuidString,
-                            reasoning: allocation.reasoning
+                            votedForLetterId: letter.id.uuidString
                         ))
                     }
                 }
@@ -133,7 +129,6 @@ class CoverLetterCommitteeSummaryGenerator {
             if let letter = coverLetters.first(where: { $0.id.uuidString == analysis.letterId }) {
                 Logger.debug("🔍 Found letter: \(letter.sequencedName)")
                 let committeeFeedback = CommitteeFeedbackSummary(
-                    letterId: analysis.letterId,
                     summaryOfModelAnalysis: analysis.summaryOfModelAnalysis,
                     pointsAwarded: analysis.pointsAwarded,
                     modelVotes: analysis.modelVotes
@@ -265,7 +260,6 @@ class CoverLetterCommitteeSummaryGenerator {
         summaryPrompt += "{\n"
         summaryPrompt += "  \"letterAnalyses\": [\n"
         summaryPrompt += "    {\n"
-        summaryPrompt += "      \"letterId\": \"UUID of the letter\",\n"
         summaryPrompt += "      \"summaryOfModelAnalysis\": \"Comprehensive summary of what models said about this letter\",\n"
         summaryPrompt += "      \"pointsAwarded\": [\n"
         summaryPrompt += "        {\"model\": \"Model name\", \"points\": 0}\n"
@@ -290,10 +284,6 @@ class CoverLetterCommitteeSummaryGenerator {
                     items: JSONSchema(
                         type: .object,
                         properties: [
-                            "letterId": JSONSchema(
-                                type: .string,
-                                description: "UUID of the cover letter"
-                            ),
                             "summaryOfModelAnalysis": JSONSchema(
                                 type: .string,
                                 description: "Comprehensive summary of model feedback for this letter"
@@ -328,18 +318,14 @@ class CoverLetterCommitteeSummaryGenerator {
                                         "votedForLetterId": JSONSchema(
                                             type: .string,
                                             description: "UUID of the letter this model voted for"
-                                        ),
-                                        "reasoning": JSONSchema(
-                                            type: .string,
-                                            description: "Model's reasoning for the vote"
                                         )
                                     ],
-                                    required: ["model", "votedForLetterId", "reasoning"],
+                                    required: ["model", "votedForLetterId"],
                                     additionalProperties: false
                                 )
                             )
                         ],
-                        required: ["letterId", "summaryOfModelAnalysis", "pointsAwarded", "modelVotes"],
+                        required: ["summaryOfModelAnalysis", "pointsAwarded", "modelVotes"],
                         additionalProperties: false
                     )
                 )

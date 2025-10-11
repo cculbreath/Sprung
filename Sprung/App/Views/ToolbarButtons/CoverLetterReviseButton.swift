@@ -68,7 +68,6 @@ struct CoverLetterReviseButton: View {
                 targetLetter.content = coverLetter.content
                 targetLetter.generated = false
                 targetLetter.editorPrompt = operation
-                targetLetter.encodedMessageHistory = coverLetter.encodedMessageHistory
                 targetLetter.currentMode = operation == .custom ? .revise : .rewrite
                 
                 // Don't add to store yet - wait for successful generation
