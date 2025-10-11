@@ -69,6 +69,7 @@ struct PhysicsCloudResumeApp: App {
             ContentViewLaunch(deps: appDependencies)
                 .environment(appEnvironment)
                 .environment(appEnvironment.appState)
+                .environment(appDependencies.navigationState)
                 .environment(appDependencies.resumeExportCoordinator)
                 .environment(appDependencies.templateStore)
                 .environment(appDependencies.templateSeedStore)

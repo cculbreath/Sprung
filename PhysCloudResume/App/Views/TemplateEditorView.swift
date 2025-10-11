@@ -53,7 +53,7 @@ private enum PendingTemplateChange {
 
 struct TemplateEditorView: View {
     @Query private var resumes: [Resume]
-    @Environment(AppState.self) private var appState
+    @Environment(NavigationStateService.self) private var navigationState
     @Environment(AppEnvironment.self) private var appEnvironment
     
     @State private var selectedTemplate: String = "archer"
@@ -130,7 +130,7 @@ struct TemplateEditorView: View {
     ]
     
     private var selectedResume: Resume? {
-        appState.selectedResume
+        navigationState.selectedResume
     }
     
     private var hasSelectedResume: Bool {

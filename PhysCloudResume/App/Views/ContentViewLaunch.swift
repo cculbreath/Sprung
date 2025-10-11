@@ -38,6 +38,7 @@ struct ContentViewLaunch: View {
         ContentView()
             .environment(deps.appEnvironment)
             .environment(deps.appEnvironment.appState)
+            .environment(deps.navigationState)
             .environment(deps.appEnvironment.openRouterService)
             .environment(deps.appEnvironment.coverLetterService)
             .environment(deps.debugSettingsStore)

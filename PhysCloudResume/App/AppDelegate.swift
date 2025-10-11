@@ -117,13 +117,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             // Create hosting view with proper environment objects
             let hostingView: NSHostingView<AnyView>
-            if let appEnvironment = self.appEnvironment, let container = self.modelContainer, let enabledLLMStore = self.enabledLLMStore {
+            if let appEnvironment = self.appEnvironment,
+               let container = self.modelContainer,
+               let enabledLLMStore = self.enabledLLMStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
 
                 let root = settingsView
                     .environment(appEnvironment)
                     .environment(appState)
+                    .environment(appEnvironment.navigationState)
                     .environment(enabledLLMStore)
                     .environment(debugSettingsStore)
                     .modelContainer(container)
@@ -222,6 +225,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .modelContainer(modelContainer)
                         .environment(appEnvironment)
                         .environment(appEnvironment.appState)
+                        .environment(appEnvironment.navigationState)
                 ))
             } else if let modelContainer = self.modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(editorView.modelContainer(modelContainer)))

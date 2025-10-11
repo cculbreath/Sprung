@@ -11,7 +11,7 @@ import SwiftUI
 
 @MainActor
 struct TemplateQuickActionsView: View {
-    @Environment(AppState.self) private var appState
+    @Environment(NavigationStateService.self) private var navigationState
     @Environment(AppEnvironment.self) private var appEnvironment
 
     @State private var statusMessage: String?
@@ -36,7 +36,7 @@ struct TemplateQuickActionsView: View {
     }
 
     private var selectedResume: Resume? {
-        appState.selectedResume
+        navigationState.selectedResume
     }
 
     private var selectedTemplate: Template? {
