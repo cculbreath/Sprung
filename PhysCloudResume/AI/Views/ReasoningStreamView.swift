@@ -259,63 +259,16 @@ class ReasoningStreamManager {
     var modelName: String = ""
     var isStreaming: Bool = false
     
-    private var currentTask: Task<Void, Never>?
-    
-    /// Start processing a reasoning stream
-    func startStream<T: AsyncSequence & Sendable>(_ stream: T) where T.Element == LLMStreamChunkDTO, T.AsyncIterator: Sendable {
-        // Cancel any existing stream
-        currentTask?.cancel()
-        
-        // Reset state
-        reasoningText = ""
-        isVisible = true
-        isStreaming = true
-        
-        currentTask = Task {
-            do {
-                for try await chunk in stream {
-                    // Check for cancellation
-                    if Task.isCancelled { break }
-                    
-                    // Append reasoning content
-                    if let reasoning = chunk.reasoning {
-                        if Logger.isVerboseEnabled {
-                            Logger.verbose(
-                                "🧠 [ReasoningStreamManager] Appending reasoning: \(reasoning.prefix(100))...",
-                                category: .ui
-                            )
-                        }
-                        reasoningText += reasoning
-                    }
-                    
-                    // Check if finished
-                    if chunk.isFinished {
-                        isStreaming = false
-                    }
-                }
-            } catch {
-                Logger.error("🚨 Error in reasoning stream: \(error)", category: .ai)
-                isStreaming = false
-            }
-        }
-    }
-    
     /// Stop the current stream
     func stopStream() {
-        currentTask?.cancel()
-        currentTask = nil
         isStreaming = false
-    }
-    
-    /// Hide the reasoning view
-    func hide() {
-        isVisible = false
     }
     
     /// Clear all reasoning state
     func clear() {
         reasoningText = ""
         modelName = ""
+        isStreaming = false
     }
     
     /// Start a new reasoning session with model information
