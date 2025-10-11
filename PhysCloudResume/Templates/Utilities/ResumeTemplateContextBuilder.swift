@@ -7,31 +7,6 @@ struct ResumeTemplateContextBuilder {
     init(templateSeedStore: TemplateSeedStore) {
         self.templateSeedStore = templateSeedStore
     }
-
-    @MainActor
-    func buildJSONString(
-        for template: Template,
-        fallbackJSON: String,
-        applicantProfile: ApplicantProfile
-    ) -> String? {
-        guard let context = buildContext(for: template, fallbackJSON: fallbackJSON, applicantProfile: applicantProfile) else {
-            return nil
-        }
-
-        guard JSONSerialization.isValidJSONObject(context) else {
-            Logger.warning("ResumeTemplateContextBuilder: context is not valid JSON")
-            return nil
-        }
-
-        do {
-            let data = try JSONSerialization.data(withJSONObject: context, options: [])
-            return String(data: data, encoding: .utf8)
-        } catch {
-            Logger.warning("ResumeTemplateContextBuilder: Failed to encode context: \(error)")
-            return nil
-        }
-    }
-
     @MainActor
     func buildContext(
         for template: Template,

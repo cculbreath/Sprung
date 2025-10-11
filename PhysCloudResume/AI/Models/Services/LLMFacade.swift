@@ -10,7 +10,6 @@ import Foundation
 import Observation
 
 struct LLMStreamingHandle {
-    let id: UUID
     let conversationId: UUID?
     let stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>
     let cancel: @Sendable () -> Void
@@ -21,7 +20,6 @@ struct LLMStreamingHandle {
 final class LLMFacade {
     private let client: LLMClient
     private let llmService: LLMService // temporary bridge for conversation flows
-    private let appState: AppState
     private let openRouterService: OpenRouterService
     private let enabledLLMStore: EnabledLLMStore?
     private let modelValidationService: ModelValidationService
@@ -30,14 +28,12 @@ final class LLMFacade {
     init(
         client: LLMClient,
         llmService: LLMService,
-        appState: AppState,
         openRouterService: OpenRouterService,
         enabledLLMStore: EnabledLLMStore?,
         modelValidationService: ModelValidationService
     ) {
         self.client = client
         self.llmService = llmService
-        self.appState = appState
         self.openRouterService = openRouterService
         self.enabledLLMStore = enabledLLMStore
         self.modelValidationService = modelValidationService
@@ -80,7 +76,6 @@ final class LLMFacade {
     }
 
     private func missingCapabilities(
-        for modelId: String,
         metadata: OpenRouterModel?,
         record: EnabledLLM?,
         requires capabilities: [ModelCapability]
@@ -100,7 +95,7 @@ final class LLMFacade {
             throw LLMError.clientError("Model '\(modelId)' not found")
         }
 
-        var missing = missingCapabilities(for: modelId, metadata: metadata, record: record, requires: capabilities)
+        var missing = missingCapabilities(metadata: metadata, record: record, requires: capabilities)
         guard !missing.isEmpty else { return }
 
         // Attempt to refresh capabilities using validation service
@@ -119,7 +114,7 @@ final class LLMFacade {
 
         let refreshedRecord = enabledModelRecord(for: modelId)
         let refreshedMetadata = openRouterService.findModel(id: modelId)
-        missing = missingCapabilities(for: modelId, metadata: refreshedMetadata, record: refreshedRecord, requires: capabilities)
+        missing = missingCapabilities(metadata: refreshedMetadata, record: refreshedRecord, requires: capabilities)
 
         guard missing.isEmpty else {
             let missingNames = missing.map { $0.displayName }.joined(separator: ", ")
@@ -219,7 +214,7 @@ final class LLMFacade {
             }
         }
 
-        return LLMStreamingHandle(id: handleId, conversationId: nil, stream: stream, cancel: cancelClosure)
+        return LLMStreamingHandle(conversationId: nil, stream: stream, cancel: cancelClosure)
     }
 
     // MARK: - Conversation (temporary pass-through to LLMService)
@@ -273,7 +268,7 @@ final class LLMFacade {
             }
         }
 
-        return LLMStreamingHandle(id: handleId, conversationId: conversationId, stream: stream, cancel: cancelClosure)
+        return LLMStreamingHandle(conversationId: conversationId, stream: stream, cancel: cancelClosure)
     }
 
     func continueConversationStreaming(
@@ -327,7 +322,7 @@ final class LLMFacade {
             }
         }
 
-        return LLMStreamingHandle(id: handleId, conversationId: conversationId, stream: stream, cancel: cancelClosure)
+        return LLMStreamingHandle(conversationId: conversationId, stream: stream, cancel: cancelClosure)
     }
 
     func continueConversation(

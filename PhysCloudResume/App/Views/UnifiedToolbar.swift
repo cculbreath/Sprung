@@ -27,8 +27,6 @@ func buildUnifiedToolbar(
 
 struct UnifiedToolbar: CustomizableToolbarContent {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(AppState.self) private var appState: AppState
-    @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
 
     @Binding var selectedTab: TabList
     @Binding var listingButtons: SaveButtons

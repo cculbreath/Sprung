@@ -147,10 +147,6 @@ final class LLMService {
         return text
     }
 
-    private func fetchAppState() async -> AppState? {
-        await MainActor.run { self.appState }
-    }
-
     // MARK: - Core Operations
 
     func executeStructuredStreaming<T: Codable & Sendable>(

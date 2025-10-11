@@ -179,7 +179,7 @@ struct ProposedRevisionNode: Codable, Equatable {
     // Encodable synthesis is fine.
 }
 
-struct RevisionsContainer: Codable, StructuredOutput {
+struct RevisionsContainer: Codable {
     var revArray: [ProposedRevisionNode]
     
     /// Custom coding keys to handle case variations from different LLM responses
@@ -210,6 +210,9 @@ struct RevisionsContainer: Codable, StructuredOutput {
         try container.encode(revArray, forKey: .revArray)
     }
     
+    func validate() -> Bool {
+        !revArray.isEmpty
+    }
 }
 
 enum PostReviewAction: String, Codable {

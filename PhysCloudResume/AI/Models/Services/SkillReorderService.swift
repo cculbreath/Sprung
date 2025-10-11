@@ -77,14 +77,13 @@ class SkillReorderService {
         // Convert to ReorderedSkillNode format expected by existing code
         let reorderedNodes = response.reorderedSkillsAndExpertise.map { simpleSkill in
             // Look up the original skill to get tree path and title node info
-            let originalSkill = findOriginalSkill(with: simpleSkill.id, in: resume)
+            let isTitleNode = findOriginalSkill(with: simpleSkill.id, in: resume) ?? false
             return ReorderedSkillNode(
                 id: simpleSkill.id,
                 originalValue: simpleSkill.originalValue,
                 newPosition: simpleSkill.newPosition,
                 reasonForReordering: simpleSkill.reasonForReordering,
-                isTitleNode: originalSkill?.isTitleNode ?? false,
-                treePath: originalSkill?.treePath ?? ""
+                isTitleNode: isTitleNode
             )
         }
         
@@ -166,20 +165,14 @@ class SkillReorderService {
     }
     
     /// Find the original skill data for the given ID
-    private func findOriginalSkill(with id: String, in resume: Resume) -> (isTitleNode: Bool, treePath: String)? {
+    private func findOriginalSkill(with id: String, in resume: Resume) -> Bool? {
         // Look up the skill in the resume's tree structure to get the original tree path and title info
         guard let node = resume.nodes.first(where: { $0.id == id }) else {
             return nil
         }
         
         // Determine if this is a title node by checking if it has children
-        let isTitleNode = node.children?.isEmpty == false
-        
-        // Generate a simple tree path - for now just use the node's name
-        // In a more sophisticated implementation, you'd walk up the tree to build a full path
-        let treePath = node.name
-        
-        return (isTitleNode: isTitleNode, treePath: treePath)
+        return node.children?.isEmpty == false
     }
     
     /// Save debug prompt to file if debug mode is enabled

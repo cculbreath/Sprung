@@ -45,7 +45,7 @@ struct CoverLetterScore: Codable {
 }
 
 /// Response schema for best cover letter selection
-struct BestCoverLetterResponse: Codable, StructuredOutput {
+struct BestCoverLetterResponse: Codable {
     let strengthAndVoiceAnalysis: String
     let bestLetterUuid: String?  // Optional: Used only for FPTP voting
     let verdict: String
@@ -94,21 +94,6 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
         }
     }
     
-    // Backward compatibility initializer for FPTP voting
-    init(strengthAndVoiceAnalysis: String, bestLetterUuid: String, verdict: String) {
-        self.strengthAndVoiceAnalysis = strengthAndVoiceAnalysis
-        self.bestLetterUuid = bestLetterUuid
-        self.verdict = verdict
-        self.scoreAllocations = nil
-    }
-    
-    // Full initializer including score allocations
-    init(strengthAndVoiceAnalysis: String, bestLetterUuid: String?, verdict: String, scoreAllocations: [CoverLetterScore]?) {
-        self.strengthAndVoiceAnalysis = strengthAndVoiceAnalysis
-        self.bestLetterUuid = bestLetterUuid
-        self.verdict = verdict
-        self.scoreAllocations = scoreAllocations
-    }
 }
 
 @Observable class CoverLetterQuery {
@@ -279,11 +264,6 @@ struct BestCoverLetterResponse: Codable, StructuredOutput {
             email: profile.email,
             phone: profile.phone
         )
-    }
-    
-    // Method to update the applicant data later
-    func updateApplicant(_ newApplicant: Applicant) {
-        applicant = newApplicant
     }
     
     // MARK: - System Prompts

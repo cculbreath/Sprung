@@ -158,15 +158,10 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator()
     }
 
     class Coordinator: NSObject, WKNavigationDelegate {
-        var parent: MarkdownWebView
-
-        init(_ parent: MarkdownWebView) {
-            self.parent = parent
-        }
 
         // Example: Open external links in the system browser
         func webView(_: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct OpenRouterModelSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(OpenRouterService.self) private var openRouterService
 
@@ -390,5 +389,4 @@ struct CapabilityIndicator: View {
             .opacity(isSupported ? 1.0 : 0.3)
     }
 }
-
 

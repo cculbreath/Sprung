@@ -9,13 +9,13 @@ import Foundation
 import SwiftOpenAI
 
 /// Reasoning configuration for OpenRouter (matches their API format exactly)
-public struct OpenRouterReasoning: Codable {
+struct OpenRouterReasoning: Codable {
     /// Effort level: "high", "medium", or "low"
-    public let effort: String?
+    let effort: String?
     /// Whether to exclude reasoning tokens from response (false = include, true = exclude)
-    public let exclude: Bool?
+    let exclude: Bool?
     /// Maximum tokens for reasoning
-    public let maxTokens: Int?
+    let maxTokens: Int?
     
     enum CodingKeys: String, CodingKey {
         case effort
@@ -23,14 +23,8 @@ public struct OpenRouterReasoning: Codable {
         case maxTokens = "max_tokens"
     }
     
-    public init(effort: String? = nil, exclude: Bool? = nil, maxTokens: Int? = nil) {
-        self.effort = effort
-        self.exclude = exclude
-        self.maxTokens = maxTokens
-    }
-    
     /// Convenience initializer with includeReasoning parameter
-    public init(effort: String? = nil, includeReasoning: Bool = true, maxTokens: Int? = nil) {
+    init(effort: String? = nil, includeReasoning: Bool = true, maxTokens: Int? = nil) {
         self.effort = effort
         self.exclude = includeReasoning ? false : true  // false = include (don't exclude), true = exclude
         self.maxTokens = maxTokens
@@ -222,18 +216,6 @@ struct LLMRequestBuilder {
         )
     }
 
-    static func buildConversationRequest(
-        messages: [LLMMessage],
-        modelId: String,
-        temperature: Double
-    ) -> ChatCompletionParameters {
-        return ChatCompletionParameters(
-            messages: messages,
-            model: .custom(modelId),
-            temperature: temperature
-        )
-    }
-
     /// Build parameters for structured conversation requests
     static func buildStructuredConversationRequest<T: Codable>(
         messages: [LLMMessageDTO],
@@ -267,34 +249,4 @@ struct LLMRequestBuilder {
         }
     }
 
-    static func buildStructuredConversationRequest<T: Codable>(
-        messages: [LLMMessage],
-        modelId: String,
-        responseType: T.Type,
-        temperature: Double,
-        jsonSchema: JSONSchema? = nil
-    ) -> ChatCompletionParameters {
-        if let schema = jsonSchema {
-            let responseFormatSchema = JSONSchemaResponseFormat(
-                name: String(describing: responseType).lowercased(),
-                strict: true,
-                schema: schema
-            )
-            Logger.debug("📝 Conversation using structured output with JSON Schema enforcement")
-            return ChatCompletionParameters(
-                messages: messages,
-                model: .custom(modelId),
-                responseFormat: .jsonSchema(responseFormatSchema),
-                temperature: temperature
-            )
-        } else {
-            Logger.debug("📝 Conversation using basic JSON object mode (no schema enforcement)")
-            return ChatCompletionParameters(
-                messages: messages,
-                model: .custom(modelId),
-                responseFormat: .jsonObject,
-                temperature: temperature
-            )
-        }
-    }
 }

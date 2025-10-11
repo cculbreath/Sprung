@@ -9,9 +9,6 @@ struct ContentView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(NavigationStateService.self) private var navigationState
-    @Environment(LLMFacade.self) private var llmFacade
-    @Environment(AppEnvironment.self) private var appEnvironment
-    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     // DragInfo is inherited from ContentViewLaunch
 
@@ -24,10 +21,6 @@ struct ContentView: View {
     @State private var listingButtons = SaveButtons()
     @State private var hasVisitedResumeTab: Bool = false
     @State private var refPopup: Bool = false
-
-    // App Storage remains here as it's app-level config
-    @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
-    @AppStorage("availableStyles") var availableStylesString: String = "Typewriter"
 
     var body: some View {
         // Bindable references for selection binding

@@ -12,10 +12,7 @@ protocol Logging {
         level: Logger.Level,
         category: Logger.Category,
         message: String,
-        metadata: [String: String],
-        file: String,
-        function: String,
-        line: Int
+        metadata: [String: String]
     )
 }
 
@@ -33,10 +30,7 @@ final class OSLoggerBackend: Logging {
         level: Logger.Level,
         category: Logger.Category,
         message: String,
-        metadata: [String: String],
-        file: String,
-        function: String,
-        line: Int
+        metadata: [String: String]
     ) {
         let osLogger = logger(for: category)
         let combinedMessage = OSLoggerBackend.composeMessage(message, metadata: metadata)
@@ -162,27 +156,6 @@ final class Logger {
         #endif
     }
 
-    static func setConsoleOutput(enabled: Bool) {
-        configurationQueue.async(flags: .barrier) {
-            configuration.enableConsoleOutput = enabled
-        }
-    }
-
-    static func configure(subsystem: String) {
-        configurationQueue.async(flags: .barrier) {
-            configuration.subsystem = subsystem
-            backendLock.lock()
-            backend = OSLoggerBackend(subsystem: subsystem)
-            backendLock.unlock()
-        }
-    }
-
-    static func setBackend(_ backend: Logging) {
-        backendLock.lock()
-        self.backend = backend
-        backendLock.unlock()
-    }
-
     // MARK: - Logging Methods
 
     static func log(
@@ -212,10 +185,7 @@ final class Logger {
             level: level,
             category: category,
             message: sanitizedMessage,
-            metadata: metadata,
-            file: file,
-            function: function,
-            line: line
+            metadata: metadata
         )
 
         if shouldSaveDebugFiles && (level == .error || level == .warning) {

@@ -35,5 +35,4 @@ struct QuestionAnswer: Codable {
 /// Mode for resume query workflow
 enum ResumeQueryMode {
     case normal
-    case withClarifyingQuestions
 }

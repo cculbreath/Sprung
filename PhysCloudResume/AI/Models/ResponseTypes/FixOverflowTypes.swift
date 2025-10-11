@@ -16,15 +16,10 @@ struct RevisedSkillNode: Codable, Equatable {
     var id: String
     var newTitle: String?  // New title if changed
     var newDescription: String?  // New description if changed
-    var originalTitle: String  // Echoed back by LLM for context
-    var originalDescription: String  // Echoed back by LLM for context
-
     enum CodingKeys: String, CodingKey {
         case id
         case newTitle = "new_title"
         case newDescription = "new_description"
-        case originalTitle = "original_title"
-        case originalDescription = "original_description"
     }
 }
 

@@ -98,7 +98,6 @@ final class AppDependencies {
         let llmFacade = LLMFacade(
             client: client,
             llmService: llmService,
-            appState: appState,
             openRouterService: openRouterService,
             enabledLLMStore: enabledLLMStore,
             modelValidationService: appState.modelValidationService
@@ -123,7 +122,6 @@ final class AppDependencies {
             openRouterService: openRouterService,
             coverLetterService: coverLetterService,
             llmFacade: llmFacade,
-            modelValidationService: modelValidationService,
             debugSettingsStore: debugSettingsStore,
             templateStore: templateStore,
             templateSeedStore: templateSeedStore,

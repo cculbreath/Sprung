@@ -23,16 +23,6 @@ class TextResumeGenerator {
     func generateTextResume(for resume: Resume, template: String = "archer") throws -> String {
         return try renderTemplate(for: resume, template: template)
     }
-    
-    /// Generate text from a custom template string
-    func generateTextFromCustomTemplate(for resume: Resume, customText: String) throws -> String {
-        let context = try createTemplateContext(from: resume)
-        let processedContext = preprocessContextForText(context, from: resume)
-        let mustacheTemplate = try Mustache.Template(string: customText)
-        TemplateFilters.register(on: mustacheTemplate)
-        return try mustacheTemplate.render(processedContext)
-    }
-    
     // MARK: - Private Methods
     
     private func renderTemplate(for resume: Resume, template: String) throws -> String {
