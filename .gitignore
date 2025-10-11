@@ -5,7 +5,7 @@ weasy/
 physcloudresume/scripts/
 test_*
 # Ignore root-level generated files
-PhysCloudResume.zip
+Sprung.zip
 backup.txt
 combined_model_code.txt
 combined_output.txt

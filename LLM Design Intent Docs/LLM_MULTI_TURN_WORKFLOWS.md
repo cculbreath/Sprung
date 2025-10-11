@@ -47,7 +47,7 @@
 
 ## Overview
 
-This document analyzes the UX and LLM prompt workflows for multi-turn operations in the PhysCloudResume application.
+This document analyzes the UX and LLM prompt workflows for multi-turn operations in the Sprung application.
 
 
 ## 1. Fix Overflow / Does Content Fit Workflow

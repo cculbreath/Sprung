@@ -1,7 +1,7 @@
 # LLM Pass-off Summary
 
 ## Repository / Branch
-- **Location:** `/Users/cculbreath/devlocal/codebase/PhysCloudResume`
+- **Location:** `/Users/cculbreath/devlocal/codebase/Sprung`
 - **Current branch:** `SecondPassRefactor`
 - **Latest commit:** `c483129 chore: baseline before LLM cleanup` (baseline snapshot before any new LLM cleanup work)
 
@@ -51,7 +51,7 @@
 2. **Environment contexts**  
    ```
    <environment_context>
-     <cwd>/Users/cculbreath/devlocal/codebase/PhysCloudResume</cwd>
+     <cwd>/Users/cculbreath/devlocal/codebase/Sprung</cwd>
      <approval_policy>on-request</approval_policy>
      <sandbox_mode>workspace-write</sandbox_mode>
      <network_access>restricted</network_access>
