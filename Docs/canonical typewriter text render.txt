@@ -117,7 +117,7 @@ Owner, Photographer, Client Satisfaction Expert
 
 [Software Development] *Physics Cloud:* A custom learning management system
 built on the LAMP stack. *Chore Cloud:* Brings family chores and allowance
-tracking to mobile devices. *Physics Cloud Résumé:* Delivers a native macOS
+tracking to mobile devices. *Sprung:* Delivers a native macOS
 experience for tracking, preparing, and submitting job applications. *Mom’s
 Bills:* A multi-device, FileMaker-based relational database accounting platform.
 [Precision Machining] *Classically Trained* by a master machinist in

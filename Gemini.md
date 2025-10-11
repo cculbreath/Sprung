@@ -58,7 +58,7 @@ This file provides guidance to Gemini when working with code in this repository.
 - I will use optional fields in structs when the API might not always return a value.
 
 ## Systematic Debugging
-- I will use the project's Logger utility at `/PhysCloudResume/Shared/Utilities/Logger.swift` for all logging.
+- I will use the project's Logger utility at `/Sprung/Shared/Utilities/Logger.swift` for all logging.
 - I will understand and use the debug level system: "None", "Basic", or "Verbose".
 - I will choose appropriate log levels for my code.
 - I will use descriptive emoji prefixes for context: 🚀 start, 📊 progress, ✅ success, ❌ error, 🎯 key events.

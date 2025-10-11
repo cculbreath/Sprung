@@ -14,7 +14,7 @@ As of 6/11/2025 this document is somewhat out of date.
 OVERVIEW
 --------
 
-This document analyzes all LLM operations in the PhysCloudResume codebase to 
+This document analyzes all LLM operations in the Sprung codebase to 
 design a unified, clean architecture. The app has successfully completed Phase 4 
 of migration to a unified OpenRouter-based system with complete LLM architecture unification.
 

@@ -1,6 +1,6 @@
-# Physics Cloud Résumé
+# Sprung
 
-Physics Cloud Résumé is a native macOS application that stream-lines every
+Sprung is a native macOS application that stream-lines every
 step of the modern job–search workflow: collecting postings, tailoring
 résumés, generating cover letters, tracking application status and even
 auditing your material with Gen-AI.  The project is written entirely in Swift
@@ -11,7 +11,7 @@ using SwiftUI for the interface and Swift Data for local persistence.
 ## Why another job-search app?
 
 Most tools only focus on one piece of the puzzle (e.g. a résumé builder or
-an application tracker).  Physics Cloud Résumé keeps everything in the same
+an application tracker).  Sprung keeps everything in the same
 place **and** adds an opinionated AI layer so you can
 
 * 📝 **Generate, review & version résumés** – import existing files or build
@@ -63,14 +63,14 @@ Key points
   through the injected dependencies.
 
 For a deep dive into the AI sub-system take a look at
-`PhysCloudResume/AI/README.md`.
+`Sprung/AI/README.md`.
 
 ## Folder overview
 
 ```
 Assets.xcassets/        App icons & custom SF Symbols
 Docs/                   Planning docs & canonical résumé JSON
-PhysCloudResume/        Source code (SwiftUI, SwiftData, AI module, …)
+Sprung/        Source code (SwiftUI, SwiftData, AI module, …)
 ├─ App/                 @main entry-point & high-level state
 ├─ AI/                  LLM clients, services, providers & views
 ├─ DataManagers/        SwiftData store helpers
@@ -93,17 +93,17 @@ Tests/                  XCTRuntimeAssertions based unit tests
 1. Clone the repo
 
    ```bash
-   git clone https://github.com/your-org/PhysCloudResume.git
-   cd PhysCloudResume
+   git clone https://github.com/your-org/Sprung.git
+   cd Sprung
    ```
 
 2. Open the Xcode project
 
    ```bash
-   open PhysCloudResume.xcodeproj
+   open Sprung.xcodeproj
    ```
 
-3. Add your API keys to the *Physics Cloud Résumé* target → *Signing & 
+3. Add your API keys to the *Sprung* target → *Signing & 
    Capabilities* → *Environment Variables* (or export them in your shell).
 
 4. Build & run. The app stores exports alongside the résumé record and exposes
@@ -111,7 +111,7 @@ Tests/                  XCTRuntimeAssertions based unit tests
 
 ## Running tests
 
-`⌘` + `U` runs `xcodebuild test` for the `PhysCloudResume` scheme. Current
+`⌘` + `U` runs `xcodebuild test` for the `Sprung` scheme. Current
 coverage focuses on template builders and AI DTO transforms; UI coverage is
 manual for now.
 
