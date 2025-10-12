@@ -59,7 +59,7 @@ struct TemplateEditorSidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 160)
+        .frame(minWidth: 140)
         .background(Color(NSColor.controlBackgroundColor))
         .padding(.top, 4)
     }
