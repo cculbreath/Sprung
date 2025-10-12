@@ -26,6 +26,7 @@ class ResumeReviseViewModel {
     private let exportCoordinator: ResumeExportCoordinator
     private let validationService: RevisionValidationService
     private let streamingService: RevisionStreamingService
+    private let completionService: RevisionCompletionService
     
     // MARK: - UI State (ViewModel Layer)
     var showResumeRevisionSheet: Bool = false {
@@ -64,7 +65,8 @@ class ResumeReviseViewModel {
         reasoningStreamManager: ReasoningStreamManager,
         exportCoordinator: ResumeExportCoordinator,
         validationService: RevisionValidationService = RevisionValidationService(),
-        streamingService: RevisionStreamingService? = nil
+        streamingService: RevisionStreamingService? = nil,
+        completionService: RevisionCompletionService = RevisionCompletionService()
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
@@ -75,6 +77,7 @@ class ResumeReviseViewModel {
             llm: llmFacade,
             reasoningStreamManager: reasoningStreamManager
         )
+        self.completionService = completionService
     }
     
     func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {
@@ -410,35 +413,33 @@ class ResumeReviseViewModel {
         }
         isCompletingReview = true
         defer { isCompletingReview = false }
-        
-        // Merge approved feedback from previous rounds with current feedback
-        let allFeedbackNodes = approvedFeedbackNodes + feedbackNodes
-        
-        // Log statistics and apply changes using all feedback
-        allFeedbackNodes.logFeedbackStatistics()
-        allFeedbackNodes.applyAcceptedChanges(to: resume, exportCoordinator: exportCoordinator)
-        
-        // Check for resubmission using all feedback
-        let nodesToResubmit = allFeedbackNodes.nodesRequiringAIResubmission
-        
-        if !nodesToResubmit.isEmpty {
-            Logger.debug("Resubmitting \(nodesToResubmit.count) nodes to AI...")
+
+        // Use completion service to determine next steps
+        let result = completionService.completeReviewWorkflow(
+            feedbackNodes: feedbackNodes,
+            approvedFeedbackNodes: approvedFeedbackNodes,
+            resume: resume,
+            exportCoordinator: exportCoordinator
+        )
+
+        switch result {
+        case .requiresResubmission(let nodesToResubmit, _):
             // Keep only nodes that need AI intervention for the next round
             feedbackNodes = nodesToResubmit
-            nodesToResubmit.logResubmissionSummary()
-            
+
             // Start AI resubmission workflow
             startAIResubmission(with: resume)
-        } else {
+
+        case .finished:
             Logger.debug("No nodes need resubmission. All changes applied, dismissing sheet...")
             Logger.debug("🔍 [completeReviewWorkflow] Setting showResumeRevisionSheet = false")
             Logger.debug("🔍 [completeReviewWorkflow] Current showResumeRevisionSheet value: \(showResumeRevisionSheet)")
-            
+
             // Clear all state before dismissing
             approvedFeedbackNodes = []
             feedbackNodes = []
             resumeRevisions = []
-            
+
             showResumeRevisionSheet = false
             Logger.debug("🔍 [completeReviewWorkflow] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
             markWorkflowCompleted(reset: true)
@@ -449,16 +450,13 @@ class ResumeReviseViewModel {
     private func attemptAutomaticCompletionIfReady(resume: Resume) {
         guard !resumeRevisions.isEmpty else { return }
         guard !isCompletingReview else { return }
-        
-        let respondedIds = feedbackNodes
-            .filter { $0.actionRequested != .unevaluated }
-            .map { $0.id }
-        
-        let respondedSet = Set(respondedIds)
-        let expectedSet = Set(resumeRevisions.map { $0.id })
-        
-        guard expectedSet.isSubset(of: respondedSet) else { return }
-        
+
+        // Check if all revisions have responses using completion service
+        guard completionService.allRevisionsHaveResponses(
+            feedbackNodes: feedbackNodes,
+            resumeRevisions: resumeRevisions
+        ) else { return }
+
         Logger.debug("✅ All revision nodes have responses. Completing workflow automatically.")
         completeReviewWorkflow(with: resume)
     }
@@ -524,10 +522,24 @@ class ResumeReviseViewModel {
                 let aiActions: Set<PostReviewAction> = [.revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment]
                 return aiActions.contains(node.actionRequested)
             }
-            
+
             Logger.debug("🔄 Resubmitting \(nodesToResubmit.count) nodes to AI")
-            
-            let revisionPrompt = createRevisionPrompt(feedbackNodes: nodesToResubmit)
+
+            // Use completion service to create revision prompt
+            let result = completionService.completeReviewWorkflow(
+                feedbackNodes: nodesToResubmit,
+                approvedFeedbackNodes: [],
+                resume: resume,
+                exportCoordinator: exportCoordinator
+            )
+
+            guard case .requiresResubmission(_, let revisionPrompt) = result else {
+                Logger.error("Expected resubmission result but got finished")
+                aiResubmit = false
+                workflowInProgress = false
+                showResumeRevisionSheet = true
+                return
+            }
             
             // Check if model supports reasoning for streaming during resubmission
             let model = openRouterService.findModel(id: modelId)
@@ -775,30 +787,6 @@ class ResumeReviseViewModel {
         isCommenting = false
         isMoreCommenting = false
         isEditingResponse = false
-    }
-    
-    // MARK: - Private Helpers
-
-    /// Create a revision prompt from feedback nodes
-    private func createRevisionPrompt(feedbackNodes: [FeedbackNode]) -> String {
-        var prompt = "Please revise the following items based on the feedback provided:\n\n"
-        
-        for (index, node) in feedbackNodes.enumerated() {
-            prompt += "## Item \(index + 1)\n"
-            prompt += "Original Text: \(node.originalValue)\n"
-            prompt += "Previous Revision: \(node.proposedRevision)\n"
-            prompt += "Action Requested: \(node.actionRequested.rawValue)\n"
-            
-            if !node.reviewerComments.isEmpty {
-                prompt += "Reviewer Comments: \(node.reviewerComments)\n"
-            }
-            
-            prompt += "\n"
-        }
-        
-        prompt += "Please provide improved revisions that address the feedback, maintaining the same JSON format as before."
-        
-        return prompt
     }
     
 }
