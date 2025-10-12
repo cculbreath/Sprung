@@ -18,12 +18,25 @@ struct LLMStreamingHandle {
 @Observable
 @MainActor
 final class LLMFacade {
+    enum Backend: CaseIterable {
+        case openRouter
+        case openAI
+
+        var displayName: String {
+            switch self {
+            case .openRouter: return "OpenRouter"
+            case .openAI: return "OpenAI"
+            }
+        }
+    }
+
     private let client: LLMClient
     private let llmService: LLMService // temporary bridge for conversation flows
     private let openRouterService: OpenRouterService
     private let enabledLLMStore: EnabledLLMStore?
     private let modelValidationService: ModelValidationService
     private var activeStreamingTasks: [UUID: Task<Void, Never>] = [:]
+    private var backendClients: [Backend: LLMClient] = [:]
 
     init(
         client: LLMClient,
@@ -37,6 +50,26 @@ final class LLMFacade {
         self.openRouterService = openRouterService
         self.enabledLLMStore = enabledLLMStore
         self.modelValidationService = modelValidationService
+        backendClients[.openRouter] = client
+    }
+
+    func registerClient(_ client: LLMClient, for backend: Backend) {
+        backendClients[backend] = client
+    }
+
+    func availableBackends() -> [Backend] {
+        Backend.allCases.filter { backendClients[$0] != nil }
+    }
+
+    func hasBackend(_ backend: Backend) -> Bool {
+        backendClients[backend] != nil
+    }
+
+    private func resolveClient(for backend: Backend) throws -> LLMClient {
+        guard let resolved = backendClients[backend] else {
+            throw LLMError.clientError("Backend \(backend.displayName) is not configured")
+        }
+        return resolved
     }
 
     private func registerStreamingTask(_ task: Task<Void, Never>, for handleId: UUID) {
@@ -127,25 +160,69 @@ final class LLMFacade {
     }
 
     // Text
-    func executeText(prompt: String, modelId: String, temperature: Double? = nil) async throws -> String {
-        try await validate(modelId: modelId, requires: [])
-        return try await client.executeText(prompt: prompt, modelId: modelId, temperature: temperature)
+    func executeText(
+        prompt: String,
+        modelId: String,
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
+    ) async throws -> String {
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [])
+            return try await client.executeText(prompt: prompt, modelId: modelId, temperature: temperature)
+        }
+
+        let altClient = try resolveClient(for: backend)
+        return try await altClient.executeText(prompt: prompt, modelId: modelId, temperature: temperature)
     }
 
-    func executeTextWithImages(prompt: String, modelId: String, images: [Data], temperature: Double? = nil) async throws -> String {
-        try await validate(modelId: modelId, requires: [.vision])
-        return try await client.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
+    func executeTextWithImages(
+        prompt: String,
+        modelId: String,
+        images: [Data],
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
+    ) async throws -> String {
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [.vision])
+            return try await client.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
+        }
+
+        let altClient = try resolveClient(for: backend)
+        return try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
     }
 
     // Structured
-    func executeStructured<T: Codable & Sendable>(prompt: String, modelId: String, as type: T.Type, temperature: Double? = nil) async throws -> T {
-        try await validate(modelId: modelId, requires: [.structuredOutput])
-        return try await client.executeStructured(prompt: prompt, modelId: modelId, as: type, temperature: temperature)
+    func executeStructured<T: Codable & Sendable>(
+        prompt: String,
+        modelId: String,
+        as type: T.Type,
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
+    ) async throws -> T {
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [.structuredOutput])
+            return try await client.executeStructured(prompt: prompt, modelId: modelId, as: type, temperature: temperature)
+        }
+
+        let altClient = try resolveClient(for: backend)
+        return try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type, temperature: temperature)
     }
 
-    func executeStructuredWithImages<T: Codable & Sendable>(prompt: String, modelId: String, images: [Data], as type: T.Type, temperature: Double? = nil) async throws -> T {
-        try await validate(modelId: modelId, requires: [.vision, .structuredOutput])
-        return try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
+    func executeStructuredWithImages<T: Codable & Sendable>(
+        prompt: String,
+        modelId: String,
+        images: [Data],
+        as type: T.Type,
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
+    ) async throws -> T {
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [.vision, .structuredOutput])
+            return try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
+        }
+
+        let altClient = try resolveClient(for: backend)
+        return try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
     }
 
     func executeFlexibleJSON<T: Codable & Sendable>(
@@ -153,16 +230,27 @@ final class LLMFacade {
         modelId: String,
         as type: T.Type,
         temperature: Double? = nil,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        backend: Backend = .openRouter
     ) async throws -> T {
         let required: [ModelCapability] = jsonSchema == nil ? [] : [.structuredOutput]
-        try await validate(modelId: modelId, requires: required)
-        return try await llmService.executeFlexibleJSON(
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: required)
+            return try await llmService.executeFlexibleJSON(
+                prompt: prompt,
+                modelId: modelId,
+                responseType: type,
+                temperature: temperature,
+                jsonSchema: jsonSchema
+            )
+        }
+
+        let altClient = try resolveClient(for: backend)
+        return try await altClient.executeStructured(
             prompt: prompt,
             modelId: modelId,
-            responseType: type,
-            temperature: temperature,
-            jsonSchema: jsonSchema
+            as: type,
+            temperature: temperature
         )
     }
 
@@ -172,8 +260,12 @@ final class LLMFacade {
         as type: T.Type,
         temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        backend: Backend = .openRouter
     ) async throws -> LLMStreamingHandle {
+        guard backend == .openRouter else {
+            throw LLMError.clientError("Structured streaming is not supported for backend \(backend.displayName)")
+        }
         var required: [ModelCapability] = [.structuredOutput]
         if reasoning != nil { required.append(.reasoning) }
         try await validate(modelId: modelId, requires: required)
@@ -278,8 +370,12 @@ final class LLMFacade {
         images: [Data] = [],
         temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        backend: Backend = .openRouter
     ) async throws -> LLMStreamingHandle {
+        guard backend == .openRouter else {
+            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
+        }
         var required: [ModelCapability] = images.isEmpty ? [] : [.vision]
         if reasoning != nil { required.append(.reasoning) }
         if jsonSchema != nil { required.append(.structuredOutput) }
@@ -330,8 +426,12 @@ final class LLMFacade {
         modelId: String,
         conversationId: UUID,
         images: [Data] = [],
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
     ) async throws -> String {
+        guard backend == .openRouter else {
+            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
+        }
         let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
         try await validate(modelId: modelId, requires: required)
 
@@ -351,8 +451,12 @@ final class LLMFacade {
         as type: T.Type,
         images: [Data] = [],
         temperature: Double? = nil,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        backend: Backend = .openRouter
     ) async throws -> T {
+        guard backend == .openRouter else {
+            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
+        }
         var required: [ModelCapability] = [.structuredOutput]
         if !images.isEmpty { required.append(.vision) }
         try await validate(modelId: modelId, requires: required)
@@ -372,8 +476,12 @@ final class LLMFacade {
         systemPrompt: String? = nil,
         userMessage: String,
         modelId: String,
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
     ) async throws -> (UUID, String) {
+        guard backend == .openRouter else {
+            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
+        }
         try await validate(modelId: modelId, requires: [])
         return try await llmService.startConversation(
             systemPrompt: systemPrompt,

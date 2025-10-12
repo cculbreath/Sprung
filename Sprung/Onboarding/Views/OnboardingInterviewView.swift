@@ -1,16 +1,19 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import SwiftyJSON
 
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewService.self) private var interviewService
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    @Environment(AppEnvironment.self) private var appEnvironment
 
     @State private var selectedModelId: String = ""
-    @State private var selectedBackend: OnboardingInterviewService.Backend = .openRouter
+    @State private var selectedBackend: LLMFacade.Backend = .openRouter
     @State private var userInput: String = ""
     @State private var shouldAutoScroll = true
+    @State private var linkedInURL: String = ""
+    @State private var fileImportError: String?
+    @State private var showImportError = false
 
     private let fallbackModelId = "gpt-4o"
 
@@ -28,12 +31,34 @@ struct OnboardingInterviewView: View {
                 chatPanel(service: service)
                 Divider()
                 artifactPanel(service: service)
-                    .frame(minWidth: 320)
+                    .frame(minWidth: 340)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 960, minHeight: 640)
-        .task { initializeModelSelectionIfNeeded() }
+        .frame(minWidth: 1000, minHeight: 680)
+        .task { initializeSelectionsIfNeeded() }
+        .sheet(isPresented: Binding(get: { service.pendingExtraction != nil }, set: { newValue in
+            if !newValue {
+                interviewService.cancelPendingExtraction()
+            }
+        })) {
+            if let pending = service.pendingExtraction {
+                ExtractionReviewSheet(
+                    extraction: pending,
+                    onConfirm: { updated, notes in
+                        Task { await interviewService.confirmPendingExtraction(updatedExtraction: updated, notes: notes) }
+                    },
+                    onCancel: {
+                        interviewService.cancelPendingExtraction()
+                    }
+                )
+            }
+        }
+        .alert("Import Failed", isPresented: $showImportError, presenting: fileImportError) { _ in
+            Button("OK") { fileImportError = nil }
+        } message: { message in
+            Text(message ?? "Unknown error")
+        }
     }
 
     // MARK: - Header
@@ -41,46 +66,13 @@ struct OnboardingInterviewView: View {
     private func header(service: OnboardingInterviewService) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 16) {
-                Picker("Model", selection: $selectedModelId) {
-                    ForEach(enabledLLMStore.enabledModels, id: \.modelId) { model in
-                        Text(model.displayName).tag(model.modelId)
-                    }
-                    if enabledLLMStore.enabledModels.isEmpty {
-                        Text("gpt-4o").tag(fallbackModelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 220)
-                .onChange(of: enabledLLMStore.enabledModels) { _, _ in
-                    initializeModelSelectionIfNeeded()
-                }
-
-                Picker("Backend", selection: $selectedBackend) {
-                    ForEach(OnboardingInterviewService.Backend.allCases, id: \.self) { backend in
-                        Text(backend.displayName)
-                            .tag(backend)
-                            .disabled(!backend.isAvailable)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 220)
-
-                Picker("Phase", selection: Binding(get: { service.currentPhase }, set: { service.setPhase($0) })) {
-                    ForEach(OnboardingPhase.allCases, id: \.self) { phase in
-                        Text(phase.displayName).tag(phase)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 300)
-
+                modelPicker
+                backendPicker
+                phasePicker(service: service)
                 Spacer()
-
-                Button {
-                    Task { await interviewService.startInterview(modelId: currentModelId(), backend: selectedBackend) }
-                } label: {
+                Button(action: { Task { await interviewService.startInterview(modelId: currentModelId(), backend: selectedBackend) } }) {
                     if service.isProcessing && !service.isActive {
-                        ProgressView()
-                            .controlSize(.small)
+                        ProgressView().controlSize(.small)
                     } else {
                         Label("Start Interview", systemImage: "play.fill")
                     }
@@ -95,12 +87,69 @@ struct OnboardingInterviewView: View {
                 .buttonStyle(.bordered)
             }
 
+            HStack(spacing: 12) {
+                Button("Upload Résumé") { importResume() }
+                Button("Import Artifact") { importArtifact() }
+
+                HStack(spacing: 4) {
+                    TextField("LinkedIn URL", text: $linkedInURL)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 250)
+                    Button("Add") { registerLinkedIn() }
+                        .buttonStyle(.bordered)
+                }
+
+                Toggle("Allow Web Search", isOn: Binding(get: { service.allowWebSearch }, set: { interviewService.setWebSearchConsent($0) }))
+                    .toggleStyle(.switch)
+            }
+
             if let error = service.lastError {
                 Text(error)
                     .foregroundColor(.red)
                     .font(.footnote)
             }
         }
+    }
+
+    private var modelPicker: some View {
+        Picker("Model", selection: $selectedModelId) {
+            ForEach(enabledLLMStore.enabledModels, id: \.modelId) { model in
+                Text(model.displayName).tag(model.modelId)
+            }
+            if enabledLLMStore.enabledModels.isEmpty {
+                Text(fallbackModelId).tag(fallbackModelId)
+            }
+        }
+        .pickerStyle(.menu)
+        .frame(width: 220)
+        .onChange(of: enabledLLMStore.enabledModels) { _, _ in
+            initializeSelectionsIfNeeded()
+        }
+    }
+
+    private var backendPicker: some View {
+        let backends = interviewService.availableBackends()
+        return Group {
+            if backends.count > 1 {
+                Picker("Backend", selection: $selectedBackend) {
+                    ForEach(backends, id: \.self) { backend in
+                        Text(backend.displayName).tag(backend)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 240)
+            }
+        }
+    }
+
+    private func phasePicker(service: OnboardingInterviewService) -> some View {
+        Picker("Phase", selection: Binding(get: { service.currentPhase }, set: { service.setPhase($0) })) {
+            ForEach(OnboardingPhase.allCases, id: \.self) { phase in
+                Text(phase.displayName).tag(phase)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 320)
     }
 
     // MARK: - Chat Panel
@@ -164,7 +213,7 @@ struct OnboardingInterviewView: View {
             }
             .padding(.all, 16)
         }
-        .frame(minWidth: 600)
+        .frame(minWidth: 620)
     }
 
     private func send(_ text: String) {
@@ -191,11 +240,23 @@ struct OnboardingInterviewView: View {
                     .buttonStyle(.bordered)
                 }
 
+                if !service.schemaIssues.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Schema Alerts")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                        ForEach(service.schemaIssues, id: \.self) { issue in
+                            Label(issue, systemImage: "exclamationmark.triangle")
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+
                 if let profileJSON = service.artifacts.applicantProfile {
                     ArtifactSection(title: "Applicant Profile", content: formattedJSON(profileJSON))
                 }
 
-                if let defaultsJSON = service.artifacts.defaultValues {
+               if let defaultsJSON = service.artifacts.defaultValues {
                     ArtifactSection(title: "Default Values", content: formattedJSON(defaultsJSON))
                 }
 
@@ -236,6 +297,17 @@ struct OnboardingInterviewView: View {
                     }
                 }
 
+                if !service.uploadedItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Uploads")
+                            .font(.headline)
+                        ForEach(service.uploadedItems) { item in
+                            Label("\(item.kind.rawValue.capitalized): \(item.name) (ID: \(item.id))", systemImage: "doc")
+                                .font(.caption)
+                        }
+                    }
+                }
+
                 if service.isProcessing {
                     ProgressView("Processing…")
                         .progressViewStyle(.linear)
@@ -257,13 +329,13 @@ struct OnboardingInterviewView: View {
         return fallbackModelId
     }
 
-    private func initializeModelSelectionIfNeeded() {
+    private func initializeSelectionsIfNeeded() {
         if selectedModelId.isEmpty {
-            if let first = enabledLLMStore.enabledModels.first?.modelId {
-                selectedModelId = first
-            } else {
-                selectedModelId = fallbackModelId
-            }
+            selectedModelId = enabledLLMStore.enabledModels.first?.modelId ?? fallbackModelId
+        }
+        let backends = interviewService.availableBackends()
+        if !backends.contains(selectedBackend) {
+            selectedBackend = backends.first ?? .openRouter
         }
     }
 
@@ -271,17 +343,53 @@ struct OnboardingInterviewView: View {
         json.rawString(options: [.prettyPrinted]) ?? json.rawString() ?? ""
     }
 
-    private func formattedJSON(_ json: JSON?) -> String {
-        guard let json else { return "—" }
-        return formattedJSON(json)
+    private func importResume() {
+        openPanel(allowedTypes: [.pdf, .text, .plainText, .json]) { url in
+            do {
+                try interviewService.registerResume(fileURL: url)
+            } catch {
+                fileImportError = error.localizedDescription
+                showImportError = true
+            }
+        }
     }
 
-    private func formattedJSON(_ jsonString: String) -> String {
-        jsonString
+    private func importArtifact() {
+        openPanel(allowedTypes: [.pdf, .text, .plainText, .json]) { url in
+            do {
+                let data = try Data(contentsOf: url)
+                _ = interviewService.registerArtifact(data: data, suggestedName: url.lastPathComponent)
+            } catch {
+                fileImportError = error.localizedDescription
+                showImportError = true
+            }
+        }
     }
+
+    private func registerLinkedIn() {
+        guard let url = URL(string: linkedInURL.trimmingCharacters(in: .whitespacesAndNewlines)), !linkedInURL.isEmpty else {
+            fileImportError = "Please enter a valid LinkedIn URL."
+            showImportError = true
+            return
+        }
+        _ = interviewService.registerLinkedInProfile(url: url)
+        linkedInURL = ""
+    }
+
+    private func openPanel(allowedTypes: [UTType], completion: @escaping (URL) -> Void) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = allowedTypes
+        panel.begin { result in
+            guard result == .OK, let url = panel.url else { return }
+            completion(url)
+        }
+    }
+
+    // MARK: - Supporting Types
+
 }
-
-// MARK: - Subviews
 
 private struct MessageBubble: View {
     let message: OnboardingMessage
@@ -301,7 +409,7 @@ private struct MessageBubble: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: 480, alignment: message.role == .user ? .trailing : .leading)
+            .frame(maxWidth: 520, alignment: message.role == .user ? .trailing : .leading)
 
             if message.role != .user { Spacer() }
         }
@@ -329,7 +437,7 @@ private struct ArtifactSection: View {
             Text(title)
                 .font(.headline)
             ScrollView {
-                Text(content)
+                Text(content.isEmpty ? "—" : content)
                     .font(.system(.body, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -357,40 +465,105 @@ private struct KnowledgeCardView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            let metrics = card["metrics"].arrayValue
+            let metrics = card["metrics"].arrayValue.compactMap { $0.string }
             if !metrics.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Metrics")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    ForEach(metrics.compactMap { $0.string }, id: \.self) { metric in
+                    ForEach(metrics, id: \.self) { metric in
                         Text("• \(metric)")
                             .font(.caption)
                     }
                 }
             }
-            let skills = card["skills"].arrayValue
+            let skills = card["skills"].arrayValue.compactMap { $0.string }
             if !skills.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Skills")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text(skills.compactMap { $0.string }.joined(separator: ", "))
+                    Text(skills.joined(separator: ", "))
                         .font(.caption)
-                }
-            }
-            let quotes = card["quotes"].arrayValue
-            if !quotes.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Quotes")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    ForEach(quotes.compactMap { $0.string }, id: \.self) { quote in
-                        Text("“\(quote)”")
-                            .font(.caption)
-                    }
                 }
             }
         }
+    }
+}
+
+private struct ExtractionReviewSheet: View {
+    let extraction: OnboardingInterviewService.PendingExtraction
+    let onConfirm: (JSON, String?) -> Void
+    let onCancel: () -> Void
+
+    @State private var jsonText: String
+    @State private var notes: String = ""
+    @State private var errorMessage: String?
+
+    init(
+        extraction: OnboardingInterviewService.PendingExtraction,
+        onConfirm: @escaping (JSON, String?) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.extraction = extraction
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+        self._jsonText = State(initialValue: extraction.rawExtraction.rawString(options: [.prettyPrinted]) ?? extraction.rawExtraction.description)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Review Résumé Extraction")
+                .font(.title2)
+                .bold()
+
+            if !extraction.uncertainties.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Uncertain Fields")
+                        .font(.headline)
+                        .foregroundColor(.orange)
+                    ForEach(extraction.uncertainties, id: \.self) { item in
+                        Label(item, systemImage: "questionmark.circle")
+                            .foregroundColor(.orange)
+                    }
+                }
+            }
+
+            Text("Raw Extraction (editable JSON)")
+                .font(.headline)
+
+            TextEditor(text: $jsonText)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 240)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.2))
+                )
+
+            TextField("Notes for the assistant (optional)", text: $notes)
+                .textFieldStyle(.roundedBorder)
+
+            if let error = errorMessage {
+                Text(error)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { onCancel() }
+                Button("Confirm") {
+                    guard let data = jsonText.data(using: .utf8),
+                          let json = try? JSON(data: data) else {
+                        errorMessage = "JSON is invalid. Please correct it before confirming."
+                        return
+                    }
+                    onConfirm(json, notes.isEmpty ? nil : notes)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 560, minHeight: 480)
     }
 }

@@ -106,6 +106,11 @@ The resume system uses a fully array-based JSON structure to ensure order preser
 - Handle nil cases explicitly with appropriate fallbacks or errors
 - Be cautious with implicitly unwrapped optionals
 
+### No Stubs or Placeholder Code
+- Do not add stub implementations, placeholder switches, or dummy return values during development.
+- If a feature is in progress, either complete the implementation or leave the call site untouched.
+- Temporary scaffolding must be accompanied by working behavior and clear removal plans—avoid `TODO`, `fatalError`, or silent fallbacks as shortcuts.
+
 ### Swift Concurrency and Actor Isolation
 - **MainActor Usage**: Mark functions with `@MainActor` when they need to access main actor-isolated properties
 - **Actor Isolation**: Remove `@MainActor` from services that don't need UI thread access to avoid compilation conflicts
