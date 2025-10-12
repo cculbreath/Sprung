@@ -21,6 +21,8 @@ final class AppEnvironment {
     let templateStore: TemplateStore
     let templateSeedStore: TemplateSeedStore
     let resumeExportCoordinator: ResumeExportCoordinator
+    let applicantProfileStore: ApplicantProfileStore
+    let onboardingInterviewService: OnboardingInterviewService
     var launchState: LaunchState
 
     init(
@@ -33,6 +35,8 @@ final class AppEnvironment {
         templateStore: TemplateStore,
         templateSeedStore: TemplateSeedStore,
         resumeExportCoordinator: ResumeExportCoordinator,
+        applicantProfileStore: ApplicantProfileStore,
+        onboardingInterviewService: OnboardingInterviewService,
         launchState: LaunchState
     ) {
         self.appState = appState
@@ -44,6 +48,8 @@ final class AppEnvironment {
         self.templateStore = templateStore
         self.templateSeedStore = templateSeedStore
         self.resumeExportCoordinator = resumeExportCoordinator
+        self.applicantProfileStore = applicantProfileStore
+        self.onboardingInterviewService = onboardingInterviewService
         self.launchState = launchState
     }
 }

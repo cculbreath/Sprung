@@ -5,11 +5,13 @@ import Mustache
 @MainActor
 class NativePDFGenerator: NSObject, ObservableObject {
     private let templateStore: TemplateStore
+    private let profileProvider: ApplicantProfileProviding
     private var webView: WKWebView?
     private var currentCompletion: ((Result<Data, Error>) -> Void)?
     
-    init(templateStore: TemplateStore) {
+    init(templateStore: TemplateStore, profileProvider: ApplicantProfileProviding) {
         self.templateStore = templateStore
+        self.profileProvider = profileProvider
         super.init()
         setupWebView()
     }
@@ -179,7 +181,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         let resumeData = try ResumeTemplateDataBuilder.buildContext(from: resume)
         
         // Get applicant profile for contact information
-        let applicant = ApplicantProfileManager.shared.getProfile()
+        let applicant = profileProvider.currentProfile()
         
         // Create complete context with contact info + resume data
         var context = resumeData

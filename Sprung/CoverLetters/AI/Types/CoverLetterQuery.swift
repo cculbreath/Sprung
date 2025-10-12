@@ -224,6 +224,7 @@ struct BestCoverLetterResponse: Codable {
         resume: Resume,
         jobApp: JobApp,
         exportCoordinator: ResumeExportCoordinator,
+        applicantProfile: ApplicantProfile,
         saveDebugPrompt: Bool = false
     ) {
         self.coverLetter = coverLetter
@@ -231,19 +232,7 @@ struct BestCoverLetterResponse: Codable {
         self.jobApp = jobApp
         self.saveDebugPrompt = saveDebugPrompt
         self.exportCoordinator = exportCoordinator
-        
-        // Create a complete applicant profile with default values
-        let profile = ApplicantProfile()
-        applicant = Applicant(
-            name: profile.name,
-            address: profile.address,
-            city: profile.city,
-            state: profile.state,
-            zip: profile.zip,
-            websites: profile.websites,
-            email: profile.email,
-            phone: profile.phone
-        )
+        applicant = Applicant(profile: applicantProfile)
     }
     
     // MARK: - System Prompts
@@ -338,6 +327,7 @@ struct BestCoverLetterResponse: Codable {
                 coverLetter: coverLetter,
                 resume: resume,
                 mode: .rewrite,
+                applicant: applicant,
                 customFeedbackString: feedback
             )
         }

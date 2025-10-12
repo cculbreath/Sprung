@@ -7,17 +7,20 @@ class BatchCoverLetterGenerator {
     private let llmFacade: LLMFacade
     private let coverLetterService: CoverLetterService
     private let exportCoordinator: ResumeExportCoordinator
+    private let applicantProfileStore: ApplicantProfileStore
 
     init(
         coverLetterStore: CoverLetterStore,
         llmFacade: LLMFacade,
         coverLetterService: CoverLetterService,
-        exportCoordinator: ResumeExportCoordinator
+        exportCoordinator: ResumeExportCoordinator,
+        applicantProfileStore: ApplicantProfileStore
     ) {
         self.coverLetterStore = coverLetterStore
         self.llmFacade = llmFacade
         self.coverLetterService = coverLetterService
         self.exportCoordinator = exportCoordinator
+        self.applicantProfileStore = applicantProfileStore
     }
 
     private func executeText(_ prompt: String, modelId: String) async throws -> String {
@@ -279,6 +282,8 @@ class BatchCoverLetterGenerator {
         // Debug: Verify jobApp parameter is provided
         Logger.debug("🔍 generateSingleCoverLetter called with jobApp: \(jobApp.id.uuidString)")
         
+        let applicantProfile = applicantProfileStore.currentProfile()
+        
         // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model
         let letterName: String
@@ -308,6 +313,7 @@ class BatchCoverLetterGenerator {
                 resume: resume,
                 jobApp: jobApp,
                 exportCoordinator: exportCoordinator,
+                applicantProfile: applicantProfile,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             
@@ -340,6 +346,7 @@ class BatchCoverLetterGenerator {
                 resume: resume,
                 jobApp: jobApp,
                 exportCoordinator: exportCoordinator,
+                applicantProfile: applicantProfile,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             

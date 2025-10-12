@@ -25,6 +25,9 @@ final class AppDependencies {
     let resumeExportCoordinator: ResumeExportCoordinator
     let templateStore: TemplateStore
     let templateSeedStore: TemplateSeedStore
+    let applicantProfileStore: ApplicantProfileStore
+    let onboardingArtifactStore: OnboardingArtifactStore
+    let onboardingInterviewService: OnboardingInterviewService
     let llmService: LLMService
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
@@ -54,8 +57,16 @@ final class AppDependencies {
         )
         TemplateTextResetMigration.runIfNeeded(templateStore: templateStore)
 
+        let applicantProfileStore = ApplicantProfileStore(context: modelContext)
+        self.applicantProfileStore = applicantProfileStore
+        let onboardingArtifactStore = OnboardingArtifactStore()
+        self.onboardingArtifactStore = onboardingArtifactStore
+
         // Core export orchestration
-        let resumeExportService = ResumeExportService(templateStore: templateStore)
+        let resumeExportService = ResumeExportService(
+            templateStore: templateStore,
+            applicantProfileStore: applicantProfileStore
+        )
         let resumeExportCoordinator = ResumeExportCoordinator(
             exportService: resumeExportService
         )
@@ -64,6 +75,7 @@ final class AppDependencies {
         self.resStore = ResStore(
             context: modelContext,
             exportCoordinator: resumeExportCoordinator,
+            applicantProfileStore: applicantProfileStore,
             templateSeedStore: templateSeedStore
         )
         self.resRefStore = ResRefStore(context: modelContext)
@@ -71,7 +83,11 @@ final class AppDependencies {
         self.reasoningStreamManager = ReasoningStreamManager()
 
         // Dependent stores
-        self.coverLetterStore = CoverLetterStore(context: modelContext, refStore: coverRefStore)
+        self.coverLetterStore = CoverLetterStore(
+            context: modelContext,
+            refStore: coverRefStore,
+            applicantProfileStore: applicantProfileStore
+        )
         self.jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
         self.enabledLLMStore = EnabledLLMStore(modelContext: modelContext)
         self.navigationState = NavigationStateService()
@@ -104,16 +120,25 @@ final class AppDependencies {
 
         let coverLetterService = CoverLetterService(
             llmFacade: llmFacade,
-            exportCoordinator: resumeExportCoordinator
+            exportCoordinator: resumeExportCoordinator,
+            applicantProfileStore: applicantProfileStore
         )
 
         let resumeReviseViewModel = ResumeReviseViewModel(
             llmFacade: llmFacade,
             openRouterService: openRouterService,
             reasoningStreamManager: reasoningStreamManager,
-            exportCoordinator: resumeExportCoordinator
+            exportCoordinator: resumeExportCoordinator,
+            applicantProfileStore: applicantProfileStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
+
+        let onboardingInterviewService = OnboardingInterviewService(
+            llmFacade: llmFacade,
+            artifactStore: onboardingArtifactStore,
+            applicantProfileStore: applicantProfileStore
+        )
+        self.onboardingInterviewService = onboardingInterviewService
 
         self.appEnvironment = AppEnvironment(
             appState: appState,
@@ -125,6 +150,8 @@ final class AppDependencies {
             templateStore: templateStore,
             templateSeedStore: templateSeedStore,
             resumeExportCoordinator: resumeExportCoordinator,
+            applicantProfileStore: applicantProfileStore,
+            onboardingInterviewService: onboardingInterviewService,
             launchState: .ready
         )
 

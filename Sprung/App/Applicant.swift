@@ -62,16 +62,13 @@ class ApplicantProfile {
     }
 }
 
-// Legacy struct for backward compatibility during transition
 struct Applicant {
     var profile: ApplicantProfile
 
-    @MainActor
-    init(profile: ApplicantProfile? = nil) {
-        self.profile = profile ?? ApplicantProfileManager.shared.getProfile()
+    init(profile: ApplicantProfile) {
+        self.profile = profile
     }
 
-    // Non-MainActor initializer that directly sets values - for use in non-MainActor contexts
     init(
         name: String,
         address: String,
@@ -95,6 +92,11 @@ struct Applicant {
         )
     }
 
+    @MainActor
+    init(provider: ApplicantProfileProviding) {
+        self.profile = provider.currentProfile()
+    }
+
     // Forward properties to maintain backward compatibility
     var name: String { profile.name }
     var address: String { profile.address }
@@ -104,99 +106,4 @@ struct Applicant {
     var websites: String { profile.websites }
     var email: String { profile.email }
     var phone: String { profile.phone }
-}
-
-// Singleton manager for ApplicantProfile
-@MainActor
-class ApplicantProfileManager {
-    static let shared = ApplicantProfileManager()
-    private var cachedProfile: ApplicantProfile?
-    private var modelContainer: ModelContainer?
-
-    private init() {
-        setupModelContainer()
-    }
-
-    /// Creates a `ModelContainer` that is schema‑compatible with the container
-    /// defined at the application root.  Using the same full set of model
-    /// types prevents SQLite migration problems that occur when multiple
-    /// containers that reference the same underlying store are created with
-    /// different schemas.  (The crash reported as *no such table: ZJOBAPP* was
-    /// a direct result of this mismatch.)
-    ///
-    /// We therefore build the container with **all** model types that the main
-    /// application declares instead of only `ApplicantProfile`.  That way every
-    /// `ModelContainer` in the process shares an identical schema and can
-    /// safely coexist while pointing at the same `default.store` file.
-    private func setupModelContainer() {
-        do {
-            // Use the migration-enabled container factory to ensure schema compatibility
-            modelContainer = try ModelContainer.createWithMigration()
-        } catch {
-            Logger.error("Failed to setup model container with migration: \(error)")
-        }
-    }
-
-    func getProfile() -> ApplicantProfile {
-        if let cachedProfile {
-            return cachedProfile
-        }
-
-        // Try to load from SwiftData
-        if let loadedProfile = loadProfileFromSwiftData() {
-            cachedProfile = loadedProfile
-            return loadedProfile
-        }
-
-        // Create default profile if none exists
-        let defaultProfile = ApplicantProfile()
-        saveProfile(defaultProfile)
-        cachedProfile = defaultProfile
-        return defaultProfile
-    }
-
-    private func loadProfileFromSwiftData() -> ApplicantProfile? {
-        guard let context = modelContainer?.mainContext else {
-            return nil
-        }
-
-        do {
-            let descriptor = FetchDescriptor<ApplicantProfile>(sortBy: [])
-            let profiles = try context.fetch(descriptor)
-            return profiles.first
-        } catch {
-            return nil
-        }
-    }
-
-    func saveProfile(_ profile: ApplicantProfile) {
-        guard let context = modelContainer?.mainContext else {
-            return
-        }
-
-        do {
-            // Check if we already have a profile
-            let descriptor = FetchDescriptor<ApplicantProfile>(sortBy: [])
-            let existingProfiles = try context.fetch(descriptor)
-
-            if let existingProfile = existingProfiles.first {
-                // Update existing profile
-                existingProfile.name = profile.name
-                existingProfile.address = profile.address
-                existingProfile.city = profile.city
-                existingProfile.state = profile.state
-                existingProfile.zip = profile.zip
-                existingProfile.websites = profile.websites
-                existingProfile.email = profile.email
-                existingProfile.phone = profile.phone
-                existingProfile.signatureData = profile.signatureData
-            } else {
-                // Insert new profile
-                context.insert(profile)
-            }
-
-            try context.save()
-            cachedProfile = profile
-        } catch {}
-    }
 }

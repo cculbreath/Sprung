@@ -41,6 +41,7 @@ class MultiModelCoverLetterService {
     private var llmFacade: LLMFacade?
     private var modelContext: ModelContext?
     private var exportCoordinator: ResumeExportCoordinator?
+    private var applicantProfileStore: ApplicantProfileStore?
     
     // MARK: - Initialization
     init() {}
@@ -51,7 +52,8 @@ class MultiModelCoverLetterService {
         coverLetterStore: CoverLetterStore,
         enabledLLMStore: EnabledLLMStore,
         llmFacade: LLMFacade,
-        exportCoordinator: ResumeExportCoordinator
+        exportCoordinator: ResumeExportCoordinator,
+        applicantProfileStore: ApplicantProfileStore
     ) {
         self.appState = appState
         self.jobAppStore = jobAppStore
@@ -60,6 +62,7 @@ class MultiModelCoverLetterService {
         self.modelContext = coverLetterStore.modelContext
         self.llmFacade = llmFacade
         self.exportCoordinator = exportCoordinator
+        self.applicantProfileStore = applicantProfileStore
         summaryGenerator.configure(llmFacade: llmFacade)
     }
     
@@ -224,11 +227,20 @@ class MultiModelCoverLetterService {
             return
         }
 
+        guard let applicantProfileStore else {
+            await MainActor.run {
+                errorMessage = "Applicant profile store unavailable"
+                isProcessing = false
+            }
+            return
+        }
+
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
             jobApp: jobApp,
             exportCoordinator: exportCoordinator,
+            applicantProfile: applicantProfileStore.currentProfile(),
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         

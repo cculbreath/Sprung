@@ -10,6 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ApplicantProfileView: View {
+    @Environment(ApplicantProfileStore.self) private var profileStore: ApplicantProfileStore
     @State private var profile: ApplicantProfile
     @State private var showImagePicker = false
     @State private var successMessage = ""
@@ -143,8 +144,7 @@ struct ApplicantProfileView: View {
             handleSignatureSelection(result)
         }
         .task {
-            // Load profile from manager
-            await loadProfile()
+            loadProfile()
             isLoading = false
         }
     }
@@ -168,13 +168,13 @@ struct ApplicantProfileView: View {
     }
 
     @MainActor
-    private func loadProfile() async {
-        profile = ApplicantProfileManager.shared.getProfile()
+    private func loadProfile() {
+        profile = profileStore.currentProfile()
     }
 
     @MainActor
     private func saveProfile() {
-        ApplicantProfileManager.shared.saveProfile(profile)
+        profileStore.save(profile)
         successMessage = "Profile saved successfully"
         hasChanges = false
 

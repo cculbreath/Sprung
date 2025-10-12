@@ -13,9 +13,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var applicantProfileWindow: NSWindow?
     var templateEditorWindow: NSWindow?
+    var onboardingInterviewWindow: NSWindow?
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
+    var applicantProfileStore: ApplicantProfileStore?
+    var onboardingInterviewService: OnboardingInterviewService?
+    var onboardingArtifactStore: OnboardingArtifactStore?
 
     func applicationDidFinishLaunching(_: Notification) {
         // DEBUG: Remove existing SwiftData SQLite store files to avoid migration errors
@@ -118,7 +122,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let hostingView: NSHostingView<AnyView>
             if let appEnvironment = self.appEnvironment,
                let container = self.modelContainer,
-               let enabledLLMStore = self.enabledLLMStore {
+               let enabledLLMStore = self.enabledLLMStore,
+               let applicantProfileStore = self.applicantProfileStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
 
@@ -127,6 +132,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appState)
                     .environment(appEnvironment.navigationState)
                     .environment(enabledLLMStore)
+                    .environment(applicantProfileStore)
                     .environment(debugSettingsStore)
                     .modelContainer(container)
 
@@ -172,7 +178,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if applicantProfileWindow == nil {
             let profileView = ApplicantProfileView()
-            let hostingView = NSHostingView(rootView: profileView)
+            let hostingView: NSHostingView<AnyView>
+
+            if let appEnvironment,
+               let container = modelContainer,
+               let applicantProfileStore {
+                let root = profileView
+                    .environment(appEnvironment)
+                    .environment(appEnvironment.appState)
+                    .environment(applicantProfileStore)
+                    .modelContainer(container)
+                hostingView = NSHostingView(rootView: AnyView(root))
+            } else if let container = modelContainer {
+                let root = profileView.modelContainer(container)
+                hostingView = NSHostingView(rootView: AnyView(root))
+            } else {
+                hostingView = NSHostingView(rootView: AnyView(profileView))
+            }
 
             applicantProfileWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
@@ -225,6 +247,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .environment(appEnvironment)
                         .environment(appEnvironment.appState)
                         .environment(appEnvironment.navigationState)
+                        .environment(appEnvironment.applicantProfileStore)
                 ))
             } else if let modelContainer = self.modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(editorView.modelContainer(modelContainer)))
@@ -251,6 +274,53 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         templateEditorWindow?.makeKeyAndOrderFront(nil)
         
         // Activate the app to ensure focus
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func showOnboardingInterviewWindow() {
+        if let window = onboardingInterviewWindow, !window.isVisible {
+            onboardingInterviewWindow = nil
+        }
+
+        if onboardingInterviewWindow == nil {
+            let interviewView = OnboardingInterviewView()
+            let hostingView: NSHostingView<AnyView>
+
+            if let modelContainer,
+               let appEnvironment,
+               let enabledLLMStore {
+                let onboardingService = onboardingInterviewService ?? appEnvironment.onboardingInterviewService
+                let root = interviewView
+                    .modelContainer(modelContainer)
+                    .environment(appEnvironment)
+                    .environment(appEnvironment.appState)
+                    .environment(appEnvironment.navigationState)
+                    .environment(enabledLLMStore)
+                    .environment(appEnvironment.applicantProfileStore)
+                    .environment(onboardingService)
+
+                hostingView = NSHostingView(rootView: AnyView(root))
+            } else if let modelContainer {
+                hostingView = NSHostingView(rootView: AnyView(interviewView.modelContainer(modelContainer)))
+            } else {
+                hostingView = NSHostingView(rootView: AnyView(interviewView))
+            }
+
+            onboardingInterviewWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 980, height: 700),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            onboardingInterviewWindow?.title = "Onboarding Interview"
+            onboardingInterviewWindow?.tabbingMode = .disallowed
+            onboardingInterviewWindow?.contentView = hostingView
+            onboardingInterviewWindow?.isReleasedWhenClosed = false
+            onboardingInterviewWindow?.center()
+            onboardingInterviewWindow?.minSize = NSSize(width: 860, height: 600)
+        }
+
+        onboardingInterviewWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

@@ -43,6 +43,25 @@ class FileHandler {
         return appSupportDirectory.appendingPathComponent(filename)
     }
 
+    // MARK: - Onboarding Artifacts
+
+    /// Directory for storing onboarding interview artifacts (JSON, text files)
+    static func artifactsDirectory() -> URL {
+        let directory = appSupportDirectory.appendingPathComponent("Artifacts", isDirectory: true)
+        if !fileManager.fileExists(atPath: directory.path) {
+            do {
+                try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            } catch {
+                Logger.error("Failed to create artifacts directory: \(error)")
+            }
+        }
+        return directory
+    }
+
+    static func artifactUrl(filename: String) -> URL {
+        artifactsDirectory().appendingPathComponent(filename)
+    }
+
     // Function to save JSON to Application Support
     static func saveJSONToFile(jsonString: String) -> URL? {
         let fileURL = FileHandler.jsonUrl()

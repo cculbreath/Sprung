@@ -22,6 +22,7 @@ final class ResStore: SwiftDataStore {
 
     unowned let modelContext: ModelContext
     private let exportCoordinator: ResumeExportCoordinator
+    private let applicantProfileStore: ApplicantProfileStore
     private let templateSeedStore: TemplateSeedStore
 
     // MARK: - Initialiser
@@ -29,10 +30,12 @@ final class ResStore: SwiftDataStore {
     init(
         context: ModelContext,
         exportCoordinator: ResumeExportCoordinator,
+        applicantProfileStore: ApplicantProfileStore,
         templateSeedStore: TemplateSeedStore
     ) {
         modelContext = context
         self.exportCoordinator = exportCoordinator
+        self.applicantProfileStore = applicantProfileStore
         self.templateSeedStore = templateSeedStore
     }
 
@@ -53,7 +56,7 @@ final class ResStore: SwiftDataStore {
         }
 
         let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: templateSeedStore)
-        let applicantProfile = ApplicantProfileManager.shared.getProfile()
+        let applicantProfile = applicantProfileStore.currentProfile()
         guard let context = contextBuilder.buildContext(
             for: template,
             fallbackJSON: nil,

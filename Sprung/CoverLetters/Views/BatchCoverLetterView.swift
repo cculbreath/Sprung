@@ -15,6 +15,7 @@ struct BatchCoverLetterView: View {
     @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
 
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
@@ -361,7 +362,8 @@ struct BatchCoverLetterView: View {
                 coverLetterStore: coverLetterStore,
                 llmFacade: llmFacade,
                 coverLetterService: coverLetterService,
-                exportCoordinator: appEnvironment.resumeExportCoordinator
+                exportCoordinator: appEnvironment.resumeExportCoordinator,
+                applicantProfileStore: applicantProfileStore
             )
             
             do {

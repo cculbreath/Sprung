@@ -18,12 +18,18 @@ final class CoverLetterService {
     internal var conversations: [UUID: UUID] = [:] // coverLetterId -> conversationId
     private let llmFacade: LLMFacade
     private let exportCoordinator: ResumeExportCoordinator
+    private let applicantProfileStore: ApplicantProfileStore
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
+    init(
+        llmFacade: LLMFacade,
+        exportCoordinator: ResumeExportCoordinator,
+        applicantProfileStore: ApplicantProfileStore
+    ) {
         self.llmFacade = llmFacade
         self.exportCoordinator = exportCoordinator
+        self.applicantProfileStore = applicantProfileStore
     }
     
     // MARK: - Cover Letter Generation
@@ -104,6 +110,7 @@ final class CoverLetterService {
             resume: resume,
             jobApp: jobApp,
             exportCoordinator: exportCoordinator,
+            applicantProfile: applicantProfileStore.currentProfile(),
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         
@@ -171,6 +178,7 @@ final class CoverLetterService {
             resume: resume,
             jobApp: jobApp,
             exportCoordinator: exportCoordinator,
+            applicantProfile: applicantProfileStore.currentProfile(),
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         

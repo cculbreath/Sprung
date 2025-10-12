@@ -20,9 +20,12 @@ class ResumeExportService: ObservableObject {
     private let textGenerator: TextResumeGenerator
     private let templateStore: TemplateStore
     
-    init(templateStore: TemplateStore) {
+    init(templateStore: TemplateStore, applicantProfileStore: ApplicantProfileStore) {
         self.templateStore = templateStore
-        self.nativeGenerator = NativePDFGenerator(templateStore: templateStore)
+        self.nativeGenerator = NativePDFGenerator(
+            templateStore: templateStore,
+            profileProvider: applicantProfileStore
+        )
         self.textGenerator = TextResumeGenerator(templateStore: templateStore)
     }
     

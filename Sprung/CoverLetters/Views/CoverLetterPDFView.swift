@@ -10,6 +10,7 @@ import SwiftUI
 
 struct CoverLetterPDFView: View {
     let coverLetter: CoverLetter
+    @Environment(ApplicantProfileStore.self) private var profileStore: ApplicantProfileStore
     @State private var applicant: Applicant
     @State private var pdfData: Data = .init()
     @State private var isLoading: Bool = true
@@ -48,10 +49,9 @@ struct CoverLetterPDFView: View {
             }
         }
         .task {
-            // Get the latest applicant profile with signature from the manager
-            await loadApplicantProfile()
-            generatePDF()
-        }
+        loadApplicantProfile()
+        generatePDF()
+    }
     }
 
     private func generatePDF() {
@@ -77,8 +77,8 @@ struct CoverLetterPDFView: View {
     }
 
     @MainActor
-    private func loadApplicantProfile() async {
-        applicant = Applicant() // This will use the
+    private func loadApplicantProfile() {
+        applicant = Applicant(profile: profileStore.currentProfile())
     }
 }
 
