@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftOpenAI
 
 /// Service responsible for managing LLM streaming and reasoning coordination
 /// Handles streaming responses, reasoning display, and response collection
@@ -37,7 +38,7 @@ class RevisionStreamingService {
         userMessage: String,
         modelId: String,
         reasoning: OpenRouterReasoning,
-        jsonSchema: [String: Any]
+        jsonSchema: JSONSchema
     ) async throws -> (revisions: RevisionsContainer, conversationId: UUID) {
 
         // Start streaming conversation with reasoning
@@ -78,7 +79,7 @@ class RevisionStreamingService {
         modelId: String,
         conversationId: UUID,
         reasoning: OpenRouterReasoning,
-        jsonSchema: [String: Any]
+        jsonSchema: JSONSchema
     ) async throws -> RevisionsContainer {
 
         // Start streaming
