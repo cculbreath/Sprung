@@ -415,7 +415,7 @@ struct TemplateEditorView: View {
                         onPromoteSeed: promoteCurrentResumeToSeed,
                         onSaveSeed: { _ = saveSeed() }
                     )
-                        .frame(minWidth: 480)
+                        .frame(minWidth: 300)
                         .layoutPriority(2)
                     TemplateEditorPreviewColumn(
                         previewPDFData: previewPDFData,
@@ -433,7 +433,7 @@ struct TemplateEditorView: View {
                         onRefresh: previewPDF,
                         onPrepareOverlayOptions: prepareOverlayOptions
                     )
-                        .frame(minWidth: 360, idealWidth: 400)
+                        .frame(minWidth: 540, idealWidth: 600)
                         .layoutPriority(1)
                 }
             } else {
@@ -460,7 +460,7 @@ struct TemplateEditorView: View {
                     onPromoteSeed: promoteCurrentResumeToSeed,
                     onSaveSeed: { _ = saveSeed() }
                 )
-                    .frame(minWidth: 480)
+                    .frame(minWidth: 300)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
