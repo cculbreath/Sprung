@@ -233,17 +233,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             
             templateEditorWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+                contentRect: NSRect(x: 0, y: 0, width: 1200, height: 760),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered, defer: false
             )
             templateEditorWindow?.title = "Template Editor"
+            templateEditorWindow?.tabbingMode = .disallowed
             templateEditorWindow?.contentView = hostingView
             templateEditorWindow?.isReleasedWhenClosed = false
             templateEditorWindow?.center()
             
             // Set a minimum size for the window
-            templateEditorWindow?.minSize = NSSize(width: 800, height: 600)
+            templateEditorWindow?.minSize = NSSize(width: 960, height: 640)
         }
         
         // Bring the window to the front
