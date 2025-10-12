@@ -95,6 +95,7 @@ struct TemplateEditorView: View {
     @State private var textEditorInsertion: TextEditorInsertionRequest?
     @StateObject private var pdfController = PDFPreviewController()
     @State private var templatePendingDeletion: String?
+    @State private var showRevertConfirmation: Bool = false
     private let textFilterReference: [TextFilterInfo] = [
         TextFilterInfo(
             name: "center",
@@ -367,14 +368,22 @@ struct TemplateEditorView: View {
         } message: { template in
             Text("Are you sure you want to delete the '\(templateDisplayName(template))' template? This cannot be undone.")
         }
+        .alert("Revert All Changes?", isPresented: $showRevertConfirmation) {
+            Button("Revert", role: .destructive) {
+                revertAllChanges()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Reloads the template, manifest, and default values from the last saved state.")
+        }
         .toolbar(id: "templateEditorToolbar") {
             TemplateEditorToolbar(
                 showSidebar: $showSidebar,
                 showInspector: $showInspector,
                 hasUnsavedChanges: hasAnyUnsavedChanges,
-                canRevert: currentHasChanges,
+                canRevert: hasAnyUnsavedChanges,
                 onRefresh: performRefresh,
-                onRevert: revertCurrentTab,
+                onRevertRequested: { showRevertConfirmation = true },
                 onClose: performClose,
                 onToggleInspector: toggleInspectorVisibility,
                 onToggleSidebar: toggleSidebar,
@@ -801,10 +810,6 @@ struct TemplateEditorView: View {
                 }
                 .disabled(!seedHasChanges)
                 .buttonStyle(.borderedProminent)
-                Button("Reload") {
-                    loadSeed()
-                }
-                .buttonStyle(.bordered)
                 Spacer()
                 if let message = seedValidationMessage {
                     Text(message)
@@ -871,6 +876,18 @@ struct TemplateEditorView: View {
         seedHasChanges = false
         manifestValidationMessage = nil
         seedValidationMessage = nil
+    }
+
+    private func revertAllChanges() {
+        discardPendingChanges()
+        loadTemplate()
+        loadManifest()
+        loadSeed()
+        showOverlay = false
+        overlayPDFDocument = nil
+        overlayFilename = nil
+        overlayPageCount = 0
+        generateInitialPreview()
     }
 
     private func applyPendingTemplateChange() {
@@ -1407,7 +1424,7 @@ private struct TemplateEditorToolbar: CustomizableToolbarContent {
     var hasUnsavedChanges: Bool
     var canRevert: Bool
     var onRefresh: () -> Void
-    var onRevert: () -> Void
+    var onRevertRequested: () -> Void
     var onClose: () -> Void
     var onToggleInspector: () -> Void
     var onToggleSidebar: () -> Void
@@ -1416,9 +1433,9 @@ private struct TemplateEditorToolbar: CustomizableToolbarContent {
     var body: some CustomizableToolbarContent {
         Group {
             navigationGroup
+            applicantGroup
             actionGroup
             inspectorGroup
-            applicantGroup
             statusGroup
             closeGroup
         }
@@ -1465,7 +1482,7 @@ private struct TemplateEditorToolbar: CustomizableToolbarContent {
             }
 
             ToolbarItem(id: "revert", placement: .primaryAction, showsByDefault: true) {
-                Button(action: onRevert) {
+                Button(action: onRevertRequested) {
                     Label("Revert", systemImage: "arrow.uturn.backward")
                 }
                 .disabled(!canRevert)
