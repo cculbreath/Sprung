@@ -25,6 +25,7 @@ class ResumeReviseViewModel {
     private let reasoningStreamManager: ReasoningStreamManager
     private let exportCoordinator: ResumeExportCoordinator
     private let validationService: RevisionValidationService
+    private let streamingService: RevisionStreamingService
     
     // MARK: - UI State (ViewModel Layer)
     var showResumeRevisionSheet: Bool = false {
@@ -55,7 +56,6 @@ class ResumeReviseViewModel {
     private var currentConversationId: UUID?
     var currentModelId: String? // Make currentModelId accessible to views
     private(set) var isProcessingRevisions: Bool = false
-    private var activeStreamingHandle: LLMStreamingHandle?
     private var isCompletingReview: Bool = false
     
     init(
@@ -63,13 +63,18 @@ class ResumeReviseViewModel {
         openRouterService: OpenRouterService,
         reasoningStreamManager: ReasoningStreamManager,
         exportCoordinator: ResumeExportCoordinator,
-        validationService: RevisionValidationService = RevisionValidationService()
+        validationService: RevisionValidationService = RevisionValidationService(),
+        streamingService: RevisionStreamingService? = nil
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
         self.reasoningStreamManager = reasoningStreamManager
         self.exportCoordinator = exportCoordinator
         self.validationService = validationService
+        self.streamingService = streamingService ?? RevisionStreamingService(
+            llm: llmFacade,
+            reasoningStreamManager: reasoningStreamManager
+        )
     }
     
     func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {
@@ -143,67 +148,26 @@ class ResumeReviseViewModel {
             if supportsReasoning {
                 // Use streaming with reasoning for supported models from the start
                 Logger.info("🧠 Using streaming with reasoning for revision generation: \(modelId)")
-                
+
                 // Configure reasoning parameters for revision generation using user setting
                 let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(
                     effort: userEffort,
                     includeReasoning: true
                 )
-                
+
                 // Start streaming conversation with reasoning
-                cancelActiveStreaming()
-                let handle = try await llm.startConversationStreaming(
+                let result = try await streamingService.startConversationStreaming(
                     systemPrompt: systemPrompt,
                     userMessage: userPrompt,
                     modelId: modelId,
                     reasoning: reasoning,
                     jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
-                guard let conversationId = handle.conversationId else {
-                    throw LLMError.clientError("Failed to establish conversation for revision streaming")
-                }
-                self.currentConversationId = conversationId
+
+                self.currentConversationId = result.conversationId
                 self.currentModelId = modelId
-                activeStreamingHandle = handle
-                
-                // Process stream and collect full response
-                // Clear any previous reasoning text before starting
-                reasoningStreamManager.clear()
-                reasoningStreamManager.startReasoning(modelName: modelId)
-                var fullResponse = ""
-                var collectingJSON = false
-                var jsonResponse = ""
-                
-                for try await chunk in handle.stream {
-                    // Handle reasoning content
-                    if let reasoningContent = chunk.reasoning {
-                        reasoningStreamManager.reasoningText += reasoningContent
-                    }
-                    
-                    // Collect regular content
-                    if let content = chunk.content {
-                        fullResponse += content
-                        
-                        // Try to extract JSON from the response
-                        if content.contains("{") || collectingJSON {
-                            collectingJSON = true
-                            jsonResponse += content
-                        }
-                    }
-                    
-                    // Handle completion
-                    if chunk.isFinished {
-                        reasoningStreamManager.isStreaming = false
-                        // Hide the reasoning modal when streaming completes
-                        reasoningStreamManager.isVisible = false
-                    }
-                }
-                cancelActiveStreaming()
-                
-                // Parse the JSON response
-                let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-                revisions = try LLMResponseParser.parseJSON(responseText, as: RevisionsContainer.self)
+                revisions = result.revisions
                 
             } else {
                 // Use non-streaming structured output for models without reasoning
@@ -296,19 +260,20 @@ class ResumeReviseViewModel {
             if supportsReasoning {
                 // Use streaming with reasoning for supported models
                 Logger.info("🧠 Using streaming with reasoning for revision continuation: \(modelId)")
-                
+
                 // Configure reasoning parameters using user setting
                 let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(
                     effort: userEffort,
                     includeReasoning: true
                 )
-                
-                revisions = try await streamRevisionGeneration(
+
+                revisions = try await streamingService.continueConversationStreaming(
                     userMessage: revisionRequestPrompt,
                     modelId: modelId,
                     conversationId: conversationId,
-                    reasoning: reasoning
+                    reasoning: reasoning,
+                    jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
             } else {
                 // Use non-streaming for models without reasoning
@@ -573,19 +538,20 @@ class ResumeReviseViewModel {
             if supportsReasoning {
                 // Use streaming with reasoning for supported models
                 Logger.info("🧠 Using streaming with reasoning for AI resubmission: \(modelId)")
-                
+
                 // Configure reasoning parameters using user setting
                 let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(
                     effort: userEffort,
                     includeReasoning: true
                 )
-                
-                revisions = try await streamRevisionGeneration(
+
+                revisions = try await streamingService.continueConversationStreaming(
                     userMessage: revisionPrompt,
                     modelId: modelId,
                     conversationId: conversationId,
-                    reasoning: reasoning
+                    reasoning: reasoning,
+                    jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
             } else {
                 // Use non-streaming for models without reasoning
@@ -835,67 +801,6 @@ class ResumeReviseViewModel {
         return prompt
     }
     
-    /// Stream revision generation with reasoning support
-    private func streamRevisionGeneration(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        reasoning: OpenRouterReasoning
-    ) async throws -> RevisionsContainer {
-        
-        // Start streaming
-        cancelActiveStreaming()
-        let handle = try await llm.continueConversationStreaming(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            images: [],
-            temperature: nil,
-            reasoning: reasoning,
-            jsonSchema: ResumeApiQuery.revNodeArraySchema
-        )
-        activeStreamingHandle = handle
-        
-        // Process stream and collect full response
-        // Start reasoning stream (content already cleared in parent method)
-        reasoningStreamManager.startReasoning(modelName: modelId)
-        var fullResponse = ""
-        var collectingJSON = false
-        var jsonResponse = ""
-        
-        for try await chunk in handle.stream {
-            // Handle reasoning content
-            if let reasoningContent = chunk.reasoning {
-                reasoningStreamManager.reasoningText += reasoningContent
-            }
-            
-            // Collect regular content
-            if let content = chunk.content {
-                fullResponse += content
-                
-                // Try to extract JSON from the response
-                if content.contains("{") || collectingJSON {
-                    collectingJSON = true
-                    jsonResponse += content
-                }
-            }
-            
-            // Handle completion
-            if chunk.isFinished {
-                reasoningStreamManager.isStreaming = false
-            }
-        }
-        cancelActiveStreaming()
-        
-        // Parse the JSON response
-        let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-        return try LLMResponseParser.parseJSON(responseText, as: RevisionsContainer.self)
-    }
-
-    private func cancelActiveStreaming() {
-        activeStreamingHandle?.cancel()
-        activeStreamingHandle = nil
-    }
 }
 
 // MARK: - Supporting Types
