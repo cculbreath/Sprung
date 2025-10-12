@@ -24,6 +24,7 @@ class ResumeReviseViewModel {
     let openRouterService: OpenRouterService
     private let reasoningStreamManager: ReasoningStreamManager
     private let exportCoordinator: ResumeExportCoordinator
+    private let validationService: RevisionValidationService
     
     // MARK: - UI State (ViewModel Layer)
     var showResumeRevisionSheet: Bool = false {
@@ -61,12 +62,14 @@ class ResumeReviseViewModel {
         llmFacade: LLMFacade,
         openRouterService: OpenRouterService,
         reasoningStreamManager: ReasoningStreamManager,
-        exportCoordinator: ResumeExportCoordinator
+        exportCoordinator: ResumeExportCoordinator,
+        validationService: RevisionValidationService = RevisionValidationService()
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
         self.reasoningStreamManager = reasoningStreamManager
         self.exportCoordinator = exportCoordinator
+        self.validationService = validationService
     }
     
     func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {
@@ -200,7 +203,7 @@ class ResumeReviseViewModel {
                 
                 // Parse the JSON response
                 let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-                revisions = try parseJSONFromText(responseText, as: RevisionsContainer.self)
+                revisions = try LLMResponseParser.parseJSON(responseText, as: RevisionsContainer.self)
                 
             } else {
                 // Use non-streaming structured output for models without reasoning
@@ -227,7 +230,7 @@ class ResumeReviseViewModel {
             }
             
             // Validate and process the revisions
-            let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
+            let validatedRevisions = validationService.validateRevisions(revisions.revArray, for: resume)
             
             // Set up the UI state for revision review
             await setupRevisionsForReview(validatedRevisions)
@@ -321,7 +324,7 @@ class ResumeReviseViewModel {
             }
             
             // Process and validate revisions
-            let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
+            let validatedRevisions = validationService.validateRevisions(revisions.revArray, for: resume)
             
             // Set up the UI state for revision review
             await setupRevisionsForReview(validatedRevisions)
@@ -596,7 +599,7 @@ class ResumeReviseViewModel {
             }
             
             // Validate and process the new revisions
-            let validatedRevisions = validateRevisions(revisions.revArray, for: resume)
+            let validatedRevisions = validationService.validateRevisions(revisions.revArray, for: resume)
             
             // Get IDs of nodes that were resubmitted for updating
             let resubmittedNodeIds = Set(nodesToResubmit.map { $0.id })
@@ -809,113 +812,7 @@ class ResumeReviseViewModel {
     }
     
     // MARK: - Private Helpers
-    
-    /// Validate revisions against current resume state
-    func validateRevisions(_ revisions: [ProposedRevisionNode], for resume: Resume) -> [ProposedRevisionNode] {
-        Logger.debug("🔍 Validating \(revisions.count) revisions")
-        
-        var validRevisions = revisions
-        let updateNodes = resume.getUpdatableNodes()
-        
-        // Filter out revisions for nodes that no longer exist
-        let currentNodeIds = Set(resume.nodes.map { $0.id })
-        let initialCount = validRevisions.count
-        validRevisions = validRevisions.filter { revNode in
-            let exists = currentNodeIds.contains(revNode.id)
-            if !exists {
-                Logger.debug("⚠️ Filtering out revision for non-existent node: \(revNode.id)")
-            }
-            return exists
-        }
-        
-        if validRevisions.count < initialCount {
-            Logger.debug("🔍 Removed \(initialCount - validRevisions.count) revisions for non-existent nodes")
-        }
-        
-        // Validate and fix revision node content
-        for (index, item) in validRevisions.enumerated() {
-            // Find matching node by ID
-            let nodesWithSameId = updateNodes.filter { $0["id"] as? String == item.id }
-            
-            if !nodesWithSameId.isEmpty {
-                var matchedNode: [String: Any]?
-                
-                // Handle multiple nodes with same ID (title vs value)
-                if nodesWithSameId.count > 1 {
-                    // Try to match by content first
-                    if !item.oldValue.isEmpty {
-                        matchedNode = nodesWithSameId.first { node in
-                            let nodeValue = node["value"] as? String ?? ""
-                            let nodeName = node["name"] as? String ?? ""
-                            return nodeValue == item.oldValue || nodeName == item.oldValue
-                        }
-                    }
-                    
-                    // Fallback to title node preference
-                    if matchedNode == nil {
-                        matchedNode = nodesWithSameId.first { node in
-                            node["isTitleNode"] as? Bool == true
-                        } ?? nodesWithSameId.first
-                    }
-                } else {
-                    matchedNode = nodesWithSameId.first
-                }
-                
-                // Update revision with correct values
-                if let matchedNode = matchedNode {
-                    if validRevisions[index].oldValue.isEmpty {
-                        let isTitleNode = matchedNode["isTitleNode"] as? Bool ?? false
-                        if isTitleNode {
-                            validRevisions[index].oldValue = matchedNode["name"] as? String ?? ""
-                        } else {
-                            validRevisions[index].oldValue = matchedNode["value"] as? String ?? ""
-                        }
-                        validRevisions[index].isTitleNode = isTitleNode
-                    } else {
-                        validRevisions[index].isTitleNode = matchedNode["isTitleNode"] as? Bool ?? false
-                    }
-                }
-            }
-            
-            // Last resort: find by tree path
-            else if !item.treePath.isEmpty {
-                let treePath = item.treePath
-                let components = treePath.components(separatedBy: " > ")
-                if components.count > 1 {
-                    let potentialMatches = updateNodes.filter { node in
-                        let nodePath = node["tree_path"] as? String ?? ""
-                        return nodePath == treePath || nodePath.hasSuffix(treePath)
-                    }
-                    
-                    if let match = potentialMatches.first {
-                        validRevisions[index].id = match["id"] as? String ?? item.id
-                        let isTitleNode = match["isTitleNode"] as? Bool ?? false
-                        if isTitleNode {
-                            validRevisions[index].oldValue = match["name"] as? String ?? ""
-                        } else {
-                            validRevisions[index].oldValue = match["value"] as? String ?? ""
-                        }
-                        validRevisions[index].isTitleNode = isTitleNode
-                    }
-                }
-            }
-            
-            // Final fallback: direct node lookup
-            if validRevisions[index].oldValue.isEmpty && !validRevisions[index].id.isEmpty {
-                if let treeNode = resume.nodes.first(where: { $0.id == validRevisions[index].id }) {
-                    if validRevisions[index].isTitleNode {
-                        validRevisions[index].oldValue = treeNode.name
-                    } else {
-                        validRevisions[index].oldValue = treeNode.value
-                    }
-                }
-            }
-        }
-        
-        Logger.debug("✅ Validated revisions: \(validRevisions.count) (from \(revisions.count))")
-        return validRevisions
-    }
-    
+
     /// Create a revision prompt from feedback nodes
     private func createRevisionPrompt(feedbackNodes: [FeedbackNode]) -> String {
         var prompt = "Please revise the following items based on the feedback provided:\n\n"
@@ -992,100 +889,12 @@ class ResumeReviseViewModel {
         
         // Parse the JSON response
         let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-        return try parseJSONFromText(responseText, as: RevisionsContainer.self)
+        return try LLMResponseParser.parseJSON(responseText, as: RevisionsContainer.self)
     }
 
     private func cancelActiveStreaming() {
         activeStreamingHandle?.cancel()
         activeStreamingHandle = nil
-    }
-
-    /// Parse JSON from text content with fallback strategies
-    private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
-        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")
-        
-        // First try direct parsing if the entire text is JSON
-        if let jsonData = text.data(using: .utf8) {
-            do {
-                let result = try JSONDecoder().decode(type, from: jsonData)
-                Logger.info("✅ Direct JSON parsing successful")
-                return result
-            } catch {
-                Logger.debug("❌ Direct JSON parsing failed: \(error)")
-                Logger.error("🚨 [JSON Debug] Full LLM response that failed direct parsing:")
-                Logger.error("📄 [JSON Debug] Response length: \(text.count) characters")
-                Logger.error("📄 [JSON Debug] Full response text:")
-                Logger.error("--- START RESPONSE ---")
-                Logger.error("\(text)")
-                Logger.error("--- END RESPONSE ---")
-            }
-        }
-        
-        // Try to extract JSON from text (look for JSON between ```json and ``` or just {...})
-        let cleanedText = extractJSONFromText(text)
-        if let jsonData = cleanedText.data(using: .utf8) {
-            do {
-                let result = try JSONDecoder().decode(type, from: jsonData)
-                Logger.info("✅ Extracted JSON parsing successful")
-                return result
-            } catch {
-                Logger.debug("❌ Extracted JSON parsing failed: \(error)")
-                Logger.error("🚨 [JSON Debug] Extracted text that failed parsing:")
-                Logger.error("📄 [JSON Debug] Extracted length: \(cleanedText.count) characters")
-                Logger.error("📄 [JSON Debug] Extracted text:")
-                Logger.error("--- START EXTRACTED ---")
-                Logger.error("\(cleanedText)")
-                Logger.error("--- END EXTRACTED ---")
-                Logger.error("🔍 [JSON Debug] Expected type: \(String(describing: type))")
-                Logger.error("🔍 [JSON Debug] Decoding error details: \(error)")
-            }
-        } else {
-            Logger.error("🚨 [JSON Debug] Could not convert extracted text to UTF-8 data")
-            Logger.error("📄 [JSON Debug] Original text length: \(text.count)")
-            Logger.error("📄 [JSON Debug] Extracted text: '\(cleanedText)'")
-        }
-        
-        // If JSON parsing fails, include the full response in the error for debugging
-        let fullResponsePreview = text.count > 1000 ? "\(text.prefix(1000))...[truncated]" : text
-        let errorMessage = "Could not parse JSON from response. Full response: \(fullResponsePreview)"
-        throw LLMError.decodingFailed(NSError(domain: "ResumeReviseViewModel", code: 1, userInfo: [
-            NSLocalizedDescriptionKey: errorMessage,
-            "fullResponse": text
-        ]))
-    }
-    
-    /// Extract JSON from text that may contain other content
-    private func extractJSONFromText(_ text: String) -> String {
-        // Look for JSON between code blocks
-        if let range = text.range(of: "```json") {
-            let afterStart = text[range.upperBound...]
-            if let endRange = afterStart.range(of: "```") {
-                return String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-        
-        // Look for standalone JSON object
-        if let startRange = text.range(of: "{") {
-            var braceCount = 1
-            var index = text.index(after: startRange.lowerBound)
-            
-            while index < text.endIndex && braceCount > 0 {
-                let char = text[index]
-                if char == "{" {
-                    braceCount += 1
-                } else if char == "}" {
-                    braceCount -= 1
-                }
-                index = text.index(after: index)
-            }
-            
-            if braceCount == 0 {
-                let jsonRange = startRange.lowerBound..<index
-                return String(text[jsonRange])
-            }
-        }
-        
-        return text
     }
 }
 
