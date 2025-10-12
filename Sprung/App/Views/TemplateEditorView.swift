@@ -72,8 +72,8 @@ struct TemplateEditorView: View {
     @State var availableTemplates: [String] = []
 
     @State var showSidebar: Bool = true
-    @State var sidebarWidth: CGFloat = 180
-    private let sidebarWidthRange: ClosedRange<CGFloat> = 150...300
+    @State var sidebarWidth: CGFloat = 150
+    private let sidebarWidthRange: ClosedRange<CGFloat> = 140...300
     @State private var textEditorInsertion: TextEditorInsertionRequest?
     @StateObject private var pdfController = PDFPreviewController()
     @State var templatePendingDeletion: String?
@@ -415,7 +415,7 @@ struct TemplateEditorView: View {
                         onPromoteSeed: promoteCurrentResumeToSeed,
                         onSaveSeed: { _ = saveSeed() }
                     )
-                        .frame(minWidth: 520)
+                        .frame(minWidth: 480)
                         .layoutPriority(2)
                     TemplateEditorPreviewColumn(
                         previewPDFData: previewPDFData,
@@ -433,7 +433,7 @@ struct TemplateEditorView: View {
                         onRefresh: previewPDF,
                         onPrepareOverlayOptions: prepareOverlayOptions
                     )
-                        .frame(minWidth: 320, idealWidth: 360)
+                        .frame(minWidth: 360, idealWidth: 400)
                         .layoutPriority(1)
                 }
             } else {
@@ -460,7 +460,7 @@ struct TemplateEditorView: View {
                     onPromoteSeed: promoteCurrentResumeToSeed,
                     onSaveSeed: { _ = saveSeed() }
                 )
-                    .frame(minWidth: 520)
+                    .frame(minWidth: 480)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -501,6 +501,15 @@ struct TemplateEditorView: View {
                     .frame(width: 1),
                 alignment: .center
             )
+            .onHover { hovering in
+#if os(macOS)
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+#endif
+            }
     }
 
     private func revertCurrentTab() {
