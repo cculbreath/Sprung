@@ -81,6 +81,12 @@ struct TemplateEditorPreviewColumn: View {
             Spacer()
 
             HStack(spacing: 8) {
+                Button(action: onRefresh) {
+                    Image(systemName: "arrow.triangle.head.2.clockwise")
+                }
+                .help("Refresh PDF Preview")
+                .disabled(selectedTab != .pdfTemplate || isGeneratingPreview || !hasSelectedResume)
+
                 Button {
                     pdfController.goToPreviousPage()
                 } label: {
@@ -127,14 +133,6 @@ struct TemplateEditorPreviewColumn: View {
     @ViewBuilder
     private func previewFooter() -> some View {
         HStack(spacing: 12) {
-            Button(action: onRefresh) {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(selectedTab != .pdfTemplate || isGeneratingPreview || !hasSelectedResume)
-
-            Spacer()
-
             if overlayDocument != nil {
                 HStack(spacing: 8) {
                     Text("Overlay Opacity")
@@ -164,6 +162,8 @@ struct TemplateEditorPreviewColumn: View {
                     .disabled(true)
                     .foregroundStyle(Color.secondary)
             }
+
+            Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
