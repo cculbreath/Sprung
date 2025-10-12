@@ -64,20 +64,20 @@ class ResumeReviseViewModel {
         openRouterService: OpenRouterService,
         reasoningStreamManager: ReasoningStreamManager,
         exportCoordinator: ResumeExportCoordinator,
-        validationService: RevisionValidationService = RevisionValidationService(),
+        validationService: RevisionValidationService? = nil,
         streamingService: RevisionStreamingService? = nil,
-        completionService: RevisionCompletionService = RevisionCompletionService()
+        completionService: RevisionCompletionService? = nil
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
         self.reasoningStreamManager = reasoningStreamManager
         self.exportCoordinator = exportCoordinator
-        self.validationService = validationService
+        self.validationService = validationService ?? RevisionValidationService()
         self.streamingService = streamingService ?? RevisionStreamingService(
             llm: llmFacade,
             reasoningStreamManager: reasoningStreamManager
         )
-        self.completionService = completionService
+        self.completionService = completionService ?? RevisionCompletionService()
     }
     
     func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {

@@ -7,7 +7,6 @@ import Foundation
 
 /// Service responsible for validating and matching revision nodes against resume state
 /// Handles complex node matching by ID, content, and tree path
-@MainActor
 class RevisionValidationService {
 
     /// Validate revisions against current resume state
