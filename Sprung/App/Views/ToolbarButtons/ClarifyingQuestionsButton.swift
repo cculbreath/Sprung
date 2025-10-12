@@ -8,6 +8,7 @@ struct ClarifyingQuestionsButton: View {
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager: ReasoningStreamManager
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
     
     @Binding var selectedTab: TabList
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
@@ -98,7 +99,8 @@ struct ClarifyingQuestionsButton: View {
                 openRouterService: openRouterService,
                 reasoningStreamManager: reasoningStreamManager,
                 defaultResumeReviseViewModel: resumeReviseViewModel,
-                exportCoordinator: appEnvironment.resumeExportCoordinator
+                exportCoordinator: appEnvironment.resumeExportCoordinator,
+                applicantProfileStore: applicantProfileStore
             )
             clarifyingQuestionsViewModel = clarifyingViewModel
             

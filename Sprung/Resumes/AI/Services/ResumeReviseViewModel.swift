@@ -24,6 +24,7 @@ class ResumeReviseViewModel {
     let openRouterService: OpenRouterService
     private let reasoningStreamManager: ReasoningStreamManager
     private let exportCoordinator: ResumeExportCoordinator
+    private let applicantProfileStore: ApplicantProfileStore
     
     // MARK: - UI State (ViewModel Layer)
     var showResumeRevisionSheet: Bool = false {
@@ -61,12 +62,14 @@ class ResumeReviseViewModel {
         llmFacade: LLMFacade,
         openRouterService: OpenRouterService,
         reasoningStreamManager: ReasoningStreamManager,
-        exportCoordinator: ResumeExportCoordinator
+        exportCoordinator: ResumeExportCoordinator,
+        applicantProfileStore: ApplicantProfileStore
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
         self.reasoningStreamManager = reasoningStreamManager
         self.exportCoordinator = exportCoordinator
+        self.applicantProfileStore = applicantProfileStore
     }
     
     func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {
@@ -112,6 +115,7 @@ class ResumeReviseViewModel {
             let query = ResumeApiQuery(
                 resume: resume,
                 exportCoordinator: exportCoordinator,
+                applicantProfile: applicantProfileStore.currentProfile(),
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             
@@ -261,6 +265,7 @@ class ResumeReviseViewModel {
             let query = ResumeApiQuery(
                 resume: resume,
                 exportCoordinator: exportCoordinator,
+                applicantProfile: applicantProfileStore.currentProfile(),
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             let revisionRequestPrompt = await query.multiTurnRevisionPrompt()

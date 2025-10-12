@@ -20,8 +20,13 @@ enum CoverLetterPrompts {
     )
 
     @MainActor
-    static func generate(coverLetter: CoverLetter, resume: Resume, mode: CoverAiMode, customFeedbackString: String? = "") -> String {
-        let applicant = Applicant() // Using customizable applicant profile
+    static func generate(
+        coverLetter: CoverLetter,
+        resume: Resume,
+        mode: CoverAiMode,
+        applicant: Applicant,
+        customFeedbackString: String? = ""
+    ) -> String {
         let app = coverLetter.jobApp
         let formatter = DateFormatter()
         formatter.dateStyle = .long // Automatically formats as "January 1, 2025"

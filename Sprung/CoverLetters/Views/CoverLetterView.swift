@@ -51,6 +51,7 @@ struct CoverLetterView: View {
 struct CoverLetterContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
     @Binding var isEditing: Bool
 
     var body: some View {
@@ -205,7 +206,7 @@ struct CoverLetterContentView: View {
                         if cL.generated {
                             CoverLetterPDFView(
                                 coverLetter: cL,
-                                applicant: Applicant()
+                                applicant: Applicant(profile: applicantProfileStore.currentProfile())
                             )
                             .frame(maxHeight: .infinity)
                             .id(cL.id)

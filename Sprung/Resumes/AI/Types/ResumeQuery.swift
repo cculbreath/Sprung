@@ -187,23 +187,16 @@ import SwiftUI
 
     // MARK: - Initialization
 
-    init(resume: Resume, exportCoordinator: ResumeExportCoordinator, saveDebugPrompt: Bool = true) {
+    init(
+        resume: Resume,
+        exportCoordinator: ResumeExportCoordinator,
+        applicantProfile: ApplicantProfile,
+        saveDebugPrompt: Bool = true
+    ) {
         // Optionally let users pass in the debug flag during initialization
         res = resume
         self.exportCoordinator = exportCoordinator
-        
-        // Create a complete applicant profile with default values to avoid @MainActor issues
-        let profile = ApplicantProfile() // Uses default values from ApplicantProfile init
-        applicant = Applicant(
-            name: profile.name,
-            address: profile.address,
-            city: profile.city,
-            state: profile.state,
-            zip: profile.zip,
-            websites: profile.websites,
-            email: profile.email,
-            phone: profile.phone
-        )
+        applicant = Applicant(profile: applicantProfile)
         self.saveDebugPrompt = saveDebugPrompt
     }
 

@@ -20,6 +20,7 @@ class ClarifyingQuestionsViewModel {
     private let reasoningStreamManager: ReasoningStreamManager
     private let defaultResumeReviseViewModel: ResumeReviseViewModel
     private let exportCoordinator: ResumeExportCoordinator
+    private let applicantProfileStore: ApplicantProfileStore
     private var activeStreamingHandle: LLMStreamingHandle?
     
     // MARK: - UI State
@@ -37,13 +38,15 @@ class ClarifyingQuestionsViewModel {
         openRouterService: OpenRouterService,
         reasoningStreamManager: ReasoningStreamManager,
         defaultResumeReviseViewModel: ResumeReviseViewModel,
-        exportCoordinator: ResumeExportCoordinator
+        exportCoordinator: ResumeExportCoordinator,
+        applicantProfileStore: ApplicantProfileStore
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
         self.reasoningStreamManager = reasoningStreamManager
         self.defaultResumeReviseViewModel = defaultResumeReviseViewModel
         self.exportCoordinator = exportCoordinator
+        self.applicantProfileStore = applicantProfileStore
     }
     
     // MARK: - Public Interface
@@ -72,6 +75,7 @@ class ClarifyingQuestionsViewModel {
             let query = ResumeApiQuery(
                 resume: resume,
                 exportCoordinator: exportCoordinator,
+                applicantProfile: applicantProfileStore.currentProfile(),
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             

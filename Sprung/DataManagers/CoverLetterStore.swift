@@ -28,12 +28,18 @@ final class CoverLetterStore: SwiftDataStore {
     var cL: CoverLetter? // This is the currently selected/active cover letter instance
     var isGeneratingCoverLetter = false // Track when cover letter generation is in progress
     private let exportService: any CoverLetterExportService = LocalCoverLetterExportService()
+    private let applicantProfileStore: ApplicantProfileStore
 
     // MARK: - Initialiser
 
-    init(context: ModelContext, refStore: CoverRefStore) {
+    init(
+        context: ModelContext,
+        refStore: CoverRefStore,
+        applicantProfileStore: ApplicantProfileStore
+    ) {
         modelContext = context
         coverRefStore = refStore
+        self.applicantProfileStore = applicantProfileStore
 
         // Perform one-time migration for existing cover letters
         performMigrationForGeneratedFlag()
@@ -144,7 +150,8 @@ final class CoverLetterStore: SwiftDataStore {
     // MARK: - PDF Export
 
     func exportPDF(from coverLetter: CoverLetter) -> Data {
-        return exportService.exportPDF(from: coverLetter, applicant: Applicant())
+        let applicant = Applicant(profile: applicantProfileStore.currentProfile())
+        return exportService.exportPDF(from: coverLetter, applicant: applicant)
     }
 
     // MARK: - Migration

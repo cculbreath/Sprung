@@ -78,6 +78,9 @@ struct SprungApp: App {
                     appDelegate.appEnvironment = appEnvironment
                     appDelegate.modelContainer = modelContainer
                     appDelegate.enabledLLMStore = appDependencies.enabledLLMStore
+                    appDelegate.applicantProfileStore = appDependencies.applicantProfileStore
+                    appDelegate.onboardingInterviewService = appDependencies.onboardingInterviewService
+                    appDelegate.onboardingArtifactStore = appDependencies.onboardingArtifactStore
                 }
         }
         .modelContainer(modelContainer)
@@ -231,6 +234,14 @@ struct SprungApp: App {
             Button("Export All Cover Letter Options") {
                 NotificationCenter.default.post(name: .exportAllCoverLetters, object: nil)
             }
+            }
+        }
+        .commands {
+            CommandMenu("Interview") {
+                Button("Initiate Onboarding Interview") {
+                    NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
+                }
+                .keyboardShortcut("i", modifiers: [.command, .shift, .option])
             }
         }
         .commands {

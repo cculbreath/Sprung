@@ -48,6 +48,8 @@ struct ContentViewLaunch: View {
             .environment(deps.coverRefStore)
             .environment(deps.coverLetterStore)
             .environment(deps.enabledLLMStore)
+            .environment(deps.applicantProfileStore)
+            .environment(deps.onboardingInterviewService)
             .environment(deps.dragInfo)
             .environment(deps.appEnvironment.llmFacade)
             .environment(deps.llmService)
