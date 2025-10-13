@@ -24,6 +24,7 @@ final class AppEnvironment {
     let applicantProfileStore: ApplicantProfileStore
     let onboardingInterviewService: OnboardingInterviewService
     var launchState: LaunchState
+    var requiresTemplateSetup: Bool = false
 
     init(
         appState: AppState,

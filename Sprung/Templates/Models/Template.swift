@@ -13,6 +13,7 @@ final class Template {
     var createdAt: Date
     var updatedAt: Date
     var isCustom: Bool
+    var isDefault: Bool
 
     @Relationship(deleteRule: .cascade, inverse: \TemplateAsset.template)
     var assets: [TemplateAsset]
@@ -32,6 +33,7 @@ final class Template {
         cssContent: String? = nil,
         manifestData: Data? = nil,
         isCustom: Bool = false,
+        isDefault: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         assets: [TemplateAsset] = [],
@@ -45,6 +47,7 @@ final class Template {
         self.cssContent = cssContent
         self.manifestData = manifestData
         self.isCustom = isCustom
+        self.isDefault = isDefault
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.assets = assets

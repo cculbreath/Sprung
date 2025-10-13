@@ -12,6 +12,8 @@ struct TemplateEditorSidebarView: View {
     let templateDisplayName: (String) -> String
     let templateIconName: (String) -> String
     let templateMatchesCurrentResume: (String) -> Bool
+    let templateIsDefault: (String) -> Bool
+    let onMakeDefault: (String) -> Void
     let onDuplicateTemplate: (String) -> Void
     let onRequestDeleteTemplate: (String) -> Void
     @Binding var showingAddTemplate: Bool
@@ -35,10 +37,15 @@ struct TemplateEditorSidebarView: View {
         List(selection: selection) {
             Section("Templates") {
                 if availableTemplates.isEmpty {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 24)
+                    VStack(spacing: 8) {
+                        Text("No templates available")
+                            .foregroundColor(.secondary)
+                        Text("Use 'New Template' to add one.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
                 } else {
                     ForEach(availableTemplates, id: \.self) { template in
                         templateRow(template)
@@ -76,6 +83,12 @@ struct TemplateEditorSidebarView: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
+                if templateIsDefault(template) {
+                    Label("Default", systemImage: "star.fill")
+                        .font(.caption2)
+                        .labelStyle(.titleAndIcon)
+                        .foregroundColor(.yellow)
+                }
             }
             Spacer()
         }
@@ -85,6 +98,10 @@ struct TemplateEditorSidebarView: View {
             Button("Duplicate Template") {
                 onDuplicateTemplate(template)
             }
+            Button("Make Default") {
+                onMakeDefault(template)
+            }
+            .disabled(templateIsDefault(template))
             Button("Delete Template", role: .destructive) {
                 onRequestDeleteTemplate(template)
             }
@@ -127,4 +144,3 @@ struct TemplateEditorSidebarView: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
 }
-

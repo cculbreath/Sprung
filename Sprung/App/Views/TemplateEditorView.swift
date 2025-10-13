@@ -2,7 +2,7 @@
 //  TemplateEditorView.swift
 //  Sprung
 //
-//  Template editor for bundled resume templates
+//  Template editor for resume templates
 //
 
 import SwiftUI
@@ -32,7 +32,7 @@ struct TemplateEditorView: View {
     @Environment(NavigationStateService.self) var navigationState
     @Environment(AppEnvironment.self) var appEnvironment
 
-    @State var selectedTemplate: String = "archer"
+    @State var selectedTemplate: String = ""
     @State var selectedTab: TemplateEditorTab = .pdfTemplate
     @State var templateContent: String = ""
     @State var assetHasChanges: Bool = false
@@ -74,6 +74,7 @@ struct TemplateEditorView: View {
     @State var overlayPageSelection: Int = 0
 
     @State var availableTemplates: [String] = []
+    @State var defaultTemplateSlug: String? = nil
 
     @State var showSidebar: Bool = true
     @State var sidebarWidth: CGFloat = 150
@@ -132,7 +133,10 @@ struct TemplateEditorView: View {
     }
 
     func templateDisplayName(_ template: String) -> String {
-        template
+        if let record = appEnvironment.templateStore.template(slug: template) {
+            return record.name
+        }
+        return template
             .replacingOccurrences(of: "-", with: " ")
             .replacingOccurrences(of: "_", with: " ")
             .capitalized
@@ -145,6 +149,17 @@ struct TemplateEditorView: View {
     private func templateMatchesSelectedResume(_ template: String) -> Bool {
         guard let resumeTemplateIdentifier else { return false }
         return resumeTemplateIdentifier == template.lowercased()
+    }
+
+    private func templateIsDefault(_ template: String) -> Bool {
+        guard let defaultTemplateSlug else { return false }
+        return defaultTemplateSlug.lowercased() == template.lowercased()
+    }
+
+    private func makeTemplateDefault(slug: String) {
+        guard let record = appEnvironment.templateStore.template(slug: slug) else { return }
+        appEnvironment.templateStore.setDefault(record)
+        defaultTemplateSlug = slug
     }
 
     private func handleTemplateDraftUpdate(with content: String) {
@@ -220,10 +235,9 @@ struct TemplateEditorView: View {
 
     private var templateSelectionBinding: Binding<String?> {
         Binding<String?>(
-            get: { selectedTemplate },
+            get: { selectedTemplate.isEmpty ? nil : selectedTemplate },
             set: { newValue in
-                guard let newValue else { return }
-                selectedTemplate = newValue
+                selectedTemplate = newValue ?? ""
             }
         )
     }
@@ -391,94 +405,74 @@ struct TemplateEditorView: View {
 
     @ViewBuilder
     private func mainContent() -> some View {
-        Group {
-            if showInspector {
-                HSplitView {
-                    TemplateEditorEditorColumn(
-                        selectedTab: $selectedTab,
-                        templateContent: $templateContent,
-                        manifestContent: $manifestContent,
-                        seedContent: $seedContent,
-                        assetHasChanges: $assetHasChanges,
-                        manifestHasChanges: $manifestHasChanges,
-                        seedHasChanges: $seedHasChanges,
-                        manifestValidationMessage: $manifestValidationMessage,
-                        seedValidationMessage: $seedValidationMessage,
-                        textEditorInsertion: $textEditorInsertion,
-                        selectedResume: selectedResume,
-                        onTemplateChange: { updatedContent in
-                            handleTemplateDraftUpdate(with: updatedContent)
-                        },
-                        onValidateManifest: validateManifest,
-                        onSaveManifest: { _ = saveManifest() },
-                        onReloadManifest: loadManifest,
-                        onPromoteSeed: promoteCurrentResumeToSeed,
-                        onSaveSeed: { _ = saveSeed() }
-                    )
+        if availableTemplates.isEmpty {
+            TemplateEditorEmptyState(showingAddTemplate: $showingAddTemplate)
+        } else if selectedTemplate.isEmpty {
+            TemplateSelectionState(showingAddTemplate: $showingAddTemplate)
+        } else {
+            Group {
+                if showInspector {
+                    HSplitView {
+                        editorColumn
+                            .frame(minWidth: 300)
+                            .layoutPriority(2)
+                        previewColumn
+                            .frame(minWidth: 540, idealWidth: 600)
+                            .layoutPriority(1)
+                    }
+                } else {
+                    editorColumn
                         .frame(minWidth: 300)
-                        .layoutPriority(2)
-                    TemplateEditorPreviewColumn(
-                        previewPDFData: previewPDFData,
-                        textPreview: previewTextContent,
-                        showOverlay: $showOverlay,
-                        overlayDocument: overlayPDFDocument,
-                        overlayPageIndex: overlayPageIndex,
-                        overlayOpacity: $overlayOpacity,
-                        overlayColor: overlayColor,
-                        isGeneratingPreview: isGeneratingPreview,
-                        isGeneratingLivePreview: isGeneratingLivePreview,
-                        selectedTab: selectedTab,
-                        pdfController: pdfController,
-                        onRefresh: { refreshTemplatePreview(force: true) },
-                        onPrepareOverlayOptions: prepareOverlayOptions
-                    )
-                    .frame(minWidth: 540, idealWidth: 600)
-                    .layoutPriority(1)
+                    previewColumn
+                        .frame(minWidth: 540, idealWidth: 600)
+                        .layoutPriority(1)
                 }
-            } else {
-                TemplateEditorEditorColumn(
-                    selectedTab: $selectedTab,
-                    templateContent: $templateContent,
-                    manifestContent: $manifestContent,
-                    seedContent: $seedContent,
-                    assetHasChanges: $assetHasChanges,
-                    manifestHasChanges: $manifestHasChanges,
-                    seedHasChanges: $seedHasChanges,
-                    manifestValidationMessage: $manifestValidationMessage,
-                    seedValidationMessage: $seedValidationMessage,
-                    textEditorInsertion: $textEditorInsertion,
-                    selectedResume: selectedResume,
-                    onTemplateChange: { updatedContent in
-                        handleTemplateDraftUpdate(with: updatedContent)
-                    },
-                    onValidateManifest: validateManifest,
-                    onSaveManifest: { _ = saveManifest() },
-                    onReloadManifest: loadManifest,
-                    onPromoteSeed: promoteCurrentResumeToSeed,
-                    onSaveSeed: { _ = saveSeed() }
-                )
-                    .frame(minWidth: 300)
-                TemplateEditorPreviewColumn(
-                    previewPDFData: previewPDFData,
-                    textPreview: previewTextContent,
-                    showOverlay: $showOverlay,
-                    overlayDocument: overlayPDFDocument,
-                    overlayPageIndex: overlayPageIndex,
-                    overlayOpacity: $overlayOpacity,
-                    overlayColor: overlayColor,
-                    isGeneratingPreview: isGeneratingPreview,
-                    isGeneratingLivePreview: isGeneratingLivePreview,
-                    selectedTab: selectedTab,
-                    pdfController: pdfController,
-                    onRefresh: { refreshTemplatePreview(force: true) },
-                    onPrepareOverlayOptions: prepareOverlayOptions
-                )
-                .frame(minWidth: 540, idealWidth: 600)
-                .layoutPriority(1)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(NSColor.textBackgroundColor))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
+    }
+
+    private var editorColumn: some View {
+        TemplateEditorEditorColumn(
+            selectedTab: $selectedTab,
+            templateContent: $templateContent,
+            manifestContent: $manifestContent,
+            seedContent: $seedContent,
+            assetHasChanges: $assetHasChanges,
+            manifestHasChanges: $manifestHasChanges,
+            seedHasChanges: $seedHasChanges,
+            manifestValidationMessage: $manifestValidationMessage,
+            seedValidationMessage: $seedValidationMessage,
+            textEditorInsertion: $textEditorInsertion,
+            selectedResume: selectedResume,
+            onTemplateChange: { updatedContent in
+                handleTemplateDraftUpdate(with: updatedContent)
+            },
+            onValidateManifest: validateManifest,
+            onSaveManifest: { _ = saveManifest() },
+            onReloadManifest: loadManifest,
+            onPromoteSeed: promoteCurrentResumeToSeed,
+            onSaveSeed: { _ = saveSeed() }
+        )
+    }
+
+    private var previewColumn: some View {
+        TemplateEditorPreviewColumn(
+            previewPDFData: previewPDFData,
+            textPreview: previewTextContent,
+            showOverlay: $showOverlay,
+            overlayDocument: overlayPDFDocument,
+            overlayPageIndex: overlayPageIndex,
+            overlayOpacity: $overlayOpacity,
+            overlayColor: overlayColor,
+            isGeneratingPreview: isGeneratingPreview,
+            isGeneratingLivePreview: isGeneratingLivePreview,
+            selectedTab: selectedTab,
+            pdfController: pdfController,
+            onRefresh: { refreshTemplatePreview(force: true) },
+            onPrepareOverlayOptions: prepareOverlayOptions
+        )
     }
 
     @ViewBuilder
@@ -490,6 +484,8 @@ struct TemplateEditorView: View {
             templateDisplayName: templateDisplayName(_:),
             templateIconName: { templateIconName(for: $0) },
             templateMatchesCurrentResume: { templateMatchesSelectedResume($0) },
+            templateIsDefault: { templateIsDefault($0) },
+            onMakeDefault: { makeTemplateDefault(slug: $0) },
             onDuplicateTemplate: { slug in duplicateTemplate(slug: slug) },
             onRequestDeleteTemplate: { slug in templatePendingDeletion = slug },
             showingAddTemplate: $showingAddTemplate,
@@ -634,4 +630,44 @@ struct TemplateEditorView: View {
         }
     }
 
+}
+
+private struct TemplateEditorEmptyState: View {
+    @Binding var showingAddTemplate: Bool
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("No templates found")
+                .font(.title2)
+                .fontWeight(.semibold)
+            Text("Create a template to begin editing resumes.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: 360)
+            Button("New Template") {
+                showingAddTemplate = true
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct TemplateSelectionState: View {
+    @Binding var showingAddTemplate: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Select a template to begin")
+                .font(.title3)
+                .fontWeight(.medium)
+            Text("Choose an existing template from the sidebar or create a new one.")
+                .foregroundColor(.secondary)
+            Button("New Template") {
+                showingAddTemplate = true
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 }

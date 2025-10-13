@@ -33,23 +33,23 @@ struct CreateResumeView: View {
                 Text("Select Template")
                     .font(.headline)
                     
-                HStack {
-                    Picker("Select Template", selection: $selectedTemplateID) {
-                        Text("Select a template").tag(nil as UUID?)
-                        ForEach(templates) { template in
-                            Text(template.name).tag(template.id as UUID?)
+                Picker("Select Template", selection: $selectedTemplateID) {
+                    Text("Select a template").tag(nil as UUID?)
+                    ForEach(templates) { template in
+                        Text(template.name).tag(template.id as UUID?)
+                    }
+                }
+                .frame(minWidth: 200)
+                
+                if templates.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No templates available")
+                            .foregroundColor(.secondary)
+                        Button("Open Template Editor") {
+                            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
                         }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .frame(minWidth: 200)
-                    
-                    Button(action: {
-                        // Open the model viewer in sheet
-//                        showResRefSheet = true
-                    }) {
-                        Image(systemName: "plus.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Add new resume template")
                 }
                 
                 if let templateID = selectedTemplateID,
@@ -99,8 +99,12 @@ struct CreateResumeView: View {
         .frame(minWidth: 500, minHeight: 300)
         .onAppear {
             // Default model selection
-            if selectedTemplateID == nil, let firstTemplate = templates.first {
-                selectedTemplateID = firstTemplate.id
+            if selectedTemplateID == nil {
+                if let defaultTemplate = templateStore.defaultTemplate() {
+                    selectedTemplateID = defaultTemplate.id
+                } else if let firstTemplate = templates.first {
+                    selectedTemplateID = firstTemplate.id
+                }
             }
         }
     }

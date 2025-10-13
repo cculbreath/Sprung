@@ -30,6 +30,21 @@ struct CreateNewResumeView: View {
 
                 // Standard SwiftUI Picker - going back to basics
                 let templates = templateStore.templates()
+                if templates.isEmpty {
+                    VStack(spacing: 12) {
+                        Text("No templates available")
+                            .font(.headline)
+                        Text("Open the Template Editor to add a template before creating a resume.")
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                        Button("Open Template Editor") {
+                            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+                }
                 Picker("Select Template", selection: $selectedTemplateID) {
                     Text("Select a template").tag(nil as UUID?)
                     ForEach(templates) { template in
@@ -68,6 +83,7 @@ struct CreateNewResumeView: View {
                 }
                 .padding(.horizontal)
                 .buttonStyle(PlainButtonStyle())
+                .disabled(templates.isEmpty)
 
                 // Error message display
                 if showErrorMessage {
@@ -82,7 +98,7 @@ struct CreateNewResumeView: View {
                 // Set default selection
                 let templates = templateStore.templates()
                 if selectedTemplateID == nil, let first = templates.first {
-                    selectedTemplateID = first.id
+                    selectedTemplateID = templateStore.defaultTemplate()?.id ?? first.id
                 }
             }
         } else {

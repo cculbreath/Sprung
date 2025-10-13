@@ -11,8 +11,8 @@ enum TemplateManifestLoader {
     }
 
     static func manifest(forSlug slug: String) -> TemplateManifest? {
-        guard let data = bundledManifest(slug: slug) else {
-            Logger.warning("TemplateManifestLoader: No bundled manifest found for slug \(slug)")
+        guard let data = documentsManifest(slug: slug) else {
+            Logger.warning("TemplateManifestLoader: No manifest found for slug \(slug)")
             return nil
         }
         return decode(from: data, slug: slug)
@@ -31,15 +31,18 @@ enum TemplateManifestLoader {
         }
     }
 
-    private static func bundledManifest(slug: String) -> Data? {
-        let resourceName = "\(slug)-manifest"
-        if let url = Bundle.main.url(
-            forResource: resourceName,
-            withExtension: "json",
-            subdirectory: "Resources/Templates/\(slug)"
-        ) {
-            return try? Data(contentsOf: url)
+    private static func documentsManifest(slug: String) -> Data? {
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Sprung", isDirectory: true)
+            .appendingPathComponent("Templates", isDirectory: true)
+            .appendingPathComponent(slug, isDirectory: true)
+            .appendingPathComponent("\(slug)-manifest.json")
+
+        if let documentsURL,
+           let data = try? Data(contentsOf: documentsURL) {
+            return data
         }
+
         return nil
     }
 }

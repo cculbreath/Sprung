@@ -26,7 +26,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         webView?.navigationDelegate = self
     }
     
-    func generatePDF(for resume: Resume, template: String = "archer", format: String = "html") async throws -> Data {
+    func generatePDF(for resume: Resume, template: String, format: String = "html") async throws -> Data {
         return try await withCheckedThrowingContinuation { continuation in
             Task { @MainActor in
                 do {
@@ -72,11 +72,8 @@ class NativePDFGenerator: NSObject, ObservableObject {
     @MainActor
     private func renderTemplate(for resume: Resume, template: String, format: String) throws -> String {
         let normalizedTemplate = template.lowercased()
-        // Load template from bundle with template-specific naming (case-insensitive)
         let resourceName = "\(normalizedTemplate)-template"
-        
-        // Try multiple path strategies to find the template
-        var templatePath: String?
+
         var templateContent: String?
 
         if format == "html", let stored = templateStore.htmlTemplateContent(slug: normalizedTemplate) {
@@ -85,8 +82,8 @@ class NativePDFGenerator: NSObject, ObservableObject {
             templateContent = stored
         }
 
-        // Strategy 0: Check Documents directory first for user modifications
-        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+        if templateContent == nil,
+           let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             let userTemplatePath = documentsPath
                 .appendingPathComponent("Sprung")
                 .appendingPathComponent("Templates")
@@ -94,63 +91,11 @@ class NativePDFGenerator: NSObject, ObservableObject {
                 .appendingPathComponent("\(resourceName).\(format)")
             if let content = try? String(contentsOf: userTemplatePath, encoding: .utf8) {
                 templateContent = content
-                templatePath = userTemplatePath.path
                 Logger.debug("Using user-modified template from: \(userTemplatePath.path)")
             }
         }
-        
-        // Strategy 1: Look in Templates/template subdirectory
-        if templateContent == nil {
-            templatePath = Bundle.main.path(forResource: resourceName, ofType: format, inDirectory: "Templates/\(template)")
-            if let path = templatePath {
-                templateContent = try? String(contentsOfFile: path, encoding: .utf8)
-            }
-        }
-        
-        // Strategy 2: Look directly in main bundle
-        if templateContent == nil {
-            templatePath = Bundle.main.path(forResource: resourceName, ofType: format)
-            if let path = templatePath {
-                templateContent = try? String(contentsOfFile: path, encoding: .utf8)
-            }
-        }
-        
-        // Strategy 3: Look for the template file anywhere in the bundle
-        if templateContent == nil {
-            let bundlePath = Bundle.main.bundlePath
-            let fileManager = FileManager.default
-            let enumerator = fileManager.enumerator(atPath: bundlePath)
-            while let file = enumerator?.nextObject() as? String {
-                if file.hasSuffix("\(resourceName).\(format)") {
-                    let fullPath = bundlePath + "/" + file
-                    templateContent = try? String(contentsOfFile: fullPath, encoding: .utf8)
-                    if templateContent != nil {
-                        templatePath = fullPath
-                        break
-                    }
-                }
-            }
-        }
-        
-        // Fallback to embedded templates
-        if templateContent == nil {
-            templateContent = BundledTemplates.getTemplate(name: template, format: format)
-            if templateContent != nil {
-                Logger.debug("Using embedded template for \(template).\(format)")
-            }
-        }
-        
+
         guard let content = templateContent else {
-            // Debug: List available resources
-            Logger.debug("Template not found: \(resourceName).\(format)")
-            Logger.debug("Bundle path: \(Bundle.main.bundlePath)")
-            if let resourcePath = Bundle.main.resourcePath {
-                Logger.debug("Resource path: \(resourcePath)")
-                let fileManager = FileManager.default
-                if let files = try? fileManager.contentsOfDirectory(atPath: resourcePath) {
-                    Logger.debug("Available resources: \(files.prefix(10))")
-                }
-            }
             throw PDFGeneratorError.templateNotFound("\(resourceName).\(format)")
         }
         
@@ -328,6 +273,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         if let summary = processed["summary"] as? String {
             // Trim whitespace from summary before wrapping to prevent extra blank lines
             let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            processed["summary"] = trimmedSummary
             processed["wrappedSummary"] = TextFormatHelpers.wrapper(trimmedSummary, width: 80, leftMargin: 6, rightMargin: 6)
         }
         
@@ -354,6 +300,9 @@ class NativePDFGenerator: NSObject, ObservableObject {
             // For text templates, strip tags and format
             let cleanFooterText = moreInfo.replacingOccurrences(of: #"<\/?[^>]+(>|$)|↪︎"#, with: "", options: .regularExpression).uppercased()
             processed["footerTextFormatted"] = TextFormatHelpers.formatFooter(cleanFooterText, width: 80)
+#if DEBUG
+            Logger.debug("NativePDFGenerator: more-info after preprocessing – \(cleanFooterText.prefix(80))")
+#endif
         }
         
         // Apply WebKit scaling to font-sizes for HTML output

@@ -3,6 +3,7 @@
 //  Sprung
 //
 
+import AppKit
 import PDFKit
 import SwiftUI
 
@@ -20,9 +21,18 @@ struct TemplateEditorPreviewColumn: View {
     let pdfController: PDFPreviewController
     let onRefresh: () -> Void
     let onPrepareOverlayOptions: () -> Void
+    @State private var textPreviewFontSize: CGFloat = TextPreviewAppearance.defaultFontSize
 
     private var isTextPreviewActive: Bool {
         selectedTab == .txtTemplate
+    }
+
+    private var textPreviewFont: Font {
+        .system(size: textPreviewFontSize, weight: .regular, design: .monospaced)
+    }
+
+    private var textPreviewFontLabel: String {
+        "\(Int(textPreviewFontSize)) pt"
     }
 
     var body: some View {
@@ -83,7 +93,7 @@ struct TemplateEditorPreviewColumn: View {
 
             HStack(spacing: 8) {
                 Button(action: onRefresh) {
-                    Image(systemName: "arrow.triangle.head.2.clockwise")
+                    Image(systemName: "arrow.trianglehead.2.clockwise")
                 }
                 .help(isTextPreviewActive ? "Refresh Text Preview" : "Refresh PDF Preview")
                 .disabled(isGeneratingPreview)
@@ -124,6 +134,29 @@ struct TemplateEditorPreviewColumn: View {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                     }
                     .help("Fit to page")
+                } else {
+                    Divider()
+                        .frame(height: 16)
+                    Button {
+                        decreaseFontSize()
+                    } label: {
+                        Image(systemName: "textformat.size.smaller")
+                    }
+                    .help("Decrease font size")
+                    .disabled(textPreviewFontSize <= TextPreviewAppearance.minFontSize)
+
+                    Text(textPreviewFontLabel)
+                        .font(.caption)
+                        .foregroundStyle(Color.secondary)
+                        .frame(minWidth: 44, alignment: .center)
+
+                    Button {
+                        increaseFontSize()
+                    } label: {
+                        Image(systemName: "textformat.size.larger")
+                    }
+                    .help("Increase font size")
+                    .disabled(textPreviewFontSize >= TextPreviewAppearance.maxFontSize)
                 }
             }
             .buttonStyle(.plain)
@@ -183,12 +216,17 @@ struct TemplateEditorPreviewColumn: View {
     @ViewBuilder
     private func textPreviewView() -> some View {
         if let textPreview, !textPreview.isEmpty {
-            ScrollView {
-                Text(textPreview)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+            ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(textPreview)
+                        .font(textPreviewFont)
+                        .textSelection(.enabled)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    Spacer(minLength: 0)
+                }
             }
             .background(Color(NSColor.textBackgroundColor))
         } else {
@@ -210,4 +248,18 @@ struct TemplateEditorPreviewColumn: View {
             pdfController.updatePagingState()
         }
     }
+
+    private func increaseFontSize() {
+        textPreviewFontSize = min(TextPreviewAppearance.maxFontSize, textPreviewFontSize + 1)
+    }
+
+    private func decreaseFontSize() {
+        textPreviewFontSize = max(TextPreviewAppearance.minFontSize, textPreviewFontSize - 1)
+    }
+}
+
+private enum TextPreviewAppearance {
+    static let minFontSize: CGFloat = 10
+    static let defaultFontSize: CGFloat = 13
+    static let maxFontSize: CGFloat = 18
 }

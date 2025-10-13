@@ -6,6 +6,7 @@ import SwiftUI
 struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
 
+    @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(NavigationStateService.self) private var navigationState
@@ -21,6 +22,7 @@ struct ContentView: View {
     @State private var listingButtons = SaveButtons()
     @State private var hasVisitedResumeTab: Bool = false
     @State private var refPopup: Bool = false
+    @State private var didPromptTemplateEditor = false
 
     var body: some View {
         // Bindable references for selection binding
@@ -104,6 +106,11 @@ struct ContentView: View {
                 }
             }
         }
+        .overlay(alignment: .center) {
+            if appEnvironment.requiresTemplateSetup {
+                TemplateSetupOverlay()
+            }
+        }
         // Apply sheet modifier
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
@@ -140,6 +147,16 @@ struct ContentView: View {
             {
                 Logger.debug("Store URL: \(storeURL.path)")
             }
+
+            if appEnvironment.requiresTemplateSetup && !didPromptTemplateEditor {
+                NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                didPromptTemplateEditor = true
+            }
+        }
+        .onChange(of: appEnvironment.requiresTemplateSetup) { _, requiresSetup in
+            if requiresSetup {
+                NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+            }
         }
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch
     }
@@ -160,5 +177,26 @@ struct ContentView: View {
         } else {
             coverLetterStore.cL = nil
         }
+    }
+}
+
+private struct TemplateSetupOverlay: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Add a Template to Get Started")
+                .font(.headline)
+            Text("No resume templates are available. Open the Template Editor to create or import one before continuing.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: 360)
+            Button("Open Template Editor") {
+                NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(24)
+        .background(.regularMaterial)
+        .cornerRadius(16)
+        .shadow(radius: 8)
     }
 }

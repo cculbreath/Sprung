@@ -60,6 +60,17 @@ struct TemplateManifest: Codable {
             let children: [FieldDescriptor]?
             let placeholder: String?
 
+            private enum CodingKeys: String, CodingKey {
+                case key
+                case input
+                case required
+                case repeatable
+                case validation
+                case titleTemplate
+                case children
+                case placeholder
+            }
+
             init(
                 key: String,
                 input: InputKind? = nil,
@@ -78,6 +89,34 @@ struct TemplateManifest: Codable {
                 self.titleTemplate = titleTemplate
                 self.children = children
                 self.placeholder = placeholder
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                key = try container.decode(String.self, forKey: .key)
+                input = try container.decodeIfPresent(InputKind.self, forKey: .input)
+                required = try container.decodeIfPresent(Bool.self, forKey: .required) ?? false
+                repeatable = try container.decodeIfPresent(Bool.self, forKey: .repeatable) ?? false
+                validation = try container.decodeIfPresent(Validation.self, forKey: .validation)
+                titleTemplate = try container.decodeIfPresent(String.self, forKey: .titleTemplate)
+                children = try container.decodeIfPresent([FieldDescriptor].self, forKey: .children)
+                placeholder = try container.decodeIfPresent(String.self, forKey: .placeholder)
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(key, forKey: .key)
+                try container.encodeIfPresent(input, forKey: .input)
+                if required {
+                    try container.encode(required, forKey: .required)
+                }
+                if repeatable {
+                    try container.encode(repeatable, forKey: .repeatable)
+                }
+                try container.encodeIfPresent(validation, forKey: .validation)
+                try container.encodeIfPresent(titleTemplate, forKey: .titleTemplate)
+                try container.encodeIfPresent(children, forKey: .children)
+                try container.encodeIfPresent(placeholder, forKey: .placeholder)
             }
         }
 
@@ -219,7 +258,7 @@ struct TemplateManifest: Codable {
                     try container.encode(number.doubleValue)
                 }
             case let dict as [String: Any]:
-                let encoded = try dict.reduce(into: [String: JSONValue]()) { partialResult, element in
+                let encoded = dict.reduce(into: [String: JSONValue]()) { partialResult, element in
                     partialResult[element.key] = JSONValue(value: element.value)
                 }
                 try container.encode(encoded)

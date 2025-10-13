@@ -8,8 +8,13 @@ import SwiftUI
 
 extension TemplateEditorView {
     func loadTemplate() {
-        let resourceName = "\(selectedTemplate)-template"
         let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
+        guard selectedTemplate.isEmpty == false else {
+            templateContent = ""
+            assetHasChanges = false
+            storeLoadedTemplateContent("", format: fileExtension)
+            return
+        }
 
         let storedSlug = selectedTemplate.lowercased()
         if fileExtension == "html", let stored = appEnvironment.templateStore.htmlTemplateContent(slug: storedSlug) {
@@ -30,7 +35,7 @@ extension TemplateEditorView {
                 .appendingPathComponent("Sprung")
                 .appendingPathComponent("Templates")
                 .appendingPathComponent(selectedTemplate)
-                .appendingPathComponent("\(resourceName).\(fileExtension)")
+                .appendingPathComponent("\(selectedTemplate)-template.\(fileExtension)")
             if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
                 templateContent = content
                 assetHasChanges = false
@@ -39,37 +44,19 @@ extension TemplateEditorView {
             }
         }
 
-        var bundlePath: String?
-        bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Resources/Templates/\(selectedTemplate)")
-        if bundlePath == nil {
-            bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Templates/\(selectedTemplate)")
-        }
-        if bundlePath == nil {
-            bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension)
-        }
-
-        if let path = bundlePath,
-           let content = try? String(contentsOfFile: path, encoding: .utf8) {
-            templateContent = content
-            assetHasChanges = false
-            storeLoadedTemplateContent(content, format: fileExtension)
-        } else if let embeddedContent = BundledTemplates.getTemplate(name: selectedTemplate, format: fileExtension) {
-            templateContent = embeddedContent
-            assetHasChanges = false
-            storeLoadedTemplateContent(embeddedContent, format: fileExtension)
-        } else {
-            templateContent = """
-// Template not found: \(resourceName).\(fileExtension)
-// Bundle path: \(Bundle.main.bundlePath)
-// Resource path: \(Bundle.main.resourcePath ?? "nil")
-"""
-            assetHasChanges = false
-            storeLoadedTemplateContent(templateContent, format: fileExtension)
-        }
+        templateContent = ""
+        assetHasChanges = false
+        storeLoadedTemplateContent("", format: fileExtension)
     }
 
     func loadManifest() {
         manifestValidationMessage = nil
+        guard selectedTemplate.isEmpty == false else {
+            manifestContent = TemplateEditorView.emptyManifest()
+            manifestHasChanges = false
+            return
+        }
+
         let slug = selectedTemplate.lowercased()
 
         if let template = appEnvironment.templateStore.template(slug: slug),
@@ -86,25 +73,17 @@ extension TemplateEditorView {
             return
         }
 
-        if let bundleContent = manifestStringFromBundle(slug: slug) {
-            manifestContent = bundleContent
-            manifestHasChanges = false
-            return
-        }
-
-        manifestContent = """
-{
-  \"slug\": \"\(slug)\",
-  \"sectionOrder\": [],
-  \"sections\": {}
-}
-"""
+        manifestContent = TemplateEditorView.emptyManifest(slug: slug)
         manifestHasChanges = false
     }
 
     @discardableResult
     func saveManifest() -> Bool {
         manifestValidationMessage = nil
+        guard selectedTemplate.isEmpty == false else {
+            manifestValidationMessage = "Select a template first."
+            return false
+        }
         let slug = selectedTemplate.lowercased()
 
         guard let rawData = manifestContent.data(using: .utf8) else {
@@ -158,6 +137,12 @@ extension TemplateEditorView {
 
     func loadSeed() {
         seedValidationMessage = nil
+        guard selectedTemplate.isEmpty == false else {
+            seedContent = "{}"
+            seedHasChanges = false
+            return
+        }
+
         let slug = selectedTemplate.lowercased()
 
         if let template = appEnvironment.templateStore.template(slug: slug),
@@ -175,6 +160,10 @@ extension TemplateEditorView {
     @discardableResult
     func saveSeed() -> Bool {
         seedValidationMessage = nil
+        guard selectedTemplate.isEmpty == false else {
+            seedValidationMessage = "Select a template first."
+            return false
+        }
         let slug = selectedTemplate.lowercased()
 
         guard let template = appEnvironment.templateStore.template(slug: slug) else {
@@ -211,6 +200,7 @@ extension TemplateEditorView {
 
     func promoteCurrentResumeToSeed() {
         seedValidationMessage = nil
+        guard selectedTemplate.isEmpty == false else { return }
         guard let resume = selectedResume else { return }
 
         do {
@@ -239,30 +229,6 @@ extension TemplateEditorView {
         return try? String(contentsOf: manifestURL, encoding: .utf8)
     }
 
-    func manifestStringFromBundle(slug: String) -> String? {
-        let resourceName = "\(slug)-manifest"
-        let candidates: [URL?] = [
-            Bundle.main.url(
-                forResource: resourceName,
-                withExtension: "json",
-                subdirectory: "Resources/Templates/\(slug)"
-            ),
-            Bundle.main.url(
-                forResource: resourceName,
-                withExtension: "json",
-                subdirectory: "Templates/\(slug)"
-            ),
-            Bundle.main.url(forResource: resourceName, withExtension: "json")
-        ]
-
-        for candidate in candidates {
-            if let url = candidate, let content = try? String(contentsOf: url, encoding: .utf8) {
-                return content
-            }
-        }
-        return nil
-    }
-
     func prettyJSONString(from data: Data) -> String? {
         guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
             return nil
@@ -280,6 +246,10 @@ extension TemplateEditorView {
 
     @discardableResult
     func saveTemplate() -> Bool {
+        guard selectedTemplate.isEmpty == false else {
+            saveError = "Select a template before saving."
+            return false
+        }
         let resourceName = "\(selectedTemplate)-template"
         let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
 
@@ -329,14 +299,22 @@ extension TemplateEditorView {
 
     func loadAvailableTemplates() {
         let templates = appEnvironment.templateStore.templates()
-        if templates.isEmpty {
-            availableTemplates = ["archer", "typewriter"]
-        } else {
-            availableTemplates = templates.map { $0.slug }.sorted()
-        }
+        availableTemplates = templates.map { $0.slug }.sorted()
+        appEnvironment.requiresTemplateSetup = availableTemplates.isEmpty
 
-        if !availableTemplates.contains(selectedTemplate) {
-            selectedTemplate = availableTemplates.first ?? "archer"
+        if availableTemplates.isEmpty {
+            defaultTemplateSlug = nil
+            selectedTemplate = ""
+        } else {
+            defaultTemplateSlug = appEnvironment.templateStore.defaultTemplate()?.slug
+            if selectedTemplate.isEmpty || !availableTemplates.contains(selectedTemplate) {
+                if let defaultTemplateSlug,
+                   availableTemplates.contains(defaultTemplateSlug) {
+                    selectedTemplate = defaultTemplateSlug
+                } else {
+                    selectedTemplate = availableTemplates.first ?? ""
+                }
+            }
         }
     }
 
@@ -349,16 +327,22 @@ extension TemplateEditorView {
 
         let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
         let initialContent = createEmptyTemplate(name: trimmedName, format: fileExtension)
+        let shouldBeDefault = availableTemplates.isEmpty
         appEnvironment.templateStore.upsertTemplate(
             slug: trimmedName,
             name: trimmedName.capitalized,
             htmlContent: fileExtension == "html" ? initialContent : nil,
             textContent: fileExtension == "txt" ? initialContent : nil,
-            isCustom: true
+            isCustom: true,
+            markAsDefault: shouldBeDefault
         )
 
         loadAvailableTemplates()
         selectedTemplate = trimmedName
+        if shouldBeDefault {
+            defaultTemplateSlug = trimmedName
+        }
+        appEnvironment.requiresTemplateSetup = availableTemplates.isEmpty
         newTemplateName = ""
 
         templateContent = initialContent
@@ -400,6 +384,7 @@ extension TemplateEditorView {
 
         loadAvailableTemplates()
         selectedTemplate = candidateSlug
+        defaultTemplateSlug = appEnvironment.templateStore.defaultTemplate()?.slug
         loadTemplate()
         loadManifest()
         loadSeed()
@@ -417,19 +402,26 @@ extension TemplateEditorView {
             try? FileManager.default.removeItem(at: templateDir)
         }
 
-        availableTemplates.removeAll { $0 == slug }
         appEnvironment.templateStore.deleteTemplate(slug: slug.lowercased())
         appEnvironment.templateSeedStore.deleteSeed(forSlug: slug.lowercased())
 
+        loadAvailableTemplates()
+        defaultTemplateSlug = appEnvironment.templateStore.defaultTemplate()?.slug
+
         if selectedTemplate == slug {
-            selectedTemplate = availableTemplates.first ?? "archer"
-            loadTemplate()
-            loadManifest()
-            loadSeed()
+            if let defaultTemplateSlug,
+               availableTemplates.contains(defaultTemplateSlug) {
+                selectedTemplate = defaultTemplateSlug
+            } else {
+                selectedTemplate = availableTemplates.first ?? ""
+            }
         }
 
+        appEnvironment.requiresTemplateSetup = availableTemplates.isEmpty
         templatePendingDeletion = nil
-        loadAvailableTemplates()
+        loadTemplate()
+        loadManifest()
+        loadSeed()
     }
 
     func performRefresh() {
@@ -520,6 +512,17 @@ extension TemplateEditorView {
         default:
             break
         }
+    }
+
+    static func emptyManifest(slug: String = "") -> String {
+        let effectiveSlug = slug.isEmpty ? "template" : slug
+        return """
+{
+  \"slug\": \"\(effectiveSlug)\",
+  \"sectionOrder\": [],
+  \"sections\": {}
+}
+"""
     }
 
 }

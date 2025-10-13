@@ -20,13 +20,13 @@ final class OnboardingInterviewService {
         let createdAt: Date
     }
 
-    struct PendingExtraction: Sendable {
+    struct PendingExtraction: @unchecked Sendable {
         let fileId: String
         var rawExtraction: JSON
         var uncertainties: [String]
     }
 
-    private struct ToolCall: Sendable {
+    private struct ToolCall: @unchecked Sendable {
         let identifier: String
         let tool: String
         let arguments: JSON

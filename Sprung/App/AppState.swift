@@ -66,9 +66,9 @@ class AppState {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
-            self.updateOpenRouterConfiguration(configureClient: false)
-            self.refreshOpenAiKeyState()
+            Task { [weak self] in
+                await self?.handleAPIKeysChanged()
+            }
         }
     }
 
@@ -89,5 +89,11 @@ class AppState {
         }
 
         return raw.components(separatedBy: .newlines).joined()
+    }
+
+    @MainActor
+    private func handleAPIKeysChanged() {
+        updateOpenRouterConfiguration(configureClient: false)
+        refreshOpenAiKeyState()
     }
 }
