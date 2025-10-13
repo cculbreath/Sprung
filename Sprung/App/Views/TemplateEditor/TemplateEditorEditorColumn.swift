@@ -17,7 +17,7 @@ struct TemplateEditorEditorColumn: View {
     @Binding var seedValidationMessage: String?
     @Binding var textEditorInsertion: TextEditorInsertionRequest?
     let selectedResume: Resume?
-    let onTemplateChange: () -> Void
+    let onTemplateChange: (String) -> Void
     let onValidateManifest: () -> Void
     let onSaveManifest: () -> Void
     let onReloadManifest: () -> Void
@@ -59,7 +59,7 @@ struct TemplateEditorEditorColumn: View {
         case .pdfTemplate, .txtTemplate:
             TemplateTextEditor(text: $templateContent, insertionRequest: $textEditorInsertion) {
                 assetHasChanges = true
-                onTemplateChange()
+                onTemplateChange(templateContent)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .manifest:
@@ -128,4 +128,3 @@ struct TemplateEditorEditorColumn: View {
         }
     }
 }
-
