@@ -79,6 +79,7 @@ struct SprungApp: App {
                     appDelegate.modelContainer = modelContainer
                     appDelegate.enabledLLMStore = appDependencies.enabledLLMStore
                     appDelegate.applicantProfileStore = appDependencies.applicantProfileStore
+                    appDelegate.llmService = appDependencies.llmService
                     appDelegate.onboardingInterviewService = appDependencies.onboardingInterviewService
                     appDelegate.onboardingArtifactStore = appDependencies.onboardingArtifactStore
                 }

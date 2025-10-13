@@ -57,13 +57,20 @@ extension TemplateEditorView {
             throw TemplatePreviewGeneratorError.templateUnavailable
         }
 
+        let manifestData = templateRecord?.manifestData ?? loadManifestData(slug: slug)
+#if DEBUG
+        if manifestData == nil {
+            Logger.warning("TemplateEditor: No manifest data available for slug \(slug) – falling back to bundled lookup.")
+        }
+#endif
+
         let template = Template(
             name: templateName,
             slug: slug,
             htmlContent: htmlTemplate,
             textContent: textTemplate,
             cssContent: templateRecord?.cssContent,
-            manifestData: templateRecord?.manifestData,
+            manifestData: manifestData,
             isCustom: templateRecord?.isCustom ?? false,
             createdAt: templateRecord?.createdAt ?? Date(),
             updatedAt: templateRecord?.updatedAt ?? Date()
@@ -191,6 +198,53 @@ extension TemplateEditorView {
         overlayPageSelection = min(overlayPageSelection, max(document.pageCount - 1, 0))
         overlayFilename = url.lastPathComponent
     }
+}
+
+private func loadManifestData(slug: String) -> Data? {
+    let normalized = slug.lowercased()
+
+    let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+        .appendingPathComponent("Sprung", isDirectory: true)
+        .appendingPathComponent("Templates", isDirectory: true)
+        .appendingPathComponent(normalized, isDirectory: true)
+        .appendingPathComponent("\(normalized)-manifest.json")
+
+    if let documentsPath,
+       let data = try? Data(contentsOf: documentsPath) {
+#if DEBUG
+        Logger.debug("TemplateEditor: Loaded manifest for \(slug) from documents at \(documentsPath.path)")
+#endif
+        return data
+    }
+
+    let bundleCandidates = [
+        Bundle.main.url(
+            forResource: "\(normalized)-manifest",
+            withExtension: "json",
+            subdirectory: "Resources/Templates/\(normalized)"
+        ),
+        Bundle.main.url(
+            forResource: "\(normalized)-manifest",
+            withExtension: "json",
+            subdirectory: "Templates/\(normalized)"
+        ),
+        Bundle.main.url(forResource: "\(normalized)-manifest", withExtension: "json")
+    ]
+
+    for candidate in bundleCandidates {
+        if let url = candidate,
+           let data = try? Data(contentsOf: url) {
+#if DEBUG
+            Logger.debug("TemplateEditor: Loaded manifest for \(slug) from bundle at \(url.path)")
+#endif
+            return data
+        }
+    }
+
+#if DEBUG
+    Logger.warning("TemplateEditor: Failed to locate manifest for \(slug) in documents or bundle")
+#endif
+    return nil
 }
 
 enum TemplatePreviewGeneratorError: Error {

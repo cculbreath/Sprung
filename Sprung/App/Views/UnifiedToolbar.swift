@@ -60,85 +60,35 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 BestJobButton()
             }
 
-            ToolbarItem(id: "showSources", placement: .navigation, showsByDefault: true) {
+            ToolbarItem(id: "applicantProfile", placement: .navigation, showsByDefault: true) {
                 Button(action: {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
-                        showSlidingList.toggle()
-                    }})
-                {Label("Show Sources", systemImage: "newspaper").font(.system(size: 14, weight: .light))
+                    NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
+                }) {
+                    Label("Profile", systemImage: "person")
+                        .font(.system(size: 14, weight: .light))
                 }
-                .buttonStyle( .automatic )
-                .help("Show Sources")
-                .disabled(jobAppStore.selectedApp == nil)
+                .buttonStyle(.automatic)
+                .help("Open Applicant Profile")
             }
         }}
 
     private var mainButtonsGroup: some CustomizableToolbarContent {
         Group {
-            // Resume Operations
-            ToolbarItem(id: "customize", placement: .secondaryAction, showsByDefault: true) {
-                ResumeCustomizeButton(
-                    selectedTab: $selectedTab
-                )
-            }
-            
-            ToolbarItem(id: "clarifyCustomize", placement: .secondaryAction, showsByDefault: true) {
-                ClarifyingQuestionsButton(
-                    selectedTab: $selectedTab,
-                    clarifyingQuestions: $clarifyingQuestions,
-                    sheets: $sheets
-                )
-            }
-            
-            ToolbarItem(id: "optimize", placement: .secondaryAction, showsByDefault: true) {
+            ToolbarItem(id: "startOnboardingInterview", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
-                    sheets.showResumeReview = true
+                    NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
                 }) {
-                    Label("Optimize", systemImage: "character.magnify")
+                    Label("Interview", systemImage: "bubble.left.and.text.bubble.right")
                         .font(.system(size: 14, weight: .light))
-                       
                 }
-                .buttonStyle( .automatic )
-                .help("AI Resume Review")
-                .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+                .buttonStyle(.automatic)
+                .help("Launch onboarding interview")
             }
-            
-            // Cover Letter Operations
+
             ToolbarItem(id: "coverLetter", placement: .secondaryAction, showsByDefault: true) {
                 CoverLetterGenerateButton()
             }
-            
-            ToolbarItem(id: "reviseLetter", placement: .secondaryAction, showsByDefault: true) {
-                CoverLetterReviseButton()
-            }
-            
-            ToolbarItem(id: "batchLetter", placement: .secondaryAction, showsByDefault: true) {
-                Button(action: {
-                    sheets.showBatchCoverLetter = true
-                }){Label("Batch Letter", systemImage: "square.stack.3d.down.right").font(.system(size: 14, weight: .light))
 
-                        .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-                    .help("Batch Cover Letter Operations")}.buttonStyle( .automatic )
-            }
-            
-            ToolbarItem(id: "committee", placement: .secondaryAction, showsByDefault: true) {
-                Button(action: {
-                    sheets.showMultiModelChooseBest = true
-                }) {
-                    Label("Committee", systemImage: "trophy")
-                           .font(.system(size: 14, weight: .light))
-                    }
-
-                .font(.system(size: 14, weight: .light))
-                .buttonStyle( .automatic )
-                .help("Multi-model Choose Best Cover Letter")
-                .disabled((jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) < 2)
-            }
-            
-            ToolbarItem(id: "tts", placement: .secondaryAction, showsByDefault: true) {
-                TTSButton()
-            }
-            
             ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
                     sheets.showApplicationReview = true
@@ -155,9 +105,37 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
         }
     }
-    
+
     private var inspectorButtonGroup: some CustomizableToolbarContent {
         Group {
+            ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: true) {
+                Button(action: {
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                        NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil)
+                    }
+                }) {
+                    Label("Templates", systemImage: "richtext.page")
+                        .font(.system(size: 14, weight: .light))
+                }
+                .buttonStyle(.automatic)
+                .help("Open Template Editor")
+            }
+
+            ToolbarItem(id: "showSources", placement: .primaryAction, showsByDefault: true) {
+                Button(action: {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
+                        showSlidingList.toggle()
+                    }
+                }) {
+                    Label("Sources", systemImage: "newspaper")
+                        .font(.system(size: 14, weight: .light))
+                }
+                .buttonStyle(.automatic)
+                .help("Show Sources")
+                .disabled(jobAppStore.selectedApp == nil)
+            }
+
             ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
                 Button("Inspector", systemImage: "sidebar.right") {
                     switch selectedTab {
@@ -180,20 +158,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                     NotificationCenter.default.post(name: .showSettings, object: nil)
                 }
                 .help("Open Settings")
-            }
-            
-            ToolbarItem(id: "applicantProfile", placement: .primaryAction, showsByDefault: false) {
-                Button("Profile", systemImage: "person.crop.circle") {
-                    NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
-                }
-                .help("Open Applicant Profile")
-            }
-            
-            ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: false) {
-                Button("Templates", systemImage: "doc.text") {
-                    NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
-                }
-                .help("Open Template Editor")
             }
             
             // Legacy placeholder items to prevent crashes for previously customized toolbars

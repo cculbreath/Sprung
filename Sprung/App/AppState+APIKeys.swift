@@ -9,12 +9,10 @@ import Foundation
 
 extension AppState {
     var hasValidOpenRouterKey: Bool {
-        let apiKey = APIKeyManager.get(.openRouter) ?? ""
-        return !apiKey.isEmpty
+        !openRouterApiKey.isEmpty
     }
     
     var hasValidOpenAiKey: Bool {
-        let apiKey = APIKeyManager.get(.openAI) ?? ""
-        return !apiKey.isEmpty
+        !openAiApiKey.isEmpty
     }
 }
