@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ResRefFormView: View {
     @State private var isTargeted: Bool = false
     @State var sourceName: String = ""
     @State var sourceContent: String = ""
     @State var enabledByDefault: Bool = true
+    @State private var dropErrorMessage: String?
     @Binding var isSheetPresented: Bool
 
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
@@ -46,6 +48,10 @@ struct ResRefFormView: View {
                             .frame(width: 150, alignment: .trailing)
 
                         CustomTextEditor(sourceContent: $sourceContent)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(isTargeted ? Color.accentColor : Color.clear, lineWidth: 2)
+                            )
                     }
 
                     HStack {
@@ -79,10 +85,8 @@ struct ResRefFormView: View {
         }
         .frame(width: 500) // Fix width explicitly
         .background(Color(NSColor.windowBackgroundColor)) // Matches macOS window background
-        .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
+        .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isTargeted) { providers in
             handleOnDrop(providers: providers)
-        }
-        .onChange(of: isTargeted) { _, _ in
         }
         .onAppear {
             if let resRef = existingResRef {
@@ -90,6 +94,16 @@ struct ResRefFormView: View {
                 self.sourceContent = resRef.content
                 self.enabledByDefault = resRef.enabledByDefault
             }
+        }
+        .alert("Import Failed", isPresented: Binding(
+            get: { dropErrorMessage != nil },
+            set: { if !$0 { dropErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                dropErrorMessage = nil
+            }
+        } message: {
+            Text(dropErrorMessage ?? "Unknown error")
         }
     }
 
@@ -118,39 +132,74 @@ struct ResRefFormView: View {
     }
 
     private func handleOnDrop(providers: [NSItemProvider]) -> Bool {
-        for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
-                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
-                    guard let urlData = item as? Data,
-                          let url = URL(dataRepresentation: urlData, relativeTo: nil)
-                    else {
-                        return
-                    }
+        var didRequestLoad = false
 
-                    do {
-                        let fileName = url.deletingPathExtension().lastPathComponent
-                        let text = try String(contentsOf: url, encoding: .utf8)
-                        DispatchQueue.main.async {
-                            self.sourceName = fileName
-                            self.sourceContent = text
-                            saveRefForm()
-                        }
-
-                    } catch {}
+        for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            didRequestLoad = true
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                guard let urlData = item as? Data,
+                      let url = URL(dataRepresentation: urlData, relativeTo: nil)
+                else {
+                    Logger.error("❌ Failed to resolve dropped file URL")
+                    showDropError("Could not access the dropped file.")
+                    return
                 }
 
-                // Continue to handle other providers
-                continue
-            } else {
-                return false
+                guard isSupportedTextFile(url) else {
+                    Logger.warning("⚠️ Unsupported file type dropped: \(url.pathExtension)")
+                    showDropError("Unsupported file type: \(url.pathExtension.uppercased()). Please drop a plain text, Markdown, or JSON file.")
+                    return
+                }
+
+                do {
+                    let text = try String(contentsOf: url, encoding: .utf8)
+                    let fileName = url.deletingPathExtension().lastPathComponent
+
+                    DispatchQueue.main.async {
+                        self.sourceName = fileName
+                        self.sourceContent = text
+                        self.dropErrorMessage = nil
+                        saveRefForm()
+                        resetRefForm()
+                        closePopup()
+                    }
+                } catch {
+                    Logger.error("❌ Failed to load dropped file as UTF-8 text: \(error.localizedDescription)")
+                    showDropError("Could not read the file using UTF-8 encoding.")
+                }
             }
         }
-        resetRefForm()
-        closePopup()
-        return true
+
+        return didRequestLoad
     }
 
     private func closePopup() {
         isSheetPresented = false
+    }
+
+    private func isSupportedTextFile(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        guard !ext.isEmpty else { return false }
+
+        if let type = UTType(filenameExtension: ext) {
+            if type.conforms(to: .plainText) ||
+                type.conforms(to: .utf8PlainText) ||
+                type.conforms(to: .utf16PlainText) ||
+                type.conforms(to: .json) {
+                return true
+            }
+
+            if let markdown = UTType(filenameExtension: "md"), type == markdown { return true }
+            if let markdownLong = UTType(filenameExtension: "markdown"), type == markdownLong { return true }
+        }
+
+        let allowedExtensions: Set<String> = ["txt", "md", "markdown", "json", "csv", "yaml", "yml"]
+        return allowedExtensions.contains(ext)
+    }
+
+    private func showDropError(_ message: String) {
+        DispatchQueue.main.async {
+            self.dropErrorMessage = message
+        }
     }
 }

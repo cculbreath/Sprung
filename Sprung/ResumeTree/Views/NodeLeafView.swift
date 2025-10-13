@@ -52,7 +52,7 @@ struct NodeLeafView: View {
                         tempValue: Binding(get: { vm.tempValue }, set: { vm.tempValue = $0 }),
                         node: node,
                         validationError: vm.validationError,
-                        allowNameEditing: !isSectionLabelEntry,
+                        allowNameEditing: node.allowsInlineNameEditing,
                         saveChanges: { vm.saveEdits() },
                         cancelChanges: { vm.cancelEditing() },
                         deleteNode: { deleteNode(node: node) },

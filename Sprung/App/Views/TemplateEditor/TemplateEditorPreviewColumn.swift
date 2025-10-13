@@ -39,20 +39,22 @@ struct TemplateEditorPreviewColumn: View {
 
     @ViewBuilder
     private func previewContent() -> some View {
-        if isTextPreviewActive {
-            textPreviewView()
-        } else if let pdfData = previewPDFData {
-            PDFPreviewView(
-                pdfData: pdfData,
-                overlayDocument: showOverlay ? overlayDocument : nil,
-                overlayPageIndex: overlayPageIndex,
-                overlayOpacity: overlayOpacity,
-                overlayColor: overlayColor.toNSColor(),
-                controller: pdfController
-            )
-            .background(Color(NSColor.textBackgroundColor))
-        } else {
-            previewUnavailableMessage("PDF preview will render after template defaults are generated.")
+        ZStack {
+            Color(NSColor.textBackgroundColor)
+            if isTextPreviewActive {
+                textPreviewView()
+            } else if let pdfData = previewPDFData {
+                PDFPreviewView(
+                    pdfData: pdfData,
+                    overlayDocument: showOverlay ? overlayDocument : nil,
+                    overlayPageIndex: overlayPageIndex,
+                    overlayOpacity: overlayOpacity,
+                    overlayColor: overlayColor.toNSColor(),
+                    controller: pdfController
+                )
+            } else {
+                previewUnavailableMessage("PDF preview will render after template defaults are generated.")
+            }
         }
     }
 

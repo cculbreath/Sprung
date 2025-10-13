@@ -25,8 +25,8 @@ struct EditingControls: View {
     @State private var isHoveringDelete: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 Button(action: {
                     isEditing = false
                     deleteNode()
@@ -41,10 +41,14 @@ struct EditingControls: View {
                     if allowNameEditing {
                         TextField("Name", text: $tempName)
                             .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: .infinity)
                             .onChange(of: tempName) { _, _ in clearValidation() }
                     }
 
-                    valueEditor()
+                    Group {
+                        valueEditor()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let validationError, !validationError.isEmpty {
                         Text(validationError)
@@ -56,9 +60,10 @@ struct EditingControls: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-        HStack(spacing: 16) {
+            HStack(spacing: 16) {
                 Button(action: saveChanges) {
                     Label("Save", systemImage: "checkmark.circle.fill")
                         .foregroundColor(isHoveringSave ? .green : .secondary)
@@ -111,10 +116,12 @@ struct EditingControls: View {
                 }
             ))
             .textFieldStyle(.roundedBorder)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .onChange(of: tempValue) { _, _ in clearValidation() }
         case .url, .email, .phone:
             TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
                 .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: tempValue) { _, _ in clearValidation() }
         case .select:
             selectionPicker(options: node.schemaValidationOptions)
@@ -122,6 +129,7 @@ struct EditingControls: View {
         default:
             TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
                 .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: tempValue) { _, _ in clearValidation() }
         }
     }
@@ -154,41 +162,41 @@ struct EditingControls: View {
     }
 
     private func selectionPicker(options: [String]) -> AnyView {
-    if options.count <= 3 {
-        return AnyView(
-            Picker(node.schemaPlaceholder ?? "Value", selection: $tempValue) {
-                ForEach(options, id: \.self) { option in
-                    Text(option).tag(option)
+        if options.count <= 3 {
+            return AnyView(
+                Picker(node.schemaPlaceholder ?? "Value", selection: $tempValue) {
+                    ForEach(options, id: \.self) { option in
+                        Text(option).tag(option)
+                    }
                 }
+                .pickerStyle(.segmented)
+            )
+        }
+
+        return AnyView(
+            Menu {
+                ForEach(options, id: \.self) { option in
+                    Button(option) {
+                        tempValue = option
+                        clearValidation()
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(tempValue.isEmpty ? (node.schemaPlaceholder ?? "Select") : tempValue)
+                        .foregroundColor(tempValue.isEmpty ? .secondary : .primary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(Color.primary.opacity(0.05))
+                .cornerRadius(6)
             }
-            .pickerStyle(.segmented)
         )
     }
-
-    return AnyView(
-        Menu {
-            ForEach(options, id: \.self) { option in
-                Button(option) {
-                    tempValue = option
-                    clearValidation()
-                }
-            }
-        } label: {
-            HStack {
-                Text(tempValue.isEmpty ? (node.schemaPlaceholder ?? "Select") : tempValue)
-                    .foregroundColor(tempValue.isEmpty ? .secondary : .primary)
-                Spacer()
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
-            .background(Color.primary.opacity(0.05))
-            .cornerRadius(6)
-        }
-    )
-}
 }
 
 // MARK: - Supporting Views
