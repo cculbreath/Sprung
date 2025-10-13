@@ -81,56 +81,85 @@ struct EditingControls: View {
         }
     }
 
-    @ViewBuilder
     private func valueEditor() -> some View {
-        switch node.schemaInputKind {
-        case .textarea, .markdown:
-            PlaceholderTextEditor(text: $tempValue, placeholder: node.schemaPlaceholder, onChange: { clearValidation() })
-                .frame(minHeight: 120)
-        case .chips:
-            ChipsEditor(text: $tempValue, placeholder: node.schemaPlaceholder)
+        let inputKind = node.schemaInputKind ?? node.parent?.schemaInputKind
+        let requiresMultilineEditor = shouldUseMultilineEditor(for: inputKind)
+        Logger.debug(
+            """
+            🛠 EditingControls.valueEditor \
+            node=\(node.name.isEmpty ? "<unnamed>" : node.name) \
+            schemaInputKind=\(inputKind?.rawValue ?? "nil") \
+            parentInputKind=\(node.parent?.schemaInputKind?.rawValue ?? "nil") \
+            requiresMultiline=\(requiresMultilineEditor) \
+            tempValueLength=\(tempValue.count)
+            """
+        )
+
+        return Group {
+            switch inputKind {
+            case .textarea, .markdown:
+                CustomTextEditor(
+                    sourceContent: $tempValue,
+                    placeholder: node.schemaPlaceholder,
+                    minimumHeight: 120,
+                    maximumHeight: nil,
+                    onChange: { clearValidation() }
+                )
+            case .chips:
+                ChipsEditor(text: $tempValue, placeholder: node.schemaPlaceholder)
+                    .onChange(of: tempValue) { _, _ in clearValidation() }
+            case .toggle:
+                Toggle("Enabled", isOn: Binding(
+                    get: { tempValue.lowercased() == "true" },
+                    set: { tempValue = $0 ? "true" : "false" }
+                ))
+                .toggleStyle(SwitchToggleStyle())
                 .onChange(of: tempValue) { _, _ in clearValidation() }
-        case .toggle:
-            Toggle("Enabled", isOn: Binding(
-                get: { tempValue.lowercased() == "true" },
-                set: { tempValue = $0 ? "true" : "false" }
-            ))
-            .toggleStyle(SwitchToggleStyle())
-            .onChange(of: tempValue) { _, _ in clearValidation() }
-        case .date:
-            DatePicker(
-                node.schemaPlaceholder ?? "Select Date",
-                selection: Binding(
-                    get: { stringToDate(tempValue) ?? Date() },
-                    set: { tempValue = dateToString($0) }
-                ),
-                displayedComponents: .date
-            )
-            .onChange(of: tempValue) { _, _ in clearValidation() }
-        case .number:
-            TextField(node.schemaPlaceholder ?? "Value", text: Binding(
-                get: { tempValue },
-                set: { newValue in
-                    let filtered = newValue.filter { $0.isNumber || $0 == "." }
-                    tempValue = filtered
+            case .date:
+                DatePicker(
+                    node.schemaPlaceholder ?? "Select Date",
+                    selection: Binding(
+                        get: { stringToDate(tempValue) ?? Date() },
+                        set: { tempValue = dateToString($0) }
+                    ),
+                    displayedComponents: .date
+                )
+                .onChange(of: tempValue) { _, _ in clearValidation() }
+            case .number:
+                TextField(node.schemaPlaceholder ?? "Value", text: Binding(
+                    get: { tempValue },
+                    set: { newValue in
+                        let filtered = newValue.filter { $0.isNumber || $0 == "." }
+                        tempValue = filtered
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onChange(of: tempValue) { _, _ in clearValidation() }
+            case .url, .email, .phone:
+                TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: tempValue) { _, _ in clearValidation() }
+            case .select:
+                selectionPicker(options: node.schemaValidationOptions)
+                    .onChange(of: tempValue) { _, _ in clearValidation() }
+            default:
+                if requiresMultilineEditor {
+                    CustomTextEditor(
+                        sourceContent: $tempValue,
+                        placeholder: node.schemaPlaceholder,
+                        minimumHeight: 120,
+                        maximumHeight: nil,
+                        onChange: { clearValidation() }
+                    )
+                } else {
+                    TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .onChange(of: tempValue) { _, _ in clearValidation() }
                 }
-            ))
-            .textFieldStyle(.roundedBorder)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .onChange(of: tempValue) { _, _ in clearValidation() }
-        case .url, .email, .phone:
-            TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .onChange(of: tempValue) { _, _ in clearValidation() }
-        case .select:
-            selectionPicker(options: node.schemaValidationOptions)
-                .onChange(of: tempValue) { _, _ in clearValidation() }
-        default:
-            TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .onChange(of: tempValue) { _, _ in clearValidation() }
+            }
         }
     }
 
@@ -197,31 +226,26 @@ struct EditingControls: View {
             }
         )
     }
-}
 
-// MARK: - Supporting Views
-
-private struct PlaceholderTextEditor: View {
-    @Binding var text: String
-    var placeholder: String?
-    var onChange: (() -> Void)?
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            if (text.isEmpty) {
-                Text(placeholder ?? "Enter value")
-                    .foregroundColor(.secondary)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 4)
-            }
-            TextEditor(text: $text)
-                .padding(4)
-                .background(Color.primary.opacity(0.05))
-                .cornerRadius(6)
-                .onChange(of: text) { _, _ in onChange?() }
+    private func shouldUseMultilineEditor(
+        for inputKind: TemplateManifest.Section.FieldDescriptor.InputKind?
+    ) -> Bool {
+        switch inputKind {
+        case .textarea, .markdown:
+            return true
+        case nil:
+            let multilineLengthThreshold = 80
+            return tempValue.contains("\n")
+                || node.value.contains("\n")
+                || tempValue.count > multilineLengthThreshold
+                || node.value.count > multilineLengthThreshold
+        default:
+            return false
         }
     }
 }
+
+// MARK: - Supporting Views
 
 private struct ChipsEditor: View {
     @Binding var text: String

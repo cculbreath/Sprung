@@ -261,22 +261,17 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
         
         // Handle skills-and-expertise (either object or array format)
-        if let skillsDict = processed["skills-and-expertise"] as? [String: Any] {
-            // Convert object format to array format
-            var skillsArray: [[String: Any]] = []
-            for (title, description) in skillsDict {
-                skillsArray.append([
-                    "title": title,
-                    "description": description
-                ])
-            }
+        if let treeSkills = skillsArrayFromResumeTree(resume) {
+            processed["skills-and-expertise"] = treeSkills
+            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(treeSkills, width: 80, indent: 3)
+        } else if let skillsDict = processed["skills-and-expertise"] as? [String: Any] {
+            let skillsArray = skillsDictionaryToArray(skillsDict)
             processed["skills-and-expertise"] = skillsArray
-            
-            // Add formatted text helpers for text templates
             processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(skillsArray, width: 80, indent: 3)
         } else if let skillsArray = processed["skills-and-expertise"] as? [[String: Any]] {
-            // Already in array format, just add formatted text
-            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(skillsArray, width: 80, indent: 3)
+            let reordered = reorderSkills(skillsArray, using: resume)
+            processed["skills-and-expertise"] = reordered
+            processed["skillsAndExpertiseFormatted"] = TextFormatHelpers.formatSkillsWithIndent(reordered, width: 80, indent: 3)
         }
         
         // Convert education object to array format
@@ -367,6 +362,96 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
         
         return processed
+    }
+
+    private func skillsArrayFromResumeTree(_ resume: Resume) -> [[String: Any]]? {
+        guard let root = resume.rootNode else { return nil }
+        guard let skillsNode = root.orderedChildren.first(where: { $0.name == "skills-and-expertise" }) else {
+            return nil
+        }
+
+        let entries = skillsNode.orderedChildren.compactMap { entry -> [String: Any]? in
+            var result: [String: Any] = [:]
+
+            if entry.hasChildren {
+                for child in entry.orderedChildren {
+                    guard !child.name.isEmpty else { continue }
+                    if !child.value.isEmpty {
+                        result[child.name] = child.value
+                    }
+                }
+            }
+
+            if result["title"] == nil {
+                let fallbackTitle = entry.name.isEmpty ? entry.value : entry.name
+                if !fallbackTitle.isEmpty {
+                    result["title"] = fallbackTitle
+                }
+            }
+
+            if result["description"] == nil, !entry.value.isEmpty {
+                result["description"] = entry.value
+            }
+
+            return result.isEmpty ? nil : result
+        }
+
+        return entries.isEmpty ? nil : entries
+    }
+
+    private func skillsDictionaryToArray(_ dictionary: [String: Any]) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        for key in dictionary.keys.sorted() {
+            guard let value = dictionary[key] else { continue }
+            if let description = value as? String {
+                result.append(["title": key, "description": description])
+            } else if var nested = value as? [String: Any] {
+                if nested["title"] == nil {
+                    nested["title"] = key
+                }
+                result.append(nested)
+            }
+        }
+        return result
+    }
+
+    private func reorderSkills(_ skills: [[String: Any]], using resume: Resume) -> [[String: Any]] {
+        guard let root = resume.rootNode else { return skills }
+        guard let skillsNode = root.orderedChildren.first(where: { $0.name == "skills-and-expertise" }) else {
+            return skills
+        }
+
+        let preferredOrder: [String] = skillsNode.orderedChildren.compactMap { entry in
+            if let titleChild = entry.orderedChildren.first(where: { $0.name == "title" }),
+               !titleChild.value.isEmpty {
+                return titleChild.value
+            }
+            if !entry.name.isEmpty { return entry.name }
+            return entry.value.isEmpty ? nil : entry.value
+        }
+
+        guard !preferredOrder.isEmpty else { return skills }
+
+        var lookup: [String: [String: Any]] = [:]
+        for item in skills {
+            if let title = item["title"] as? String {
+                lookup[title] = item
+            }
+        }
+
+        var reordered: [[String: Any]] = []
+        for title in preferredOrder {
+            if let item = lookup.removeValue(forKey: title) {
+                reordered.append(item)
+            }
+        }
+
+        if !lookup.isEmpty {
+            let remaining = lookup.keys.sorted().compactMap { lookup[$0] }
+            reordered.append(contentsOf: remaining)
+        }
+
+        return reordered.isEmpty ? skills : reordered
     }
     
     private func preprocessTemplateForGRMustache(_ template: String) -> String {
