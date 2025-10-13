@@ -541,6 +541,61 @@ extension TemplateManifest {
     }
 }
 
+// MARK: - Applicant Profile Bindings
+
+extension TemplateManifest {
+    struct ApplicantProfileBinding {
+        let section: String
+        let path: [String]
+        let descriptor: Section.FieldDescriptor
+        let binding: Section.FieldDescriptor.Binding
+    }
+
+    func applicantProfileBindings() -> [ApplicantProfileBinding] {
+        var bindings: [ApplicantProfileBinding] = []
+        for (sectionKey, section) in sections {
+            collectApplicantProfileBindings(
+                in: section.fields,
+                sectionKey: sectionKey,
+                currentPath: [],
+                accumulator: &bindings
+            )
+        }
+        return bindings
+    }
+
+    private func collectApplicantProfileBindings(
+        in descriptors: [Section.FieldDescriptor],
+        sectionKey: String,
+        currentPath: [String],
+        accumulator: inout [ApplicantProfileBinding]
+    ) {
+        for descriptor in descriptors where descriptor.key != "*" {
+            let nextPath = currentPath + [descriptor.key]
+            if descriptor.repeatable { continue }
+            if let binding = descriptor.binding,
+               binding.source == .applicantProfile {
+                accumulator.append(
+                    ApplicantProfileBinding(
+                        section: sectionKey,
+                        path: nextPath,
+                        descriptor: descriptor,
+                        binding: binding
+                    )
+                )
+            }
+            if let children = descriptor.children, children.isEmpty == false {
+                collectApplicantProfileBindings(
+                    in: children,
+                    sectionKey: sectionKey,
+                    currentPath: nextPath,
+                    accumulator: &accumulator
+                )
+            }
+        }
+    }
+}
+
 // MARK: - Field Descriptor Synthesis
 
 private enum FieldDescriptorFactory {

@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftUI
+import OrderedCollections
 
 extension TemplateEditorView {
     func loadTemplate() {
@@ -178,7 +179,47 @@ extension TemplateEditorView {
 
         do {
             let jsonObject = try JSONSerialization.jsonObject(with: data)
-            guard let formatted = prettyJSONString(from: jsonObject) else {
+            guard var seedDictionary = jsonObject as? [String: Any] else {
+                seedValidationMessage = "Seed must be a JSON object."
+                return false
+            }
+
+            let manifest = TemplateManifestLoader.manifest(for: template)
+            var profileChanges: [ProfileUpdateChange] = []
+
+            if let manifest {
+                let bindings = manifest.applicantProfileBindings()
+                if bindings.isEmpty == false {
+                    let profile = appEnvironment.applicantProfileStore.currentProfile()
+                    for binding in bindings {
+                        guard let field = profileField(for: binding.binding.path) else { continue }
+                        guard let seedValue = extractStringValue(
+                            section: binding.section,
+                            path: binding.path,
+                            from: seedDictionary
+                        ), seedValue.isEmpty == false else { continue }
+
+                        let trimmedSeed = seedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let currentValue = profile[keyPath: field.keyPath]
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmedSeed != currentValue {
+                            profileChanges.append(
+                                ProfileUpdateChange(
+                                    label: field.label,
+                                    keyPath: field.keyPath,
+                                    newValue: trimmedSeed,
+                                    currentValue: currentValue
+                                )
+                            )
+                        }
+                    }
+                    seedDictionary = removeProfileData(from: seedDictionary, bindings: bindings)
+                }
+            } else {
+                seedDictionary.removeValue(forKey: "contact")
+            }
+
+            guard let formatted = prettyJSONString(from: seedDictionary) else {
                 seedValidationMessage = "Seed must be valid JSON."
                 return false
             }
@@ -191,11 +232,161 @@ extension TemplateEditorView {
             seedContent = formatted
             seedHasChanges = false
             seedValidationMessage = "Seed saved."
+
+            if profileChanges.isEmpty == false {
+                pendingProfileUpdate = ProfileUpdatePrompt(changes: profileChanges)
+            }
+
             return true
         } catch {
             seedValidationMessage = "Seed validation failed: \(error.localizedDescription)"
             return false
         }
+    }
+
+    private func profileField(for path: [String]) -> ProfileField? {
+        guard let first = path.first else { return nil }
+        switch first {
+        case "name":
+            return ProfileField(label: "Name", keyPath: \ApplicantProfile.name)
+        case "email":
+            return ProfileField(label: "Email", keyPath: \ApplicantProfile.email)
+        case "phone":
+            return ProfileField(label: "Phone", keyPath: \ApplicantProfile.phone)
+        case "url", "website":
+            return ProfileField(label: "Website", keyPath: \ApplicantProfile.websites)
+        case "address":
+            return ProfileField(label: "Address", keyPath: \ApplicantProfile.address)
+        case "city":
+            return ProfileField(label: "City", keyPath: \ApplicantProfile.city)
+        case "region", "state":
+            return ProfileField(label: "State", keyPath: \ApplicantProfile.state)
+        case "postalCode", "zip", "code":
+            return ProfileField(label: "Postal Code", keyPath: \ApplicantProfile.zip)
+        case "location":
+            let remainder = Array(path.dropFirst())
+            return profileField(for: remainder)
+        default:
+            return nil
+        }
+    }
+
+    private func extractStringValue(
+        section: String,
+        path: [String],
+        from dictionary: [String: Any]
+    ) -> String? {
+        guard let sectionValue = dictionary[section] else { return nil }
+        guard let raw = valueAtPath(path, in: sectionValue) else { return nil }
+        if let string = raw as? String {
+            return string
+        }
+        if let number = raw as? NSNumber {
+            return number.stringValue
+        }
+        return nil
+    }
+
+    private func valueAtPath(_ path: [String], in value: Any) -> Any? {
+        guard let first = path.first else { return value }
+
+        if let dict = dictionaryValue(from: value) {
+            let remainder = Array(path.dropFirst())
+            guard let child = dict[first] else { return nil }
+            return remainder.isEmpty ? child : valueAtPath(remainder, in: child)
+        }
+
+        return nil
+    }
+
+    private func removeProfileData(
+        from dictionary: [String: Any],
+        bindings: [TemplateManifest.ApplicantProfileBinding]
+    ) -> [String: Any] {
+        bindings.reduce(dictionary) { partial, binding in
+            removeProfileValue(at: binding.path, inSection: binding.section, from: partial)
+        }
+    }
+
+    private func removeProfileValue(
+        at path: [String],
+        inSection section: String,
+        from dictionary: [String: Any]
+    ) -> [String: Any] {
+        guard var sectionValue = dictionary[section] else { return dictionary }
+        let updated = removeValue(at: path, from: sectionValue)
+        var sanitized = dictionary
+        if let updated {
+            sanitized[section] = updated
+        } else {
+            sanitized.removeValue(forKey: section)
+        }
+        return sanitized
+    }
+
+    private func removeValue(at path: [String], from value: Any) -> Any? {
+        guard let first = path.first else { return value }
+
+        if path.count == 1 {
+            if var dict = dictionaryValue(from: value) {
+                dict.removeValue(forKey: first)
+                return dict.isEmpty ? nil : dict
+            }
+            return nil
+        }
+
+        guard var dict = dictionaryValue(from: value) else { return value }
+        let remainder = Array(path.dropFirst())
+        if let child = dict[first], let updated = removeValue(at: remainder, from: child) {
+            dict[first] = updated
+        } else {
+            dict.removeValue(forKey: first)
+        }
+        return dict.isEmpty ? nil : dict
+    }
+
+    private func dictionaryValue(from value: Any?) -> [String: Any]? {
+        guard let value else { return nil }
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
+        }
+        return nil
+    }
+
+    func applyProfileUpdate(_ prompt: ProfileUpdatePrompt) {
+        var profile = appEnvironment.applicantProfileStore.currentProfile()
+        for change in prompt.changes {
+            profile[keyPath: change.keyPath] = change.newValue
+        }
+        appEnvironment.applicantProfileStore.save(profile)
+        pendingProfileUpdate = nil
+        seedValidationMessage = "Seed saved. Profile updated."
+    }
+
+    struct ProfileUpdateChange {
+        let label: String
+        let keyPath: WritableKeyPath<ApplicantProfile, String>
+        let newValue: String
+        let currentValue: String
+    }
+
+    struct ProfileUpdatePrompt {
+        let changes: [ProfileUpdateChange]
+
+        var message: String {
+            changes.map { change in
+                let previous = change.currentValue.isEmpty ? "(empty)" : change.currentValue
+                return "• \(change.label): \(previous) → \(change.newValue)"
+            }.joined(separator: "\n")
+        }
+    }
+
+    private struct ProfileField {
+        let label: String
+        let keyPath: WritableKeyPath<ApplicantProfile, String>
     }
 
     func promoteCurrentResumeToSeed() {
