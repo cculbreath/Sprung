@@ -11,8 +11,6 @@ import SwiftUI
 struct NewAppSheetView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
 
-    @AppStorage("scrapingDogApiKey") var scrapingDogApiKey: String = "none"
-
     @State private var isLoading: Bool = false
     @State private var urlText: String = ""
     @State private var delayed: Bool = false
@@ -24,9 +22,20 @@ struct NewAppSheetView: View {
     @State private var showError: Bool = false
     @State private var showLinkedInLogin: Bool = false
     @State private var isProcessingJob: Bool = false
-    @StateObject private var linkedInSessionManager = LinkedInSessionManager.shared
+    @StateObject private var linkedInSessionManager: LinkedInSessionManager
 
     @Binding var isPresented: Bool
+
+    @MainActor
+    init(isPresented: Binding<Bool>) {
+        self.init(isPresented: isPresented, sessionManager: LinkedInSessionManager())
+    }
+
+    @MainActor
+    init(isPresented: Binding<Bool>, sessionManager: LinkedInSessionManager) {
+        _isPresented = isPresented
+        _linkedInSessionManager = StateObject(wrappedValue: sessionManager)
+    }
 
     var body: some View {
         VStack {
@@ -39,7 +48,8 @@ struct NewAppSheetView: View {
                         Text("Fetch results not ready. Trying again in 10s").font(.caption)
                     }
                     if verydelayed {
-                        Text("Something suss going on with scraper. Trying again in 200s").font(.caption)
+                        Text("The scraping service is taking longer than expected. Retrying in 200 seconds.")
+                            .font(.caption)
                     }
                     if baddomain {
                         VStack { Text("URL does not is not a supported job listing site").font(.caption).padding()
@@ -265,7 +275,8 @@ struct NewAppSheetView: View {
         }
         
         // Fallback to ScrapingDog if a key is configured
-        guard scrapingDogApiKey != "none",
+        guard let scrapingDogApiKey = APIKeyManager.get(.scrapingDog),
+              !scrapingDogApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let jobID = linkedinJobId(from: url)
         else {
             await MainActor.run {
@@ -276,11 +287,10 @@ struct NewAppSheetView: View {
             return
         }
 
-        await fetchLinkedInWithScrapingDog(jobID: jobID, postingURL: url)
+        await fetchLinkedInWithScrapingDog(jobID: jobID, postingURL: url, apiKey: scrapingDogApiKey)
     }
 
-    private func fetchLinkedInWithScrapingDog(jobID: String, postingURL: URL) async {
-        let apiKey = scrapingDogApiKey
+    private func fetchLinkedInWithScrapingDog(jobID: String, postingURL: URL, apiKey: String) async {
         let requestURL =
             "https://api.scrapingdog.com/linkedinjobs?api_key=\(apiKey)&job_id=\(jobID)"
 

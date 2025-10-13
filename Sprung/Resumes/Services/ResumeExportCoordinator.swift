@@ -2,8 +2,6 @@
 //  ResumeExportCoordinator.swift
 //  Sprung
 //
-//  Created by Codex Agent on 10/23/25.
-//
 
 import Foundation
 import Observation

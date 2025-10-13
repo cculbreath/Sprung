@@ -2,8 +2,6 @@
 //  TemplateQuickActionsView.swift
 //  Sprung
 //
-//  Created by Codex Agent on 10/27/25.
-//
 
 import AppKit
 import Foundation

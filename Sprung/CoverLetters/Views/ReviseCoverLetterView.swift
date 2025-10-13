@@ -125,7 +125,7 @@ struct ReviseCoverLetterView: View {
         switch operation {
         case .improve:
             return "Identifies and improves content and writing quality while maintaining the core message and structure."
-        case .zissner:
+        case .zinsser:
             return "Applies William Zinsser's 'On Writing Well' editing techniques for clarity, brevity, and elegance."
         case .mimic:
             return "Rewrites the cover letter to match the tone and style of your writing samples."

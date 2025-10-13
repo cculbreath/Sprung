@@ -95,7 +95,7 @@ struct AppWindowView: View {
                     Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
                 }
                 .tag(TabList.coverLetter)
-                .disabled(!jobAppStore.selectedApp!.hasAnyRes)
+                .disabled(!(jobAppStore.selectedApp?.hasAnyRes ?? false))
                 
             ResumeExportView()
                 .tabItem {
@@ -188,10 +188,7 @@ struct AppWindowViewModifiers: ViewModifier {
                 }
             }
             .sheet(isPresented: $sheets.showNewJobApp) {
-                NewAppSheetView(
-                    scrapingDogApiKey: UserDefaults.standard.string(forKey: "scrapingDogApiKey") ?? "none",
-                    isPresented: $sheets.showNewJobApp
-                )
+                NewAppSheetView(isPresented: $sheets.showNewJobApp)
                 .environment(jobAppStore)
             }
             .sheet(isPresented: $sheets.showApplicationReview) {

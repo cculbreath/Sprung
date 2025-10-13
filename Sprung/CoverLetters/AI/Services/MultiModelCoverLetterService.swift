@@ -450,7 +450,8 @@ class MultiModelCoverLetterService {
                 modelReasonings: modelReasonings,
                 voteTally: voteTally,
                 scoreTally: scoreTally,
-                selectedVotingScheme: selectedVotingScheme
+                selectedVotingScheme: selectedVotingScheme,
+                preferredModelId: modelReasonings.first?.model
             )
             
             self.reasoningSummary = summary

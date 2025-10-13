@@ -330,7 +330,9 @@ struct RichTextView: View {
                     result = (result as NSString).replacingCharacters(in: range, with: content)
                 }
             }
-        } catch {}
+        } catch {
+            Logger.debug("🧹 Failed to normalize markdown markers: \(error.localizedDescription)")
+        }
 
         return result
     }

@@ -541,6 +541,8 @@ struct BestCoverLetterResponse: Codable {
         
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {}
+        } catch {
+            Logger.debug("🪵 Failed to save debug prompt \(fileName): \(error.localizedDescription)")
+        }
     }
 }
