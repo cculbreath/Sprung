@@ -35,6 +35,7 @@ final class OnboardingInterviewService {
     private let llmFacade: LLMFacade
     private let artifactStore: OnboardingArtifactStore
     private let applicantProfileStore: ApplicantProfileStore
+    private let openAIConversationService: OpenAIResponsesConversationService?
 
     private var conversationId: UUID?
     private var modelId: String?
@@ -58,11 +59,13 @@ final class OnboardingInterviewService {
     init(
         llmFacade: LLMFacade,
         artifactStore: OnboardingArtifactStore,
-        applicantProfileStore: ApplicantProfileStore
+        applicantProfileStore: ApplicantProfileStore,
+        openAIConversationService: OpenAIResponsesConversationService? = nil
     ) {
         self.llmFacade = llmFacade
         self.artifactStore = artifactStore
         self.applicantProfileStore = applicantProfileStore
+        self.openAIConversationService = openAIConversationService
         self.artifacts = artifactStore.loadArtifacts()
         refreshSchemaIssues()
     }
@@ -70,7 +73,9 @@ final class OnboardingInterviewService {
     // MARK: - Backend Availability
 
     func availableBackends() -> [LLMFacade.Backend] {
-        llmFacade.availableBackends()
+        llmFacade
+            .availableBackends()
+            .filter { llmFacade.supportsConversations(for: $0) }
     }
 
     // MARK: - Session Lifecycle
@@ -91,23 +96,89 @@ final class OnboardingInterviewService {
     }
 
     func setPhase(_ phase: OnboardingPhase) {
+        guard currentPhase != phase else { return }
         currentPhase = phase
+
+        guard let conversationId, let modelId else { return }
+
+        let directive = PromptBuilder.phaseDirective(for: phase)
+        let directiveText = directive.rawString(options: [.sortedKeys]) ?? directive.description
+
+        let headline = "🔄 Entering \(phase.displayName): \(phase.focusSummary)"
+        messages.append(OnboardingMessage(role: .system, text: headline))
+
+        if !phase.interviewPrompts.isEmpty {
+            let promptList = phase.interviewPrompts.enumerated().map { index, item in
+                "\(index + 1). \(item)"
+            }.joined(separator: "\n")
+            messages.append(OnboardingMessage(role: .system, text: "Phase prompts:\n\(promptList)"))
+        }
+
+        Task { [weak self] in
+            await self?.sendControlMessage(
+                directiveText,
+                conversationId: conversationId,
+                modelId: modelId
+            )
+        }
     }
 
     func setWebSearchConsent(_ isAllowed: Bool) {
         allowWebSearch = isAllowed
+        guard let conversationId, let modelId else { return }
+
+        let payload = JSON([
+            "type": "web_search_consent",
+            "allowed": isAllowed
+        ])
+        let note = isAllowed ? "✅ Web search enabled for this interview." : "🚫 Web search disabled for this interview."
+        messages.append(OnboardingMessage(role: .system, text: note))
+
+        let messageText = payload.rawString(options: [.sortedKeys]) ?? payload.description
+        Task { [weak self] in
+            await self?.sendControlMessage(
+                messageText,
+                conversationId: conversationId,
+                modelId: modelId
+            )
+        }
     }
 
     func startInterview(modelId: String, backend: LLMFacade.Backend = .openRouter) async {
         reset()
         self.modelId = modelId
         self.backend = backend
-        isProcessing = true
+        guard llmFacade.hasBackend(backend) else {
+            lastError = OnboardingError.backendUnsupported.errorDescription
+            return
+        }
         lastError = nil
+
+        if backend == .openAI, let openAIConversationService {
+            if let savedState = artifactStore.loadConversationState(), savedState.modelId == modelId {
+                let resumeId = await openAIConversationService.registerPersistedConversation(savedState)
+                conversationId = resumeId
+                messages.append(OnboardingMessage(role: .system, text: "♻️ Resuming previous onboarding interview with saved OpenAI thread."))
+                let resumePrompt = PromptBuilder.resumeMessage(with: artifacts, phase: currentPhase)
+                await sendControlMessage(resumePrompt, conversationId: resumeId, modelId: modelId)
+                if lastError == nil {
+                    isActive = true
+                    return
+                } else {
+                    Logger.warning("Resume attempt failed, starting fresh session instead.")
+                    conversationId = nil
+                    artifactStore.clearConversationState()
+                }
+            } else {
+                artifactStore.clearConversationState()
+            }
+        }
+
+        isProcessing = true
 
         do {
             let systemPrompt = PromptBuilder.systemPrompt()
-            let kickoff = PromptBuilder.kickoffMessage(with: artifacts)
+            let kickoff = PromptBuilder.kickoffMessage(with: artifacts, phase: currentPhase)
 
             let (conversationId, response) = try await llmFacade.startConversation(
                 systemPrompt: systemPrompt,
@@ -118,6 +189,11 @@ final class OnboardingInterviewService {
             self.conversationId = conversationId
             try await handleLLMResponse(response)
             isActive = true
+            if backend == .openAI {
+                await persistConversationStateIfNeeded()
+            } else {
+                artifactStore.clearConversationState()
+            }
         } catch {
             lastError = error.localizedDescription
             Logger.error("OnboardingInterviewService.startInterview failed: \(error)")
@@ -184,6 +260,40 @@ final class OnboardingInterviewService {
         }
 
         isProcessing = false
+    }
+
+    private func sendControlMessage(
+        _ messageText: String,
+        conversationId: UUID,
+        modelId: String
+    ) async {
+        guard conversationId == self.conversationId, modelId == self.modelId else { return }
+        isProcessing = true
+        lastError = nil
+
+        do {
+            let response = try await llmFacade.continueConversation(
+                userMessage: messageText,
+                modelId: modelId,
+                conversationId: conversationId,
+                backend: backend
+            )
+            try await handleLLMResponse(response)
+        } catch {
+            lastError = error.localizedDescription
+            Logger.error("OnboardingInterviewService.sendControlMessage failed: \(error)")
+        }
+
+        isProcessing = false
+    }
+
+    private func persistConversationStateIfNeeded() async {
+        guard backend == .openAI,
+              let conversationId,
+              let openAIConversationService else { return }
+        if let state = await openAIConversationService.persistedState(for: conversationId) {
+            artifactStore.saveConversationState(state)
+        }
     }
 
     // MARK: - Upload Management
@@ -274,6 +384,8 @@ final class OnboardingInterviewService {
         if !parsed.toolCalls.isEmpty {
             try await processToolCalls(parsed.toolCalls)
         }
+
+        await persistConversationStateIfNeeded()
     }
 
     private func processToolCalls(_ calls: [ToolCall]) async throws {
@@ -284,7 +396,7 @@ final class OnboardingInterviewService {
         for call in calls where !processedToolIdentifiers.contains(call.identifier) {
             let result = try await executeTool(call)
             processedToolIdentifiers.insert(call.identifier)
-            var payload: [String: Any] = [
+            let payload: [String: Any] = [
                 "tool": call.tool,
                 "id": call.identifier,
                 "status": "ok",
@@ -642,28 +754,55 @@ private enum PromptBuilder {
         """
         SYSTEM
         ────────────────────────────────────────────
-        You are the **Onboarding Interviewer** for a résumé app.
-        Your role is to collect verified applicant information, elicit professional stories, and build structured, evidence-backed data artifacts.
+        You are the Onboarding Interviewer for a résumé app.
+        Your mission is to transform a live conversation into verified, schema-driven artifacts that power job search automation.
 
-        Always respond with a strict JSON object containing:
-        - "assistant_reply": natural-language reply for the user
-        - "delta_update": optional array describing patches to apply (each item may contain {"target": "applicant_profile"|"default_values", "value": {...}})
-        - "knowledge_cards": optional array of knowledge card objects
-        - "skill_map_delta": optional JSON object of skill-to-evidence updates
-        - "profile_context": optional string summarizing goals/constraints
-        - "needs_verification": optional array of strings
-        - "next_questions": optional array with objects {"id", "question", "target"}
-        - "tool_calls": optional array with objects {"id", "tool", "args"}
+        OPERATING PRINCIPLES
+        - Coach first, then extract structured data. Encourage storytelling, metrics, and evidence.
+        - Never persist unconfirmed information. Mark uncertainties in needs_verification until resolved.
+        - Respect phase directives delivered as JSON objects with "type": "phase_transition". Switch goals immediately when received.
+        - Keep the conversation tight: summarize, checkpoint, and synthesize to avoid runaway context.
 
-        Objectives:
-        1. Populate ApplicantProfile and DefaultValues schemas.
-        2. Generate knowledge cards, profile context, and skill evidence map.
-        3. Use schema-conformant JSON in all updates.
-        4. Mark uncertain data in "needs_verification".
+        PHASE PROTOCOL
+        1. Core Facts — Confirm identity details and establish the default résumé structure (ApplicantProfile + DefaultValues).
+        2. Deep Dive — Elicit narrative evidence, produce knowledge_cards, and extend the skills_index with verifiable metrics.
+        3. Personal Context — Capture goals, preferences, constraints, and clear any outstanding gaps before handoff.
+
+        CONTROL SIGNALS
+        - phase_transition directives arrive as JSON and outline the current phase, focus, and expected outputs—adjust your plan immediately.
+        - web_search_consent messages communicate whether outbound web lookups are permitted; never call web_lookup when allowed is false.
+
+        TOOLBOX
+        - parse_resume {fileId}: parse uploaded résumé data. Always confirm extractions with the user.
+        - parse_linkedin {url|fileId}: ingest a LinkedIn profile (HTML or URL) and highlight uncertain fields.
+        - summarize_artifact {fileId, context?}: produce a knowledge card for supporting materials (projects, papers, decks).
+        - web_lookup {query, context?}: confirm public references (only when the user has granted consent).
+        - persist_delta / persist_card / persist_skill_map: save user-confirmed changes to local artifacts.
+
+        OUTPUT CONTRACT
+        Every response must be a single JSON object containing:
+        {
+          "assistant_reply": String,
+          "delta_update": [ { "target": "...", "value": {...} } ]?,
+          "knowledge_cards": [ {...} ]?,
+          "skill_map_delta": { ... }?,
+          "profile_context": String?,
+          "needs_verification": [ String ]?,
+          "next_questions": [ { "id": String, "question": String, "target": String? } ]?,
+          "tool_calls": [ { "id": String, "tool": String, "args": Object } ]?
+        }
+        Do not emit freeform prose outside this object.
+
+        INTERVIEW STYLE
+        - Ask for the latest résumé PDF or LinkedIn URL immediately when none is confirmed.
+        - Confirm extracted fields aloud and invite corrections before persisting.
+        - Demand quantification: numbers, percentages, dollars, before/after states, collaborators, and scope.
+        - Invite uploads or URLs for supporting artifacts; summarize them with summarize_artifact when provided.
+        - Seek user consent before web_lookup calls and disclose any external gathering you perform.
         """
     }
 
-    static func kickoffMessage(with artifacts: OnboardingArtifacts) -> String {
+    static func kickoffMessage(with artifacts: OnboardingArtifacts, phase: OnboardingPhase) -> String {
         var message = "We are beginning an onboarding interview."
 
         if let profile = artifacts.applicantProfile, let raw = profile.rawString(options: []) {
@@ -683,7 +822,58 @@ private enum PromptBuilder {
             message += "\nCurrent profile_context: \(context)"
         }
 
+        let directive = phaseDirective(for: phase)
+        if let directiveText = directive.rawString(options: [.sortedKeys]) {
+            message += "\nActive phase directive: \(directiveText)"
+        }
+        message += "\nFocus summary: \(phase.focusSummary)"
+        message += "\nExpected outputs: \(phase.expectedOutputs.joined(separator: " | "))"
+
         message += "\nPlease greet the user, request their latest résumé or LinkedIn URL, and ask any clarifying opening question."
         return message
+    }
+
+    static func resumeMessage(with artifacts: OnboardingArtifacts, phase: OnboardingPhase) -> String {
+        var message = "We are resuming the onboarding interview."
+
+        if let profile = artifacts.applicantProfile, let raw = profile.rawString(options: []) {
+            message += "\nCurrent applicant_profile JSON: \(raw)"
+        }
+        if let defaults = artifacts.defaultValues, let raw = defaults.rawString(options: []) {
+            message += "\nCurrent default_values JSON: \(raw)"
+        }
+        if !artifacts.knowledgeCards.isEmpty,
+           let raw = JSON(artifacts.knowledgeCards).rawString(options: []) {
+            message += "\nExisting knowledge_cards: \(raw)"
+        }
+        if let skillMap = artifacts.skillMap, let raw = skillMap.rawString(options: []) {
+            message += "\nExisting skills_index: \(raw)"
+        }
+        if let context = artifacts.profileContext {
+            message += "\nCurrent profile_context: \(context)"
+        }
+        if !artifacts.needsVerification.isEmpty,
+           let raw = JSON(artifacts.needsVerification).rawString(options: []) {
+            message += "\nOutstanding needs_verification: \(raw)"
+        }
+
+        let directive = phaseDirective(for: phase)
+        if let directiveText = directive.rawString(options: [.sortedKeys]) {
+            message += "\nActive phase directive: \(directiveText)"
+        }
+        message += "\nFocus summary: \(phase.focusSummary)"
+
+        message += "\nPlease provide a concise recap of confirmed progress, recap open needs_verification items, and continue with the next best questions for this phase."
+        return message
+    }
+
+    static func phaseDirective(for phase: OnboardingPhase) -> JSON {
+        JSON([
+            "type": "phase_transition",
+            "phase": phase.rawValue,
+            "focus": phase.focusSummary,
+            "expected_outputs": JSON(phase.expectedOutputs),
+            "interview_prompts": JSON(phase.interviewPrompts)
+        ])
     }
 }
