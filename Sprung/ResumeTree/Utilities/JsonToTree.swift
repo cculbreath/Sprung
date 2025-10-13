@@ -12,25 +12,6 @@ class JsonToTree {
     private let res: Resume
     var json: OrderedDictionary<String, Any>
     private let manifest: TemplateManifest?
-    private static let specialKeys: Set<String> = ["font-sizes", "include-fonts"]
-    private static let fallbackSectionOrder: [String] = [
-        "meta",
-        "font-sizes",
-        "include-fonts",
-        "section-labels",
-        "contact",
-        "summary",
-        "job-titles",
-        "employment",
-        "education",
-        "skills-and-expertise",
-        "languages",
-        "projects-highlights",
-        "projects-and-hobbies",
-        "publications",
-        "keys-in-editor",
-        "more-info"
-    ]
     /// Supplies monotonically increasing indexes during this tree build.
     private var indexCounter: Int = 0
 
@@ -99,6 +80,191 @@ class JsonToTree {
         return value
     }
 
+    private func applyManifestBehaviors() {
+        if res.needToFont {
+            res.fontSizeNodes = []
+        }
+        res.includeFonts = false
+        res.importedEditorKeys = []
+        guard let manifest else {
+            applyLegacySemantics()
+            return
+        }
+
+        applySectionBehaviors(using: manifest)
+        applyFieldBehaviors(using: manifest)
+        applyLegacySemantics()
+    }
+
+    private func applySectionBehaviors(using manifest: TemplateManifest) {
+        for key in json.keys {
+            guard let behavior = manifest.behavior(forSection: key) else { continue }
+            let value = json[key]
+            applySectionBehavior(behavior, value: value)
+        }
+    }
+
+    private func applySectionBehavior(
+        _ behavior: TemplateManifest.Section.Behavior,
+        value: Any?
+    ) {
+        switch behavior {
+        case .fontSizes:
+            assignFontSizes(from: value)
+        case .includeFonts:
+            assignIncludeFonts(from: value)
+        case .editorKeys:
+            assignEditorKeys(from: value)
+        case .styling, .metadata, .applicantProfile:
+            break
+        }
+    }
+
+    private func applyFieldBehaviors(using manifest: TemplateManifest) {
+        for (sectionKey, section) in manifest.sections {
+            guard let sectionValue = json[sectionKey] else { continue }
+            for descriptor in section.fields where descriptor.behavior != nil {
+                guard let behavior = descriptor.behavior else { continue }
+                let rawValue = rawValue(for: descriptor, in: sectionValue)
+                applyFieldBehavior(behavior, value: rawValue)
+            }
+        }
+    }
+
+    private func applyFieldBehavior(
+        _ behavior: TemplateManifest.Section.FieldDescriptor.Behavior,
+        value: Any?
+    ) {
+        switch behavior {
+        case .fontSizes:
+            assignFontSizes(from: value)
+        case .includeFonts:
+            assignIncludeFonts(from: value)
+        case .editorKeys:
+            assignEditorKeys(from: value)
+        case .sectionLabels:
+            assignSectionLabels(from: value)
+        case .applicantProfile:
+            break
+        }
+    }
+
+    private func applyLegacySemantics() {
+        assignFontSizes(from: json["font-sizes"])
+        assignIncludeFonts(from: json["include-fonts"])
+        assignEditorKeys(from: json["keys-in-editor"])
+        assignSectionLabels(from: json["section-labels"])
+    }
+
+    private func rawValue(
+        for descriptor: TemplateManifest.Section.FieldDescriptor,
+        in sectionValue: Any
+    ) -> Any? {
+        if descriptor.key == "*" {
+            return sectionValue
+        }
+        if let ordered = sectionValue as? OrderedDictionary<String, Any> {
+            return ordered[descriptor.key]
+        }
+        if let dict = sectionValue as? [String: Any] {
+            return dict[descriptor.key]
+        }
+        return nil
+    }
+
+    private func assignFontSizes(from value: Any?) {
+        guard res.needToFont else { return }
+        guard let value,
+              let orderedFonts = orderedDictionary(from: value) else {
+            return
+        }
+
+        res.needToFont = false
+        var nodes: [FontSizeNode] = []
+        for (key, rawValue) in orderedFonts {
+            let fontString: String
+            if let stringValue = rawValue as? String {
+                fontString = stringValue
+            } else if let numberValue = rawValue as? NSNumber {
+                fontString = numberValue.stringValue + "pt"
+            } else {
+                fontString = String(describing: rawValue)
+            }
+            let idx = indexCounter
+            indexCounter += 1
+            let node = FontSizeNode(key: key, index: idx, fontString: fontString, resume: res)
+            nodes.append(node)
+        }
+        res.fontSizeNodes = nodes
+    }
+
+    private func assignIncludeFonts(from value: Any?) {
+        guard let value else { return }
+        if let boolValue = value as? Bool {
+            res.includeFonts = boolValue
+        } else if let stringValue = value as? String {
+            res.includeFonts = stringValue.lowercased() == "true"
+        } else if let numberValue = value as? NSNumber {
+            res.includeFonts = numberValue.boolValue
+        }
+    }
+
+    private func assignEditorKeys(from value: Any?) {
+        guard let value else { return }
+        if let strings = value as? [String] {
+            res.importedEditorKeys = strings
+        } else if let array = value as? [Any] {
+            res.importedEditorKeys = array.compactMap { $0 as? String }
+        } else if let single = value as? String {
+            res.importedEditorKeys = [single]
+        }
+    }
+
+    private func assignSectionLabels(from value: Any?) {
+        guard let value else { return }
+        var labels: [String: String] = [:]
+
+        if let dict = value as? [String: String] {
+            labels = dict
+        } else if let dict = value as? [String: Any] {
+            for (key, anyValue) in dict {
+                if let stringValue = anyValue as? String {
+                    labels[key] = stringValue
+                }
+            }
+        } else if let ordered = value as? OrderedDictionary<String, Any> {
+            for (key, anyValue) in ordered {
+                if let stringValue = anyValue as? String {
+                    labels[key] = stringValue
+                }
+            }
+        }
+
+        guard labels.isEmpty == false else { return }
+        res.keyLabels.merge(labels) { _, new in new }
+    }
+
+    private func orderedDictionary(from value: Any) -> OrderedDictionary<String, Any>? {
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return ordered
+        }
+        if let dict = value as? [String: Any] {
+            return OrderedDictionary(uniqueKeysWithValues: dict.map { ($0.key, $0.value) })
+        }
+        return nil
+    }
+
+    private func manifestHandlesSectionLabels() -> Bool {
+        guard let manifest else { return false }
+        for section in manifest.sections.values {
+            if section.fields.contains(where: { $0.behavior == .sectionLabels }) {
+                return true
+            }
+        }
+        return false
+    }
+
+
     func buildTree() -> TreeNode? {
         let rootNode = TreeNode(name: "root", value: "", inEditor: true, status: .isNotLeaf, resume: res)
         // Child indices start fresh for every new tree build.
@@ -107,7 +273,7 @@ class JsonToTree {
             return res.rootNode
         }
         res.needToTree = false
-        parseSpecialKeys()
+        applyManifestBehaviors()
         var processed: Set<String> = []
         for key in orderedKeys(forKeys: Array(json.keys)) {
             guard json[key] != nil else { continue }
@@ -124,61 +290,27 @@ class JsonToTree {
     }
 
     private func processSectionIfNeeded(named key: String, rootNode: TreeNode) {
-        guard JsonToTree.specialKeys.contains(key) == false else { return }
+        guard shouldSkipSectionInTree(key) == false else { return }
         guard let handler = treeFunction(for: key) else { return }
         handler(key, rootNode)
     }
 
-    private func parseInclude(key: String) -> Bool {
-        if let myString = json[key] as? String {
-            if myString == "true" {
-                return true
-            }
+    private func shouldSkipSectionInTree(_ key: String) -> Bool {
+        if let behavior = manifest?.behavior(forSection: key),
+           [.fontSizes, .includeFonts, .editorKeys].contains(behavior) {
+            return true
         }
-        return false
-    }
-
-    private func parseSpecialKeys() {
-        res.fontSizeNodes = parseFontSizeSection(key: "font-sizes")
-        res.includeFonts = parseInclude(key: "include-fonts")
-        res.importedEditorKeys = parseStringArray(key: "keys-in-editor")
+        if manifest != nil {
+            return false
+        }
+        return key == "font-sizes" || key == "include-fonts" || key == "keys-in-editor"
     }
 
     private func processKeyLabels() {
-        if let labelDict = json["section-labels"] as? OrderedDictionary<String, Any> {
-            for key in labelDict.keys {
-                if let value = labelDict[key] { // Correct dictionary access
-                    res.keyLabels[key] = value as? String ?? "Error!" // Assigning the value correctly
-                }
-            }
-        } else {}
-    }
-
-    private func parseFontSizeSection(key: String) -> [FontSizeNode] {
-        guard res.needToFont else {
-            Logger.warning("JsonToTree.parseFontSizeSection() called redundantly; returning existing font sizes")
-            return res.fontSizeNodes
+        if manifestHandlesSectionLabels() {
+            return
         }
-        res.needToFont = false
-        let orderedFonts: OrderedDictionary<String, Any>
-        if let fontArray = json[key] as? OrderedDictionary<String, Any> {
-            orderedFonts = fontArray
-        } else if let dict = json[key] as? [String: Any] {
-            orderedFonts = OrderedDictionary(uniqueKeysWithValues: dict.map { ($0.key, $0.value) })
-        } else {
-            return []
-        }
-
-        var nodes: [FontSizeNode] = []
-        for (myKey, myValue) in orderedFonts {
-            let fontString = myValue as? String ?? ""
-            let idx = indexCounter
-            indexCounter += 1
-            let node = FontSizeNode(key: myKey, index: idx, fontString: fontString, resume: res)
-            nodes.append(node)
-        }
-
-        return nodes
+        assignSectionLabels(from: json["section-labels"])
     }
 
     func treeFunction(for sectionType: SectionType) -> (String, TreeNode) -> Void {
@@ -251,25 +383,15 @@ class JsonToTree {
     }
 
     private static func orderedKeys(from keys: [String], manifest: TemplateManifest?) -> [String] {
+        guard let manifest else { return keys }
         var ordered: [String] = []
-        if let manifestOrder = manifest?.sectionOrder {
-            for key in manifestOrder where keys.contains(key) {
-                ordered.append(key)
-            }
-        } else {
-            for key in fallbackSectionOrder where keys.contains(key) {
-                ordered.append(key)
-            }
+        for key in manifest.sectionOrder where keys.contains(key) {
+            ordered.append(key)
         }
-        let extras = keys.filter { !ordered.contains($0) }.sorted()
-        ordered.append(contentsOf: extras)
+        for key in keys where !ordered.contains(key) {
+            ordered.append(key)
+        }
         return ordered
-    }
-
-    private func parseStringArray(key: String) -> [String] {
-        if let stringArray = json[key] as? [String] {
-            return stringArray
-        } else { return [] }
     }
 
     private func treeStringArraySection(key: String, parent: TreeNode) {
