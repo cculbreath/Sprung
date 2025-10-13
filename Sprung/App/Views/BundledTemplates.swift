@@ -30,9 +30,7 @@ struct BundledTemplates {
            let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
-        // Fallback: load from project directory during development
-        let projectPath = "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resources/Templates/archer/archer-template.html"
-        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "<!-- Archer HTML template not found -->"
+        return "<!-- Archer HTML template not found -->"
     }()
     
     private static let archerTextTemplate: String = {
@@ -40,8 +38,7 @@ struct BundledTemplates {
            let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
-        let projectPath = "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resources/Templates/archer/archer-template.txt"
-        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "# Archer text template not found"
+        return "# Archer text template not found"
     }()
     
     private static let typewriterHTMLTemplate: String = {
@@ -49,8 +46,7 @@ struct BundledTemplates {
            let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
-        let projectPath = "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resources/Templates/typewriter/typewriter-template.html"
-        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "<!-- Typewriter HTML template not found -->"
+        return "<!-- Typewriter HTML template not found -->"
     }()
     
     private static let typewriterTextTemplate: String = {
@@ -58,7 +54,6 @@ struct BundledTemplates {
            let content = try? String(contentsOfFile: path, encoding: .utf8) {
             return content
         }
-        let projectPath = "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resources/Templates/typewriter/typewriter-template.txt"
-        return (try? String(contentsOfFile: projectPath, encoding: .utf8)) ?? "# Typewriter text template not found"
+        return "# Typewriter text template not found"
     }()
 }

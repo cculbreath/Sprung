@@ -131,6 +131,8 @@ extension JobApp {
 
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
 
-        } catch {}
+        } catch {
+            Logger.error("🚨 Failed to parse Apple job listing: \(error.localizedDescription)")
+        }
     }
 }

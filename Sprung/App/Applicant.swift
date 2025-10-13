@@ -2,15 +2,6 @@
 //  Applicant.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/1/24.
-//
-
-//
-//  ResumeApplicant.swift
-//  Sprung
-//
-//  Created by Christopher Culbreath on 8/25/24.
-//
 
 import Foundation
 import SwiftData
@@ -29,14 +20,14 @@ class ApplicantProfile {
     var signatureData: Data?
 
     init(
-        name: String = "Christopher Culbreath",
-        address: String = "7317 Shadywood Drive",
+        name: String = "John Doe",
+        address: String = "123 Main Street",
         city: String = "Austin",
         state: String = "Texas",
-        zip: String = "78745",
-        websites: String = "culbreath.net",
-        email: String = "cc@physicscloud.net",
-        phone: String = "(805) 234-0847",
+        zip: String = "78701",
+        websites: String = "example.com",
+        email: String = "applicant@example.com",
+        phone: String = "(555) 123-4567",
         signatureData: Data? = nil
     ) {
         self.name = name

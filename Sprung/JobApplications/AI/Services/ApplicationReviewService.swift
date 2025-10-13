@@ -2,8 +2,6 @@
 //  ApplicationReviewService.swift
 //  Sprung
 //
-//  Created by OpenAI Assistant on 5/11/25.
-//
 
 import Foundation
 import PDFKit

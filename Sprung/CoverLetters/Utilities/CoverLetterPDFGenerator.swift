@@ -20,10 +20,11 @@ enum CoverLetterPDFGenerator {
         let signatureImage = getSignatureImage(from: applicant)
 
         // Use a better PDF generation approach that guarantees vector text
-        let pdfData = createPaginatedPDFFromString(text, signatureImage: signatureImage)
-
-        // Debug - save PDF to desktop
-        saveDebugPDF(pdfData)
+        let pdfData = createPaginatedPDFFromString(
+            text,
+            applicantName: applicant.name,
+            signatureImage: signatureImage
+        )
 
         return pdfData
     }
@@ -41,20 +42,11 @@ enum CoverLetterPDFGenerator {
         return image
     }
 
-    private static func saveDebugPDF(_ data: Data) {
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let debugPath = downloadsURL.appendingPathComponent("debug_coverletter.pdf")
-
-        do {
-            try data.write(to: debugPath)
-        } catch {}
-    }
-
     // MARK: - Private Helpers
 
     private static func buildLetterText(from cover: CoverLetter, applicant: Applicant) -> String {
         // Extract just the body of the letter
-        let letterContent = extractLetterBody(from: cover.content)
+        let letterContent = extractLetterBody(from: cover.content, applicantName: applicant.name)
 
         // Create explicit signature block with tighter contact info spacing
         let signatureBlock = """
@@ -74,14 +66,13 @@ enum CoverLetterPDFGenerator {
     }
 
     /// Extract only the body of the letter, removing salutation, signature, date, etc.
-    static func extractLetterBody(from content: String) -> String {
+    static func extractLetterBody(from content: String, applicantName: String) -> String {
         // First check if we have "best regards" or similar closing text
         let commonClosings = [
             "Best Regards", "Best regards", "Sincerely", "Thank you,",
             "Thank you for your consideration,", "Regards,", "Best,", "Yours,",
         ]
         let lines = content.components(separatedBy: .newlines)
-        let applicantName = "Christopher Culbreath" // Hardcoded for now
 
         // Find the start and end indices
         var startIndex = -1
@@ -154,7 +145,11 @@ enum CoverLetterPDFGenerator {
     }
 
     /// Paginated vector PDF generation using CoreText framesetter
-    private static func createPaginatedPDFFromString(_ text: String, signatureImage: NSImage? = nil) -> Data {
+    private static func createPaginatedPDFFromString(
+        _ text: String,
+        applicantName: String,
+        signatureImage: NSImage? = nil
+    ) -> Data {
         // Register and log Futura Light font file usage
         let specificFuturaPath = "/Library/Fonts/Futura Light.otf"
         if FileManager.default.fileExists(atPath: specificFuturaPath) {
@@ -411,7 +406,7 @@ enum CoverLetterPDFGenerator {
                     "Yours truly,", "Yours Truly,", "Yours truly", "Yours Truly",
                     "Respectfully,", "Respectfully",
                 ]
-                let nameMarker = "Christopher Culbreath"
+                let nameMarker = applicantName
 
                 // Get all lines from the frame for proper positioning
                 let frameLines = CTFrameGetLines(frame) as? [CTLine] ?? []

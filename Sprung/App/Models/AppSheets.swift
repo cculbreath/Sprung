@@ -47,10 +47,7 @@ struct AppSheetsModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $sheets.showNewJobApp) {
-                NewAppSheetView(
-                    scrapingDogApiKey: UserDefaults.standard.string(forKey: "scrapingDogApiKey") ?? "none",
-                    isPresented: $sheets.showNewJobApp
-                )
+                NewAppSheetView(isPresented: $sheets.showNewJobApp)
                 .environment(jobAppStore)
             }
             .sheet(isPresented: $sheets.showResumeReview) {

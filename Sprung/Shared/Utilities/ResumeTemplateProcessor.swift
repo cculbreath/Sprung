@@ -2,8 +2,6 @@
 //  ResumeTemplateProcessor.swift
 //  Sprung
 //
-//  Created by Assistant on 12/20/24.
-//
 
 import Foundation
 

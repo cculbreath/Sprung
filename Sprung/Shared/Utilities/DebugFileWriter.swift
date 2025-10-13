@@ -2,10 +2,7 @@
 //  DebugFileWriter.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/19/25.
-//
-
-//  automatically by the system at a later point.
+//  Lightweight helper for writing debug artifacts to disk.
 //
 
 import Foundation
@@ -28,6 +25,7 @@ enum DebugFileWriter {
             try text.write(to: tempURL, atomically: true, encoding: .utf8)
             return tempURL
         } catch {
+            Logger.debug("🪵 Failed to write debug file \(filename): \(error.localizedDescription)")
             return nil
         }
     }

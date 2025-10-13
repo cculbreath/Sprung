@@ -132,12 +132,6 @@ struct ApplicationReviewSheet: View {
                             .frame(minHeight: 200)
                     }
                     
-                    // Debug info
-                    if !responseText.isEmpty {
-                        Text("Debug: Response has \(responseText.count) characters")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
                 }
                 .padding(.bottom, 16)
             }

@@ -11,14 +11,12 @@ import WebKit
 
 @MainActor
 class LinkedInSessionManager: ObservableObject {
-    static let shared = LinkedInSessionManager()
-    
     @Published var isLoggedIn = false
     @Published var sessionExpired = false
     
     private var webView: WKWebView?
 
-    private init() {
+    init() {
         setupWebView()
     }
     
@@ -594,5 +592,4 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
         decisionHandler(.allow)
     }
 }
-
 

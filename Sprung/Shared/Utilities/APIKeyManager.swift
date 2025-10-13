@@ -11,6 +11,7 @@ import Security
 enum APIKeyType: String {
     case openRouter = "openRouterApiKey"
     case openAI = "openAiApiKey"
+    case scrapingDog = "scrapingDogApiKey"
 }
 
 struct APIKeyManager {
@@ -80,6 +81,13 @@ struct APIKeyManager {
         if get(.openAI) == nil, let val = defaults.string(forKey: APIKeyType.openAI.rawValue), !val.isEmpty, val != "none" {
             if set(.openAI, value: val) {
                 Logger.debug("🔑 Migrated OpenAI API key to Keychain")
+            }
+        }
+
+        // ScrapingDog
+        if get(.scrapingDog) == nil, let val = defaults.string(forKey: APIKeyType.scrapingDog.rawValue), !val.isEmpty, val != "none" {
+            if set(.scrapingDog, value: val) {
+                Logger.debug("🔑 Migrated ScrapingDog API key to Keychain")
             }
         }
     }
