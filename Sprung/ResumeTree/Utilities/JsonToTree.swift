@@ -455,7 +455,6 @@ class JsonToTree {
     }
 
     private func treeArrayOfObjectsSection(key: String, parent: TreeNode) {
-        guard let sectionArray = asOrderedArrayOfDictionaries(json[key]) else { return }
         let inEditor = isInEditor(key)
         let sectionNode = parent.addChild(
             TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
@@ -464,8 +463,16 @@ class JsonToTree {
         let descriptor = manifest?.section(for: key)
         let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
         let entryDescriptor = usesDescriptor ? descriptor?.fields.first(where: { $0.key == "*" }) : nil
+        guard let normalizedEntries = normalizedArrayEntries(
+            forKey: key,
+            value: json[key],
+            entryDescriptor: entryDescriptor
+        ) else {
+            return
+        }
 
-        for (index, element) in sectionArray.enumerated() {
+        for (index, entry) in normalizedEntries.enumerated() {
+            let element = entry.value
             let defaultTitle = "\(key.capitalized) \(index + 1)"
             let title = displayTitle(
                 for: element,
@@ -475,6 +482,9 @@ class JsonToTree {
             let entryNode = sectionNode.addChild(
                 TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
             )
+            if let sourceKey = entry.sourceKey {
+                entryNode.schemaSourceKey = sourceKey
+            }
             if let entryDescriptor {
                 entryNode.applyDescriptor(entryDescriptor)
             }
@@ -739,4 +749,110 @@ class JsonToTree {
         }
         return ordered
     }
+
+    private struct ArrayEntry {
+        let sourceKey: String?
+        let value: OrderedDictionary<String, Any>
+    }
+
+    private func normalizedArrayEntries(
+        forKey key: String,
+        value: Any?,
+        entryDescriptor: TemplateManifest.Section.FieldDescriptor?
+    ) -> [ArrayEntry]? {
+        if var array = asOrderedArrayOfDictionaries(value) {
+            return array.map { dictionary in
+                var entry = dictionary
+                let sourceKey = (entry["__key"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                if sourceKey != nil {
+                    entry.removeValue(forKey: "__key")
+                }
+                return ArrayEntry(sourceKey: sourceKey, value: entry)
+            }
+        }
+
+        if let orderedDict = asOrderedDictionary(value) {
+            var entries: [ArrayEntry] = []
+            for (entryKey, entryValue) in orderedDict {
+                if let nested = asOrderedDictionary(entryValue) {
+                    var normalized = nested
+                    ensureTitle(in: &normalized, fallbackKey: entryKey, descriptor: entryDescriptor)
+                    entries.append(ArrayEntry(sourceKey: entryKey, value: normalized))
+                    continue
+                }
+
+                if let stringValue = entryValue as? String {
+                    var normalized = OrderedDictionary<String, Any>()
+                    assignTitleAndPrimaryValue(
+                        to: &normalized,
+                        title: entryKey,
+                        value: stringValue,
+                        descriptor: entryDescriptor
+                    )
+                    entries.append(ArrayEntry(sourceKey: entryKey, value: normalized))
+                    continue
+                }
+
+                if let arrayValue = entryValue as? [Any] {
+                    var normalized = OrderedDictionary<String, Any>()
+                    normalized["title"] = entryKey
+                    normalized["items"] = JsonToTree.convertToOrderedStructure(arrayValue)
+                    entries.append(ArrayEntry(sourceKey: entryKey, value: normalized))
+                    continue
+                }
+            }
+            return entries.isEmpty ? nil : entries
+        }
+
+        if let arrayOfStrings = value as? [String] {
+            return arrayOfStrings.map { stringValue in
+                var normalized = OrderedDictionary<String, Any>()
+                normalized["title"] = stringValue
+                return ArrayEntry(sourceKey: nil, value: normalized)
+            }
+        }
+
+        return nil
+    }
+
+    private func ensureTitle(
+        in entry: inout OrderedDictionary<String, Any>,
+        fallbackKey: String,
+        descriptor: TemplateManifest.Section.FieldDescriptor?
+    ) {
+        if let descriptor,
+           let titleField = descriptor.children?.first(where: { $0.key == "title" }),
+           entry[titleField.key] == nil {
+            entry[titleField.key] = fallbackKey
+            return
+        }
+        if entry["title"] == nil {
+            entry["title"] = fallbackKey
+        }
+    }
+
+    private func assignTitleAndPrimaryValue(
+        to entry: inout OrderedDictionary<String, Any>,
+        title: String,
+        value: String,
+        descriptor: TemplateManifest.Section.FieldDescriptor?
+    ) {
+        if let descriptor, let children = descriptor.children, !children.isEmpty {
+            let titleDescriptor = children.first(where: { $0.key == "title" }) ?? children.first
+            if let titleDescriptor {
+                entry[titleDescriptor.key] = title
+            } else {
+                entry["title"] = title
+            }
+            if let descriptionDescriptor = children.first(where: { $0.key != titleDescriptor?.key }) {
+                entry[descriptionDescriptor.key] = value
+            } else {
+                entry["value"] = value
+            }
+        } else {
+            entry["title"] = title
+            entry["value"] = value
+        }
+    }
+
 }
