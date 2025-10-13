@@ -271,9 +271,7 @@ struct ApplicationReviewSheet: View {
             }
         }()
 
-        Logger.debug("🚀 [ApplicationReviewSheet] Submitting review request")
-        Logger.debug("🚀 [ApplicationReviewSheet] Review type: \(selectedType.rawValue)")
-        Logger.debug("🚀 [ApplicationReviewSheet] Has custom options: \(selectedType == .custom)")
+        Logger.info("🚀 Submitting application review using \(selectedType.rawValue) (custom: \(selectedType == .custom))")
         
         Task { @MainActor in
             guard let service = reviewService else {
@@ -289,27 +287,22 @@ struct ApplicationReviewSheet: View {
                 modelId: selectedModel,
                 customOptions: selectedType == .custom ? customOptions : nil,
                 onProgress: { chunk in
-                    Logger.debug("📝 [ApplicationReviewSheet] Progress callback - chunk length: \(chunk.count)")
                     Task { @MainActor in
                         // If we're just starting, clear any previous placeholder
                         if self.responseText == "Submitting request..." { 
                             self.responseText = "" 
                         }
                         self.responseText += chunk
-                        Logger.debug("📝 [ApplicationReviewSheet] Updated response text length: \(self.responseText.count)")
                     }
                 },
                 onComplete: { result in
-                    Logger.debug("✅ [ApplicationReviewSheet] Complete callback")
                     Task { @MainActor in
                         self.isProcessing = false
                         if case let .failure(err) = result { 
                             self.errorMessage = err.localizedDescription
-                            Logger.error("x [ApplicationReviewSheet] Error: \(err)")
+                            Logger.error("❌ Application review failed: \(err)")
                         } else {
-                            Logger.debug("✅ [ApplicationReviewSheet] Success")
-                            Logger.debug("✅ [ApplicationReviewSheet] Final responseText: \(self.responseText.prefix(100))...")
-                            Logger.debug("✅ [ApplicationReviewSheet] isProcessing: \(self.isProcessing)")
+                            Logger.info("✅ Application review completed successfully")
                         }
                     }
                 }

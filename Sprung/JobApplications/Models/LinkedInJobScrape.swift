@@ -9,6 +9,18 @@ import WebKit
 
 // MARK: - LinkedIn Session Manager
 
+private enum LinkedInScrapeTiming {
+    static let requestTimeout: TimeInterval = 60
+    static let fallbackCheckInterval: TimeInterval = 2
+    static let htmlExtractionDelay: TimeInterval = 2
+    static let navigationTransitionDelay: TimeInterval = 2
+    static let dynamicContentDelay: TimeInterval = 3
+    static let debugWindowRevealDelay: TimeInterval = 10
+    static let debugWindowCloseDelay: TimeInterval = 3
+    static let ultimateTimeout: TimeInterval = 60
+    static let timeoutDebugWindowDuration: TimeInterval = 10
+}
+
 @MainActor
 class LinkedInSessionManager: ObservableObject {
     @Published var isLoggedIn = false
@@ -163,7 +175,7 @@ extension JobApp {
                     }
                     
                     // Close debug window after a brief delay (only if it was shown)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.debugWindowCloseDelay) {
                         if debugWindow?.isVisible == true {
                             debugWindow?.close()
                         }
@@ -181,7 +193,7 @@ extension JobApp {
                 request.setValue("en-US,en;q=0.5", forHTTPHeaderField: "Accept-Language")
                 request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
                 request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-                request.timeoutInterval = 60.0
+                request.timeoutInterval = LinkedInScrapeTiming.requestTimeout
                 
                 Logger.debug("🔍 [LinkedIn Scraper] Step 1: Loading LinkedIn feed to establish session")
                 webView.load(request)
@@ -212,7 +224,7 @@ extension JobApp {
                             }
                             
                             // Give it a moment more then extract HTML
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.navigationTransitionDelay) {
                                 guard !hasResumed else { return }
                                 
                                 webView.evaluateJavaScript("document.documentElement.outerHTML") { htmlResult, htmlError in
@@ -232,7 +244,7 @@ extension JobApp {
                                         }
                                         
                                         // Close debug window after a brief delay (only if it was shown)
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.debugWindowCloseDelay) {
                                             if debugWindow?.isVisible == true {
                                                 debugWindow?.close()
                                             }
@@ -245,13 +257,13 @@ extension JobApp {
                                 }
                             }
                         } else if fallbackAttempts < maxFallbackAttempts {
-                            // Try again in 2 seconds
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            // Try again after fallback interval
+                            DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.fallbackCheckInterval) {
                                 checkPageLoaded()
                             }
                         } else {
                             // Continue trying - the main timeout will handle giving up
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.fallbackCheckInterval) {
                                 checkPageLoaded()
                             }
                         }
@@ -259,7 +271,7 @@ extension JobApp {
                 }
                 
                 // Show debug window after 10 seconds if scraping hasn't completed
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.debugWindowRevealDelay) {
                     guard !hasResumed else { return }
                     Logger.info("🪟 [LinkedIn Scraper] Showing debug window - scraping taking longer than expected")
                     debugWindow?.makeKeyAndOrderFront(nil)
@@ -267,7 +279,7 @@ extension JobApp {
                 }
                 
                 // Ultimate timeout after 60 seconds to allow fallback to ScrapingDog
-                DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.ultimateTimeout) {
                     guard !hasResumed else { return }
                     hasResumed = true
                     Logger.warning("⚠️ [LinkedIn Scraper] Timeout reached after 60 seconds - will fallback to ScrapingDog")
@@ -278,7 +290,7 @@ extension JobApp {
                     
                     // Keep debug window open longer on timeout so we can see what happened
                     Logger.info("🪟 [LinkedIn Scraper] Debug window will stay open for 10 seconds so you can inspect the page")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.timeoutDebugWindowDuration) {
                         debugWindow?.close()
                     }
                     
@@ -479,14 +491,14 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
             Logger.debug("🔍 [LinkedInJobScrapeDelegate] Step 1 complete, now navigating to job page")
             
             // Wait a moment for the feed to fully load, then navigate to job page
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.navigationTransitionDelay) {
                 var request = URLRequest(url: self.targetURL)
                 request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
                 request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
                 request.setValue("en-US,en;q=0.5", forHTTPHeaderField: "Accept-Language")
                 request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
                 request.setValue("https://www.linkedin.com/feed/", forHTTPHeaderField: "Referer")
-                request.timeoutInterval = 60.0
+                request.timeoutInterval = LinkedInScrapeTiming.requestTimeout
                 
                 Logger.debug("🔍 [LinkedInJobScrapeDelegate] Step 2: Loading job page with proper referer")
                 webView.load(request)
@@ -496,8 +508,8 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
             Logger.debug("🔍 [LinkedInJobScrapeDelegate] Step 2 complete, extracting job page HTML")
             
             // Wait a moment for dynamic content to load
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                Logger.debug("🔍 [LinkedInJobScrapeDelegate] Extracting HTML after 3 second delay...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.dynamicContentDelay) {
+                Logger.debug("🔍 [LinkedInJobScrapeDelegate] Extracting HTML after \(LinkedInScrapeTiming.dynamicContentDelay) second delay...")
                 webView.evaluateJavaScript("document.documentElement.outerHTML") { result, error in
                     guard !self.hasCompleted else {
                         Logger.debug("🔍 [LinkedInJobScrapeDelegate] JavaScript completed but already handled")
@@ -592,4 +604,3 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
         decisionHandler(.allow)
     }
 }
-

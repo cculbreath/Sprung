@@ -34,6 +34,33 @@ extension JobApp {
 
             let scriptTags = try doc.select("script[type=application/ld+json]")
 
+            func containsJobPostingType(in dict: [String: Any]) -> Bool {
+                if let typeStr = dict["@type"] as? String, typeStr.lowercased() == "jobposting" {
+                    return true
+                }
+                if let typeArr = dict["@type"] as? [String] {
+                    return typeArr.contains { $0.lowercased() == "jobposting" }
+                }
+                return false
+            }
+
+            func jobPostingDictionary(from json: Any) -> [String: Any]? {
+                if let dict = json as? [String: Any], containsJobPostingType(in: dict) {
+                    return dict
+                }
+                if let dictArray = json as? [[String: Any]] {
+                    return dictArray.first(where: { containsJobPostingType(in: $0) })
+                }
+                if let anyArray = json as? [Any] {
+                    for element in anyArray {
+                        if let dict = element as? [String: Any], containsJobPostingType(in: dict) {
+                            return dict
+                        }
+                    }
+                }
+                return nil
+            }
+
             var jobDict: [String: Any]?
 
             outer: for tag in scriptTags.array() {
@@ -45,34 +72,10 @@ extension JobApp {
 
                 guard let data = content.data(using: .utf8) else { continue }
 
-                if let topObj = try? JSONSerialization.jsonObject(with: data, options: []) {
-                    // Could be dict or array
-                    if let dict = topObj as? [String: Any] {
-                        // @type can be a String or an Array of Strings according to the
-                        // JSON‑LD spec.  Indeed sometimes emits ["JobPosting", "Thing"].
-                        if let typeStr = dict["@type"] as? String, typeStr.lowercased() == "jobposting" {
-                            jobDict = dict; break outer
-                        }
-                        if let typeArr = dict["@type"] as? [String],
-                           typeArr.map({ $0.lowercased() }).contains("jobposting")
-                        {
-                            jobDict = dict; break outer
-                        }
-                    }
-
-                    if let arr = topObj as? [[String: Any]] {
-                        for item in arr {
-                            // Same dual‑type handling as above.
-                            if let typeStr = item["@type"] as? String, typeStr.lowercased() == "jobposting" {
-                                jobDict = item; break outer
-                            }
-                            if let typeArr = item["@type"] as? [String],
-                               typeArr.map({ $0.lowercased() }).contains("jobposting")
-                            {
-                                jobDict = item; break outer
-                            }
-                        }
-                    }
+                if let topObj = try? JSONSerialization.jsonObject(with: data, options: []),
+                   let posting = jobPostingDictionary(from: topObj) {
+                    jobDict = posting
+                    break outer
                 }
             }
 
