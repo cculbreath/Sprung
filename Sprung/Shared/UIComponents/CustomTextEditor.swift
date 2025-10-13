@@ -8,19 +8,36 @@ import SwiftUI
 
 struct CustomTextEditor: View {
     @Binding var sourceContent: String
+    var placeholder: String? = nil
+    var minimumHeight: CGFloat = 130
+    var maximumHeight: CGFloat? = 150
+    var onChange: (() -> Void)? = nil
 
-    // Internal FocusState
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
+            if sourceContent.isEmpty, let placeholder, !placeholder.isEmpty {
+                Text(placeholder)
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 6)
+            }
+
             TextEditor(text: $sourceContent)
-                .frame(height: 130) // Adjust height as needed
-                .overlay(RoundedRectangle(cornerRadius: 6)
-                    .stroke(isFocused ? Color.blue : Color.secondary, lineWidth: 1))
+                .padding(.horizontal, 2)
+                .padding(.vertical, 4)
                 .focused($isFocused)
-                .onTapGesture { isFocused = true }
         }
-        .frame(maxWidth: .infinity, maxHeight: 150)
+        .frame(minHeight: minimumHeight, maxHeight: maximumHeight)
+        .frame(maxWidth: .infinity)
+        .background(Color.primary.opacity(0.05))
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isFocused ? Color.blue : Color.secondary, lineWidth: 1)
+        )
+        .onTapGesture { isFocused = true }
+        .onChange(of: sourceContent) { _, _ in onChange?() }
     }
 }

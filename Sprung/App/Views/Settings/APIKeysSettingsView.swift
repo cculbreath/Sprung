@@ -44,11 +44,11 @@ struct APIKeysSettingsView: View {
             )
 
             APIKeyEditor(
-                title: "OpenAI (Voice)",
+                title: "OpenAI (Voice and Onboarding Interview)",
                 systemImage: "speaker.wave.2",
                 value: $openAiTTSApiKey,
                 placeholder: "sk-…",
-                help: "Used for text-to-speech previews when narrating résumés.",
+                help: "Used for text-to-speech previews and onboarding interview conversations.",
                 normalizesNoneValue: true,
                 onSave: handleOpenAITTSSave
             )

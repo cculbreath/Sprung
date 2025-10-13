@@ -16,6 +16,8 @@ struct ResumeSplitView: View {
     @Binding var tab: TabList
     @Binding var showResumeInspector: Bool
     @Binding var refresh: Bool
+    @Binding var sheets: AppSheets
+    @Binding var clarifyingQuestions: [ClarifyingQuestion]
     
     @State private var showCreateResumeSheet = false
     
@@ -26,12 +28,21 @@ struct ResumeSplitView: View {
                 @Bindable var selApp = selApp
 
                 HSplitView {
-                    ResumeDetailView(
-                        resume: selRes,
-                        tab: $tab,
-                        isWide: $isWide,
-                        exportCoordinator: appEnvironment.resumeExportCoordinator
-                    )
+                    VStack(spacing: 0) {
+                        ResumeActionsBar(
+                            selectedTab: $tab,
+                            sheets: $sheets,
+                            clarifyingQuestions: $clarifyingQuestions
+                        )
+                        Divider()
+                        ResumeDetailView(
+                            resume: selRes,
+                            tab: $tab,
+                            isWide: $isWide,
+                            exportCoordinator: appEnvironment.resumeExportCoordinator
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                     .frame(
                         minWidth: isWide ? 350 : 200,
                         idealWidth: isWide ? 500 : 300,
@@ -97,5 +108,41 @@ struct ResumeSplitView: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+private struct ResumeActionsBar: View {
+    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    
+    @Binding var selectedTab: TabList
+    @Binding var sheets: AppSheets
+    @Binding var clarifyingQuestions: [ClarifyingQuestion]
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ResumeCustomizeButton(selectedTab: $selectedTab)
+            
+            ClarifyingQuestionsButton(
+                selectedTab: $selectedTab,
+                clarifyingQuestions: $clarifyingQuestions,
+                sheets: $sheets
+            )
+            
+            Button {
+                sheets.showResumeReview = true
+            } label: {
+                Label("Optimize", systemImage: "character.magnify")
+                    .font(.system(size: 14, weight: .light))
+            }
+            .buttonStyle(.automatic)
+            .help("AI Resume Review")
+            .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+            
+            Spacer(minLength: 0)
+        }
+        .controlSize(.large)
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
     }
 }

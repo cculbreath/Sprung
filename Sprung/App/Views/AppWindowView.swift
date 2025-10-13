@@ -83,7 +83,9 @@ struct AppWindowView: View {
                 isWide: .constant(true),
                 tab: $selectedTab,
                 showResumeInspector: $sheets.showResumeInspector,
-                refresh: $tabRefresh
+                refresh: $tabRefresh,
+                sheets: $sheets,
+                clarifyingQuestions: $clarifyingQuestions
             )
                 .tabItem {
                     Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")

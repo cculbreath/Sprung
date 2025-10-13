@@ -260,6 +260,7 @@ struct TemplateEditorView: View {
         HStack(spacing: 0) {
             if showSidebar {
                 sidebarContainer()
+                    .clipped()
                     .frame(width: sidebarWidth)
                     .transition(.move(edge: .leading))
             }

@@ -18,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
     var applicantProfileStore: ApplicantProfileStore?
+    var llmService: LLMService?
     var onboardingInterviewService: OnboardingInterviewService?
     var onboardingArtifactStore: OnboardingArtifactStore?
 
@@ -123,7 +124,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let appEnvironment = self.appEnvironment,
                let container = self.modelContainer,
                let enabledLLMStore = self.enabledLLMStore,
-               let applicantProfileStore = self.applicantProfileStore {
+               let applicantProfileStore = self.applicantProfileStore,
+               let llmService = self.llmService {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
 
@@ -133,13 +135,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.navigationState)
                     .environment(enabledLLMStore)
                     .environment(applicantProfileStore)
+                    .environment(appEnvironment.openRouterService)
+                    .environment(llmService)
                     .environment(debugSettingsStore)
                     .modelContainer(container)
 
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {
                 // Fallback if appState or modelContainer is not available
-                Logger.warning("⚠️ Settings window requested before environment is fully configured", category: .appLifecycle)
+                Logger.warning(
+                    "⚠️ Settings window requested before environment is fully configured; dependencies missing",
+                    category: .appLifecycle
+                )
                 hostingView = NSHostingView(
                     rootView: AnyView(
                         VStack(spacing: 16) {
