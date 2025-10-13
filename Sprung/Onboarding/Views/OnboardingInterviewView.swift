@@ -57,7 +57,7 @@ struct OnboardingInterviewView: View {
         .alert("Import Failed", isPresented: $showImportError, presenting: fileImportError) { _ in
             Button("OK") { fileImportError = nil }
         } message: { message in
-            Text(message ?? "Unknown error")
+            Text(message)
         }
     }
 
@@ -102,6 +102,11 @@ struct OnboardingInterviewView: View {
                 Toggle("Allow Web Search", isOn: Binding(get: { service.allowWebSearch }, set: { interviewService.setWebSearchConsent($0) }))
                     .toggleStyle(.switch)
             }
+
+            Text("Focus: \(service.currentPhase.focusSummary)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
 
             if let error = service.lastError {
                 Text(error)

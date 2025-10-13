@@ -37,6 +37,7 @@ final class LLMFacade {
     private let modelValidationService: ModelValidationService
     private var activeStreamingTasks: [UUID: Task<Void, Never>] = [:]
     private var backendClients: [Backend: LLMClient] = [:]
+    private var conversationServices: [Backend: LLMConversationService] = [:]
 
     init(
         client: LLMClient,
@@ -51,10 +52,15 @@ final class LLMFacade {
         self.enabledLLMStore = enabledLLMStore
         self.modelValidationService = modelValidationService
         backendClients[.openRouter] = client
+        conversationServices[.openRouter] = OpenRouterConversationService(service: llmService)
     }
 
     func registerClient(_ client: LLMClient, for backend: Backend) {
         backendClients[backend] = client
+    }
+
+    func registerConversationService(_ service: LLMConversationService, for backend: Backend) {
+        conversationServices[backend] = service
     }
 
     func availableBackends() -> [Backend] {
@@ -63,6 +69,10 @@ final class LLMFacade {
 
     func hasBackend(_ backend: Backend) -> Bool {
         backendClients[backend] != nil
+    }
+
+    func supportsConversations(for backend: Backend) -> Bool {
+        conversationServices[backend] != nil
     }
 
     private func resolveClient(for backend: Backend) throws -> LLMClient {
@@ -429,13 +439,23 @@ final class LLMFacade {
         temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> String {
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
-        }
-        let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
-        try await validate(modelId: modelId, requires: required)
+        if backend == .openRouter {
+            let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
+            try await validate(modelId: modelId, requires: required)
 
-        return try await llmService.continueConversation(
+            return try await llmService.continueConversation(
+                userMessage: userMessage,
+                modelId: modelId,
+                conversationId: conversationId,
+                images: images,
+                temperature: temperature
+            )
+        }
+
+        guard let service = conversationServices[backend] else {
+            throw LLMError.clientError("Selected backend does not support conversations")
+        }
+        return try await service.continueConversation(
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
@@ -479,11 +499,20 @@ final class LLMFacade {
         temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> (UUID, String) {
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [])
+            return try await llmService.startConversation(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId,
+                temperature: temperature
+            )
         }
-        try await validate(modelId: modelId, requires: [])
-        return try await llmService.startConversation(
+
+        guard let service = conversationServices[backend] else {
+            throw LLMError.clientError("Selected backend does not support conversations")
+        }
+        return try await service.startConversation(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
             modelId: modelId,

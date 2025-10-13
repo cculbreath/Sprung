@@ -7,9 +7,10 @@
 //
 
 import Foundation
-import SwiftUI
-import SwiftData
 import Observation
+import SwiftData
+import SwiftOpenAI
+import SwiftUI
 
 @Observable
 @MainActor
@@ -118,6 +119,20 @@ final class AppDependencies {
             modelValidationService: appState.modelValidationService
         )
 
+        var openAIConversationService: OpenAIResponsesConversationService?
+
+        if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !openAIKey.isEmpty {
+            let debugEnabled = Logger.isVerboseEnabled
+            let openAIService = OpenAIServiceFactory.service(apiKey: openAIKey, debugEnabled: debugEnabled)
+            let openAIClient = OpenAIResponsesClient(service: openAIService)
+            llmFacade.registerClient(openAIClient, for: .openAI)
+            let conversationService = OpenAIResponsesConversationService(service: openAIService)
+            llmFacade.registerConversationService(conversationService, for: .openAI)
+            openAIConversationService = conversationService
+            Logger.info("✅ OpenAI backend registered for onboarding conversations", category: .appLifecycle)
+        }
+
         let coverLetterService = CoverLetterService(
             llmFacade: llmFacade,
             exportCoordinator: resumeExportCoordinator,
@@ -136,7 +151,8 @@ final class AppDependencies {
         let onboardingInterviewService = OnboardingInterviewService(
             llmFacade: llmFacade,
             artifactStore: onboardingArtifactStore,
-            applicantProfileStore: applicantProfileStore
+            applicantProfileStore: applicantProfileStore,
+            openAIConversationService: openAIConversationService
         )
         self.onboardingInterviewService = onboardingInterviewService
 
