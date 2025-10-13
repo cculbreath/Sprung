@@ -95,8 +95,15 @@ struct TemplateEditorEditorColumn: View {
                 manifestHasChanges = true
                 manifestValidationMessage = nil
             }
-            .frame(minWidth: 600, minHeight: 400)
+            .frame(
+                minWidth: 300,
+                idealWidth: 600,
+                maxWidth: .infinity,
+                minHeight: 400,
+                maxHeight: .infinity
+            )
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -124,7 +131,14 @@ struct TemplateEditorEditorColumn: View {
                 seedHasChanges = true
                 seedValidationMessage = nil
             }
-            .frame(minWidth: 600, minHeight: 400)
+            .frame(
+                minWidth: 300,
+                idealWidth: 600,
+                maxWidth: .infinity,
+                minHeight: 400,
+                maxHeight: .infinity
+            )
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

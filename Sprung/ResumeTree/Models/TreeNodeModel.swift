@@ -256,6 +256,24 @@ extension TreeNode {
     }
 }
 
+// MARK: - Schema convenience -------------------------------------------------
+extension TreeNode {
+    /// Determines whether the node's label ("name") should be editable in the UI.
+    /// Manifest-backed nodes typically provide explicit titles, so we hide the name field
+    /// unless the node lacks schema metadata.
+    var allowsInlineNameEditing: Bool {
+        if parent?.name == "section-labels" { return false }
+        if schemaTitleTemplate != nil { return false }
+        if schemaInputKind != nil { return false }
+        if schemaKey != nil { return false }
+        if parent?.schemaInputKind != nil { return false }
+        if parent?.schemaTitleTemplate != nil { return false }
+        if let parentKey = parent?.schemaKey, !parentKey.isEmpty { return false }
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        return true
+    }
+}
+
 // MARK: - JSON Conversion Extension
 extension TreeNode {
     /// Convert TreeNode to JSON string representation
