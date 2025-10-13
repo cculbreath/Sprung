@@ -314,13 +314,23 @@ class JobRecommendationService {
     /// Save debug prompt to file if debug mode is enabled
     private func saveDebugPrompt(content: String, fileName: String) {
         let fileManager = FileManager.default
-        let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
-        let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
-        let fileURL = downloadsURL.appendingPathComponent(fileName)
-        
+        guard let supportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            Logger.warning("⚠️ Unable to locate Application Support directory for debug prompt.")
+            return
+        }
+
+        let debugDirectory = supportDirectory.appendingPathComponent("Sprung/Debug", isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: debugDirectory, withIntermediateDirectories: true)
+        } catch {
+            Logger.warning("⚠️ Failed to create debug directory: \(error.localizedDescription)")
+            return
+        }
+
+        let fileURL = debugDirectory.appendingPathComponent(fileName)
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            Logger.debug("💾 Saved debug file: \(fileName)")
+            Logger.debug("💾 Saved debug file to Application Support: \(fileName)")
         } catch {
             Logger.warning("⚠️ Failed to save debug file \(fileName): \(error.localizedDescription)")
         }

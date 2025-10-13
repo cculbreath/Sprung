@@ -101,7 +101,12 @@ final class CoverLetterService {
         let llm = llmFacade
         // Ensure cover letter has an associated job application
         guard let jobApp = coverLetter.jobApp else {
-            throw NSError(domain: "CoverLetterService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application"])
+            Logger.error("🚨 Cover letter generation requested without job application (letter id: \(coverLetter.id))")
+            throw NSError(
+                domain: "CoverLetterService",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to generate a cover letter. Please choose a job application first."]
+            )
         }
         
         // Create CoverLetterQuery for centralized prompt management
@@ -169,7 +174,12 @@ final class CoverLetterService {
         let llm = llmFacade
         // Ensure cover letter has an associated job application
         guard let jobApp = coverLetter.jobApp else {
-            throw NSError(domain: "CoverLetterService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Cover letter must have an associated job application for revision"])
+            Logger.error("🚨 Cover letter revision requested without job application (letter id: \(coverLetter.id))")
+            throw NSError(
+                domain: "CoverLetterService",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to revise this cover letter because no job application is selected."]
+            )
         }
         
         // Create CoverLetterQuery for centralized prompt management

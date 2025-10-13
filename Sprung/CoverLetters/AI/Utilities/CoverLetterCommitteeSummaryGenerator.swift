@@ -11,7 +11,7 @@ enum CoverLetterCommitteeSummaryError: LocalizedError {
     case facadeUnavailable
 
     var errorDescription: String? {
-        "CoverLetterCommitteeSummaryGenerator is not configured with an LLMFacade"
+        "Unable to generate the analysis summary because the AI service is unavailable."
     }
 }
 
@@ -29,7 +29,8 @@ class CoverLetterCommitteeSummaryGenerator {
         modelReasonings: [(model: String, response: BestCoverLetterResponse)],
         voteTally: [UUID: Int],
         scoreTally: [UUID: Int],
-        selectedVotingScheme: VotingScheme
+        selectedVotingScheme: VotingScheme,
+        preferredModelId: String? = nil
     ) async throws -> String {
         Logger.info("🧠 Generating reasoning summary...")
         
@@ -115,13 +116,16 @@ class CoverLetterCommitteeSummaryGenerator {
             throw CoverLetterCommitteeSummaryError.facadeUnavailable
         }
 
+        let summaryModelId = preferredModelId ?? modelReasonings.first?.model ?? "gpt-4o-mini"
+
         let summaryResponse: CommitteeSummaryResponse = try await llm.executeFlexibleJSON(
                 prompt: summaryPrompt,
-                modelId: "openai/o3",
+                modelId: summaryModelId,
                 as: CommitteeSummaryResponse.self,
                 temperature: 0.7,
                 jsonSchema: jsonSchema
         )
+        Logger.info("🧠 Analysis summary generated using model \(summaryModelId)")
         
         Logger.debug("🔍 Processing \(summaryResponse.letterAnalyses.count) letter analyses")
         for analysis in summaryResponse.letterAnalyses {

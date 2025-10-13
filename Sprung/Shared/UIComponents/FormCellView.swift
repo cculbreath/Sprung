@@ -36,21 +36,21 @@ struct Cell: View {
             } else {
                 HStack {
                     if let app = jobAppStore?.selectedApp {
-                        let val = app[keyPath: trailingKeys]
-                        Text(val.isEmpty ? "none listed" : val)
-                            .foregroundColor(false ? .blue : .secondary)
-                            .italic(val.isEmpty)
+                        let value = app[keyPath: trailingKeys]
+                        let isLink = isValidURL(value)
+                        Text(value.isEmpty ? "none listed" : value)
+                            .foregroundColor(isLink ? .accentColor : .secondary)
+                            .italic(value.isEmpty)
                             .lineLimit(1)
 
-                        if isValidURL(val) {
+                        if isLink {
                             Button(action: {
-                                if let url = URL(string: val) {
+                                if let url = URL(string: value) {
                                     openURL(url)
-                                } else {}
+                                }
                             }) {
                                 Image(systemName: "arrow.up.right.square")
-                                    .foregroundColor(
-                                        false ? .blue : .secondary)
+                                    .foregroundColor(.accentColor)
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
@@ -61,9 +61,6 @@ struct Cell: View {
                     }
                 }
             }
-        }
-        .onAppear {
-            // Debugging print statements, safely
         }
     }
 

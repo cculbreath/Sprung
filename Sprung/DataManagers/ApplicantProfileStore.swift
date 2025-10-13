@@ -2,8 +2,6 @@
 //  ApplicantProfileStore.swift
 //  Sprung
 //
-//  Created by Codex on 10/22/25.
-//
 
 import Foundation
 import Observation

@@ -12,10 +12,9 @@ struct APIKeysSettingsView: View {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(LLMService.self) private var llmService
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
-
-    @AppStorage("scrapingDogApiKey") private var scrapingDogApiKey: String = "none"
-    @AppStorage("openRouterApiKey") private var openRouterApiKey: String = ""
-    @AppStorage("openAiTTSApiKey") private var openAiTTSApiKey: String = "none"
+    @State private var scrapingDogApiKey: String = APIKeyManager.get(.scrapingDog) ?? ""
+    @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
+    @State private var openAiTTSApiKey: String = APIKeyManager.get(.openAI) ?? ""
 
     @State private var showModelSelectionSheet = false
 
@@ -40,7 +39,8 @@ struct APIKeysSettingsView: View {
                 value: $scrapingDogApiKey,
                 placeholder: "sdg-…",
                 help: "Optional fallback scraper for LinkedIn job imports.",
-                normalizesNoneValue: true
+                normalizesNoneValue: true,
+                onSave: handleScrapingDogSave
             )
 
             APIKeyEditor(
@@ -84,6 +84,12 @@ struct APIKeysSettingsView: View {
             OpenRouterModelSelectionSheet()
                 .environment(appState)
         }
+        .task {
+            refreshKeys()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
+            refreshKeys()
+        }
     }
 
     private func handleOpenRouterSave(_ newValue: String) {
@@ -100,16 +106,34 @@ struct APIKeysSettingsView: View {
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
 
+    private func handleScrapingDogSave(_ newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            APIKeyManager.delete(.scrapingDog)
+            scrapingDogApiKey = ""
+        } else {
+            _ = APIKeyManager.set(.scrapingDog, value: trimmed)
+            scrapingDogApiKey = trimmed
+        }
+        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
+    }
+
     private func handleOpenAITTSSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             APIKeyManager.delete(.openAI)
-            openAiTTSApiKey = "none"
+            openAiTTSApiKey = ""
         } else {
             _ = APIKeyManager.set(.openAI, value: trimmed)
             openAiTTSApiKey = trimmed
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
+    }
+
+    private func refreshKeys() {
+        openRouterApiKey = APIKeyManager.get(.openRouter) ?? ""
+        scrapingDogApiKey = APIKeyManager.get(.scrapingDog) ?? ""
+        openAiTTSApiKey = APIKeyManager.get(.openAI) ?? ""
     }
 }
 
@@ -193,7 +217,7 @@ private struct APIKeyEditor: View {
 
     private func commit() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let stored = trimmed.isEmpty && normalizesNoneValue ? "none" : trimmed
+        let stored = trimmed.isEmpty && normalizesNoneValue ? "" : trimmed
 
         value = stored
         onSave?(trimmed)

@@ -58,7 +58,7 @@ class CoverLetter: Identifiable, Hashable {
     var generationModel: String? = nil
     var encodedEnabledRefs: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none
-    var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zissner
+    var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zinsser
     
     /// Indicates this is the chosen submission draft (star indicator)
     var isChosenSubmissionDraft: Bool = false

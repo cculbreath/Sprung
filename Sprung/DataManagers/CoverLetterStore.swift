@@ -5,13 +5,6 @@
 //  Created by Christopher Culbreath on 9/12/24.
 //
 
-//
-//  swift
-//  Sprung
-//
-//  Created by Christopher Culbreath on 8/30/24.
-//
-
 import Foundation
 import SwiftData
 
