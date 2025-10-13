@@ -5,8 +5,12 @@
 
 import AppKit
 import Foundation
+import Mustache
 import PDFKit
+import SwiftData
 import SwiftUI
+
+typealias TemplatePreviewResult = (pdfData: Data, text: String)
 
 extension TemplateEditorView {
     func closeEditor() {
@@ -15,48 +19,123 @@ extension TemplateEditorView {
         }
     }
 
-    func scheduleLivePreviewUpdate() {
-        guard selectedTab == .pdfTemplate else { return }
-        debounceTimer?.invalidate()
+    func refreshTemplatePreview(force: Bool = false) {
+        guard !isPreviewRefreshing else { return }
+        isPreviewRefreshing = true
+        isGeneratingPreview = true
+        isGeneratingLivePreview = true
 
-        debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-            Task { @MainActor in
-                await generateLivePreview()
+        Task { @MainActor in
+            defer {
+                isPreviewRefreshing = false
+                isGeneratingPreview = false
+                isGeneratingLivePreview = false
+            }
+
+            do {
+                let result = try await generateTemplatePreview()
+                previewPDFData = result.pdfData
+                previewTextContent = result.text
+            } catch {
+                Logger.error("Template preview generation failed: \(error)")
+                previewPDFData = nil
+                previewTextContent = nil
+                saveError = "Failed to generate template preview: \(error.localizedDescription)"
             }
         }
     }
 
-    @MainActor
-    func generateInitialPreview() {
-        guard selectedTab == .pdfTemplate else { return }
-        Task {
-            await generateLivePreview()
+    private func generateTemplatePreview() async throws -> TemplatePreviewResult {
+        let slug = selectedTemplate.lowercased()
+        let templateRecord = appEnvironment.templateStore.template(slug: slug)
+        let templateName = templateRecord?.name ?? templateDisplayName(selectedTemplate)
+
+        guard let htmlTemplate = resolveHTMLTemplate(slug: slug) else {
+            throw TemplatePreviewGeneratorError.templateUnavailable
         }
+        guard let textTemplate = resolveTextTemplate(slug: slug) else {
+            throw TemplatePreviewGeneratorError.templateUnavailable
+        }
+
+        let template = Template(
+            name: templateName,
+            slug: slug,
+            htmlContent: htmlTemplate,
+            textContent: textTemplate,
+            cssContent: templateRecord?.cssContent,
+            manifestData: templateRecord?.manifestData,
+            isCustom: templateRecord?.isCustom ?? false,
+            createdAt: templateRecord?.createdAt ?? Date(),
+            updatedAt: templateRecord?.updatedAt ?? Date()
+        )
+
+        let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: appEnvironment.templateSeedStore)
+        let applicantProfile = appEnvironment.applicantProfileStore.currentProfile()
+
+        guard let context = contextBuilder.buildContext(
+            for: template,
+            fallbackJSON: nil,
+            applicantProfile: applicantProfile
+        ) else {
+            throw TemplatePreviewGeneratorError.contextGenerationFailed
+        }
+
+        let jobApp = JobApp()
+        let resume = Resume(jobApp: jobApp, enabledSources: [], template: template)
+        resume.needToTree = true
+        resume.importedEditorKeys = []
+
+        let manifest = TemplateManifestLoader.manifest(for: template)
+        guard let rootNode = JsonToTree(resume: resume, context: context, manifest: manifest).buildTree() else {
+            throw TemplatePreviewGeneratorError.treeGenerationFailed
+        }
+        resume.rootNode = rootNode
+
+        let renderingContext = try ResumeTemplateProcessor.createTemplateContext(from: resume)
+
+        // Render text
+        let textOutput = try renderMustache(template: textTemplate, context: renderingContext)
+
+        // Render PDF via WKWebView using the HTML template
+        let pdfGenerator = NativePDFGenerator(
+            templateStore: appEnvironment.templateStore,
+            profileProvider: appEnvironment.applicantProfileStore
+        )
+        let pdfData = try await pdfGenerator.generatePDFFromCustomTemplate(for: resume, customHTML: htmlTemplate)
+
+        return (pdfData: pdfData, text: textOutput)
     }
 
-    @MainActor
-    func generateLivePreview() async {
-        guard selectedTab == .pdfTemplate, let resume = selectedResume else { return }
-
-        if !isEditingCurrentTemplate || !assetHasChanges {
-            previewPDFData = resume.pdfData
-            return
+    private func resolveHTMLTemplate(slug: String) -> String? {
+        if let draft = htmlDraft, !draft.isEmpty {
+            return draft
         }
-
-        isGeneratingLivePreview = true
-
-        if assetHasChanges {
-            _ = saveTemplate()
+        if let stored = appEnvironment.templateStore.template(slug: slug)?.htmlContent {
+            return stored
         }
-
-        do {
-            try await appEnvironment.resumeExportCoordinator.ensureFreshRenderedText(for: resume)
-            previewPDFData = resume.pdfData
-        } catch {
-            Logger.error("Live preview generation failed: \(error)")
+        if let bundled = BundledTemplates.getTemplate(name: slug, format: "html") {
+            return bundled
         }
+        return nil
+    }
 
-        isGeneratingLivePreview = false
+    private func resolveTextTemplate(slug: String) -> String? {
+        if let draft = textDraft, !draft.isEmpty {
+            return draft
+        }
+        if let stored = appEnvironment.templateStore.template(slug: slug)?.textContent {
+            return stored
+        }
+        if let bundled = BundledTemplates.getTemplate(name: slug, format: "txt") {
+            return bundled
+        }
+        return nil
+    }
+
+    private func renderMustache(template: String, context: [String: Any]) throws -> String {
+        let mustache = try Mustache.Template(string: template)
+        TemplateFilters.register(on: mustache)
+        return try mustache.render(context)
     }
 
     func prepareOverlayOptions() {
@@ -112,4 +191,10 @@ extension TemplateEditorView {
         overlayPageSelection = min(overlayPageSelection, max(document.pageCount - 1, 0))
         overlayFilename = url.lastPathComponent
     }
+}
+
+enum TemplatePreviewGeneratorError: Error {
+    case templateUnavailable
+    case contextGenerationFailed
+    case treeGenerationFailed
 }

@@ -51,6 +51,10 @@ struct TemplateEditorView: View {
 
     // Live preview state
     @State var previewPDFData: Data?
+    @State var previewTextContent: String?
+    @State var htmlDraft: String?
+    @State var textDraft: String?
+    @State var isPreviewRefreshing: Bool = false
     @State var showInspector: Bool = true
     @State var debounceTimer: Timer?
     @State var isGeneratingLivePreview: Bool = false
@@ -127,7 +131,7 @@ struct TemplateEditorView: View {
         navigationState.selectedResume
     }
 
-    private func templateDisplayName(_ template: String) -> String {
+    func templateDisplayName(_ template: String) -> String {
         template
             .replacingOccurrences(of: "-", with: " ")
             .replacingOccurrences(of: "_", with: " ")
@@ -141,6 +145,17 @@ struct TemplateEditorView: View {
     private func templateMatchesSelectedResume(_ template: String) -> Bool {
         guard let resumeTemplateIdentifier else { return false }
         return resumeTemplateIdentifier == template.lowercased()
+    }
+
+    private func handleTemplateDraftUpdate(with content: String) {
+        switch selectedTab {
+        case .pdfTemplate:
+            htmlDraft = content
+        case .txtTemplate:
+            textDraft = content
+        default:
+            break
+        }
     }
 
     private func toggleInspectorVisibility() {
@@ -164,9 +179,6 @@ struct TemplateEditorView: View {
         }
     }
     
-    private var hasSelectedResume: Bool {
-        selectedResume != nil
-    }
     
     private var resumeTemplateIdentifier: String? {
         guard let resume = selectedResume else { return nil }
@@ -179,10 +191,6 @@ struct TemplateEditorView: View {
         return nil
     }
     
-    var isEditingCurrentTemplate: Bool {
-        guard let resumeTemplateIdentifier else { return false }
-        return selectedTemplate.lowercased() == resumeTemplateIdentifier && selectedTab == .pdfTemplate
-    }
 
     var currentFormat: String {
         switch selectedTab {
@@ -267,20 +275,13 @@ struct TemplateEditorView: View {
             loadSeed()
             manifestHasChanges = false
             seedHasChanges = false
-            if selectedTab == .pdfTemplate {
-                generateInitialPreview()
-            }
+            refreshTemplatePreview(force: true)
         }
         .onChange(of: selectedTemplate) { _, _ in
             handleTemplateSelectionChange()
         }
         .onChange(of: selectedTab) { _, newValue in
             handleTabSelectionChange(newValue)
-        }
-        .onChange(of: selectedResume?.id) { _, _ in
-            if selectedTab == .pdfTemplate {
-                generateInitialPreview()
-            }
         }
         .alert("Unsaved Changes", isPresented: $showingSaveAlert) {
             Button("Save") {
@@ -404,10 +405,8 @@ struct TemplateEditorView: View {
                         seedValidationMessage: $seedValidationMessage,
                         textEditorInsertion: $textEditorInsertion,
                         selectedResume: selectedResume,
-                        onTemplateChange: {
-                            if selectedTab == .pdfTemplate {
-                                scheduleLivePreviewUpdate()
-                            }
+                        onTemplateChange: { updatedContent in
+                            handleTemplateDraftUpdate(with: updatedContent)
                         },
                         onValidateManifest: validateManifest,
                         onSaveManifest: { _ = saveManifest() },
@@ -419,6 +418,7 @@ struct TemplateEditorView: View {
                         .layoutPriority(2)
                     TemplateEditorPreviewColumn(
                         previewPDFData: previewPDFData,
+                        textPreview: previewTextContent,
                         showOverlay: $showOverlay,
                         overlayDocument: overlayPDFDocument,
                         overlayPageIndex: overlayPageIndex,
@@ -427,14 +427,12 @@ struct TemplateEditorView: View {
                         isGeneratingPreview: isGeneratingPreview,
                         isGeneratingLivePreview: isGeneratingLivePreview,
                         selectedTab: selectedTab,
-                        isEditingCurrentTemplate: isEditingCurrentTemplate,
-                        hasSelectedResume: hasSelectedResume,
                         pdfController: pdfController,
-                        onRefresh: previewPDF,
+                        onRefresh: { refreshTemplatePreview(force: true) },
                         onPrepareOverlayOptions: prepareOverlayOptions
                     )
-                        .frame(minWidth: 540, idealWidth: 600)
-                        .layoutPriority(1)
+                    .frame(minWidth: 540, idealWidth: 600)
+                    .layoutPriority(1)
                 }
             } else {
                 TemplateEditorEditorColumn(
@@ -449,10 +447,8 @@ struct TemplateEditorView: View {
                     seedValidationMessage: $seedValidationMessage,
                     textEditorInsertion: $textEditorInsertion,
                     selectedResume: selectedResume,
-                    onTemplateChange: {
-                        if selectedTab == .pdfTemplate {
-                            scheduleLivePreviewUpdate()
-                        }
+                    onTemplateChange: { updatedContent in
+                        handleTemplateDraftUpdate(with: updatedContent)
                     },
                     onValidateManifest: validateManifest,
                     onSaveManifest: { _ = saveManifest() },
@@ -461,6 +457,23 @@ struct TemplateEditorView: View {
                     onSaveSeed: { _ = saveSeed() }
                 )
                     .frame(minWidth: 300)
+                TemplateEditorPreviewColumn(
+                    previewPDFData: previewPDFData,
+                    textPreview: previewTextContent,
+                    showOverlay: $showOverlay,
+                    overlayDocument: overlayPDFDocument,
+                    overlayPageIndex: overlayPageIndex,
+                    overlayOpacity: $overlayOpacity,
+                    overlayColor: overlayColor,
+                    isGeneratingPreview: isGeneratingPreview,
+                    isGeneratingLivePreview: isGeneratingLivePreview,
+                    selectedTab: selectedTab,
+                    pdfController: pdfController,
+                    onRefresh: { refreshTemplatePreview(force: true) },
+                    onPrepareOverlayOptions: prepareOverlayOptions
+                )
+                .frame(minWidth: 540, idealWidth: 600)
+                .layoutPriority(1)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -572,7 +585,7 @@ struct TemplateEditorView: View {
         overlayPDFDocument = nil
         overlayFilename = nil
         overlayPageCount = 0
-        generateInitialPreview()
+        refreshTemplatePreview(force: true)
     }
 
     private func applyPendingTemplateChange() {
@@ -598,11 +611,7 @@ struct TemplateEditorView: View {
                 showingSaveAlert = true
             } else {
                 loadTemplate()
-                if newTab == .pdfTemplate {
-                    generateInitialPreview()
-                } else {
-                    previewPDFData = nil
-                }
+                refreshTemplatePreview(force: false)
             }
         case .manifest:
             if manifestContent.isEmpty {
@@ -619,10 +628,8 @@ struct TemplateEditorView: View {
         loadTemplate()
         loadManifest()
         loadSeed()
-        if selectedTab == .pdfTemplate {
-            generateInitialPreview()
-        } else {
-            previewPDFData = nil
+        if selectedTab == .pdfTemplate || selectedTab == .txtTemplate {
+            refreshTemplatePreview(force: false)
         }
     }
 

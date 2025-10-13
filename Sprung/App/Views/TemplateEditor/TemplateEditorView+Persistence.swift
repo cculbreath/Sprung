@@ -11,16 +11,17 @@ extension TemplateEditorView {
         let resourceName = "\(selectedTemplate)-template"
         let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
 
-        // Prefer SwiftData-stored templates when available
         let storedSlug = selectedTemplate.lowercased()
         if fileExtension == "html", let stored = appEnvironment.templateStore.htmlTemplateContent(slug: storedSlug) {
             templateContent = stored
             assetHasChanges = false
+            storeLoadedTemplateContent(stored, format: "html")
             return
         }
         if fileExtension == "txt", let stored = appEnvironment.templateStore.textTemplateContent(slug: storedSlug) {
             templateContent = stored
             assetHasChanges = false
+            storeLoadedTemplateContent(stored, format: "txt")
             return
         }
 
@@ -33,63 +34,37 @@ extension TemplateEditorView {
             if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
                 templateContent = content
                 assetHasChanges = false
+                storeLoadedTemplateContent(content, format: fileExtension)
                 return
             }
         }
 
-        // Debug: List bundle contents
-        if let bundlePath = Bundle.main.resourcePath {
-            let fileManager = FileManager.default
-            if let contents = try? fileManager.contentsOfDirectory(atPath: bundlePath) {
-                Logger.debug("🗂️ Bundle contents: \(contents)")
-
-                // Look for Templates directory
-                let templatesPath = bundlePath + "/Templates"
-                if fileManager.fileExists(atPath: templatesPath) {
-                    if let templateContents = try? fileManager.contentsOfDirectory(atPath: templatesPath) {
-                        Logger.debug("📁 Templates directory contents: \(templateContents)")
-                    }
-                } else {
-                    Logger.debug("❓ Templates directory not found in bundle")
-                }
-            }
-        }
-
-        // Try multiple bundle lookup strategies
         var bundlePath: String?
-
-        // Strategy 1: Resources/Templates subdirectory
         bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Resources/Templates/\(selectedTemplate)")
-        if bundlePath != nil {
-            Logger.debug("✅ Found via Resources/Templates/\(selectedTemplate)")
-        }
-
-        // Strategy 2: Templates subdirectory
         if bundlePath == nil {
             bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension, inDirectory: "Templates/\(selectedTemplate)")
-            if bundlePath != nil {
-                Logger.debug("✅ Found via Templates/\(selectedTemplate)")
-            }
         }
-
-        // Strategy 3: Direct lookup
         if bundlePath == nil {
             bundlePath = Bundle.main.path(forResource: resourceName, ofType: fileExtension)
-            if bundlePath != nil {
-                Logger.debug("✅ Found via direct lookup")
-            }
         }
 
         if let path = bundlePath,
            let content = try? String(contentsOfFile: path, encoding: .utf8) {
             templateContent = content
             assetHasChanges = false
+            storeLoadedTemplateContent(content, format: fileExtension)
         } else if let embeddedContent = BundledTemplates.getTemplate(name: selectedTemplate, format: fileExtension) {
             templateContent = embeddedContent
             assetHasChanges = false
+            storeLoadedTemplateContent(embeddedContent, format: fileExtension)
         } else {
-            templateContent = "// Template not found: \(resourceName).\(fileExtension)\n// Bundle path: \(Bundle.main.bundlePath)\n// Resource path: \(Bundle.main.resourcePath ?? "nil")"
+            templateContent = """
+// Template not found: \(resourceName).\(fileExtension)
+// Bundle path: \(Bundle.main.bundlePath)
+// Resource path: \(Bundle.main.resourcePath ?? "nil")
+"""
             assetHasChanges = false
+            storeLoadedTemplateContent(templateContent, format: fileExtension)
         }
     }
 
@@ -308,7 +283,6 @@ extension TemplateEditorView {
         let resourceName = "\(selectedTemplate)-template"
         let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
 
-        // Save to Documents directory
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             saveError = "Unable to locate Documents directory."
             return false
@@ -319,10 +293,8 @@ extension TemplateEditorView {
             .appendingPathComponent(selectedTemplate)
 
         do {
-            // Create directory if needed
             try FileManager.default.createDirectory(at: templateDir, withIntermediateDirectories: true)
 
-            // Write file
             let templatePath = templateDir.appendingPathComponent("\(resourceName).\(fileExtension)")
             try templateContent.write(to: templatePath, atomically: true, encoding: .utf8)
 
@@ -335,6 +307,7 @@ extension TemplateEditorView {
                     textContent: nil,
                     isCustom: true
                 )
+                storeLoadedTemplateContent(templateContent, format: "html")
             } else if fileExtension == "txt" {
                 appEnvironment.templateStore.upsertTemplate(
                     slug: slug,
@@ -343,6 +316,7 @@ extension TemplateEditorView {
                     textContent: templateContent,
                     isCustom: true
                 )
+                storeLoadedTemplateContent(templateContent, format: "txt")
             }
 
             assetHasChanges = false
@@ -350,16 +324,6 @@ extension TemplateEditorView {
         } catch {
             saveError = "Failed to save template: \(error.localizedDescription)"
             return false
-        }
-    }
-
-    @MainActor
-    func previewPDF() {
-        guard selectedTab == .pdfTemplate else { return }
-        isGeneratingPreview = true
-        Task { @MainActor in
-            await generateLivePreview()
-            isGeneratingPreview = false
         }
     }
 
@@ -399,6 +363,7 @@ extension TemplateEditorView {
 
         templateContent = initialContent
         assetHasChanges = true
+        storeLoadedTemplateContent(initialContent, format: fileExtension)
         loadManifest()
         loadSeed()
     }
@@ -469,9 +434,7 @@ extension TemplateEditorView {
 
     func performRefresh() {
         _ = savePendingChanges()
-        if selectedTab == .pdfTemplate {
-            previewPDF()
-        }
+        refreshTemplatePreview(force: true)
     }
 
     func performClose() {
@@ -548,4 +511,15 @@ extension TemplateEditorView {
             return "// New \(name) template in \(format) format"
         }
     }
+    fileprivate func storeLoadedTemplateContent(_ content: String, format: String) {
+        switch format.lowercased() {
+        case "html":
+            htmlDraft = content
+        case "txt":
+            textDraft = content
+        default:
+            break
+        }
+    }
+
 }
