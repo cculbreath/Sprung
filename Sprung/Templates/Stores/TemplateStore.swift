@@ -9,11 +9,6 @@ final class TemplateStore {
 
     init(context: ModelContext) {
         self.context = context
-        do {
-            try TemplateImporter.ensureInitialTemplates(context: context)
-        } catch {
-            Logger.warning("⚠️ Failed to initialize template library: \(error)")
-        }
     }
 
     func templates() -> [Template] {
@@ -39,6 +34,20 @@ final class TemplateStore {
         template(slug: slug)?.cssContent
     }
 
+    func defaultTemplate() -> Template? {
+        let descriptor = FetchDescriptor<Template>(
+            predicate: #Predicate { $0.isDefault == true },
+            sortBy: [SortDescriptor(\Template.updatedAt, order: .reverse)]
+        )
+        if let match = try? context.fetch(descriptor).first {
+            return match
+        }
+        let fallbackDescriptor = FetchDescriptor<Template>(
+            sortBy: [SortDescriptor(\Template.createdAt, order: .forward)]
+        )
+        return try? context.fetch(fallbackDescriptor).first
+    }
+
     @discardableResult
     func upsertTemplate(
         slug: String,
@@ -46,7 +55,8 @@ final class TemplateStore {
         htmlContent: String? = nil,
         textContent: String? = nil,
         cssContent: String? = nil,
-        isCustom: Bool
+        isCustom: Bool,
+        markAsDefault: Bool = false
     ) -> Template {
         let normalized = slug.lowercased()
         let now = Date()
@@ -56,9 +66,13 @@ final class TemplateStore {
             if let cssContent { existing.cssContent = cssContent }
             existing.updatedAt = now
             existing.isCustom = isCustom
+            if markAsDefault {
+                setDefault(existing)
+            }
             try? context.save()
             return existing
         } else {
+            let hadTemplates = !templates().isEmpty
             let template = Template(
                 name: name,
                 slug: normalized,
@@ -66,13 +80,28 @@ final class TemplateStore {
                 textContent: textContent,
                 cssContent: cssContent,
                 isCustom: isCustom,
+                isDefault: false,
                 createdAt: now,
                 updatedAt: now
             )
             context.insert(template)
+            if markAsDefault || !hadTemplates {
+                setDefault(template)
+            }
             try? context.save()
             return template
         }
+    }
+
+    func setDefault(_ template: Template) {
+        guard template.isDefault == false else { return }
+        let descriptor = FetchDescriptor<Template>(predicate: #Predicate { $0.isDefault == true })
+        if let currentDefaults = try? context.fetch(descriptor) {
+            currentDefaults.forEach { $0.isDefault = false }
+        }
+        template.isDefault = true
+        template.updatedAt = Date()
+        try? context.save()
     }
 
     func updateManifest(slug: String, manifestData: Data?) throws {
@@ -90,8 +119,14 @@ final class TemplateStore {
 
     func deleteTemplate(slug: String) {
         guard let template = template(slug: slug) else { return }
+        let wasDefault = template.isDefault
         context.delete(template)
         try? context.save()
+        if wasDefault {
+            if let fallback = defaultTemplate() {
+                setDefault(fallback)
+            }
+        }
     }
 }
 

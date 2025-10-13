@@ -1,8 +1,6 @@
 import Foundation
 @preconcurrency import SwiftyJSON
 
-extension JSON: @unchecked Sendable {}
-
 enum OnboardingPhase: String, CaseIterable {
     case coreFacts
     case deepDive

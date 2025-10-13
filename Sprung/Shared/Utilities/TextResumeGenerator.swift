@@ -18,7 +18,7 @@ class TextResumeGenerator {
     // MARK: - Public Methods
     
     /// Generate a text resume using the specified template
-    func generateTextResume(for resume: Resume, template: String = "archer") throws -> String {
+    func generateTextResume(for resume: Resume, template: String) throws -> String {
         return try renderTemplate(for: resume, template: template)
     }
     // MARK: - Private Methods
@@ -39,16 +39,15 @@ class TextResumeGenerator {
     
     private func loadTextTemplate(named template: String) throws -> String {
         let resourceName = "\(template.lowercased())-template"
-        
-        // Try multiple path strategies to find the template
+
         var templateContent: String?
-        
+
         if let stored = templateStore.textTemplateContent(slug: template.lowercased()) {
             templateContent = stored
         }
 
-        // Strategy 0: Check Documents directory first for user modifications
-        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+        if templateContent == nil,
+           let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             let userTemplatePath = documentsPath
                 .appendingPathComponent("Sprung")
                 .appendingPathComponent("Templates")
@@ -59,45 +58,7 @@ class TextResumeGenerator {
                 Logger.debug("Using user-modified text template from: \(userTemplatePath.path)")
             }
         }
-        
-        // Strategy 1: Look in Templates/template subdirectory
-        if templateContent == nil {
-            if let path = Bundle.main.path(forResource: resourceName, ofType: "txt", inDirectory: "Templates/\(template)") {
-                templateContent = try? String(contentsOfFile: path, encoding: .utf8)
-            }
-        }
-        
-        // Strategy 2: Look directly in main bundle
-        if templateContent == nil {
-            if let path = Bundle.main.path(forResource: resourceName, ofType: "txt") {
-                templateContent = try? String(contentsOfFile: path, encoding: .utf8)
-            }
-        }
-        
-        // Strategy 3: Look for the template file anywhere in the bundle
-        if templateContent == nil {
-            let bundlePath = Bundle.main.bundlePath
-            let fileManager = FileManager.default
-            let enumerator = fileManager.enumerator(atPath: bundlePath)
-            while let file = enumerator?.nextObject() as? String {
-                if file.hasSuffix("\(resourceName).txt") {
-                    let fullPath = bundlePath + "/" + file
-                    templateContent = try? String(contentsOfFile: fullPath, encoding: .utf8)
-                    if templateContent != nil {
-                        break
-                    }
-                }
-            }
-        }
-        
-        // Fallback to embedded templates
-        if templateContent == nil {
-            templateContent = BundledTemplates.getTemplate(name: template, format: "txt")
-            if templateContent != nil {
-                Logger.debug("Using embedded text template for \(template)")
-            }
-        }
-        
+
         guard let content = templateContent else {
             throw NSError(domain: "TextResumeGenerator", code: 404, 
                          userInfo: [NSLocalizedDescriptionKey: "Template not found: \(template)"])

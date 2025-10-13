@@ -85,9 +85,10 @@ private struct Implementation {
         }
         if let dict = value as? [String: Any] {
             let keys = dict.keys.sorted()
-            let sampleKey = keys.first ?? "nil"
+            let sampleKey = keys.first
             let sampleValue = sampleKey.flatMap { dict[$0] }.map { String(describing: $0) } ?? "nil"
-            return "dict(keys: \(keys), sample[\(sampleKey)]: \(sampleValue))"
+            let keyLabel = sampleKey ?? "nil"
+            return "dict(keys: \(keys), sample[\(keyLabel)]: \(sampleValue))"
         }
         return "\(value)"
     }

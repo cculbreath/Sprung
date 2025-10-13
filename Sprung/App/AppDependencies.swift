@@ -46,6 +46,13 @@ final class AppDependencies {
         self.debugSettingsStore = debugSettingsStore
         Logger.debug("🏗️ AppDependencies: initializing with shared ModelContext", category: .appLifecycle)
 
+        do {
+            try TemplateImporter.resetTemplatesIfNeeded(context: modelContext)
+            Logger.debug("🧹 AppDependencies: completed template data reset migration", category: .appLifecycle)
+        } catch {
+            Logger.warning("TemplateImporter: Failed to reset templates: \(error)")
+        }
+
         // Base stores
         let templateStore = TemplateStore(context: modelContext)
         self.templateStore = templateStore
@@ -187,6 +194,7 @@ final class AppDependencies {
         )
         llmService.reconfigureClient()
 
+        appEnvironment.requiresTemplateSetup = templateStore.templates().isEmpty
         Logger.debug("✅ AppDependencies: ready", category: .appLifecycle)
     }
 }

@@ -64,19 +64,7 @@ class ResumeExportService: ObservableObject {
             resume.template = fallback
             return fallback
         }
-
-        do {
-            return try await promptForCustomTemplate(for: resume)
-        } catch let error as ExportTemplateSelectionError {
-            switch error {
-            case .userCancelled:
-                throw ResumeExportError.userCancelled
-            case .failedToReadFile:
-                throw ResumeExportError.templateSelectionFailed
-            }
-        } catch {
-            throw ResumeExportError.templateSelectionFailed
-        }
+        throw ResumeExportError.noTemplatesConfigured
     }
     
     @MainActor
@@ -104,21 +92,11 @@ class ResumeExportService: ObservableObject {
            let existingText = templateStore.textTemplateContent(slug: existingSlug) {
             return existingText
         }
-        if let existingSlug = resume?.template?.slug,
-           let bundled = BundledTemplates.getTemplate(name: existingSlug, format: "txt") {
-            return bundled
-        }
         return generateBasicTextTemplate()
     }
 
     private func defaultTemplate() -> Template? {
-        if let archer = templateStore.template(slug: "archer") {
-            return archer
-        }
-        if let typewriter = templateStore.template(slug: "typewriter") {
-            return typewriter
-        }
-        return templateStore.templates().first
+        return templateStore.defaultTemplate()
     }
 
     private func generateBasicTextTemplate() -> String {
@@ -157,6 +135,7 @@ class ResumeExportService: ObservableObject {
 enum ResumeExportError: Error, LocalizedError {
     case userCancelled
     case templateSelectionFailed
+    case noTemplatesConfigured
     
     var errorDescription: String? {
         switch self {
@@ -164,6 +143,8 @@ enum ResumeExportError: Error, LocalizedError {
             return "Export cancelled by user"
         case .templateSelectionFailed:
             return "Failed to select or load template files"
+        case .noTemplatesConfigured:
+            return "No resume templates are configured. Add a template in the Template Editor before exporting."
         }
     }
 }

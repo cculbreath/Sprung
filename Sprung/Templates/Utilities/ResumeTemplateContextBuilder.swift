@@ -17,14 +17,16 @@ struct ResumeTemplateContextBuilder {
         let fallback = fallbackJSON.flatMap { Self.parseJSON(from: $0) } ?? [:]
         let seedJSON = templateSeedStore.seed(for: template)?.jsonString ?? ""
         let seed = Self.parseJSON(from: seedJSON)
+        let sanitizedFallback = removeContactSection(from: fallback)
+        let sanitizedSeed = removeContactSection(from: seed)
 
         var context = manifest?.makeDefaultContext() ?? [:]
-        merge(into: &context, with: fallback)
-        merge(into: &context, with: seed)
+        merge(into: &context, with: sanitizedFallback)
+        merge(into: &context, with: sanitizedSeed)
         merge(into: &context, with: profileContext(from: applicantProfile))
 
-        addMissingKeys(from: fallback, to: &context)
-        addMissingKeys(from: seed, to: &context)
+        addMissingKeys(from: sanitizedFallback, to: &context)
+        addMissingKeys(from: sanitizedSeed, to: &context)
 
         if let manifest {
             context = SeedContextNormalizer(manifest: manifest).normalize(context)
@@ -128,6 +130,12 @@ struct ResumeTemplateContextBuilder {
         }
     }
 
+    private func removeContactSection(from dictionary: [String: Any]) -> [String: Any] {
+        var sanitized = dictionary
+        sanitized.removeValue(forKey: "contact")
+        return sanitized
+    }
+
 #if DEBUG
     private func describeValue(_ value: Any) -> String {
         if let array = value as? [Any] {
@@ -136,9 +144,10 @@ struct ResumeTemplateContextBuilder {
         }
         if let dict = value as? [String: Any] {
             let keys = dict.keys.sorted()
-            let sampleKey = keys.first ?? "nil"
+            let sampleKey = keys.first
             let sampleValue = sampleKey.flatMap { dict[$0] }.map { String(describing: $0) } ?? "nil"
-            return "dict(keys: \(keys), sample[\(sampleKey)]: \(sampleValue))"
+            let keyLabel = sampleKey ?? "nil"
+            return "dict(keys: \(keys), sample[\(keyLabel)]: \(sampleValue))"
         }
         return "\(value)"
     }
@@ -187,6 +196,8 @@ private struct SeedContextNormalizer {
             return normalizeObjectOfObjectsSection(value, descriptor: descriptor)
         case .mapOfStrings:
             return normalizeMapOfStringsSection(value)
+        case .string:
+            return normalizeStringSection(value)
         default:
             return value
         }
@@ -207,6 +218,22 @@ private struct SeedContextNormalizer {
         }
         if let string = value as? String {
             return string.isEmpty ? [] : [string]
+        }
+        return value
+    }
+
+    private func normalizeStringSection(_ value: Any) -> Any {
+        if let string = value as? String {
+            return string
+        }
+        if let array = value as? [String] {
+            return array.first ?? ""
+        }
+        if let array = value as? [Any] {
+            return array.first as? String ?? ""
+        }
+        if let dict = value as? [String: Any], let string = dict["value"] as? String {
+            return string
         }
         return value
     }
@@ -431,6 +458,27 @@ private struct SeedContextNormalizer {
                 ensureDescriptorDefaults(for: &dict, descriptor: descriptor, fallbackKey: key)
             }
             return dict
+        }
+
+        if let array = raw as? [Any] {
+            if let firstDict = array.first as? [String: Any] {
+                var normalized = firstDict
+                if normalized["__key"] == nil {
+                    normalized["__key"] = key
+                }
+                if let descriptor {
+                    ensureDescriptorDefaults(for: &normalized, descriptor: descriptor, fallbackKey: key)
+                }
+                return normalized
+            }
+            if let firstString = array.first as? String {
+                var normalized = dictionaryFromPrimitive(firstString, descriptor: descriptor, fallbackKey: key)
+                normalized["__key"] = key
+                if let descriptor {
+                    ensureDescriptorDefaults(for: &normalized, descriptor: descriptor, fallbackKey: key)
+                }
+                return normalized
+            }
         }
 
         return raw

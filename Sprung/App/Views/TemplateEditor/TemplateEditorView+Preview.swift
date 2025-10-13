@@ -20,6 +20,11 @@ extension TemplateEditorView {
     }
 
     func refreshTemplatePreview(force: Bool = false) {
+        guard selectedTemplate.isEmpty == false else {
+            previewPDFData = nil
+            previewTextContent = nil
+            return
+        }
         guard !isPreviewRefreshing else { return }
         isPreviewRefreshing = true
         isGeneratingPreview = true
@@ -46,6 +51,9 @@ extension TemplateEditorView {
     }
 
     private func generateTemplatePreview() async throws -> TemplatePreviewResult {
+        guard selectedTemplate.isEmpty == false else {
+            throw TemplatePreviewGeneratorError.templateUnavailable
+        }
         let slug = selectedTemplate.lowercased()
         let templateRecord = appEnvironment.templateStore.template(slug: slug)
         let templateName = templateRecord?.name ?? templateDisplayName(selectedTemplate)
@@ -60,7 +68,7 @@ extension TemplateEditorView {
         let manifestData = templateRecord?.manifestData ?? loadManifestData(slug: slug)
 #if DEBUG
         if manifestData == nil {
-            Logger.warning("TemplateEditor: No manifest data available for slug \(slug) – falling back to bundled lookup.")
+            Logger.warning("TemplateEditor: No manifest data available for slug \(slug)")
         }
 #endif
 
@@ -120,9 +128,6 @@ extension TemplateEditorView {
         if let stored = appEnvironment.templateStore.template(slug: slug)?.htmlContent {
             return stored
         }
-        if let bundled = BundledTemplates.getTemplate(name: slug, format: "html") {
-            return bundled
-        }
         return nil
     }
 
@@ -132,9 +137,6 @@ extension TemplateEditorView {
         }
         if let stored = appEnvironment.templateStore.template(slug: slug)?.textContent {
             return stored
-        }
-        if let bundled = BundledTemplates.getTemplate(name: slug, format: "txt") {
-            return bundled
         }
         return nil
     }
@@ -217,32 +219,8 @@ private func loadManifestData(slug: String) -> Data? {
         return data
     }
 
-    let bundleCandidates = [
-        Bundle.main.url(
-            forResource: "\(normalized)-manifest",
-            withExtension: "json",
-            subdirectory: "Resources/Templates/\(normalized)"
-        ),
-        Bundle.main.url(
-            forResource: "\(normalized)-manifest",
-            withExtension: "json",
-            subdirectory: "Templates/\(normalized)"
-        ),
-        Bundle.main.url(forResource: "\(normalized)-manifest", withExtension: "json")
-    ]
-
-    for candidate in bundleCandidates {
-        if let url = candidate,
-           let data = try? Data(contentsOf: url) {
 #if DEBUG
-            Logger.debug("TemplateEditor: Loaded manifest for \(slug) from bundle at \(url.path)")
-#endif
-            return data
-        }
-    }
-
-#if DEBUG
-    Logger.warning("TemplateEditor: Failed to locate manifest for \(slug) in documents or bundle")
+    Logger.warning("TemplateEditor: Failed to locate manifest for \(slug) in documents directory")
 #endif
     return nil
 }

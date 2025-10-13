@@ -760,7 +760,7 @@ class JsonToTree {
         value: Any?,
         entryDescriptor: TemplateManifest.Section.FieldDescriptor?
     ) -> [ArrayEntry]? {
-        if var array = asOrderedArrayOfDictionaries(value) {
+        if let array = asOrderedArrayOfDictionaries(value) {
             return array.map { dictionary in
                 var entry = dictionary
                 let sourceKey = (entry["__key"] as? String).flatMap { $0.isEmpty ? nil : $0 }

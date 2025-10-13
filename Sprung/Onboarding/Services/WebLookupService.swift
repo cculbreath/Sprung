@@ -1,9 +1,9 @@
 import Foundation
 import SwiftSoup
-import SwiftyJSON
+@preconcurrency import SwiftyJSON
 
 enum WebLookupService {
-    struct Result: Sendable {
+    struct Result: @unchecked Sendable {
         let entries: [JSON]
         let notices: [String]
     }
