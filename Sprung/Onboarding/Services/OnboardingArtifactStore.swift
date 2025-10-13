@@ -10,6 +10,7 @@ final class OnboardingArtifactStore {
         case skillIndex = "skills_index.json"
         case profileContext = "profile_context.txt"
         case needsVerification = "needs_verification.json"
+        case conversationState = "onboarding_conversation.json"
     }
 
     private let fileManager: FileManager
@@ -173,5 +174,43 @@ final class OnboardingArtifactStore {
             }
         }
         return result
+    }
+
+    // MARK: - Conversation State
+
+    func loadConversationState() -> OpenAIConversationState? {
+        let url = directory.appendingPathComponent(ArtifactFile.conversationState.rawValue)
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            return try decoder.decode(OpenAIConversationState.self, from: data)
+        } catch {
+            Logger.error("Failed to load onboarding conversation state: \(error)")
+            return nil
+        }
+    }
+
+    func saveConversationState(_ state: OpenAIConversationState) {
+        let url = directory.appendingPathComponent(ArtifactFile.conversationState.rawValue)
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(state)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            Logger.error("Failed to persist onboarding conversation state: \(error)")
+        }
+    }
+
+    func clearConversationState() {
+        let url = directory.appendingPathComponent(ArtifactFile.conversationState.rawValue)
+        if fileManager.fileExists(atPath: url.path) {
+            do {
+                try fileManager.removeItem(at: url)
+            } catch {
+                Logger.warning("Unable to remove onboarding conversation state: \(error)")
+            }
+        }
     }
 }
