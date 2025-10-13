@@ -48,6 +48,7 @@ struct TemplateEditorView: View {
     @State var seedHasChanges: Bool = false
     @State var seedValidationMessage: String?
     @State var pendingTemplateChange: PendingTemplateChange?
+    @State var pendingProfileUpdate: ProfileUpdatePrompt?
 
     // Live preview state
     @State var previewPDFData: Data?
@@ -385,6 +386,23 @@ struct TemplateEditorView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Reloads the template, manifest, and default values from the last saved state.")
+        }
+        .alert(
+            "Update Applicant Profile?",
+            isPresented: Binding(
+                get: { pendingProfileUpdate != nil },
+                set: { if !$0 { pendingProfileUpdate = nil } }
+            ),
+            presenting: pendingProfileUpdate
+        ) { prompt in
+            Button("Update Profile") {
+                applyProfileUpdate(prompt)
+            }
+            Button("Cancel", role: .cancel) {
+                pendingProfileUpdate = nil
+            }
+        } message: { prompt in
+            Text(prompt.message)
         }
         .toolbar(id: "templateEditorToolbar") {
             TemplateEditorToolbar(

@@ -77,81 +77,18 @@ struct ResumeTemplateContextBuilder {
 
     private func buildProfilePayload(using manifest: TemplateManifest, profile: ApplicantProfile) -> [String: Any] {
         var payload: [String: Any] = [:]
-        for (sectionKey, section) in manifest.sections {
-            let contribution = profileContribution(for: section, profile: profile)
-            if let contribution,
-               isEmptyProfileContribution(contribution) == false {
-                payload[sectionKey] = contribution
-            }
+        let bindings = manifest.applicantProfileBindings()
+        for binding in bindings {
+            guard let value = applicantProfileValue(for: binding.binding, profile: profile),
+                  isEmptyProfileContribution(value) == false else { continue }
+            let updatedSection = settingProfileValue(
+                value,
+                for: binding.path,
+                existing: payload[binding.section]
+            )
+            payload[binding.section] = updatedSection
         }
         return payload
-    }
-
-    private func profileContribution(
-        for section: TemplateManifest.Section,
-        profile: ApplicantProfile
-    ) -> Any? {
-        let contributions = contributionMap(for: section.fields, profile: profile)
-        guard contributions.isEmpty == false else { return nil }
-
-        switch section.type {
-        case .string:
-            return contributions.values.first
-        case .array:
-            if let array = contributions.values.first as? [Any] {
-                return array
-            }
-            return contributions.values.first
-        default:
-            return contributions
-        }
-    }
-
-    private func contributionMap(
-        for descriptors: [TemplateManifest.Section.FieldDescriptor],
-        profile: ApplicantProfile
-    ) -> [String: Any] {
-        var result: [String: Any] = [:]
-        for descriptor in descriptors where descriptor.key != "*" {
-            guard descriptor.repeatable == false else { continue }
-            if let value = contributionValue(for: descriptor, profile: profile) {
-                result[descriptor.key] = value
-            }
-        }
-        return result
-    }
-
-    private func contributionValue(
-        for descriptor: TemplateManifest.Section.FieldDescriptor,
-        profile: ApplicantProfile
-    ) -> Any? {
-        var value: Any?
-        if let binding = descriptor.binding,
-           let bound = applicantProfileValue(for: binding, profile: profile) {
-            value = bound
-        }
-
-        if let children = descriptor.children, children.isEmpty == false {
-            var childResult: [String: Any] = [:]
-            for child in children where child.key != "*" {
-                guard child.repeatable == false else { continue }
-                if let childValue = contributionValue(for: child, profile: profile) {
-                    childResult[child.key] = childValue
-                }
-            }
-            if childResult.isEmpty == false {
-                if var existing = value as? [String: Any] {
-                    existing.merge(childResult) { _, new in new }
-                    value = existing
-                } else if value == nil {
-                    value = childResult
-                } else {
-                    value = childResult
-                }
-            }
-        }
-
-        return value
     }
 
     private func applicantProfileValue(
@@ -204,6 +141,23 @@ struct ResumeTemplateContextBuilder {
             return string.isEmpty
         }
         return false
+    }
+
+    private func settingProfileValue(
+        _ value: Any,
+        for path: [String],
+        existing: Any?
+    ) -> Any {
+        guard let first = path.first else { return value }
+        var dictionary = dictionaryValue(from: existing) ?? [:]
+        let remainder = Array(path.dropFirst())
+        if remainder.isEmpty {
+            dictionary[first] = value
+        } else {
+            let current = dictionary[first]
+            dictionary[first] = settingProfileValue(value, for: remainder, existing: current)
+        }
+        return dictionary
     }
 
     private static func parseJSON(from string: String) -> [String: Any] {
@@ -278,7 +232,7 @@ struct ResumeTemplateContextBuilder {
             return sanitized
         }
 
-        let targets = collectProfileBindingTargets(in: manifest)
+        let targets = manifest.applicantProfileBindings()
         guard targets.isEmpty == false else {
             var sanitized = dictionary
             sanitized.removeValue(forKey: "contact")
@@ -341,48 +295,6 @@ struct ResumeTemplateContextBuilder {
             return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
         }
         return nil
-    }
-
-    private struct ProfileBindingTarget {
-        let section: String
-        let path: [String]
-    }
-
-    private func collectProfileBindingTargets(in manifest: TemplateManifest) -> [ProfileBindingTarget] {
-        var targets: [ProfileBindingTarget] = []
-        for (sectionKey, section) in manifest.sections {
-            collectProfileBindingTargets(
-                in: section.fields,
-                sectionKey: sectionKey,
-                currentPath: [],
-                targets: &targets
-            )
-        }
-        return targets
-    }
-
-    private func collectProfileBindingTargets(
-        in descriptors: [TemplateManifest.Section.FieldDescriptor],
-        sectionKey: String,
-        currentPath: [String],
-        targets: inout [ProfileBindingTarget]
-    ) {
-        for descriptor in descriptors where descriptor.key != "*" {
-            let nextPath = currentPath + [descriptor.key]
-            if descriptor.repeatable { continue }
-            if let binding = descriptor.binding,
-               binding.source == .applicantProfile {
-                targets.append(ProfileBindingTarget(section: sectionKey, path: nextPath))
-            }
-            if let children = descriptor.children, children.isEmpty == false {
-                collectProfileBindingTargets(
-                    in: children,
-                    sectionKey: sectionKey,
-                    currentPath: nextPath,
-                    targets: &targets
-                )
-            }
-        }
     }
 
 #if DEBUG
