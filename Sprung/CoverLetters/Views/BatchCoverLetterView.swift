@@ -36,7 +36,7 @@ struct BatchCoverLetterView: View {
     @State private var selectedBackgroundFacts: Set<String> = []
     @State private var selectedWritingSamples: Set<String> = []
     
-    let availableRevisions: [CoverLetterPrompts.EditorPrompts] = [.improve, .zissner, .mimic]
+    let availableRevisions: [CoverLetterPrompts.EditorPrompts] = [.improve, .zinsser, .mimic]
     
     var body: some View {
         VStack(spacing: 0) {

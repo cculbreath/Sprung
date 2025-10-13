@@ -390,7 +390,7 @@ class BatchCoverLetterGenerator {
         newLetter.moddedDate = Date()
         newLetter.generationModel = model
         newLetter.currentMode = mode
-        newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zissner
+        newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zinsser
         
         // Store generation metadata - for revisions, preserve original generation sources
         if revision != nil {

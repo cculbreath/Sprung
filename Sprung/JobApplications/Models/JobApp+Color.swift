@@ -23,6 +23,7 @@ extension JobApp {
         case "unsubmitted": return .cyan
         case "in progress": return .mint
         case "new": return .green
+        case "abandoned": return .secondary
         case "abandonned": return .secondary
         case "rejected": return .black
         default: return .black
