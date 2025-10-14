@@ -168,7 +168,7 @@ class JsonToTree {
             let segments = keyPath.segments
             if segments.isEmpty { continue }
 
-            // Determine if this key path applies to the requested path.
+            // Try exact prefix matching first
             let minCount = min(normalizedPath.count, segments.count)
             var matches = true
             for index in 0..<minCount {
@@ -177,31 +177,47 @@ class JsonToTree {
                     break
                 }
             }
-            if matches == false {
-                continue
-            }
 
-            if normalizedPath.count <= segments.count {
-                let segmentIndex = max(0, normalizedPath.count - 1)
-                let segment = segments[segmentIndex]
-                let attributes = EditorAttributes(
-                    visible: segment.hidden == false,
-                    transparent: segment.hidden
-                )
-                if normalizedPath.count > bestMatchLength {
-                    bestMatchLength = normalizedPath.count
-                    bestAttributes = attributes
-                }
-            } else {
-                // The path descends deeper than the key path. Inherit behavior from the last component.
-                if segments.count > bestMatchLength {
-                    let segment = segments.last!
+            if matches {
+                if normalizedPath.count <= segments.count {
+                    let segmentIndex = max(0, normalizedPath.count - 1)
+                    let segment = segments[segmentIndex]
                     let attributes = EditorAttributes(
                         visible: segment.hidden == false,
                         transparent: segment.hidden
                     )
-                    bestMatchLength = segments.count
-                    bestAttributes = attributes
+                    if normalizedPath.count > bestMatchLength {
+                        bestMatchLength = normalizedPath.count
+                        bestAttributes = attributes
+                    }
+                } else {
+                    // The path descends deeper than the key path. Inherit behavior from the last component.
+                    if segments.count > bestMatchLength {
+                        let segment = segments.last!
+                        let attributes = EditorAttributes(
+                            visible: segment.hidden == false,
+                            transparent: segment.hidden
+                        )
+                        bestMatchLength = segments.count
+                        bestAttributes = attributes
+                    }
+                }
+            }
+        }
+
+        // Fallback: if no prefix match found, try matching just the leaf name
+        // This allows "summary" to match ["basics", "summary"] or ["custom", "jobTitles"] to match just "jobTitles"
+        if bestAttributes == nil, let leafName = normalizedPath.last {
+            for keyPath in keyPaths {
+                let segments = keyPath.segments
+                // Single-segment paths can match any path ending with that segment
+                if segments.count == 1, segments[0].key == leafName {
+                    let segment = segments[0]
+                    bestAttributes = EditorAttributes(
+                        visible: segment.hidden == false,
+                        transparent: segment.hidden
+                    )
+                    break
                 }
             }
         }
