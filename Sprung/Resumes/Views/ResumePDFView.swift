@@ -37,7 +37,7 @@ struct ResumePDFView: View {
             }
         }
         .onAppear {
-            // Lazy‑load a cached PDF if present on disk.
+            // Lazy-load a cached PDF if present on disk.
             if resume.pdfData == nil,
                let fileURL = FileHandler.readPdfUrl()
             {
@@ -53,16 +53,16 @@ struct ResumePDFView: View {
 private struct PDFKitWrapper: NSViewRepresentable {
     let pdfData: Data
 
-    func makeNSView(context _: Context) -> PDFView { 
+    func makeNSView(context _: Context) -> PDFView {
         let pdfView = PDFView()
         pdfView.autoScales = true
         return pdfView
     }
-    
-    func updateNSView(_ nsView: PDFView, context _: Context) { 
+
+    func updateNSView(_ nsView: PDFView, context _: Context) {
         // Update the PDF document when the data changes
         nsView.document = PDFDocument(data: pdfData)
     }
-    
+
     typealias NSViewType = PDFView
 }

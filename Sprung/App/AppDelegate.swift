@@ -204,7 +204,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             applicantProfileWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
+                contentRect: NSRect(x: 0, y: 0, width: 600, height: 650),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered, defer: false
             )
@@ -214,7 +214,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             applicantProfileWindow?.center()
 
             // Set a minimum size for the window
-            applicantProfileWindow?.minSize = NSSize(width: 500, height: 400)
+            applicantProfileWindow?.minSize = NSSize(width: 500, height: 520)
 
             // Register for notifications when window is closed
             NotificationCenter.default.addObserver(

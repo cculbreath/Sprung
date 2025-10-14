@@ -187,10 +187,12 @@ struct TemplateEditorView: View {
     }
 
     private func openApplicantEditor() {
-        if let delegate = NSApplication.shared.delegate as? AppDelegate {
-            delegate.showApplicantProfileWindow()
-        } else {
+        Task { @MainActor in
             NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
+            if !NSApp.sendAction(#selector(AppDelegate.showApplicantProfileWindow), to: nil, from: nil),
+               let delegate = NSApplication.shared.delegate as? AppDelegate {
+                delegate.showApplicantProfileWindow()
+            }
         }
     }
     

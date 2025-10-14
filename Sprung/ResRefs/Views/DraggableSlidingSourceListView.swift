@@ -49,8 +49,6 @@ struct DraggableSlidingSourceListView: View {
                                 isDragging = false
                             }
                     )
-                    .customCursor(NSCursor.resizeUpDown)
-
                 ScrollView {
                     VStack(spacing: 12) {
                         ResRefView()

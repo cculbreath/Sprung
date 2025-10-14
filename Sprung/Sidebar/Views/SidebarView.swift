@@ -67,6 +67,6 @@ struct SidebarView: View {
                     .zIndex(1)
             }
         }
-        .frame(maxHeight: .infinity) // Ensure VStack takes full height
+        .frame(minWidth: 220, idealWidth: 260, maxWidth: 360, maxHeight: .infinity)
     }
 }

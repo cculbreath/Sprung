@@ -75,8 +75,14 @@ final class ResStore: SwiftDataStore {
         jobApp.addResume(resume)
         modelContext.insert(resume)
         saveContext()
-
-        exportCoordinator.debounceExport(resume: resume)
+        
+        Task { @MainActor in
+            do {
+                try await exportCoordinator.ensureFreshRenderedText(for: resume)
+            } catch {
+                Logger.error("ResStore.create: Failed to render initial PDF for resume \(resume.id): \(error)")
+            }
+        }
 
         return resume
     }
@@ -132,7 +138,13 @@ final class ResStore: SwiftDataStore {
         saveContext()
         
         // Trigger export for the new resume
-        exportCoordinator.debounceExport(resume: newResume)
+        Task { @MainActor in
+            do {
+                try await exportCoordinator.ensureFreshRenderedText(for: newResume)
+            } catch {
+                Logger.error("ResStore.duplicate: Failed to render PDF for duplicated resume \(newResume.id): \(error)")
+            }
+        }
         
         return newResume
     }

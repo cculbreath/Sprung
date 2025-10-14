@@ -8,14 +8,14 @@
 import SwiftData
 import SwiftUI
 
-/// Tree‑editor panel showing resume nodes and the optional font‑size panel.
+/// Tree-editor panel showing resume nodes and the optional font-size panel.
 /// It no longer mutates the model directly; all actions are routed through
 /// `ResumeDetailVM`.
 struct ResumeDetailView: View {
     // External navigation bindings
     @Binding var tab: TabList
 
-    // View‑model (owns UI state)
+    // View-model (owns UI state)
     @State private var vm: ResumeDetailVM
 
     // MARK: – Init ---------------------------------------------------------
@@ -49,8 +49,8 @@ struct ResumeDetailView: View {
                 }
             }
         }
-        // Provide the view‑model to the subtree via environment so that
-        // NodeWithChildrenView can access it for add‑child actions.
+        // Provide the view-model to the subtree via environment so that
+        // NodeWithChildrenView can access it for add-child actions.
         .environment(vm)
         .onAppear {
             if let ext = externalIsWide {
@@ -80,7 +80,7 @@ struct ResumeDetailView: View {
             }
         }
     }
-    
+
     /// Safely gets a TreeNode property, returning nil if the node data is corrupted
     private func safeGetNodeProperty<T>(_ getter: () -> T) -> T? {
         return getter()

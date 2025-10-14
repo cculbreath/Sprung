@@ -2,6 +2,7 @@
 
 import SwiftData
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
@@ -149,19 +150,23 @@ struct ContentView: View {
             }
 
             if appEnvironment.requiresTemplateSetup && !didPromptTemplateEditor {
-                NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                openTemplateEditor()
                 didPromptTemplateEditor = true
             }
         }
         .onChange(of: appEnvironment.requiresTemplateSetup) { _, requiresSetup in
             if requiresSetup {
-                NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                openTemplateEditor()
             }
         }
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch
     }
     
     // MARK: - Helper Methods
+    
+    private func openTemplateEditor() {
+        presentTemplateEditorWindow()
+    }
     
     func updateMyLetter() {
         if let selectedApp = jobAppStore.selectedApp {
@@ -181,6 +186,7 @@ struct ContentView: View {
 }
 
 private struct TemplateSetupOverlay: View {
+
     var body: some View {
         VStack(spacing: 12) {
             Text("Add a Template to Get Started")
@@ -190,7 +196,7 @@ private struct TemplateSetupOverlay: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: 360)
             Button("Open Template Editor") {
-                NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                openTemplateEditor()
             }
             .buttonStyle(.borderedProminent)
         }
@@ -198,5 +204,24 @@ private struct TemplateSetupOverlay: View {
         .background(.regularMaterial)
         .cornerRadius(16)
         .shadow(radius: 8)
+    }
+
+    private func openTemplateEditor() {
+        presentTemplateEditorWindow()
+    }
+}
+
+private func presentTemplateEditorWindow() {
+    Task { @MainActor in
+        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+#if os(macOS)
+        if NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil) {
+            return
+        }
+        if let delegate = NSApplication.shared.delegate as? AppDelegate {
+            delegate.showTemplateEditorWindow()
+            return
+        }
+#endif
     }
 }

@@ -7,8 +7,6 @@
 
 import SwiftUI
 
-import SwiftUI
-
 struct ResumeInspectorListView: View {
     @Environment(ResStore.self) private var resStore
     @Binding var listSelection: Resume?
@@ -16,24 +14,33 @@ struct ResumeInspectorListView: View {
 
     var body: some View {
         let sortedResumes = resumes.sorted { $0.dateCreated > $1.dateCreated }
-        List(sortedResumes, id: \.id) { resume in
-            ResumeRowView(
-                resume: resume,
-                isSelected: listSelection == resume,
-                onSelect: {
-                    withAnimation {
-                        listSelection = resume
-                    }
-                },
-                onDelete: {
-                    resStore.deleteRes(resume)
-                },
-                onDuplicate: {
-                    resStore.duplicate(resume)
+
+        if sortedResumes.isEmpty {
+            Text("No resumes yet. Create one below to get started.")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 12)
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(sortedResumes, id: \.id) { resume in
+                    ResumeRowView(
+                        resume: resume,
+                        isSelected: listSelection == resume,
+                        onSelect: {
+                            withAnimation(.easeInOut(duration: 0.12)) {
+                                listSelection = resume
+                            }
+                        },
+                        onDelete: {
+                            resStore.deleteRes(resume)
+                        },
+                        onDuplicate: {
+                            resStore.duplicate(resume)
+                        }
+                    )
                 }
-            )
+            }
         }
-        .listStyle(.plain)
     }
 }
 
@@ -47,25 +54,30 @@ struct ResumeRowView: View {
     let onDuplicate: () -> Void
 
     var body: some View {
-        HStack {
-            Text(resume.createdDateString)
-                .frame(minWidth: 140, alignment: .leading)
-                .lineLimit(1)
-                .truncationMode(.tail)
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(resume.createdDateString)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
 
-            Text(resume.template?.name ?? resume.template?.slug.capitalized ?? "-")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(1)
-                .truncationMode(.tail)
+                    Text(resume.template?.name ?? resume.template?.slug.capitalized ?? "-")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+            )
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 16)
-        .background(
-            isSelected
-                ? Color.accentColor.opacity(0.2)
-                : Color.clear
-        )
-        .onTapGesture(perform: onSelect)
+        .buttonStyle(.plain)
         .contextMenu {
             Button("Duplicate", action: onDuplicate)
             Button("Delete", action: onDelete)

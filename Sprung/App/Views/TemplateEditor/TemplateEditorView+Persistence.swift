@@ -138,7 +138,7 @@ extension TemplateEditorView {
     func loadSeed() {
         seedValidationMessage = nil
         guard selectedTemplate.isEmpty == false else {
-            seedContent = "{}"
+            seedContent = ""
             seedHasChanges = false
             return
         }
@@ -153,7 +153,7 @@ extension TemplateEditorView {
             return
         }
 
-        seedContent = "{}"
+        seedContent = ""
         seedHasChanges = false
     }
 
@@ -437,70 +437,11 @@ extension TemplateEditorView {
     func createEmptyTemplate(name: String, format: String) -> String {
         switch format {
         case "html":
-            return """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>{{{contact.name}}}</title>
-    <style>
-        /* Add your CSS here */
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .header { text-align: center; margin-bottom: 20px; }
-        .name { font-size: 24px; font-weight: bold; }
-        .job-titles { font-size: 16px; color: #666; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="name">{{{contact.name}}}</div>
-        <div class="job-titles">{{{jobTitlesJoined}}}</div>
-    </div>
-
-    <div class="contact">
-        <p>{{contact.email}} | {{contact.phone}} | {{contact.location.city}}, {{contact.location.state}}</p>
-    </div>
-
-    <div class="summary">
-        <h2>Summary</h2>
-        <p>{{{summary}}}</p>
-    </div>
-
-    <!-- Add more sections as needed -->
-</body>
-</html>
-"""
+            return ""
         case "txt":
-            return """
-{{{ center(contact.name, 80) }}}
-
-{{{ center(join(job-titles), 80) }}}
-
-{{#contactLine}}
-{{{ center(contactLine, 80) }}}
-{{/contactLine}}
-
-{{{ wrap(summary, 80, 6, 6) }}}
-
-{{#section-labels.employment}}
-{{{ sectionLine(section-labels.employment, 80) }}}
-{{/section-labels.employment}}
-{{#employment}}
-{{ employer }}{{#location}} | {{{.}}}{{/location}}
-{{#position}}
-{{ position }}
-{{/position}}
-{{ formatDate(start) }} – {{ formatDate(end) }}
-{{{ bulletList(highlights, 80, 2, "•") }}}
-
-{{/employment}}
-
-{{#more-info}}
-{{{ wrap(uppercase(more-info), 80, 0, 0) }}}
-{{/more-info}}
-"""
+            return ""
         default:
-            return "// New \(name) template in \(format) format"
+            return ""
         }
     }
     fileprivate func storeLoadedTemplateContent(_ content: String, format: String) {
@@ -514,15 +455,8 @@ extension TemplateEditorView {
         }
     }
 
-    static func emptyManifest(slug: String = "") -> String {
-        let effectiveSlug = slug.isEmpty ? "template" : slug
-        return """
-{
-  \"slug\": \"\(effectiveSlug)\",
-  \"sectionOrder\": [],
-  \"sections\": {}
-}
-"""
+    static func emptyManifest(slug _: String = "") -> String {
+        return ""
     }
 
 }
