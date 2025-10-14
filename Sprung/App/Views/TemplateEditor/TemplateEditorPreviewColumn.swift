@@ -19,7 +19,9 @@ struct TemplateEditorPreviewColumn: View {
     let isGeneratingLivePreview: Bool
     let selectedTab: TemplateEditorTab
     let pdfController: PDFPreviewController
-    let onRefresh: () -> Void
+    let onReRenderText: () -> Void
+    let onSaveAndRefresh: () -> Void
+    let hasUnsavedChanges: Bool
     let onPrepareOverlayOptions: () -> Void
     @State private var textPreviewFontSize: CGFloat = TextPreviewAppearance.defaultFontSize
 
@@ -92,13 +94,19 @@ struct TemplateEditorPreviewColumn: View {
             Spacer()
 
             HStack(spacing: 8) {
-                Button(action: onRefresh) {
-                    Image(systemName: "arrow.trianglehead.2.clockwise")
-                }
-                .help(isTextPreviewActive ? "Refresh Text Preview" : "Refresh PDF Preview")
-                .disabled(isGeneratingPreview)
+                if isTextPreviewActive {
+                    Button(action: onReRenderText) {
+                        Image(systemName: "arrow.trianglehead.2.counterclockwise")
+                    }
+                    .help("Re-render text preview")
+                    .disabled(isGeneratingPreview)
+                } else {
+                    Button(action: onSaveAndRefresh) {
+                        Image(systemName: "checkmark.arrow.trianglehead.counterclockwise")
+                    }
+                    .help("Save changes and regenerate PDF preview")
+                    .disabled(isGeneratingPreview || !hasUnsavedChanges)
 
-                if !isTextPreviewActive {
                     Button {
                         pdfController.goToPreviousPage()
                     } label: {
@@ -131,10 +139,12 @@ struct TemplateEditorPreviewColumn: View {
                     Button {
                         pdfController.resetZoom()
                     } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        Image(systemName: "square.arrowtriangle.4.outward")
                     }
                     .help("Fit to page")
-                } else {
+                }
+
+                if isTextPreviewActive {
                     Divider()
                         .frame(height: 16)
                     Button {

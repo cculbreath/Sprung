@@ -24,20 +24,16 @@ extension Color {
     }
 }
 
-enum PendingTemplateChange {
-    case template
-}
-
 struct TemplateEditorView: View {
     @Environment(NavigationStateService.self) var navigationState
     @Environment(AppEnvironment.self) var appEnvironment
 
     @State var selectedTemplate: String = ""
     @State var selectedTab: TemplateEditorTab = .pdfTemplate
-    @State var templateContent: String = ""
-    @State var assetHasChanges: Bool = false
-    @State var showingSaveAlert: Bool = false
-    @State var saveError: String?
+    @State var htmlContent: String = ""
+    @State var textContent: String = ""
+    @State var htmlHasChanges: Bool = false
+    @State var textHasChanges: Bool = false
     @State var isGeneratingPreview: Bool = false
     @State var showingAddTemplate: Bool = false
     @State var newTemplateName: String = ""
@@ -47,7 +43,6 @@ struct TemplateEditorView: View {
     @State var seedContent: String = ""
     @State var seedHasChanges: Bool = false
     @State var seedValidationMessage: String?
-    @State var pendingTemplateChange: PendingTemplateChange?
     @State var pendingProfileUpdate: ProfileUpdatePrompt?
 
     // Live preview state
@@ -80,7 +75,7 @@ struct TemplateEditorView: View {
     @State var showSidebar: Bool = true
     @State var sidebarWidth: CGFloat = 150
     private let sidebarWidthRange: ClosedRange<CGFloat> = 140...300
-    @State private var textEditorInsertion: TextEditorInsertionRequest?
+    @State var textEditorInsertion: TextEditorInsertionRequest?
     @StateObject private var pdfController = PDFPreviewController()
     @State var templatePendingDeletion: String?
     @State var showRevertConfirmation: Bool = false
@@ -163,8 +158,8 @@ struct TemplateEditorView: View {
         defaultTemplateSlug = slug
     }
 
-    private func handleTemplateDraftUpdate(with content: String) {
-        switch selectedTab {
+    private func handleTemplateDraftUpdate(for tab: TemplateEditorTab, content: String) {
+        switch tab {
         case .pdfTemplate:
             htmlDraft = content
         case .txtTemplate:
@@ -209,31 +204,8 @@ struct TemplateEditorView: View {
         return nil
     }
     
-
-    var currentFormat: String {
-        switch selectedTab {
-        case .pdfTemplate:
-            return "pdf"
-        case .txtTemplate:
-            return "txt"
-        default:
-            return "pdf"
-        }
-    }
-
-    private var currentHasChanges: Bool {
-        switch selectedTab {
-        case .pdfTemplate, .txtTemplate:
-            return assetHasChanges
-        case .manifest:
-            return manifestHasChanges
-        case .seed:
-            return seedHasChanges
-        }
-    }
-
     private var hasAnyUnsavedChanges: Bool {
-        assetHasChanges || manifestHasChanges || seedHasChanges
+        htmlHasChanges || textHasChanges || manifestHasChanges || seedHasChanges
     }
 
     private var templateSelectionBinding: Binding<String?> {
@@ -243,34 +215,6 @@ struct TemplateEditorView: View {
                 selectedTemplate = newValue ?? ""
             }
         )
-    }
-
-    private var unsavedTabNames: String {
-        var names: [String] = []
-        if assetHasChanges {
-            names.append("Template")
-        }
-        if manifestHasChanges {
-            names.append(TemplateEditorTab.manifest.rawValue)
-        }
-        if seedHasChanges {
-            names.append(TemplateEditorTab.seed.rawValue)
-        }
-        return names.joined(separator: ", ")
-    }
-
-    private var pendingChangeDescription: String {
-        switch pendingTemplateChange {
-        case .template:
-            return "switching views"
-        default:
-            return "switching views"
-        }
-    }
-
-    private var unsavedChangesAlertMessage: String {
-        let tabs = unsavedTabNames.isEmpty ? "current editor" : unsavedTabNames
-        return "Unsaved changes detected in \(tabs). Save them before \(pendingChangeDescription)?"
     }
 
     var body: some View {
@@ -288,41 +232,18 @@ struct TemplateEditorView: View {
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             loadAvailableTemplates()
-            loadTemplate()
+            loadTemplateAssets()
             loadManifest()
             loadSeed()
             manifestHasChanges = false
             seedHasChanges = false
             refreshTemplatePreview(force: true)
         }
-        .onChange(of: selectedTemplate) { _, _ in
-            handleTemplateSelectionChange()
+        .onChange(of: selectedTemplate) { oldValue, _ in
+            handleTemplateSelectionChange(previousSlug: oldValue)
         }
-        .onChange(of: selectedTab) { _, newValue in
-            handleTabSelectionChange(newValue)
-        }
-        .alert("Unsaved Changes", isPresented: $showingSaveAlert) {
-            Button("Save") {
-                if savePendingChanges() {
-                    applyPendingTemplateChange()
-                }
-            }
-            Button("Don't Save") {
-                discardPendingChanges()
-                applyPendingTemplateChange()
-            }
-            Button("Cancel", role: .cancel) {
-                pendingTemplateChange = nil
-            }
-        } message: {
-            Text(unsavedChangesAlertMessage)
-        }
-        .alert("Save Error", isPresented: .constant(saveError != nil)) {
-            Button("OK") {
-                saveError = nil
-            }
-        } message: {
-            Text(saveError ?? "Unknown error")
+        .onChange(of: selectedTab) { oldValue, newValue in
+            handleTabSelectionChange(previous: oldValue, newValue: newValue)
         }
         .alert("Add New Template", isPresented: $showingAddTemplate) {
             TextField("Template name", text: $newTemplateName)
@@ -346,7 +267,7 @@ struct TemplateEditorView: View {
                     loadOverlayPDF(from: file)
                 }
             case .failure(let error):
-                saveError = "Failed to load overlay PDF: \(error.localizedDescription)"
+                Logger.error("TemplateEditor: Failed to load overlay PDF: \(error)")
             }
         }
         .sheet(isPresented: $showOverlayOptionsSheet) {
@@ -409,15 +330,14 @@ struct TemplateEditorView: View {
         .toolbar(id: "templateEditorToolbar") {
             TemplateEditorToolbar(
                 showSidebar: $showSidebar,
-                showInspector: $showInspector,
                 hasUnsavedChanges: hasAnyUnsavedChanges,
-                canRevert: hasAnyUnsavedChanges,
-                onRefresh: performRefresh,
-                onRevert: { showRevertConfirmation = true },
-                onClose: performClose,
-                onToggleInspector: toggleInspectorVisibility,
                 onToggleSidebar: toggleSidebar,
-                onOpenApplicant: openApplicantEditor
+                onOpenApplicant: openApplicantEditor,
+                onCloseWithoutSaving: {
+                    closeWithoutSaving()
+                },
+                onRevert: { showRevertConfirmation = true },
+                onSaveAndClose: saveAndClose
             )
         }
         .toolbarRole(.editor)
@@ -456,24 +376,26 @@ struct TemplateEditorView: View {
     private var editorColumn: some View {
         TemplateEditorEditorColumn(
             selectedTab: $selectedTab,
-            templateContent: $templateContent,
+            htmlContent: $htmlContent,
+            textContent: $textContent,
             manifestContent: $manifestContent,
             seedContent: $seedContent,
-            assetHasChanges: $assetHasChanges,
+            htmlHasChanges: $htmlHasChanges,
+            textHasChanges: $textHasChanges,
             manifestHasChanges: $manifestHasChanges,
             seedHasChanges: $seedHasChanges,
             manifestValidationMessage: $manifestValidationMessage,
             seedValidationMessage: $seedValidationMessage,
             textEditorInsertion: $textEditorInsertion,
             selectedResume: selectedResume,
-            onTemplateChange: { updatedContent in
-                handleTemplateDraftUpdate(with: updatedContent)
+            onTemplateChange: { tab, updatedContent in
+                handleTemplateDraftUpdate(for: tab, content: updatedContent)
             },
+            hasUnsavedChanges: hasAnyUnsavedChanges,
+            onSaveAndRefresh: performRefresh,
             onValidateManifest: validateManifest,
-            onSaveManifest: { _ = saveManifest() },
-            onReloadManifest: loadManifest,
             onPromoteSeed: promoteCurrentResumeToSeed,
-            onSaveSeed: { _ = saveSeed() }
+            onValidateSeed: validateSeedFormat
         )
     }
 
@@ -490,7 +412,9 @@ struct TemplateEditorView: View {
             isGeneratingLivePreview: isGeneratingLivePreview,
             selectedTab: selectedTab,
             pdfController: pdfController,
-            onRefresh: { refreshTemplatePreview(force: true) },
+            onReRenderText: { refreshTemplatePreview(force: true) },
+            onSaveAndRefresh: performRefresh,
+            hasUnsavedChanges: hasAnyUnsavedChanges,
             onPrepareOverlayOptions: prepareOverlayOptions
         )
     }
@@ -540,114 +464,6 @@ struct TemplateEditorView: View {
                 }
 #endif
             }
-    }
-
-    private func revertCurrentTab() {
-        switch selectedTab {
-        case .pdfTemplate, .txtTemplate:
-            loadTemplate()
-        case .manifest:
-            loadManifest()
-        case .seed:
-            loadSeed()
-        }
-    }
-
-    @discardableResult
-    private func saveCurrentTab(closeAfter: Bool = false) -> Bool {
-        let success: Bool
-        switch selectedTab {
-        case .pdfTemplate, .txtTemplate:
-            success = saveTemplate()
-        case .manifest:
-            success = saveManifest()
-        case .seed:
-            success = saveSeed()
-        }
-        if success && closeAfter {
-            return true
-        }
-        return success
-    }
-
-    @discardableResult
-    func savePendingChanges() -> Bool {
-        var success = true
-        if assetHasChanges {
-            success = saveTemplate() && success
-        }
-        if manifestHasChanges {
-            success = saveManifest() && success
-        }
-        if seedHasChanges {
-            success = saveSeed() && success
-        }
-        return success
-    }
-
-    private func discardPendingChanges() {
-        assetHasChanges = false
-        manifestHasChanges = false
-        seedHasChanges = false
-        manifestValidationMessage = nil
-        seedValidationMessage = nil
-    }
-
-    private func revertAllChanges() {
-        discardPendingChanges()
-        loadTemplate()
-        loadManifest()
-        loadSeed()
-        showOverlay = false
-        overlayPDFDocument = nil
-        overlayFilename = nil
-        overlayPageCount = 0
-        refreshTemplatePreview(force: true)
-    }
-
-    private func applyPendingTemplateChange() {
-        reloadForTemplateChange()
-        pendingTemplateChange = nil
-    }
-
-    private func handleTemplateSelectionChange() {
-        if hasAnyUnsavedChanges {
-            pendingTemplateChange = .template
-            showingSaveAlert = true
-        } else {
-            applyPendingTemplateChange()
-        }
-    }
-
-    private func handleTabSelectionChange(_ newTab: TemplateEditorTab) {
-        textEditorInsertion = nil
-        switch newTab {
-        case .pdfTemplate, .txtTemplate:
-            if hasAnyUnsavedChanges {
-                pendingTemplateChange = .template
-                showingSaveAlert = true
-            } else {
-                loadTemplate()
-                refreshTemplatePreview(force: false)
-            }
-        case .manifest:
-            if manifestContent.isEmpty {
-                loadManifest()
-            }
-        case .seed:
-            if seedContent.isEmpty {
-                loadSeed()
-            }
-        }
-    }
-
-    private func reloadForTemplateChange() {
-        loadTemplate()
-        loadManifest()
-        loadSeed()
-        if selectedTab == .pdfTemplate || selectedTab == .txtTemplate {
-            refreshTemplatePreview(force: false)
-        }
     }
 
 }
