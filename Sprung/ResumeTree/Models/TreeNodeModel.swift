@@ -18,8 +18,14 @@ enum LeafStatus: String, Codable, Hashable {
     var includeInEditor: Bool = false
     var myIndex: Int = -1 // Represents order within its parent's children array
     @Relationship(deleteRule: .cascade) var children: [TreeNode]? = nil
+    @Relationship(deleteRule: .cascade) var viewChildren: [TreeNode]? = nil
     weak var parent: TreeNode?
     var label: String { return resume.label(name) } // Assumes resume.label handles missing keys
+    var editorLabel: String?
+    /// Returns the effective display label: editorLabel if set, otherwise falls back to label
+    var displayLabel: String {
+        return editorLabel ?? label
+    }
     @Relationship(deleteRule: .noAction) var resume: Resume
     var status: LeafStatus
     var depth: Int = 0
@@ -73,6 +79,10 @@ enum LeafStatus: String, Codable, Hashable {
 
     var orderedChildren: [TreeNode] {
         (children ?? []).sorted { $0.myIndex < $1.myIndex }
+    }
+
+    var orderedViewChildren: [TreeNode] {
+        (viewChildren ?? []).sorted { $0.myIndex < $1.myIndex }
     }
 
     var aiStatusChildren: Int {
@@ -370,7 +380,7 @@ extension TreeNode {
             return nil
         }
     }
-    
+
     /// Convert TreeNode to dictionary for JSON serialization
     private func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
@@ -380,11 +390,11 @@ extension TreeNode {
             "includeInEditor": includeInEditor,
             "myIndex": myIndex
         ]
-        
+
         if let children = children, !children.isEmpty {
             dict["children"] = children.map { $0.toDictionary() }
         }
-        
+
         return dict
     }
 }

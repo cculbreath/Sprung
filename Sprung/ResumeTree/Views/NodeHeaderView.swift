@@ -37,7 +37,7 @@ struct NodeHeaderView: View {
                 HeaderTextRow()
             } else {
                 AlignedTextRow(
-                    leadingText: node.isTitleNode && !node.name.isEmpty ? node.name : node.label,
+                    leadingText: node.isTitleNode && !node.name.isEmpty ? node.name : node.displayLabel,
                     trailingText: nil,
                     nodeStatus: node.status
                 )

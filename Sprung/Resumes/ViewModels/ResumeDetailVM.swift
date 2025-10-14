@@ -7,6 +7,7 @@
 
 import Foundation
 import Observation
+import SwiftData
 
 /// View‑model for the resume editor panel (node tree + font panel).
 /// Encapsulates UI‑specific state so SwiftUI views no longer mutate the model
@@ -65,6 +66,7 @@ final class ResumeDetailVM {
         if let template = parent.orderedChildren.first {
             let clone = template.makeTemplateClone(for: resume)
             parent.addChild(clone)
+            rebuildViewHierarchy()
             refreshPDF()
             return
         }
@@ -88,7 +90,26 @@ final class ResumeDetailVM {
             resume: resume
         )
         parent.addChild(newNode)
+        rebuildViewHierarchy()
         refreshPDF()
+    }
+
+    /// Deletes a node from the tree and rebuilds the view hierarchy.
+    func deleteNode(_ node: TreeNode, context: ModelContext) {
+        TreeNode.deleteTreeNode(node: node, context: context)
+        rebuildViewHierarchy()
+        refreshPDF()
+    }
+
+    /// Rebuilds the viewChildren hierarchy for v4+ manifests after mutations.
+    /// This ensures the presentation layer stays in sync with the data layer.
+    private func rebuildViewHierarchy() {
+        guard let rootNode = resume.rootNode else { return }
+        guard let template = resume.template else { return }
+        guard let manifest = TemplateManifestLoader.manifest(for: template) else { return }
+
+        // Delegate to TreeNode extension method
+        rootNode.rebuildViewHierarchy(manifest: manifest)
     }
 
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
