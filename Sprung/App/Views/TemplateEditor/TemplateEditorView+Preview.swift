@@ -45,7 +45,6 @@ extension TemplateEditorView {
                 Logger.error("Template preview generation failed: \(error)")
                 previewPDFData = nil
                 previewTextContent = nil
-                saveError = "Failed to generate template preview: \(error.localizedDescription)"
             }
         }
     }
@@ -213,13 +212,13 @@ extension TemplateEditorView {
 
     func loadOverlayPDF(from url: URL) {
         guard url.startAccessingSecurityScopedResource() else {
-            saveError = "Failed to access overlay PDF"
+            Logger.error("TemplateEditor: Failed to access overlay PDF at \(url.path)")
             return
         }
         defer { url.stopAccessingSecurityScopedResource() }
 
         guard let document = PDFDocument(url: url) else {
-            saveError = "Failed to read overlay PDF"
+            Logger.error("TemplateEditor: Failed to read overlay PDF at \(url.path)")
             return
         }
 
