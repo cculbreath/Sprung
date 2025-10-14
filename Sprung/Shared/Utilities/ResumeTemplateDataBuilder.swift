@@ -44,36 +44,8 @@ private struct Implementation {
             context["keys-in-editor"] = resume.importedEditorKeys
         }
 
-#if DEBUG
-        if let skills = context["skills-and-expertise"] {
-            Logger.debug("ResumeTemplateDataBuilder output – skills-and-expertise: \(debugDescribe(skills))")
-        }
-        if let employment = context["employment"] {
-            Logger.debug("ResumeTemplateDataBuilder output – employment: \(debugDescribe(employment))")
-        }
-        if let projects = context["projects-highlights"] {
-            Logger.debug("ResumeTemplateDataBuilder output – projects-highlights: \(debugDescribe(projects))")
-        }
-#endif
         return context
     }
-
-#if DEBUG
-    private func debugDescribe(_ value: Any) -> String {
-        if let array = value as? [Any] {
-            let preview = array.first.map { String(describing: $0) } ?? "nil"
-            return "array(count: \(array.count), first: \(preview))"
-        }
-        if let dict = value as? [String: Any] {
-            let keys = dict.keys.sorted()
-            let sampleKey = keys.first
-            let sampleValue = sampleKey.flatMap { dict[$0] }.map { String(describing: $0) } ?? "nil"
-            let keyLabel = sampleKey ?? "nil"
-            return "dict(keys: \(keys), sample[\(keyLabel)]: \(sampleValue))"
-        }
-        return "\(value)"
-    }
-#endif
 
     private func buildSection(named sectionName: String) -> Any? {
         if let manifest,

@@ -30,17 +30,6 @@ struct ResumeTemplateContextBuilder {
 
         if let manifest {
             context = SeedContextNormalizer(manifest: manifest).normalize(context)
-#if DEBUG
-            if let skills = context["skills-and-expertise"] {
-                Logger.debug("Template seed normalization – skills-and-expertise: \(describeValue(skills))")
-            }
-            if let employment = context["employment"] {
-                Logger.debug("Template seed normalization – employment keys: \(describeValue(employment))")
-            }
-            if let projects = context["projects-highlights"] {
-                Logger.debug("Template seed normalization – projects-highlights: \(describeValue(projects))")
-            }
-#endif
         }
 
         return context
@@ -297,22 +286,6 @@ struct ResumeTemplateContextBuilder {
         return nil
     }
 
-#if DEBUG
-    private func describeValue(_ value: Any) -> String {
-        if let array = value as? [Any] {
-            let preview = array.first.map { String(describing: $0) } ?? "nil"
-            return "array(count: \(array.count), first: \(preview))"
-        }
-        if let dict = value as? [String: Any] {
-            let keys = dict.keys.sorted()
-            let sampleKey = keys.first
-            let sampleValue = sampleKey.flatMap { dict[$0] }.map { String(describing: $0) } ?? "nil"
-            let keyLabel = sampleKey ?? "nil"
-            return "dict(keys: \(keys), sample[\(keyLabel)]: \(sampleValue))"
-        }
-        return "\(value)"
-    }
-#endif
 }
 
 // MARK: - Seed normalization
