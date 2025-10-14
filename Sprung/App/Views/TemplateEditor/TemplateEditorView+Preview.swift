@@ -65,6 +65,11 @@ extension TemplateEditorView {
             throw TemplatePreviewGeneratorError.templateUnavailable
         }
 
+#if DEBUG
+        Logger.debug("TemplatePreview[\(slug)]: HTML template length = \(htmlTemplate.count)")
+        Logger.debug("TemplatePreview[\(slug)]: text template length = \(textTemplate.count)")
+#endif
+
         let manifestData = templateRecord?.manifestData ?? loadManifestData(slug: slug)
 #if DEBUG
         if manifestData == nil {
@@ -95,22 +100,41 @@ extension TemplateEditorView {
             throw TemplatePreviewGeneratorError.contextGenerationFailed
         }
 
+#if DEBUG
+        Logger.debug("TemplatePreview[\(slug)]: context keys => \(debugContextSummary(context))")
+#endif
+
         let jobApp = JobApp()
         let resume = Resume(jobApp: jobApp, enabledSources: [], template: template)
         resume.needToTree = true
         resume.importedEditorKeys = []
 
         let manifest = TemplateManifestLoader.manifest(for: template)
+#if DEBUG
+        if let manifest {
+            Logger.debug("TemplatePreview[\(slug)]: manifest sections => \(manifest.sectionOrder)")
+        } else {
+            Logger.debug("TemplatePreview[\(slug)]: manifest not found; relying on context order")
+        }
+#endif
         guard let rootNode = JsonToTree(resume: resume, context: context, manifest: manifest).buildTree() else {
             throw TemplatePreviewGeneratorError.treeGenerationFailed
         }
         resume.rootNode = rootNode
+
+#if DEBUG
+        Logger.debug("TemplatePreview[\(slug)]: tree sections => \(debugTreeSummary(rootNode))")
+#endif
 
         let pdfGenerator = NativePDFGenerator(
             templateStore: appEnvironment.templateStore,
             profileProvider: appEnvironment.applicantProfileStore
         )
         let renderingContext = try pdfGenerator.renderingContext(for: resume)
+
+#if DEBUG
+        Logger.debug("TemplatePreview[\(slug)]: rendering context keys => \(debugContextSummary(renderingContext))")
+#endif
 
         // Render text
         let textOutput = try renderMustache(template: textTemplate, context: renderingContext)
@@ -204,6 +228,41 @@ extension TemplateEditorView {
         overlayPageSelection = min(overlayPageSelection, max(document.pageCount - 1, 0))
         overlayFilename = url.lastPathComponent
     }
+
+#if DEBUG
+    private func debugContextSummary(_ context: [String: Any]) -> String {
+        context.keys.sorted().map { key in
+            guard let value = context[key] else { return "\(key): nil" }
+            return "\(key): \(debugValueSummary(value))"
+        }.joined(separator: ", ")
+    }
+
+    private func debugTreeSummary(_ root: TreeNode) -> String {
+        root.orderedChildren.map { child in
+            let name = child.name.isEmpty ? "(anonymous)" : child.name
+            let childCount = child.orderedChildren.count
+            let valuePreview = child.value.isEmpty ? "" : " value=\(child.value.prefix(40))"
+            return "\(name)[children:\(childCount)]\(valuePreview)"
+        }.joined(separator: ", ")
+    }
+
+    private func debugValueSummary(_ value: Any) -> String {
+        if let array = value as? [Any] {
+            return "array(\(array.count))"
+        }
+        if let dict = value as? [String: Any] {
+            return "object(\(dict.keys.count))"
+        }
+        if let string = value as? String {
+            let clipped = string.count > 40 ? String(string.prefix(37)) + "…" : string
+            return "string(\(string.count)): \(clipped)"
+        }
+        if value is NSNull {
+            return "null"
+        }
+        return String(describing: type(of: value))
+    }
+#endif
 }
 
 private func loadManifestData(slug: String) -> Data? {

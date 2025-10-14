@@ -60,11 +60,18 @@ class NativePDFGenerator: NSObject, ObservableObject {
                     let mustacheTemplate = try Mustache.Template(string: finalContent)
                     TemplateFilters.register(on: mustacheTemplate)
                     let htmlContent = try mustacheTemplate.render(context)
-                    
+
+                    // Mirror standard export path: persist debug HTML when enabled so preview output is inspectable.
+                    if let templateSlug = resume.template?.slug ?? resume.template?.name {
+                        saveDebugHTML(htmlContent, template: templateSlug, format: "html")
+                    } else {
+                        saveDebugHTML(htmlContent, template: "custom-preview", format: "html")
+                    }
+
                     currentCompletion = { result in
                         continuation.resume(with: result)
                     }
-                    
+
                     webView?.loadHTMLString(htmlContent, baseURL: nil)
                 } catch {
                     continuation.resume(throwing: error)
@@ -75,7 +82,11 @@ class NativePDFGenerator: NSObject, ObservableObject {
     @MainActor
     func renderingContext(for resume: Resume) throws -> [String: Any] {
         let rawContext = try createTemplateContext(from: resume)
-        return preprocessContextForTemplate(rawContext, from: resume)
+        let processed = preprocessContextForTemplate(rawContext, from: resume)
+#if DEBUG
+        Logger.debug("NativePDFGenerator: context keys => \(processed.keys.sorted())")
+#endif
+        return processed
     }
     
     // Custom text template generation has been moved to TextResumeGenerator
