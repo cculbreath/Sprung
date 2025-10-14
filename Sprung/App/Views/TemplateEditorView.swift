@@ -412,7 +412,7 @@ struct TemplateEditorView: View {
             isGeneratingLivePreview: isGeneratingLivePreview,
             selectedTab: selectedTab,
             pdfController: pdfController,
-            onReRenderText: { refreshTemplatePreview(force: true) },
+            onForceRefresh: { refreshTemplatePreview(force: true) },
             onSaveAndRefresh: performRefresh,
             hasUnsavedChanges: hasAnyUnsavedChanges,
             onPrepareOverlayOptions: prepareOverlayOptions
