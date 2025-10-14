@@ -425,6 +425,8 @@ class JsonToTree {
             )
         }
         processKeyLabels()
+        promoteTransparentNodeChildren(rootNode)
+        applyEditorOrdering(to: rootNode)
         return rootNode
     }
 
@@ -441,7 +443,7 @@ class JsonToTree {
 
     private func shouldSkipSectionInTree(_ key: String) -> Bool {
         if let behavior = manifest?.behavior(forSection: key),
-           [.fontSizes, .includeFonts, .editorKeys].contains(behavior) {
+           [.fontSizes, .includeFonts, .editorKeys, .styling, .metadata].contains(behavior) {
             return true
         }
         if manifest != nil {
@@ -508,6 +510,69 @@ class JsonToTree {
         // Default to hidden when editor keys are supplied; otherwise show everything.
         let shouldShowByDefault = editorKeyPaths.isEmpty
         return EditorAttributes(visible: shouldShowByDefault, transparent: false)
+    }
+
+    private func promoteTransparentNodeChildren(_ node: TreeNode) {
+        guard let children = node.children else { return }
+        var newChildren: [TreeNode] = []
+
+        for child in children {
+            // First, recursively process this child's subtree
+            promoteTransparentNodeChildren(child)
+
+            // If this child is transparent and has children, promote its children
+            if child.editorTransparent, let grandchildren = child.children {
+                for grandchild in grandchildren {
+                    // Update the promoted child's name if it was empty
+                    if grandchild.name.isEmpty && !child.name.isEmpty {
+                        grandchild.name = "\(child.name).\(grandchild.name)".trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                    }
+                    newChildren.append(grandchild)
+                }
+            } else {
+                // Keep non-transparent nodes as-is
+                newChildren.append(child)
+            }
+        }
+
+        // Replace the node's children with the new list
+        node.children = newChildren.isEmpty ? nil : newChildren
+    }
+
+    private func applyEditorOrdering(to rootNode: TreeNode) {
+        guard editorKeyPaths.isEmpty == false else { return }
+        guard let children = rootNode.children, children.isEmpty == false else { return }
+
+        // Determine the desired ordering for top-level sections based on the first
+        // segment encountered for each editor path.
+        var topLevelOrder: [String: Int] = [:]
+        for (index, keyPath) in editorKeyPaths.enumerated() {
+            guard let firstSegment = keyPath.segments.first else { continue }
+            let sectionName = firstSegment.key
+            if topLevelOrder[sectionName] == nil {
+                topLevelOrder[sectionName] = index
+            }
+        }
+        guard topLevelOrder.isEmpty == false else { return }
+
+        var assignedIndices = Set<Int>()
+        var fallbackIndex = topLevelOrder.count
+
+        for child in children {
+            let desiredIndex = topLevelOrder[child.name]
+            let newIndex: Int
+            if let desiredIndex {
+                newIndex = desiredIndex
+            } else {
+                while assignedIndices.contains(fallbackIndex) {
+                    fallbackIndex += 1
+                }
+                newIndex = fallbackIndex
+                fallbackIndex += 1
+            }
+            child.myIndex = newIndex
+            assignedIndices.insert(newIndex)
+        }
     }
 
     private func inferredSectionType(for key: String) -> SectionType? {
@@ -690,6 +755,12 @@ class JsonToTree {
         // 3) Catch-all / fallback so you actually see a console message if everything else fails.
     }
 
+    private func shouldSkipFieldInTree(_ descriptor: TemplateManifest.Section.FieldDescriptor?) -> Bool {
+        guard let descriptor = descriptor, let behavior = descriptor.behavior else { return false }
+        // Skip fields with behaviors that are handled as metadata or special nodes
+        return [.sectionLabels, .fontSizes, .includeFonts, .editorKeys].contains(behavior)
+    }
+
     private func buildSubtree(
         from dict: OrderedDictionary<String, Any>,
         parent: TreeNode,
@@ -707,6 +778,11 @@ class JsonToTree {
                 in: descriptors,
                 parentName: parent.name
             )
+
+            // Skip fields that have behaviors indicating they shouldn't appear in the tree
+            if shouldSkipFieldInTree(childDescriptor) {
+                continue
+            }
             if let subDict = asOrderedDictionary(subValue) {
                 let childDescriptors = childDescriptor?.children
                 let childNode = parent.addChild(
@@ -919,6 +995,12 @@ class JsonToTree {
                 in: descriptorFields,
                 parentName: key
             )
+
+            // Skip fields that have behaviors indicating they shouldn't appear in the tree
+            if shouldSkipFieldInTree(childDescriptor) {
+                continue
+            }
+
             if let stringValue = entryValue as? String {
                 let child = sectionNode.addChild(
                     TreeNode(
