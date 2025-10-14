@@ -80,6 +80,7 @@ private struct Implementation {
             if let sectionNode,
                let dictionary = buildNodeValue(sectionNode) {
                 let normalized = normalizeValue(dictionary, for: .fontSizes)
+                Logger.debug("raw fontsizes: \(dictionary)")
                 if isEmptyValue(normalized) == false {
                     return normalized
                 }

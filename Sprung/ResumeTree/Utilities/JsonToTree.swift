@@ -12,21 +12,34 @@ class JsonToTree {
     private let res: Resume
     var json: OrderedDictionary<String, Any>
     private let manifest: TemplateManifest?
+    private let originalContext: [String: Any]
+    private let orderedSectionKeys: [String]
     /// Supplies monotonically increasing indexes during this tree build.
     private var indexCounter: Int = 0
 
-    private init(resume: Resume, orderedContext: OrderedDictionary<String, Any>, manifest: TemplateManifest?) {
+    private init(
+        resume: Resume,
+        orderedContext: OrderedDictionary<String, Any>,
+        manifest: TemplateManifest?,
+        originalContext: [String: Any],
+        orderedKeys: [String]
+    ) {
         res = resume
         json = orderedContext
         self.manifest = manifest
+        self.originalContext = originalContext
+        orderedSectionKeys = orderedKeys
     }
 
 
     convenience init(resume: Resume, context: [String: Any], manifest: TemplateManifest?) {
+        let result = JsonToTree.makeOrderedContext(from: context, manifest: manifest)
         self.init(
             resume: resume,
-            orderedContext: JsonToTree.makeOrderedContext(from: context, manifest: manifest),
-            manifest: manifest
+            orderedContext: result.orderedContext,
+            manifest: manifest,
+            originalContext: context,
+            orderedKeys: result.orderedKeys
         )
     }
 
@@ -38,10 +51,18 @@ class JsonToTree {
     }
 
 
+    private struct OrderedContextResult {
+        let orderedContext: OrderedDictionary<String, Any>
+        let orderedKeys: [String]
+    }
+
     private static func makeOrderedContext(
         from context: [String: Any],
         manifest: TemplateManifest?
-    ) -> OrderedDictionary<String, Any> {
+    ) -> OrderedContextResult {
+#if DEBUG
+        Logger.debug("JsonToTree: makeOrderedContext input keys => \(Array(context.keys))")
+#endif
         var ordered: OrderedDictionary<String, Any> = [:]
         let preferredOrder = orderedKeys(from: Array(context.keys), manifest: manifest)
 
@@ -56,7 +77,18 @@ class JsonToTree {
             ordered[key] = convertToOrderedStructure(context[key] as Any)
         }
 
-        return ordered
+#if DEBUG
+        Logger.debug("JsonToTree: makeOrderedContext ordered keys => \(Array(ordered.keys))")
+#endif
+        return OrderedContextResult(orderedContext: ordered, orderedKeys: Array(ordered.keys))
+    }
+
+    private func value(for key: String) -> Any? {
+        if let stored = json[key] {
+            return stored
+        }
+        guard let original = originalContext[key] else { return nil }
+        return JsonToTree.convertToOrderedStructure(original)
     }
 
     private static func convertToOrderedStructure(_ value: Any) -> Any {
@@ -100,10 +132,10 @@ class JsonToTree {
     }
 
     private func applySectionBehaviors(using manifest: TemplateManifest) {
-        for key in json.keys {
+        for key in orderedSectionKeys {
             guard let behavior = manifest.behavior(forSection: key) else { continue }
-            let value = json[key]
-            applySectionBehavior(behavior, value: value)
+            let sectionValue = value(for: key)
+            applySectionBehavior(behavior, value: sectionValue)
         }
     }
 
@@ -125,7 +157,7 @@ class JsonToTree {
 
     private func applyFieldBehaviors(using manifest: TemplateManifest) {
         for (sectionKey, section) in manifest.sections {
-            guard let sectionValue = json[sectionKey] else { continue }
+            guard let sectionValue = value(for: sectionKey) else { continue }
             for descriptor in section.fields where descriptor.behavior != nil {
                 guard let behavior = descriptor.behavior else { continue }
                 let rawValue = rawValue(for: descriptor, in: sectionValue)
@@ -153,10 +185,10 @@ class JsonToTree {
     }
 
     private func applyLegacySemantics() {
-        assignFontSizes(from: json["font-sizes"])
-        assignIncludeFonts(from: json["include-fonts"])
-        assignEditorKeys(from: json["keys-in-editor"])
-        assignSectionLabels(from: json["section-labels"])
+        assignFontSizes(from: value(for: "font-sizes"))
+        assignIncludeFonts(from: value(for: "include-fonts"))
+        assignEditorKeys(from: value(for: "keys-in-editor"))
+        assignSectionLabels(from: value(for: "section-labels"))
     }
 
     private func rawValue(
@@ -181,7 +213,8 @@ class JsonToTree {
               let orderedFonts = orderedDictionary(from: value) else {
             return
         }
-
+        Logger.debug("raw font values: \(value)")
+        Logger.debug("parsed font dictionary: \(orderedFonts)")
         res.needToFont = false
         var nodes: [FontSizeNode] = []
         for (key, rawValue) in orderedFonts {
@@ -277,15 +310,17 @@ class JsonToTree {
         }
         res.needToTree = false
         applyManifestBehaviors()
-        var processed: Set<String> = []
-        for key in orderedKeys(forKeys: Array(json.keys)) {
-            guard json[key] != nil else { continue }
-            processSectionIfNeeded(named: key, rootNode: rootNode)
-            processed.insert(key)
+#if DEBUG
+        Logger.debug("JsonToTree: ordered context keys => \(orderedSectionKeys)")
+        for key in orderedSectionKeys {
+            let typeDescription = sectionType(for: key).map(debugDescription(for:)) ?? "nil"
+            Logger.debug(
+                "JsonToTree: section=\(key) resolvedType=\(typeDescription) valueType=\(debugValueType(value(for: key)))"
+            )
         }
-
-        // Include any remaining keys that were not part of the manifest order
-        for key in json.keys where !processed.contains(key) {
+#endif
+        for key in orderedSectionKeys {
+            guard value(for: key) != nil else { continue }
             processSectionIfNeeded(named: key, rootNode: rootNode)
         }
         processKeyLabels()
@@ -313,7 +348,7 @@ class JsonToTree {
         if manifestHandlesSectionLabels() {
             return
         }
-        assignSectionLabels(from: json["section-labels"])
+        assignSectionLabels(from: value(for: "section-labels"))
     }
 
     func treeFunction(for sectionType: SectionType) -> (String, TreeNode) -> Void {
@@ -353,7 +388,7 @@ class JsonToTree {
     }
 
     private func inferredSectionType(for key: String) -> SectionType? {
-        guard let value = json[key] else { return nil }
+        guard let value = value(for: key) else { return nil }
         switch value {
         case is String:
             return .string
@@ -399,7 +434,7 @@ class JsonToTree {
 
     private func treeStringArraySection(key: String, parent: TreeNode) {
         let inEditor = isInEditor(key)
-        if let flatArray = json[key] as? [String] {
+        if let flatArray = value(for: key) as? [String] {
             let groupNode = parent.addChild(TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
             let descriptor = manifest?.section(for: key)
             let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
@@ -450,7 +485,7 @@ class JsonToTree {
         let descriptorFields = usesDescriptor ? sectionDescriptor?.fields : nil
 
         // 1) If the value is an OrderedDictionary<String, Any> (a single dictionary).
-        if let dict = asOrderedDictionary(json[key]) {
+        if let dict = asOrderedDictionary(value(for: key)) {
             if let entryDescriptor = descriptorFields?.first(where: { $0.key == "*" }) {
                 for (entryKey, entryValue) in dict {
                     guard let entryDict = asOrderedDictionary(entryValue) else { continue }
@@ -481,7 +516,7 @@ class JsonToTree {
             return
         }
 
-        if let arrayOfDicts = asOrderedArrayOfDictionaries(json[key]) {
+        if let arrayOfDicts = asOrderedArrayOfDictionaries(value(for: key)) {
             for (index, subDict) in arrayOfDicts.enumerated() {
                 let defaultTitle = "\(key.capitalized) \(index + 1)"
                 let itemTitle = displayTitle(
@@ -590,7 +625,7 @@ class JsonToTree {
         let entryDescriptor = usesDescriptor ? descriptor?.fields.first(where: { $0.key == "*" }) : nil
         guard let normalizedEntries = normalizedArrayEntries(
             forKey: key,
-            value: json[key],
+            value: value(for: key),
             entryDescriptor: entryDescriptor
         ) else {
             return
@@ -648,7 +683,7 @@ class JsonToTree {
     }
 
     private func treeStringSection(key: String, parent: TreeNode) {
-        if let sectionString = json[key] as? String {
+        if let sectionString = value(for: key) as? String {
             let sectionNode = parent.addChild(
                 TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
             let descriptor = manifest?.section(for: key)
@@ -667,7 +702,7 @@ class JsonToTree {
     }
 
     private func treeStringObjectSection(key: String, parent: TreeNode) {
-        if let sectionDict = asOrderedDictionary(json[key]) {
+        if let sectionDict = asOrderedDictionary(value(for: key)) {
             let sectionNode = parent.addChild(
                 TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
             let descriptor = manifest?.section(for: key)
@@ -733,7 +768,7 @@ class JsonToTree {
     }
 
     private func treeMapOfStringsSection(key: String, parent: TreeNode) {
-        guard let sectionDict = asOrderedDictionary(json[key]) else { return }
+        guard let sectionDict = asOrderedDictionary(value(for: key)) else { return }
         let inEditor = isInEditor(key)
         let sectionNode = parent.addChild(
             TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
@@ -981,3 +1016,42 @@ class JsonToTree {
     }
 
 }
+
+#if DEBUG
+extension JsonToTree {
+    private func debugDescription(for sectionType: SectionType) -> String {
+        switch sectionType {
+        case .object:
+            return "object"
+        case .array:
+            return "array"
+        case .complex:
+            return "complex"
+        case .string:
+            return "string"
+        case .mapOfStrings:
+            return "mapOfStrings"
+        case .arrayOfObjects:
+            return "arrayOfObjects"
+        case .fontSizes:
+            return "fontSizes"
+        }
+    }
+
+    private func debugValueType(_ value: Any?) -> String {
+        guard let value else { return "nil" }
+        switch value {
+        case is OrderedDictionary<String, Any>:
+            return "OrderedDictionary"
+        case is [String: Any]:
+            return "Dictionary"
+        case is [Any]:
+            return "Array"
+        case is String:
+            return "String"
+        default:
+            return String(describing: type(of: value))
+        }
+    }
+}
+#endif
