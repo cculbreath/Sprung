@@ -14,6 +14,7 @@ class ApplicantProfile {
     var city: String
     var state: String
     var zip: String
+    var countryCode: String
     var websites: String
     var email: String
     var phone: String
@@ -25,6 +26,7 @@ class ApplicantProfile {
         city: String = "Austin",
         state: String = "Texas",
         zip: String = "78701",
+        countryCode: String = "US",
         websites: String = "example.com",
         email: String = "applicant@example.com",
         phone: String = "(555) 123-4567",
@@ -35,6 +37,7 @@ class ApplicantProfile {
         self.city = city
         self.state = state
         self.zip = zip
+        self.countryCode = countryCode
         self.websites = websites
         self.email = email
         self.phone = phone

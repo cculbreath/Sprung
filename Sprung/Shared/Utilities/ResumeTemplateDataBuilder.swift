@@ -32,7 +32,21 @@ private struct Implementation {
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
 
-        let orderedKeys = Self.orderedKeys(from: rootNode.orderedChildren.map { $0.name }, manifest: manifest)
+        // Get keys from tree nodes
+        var keys = rootNode.orderedChildren.map { $0.name }
+
+        // Also include sections from manifest that have special behaviors
+        if let manifest = manifest {
+            for (sectionKey, section) in manifest.sections {
+                if let behavior = section.behavior,
+                   [.styling, .fontSizes].contains(behavior),
+                   !keys.contains(sectionKey) {
+                    keys.append(sectionKey)
+                }
+            }
+        }
+
+        let orderedKeys = Self.orderedKeys(from: keys, manifest: manifest)
 
         for sectionKey in orderedKeys {
             guard let value = buildSection(named: sectionKey) else { continue }
@@ -112,7 +126,18 @@ private struct Implementation {
             guard resume.importedEditorKeys.isEmpty == false else { return nil }
             return normalizeValue(resume.importedEditorKeys, for: .editorKeys)
 
-        case .styling, .metadata, .applicantProfile:
+        case .styling:
+            // Build the styling section including fontSizes
+            var styling: [String: Any] = [:]
+            if let fontSizes = buildFontSizesSection() {
+                styling["fontSizes"] = fontSizes
+            }
+            if resume.includeFonts {
+                styling["includeFonts"] = "true"
+            }
+            return styling.isEmpty ? nil : styling
+
+        case .metadata, .applicantProfile:
             return nil
         }
     }

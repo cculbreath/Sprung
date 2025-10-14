@@ -244,7 +244,24 @@ class JsonToTree {
             assignIncludeFonts(from: value)
         case .editorKeys:
             assignEditorKeys(from: value)
-        case .styling, .metadata, .applicantProfile:
+        case .styling:
+            // Extract fontSizes and includeFonts from styling section
+            if let stylingDict = value as? [String: Any] {
+                if let fontSizes = stylingDict["fontSizes"] {
+                    assignFontSizes(from: fontSizes)
+                }
+                if let includeFonts = stylingDict["includeFonts"] {
+                    assignIncludeFonts(from: includeFonts)
+                }
+            } else if let orderedDict = value as? OrderedDictionary<String, Any> {
+                if let fontSizes = orderedDict["fontSizes"] {
+                    assignFontSizes(from: fontSizes)
+                }
+                if let includeFonts = orderedDict["includeFonts"] {
+                    assignIncludeFonts(from: includeFonts)
+                }
+            }
+        case .metadata, .applicantProfile:
             break
         }
     }
@@ -442,14 +459,16 @@ class JsonToTree {
     }
 
     private func shouldSkipSectionInTree(_ key: String) -> Bool {
+        // Skip sections that are purely metadata and shouldn't appear in the tree
         if let behavior = manifest?.behavior(forSection: key),
-           [.fontSizes, .includeFonts, .editorKeys, .styling, .metadata].contains(behavior) {
+           [.styling, .includeFonts, .editorKeys, .metadata].contains(behavior) {
             return true
         }
-        if manifest != nil {
-            return false
+        // Legacy: skip these keys if no manifest
+        if manifest == nil {
+            return key == "font-sizes" || key == "include-fonts" || key == "keys-in-editor"
         }
-        return key == "font-sizes" || key == "include-fonts" || key == "keys-in-editor"
+        return false
     }
 
     private func processKeyLabels() {
@@ -520,23 +539,57 @@ class JsonToTree {
             // First, recursively process this child's subtree
             promoteTransparentNodeChildren(child)
 
-            // If this child is transparent and has children, promote its children
-            if child.editorTransparent, let grandchildren = child.children {
-                for grandchild in grandchildren {
-                    // Update the promoted child's name if it was empty
-                    if grandchild.name.isEmpty && !child.name.isEmpty {
-                        grandchild.name = "\(child.name).\(grandchild.name)".trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            if child.editorTransparent {
+#if DEBUG
+                Logger.debug("JsonToTree.promoteTransparentNodeChildren: promoting transparent node '\(child.name)' (hasChildren: \(child.children != nil))")
+#endif
+                // If transparent node has children, promote those children up
+                if let grandchildren = child.children {
+                    for grandchild in grandchildren {
+                        // Update the promoted child's name if it was empty
+                        if grandchild.name.isEmpty && !child.name.isEmpty {
+                            grandchild.name = "\(child.name).\(grandchild.name)".trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                        }
+                        newChildren.append(grandchild)
                     }
-                    newChildren.append(grandchild)
+                } else {
+                    // Transparent leaf node - promote the node itself but make it visible
+                    child.includeInEditor = true
+                    child.editorTransparent = false
+                    newChildren.append(child)
+#if DEBUG
+                    Logger.debug("JsonToTree.promoteTransparentNodeChildren: promoted leaf node '\(child.name)'")
+#endif
                 }
             } else {
-                // Keep non-transparent nodes as-is
+                // Non-transparent node - keep it
                 newChildren.append(child)
             }
         }
 
         // Replace the node's children with the new list
         node.children = newChildren.isEmpty ? nil : newChildren
+
+        // Second pass: remove empty container nodes that have no children and no value
+        // This happens after promotion when a parent's transparent children were moved up
+        if let updatedChildren = node.children {
+            var finalChildren: [TreeNode] = []
+            for child in updatedChildren {
+                // Keep nodes that either:
+                // 1. Have children, OR
+                // 2. Have a non-empty value (leaf nodes with data)
+                let hasChildren = child.children != nil && !child.children!.isEmpty
+                let hasValue = (child.value as? String)?.isEmpty == false
+                if hasChildren || hasValue {
+                    finalChildren.append(child)
+                } else {
+#if DEBUG
+                    Logger.debug("JsonToTree.promoteTransparentNodeChildren: removing empty container '\(child.name)'")
+#endif
+                }
+            }
+            node.children = finalChildren.isEmpty ? nil : finalChildren
+        }
     }
 
     private func applyEditorOrdering(to rootNode: TreeNode) {
@@ -761,6 +814,17 @@ class JsonToTree {
         return [.sectionLabels, .fontSizes, .includeFonts, .editorKeys].contains(behavior)
     }
 
+    /// Returns true if the field descriptor is a container whose children are ALL bound to ApplicantProfile
+    private func isApplicantProfileContainerOnly(_ descriptor: TemplateManifest.Section.FieldDescriptor?) -> Bool {
+        guard let descriptor, let children = descriptor.children, !children.isEmpty else {
+            return false
+        }
+        // Check if ALL children have applicantProfile bindings
+        return children.allSatisfy { child in
+            child.binding?.source == .applicantProfile
+        }
+    }
+
     private func buildSubtree(
         from dict: OrderedDictionary<String, Any>,
         parent: TreeNode,
@@ -779,10 +843,37 @@ class JsonToTree {
                 parentName: parent.name
             )
 
-            // Skip fields that have behaviors indicating they shouldn't appear in the tree
-            if shouldSkipFieldInTree(childDescriptor) {
+            // Skip fields bound to applicant profile - ApplicantProfile is the single source of truth
+            if let descriptor = childDescriptor, descriptor.binding?.source == .applicantProfile {
                 continue
             }
+
+            // Skip container nodes that only contain ApplicantProfile-bound children (e.g., basics.location)
+            if isApplicantProfileContainerOnly(childDescriptor) {
+                continue
+            }
+
+            // Process fields with behaviors for metadata even if they don't appear in tree
+            if let descriptor = childDescriptor, let behavior = descriptor.behavior {
+                switch behavior {
+                case .sectionLabels:
+                    assignSectionLabels(from: subValue)
+                    continue // Skip adding to tree but process the data
+                case .fontSizes:
+                    assignFontSizes(from: subValue)
+                    continue
+                case .includeFonts:
+                    assignIncludeFonts(from: subValue)
+                    continue
+                case .editorKeys:
+                    assignEditorKeys(from: subValue)
+                    continue
+                case .applicantProfile:
+                    // These are handled separately
+                    continue
+                }
+            }
+
             if let subDict = asOrderedDictionary(subValue) {
                 let childDescriptors = childDescriptor?.children
                 let childNode = parent.addChild(
@@ -948,24 +1039,20 @@ class JsonToTree {
     ) {
         guard let sectionString = value(for: key) as? String else { return }
         let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
-        let sectionNode = parent.addChild(
-            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
-        )
-        sectionNode.editorTransparent = attributes.transparent
         let descriptor = manifest?.section(for: key)
         let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
         let fieldDescriptor = usesDescriptor
             ? descriptor?.fields.first(where: { $0.key == key || $0.key == "*" })
             : nil
-        let childPath = path + ["value"]
-        let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
-        let child = sectionNode.addChild(
-            TreeNode(name: "", value: sectionString, inEditor: childAttributes.visible, status: .saved, resume: res)
+
+        // Create a single collapsible node with name and value
+        // This renders as "summary >" that expands to show the full text
+        let leafNode = parent.addChild(
+            TreeNode(name: key, value: sectionString, inEditor: attributes.visible, status: .saved, resume: res)
         )
-        child.editorTransparent = childAttributes.transparent
+        leafNode.editorTransparent = attributes.transparent
         if let fieldDescriptor {
-            child.applyDescriptor(fieldDescriptor)
-            sectionNode.applyDescriptor(fieldDescriptor)
+            leafNode.applyDescriptor(fieldDescriptor)
         }
     }
 
@@ -977,15 +1064,46 @@ class JsonToTree {
     ) {
         guard let sectionDict = asOrderedDictionary(value(for: key)) else { return }
         let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
-        let sectionNode = parent.addChild(
-            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
-        )
-        sectionNode.editorTransparent = attributes.transparent
+
         let descriptor = manifest?.section(for: key)
         let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
         let descriptorFields = usesDescriptor ? descriptor?.fields : nil
         let ordered = orderedKeys(in: sectionDict, descriptors: descriptorFields)
 
+        // Count how many children would actually be visible after filtering
+        var visibleChildCount = 0
+        for entryKey in ordered {
+            guard sectionDict[entryKey] != nil else { continue }
+            let childPath = path + [entryKey]
+            let childDescriptor = matchingDescriptor(forKey: entryKey, in: descriptorFields, parentName: key)
+
+            // Skip if bound to applicant profile
+            if let desc = childDescriptor, desc.binding?.source == .applicantProfile {
+                continue
+            }
+            // Skip if container only has applicant profile children
+            if isApplicantProfileContainerOnly(childDescriptor) {
+                continue
+            }
+            // Skip if it has a behavior that filters it
+            if let desc = childDescriptor, let behavior = desc.behavior,
+               [.sectionLabels, .fontSizes, .includeFonts, .editorKeys, .applicantProfile].contains(behavior) {
+                continue
+            }
+            visibleChildCount += 1
+        }
+
+        // If all children would be filtered, don't create the parent container
+        if visibleChildCount == 0 {
+            return
+        }
+
+        let sectionNode = parent.addChild(
+            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
+        )
+        sectionNode.editorTransparent = attributes.transparent
+
+        // Build the tree naturally - let promoteTransparentNodeChildren() handle promotion later
         for entryKey in ordered {
             guard let entryValue = sectionDict[entryKey] else { continue }
             let childPath = path + [entryKey]
@@ -996,9 +1114,34 @@ class JsonToTree {
                 parentName: key
             )
 
-            // Skip fields that have behaviors indicating they shouldn't appear in the tree
-            if shouldSkipFieldInTree(childDescriptor) {
+            // Skip fields bound to applicant profile - ApplicantProfile is the single source of truth
+            if let descriptor = childDescriptor, descriptor.binding?.source == .applicantProfile {
                 continue
+            }
+
+            // Skip container nodes that only contain ApplicantProfile-bound children (e.g., basics.location)
+            if isApplicantProfileContainerOnly(childDescriptor) {
+                continue
+            }
+
+            // Process fields with behaviors for metadata even if they don't appear in tree
+            if let descriptor = childDescriptor, let behavior = descriptor.behavior {
+                switch behavior {
+                case .sectionLabels:
+                    assignSectionLabels(from: entryValue)
+                    continue
+                case .fontSizes:
+                    assignFontSizes(from: entryValue)
+                    continue
+                case .includeFonts:
+                    assignIncludeFonts(from: entryValue)
+                    continue
+                case .editorKeys:
+                    assignEditorKeys(from: entryValue)
+                    continue
+                case .applicantProfile:
+                    continue
+                }
             }
 
             if let stringValue = entryValue as? String {

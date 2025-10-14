@@ -34,8 +34,13 @@ final class ResumeDetailVM {
     // Tracks which group nodes are expanded in the UI.
     private var expandedIDs: Set<String> = []
 
-    /// Computed convenience access to the resume’s root node.
+    /// Computed convenience access to the resume's root node.
     var rootNode: TreeNode? { resume.rootNode }
+
+    /// Whether font size nodes exist for this resume.
+    var hasFontSizeNodes: Bool {
+        !resume.fontSizeNodes.isEmpty
+    }
 
     // MARK: - Dependencies --------------------------------------------------
 

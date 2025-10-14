@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import SwiftUI
 
 @Observable
 @MainActor
@@ -72,7 +73,9 @@ final class ResStore: SwiftDataStore {
         resume.rootNode = rootNode
 
         // Persist new resume (and trigger observers)
-        jobApp.addResume(resume)
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.82, blendDuration: 0.1)) {
+            jobApp.addResume(resume)
+        }
         modelContext.insert(resume)
         saveContext()
         
@@ -133,7 +136,9 @@ final class ResStore: SwiftDataStore {
         }
         
         // Add to jobApp and save
-        jobApp.addResume(newResume)
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.82, blendDuration: 0.1)) {
+            jobApp.addResume(newResume)
+        }
         modelContext.insert(newResume)
         saveContext()
         

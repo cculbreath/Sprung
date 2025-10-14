@@ -44,7 +44,8 @@ struct ResumeDetailView: View {
                     nodeView(root)
                 }
 
-                if vm.includeFonts {
+                // Show font size panel if fontSizeNodes exist
+                if vm.hasFontSizeNodes {
                     FontSizePanelView().padding(10)
                 }
             }

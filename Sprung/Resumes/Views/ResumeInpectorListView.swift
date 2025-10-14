@@ -5,6 +5,7 @@
 //  Created by Christopher Culbreath on 1/31/25.
 //
 
+import AppKit
 import SwiftUI
 
 struct ResumeInspectorListView: View {
@@ -41,9 +42,14 @@ struct ResumeInspectorListView: View {
                             resStore.duplicate(resume)
                         }
                     )
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .padding(.horizontal, 4)
+            .animation(
+                .spring(response: 0.45, dampingFraction: 0.82, blendDuration: 0.05),
+                value: resumes.map(\.id)
+            )
         }
     }
 }
@@ -79,10 +85,13 @@ struct ResumeRowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.accentColor)
+                    .fill(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.accentColor.opacity(0.25) : Color.clear, lineWidth: 1.1)
+                            .stroke(
+                                isSelected ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2),
+                                lineWidth: isSelected ? 1.1 : 1
+                            )
                     )
             )
         }
