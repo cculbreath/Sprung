@@ -385,13 +385,16 @@ struct TemplateManifest: Codable {
         }
     }
 
-    static let currentSchemaVersion: Int = 2
+    static let currentSchemaVersion: Int = 4
 
     let slug: String
     let schemaVersion: Int
     let sectionOrder: [String]
     private(set) var sections: [String: Section]
     private(set) var synthesizedSectionKeys: Set<String>
+    let editorLabels: [String: String]?
+    let transparentKeys: [String]?
+    let keysInEditor: [String]?
 
     var usesSynthesizedMetadata: Bool {
         !synthesizedSectionKeys.isEmpty
@@ -401,11 +404,17 @@ struct TemplateManifest: Codable {
         slug: String,
         schemaVersion: Int = 1,
         sectionOrder: [String],
-        sections: [String: Section]
+        sections: [String: Section],
+        editorLabels: [String: String]? = nil,
+        transparentKeys: [String]? = nil,
+        keysInEditor: [String]? = nil
     ) {
         self.slug = slug
         self.schemaVersion = schemaVersion
         self.sectionOrder = sectionOrder
+        self.editorLabels = editorLabels
+        self.transparentKeys = transparentKeys
+        self.keysInEditor = keysInEditor
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
         for (key, var section) in sections {
@@ -424,6 +433,9 @@ struct TemplateManifest: Codable {
         slug = try container.decode(String.self, forKey: .slug)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         sectionOrder = try container.decodeIfPresent([String].self, forKey: .sectionOrder) ?? []
+        editorLabels = try container.decodeIfPresent([String: String].self, forKey: .editorLabels)
+        transparentKeys = try container.decodeIfPresent([String].self, forKey: .transparentKeys)
+        keysInEditor = try container.decodeIfPresent([String].self, forKey: .keysInEditor)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
@@ -445,6 +457,9 @@ struct TemplateManifest: Codable {
         if !sectionOrder.isEmpty {
             try container.encode(sectionOrder, forKey: .sectionOrder)
         }
+        try container.encodeIfPresent(editorLabels, forKey: .editorLabels)
+        try container.encodeIfPresent(transparentKeys, forKey: .transparentKeys)
+        try container.encodeIfPresent(keysInEditor, forKey: .keysInEditor)
         try container.encode(sections, forKey: .sections)
     }
 
@@ -518,6 +533,9 @@ struct TemplateManifest: Codable {
         case schemaVersion
         case sectionOrder
         case sections
+        case editorLabels
+        case transparentKeys
+        case keysInEditor = "keys-in-editor"
     }
 }
 
@@ -530,7 +548,10 @@ extension TemplateManifest {
             slug: slug,
             schemaVersion: Self.currentSchemaVersion,
             sectionOrder: sectionOrder,
-            sections: sections
+            sections: sections,
+            editorLabels: editorLabels,
+            transparentKeys: transparentKeys,
+            keysInEditor: keysInEditor
         )
     }
 

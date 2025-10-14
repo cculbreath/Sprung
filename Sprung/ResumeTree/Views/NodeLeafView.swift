@@ -123,8 +123,6 @@ struct NodeLeafView: View {
     // startEditing/save/cancel logic handled by ResumeDetailVM
 
     private func deleteNode(node: TreeNode) {
-        _ = node.resume
-        TreeNode.deleteTreeNode(node: node, context: context)
-        vm.refreshPDF()
+        vm.deleteNode(node, context: context)
     }
 }

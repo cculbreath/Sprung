@@ -23,13 +23,12 @@ struct NodeWithChildrenView: View {
 
                 // Show child nodes when expanded.
                 if vm.isExpanded(node) {
-                    // one stable array identity -> zero diff-engine churn
-                    NodeChildrenListView(children: node.orderedChildren)
+                    NodeChildrenListView(children: node.orderedViewChildren)
                 }
             }
         }
     }
-    
+
     private func getSiblings() -> [TreeNode] {
         return node.parent?.orderedChildren ?? []
     }

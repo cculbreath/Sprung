@@ -41,7 +41,9 @@ struct ResumeDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if let root = vm.rootNode {
-                    nodeView(root)
+                    ForEach(root.orderedViewChildren, id: \.id) { viewNode in
+                        topLevelNodeView(viewNode)
+                    }
                 }
 
                 // Show font size panel if fontSizeNodes exist
@@ -63,27 +65,58 @@ struct ResumeDetailView: View {
         }
     }
 
-    // MARK: – Recursive node builder --------------------------------------
-
     @ViewBuilder
-    private func nodeView(_ node: TreeNode) -> some View {
-        // Defensive check to prevent crashes with corrupted TreeNode data
-        // Wrap in a defensive block that catches any SwiftData faulting errors
-        Group {
-            let includeInEditor = safeGetNodeProperty { node.includeInEditor } ?? false
-            if includeInEditor {
-                let hasChildren = safeGetNodeProperty { node.hasChildren } ?? false
-                if hasChildren {
-                    NodeWithChildrenView(node: node)
-                } else {
-                    NodeLeafView(node: node)
-                }
-            }
+    private func topLevelNodeView(_ node: TreeNode) -> some View {
+        if node.orderedViewChildren.isEmpty {
+            RootLeafDisclosureView(node: node)
+        } else {
+            NodeWithChildrenView(node: node)
         }
     }
+}
 
-    /// Safely gets a TreeNode property, returning nil if the node data is corrupted
-    private func safeGetNodeProperty<T>(_ getter: () -> T) -> T? {
-        return getter()
+// MARK: - Root-Level Leaf Disclosure ---------------------------------------
+
+private struct RootLeafDisclosureView: View {
+    let node: TreeNode
+
+    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
+
+    private var expansionBinding: Binding<Bool> {
+        Binding(
+            get: { vm.isExpanded(node) },
+            set: { _ in vm.toggleExpansion(for: node) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                ToggleChevronView(isExpanded: expansionBinding)
+
+                AlignedTextRow(
+                    leadingText: node.displayLabel,
+                    trailingText: nil,
+                    nodeStatus: node.status
+                )
+                Spacer(minLength: 8)
+                StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
+            }
+            .padding(.horizontal, 10)
+            .padding(.leading, CGFloat(node.depth * 20))
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                vm.toggleExpansion(for: node)
+            }
+
+            if vm.isExpanded(node) {
+                Divider()
+
+                NodeLeafView(node: node)
+                    .padding(.leading, CGFloat(node.depth) * 20)
+                    .padding(.vertical, 4)
+           }
+        }
     }
 }

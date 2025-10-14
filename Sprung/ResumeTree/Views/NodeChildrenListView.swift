@@ -13,21 +13,15 @@ struct NodeChildrenListView: View {
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(children, id: \.id) { child in
-                if child.includeInEditor {
-                    Divider()
-                    if child.hasChildren {
-                        NodeWithChildrenView(node: child)
-                    } else {
-                        ReorderableLeafRow(
-                            node: child,
-                            siblings: children
-                        )
-                        .padding(.vertical, 4)
-                    }
-                } else if child.editorTransparent {
-                    NodeChildrenListView(children: child.orderedChildren)
+                Divider()
+                if child.orderedViewChildren.isEmpty {
+                    ReorderableLeafRow(
+                        node: child,
+                        siblings: child.parent?.orderedChildren ?? []
+                    )
+                    .padding(.vertical, 4)
                 } else {
-                    EmptyView()
+                    NodeWithChildrenView(node: child)
                 }
             }
         }
