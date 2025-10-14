@@ -106,17 +106,21 @@ extension TemplateEditorView {
         }
         resume.rootNode = rootNode
 
-        let renderingContext = try ResumeTemplateProcessor.createTemplateContext(from: resume)
+        let pdfGenerator = NativePDFGenerator(
+            templateStore: appEnvironment.templateStore,
+            profileProvider: appEnvironment.applicantProfileStore
+        )
+        let renderingContext = try pdfGenerator.renderingContext(for: resume)
 
         // Render text
         let textOutput = try renderMustache(template: textTemplate, context: renderingContext)
 
         // Render PDF via WKWebView using the HTML template
-        let pdfGenerator = NativePDFGenerator(
-            templateStore: appEnvironment.templateStore,
-            profileProvider: appEnvironment.applicantProfileStore
+        let pdfData = try await pdfGenerator.generatePDFFromCustomTemplate(
+            for: resume,
+            customHTML: htmlTemplate,
+            processedContext: renderingContext
         )
-        let pdfData = try await pdfGenerator.generatePDFFromCustomTemplate(for: resume, customHTML: htmlTemplate)
 
         return (pdfData: pdfData, text: textOutput)
     }

@@ -16,3 +16,5 @@ build/
 clean-commit-msg.sh
 
 agents.md
+
+.swift-module-cache/

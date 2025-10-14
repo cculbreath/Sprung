@@ -6,6 +6,7 @@
 import Foundation
 import SwiftSoup
 import WebKit
+import ObjectiveC
 
 // MARK: - LinkedIn Session Manager
 
@@ -19,6 +20,10 @@ private enum LinkedInScrapeTiming {
     static let debugWindowCloseDelay: TimeInterval = 3
     static let ultimateTimeout: TimeInterval = 60
     static let timeoutDebugWindowDuration: TimeInterval = 10
+}
+
+private enum LinkedInScrapeAssociatedKeys {
+    static var delegateKey: UInt8 = 0
 }
 
 @MainActor
@@ -165,6 +170,12 @@ extension JobApp {
                     DispatchQueue.main.async {
                         webView.navigationDelegate = originalDelegate
                         webView.stopLoading()
+                        objc_setAssociatedObject(
+                            webView,
+                            &LinkedInScrapeAssociatedKeys.delegateKey,
+                            nil,
+                            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                        )
                     }
                     
                     switch result {
@@ -184,6 +195,12 @@ extension JobApp {
                     continuation.resume(with: result)
                 }
                 webView.navigationDelegate = scrapeDelegate
+                objc_setAssociatedObject(
+                    webView,
+                    &LinkedInScrapeAssociatedKeys.delegateKey,
+                    scrapeDelegate,
+                    .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                )
                 
                 // Start by loading LinkedIn feed to establish session context
                 let feedURL = URL(string: "https://www.linkedin.com/feed/")!
@@ -233,6 +250,12 @@ extension JobApp {
                                     
                                     if let htmlError = htmlError {
                                         Logger.error("🚨 [LinkedIn Scraper] Fallback HTML extraction failed: \(htmlError)")
+                                        objc_setAssociatedObject(
+                                            webView,
+                                            &LinkedInScrapeAssociatedKeys.delegateKey,
+                                            nil,
+                                            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                                        )
                                         continuation.resume(throwing: htmlError)
                                     } else if let html = htmlResult as? String {
                                         Logger.info("✅ [LinkedIn Scraper] Fallback successfully extracted HTML (\(html.count) characters)")
@@ -249,9 +272,21 @@ extension JobApp {
                                                 debugWindow?.close()
                                             }
                                         }
+                                        objc_setAssociatedObject(
+                                            webView,
+                                            &LinkedInScrapeAssociatedKeys.delegateKey,
+                                            nil,
+                                            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                                        )
                                         continuation.resume(returning: html)
                                     } else {
                                         Logger.error("🚨 [LinkedIn Scraper] Fallback HTML extraction returned unexpected type")
+                                        objc_setAssociatedObject(
+                                            webView,
+                                            &LinkedInScrapeAssociatedKeys.delegateKey,
+                                            nil,
+                                            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                                        )
                                         continuation.resume(throwing: URLError(.cannotDecodeContentData))
                                     }
                                 }
@@ -287,6 +322,12 @@ extension JobApp {
                     // Restore original delegate and clean up to prevent crashes
                     webView.navigationDelegate = originalDelegate
                     webView.stopLoading()
+                    objc_setAssociatedObject(
+                        webView,
+                        &LinkedInScrapeAssociatedKeys.delegateKey,
+                        nil,
+                        .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    )
                     
                     // Keep debug window open longer on timeout so we can see what happened
                     Logger.info("🪟 [LinkedIn Scraper] Debug window will stay open for 10 seconds so you can inspect the page")

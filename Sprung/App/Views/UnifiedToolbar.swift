@@ -62,7 +62,13 @@ struct UnifiedToolbar: CustomizableToolbarContent {
 
             ToolbarItem(id: "applicantProfile", placement: .navigation, showsByDefault: true) {
                 Button(action: {
-                    NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
+                        if !NSApp.sendAction(#selector(AppDelegate.showApplicantProfileWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showApplicantProfileWindow()
+                        }
+                    }
                 }) {
                     Label("Profile", systemImage: "person")
                         .font(.system(size: 14, weight: .light))

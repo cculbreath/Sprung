@@ -10,15 +10,26 @@ import SwiftUI
 
 struct CursorModifier: ViewModifier {
     let cursor: NSCursor
+    @State private var didPushCursor = false
 
     func body(content: Content) -> some View {
-        content.onHover { inside in
-            if inside {
-                cursor.push()
-            } else {
-                NSCursor.pop()
+        content
+            .onHover { inside in
+                if inside {
+                    guard didPushCursor == false else { return }
+                    cursor.push()
+                    didPushCursor = true
+                } else if didPushCursor {
+                    NSCursor.pop()
+                    didPushCursor = false
+                }
             }
-        }
+            .onDisappear {
+                if didPushCursor {
+                    NSCursor.pop()
+                    didPushCursor = false
+                }
+            }
     }
 }
 
@@ -31,89 +42,112 @@ extension View {
 struct ResumeInspectorView: View {
     @Environment(JobAppStore.self) private var jobAppStore
     @Binding var refresh: Bool
-    @State private var height: CGFloat = 200
-    @State private var isDragging = false
-    @State private var isHidden = false
-    @GestureState private var dragOffset: CGFloat = 0
+    @State private var drawerHeight: CGFloat = 240
+    @State private var isCollapsed = false
+    @State private var dragAnchorHeight: CGFloat?
+
+    private let minHeight: CGFloat = 160
+    private let maxHeight: CGFloat = 420
+    private let collapseThreshold: CGFloat = 180
+    private let defaultHeight: CGFloat = 240
 
     var body: some View {
         if let selApp = jobAppStore.selectedApp {
             @Bindable var selApp = selApp
 
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
-                    ResumeInspectorListView(
-                        listSelection: $selApp.selectedRes,
-                        resumes: selApp.resumes
-                    )
+            VStack(spacing: 0) {
+                ResumeInspectorListView(
+                    listSelection: $selApp.selectedRes,
+                    resumes: selApp.resumes
+                )
 
-                    if isHidden {
-                        VStack(spacing: 0) {
-                            // Drag handle for collapsed state
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(height: 4)
-                                .gesture(
-                                    DragGesture(minimumDistance: 1)
-                                        .onChanged { value in
-                                            if value.translation.height < -20 { // Requires slight upward drag
-                                                withAnimation(.spring()) {
-                                                    isHidden = false
-                                                    height = 200
-                                                }
-                                            }
-                                        }
-                                )
-                                .customCursor(NSCursor.resizeUpDown)
-
-                            Button("Create Resume") {
-                                withAnimation(.spring()) {
-                                    isHidden = false
-                                    height = 200
-                                }
-                            }
-                            .padding(.vertical, 8)
-                        }
-                        .background(Color.white.opacity(0.1)) // Optional: slight highlight for draggable area
-                    } else {
-                        // Drag handle for expanded state
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(height: 4)
-                            .gesture(
-                                DragGesture(minimumDistance: 1)
-                                    .updating($dragOffset) { value, state, _ in
-                                        state = -value.translation.height
-                                    }
-                                    .onChanged { value in
-                                        isDragging = true
-                                        let newHeight = height - value.translation.height
-                                        let boundedHeight = min(max(50, newHeight), geometry.size.height * 0.8)
-                                        height = boundedHeight
-                                    }
-                                    .onEnded { value in
-                                        let newHeight = height - value.translation.height
-                                        if newHeight < 150 {
-                                            withAnimation(.spring()) {
-                                                isHidden = true
-                                                height = 0
-                                            }
-                                        } else {
-                                            height = min(max(50, newHeight), geometry.size.height * 0.8)
-                                        }
-                                        isDragging = false
-                                    }
-                            )
-                            .customCursor(NSCursor.resizeUpDown)
-
-                        CreateNewResumeView(refresh: $refresh)
-                            .frame(height: max(0, height))
-                            .clipped()
-                    }
+                if isCollapsed {
+                    collapsedDrawer
+                } else {
+                    expandedDrawer
                 }
             }
+            .background(Color(NSColor.windowBackgroundColor))
         } else {
             Text("No application selected.")
         }
+    }
+
+    private var collapsedDrawer: some View {
+        VStack(spacing: 0) {
+            dragHandle
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { value in
+                            if value.translation.height < -16 {
+                                withAnimation(.spring()) {
+                                    isCollapsed = false
+                                    drawerHeight = defaultHeight
+                                }
+                            }
+                        }
+                )
+                .customCursor(.resizeUpDown)
+
+            Button("Create Resume") {
+                withAnimation(.spring()) {
+                    isCollapsed = false
+                    drawerHeight = defaultHeight
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(.top, 8)
+    }
+
+    private var expandedDrawer: some View {
+        VStack(spacing: 0) {
+            dragHandle
+                .gesture(
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { value in
+                            if dragAnchorHeight == nil {
+                                dragAnchorHeight = drawerHeight
+                            }
+
+                            let proposed = clampHeight((dragAnchorHeight ?? drawerHeight) - value.translation.height)
+                            drawerHeight = proposed
+                        }
+                        .onEnded { value in
+                            let start = dragAnchorHeight ?? drawerHeight
+                            let finalHeight = clampHeight(start - value.translation.height)
+                            dragAnchorHeight = nil
+
+                            if finalHeight < collapseThreshold {
+                                withAnimation(.spring()) {
+                                    isCollapsed = true
+                                    drawerHeight = defaultHeight
+                                }
+                            } else {
+                                drawerHeight = finalHeight
+                            }
+                        }
+                )
+                .customCursor(.resizeUpDown)
+
+            CreateNewResumeView(refresh: $refresh)
+                .frame(height: drawerHeight)
+                .clipped()
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(.top, 8)
+    }
+
+    private var dragHandle: some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.3))
+            .frame(height: 4)
+    }
+
+    private func clampHeight(_ proposed: CGFloat) -> CGFloat {
+        min(max(proposed, minHeight), maxHeight)
     }
 }

@@ -47,12 +47,18 @@ class NativePDFGenerator: NSObject, ObservableObject {
     @MainActor
     // Text generation has been moved to TextResumeGenerator
     
-    func generatePDFFromCustomTemplate(for resume: Resume, customHTML: String) async throws -> Data {
+    func generatePDFFromCustomTemplate(
+        for resume: Resume,
+        customHTML: String,
+        processedContext overrideContext: [String: Any]? = nil
+    ) async throws -> Data {
         return try await withCheckedThrowingContinuation { continuation in
             Task { @MainActor in
                 do {
-                    let context = try createTemplateContext(from: resume)
-                    let mustacheTemplate = try Mustache.Template(string: customHTML)
+                    let context = try overrideContext ?? renderingContext(for: resume)
+                    let finalContent = preprocessTemplateForGRMustache(fixFontReferences(customHTML))
+                    let mustacheTemplate = try Mustache.Template(string: finalContent)
+                    TemplateFilters.register(on: mustacheTemplate)
                     let htmlContent = try mustacheTemplate.render(context)
                     
                     currentCompletion = { result in
@@ -65,6 +71,11 @@ class NativePDFGenerator: NSObject, ObservableObject {
                 }
             }
         }
+    }
+    @MainActor
+    func renderingContext(for resume: Resume) throws -> [String: Any] {
+        let rawContext = try createTemplateContext(from: resume)
+        return preprocessContextForTemplate(rawContext, from: resume)
     }
     
     // Custom text template generation has been moved to TextResumeGenerator
