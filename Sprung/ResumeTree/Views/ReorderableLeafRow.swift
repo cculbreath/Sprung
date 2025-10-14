@@ -17,6 +17,7 @@ struct ReorderableLeafRow: View {
     @State private var isDropTargeted: Bool = false // Manage state locally
 
     var body: some View {
+        let canReorder = node.parent?.schemaAllowsChildMutation ?? false
         ZStack(alignment: .top) {
             NodeLeafView(node: node)
                 .scaleEffect(dragInfo.draggedNode == node ? 1.05 : 1.0) // Slightly enlarge the dragged node
@@ -24,6 +25,10 @@ struct ReorderableLeafRow: View {
                 .background(Color.clear) // Highlight on drop
                 .padding(.leading, CGFloat(node.depth) * 20) // now O(1) stored Int
                 .onDrag {
+                    guard canReorder else {
+                        dragInfo.draggedNode = nil
+                        return NSItemProvider()
+                    }
                     dragInfo.draggedNode = node
                     return NSItemProvider(object: node.id as NSString)
                 }
@@ -47,13 +52,17 @@ struct ReorderableLeafRow: View {
                 }
             }
         }
-        .onDrop(of: [.plainText], delegate: LeafDropDelegate(
-            node: node,
-            siblings: siblings,
-            dragInfo: dragInfo,
-            appEnvironment: appEnvironment,
-            isDropTargeted: $isDropTargeted // Pass state to the delegate
-        ))
+        .onDrop(
+            of: [.plainText],
+            delegate: LeafDropDelegate(
+                node: node,
+                siblings: siblings,
+                dragInfo: dragInfo,
+                appEnvironment: appEnvironment,
+                isDropTargeted: $isDropTargeted,
+                canReorder: canReorder
+            )
+        )
     }
 }
 
@@ -64,13 +73,18 @@ struct LeafDropDelegate: DropDelegate {
     var dragInfo: DragInfo
     let appEnvironment: AppEnvironment
     @Binding var isDropTargeted: Bool // Accept the binding for isDropTargeted
+    let canReorder: Bool
 
     func validateDrop(info _: DropInfo) -> Bool {
-        guard let dragged = dragInfo.draggedNode else { return false }
+        guard canReorder,
+              let dragged = dragInfo.draggedNode,
+              dragged.parent?.schemaAllowsChildMutation ?? false,
+              node.parent?.schemaAllowsChildMutation ?? false else { return false }
         return dragged != node && haveSameParent(dragged, node)
     }
 
     func dropEntered(info: DropInfo) {
+        guard canReorder else { return }
         guard let dragged = dragInfo.draggedNode else { return }
 
         if dragged != node && haveSameParent(dragged, node) {
@@ -87,11 +101,15 @@ struct LeafDropDelegate: DropDelegate {
     }
 
     func dropUpdated(info _: DropInfo) -> DropProposal? {
+        guard canReorder else { return nil }
         return DropProposal(operation: .move)
     }
 
     func performDrop(info _: DropInfo) -> Bool {
-        guard let dragged = dragInfo.draggedNode else { return false }
+        guard canReorder,
+              let dragged = dragInfo.draggedNode,
+              dragged.parent?.schemaAllowsChildMutation ?? false,
+              node.parent?.schemaAllowsChildMutation ?? false else { return false }
         reorder(draggedNode: dragged, overNode: node)
 
         // Reset drop feedback
@@ -107,6 +125,7 @@ struct LeafDropDelegate: DropDelegate {
     }
 
     func dropExited(info _: DropInfo) {
+        guard canReorder else { return }
         isDropTargeted = false // Remove drop highlight
         dragInfo.dropTargetNode = nil
         dragInfo.dropPosition = .none

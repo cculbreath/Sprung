@@ -16,6 +16,45 @@ class JsonToTree {
     private let orderedSectionKeys: [String]
     /// Supplies monotonically increasing indexes during this tree build.
     private var indexCounter: Int = 0
+    /// Parsed editor key instructions derived from `keys-in-editor`.
+    private var editorKeyPaths: [EditorKeyPath] = []
+
+    private struct EditorKeyPath {
+        struct Segment {
+            let key: String
+            let hidden: Bool
+        }
+
+        let segments: [Segment]
+
+        init?(from raw: String) {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.isEmpty == false else { return nil }
+            let parts = trimmed.split(separator: ".").map(String.init)
+            var segments: [Segment] = []
+            segments.reserveCapacity(parts.count)
+            for part in parts {
+                let cleaned = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard cleaned.isEmpty == false else { continue }
+                var hidden = false
+                var name = cleaned
+                if name.hasPrefix("*") {
+                    hidden = true
+                    name.removeFirst()
+                    name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                guard name.isEmpty == false else { continue }
+                segments.append(Segment(key: name, hidden: hidden))
+            }
+            guard segments.isEmpty == false else { return nil }
+            self.segments = segments
+        }
+    }
+
+    private struct EditorAttributes {
+        let visible: Bool
+        let transparent: Bool
+    }
 
     private init(
         resume: Resume,
@@ -41,13 +80,6 @@ class JsonToTree {
             originalContext: context,
             orderedKeys: result.orderedKeys
         )
-    }
-
-    private func isInEditor(_ key: String) -> Bool {
-        if res.importedEditorKeys.isEmpty {
-            return true
-        }
-        return res.importedEditorKeys.contains(key)
     }
 
 
@@ -113,6 +145,68 @@ class JsonToTree {
         }
 
         return value
+    }
+
+    private static func parseEditorKeyPaths(from keys: [String]) -> [EditorKeyPath] {
+        keys.compactMap { EditorKeyPath(from: $0) }
+    }
+
+    private static func normalizePath(_ path: [String]) -> [String] {
+        path.filter { Int($0) == nil }
+    }
+
+    private static func editorDirective(
+        for normalizedPath: [String],
+        keyPaths: [EditorKeyPath]
+    ) -> EditorAttributes? {
+        guard keyPaths.isEmpty == false else { return nil }
+        guard normalizedPath.isEmpty == false else { return nil }
+        var bestMatchLength: Int = -1
+        var bestAttributes: EditorAttributes?
+
+        for keyPath in keyPaths {
+            let segments = keyPath.segments
+            if segments.isEmpty { continue }
+
+            // Determine if this key path applies to the requested path.
+            let minCount = min(normalizedPath.count, segments.count)
+            var matches = true
+            for index in 0..<minCount {
+                if segments[index].key != normalizedPath[index] {
+                    matches = false
+                    break
+                }
+            }
+            if matches == false {
+                continue
+            }
+
+            if normalizedPath.count <= segments.count {
+                let segmentIndex = max(0, normalizedPath.count - 1)
+                let segment = segments[segmentIndex]
+                let attributes = EditorAttributes(
+                    visible: segment.hidden == false,
+                    transparent: segment.hidden
+                )
+                if normalizedPath.count > bestMatchLength {
+                    bestMatchLength = normalizedPath.count
+                    bestAttributes = attributes
+                }
+            } else {
+                // The path descends deeper than the key path. Inherit behavior from the last component.
+                if segments.count > bestMatchLength {
+                    let segment = segments.last!
+                    let attributes = EditorAttributes(
+                        visible: segment.hidden == false,
+                        transparent: segment.hidden
+                    )
+                    bestMatchLength = segments.count
+                    bestAttributes = attributes
+                }
+            }
+        }
+
+        return bestAttributes
     }
 
     private func applyManifestBehaviors() {
@@ -310,6 +404,7 @@ class JsonToTree {
         }
         res.needToTree = false
         applyManifestBehaviors()
+        editorKeyPaths = JsonToTree.parseEditorKeyPaths(from: res.importedEditorKeys)
 #if DEBUG
         Logger.debug("JsonToTree: ordered context keys => \(orderedSectionKeys)")
         for key in orderedSectionKeys {
@@ -319,18 +414,29 @@ class JsonToTree {
             )
         }
 #endif
+        let rootAttributes = EditorAttributes(visible: true, transparent: false)
         for key in orderedSectionKeys {
             guard value(for: key) != nil else { continue }
-            processSectionIfNeeded(named: key, rootNode: rootNode)
+            processSectionIfNeeded(
+                named: key,
+                rootNode: rootNode,
+                path: [key],
+                parentAttributes: rootAttributes
+            )
         }
         processKeyLabels()
         return rootNode
     }
 
-    private func processSectionIfNeeded(named key: String, rootNode: TreeNode) {
+    private func processSectionIfNeeded(
+        named key: String,
+        rootNode: TreeNode,
+        path: [String],
+        parentAttributes: EditorAttributes
+    ) {
         guard shouldSkipSectionInTree(key) == false else { return }
         guard let handler = treeFunction(for: key) else { return }
-        handler(key, rootNode)
+        handler(key, rootNode, path, parentAttributes)
     }
 
     private func shouldSkipSectionInTree(_ key: String) -> Bool {
@@ -351,7 +457,7 @@ class JsonToTree {
         assignSectionLabels(from: value(for: "section-labels"))
     }
 
-    func treeFunction(for sectionType: SectionType) -> (String, TreeNode) -> Void {
+    private func treeFunction(for sectionType: SectionType) -> (String, TreeNode, [String], EditorAttributes) -> Void {
         switch sectionType {
         case .object:
             return treeStringObjectSection
@@ -366,11 +472,11 @@ class JsonToTree {
         case .arrayOfObjects:
             return treeArrayOfObjectsSection
         case .fontSizes:
-            return { _, _ in }
+            return { _, _, _, _ in }
         }
     }
 
-    private func treeFunction(for key: String) -> ((String, TreeNode) -> Void)? {
+    private func treeFunction(for key: String) -> ((String, TreeNode, [String], EditorAttributes) -> Void)? {
         guard let sectionType = sectionType(for: key) else { return nil }
         return treeFunction(for: sectionType)
     }
@@ -385,6 +491,23 @@ class JsonToTree {
 
     private func orderedKeys(forKeys keys: [String]) -> [String] {
         JsonToTree.orderedKeys(from: keys, manifest: manifest)
+    }
+
+    private func editorAttributes(
+        for path: [String],
+        parentAttributes: EditorAttributes?
+    ) -> EditorAttributes {
+        let normalizedPath = JsonToTree.normalizePath(path)
+        if let directive = JsonToTree.editorDirective(for: normalizedPath, keyPaths: editorKeyPaths) {
+            return directive
+        }
+        if let parentAttributes, parentAttributes.transparent {
+            return parentAttributes
+        }
+
+        // Default to hidden when editor keys are supplied; otherwise show everything.
+        let shouldShowByDefault = editorKeyPaths.isEmpty
+        return EditorAttributes(visible: shouldShowByDefault, transparent: false)
     }
 
     private func inferredSectionType(for key: String) -> SectionType? {
@@ -432,53 +555,71 @@ class JsonToTree {
         return ordered
     }
 
-    private func treeStringArraySection(key: String, parent: TreeNode) {
-        let inEditor = isInEditor(key)
-        if let flatArray = value(for: key) as? [String] {
-            let groupNode = parent.addChild(TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
-            let descriptor = manifest?.section(for: key)
-            let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
-            let entryDescriptor = usesDescriptor
-                ? descriptor?.fields.first(where: { $0.key == "*" || $0.key == key })
-                : nil
-            if let entryDescriptor {
-                groupNode.applyDescriptor(entryDescriptor)
-            }
-            treeNodesStringArray(
-                strings: flatArray,
-                parent: groupNode,
-                inEditor: inEditor,
-                descriptor: entryDescriptor
-            )
+    private func treeStringArraySection(
+        key: String,
+        parent: TreeNode,
+        path: [String],
+        parentAttributes: EditorAttributes
+    ) {
+        guard let flatArray = value(for: key) as? [String] else { return }
+        let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
+        let groupNode = parent.addChild(
+            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
+        )
+        groupNode.editorTransparent = attributes.transparent
+        let descriptor = manifest?.section(for: key)
+        let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+        let entryDescriptor = usesDescriptor
+            ? descriptor?.fields.first(where: { $0.key == "*" || $0.key == key })
+            : nil
+        if let entryDescriptor {
+            groupNode.applyDescriptor(entryDescriptor)
         }
+        treeNodesStringArray(
+            strings: flatArray,
+            parent: groupNode,
+            path: path,
+            parentAttributes: attributes,
+            descriptor: entryDescriptor
+        )
     }
 
     private func treeNodesStringArray(
         strings: [String],
         parent: TreeNode,
-        inEditor: Bool,
+        path: [String],
+        parentAttributes: EditorAttributes,
         descriptor: TemplateManifest.Section.FieldDescriptor? = nil
     ) {
+        let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
         if let descriptor {
             parent.applyDescriptor(descriptor)
         }
-        for element in strings {
+        for (index, element) in strings.enumerated() {
+            let childPath = path + ["\(index)"]
+            let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
             let child = parent.addChild(
-                TreeNode(name: "", value: element, inEditor: inEditor, status: .saved, resume: res)
+                TreeNode(name: "", value: element, inEditor: childAttributes.visible, status: .saved, resume: res)
             )
+            child.editorTransparent = childAttributes.transparent
             if let descriptor {
                 child.applyDescriptor(descriptor)
             }
         }
     }
 
-    private func treeComplexSection(key: String, parent: TreeNode) {
-        let inEditor = isInEditor(key)
-
+    private func treeComplexSection(
+        key: String,
+        parent: TreeNode,
+        path: [String],
+        parentAttributes: EditorAttributes
+    ) {
+        let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
         // Create the node for this section up front.
         let sectionNode = parent.addChild(
-            TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
         )
+        sectionNode.editorTransparent = attributes.transparent
 
         let sectionDescriptor = manifest?.section(for: key)
         let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
@@ -489,53 +630,62 @@ class JsonToTree {
             if let entryDescriptor = descriptorFields?.first(where: { $0.key == "*" }) {
                 for (entryKey, entryValue) in dict {
                     guard let entryDict = asOrderedDictionary(entryValue) else { continue }
-                    let title = displayTitle(
-                        for: entryDict,
-                        defaultTitle: entryKey,
-                        descriptor: entryDescriptor
-                    )
-                    let itemNode = sectionNode.addChild(
-                        TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
-                    )
-                    itemNode.schemaSourceKey = entryKey
-                    buildSubtree(
-                        from: entryDict,
-                        parent: itemNode,
-                        inEditor: inEditor,
-                        descriptors: entryDescriptor.children
-                    )
-                }
-            } else {
-                buildSubtree(
-                    from: dict,
-                    parent: sectionNode,
-                    inEditor: inEditor,
-                    descriptors: descriptorFields
+                let title = displayTitle(
+                    for: entryDict,
+                    defaultTitle: entryKey,
+                    descriptor: entryDescriptor
                 )
-            }
-            return
-        }
-
-        if let arrayOfDicts = asOrderedArrayOfDictionaries(value(for: key)) {
-            for (index, subDict) in arrayOfDicts.enumerated() {
-                let defaultTitle = "\(key.capitalized) \(index + 1)"
-                let itemTitle = displayTitle(
-                    for: subDict,
-                    defaultTitle: defaultTitle,
-                    descriptor: descriptorFields?.first(where: { $0.key == "*" })
-                )
+                let childPath = path + [entryKey]
+                let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
                 let itemNode = sectionNode.addChild(
-                    TreeNode(name: itemTitle, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                    TreeNode(name: title, value: "", inEditor: childAttributes.visible, status: .isNotLeaf, resume: res)
                 )
+                itemNode.editorTransparent = childAttributes.transparent
+                itemNode.schemaSourceKey = entryKey
                 buildSubtree(
-                    from: subDict,
+                    from: entryDict,
                     parent: itemNode,
-                    inEditor: inEditor,
-                    descriptors: descriptorFields?.first(where: { $0.key == "*" })?.children
+                    path: childPath,
+                    parentAttributes: childAttributes,
+                    descriptors: entryDescriptor.children
                 )
             }
-            return
+        } else {
+            buildSubtree(
+                from: dict,
+                parent: sectionNode,
+                path: path,
+                parentAttributes: attributes,
+                descriptors: descriptorFields
+            )
         }
+        return
+    }
+
+    if let arrayOfDicts = asOrderedArrayOfDictionaries(value(for: key)) {
+        for (index, subDict) in arrayOfDicts.enumerated() {
+            let defaultTitle = "\(key.capitalized) \(index + 1)"
+            let itemTitle = displayTitle(
+                for: subDict,
+                defaultTitle: defaultTitle,
+                descriptor: descriptorFields?.first(where: { $0.key == "*" })
+            )
+            let childPath = path + ["\(index)"]
+            let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
+            let itemNode = sectionNode.addChild(
+                TreeNode(name: itemTitle, value: "", inEditor: childAttributes.visible, status: .isNotLeaf, resume: res)
+            )
+            itemNode.editorTransparent = childAttributes.transparent
+            buildSubtree(
+                from: subDict,
+                parent: itemNode,
+                path: childPath,
+                parentAttributes: childAttributes,
+                descriptors: descriptorFields?.first(where: { $0.key == "*" })?.children
+            )
+        }
+        return
+    }
 
         // 3) Catch-all / fallback so you actually see a console message if everything else fails.
     }
@@ -543,12 +693,15 @@ class JsonToTree {
     private func buildSubtree(
         from dict: OrderedDictionary<String, Any>,
         parent: TreeNode,
-        inEditor: Bool,
+        path: [String],
+        parentAttributes: EditorAttributes,
         descriptors: [TemplateManifest.Section.FieldDescriptor]? = nil
     ) {
         let orderedKeys = orderedKeys(in: dict, descriptors: descriptors)
         for subKey in orderedKeys {
             guard let subValue = dict[subKey] else { continue }
+            let childPath = path + [subKey]
+            let childAttributes = editorAttributes(for: childPath, parentAttributes: parentAttributes)
             let childDescriptor = matchingDescriptor(
                 forKey: subKey,
                 in: descriptors,
@@ -557,72 +710,97 @@ class JsonToTree {
             if let subDict = asOrderedDictionary(subValue) {
                 let childDescriptors = childDescriptor?.children
                 let childNode = parent.addChild(
-                    TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                    TreeNode(name: subKey, value: "", inEditor: childAttributes.visible, status: .isNotLeaf, resume: res)
                 )
+                childNode.editorTransparent = childAttributes.transparent
                 childNode.applyDescriptor(childDescriptor)
                 buildSubtree(
                     from: subDict,
                     parent: childNode,
-                    inEditor: inEditor,
+                    path: childPath,
+                    parentAttributes: childAttributes,
                     descriptors: childDescriptors
                 )
             } else if let subArray = subValue as? [String] {
                 let arrayTitleNode = parent.addChild(
-                    TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                    TreeNode(name: subKey, value: "", inEditor: childAttributes.visible, status: .isNotLeaf, resume: res)
                 )
+                arrayTitleNode.editorTransparent = childAttributes.transparent
                 arrayTitleNode.applyDescriptor(childDescriptor)
                 treeNodesStringArray(
                     strings: subArray,
                     parent: arrayTitleNode,
-                    inEditor: inEditor,
+                    path: childPath,
+                    parentAttributes: childAttributes,
                     descriptor: childDescriptor
                 )
             } else if let nestedArray = subValue as? [Any] {
                 let arrayTitleNode = parent.addChild(
-                    TreeNode(name: subKey, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                    TreeNode(name: subKey, value: "", inEditor: childAttributes.visible, status: .isNotLeaf, resume: res)
                 )
+                arrayTitleNode.editorTransparent = childAttributes.transparent
                 arrayTitleNode.applyDescriptor(childDescriptor)
-                for element in nestedArray {
+                for (index, element) in nestedArray.enumerated() {
                     if let stringElement = element as? String {
+                        let elementPath = childPath + ["\(index)"]
+                        let elementAttributes = editorAttributes(for: elementPath, parentAttributes: childAttributes)
                         let leaf = arrayTitleNode.addChild(
-                            TreeNode(name: "", value: stringElement, inEditor: inEditor, status: .saved, resume: res)
+                            TreeNode(name: "", value: stringElement, inEditor: elementAttributes.visible, status: .saved, resume: res)
                         )
+                        leaf.editorTransparent = elementAttributes.transparent
                         leaf.applyDescriptor(childDescriptor)
                     } else if let nestedDict = asOrderedDictionary(element) {
+                        let elementPath = childPath + ["\(index)"]
+                        let elementAttributes = editorAttributes(for: elementPath, parentAttributes: childAttributes)
                         let childNode = arrayTitleNode.addChild(
-                            TreeNode(name: "", value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                            TreeNode(name: "", value: "", inEditor: elementAttributes.visible, status: .isNotLeaf, resume: res)
                         )
+                        childNode.editorTransparent = elementAttributes.transparent
                         childNode.applyDescriptor(childDescriptor)
                         buildSubtree(
                             from: nestedDict,
                             parent: childNode,
-                            inEditor: inEditor,
+                            path: elementPath,
+                            parentAttributes: elementAttributes,
                             descriptors: childDescriptor?.children
                         )
                     }
                 }
             } else if let subString = subValue as? String {
-                parent.addChild(
+                let leaf = parent.addChild(
                     TreeNode(
                         name: subKey,
                         value: subString,
-                        inEditor: inEditor, status: .saved,
+                        inEditor: childAttributes.visible,
+                        status: .saved,
                         resume: res
                     )
                 )
+                leaf.editorTransparent = childAttributes.transparent
+                leaf.applyDescriptor(childDescriptor)
             } else {}
         }
     }
 
-    private func treeArrayOfObjectsSection(key: String, parent: TreeNode) {
-        let inEditor = isInEditor(key)
+    private func treeArrayOfObjectsSection(
+        key: String,
+        parent: TreeNode,
+        path: [String],
+        parentAttributes: EditorAttributes
+    ) {
+        let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
         let sectionNode = parent.addChild(
-            TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
         )
+        sectionNode.editorTransparent = attributes.transparent
 
         let descriptor = manifest?.section(for: key)
         let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
         let entryDescriptor = usesDescriptor ? descriptor?.fields.first(where: { $0.key == "*" }) : nil
+        if let entryDescriptor {
+            sectionNode.schemaAllowsChildMutation = entryDescriptor.allowsManualMutations
+            sectionNode.schemaAllowsNodeDeletion = entryDescriptor.allowsManualMutations
+        }
         guard let normalizedEntries = normalizedArrayEntries(
             forKey: key,
             value: value(for: key),
@@ -639,9 +817,12 @@ class JsonToTree {
                 defaultTitle: defaultTitle,
                 descriptor: entryDescriptor
             )
+            let childPath = path + ["\(index)"]
+            let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
             let entryNode = sectionNode.addChild(
-                TreeNode(name: title, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+                TreeNode(name: title, value: "", inEditor: childAttributes.visible, status: .isNotLeaf, resume: res)
             )
+            entryNode.editorTransparent = childAttributes.transparent
             if let sourceKey = entry.sourceKey {
                 entryNode.schemaSourceKey = sourceKey
             }
@@ -651,7 +832,8 @@ class JsonToTree {
             buildSubtree(
                 from: element,
                 parent: entryNode,
-                inEditor: inEditor,
+                path: childPath,
+                parentAttributes: childAttributes,
                 descriptors: entryDescriptor?.children
             )
         }
@@ -682,97 +864,127 @@ class JsonToTree {
         return defaultTitle
     }
 
-    private func treeStringSection(key: String, parent: TreeNode) {
-        if let sectionString = value(for: key) as? String {
-            let sectionNode = parent.addChild(
-                TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
-            let descriptor = manifest?.section(for: key)
-            let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
-            let fieldDescriptor = usesDescriptor
-                ? descriptor?.fields.first(where: { $0.key == key || $0.key == "*" })
-                : nil
-            let child = sectionNode.addChild(
-                TreeNode(name: "", value: sectionString, inEditor: isInEditor(key), status: .saved, resume: res)
+    private func treeStringSection(
+        key: String,
+        parent: TreeNode,
+        path: [String],
+        parentAttributes: EditorAttributes
+    ) {
+        guard let sectionString = value(for: key) as? String else { return }
+        let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
+        let sectionNode = parent.addChild(
+            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
+        )
+        sectionNode.editorTransparent = attributes.transparent
+        let descriptor = manifest?.section(for: key)
+        let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+        let fieldDescriptor = usesDescriptor
+            ? descriptor?.fields.first(where: { $0.key == key || $0.key == "*" })
+            : nil
+        let childPath = path + ["value"]
+        let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
+        let child = sectionNode.addChild(
+            TreeNode(name: "", value: sectionString, inEditor: childAttributes.visible, status: .saved, resume: res)
+        )
+        child.editorTransparent = childAttributes.transparent
+        if let fieldDescriptor {
+            child.applyDescriptor(fieldDescriptor)
+            sectionNode.applyDescriptor(fieldDescriptor)
+        }
+    }
+
+    private func treeStringObjectSection(
+        key: String,
+        parent: TreeNode,
+        path: [String],
+        parentAttributes: EditorAttributes
+    ) {
+        guard let sectionDict = asOrderedDictionary(value(for: key)) else { return }
+        let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
+        let sectionNode = parent.addChild(
+            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
+        )
+        sectionNode.editorTransparent = attributes.transparent
+        let descriptor = manifest?.section(for: key)
+        let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
+        let descriptorFields = usesDescriptor ? descriptor?.fields : nil
+        let ordered = orderedKeys(in: sectionDict, descriptors: descriptorFields)
+
+        for entryKey in ordered {
+            guard let entryValue = sectionDict[entryKey] else { continue }
+            let childPath = path + [entryKey]
+            let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
+            let childDescriptor = matchingDescriptor(
+                forKey: entryKey,
+                in: descriptorFields,
+                parentName: key
             )
-            if let fieldDescriptor {
-                child.applyDescriptor(fieldDescriptor)
-                sectionNode.applyDescriptor(fieldDescriptor)
+            if let stringValue = entryValue as? String {
+                let child = sectionNode.addChild(
+                    TreeNode(
+                        name: entryKey,
+                        value: stringValue,
+                        inEditor: childAttributes.visible,
+                        status: .saved,
+                        resume: res
+                    )
+                )
+                child.editorTransparent = childAttributes.transparent
+                child.applyDescriptor(childDescriptor)
+            } else if let dictValue = asOrderedDictionary(entryValue) {
+                let childNode = sectionNode.addChild(
+                    TreeNode(
+                        name: entryKey,
+                        value: "",
+                        inEditor: childAttributes.visible,
+                        status: .isNotLeaf,
+                        resume: res
+                    )
+                )
+                childNode.editorTransparent = childAttributes.transparent
+                childNode.applyDescriptor(childDescriptor)
+                let childDescriptors = childDescriptor?.children
+                buildSubtree(
+                    from: dictValue,
+                    parent: childNode,
+                    path: childPath,
+                    parentAttributes: childAttributes,
+                    descriptors: childDescriptors
+                )
+            } else if let stringArray = entryValue as? [String] {
+                let childNode = sectionNode.addChild(
+                    TreeNode(
+                        name: entryKey,
+                        value: "",
+                        inEditor: childAttributes.visible,
+                        status: .isNotLeaf,
+                        resume: res
+                    )
+                )
+                childNode.editorTransparent = childAttributes.transparent
+                treeNodesStringArray(
+                    strings: stringArray,
+                    parent: childNode,
+                    path: childPath,
+                    parentAttributes: childAttributes,
+                    descriptor: childDescriptor
+                )
             }
         }
     }
 
-    private func treeStringObjectSection(key: String, parent: TreeNode) {
-        if let sectionDict = asOrderedDictionary(value(for: key)) {
-            let sectionNode = parent.addChild(
-                TreeNode(name: key, value: "", inEditor: isInEditor(key), status: .isNotLeaf, resume: res))
-            let descriptor = manifest?.section(for: key)
-            let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
-            let descriptorFields = usesDescriptor ? descriptor?.fields : nil
-            let ordered = orderedKeys(in: sectionDict, descriptors: descriptorFields)
-
-            for entryKey in ordered {
-                guard let entryValue = sectionDict[entryKey] else { continue }
-                let childDescriptor = matchingDescriptor(
-                    forKey: entryKey,
-                    in: descriptorFields,
-                    parentName: key
-                )
-                if let stringValue = entryValue as? String {
-                    let child = sectionNode.addChild(
-                        TreeNode(
-                            name: entryKey,
-                            value: stringValue,
-                            inEditor: isInEditor(key),
-                            status: .saved,
-                            resume: res
-                        )
-                    )
-                    child.applyDescriptor(childDescriptor)
-                } else if let dictValue = asOrderedDictionary(entryValue) {
-                    let childNode = sectionNode.addChild(
-                        TreeNode(
-                            name: entryKey,
-                            value: "",
-                            inEditor: isInEditor(key),
-                            status: .isNotLeaf,
-                            resume: res
-                        )
-                    )
-                    childNode.applyDescriptor(childDescriptor)
-                    let childDescriptors = childDescriptor?.children
-                    buildSubtree(
-                        from: dictValue,
-                        parent: childNode,
-                        inEditor: isInEditor(key),
-                        descriptors: childDescriptors
-                    )
-                } else if let stringArray = entryValue as? [String] {
-                    let childNode = sectionNode.addChild(
-                        TreeNode(
-                            name: entryKey,
-                            value: "",
-                            inEditor: isInEditor(key),
-                            status: .isNotLeaf,
-                            resume: res
-                        )
-                    )
-                    treeNodesStringArray(
-                        strings: stringArray,
-                        parent: childNode,
-                        inEditor: isInEditor(key),
-                        descriptor: childDescriptor
-                    )
-                }
-            }
-        } else {}
-    }
-
-    private func treeMapOfStringsSection(key: String, parent: TreeNode) {
+    private func treeMapOfStringsSection(
+        key: String,
+        parent: TreeNode,
+        path: [String],
+        parentAttributes: EditorAttributes
+    ) {
         guard let sectionDict = asOrderedDictionary(value(for: key)) else { return }
-        let inEditor = isInEditor(key)
+        let attributes = editorAttributes(for: path, parentAttributes: parentAttributes)
         let sectionNode = parent.addChild(
-            TreeNode(name: key, value: "", inEditor: inEditor, status: .isNotLeaf, resume: res)
+            TreeNode(name: key, value: "", inEditor: attributes.visible, status: .isNotLeaf, resume: res)
         )
+        sectionNode.editorTransparent = attributes.transparent
         let sectionDescriptor = manifest?.section(for: key)
         let usesDescriptor = !(manifest?.isFieldMetadataSynthesized(for: key) ?? true)
         let descriptorFields = usesDescriptor ? sectionDescriptor?.fields : nil
@@ -781,16 +993,19 @@ class JsonToTree {
         for entryKey in ordered {
             guard let entryValue = sectionDict[entryKey] else { continue }
             guard let label = entryValue as? String else { continue }
+            let childPath = path + [entryKey]
+            let childAttributes = editorAttributes(for: childPath, parentAttributes: attributes)
             res.keyLabels[entryKey] = label
             let child = sectionNode.addChild(
                 TreeNode(
                     name: entryKey,
                     value: label,
-                    inEditor: inEditor,
+                    inEditor: childAttributes.visible,
                     status: .saved,
                     resume: res
                 )
             )
+            child.editorTransparent = childAttributes.transparent
             let childDescriptor = matchingDescriptor(
                 forKey: entryKey,
                 in: descriptorFields,

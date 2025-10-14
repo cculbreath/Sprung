@@ -24,6 +24,8 @@ struct NodeChildrenListView: View {
                         )
                         .padding(.vertical, 4)
                     }
+                } else if child.editorTransparent {
+                    NodeChildrenListView(children: child.orderedChildren)
                 } else {
                     EmptyView()
                 }

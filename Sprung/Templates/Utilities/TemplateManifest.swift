@@ -111,16 +111,17 @@ struct TemplateManifest: Codable {
                 case required
                 case repeatable
                 case validation
-                case titleTemplate
-                case children
-                case placeholder
-                case behavior
-                case binding
-            }
+            case titleTemplate
+            case children
+            case placeholder
+            case behavior
+            case binding
+            case allowsManualMutations
+        }
 
-            struct Validation: Codable {
-                enum Rule: String, Codable {
-                    case regex
+        struct Validation: Codable {
+            enum Rule: String, Codable {
+                case regex
                     case email
                     case url
                     case phone
@@ -151,6 +152,7 @@ struct TemplateManifest: Codable {
             let placeholder: String?
             let behavior: Behavior?
             let binding: Binding?
+            let allowsManualMutations: Bool
 
             init(
                 key: String,
@@ -162,7 +164,8 @@ struct TemplateManifest: Codable {
                 children: [FieldDescriptor]? = nil,
                 placeholder: String? = nil,
                 behavior: Behavior? = nil,
-                binding: Binding? = nil
+                binding: Binding? = nil,
+                allowsManualMutations: Bool = false
             ) {
                 self.key = key
                 self.input = input
@@ -174,6 +177,7 @@ struct TemplateManifest: Codable {
                 self.placeholder = placeholder
                 self.behavior = behavior
                 self.binding = binding
+                self.allowsManualMutations = allowsManualMutations
             }
 
             init(from decoder: Decoder) throws {
@@ -188,6 +192,7 @@ struct TemplateManifest: Codable {
                 placeholder = try container.decodeIfPresent(String.self, forKey: .placeholder)
                 behavior = try container.decodeIfPresent(Behavior.self, forKey: .behavior)
                 binding = try container.decodeIfPresent(Binding.self, forKey: .binding)
+                allowsManualMutations = try container.decodeIfPresent(Bool.self, forKey: .allowsManualMutations) ?? false
             }
 
             func encode(to encoder: Encoder) throws {
@@ -206,6 +211,9 @@ struct TemplateManifest: Codable {
                 try container.encodeIfPresent(placeholder, forKey: .placeholder)
                 try container.encodeIfPresent(behavior, forKey: .behavior)
                 try container.encodeIfPresent(binding, forKey: .binding)
+                if allowsManualMutations {
+                    try container.encode(allowsManualMutations, forKey: .allowsManualMutations)
+                }
             }
         }
 

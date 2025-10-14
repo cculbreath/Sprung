@@ -176,6 +176,9 @@ final class ResStore: SwiftDataStore {
         newNode.schemaValidationMax = original.schemaValidationMax
         newNode.schemaValidationOptions = original.schemaValidationOptions
         newNode.schemaSourceKey = original.schemaSourceKey
+        newNode.schemaAllowsChildMutation = original.schemaAllowsChildMutation
+        newNode.schemaAllowsNodeDeletion = original.schemaAllowsNodeDeletion
+        newNode.editorTransparent = original.editorTransparent
 
         // Recursively duplicate children
         if let originalChildren = original.children {

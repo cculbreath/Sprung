@@ -78,8 +78,8 @@ struct NodeHeaderView: View {
                     .help("Clear AI processing for all children")
                 }
                 
-                // Add child button (only if all children are leaves)
-                if node.orderedChildren.allSatisfy({ !$0.hasChildren }) {
+                // Add child button when manifest allows manual mutations.
+                if node.allowsChildAddition {
                     Button(action: addChildAction) {
                         HStack {
                             Image(systemName: "plus.circle.fill")
