@@ -27,55 +27,69 @@ struct ResumeSplitView: View {
                 // Show the resume view if there's a selected resume
                 @Bindable var selApp = selApp
 
-                let splitView = HSplitView {
-                    ResumeDetailView(
-                        resume: selRes,
-                        tab: $tab,
-                        isWide: $isWide,
-                        exportCoordinator: appEnvironment.resumeExportCoordinator
-                    )
-                    .frame(
-                        minWidth: isWide ? 300 : 220,
-                        idealWidth: isWide ? 480 : 320,
-                        maxWidth: 640,
-                        maxHeight: .infinity
-                    )
-                    .id(selRes.id) // Force view recreation when selected resume changes
-                    .onAppear { Logger.debug("RootNode") }
-                    .layoutPriority(1) // Ensures this view gets priority in layout
+                GeometryReader { geo in
+                    let inspectorWidth: CGFloat = 340
+                    let actionBarHeight: CGFloat = 52
+                    let isInspectorVisible = showResumeInspector
+                    let availableWidth = geo.size.width - (isInspectorVisible ? inspectorWidth : 0)
+                    let contentWidth = max(availableWidth, 480)
 
-                    ResumePDFView(resume: selRes)
-                        .frame(
-                            minWidth: 260, idealWidth: 360,
-                            maxWidth: .infinity, maxHeight: .infinity
-                        )
-                        .id(selRes.id) // Force view recreation when selected resume changes
-                        .layoutPriority(1) // Less priority, but still resizable
-                }
+                    HStack(spacing: 0) {
+                        ZStack(alignment: .topLeading) {
+                            HSplitView {
+                                ResumeDetailView(
+                                    resume: selRes,
+                                    tab: $tab,
+                                    isWide: $isWide,
+                                    exportCoordinator: appEnvironment.resumeExportCoordinator
+                                )
+                                .frame(
+                                    minWidth: isWide ? 300 : 220,
+                                    idealWidth: isWide ? 480 : 320,
+                                    maxWidth: .infinity,
+                                    maxHeight: .infinity
+                                )
+                                .id(selRes.id)
+                                .onAppear { Logger.debug("RootNode") }
+                                .layoutPriority(1)
 
-                ZStack(alignment: .topLeading) {
-                    splitView
-                        .padding(.top, 52)
+                                ResumePDFView(resume: selRes)
+                                    .frame(
+                                        minWidth: 260, idealWidth: 360,
+                                        maxWidth: .infinity, maxHeight: .infinity
+                                    )
+                                    .id(selRes.id)
+                                    .layoutPriority(1)
+                            }
+                            .padding(.top, actionBarHeight)
 
-                    VStack(spacing: 0) {
-                        ResumeActionsBar(
-                            selectedTab: $tab,
-                            sheets: $sheets,
-                            clarifyingQuestions: $clarifyingQuestions
-                        )
-                        Divider()
+                            VStack(spacing: 0) {
+                                ResumeActionsBar(
+                                    selectedTab: $tab,
+                                    sheets: $sheets,
+                                    clarifyingQuestions: $clarifyingQuestions
+                                )
+                                Divider()
+                            }
+                            .frame(maxWidth: .infinity)
+
+                        }
+                        .frame(width: contentWidth, height: geo.size.height)
+
+                        if isInspectorVisible {
+                            
+                            Divider()
+                            ResumeInspectorColumn(refresh: $refresh)
+                                .frame(width: inspectorWidth, height: geo.size.height)
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                                .compositingGroup()
+                                .shadow(color: Color.black.opacity(0.08), radius: 3, x: -2, y: 0)
+                                .shadow(color: Color.black.opacity(0.12), radius: 10, x: -4, y: 0)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        VisualEffectBlur(material: .headerView, blendingMode: .behindWindow)
-                    )
+                    .animation(.easeInOut(duration: 0.25), value: isInspectorVisible)
+
                 }
-                    .overlay(alignment: .trailing) {
-                        ResumeInspectorOverlay(
-                            isPresented: $showResumeInspector,
-                            refresh: $refresh
-                        )
-                    }
             } else {
                 // If no resume is selected, show a create resume view
                 VStack(spacing: 20) {
@@ -156,42 +170,21 @@ private struct ResumeActionsBar: View {
         .padding(.bottom, 6)
     }
 }
-
-private struct ResumeInspectorOverlay: View {
-    @Binding var isPresented: Bool
+private struct ResumeInspectorColumn: View {
     @Binding var refresh: Bool
-    @State private var dragOffset: CGFloat = 0
-
-    private let inspectorWidth: CGFloat = 340
 
     var body: some View {
-        GeometryReader { geo in
-            let width = inspectorWidth
+        ZStack(alignment: .leading) {
+            Color.white
+                .ignoresSafeArea()
+
             ResumeInspectorView(refresh: $refresh)
-                .frame(maxHeight: .infinity)
-                .background(
-                    VisualEffectBlur(material: .sidebar, blendingMode: .behindWindow)
-                        .ignoresSafeArea()
-                )
-                .offset(x: isPresented ? 0 : width + 16)
-                .offset(x: dragOffset)
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            dragOffset = min(0, max(-width, value.translation.width))
-                        }
-                        .onEnded { value in
-                            let shouldDismiss = value.translation.width > width * 0.4
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                if shouldDismiss {
-                                    isPresented = false
-                                }
-                                dragOffset = 0
-                            }
-                        }
-                )
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isPresented)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .allowsHitTesting(isPresented)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color.black.opacity(0.08))
+                .frame(width: 1)
+        }
     }
 }

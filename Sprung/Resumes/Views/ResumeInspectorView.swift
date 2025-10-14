@@ -49,17 +49,20 @@ struct ResumeInspectorView: View {
     private let minHeight: CGFloat = 160
     private let maxHeight: CGFloat = 420
     private let collapseThreshold: CGFloat = 180
-    private let defaultHeight: CGFloat = 240
+    private let defaultHeight: CGFloat = 280
 
     var body: some View {
         if let selApp = jobAppStore.selectedApp {
             @Bindable var selApp = selApp
 
-            VStack(spacing: 0) {
+            VStack(spacing: 12) {
                 ResumeInspectorListView(
                     listSelection: $selApp.selectedRes,
                     resumes: selApp.resumes
                 )
+                .frame(maxHeight: .infinity, alignment: .top)
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
 
                 if isCollapsed {
                     collapsedDrawer
@@ -67,7 +70,7 @@ struct ResumeInspectorView: View {
                     expandedDrawer
                 }
             }
-            .background(Color(NSColor.windowBackgroundColor))
+            .background(Color.white)
         } else {
             Text("No application selected.")
         }
@@ -95,11 +98,13 @@ struct ResumeInspectorView: View {
                     drawerHeight = defaultHeight
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.top, 12)
+            .padding(.bottom, 32)
+            .padding(.bottom, 25)
         }
+        .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .padding(.top, 8)
+        .padding(.vertical, 15)
     }
 
     private var expandedDrawer: some View {
@@ -136,9 +141,10 @@ struct ResumeInspectorView: View {
                 .frame(height: drawerHeight)
                 .clipped()
         }
+        .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
         .padding(.top, 8)
+        .padding(.bottom, 32)
     }
 
     private var dragHandle: some View {

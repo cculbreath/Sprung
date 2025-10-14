@@ -20,8 +20,11 @@ struct ResumeInspectorListView: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 12)
+                .padding(.horizontal, 12)
+                .background(Color.white)
+                .cornerRadius(12)
         } else {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(sortedResumes, id: \.id) { resume in
                     ResumeRowView(
                         resume: resume,
@@ -40,6 +43,7 @@ struct ResumeInspectorListView: View {
                     )
                 }
             }
+            .padding(.horizontal, 4)
         }
     }
 }
@@ -59,22 +63,27 @@ struct ResumeRowView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(resume.createdDateString)
                         .font(.subheadline)
-                        .foregroundColor(.primary)
+                        .foregroundColor(isSelected ? Color.white : Color.secondary)
                         .lineLimit(1)
 
                     Text(resume.template?.name ?? resume.template?.slug.capitalized ?? "-")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(isSelected ? Color.white : Color.secondary)
                         .lineLimit(1)
                 }
 
                 Spacer()
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.accentColor)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.accentColor.opacity(0.25) : Color.clear, lineWidth: 1.1)
+                    )
             )
         }
         .buttonStyle(.plain)
