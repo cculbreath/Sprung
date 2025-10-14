@@ -2,23 +2,19 @@ import SwiftUI
 
 struct TemplateEditorToolbar: CustomizableToolbarContent {
     @Binding var showSidebar: Bool
-    @Binding var showInspector: Bool
     var hasUnsavedChanges: Bool
-    var canRevert: Bool
-    var onRefresh: () -> Void
-    var onRevert: () -> Void
-    var onClose: () -> Void
-    var onToggleInspector: () -> Void
     var onToggleSidebar: () -> Void
     var onOpenApplicant: () -> Void
+    var onCloseWithoutSaving: () -> Void
+    var onRevert: () -> Void
+    var onSaveAndClose: () -> Void
 
     var body: some CustomizableToolbarContent {
         navigationItems
         applicantItem
-        actionItems
-        inspectorItem
-        statusItem
-        closeItem
+        closeWithoutSavingItem
+        revertItem
+        saveItem
     }
 
     private var navigationItems: some CustomizableToolbarContent {
@@ -32,19 +28,8 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
         }
     }
 
-    private var inspectorItem: some CustomizableToolbarContent {
-        ToolbarItem(id: "toggleInspector", placement: .automatic, showsByDefault: true) {
-            Button(action: onToggleInspector) {
-                Label("Preview", systemImage: showInspector ? "sidebar.trailing" : "sidebar.trailing")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(showInspector ? Color.accentColor : Color.secondary)
-            }
-            .help(showInspector ? "Hide Preview" : "Show Preview")
-        }
-    }
-
     private var applicantItem: some CustomizableToolbarContent {
-        ToolbarItem(id: "applicantProfile", placement: .automatic, showsByDefault: true) {
+        ToolbarItem(id: "applicantProfile", placement: .navigation, showsByDefault: true) {
             Button(action: onOpenApplicant) {
                 Label("Applicant Profile", systemImage: "person.crop.square")
             }
@@ -52,41 +37,32 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
         }
     }
 
-    private var actionItems: some CustomizableToolbarContent {
-        Group {
-            ToolbarItem(id: "refresh", placement: .primaryAction, showsByDefault: true) {
-                Button(action: onRefresh) {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .help("Save changes and regenerate preview")
+    private var closeWithoutSavingItem: some CustomizableToolbarContent {
+        ToolbarItem(id: "closeWithoutSaving", placement: .cancellationAction, showsByDefault: true) {
+            Button(action: onCloseWithoutSaving) {
+                Label("Close Without Saving", systemImage: "x.circle")
             }
-
-            ToolbarItem(id: "revert", placement: .primaryAction, showsByDefault: true) {
-                Button(action: onRevert) {
-                    Label("Revert", systemImage: "arrow.uturn.backward")
-                }
-                .disabled(!canRevert)
-                .help("Discard unsaved edits")
-            }
+            .help("Close editor and discard unsaved edits")
         }
     }
 
-    private var closeItem: some CustomizableToolbarContent {
-        ToolbarItem(id: "close", placement: .cancellationAction, showsByDefault: true) {
-            Button(action: onClose) {
-                Label("Close", systemImage: "xmark.circle")
+    private var revertItem: some CustomizableToolbarContent {
+        ToolbarItem(id: "revertAll", placement: .primaryAction, showsByDefault: true) {
+            Button(action: onRevert) {
+                Label("Revert", systemImage: "arrow.uturn.backward.square")
             }
-            .help("Save changes and close editor")
+            .disabled(!hasUnsavedChanges)
+            .help("Revert all changes to last saved state")
         }
     }
 
-    private var statusItem: some CustomizableToolbarContent {
-        ToolbarItem(id: "unsavedStatus", placement: .status, showsByDefault: true) {
-            if hasUnsavedChanges {
-                Label("Unsaved", systemImage: "exclamationmark.triangle.fill")
-                    .labelStyle(.titleAndIcon)
-                    .foregroundStyle(.orange)
+    private var saveItem: some CustomizableToolbarContent {
+        ToolbarItem(id: "saveAndClose", placement: .confirmationAction, showsByDefault: true) {
+            Button(action: onSaveAndClose) {
+                Label("Save and Close", systemImage: "checkmark.circle")
             }
+            .disabled(!hasUnsavedChanges)
+            .help("Save all changes and close editor")
         }
     }
 }

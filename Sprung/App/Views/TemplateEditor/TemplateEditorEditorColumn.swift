@@ -7,22 +7,24 @@ import SwiftUI
 
 struct TemplateEditorEditorColumn: View {
     @Binding var selectedTab: TemplateEditorTab
-    @Binding var templateContent: String
+    @Binding var htmlContent: String
+    @Binding var textContent: String
     @Binding var manifestContent: String
     @Binding var seedContent: String
-    @Binding var assetHasChanges: Bool
+    @Binding var htmlHasChanges: Bool
+    @Binding var textHasChanges: Bool
     @Binding var manifestHasChanges: Bool
     @Binding var seedHasChanges: Bool
     @Binding var manifestValidationMessage: String?
     @Binding var seedValidationMessage: String?
     @Binding var textEditorInsertion: TextEditorInsertionRequest?
     let selectedResume: Resume?
-    let onTemplateChange: (String) -> Void
+    let onTemplateChange: (TemplateEditorTab, String) -> Void
+    let hasUnsavedChanges: Bool
+    let onSaveAndRefresh: () -> Void
     let onValidateManifest: () -> Void
-    let onSaveManifest: () -> Void
-    let onReloadManifest: () -> Void
     let onPromoteSeed: () -> Void
-    let onSaveSeed: () -> Void
+    let onValidateSeed: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +48,8 @@ struct TemplateEditorEditorColumn: View {
             .controlSize(.regular)
             .labelsHidden()
             .padding(.trailing, 16)
+
+            controlsRow()
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -56,10 +60,16 @@ struct TemplateEditorEditorColumn: View {
     @ViewBuilder
     private func editorContent() -> some View {
         switch selectedTab {
-        case .pdfTemplate, .txtTemplate:
-            TemplateTextEditor(text: $templateContent, insertionRequest: $textEditorInsertion) {
-                assetHasChanges = true
-                onTemplateChange(templateContent)
+        case .pdfTemplate:
+            TemplateTextEditor(text: $htmlContent, insertionRequest: $textEditorInsertion) {
+                htmlHasChanges = true
+                onTemplateChange(.pdfTemplate, htmlContent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .txtTemplate:
+            TemplateTextEditor(text: $textContent, insertionRequest: $textEditorInsertion) {
+                textHasChanges = true
+                onTemplateChange(.txtTemplate, textContent)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .manifest:
@@ -69,27 +79,70 @@ struct TemplateEditorEditorColumn: View {
         }
     }
 
+    private func saveButton() -> some View {
+        Button(action: onSaveAndRefresh) {
+            Image(systemName: "checkmark.arrow.trianglehead.counterclockwise")
+        }
+        .buttonStyle(.borderless)
+        .disabled(!hasUnsavedChanges)
+        .help("Save all changes and refresh previews")
+    }
+
+    private func validateManifestButton() -> some View {
+        Button(action: onValidateManifest) {
+            Image(systemName: "questionmark.diamond")
+        }
+        .buttonStyle(.borderless)
+        .help("Validate manifest JSON")
+    }
+
+    private func promoteSeedButton() -> some View {
+        Button(action: onPromoteSeed) {
+            Image(systemName: "tray.and.arrow.up.fill")
+        }
+        .buttonStyle(.borderless)
+        .disabled(selectedResume == nil)
+        .help("Promote current resume to default values")
+    }
+
+    private func validateSeedButton() -> some View {
+        Button(action: onValidateSeed) {
+            Image(systemName: "questionmark.diamond")
+        }
+        .buttonStyle(.borderless)
+        .help("Validate default values format")
+    }
+
+    @ViewBuilder
+    private func controlsRow() -> some View {
+        HStack(spacing: 12) {
+            switch selectedTab {
+            case .pdfTemplate:
+                saveButton()
+            case .txtTemplate:
+                saveButton()
+            case .manifest:
+                validateManifestButton()
+                saveButton()
+            case .seed:
+                saveButton()
+                promoteSeedButton()
+                validateSeedButton()
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 4)
+    }
+
     @ViewBuilder
     private func manifestEditor() -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Button("Validate", action: onValidateManifest)
-                    .buttonStyle(.bordered)
-                Button("Save") {
-                    onSaveManifest()
-                }
-                .disabled(!manifestHasChanges)
-                .buttonStyle(.borderedProminent)
-                Button("Reload", action: onReloadManifest)
-                    .buttonStyle(.bordered)
-                Spacer()
-                if let message = manifestValidationMessage {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+            if let message = manifestValidationMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding([.top, .horizontal])
             }
-            .padding([.top, .horizontal])
 
             TemplateTextEditor(text: $manifestContent) {
                 manifestHasChanges = true
@@ -109,23 +162,12 @@ struct TemplateEditorEditorColumn: View {
     @ViewBuilder
     private func seedEditor() -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Button("Promote Current Resume", action: onPromoteSeed)
-                    .disabled(selectedResume == nil)
-                    .buttonStyle(.bordered)
-                Button("Save") {
-                    onSaveSeed()
-                }
-                .disabled(!seedHasChanges)
-                .buttonStyle(.borderedProminent)
-                Spacer()
-                if let message = seedValidationMessage {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+            if let message = seedValidationMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding([.top, .horizontal])
             }
-            .padding([.top, .horizontal])
 
             TemplateTextEditor(text: $seedContent) {
                 seedHasChanges = true
