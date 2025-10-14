@@ -17,13 +17,13 @@ struct ResumeTemplateContextBuilder {
         let fallback = fallbackJSON.flatMap { Self.parseJSON(from: $0) } ?? [:]
         let seedJSON = templateSeedStore.seed(for: template)?.jsonString ?? ""
         let seed = Self.parseJSON(from: seedJSON)
-        let sanitizedFallback = removeContactSection(from: fallback)
-        let sanitizedSeed = removeContactSection(from: seed)
+        let sanitizedFallback = removeContactSection(from: fallback, manifest: manifest)
+        let sanitizedSeed = removeContactSection(from: seed, manifest: manifest)
 
         var context = manifest?.makeDefaultContext() ?? [:]
         merge(into: &context, with: sanitizedFallback)
         merge(into: &context, with: sanitizedSeed)
-        merge(into: &context, with: profileContext(from: applicantProfile))
+        merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest))
 
         addMissingKeys(from: sanitizedFallback, to: &context)
         addMissingKeys(from: sanitizedSeed, to: &context)
@@ -48,7 +48,17 @@ struct ResumeTemplateContextBuilder {
 
     // MARK: - Private helpers
 
-    private func profileContext(from profile: ApplicantProfile) -> [String: Any] {
+    private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
+        if let manifest {
+            let payload = buildProfilePayload(using: manifest, profile: profile)
+            if payload.isEmpty == false {
+                return payload
+            }
+        }
+        return legacyProfileContext(from: profile)
+    }
+
+    private func legacyProfileContext(from profile: ApplicantProfile) -> [String: Any] {
         var location: [String: Any] = [:]
         if !profile.address.isEmpty { location["address"] = profile.address }
         if !profile.city.isEmpty { location["city"] = profile.city }
@@ -63,6 +73,91 @@ struct ResumeTemplateContextBuilder {
         if !location.isEmpty { contact["location"] = location }
 
         return contact.isEmpty ? [:] : ["contact": contact]
+    }
+
+    private func buildProfilePayload(using manifest: TemplateManifest, profile: ApplicantProfile) -> [String: Any] {
+        var payload: [String: Any] = [:]
+        let bindings = manifest.applicantProfileBindings()
+        for binding in bindings {
+            guard let value = applicantProfileValue(for: binding.binding, profile: profile),
+                  isEmptyProfileContribution(value) == false else { continue }
+            let updatedSection = settingProfileValue(
+                value,
+                for: binding.path,
+                existing: payload[binding.section]
+            )
+            payload[binding.section] = updatedSection
+        }
+        return payload
+    }
+
+    private func applicantProfileValue(
+        for binding: TemplateManifest.Section.FieldDescriptor.Binding,
+        profile: ApplicantProfile
+    ) -> Any? {
+        guard binding.source == .applicantProfile else { return nil }
+        return profileValue(for: binding.path, profile: profile)
+    }
+
+    private func profileValue(for path: [String], profile: ApplicantProfile) -> Any? {
+        guard let first = path.first else { return nil }
+        switch first {
+        case "name":
+            return profile.name
+        case "email":
+            return profile.email
+        case "phone":
+            return profile.phone
+        case "url", "website":
+            return profile.websites
+        case "address":
+            return profile.address
+        case "city":
+            return profile.city
+        case "region", "state":
+            return profile.state
+        case "postalCode", "zip", "code":
+            return profile.zip
+        case "location":
+            let remainder = Array(path.dropFirst())
+            if remainder.isEmpty { return nil }
+            return profileValue(for: remainder, profile: profile)
+        default:
+            return nil
+        }
+    }
+
+    private func isEmptyProfileContribution(_ value: Any) -> Bool {
+        if let dict = value as? [String: Any] {
+            return dict.isEmpty
+        }
+        if let dict = value as? [String: String] {
+            return dict.isEmpty
+        }
+        if let array = value as? [Any] {
+            return array.isEmpty
+        }
+        if let string = value as? String {
+            return string.isEmpty
+        }
+        return false
+    }
+
+    private func settingProfileValue(
+        _ value: Any,
+        for path: [String],
+        existing: Any?
+    ) -> Any {
+        guard let first = path.first else { return value }
+        var dictionary = dictionaryValue(from: existing) ?? [:]
+        let remainder = Array(path.dropFirst())
+        if remainder.isEmpty {
+            dictionary[first] = value
+        } else {
+            let current = dictionary[first]
+            dictionary[first] = settingProfileValue(value, for: remainder, existing: current)
+        }
+        return dictionary
     }
 
     private static func parseJSON(from string: String) -> [String: Any] {
@@ -130,10 +225,76 @@ struct ResumeTemplateContextBuilder {
         }
     }
 
-    private func removeContactSection(from dictionary: [String: Any]) -> [String: Any] {
+    private func removeContactSection(from dictionary: [String: Any], manifest: TemplateManifest?) -> [String: Any] {
+        guard let manifest else {
+            var sanitized = dictionary
+            sanitized.removeValue(forKey: "contact")
+            return sanitized
+        }
+
+        let targets = manifest.applicantProfileBindings()
+        guard targets.isEmpty == false else {
+            var sanitized = dictionary
+            sanitized.removeValue(forKey: "contact")
+            return sanitized
+        }
+
         var sanitized = dictionary
-        sanitized.removeValue(forKey: "contact")
+        for target in targets {
+            sanitized = removeProfileValue(
+                at: target.path,
+                inSection: target.section,
+                from: sanitized
+            )
+        }
         return sanitized
+    }
+
+    private func removeProfileValue(
+        at path: [String],
+        inSection section: String,
+        from dictionary: [String: Any]
+    ) -> [String: Any] {
+        guard var sectionValue = dictionary[section] else { return dictionary }
+        let updatedSection = removeValue(at: path, from: sectionValue)
+
+        var sanitized = dictionary
+        if let updatedSection {
+            sanitized[section] = updatedSection
+        } else {
+            sanitized.removeValue(forKey: section)
+        }
+        return sanitized
+    }
+
+    private func removeValue(at path: [String], from value: Any) -> Any? {
+        guard let first = path.first else { return value }
+        if path.count == 1 {
+            if var dict = dictionaryValue(from: value) {
+                dict.removeValue(forKey: first)
+                return dict.isEmpty ? nil : dict
+            }
+            return nil
+        }
+
+        guard var dict = dictionaryValue(from: value) else { return value }
+        let remainder = Array(path.dropFirst())
+        if let child = dict[first], let updated = removeValue(at: remainder, from: child) {
+            dict[first] = updated
+        } else {
+            dict.removeValue(forKey: first)
+        }
+        return dict.isEmpty ? nil : dict
+    }
+
+    private func dictionaryValue(from value: Any) -> [String: Any]? {
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
+        }
+        return nil
     }
 
 #if DEBUG
