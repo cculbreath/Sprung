@@ -150,7 +150,120 @@ class NativePDFGenerator: NSObject, ObservableObject {
     }
 
     private func preprocessContextForTemplate(_ context: [String: Any], from resume: Resume) -> [String: Any] {
-        context
+        // Merge ApplicantProfile data back into context
+        guard let template = resume.template,
+              let manifest = TemplateManifestLoader.manifest(for: template) else {
+            return context
+        }
+
+        let profile = profileProvider.currentProfile()
+        let profileContext = buildApplicantProfileContext(
+            profile: profile,
+            manifest: manifest
+        )
+
+        // Merge profile context into the template context
+        var merged = context
+        for (key, value) in profileContext {
+            if var existingDict = merged[key] as? [String: Any],
+               let newDict = value as? [String: Any] {
+                // Merge dictionaries
+                for (subKey, subValue) in newDict {
+                    existingDict[subKey] = subValue
+                }
+                merged[key] = existingDict
+            } else {
+                merged[key] = value
+            }
+        }
+
+        return merged
+    }
+
+    private func buildApplicantProfileContext(
+        profile: ApplicantProfile,
+        manifest: TemplateManifest
+    ) -> [String: Any] {
+        var payload: [String: Any] = [:]
+        let bindings = manifest.applicantProfileBindings()
+
+        for binding in bindings {
+            guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
+                  !isEmptyValue(value) else { continue }
+
+            let updatedSection = setProfileValue(
+                value,
+                for: binding.path,
+                existing: payload[binding.section]
+            )
+            payload[binding.section] = updatedSection
+        }
+
+        return payload
+    }
+
+    private func applicantProfileValue(for path: [String], profile: ApplicantProfile) -> Any? {
+        guard let first = path.first else { return nil }
+        switch first {
+        case "name":
+            return profile.name.isEmpty ? nil : profile.name
+        case "email":
+            return profile.email.isEmpty ? nil : profile.email
+        case "phone":
+            return profile.phone.isEmpty ? nil : profile.phone
+        case "url", "website":
+            return profile.websites.isEmpty ? nil : profile.websites
+        case "address":
+            return profile.address.isEmpty ? nil : profile.address
+        case "city":
+            return profile.city.isEmpty ? nil : profile.city
+        case "region", "state":
+            return profile.state.isEmpty ? nil : profile.state
+        case "postalCode", "zip", "code":
+            return profile.zip.isEmpty ? nil : profile.zip
+        case "countryCode":
+            return profile.countryCode.isEmpty ? nil : profile.countryCode
+        case "location":
+            let remainder = Array(path.dropFirst())
+            return remainder.isEmpty ? nil : applicantProfileValue(for: remainder, profile: profile)
+        default:
+            return nil
+        }
+    }
+
+    private func isEmptyValue(_ value: Any) -> Bool {
+        if let string = value as? String {
+            return string.isEmpty
+        }
+        if let dict = value as? [String: Any] {
+            return dict.isEmpty
+        }
+        return false
+    }
+
+    private func setProfileValue(
+        _ value: Any,
+        for path: [String],
+        existing: Any?
+    ) -> Any {
+        guard let first = path.first else { return value }
+        var dictionary = dictionaryValue(from: existing) ?? [:]
+        let remainder = Array(path.dropFirst())
+        if remainder.isEmpty {
+            dictionary[first] = value
+        } else {
+            let current = dictionary[first]
+            dictionary[first] = setProfileValue(value, for: remainder, existing: current)
+        }
+        return dictionary
+    }
+
+    private func dictionaryValue(from value: Any?) -> [String: Any]? {
+        guard let value else { return nil }
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        return nil
     }
 
     private func preprocessTemplateForGRMustache(_ template: String) -> String {

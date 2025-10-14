@@ -63,6 +63,10 @@ struct ApplicantProfileView: View {
                         TextField("ZIP Code", text: $profile.zip)
                             .onChange(of: profile.zip) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
+
+                        TextField("Country Code", text: $profile.countryCode)
+                            .onChange(of: profile.countryCode) { _, _ in hasChanges = true }
+                            .textFieldStyle(.roundedBorder)
                     }
 
                     Section("Signature") {

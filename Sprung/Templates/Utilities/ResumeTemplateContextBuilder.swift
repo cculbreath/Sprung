@@ -37,6 +37,10 @@ struct ResumeTemplateContextBuilder {
 
     // MARK: - Private helpers
 
+    func buildProfileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
+        profileContext(from: profile, manifest: manifest)
+    }
+
     private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
         if let manifest {
             let payload = buildProfilePayload(using: manifest, profile: profile)
@@ -107,6 +111,8 @@ struct ResumeTemplateContextBuilder {
             return profile.state
         case "postalCode", "zip", "code":
             return profile.zip
+        case "countryCode":
+            return profile.countryCode
         case "location":
             let remainder = Array(path.dropFirst())
             if remainder.isEmpty { return nil }
