@@ -8,46 +8,49 @@ import SwiftUI
 import OrderedCollections
 
 extension TemplateEditorView {
-    func loadTemplate() {
-        let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
+    func loadTemplateAssets() {
         guard selectedTemplate.isEmpty == false else {
-            templateContent = ""
-            assetHasChanges = false
-            storeLoadedTemplateContent("", format: fileExtension)
+            htmlContent = ""
+            textContent = ""
+            htmlDraft = nil
+            textDraft = nil
+            htmlHasChanges = false
+            textHasChanges = false
             return
         }
 
-        let storedSlug = selectedTemplate.lowercased()
-        if fileExtension == "html", let stored = appEnvironment.templateStore.htmlTemplateContent(slug: storedSlug) {
-            templateContent = stored
-            assetHasChanges = false
-            storeLoadedTemplateContent(stored, format: "html")
-            return
-        }
-        if fileExtension == "txt", let stored = appEnvironment.templateStore.textTemplateContent(slug: storedSlug) {
-            templateContent = stored
-            assetHasChanges = false
-            storeLoadedTemplateContent(stored, format: "txt")
-            return
+        let slug = selectedTemplate.lowercased()
+        let folderName = selectedTemplate
+        htmlContent = loadTemplateContent(slug: slug, folder: folderName, format: "html")
+        textContent = loadTemplateContent(slug: slug, folder: folderName, format: "txt")
+        htmlDraft = htmlContent
+        textDraft = textContent
+        htmlHasChanges = false
+        textHasChanges = false
+    }
+
+    private func loadTemplateContent(slug: String, folder: String, format: String) -> String {
+        if let template = appEnvironment.templateStore.template(slug: slug) {
+            if format == "html", let stored = template.htmlContent {
+                return stored
+            }
+            if format == "txt", let stored = template.textContent {
+                return stored
+            }
         }
 
         if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             let templatePath = documentsPath
                 .appendingPathComponent("Sprung")
                 .appendingPathComponent("Templates")
-                .appendingPathComponent(selectedTemplate)
-                .appendingPathComponent("\(selectedTemplate)-template.\(fileExtension)")
+                .appendingPathComponent(folder)
+                .appendingPathComponent("\(folder)-template.\(format)")
             if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
-                templateContent = content
-                assetHasChanges = false
-                storeLoadedTemplateContent(content, format: fileExtension)
-                return
+                return content
             }
         }
 
-        templateContent = ""
-        assetHasChanges = false
-        storeLoadedTemplateContent("", format: fileExtension)
+        return ""
     }
 
     func loadManifest() {
@@ -357,7 +360,7 @@ extension TemplateEditorView {
         inSection section: String,
         from dictionary: [String: Any]
     ) -> [String: Any] {
-        guard var sectionValue = dictionary[section] else { return dictionary }
+        guard let sectionValue = dictionary[section] else { return dictionary }
         let updated = removeValue(at: path, from: sectionValue)
         var sanitized = dictionary
         if let updated {
@@ -456,6 +459,25 @@ extension TemplateEditorView {
         }
     }
 
+    func validateSeedFormat() {
+        seedValidationMessage = nil
+        guard let data = seedContent.data(using: .utf8) else {
+            seedValidationMessage = "Unable to encode seed JSON."
+            return
+        }
+
+        do {
+            let jsonObject = try JSONSerialization.jsonObject(with: data)
+            guard jsonObject is [String: Any] else {
+                seedValidationMessage = "Seed must be a JSON object."
+                return
+            }
+            seedValidationMessage = "Seed is valid."
+        } catch {
+            seedValidationMessage = "Seed validation failed: \(error.localizedDescription)"
+        }
+    }
+
     func manifestStringFromDocuments(slug: String) -> String? {
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             return nil
@@ -484,54 +506,62 @@ extension TemplateEditorView {
     }
 
     @discardableResult
-    func saveTemplate() -> Bool {
-        guard selectedTemplate.isEmpty == false else {
-            saveError = "Select a template before saving."
-            return false
-        }
-        let resourceName = "\(selectedTemplate)-template"
-        let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
+    func saveTemplateAssets() -> Bool {
+        guard selectedTemplate.isEmpty == false else { return true }
+
+        let slug = selectedTemplate.lowercased()
+        let folderName = selectedTemplate
+        let resourceName = "\(folderName)-template"
+
+        let htmlToSave = htmlHasChanges ? htmlContent : nil
+        let textToSave = textHasChanges ? textContent : nil
+
+        guard htmlToSave != nil || textToSave != nil else { return true }
 
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            saveError = "Unable to locate Documents directory."
+            Logger.error("TemplateEditor: Unable to locate Documents directory while saving template")
             return false
         }
+
         let templateDir = documentsPath
             .appendingPathComponent("Sprung")
             .appendingPathComponent("Templates")
-            .appendingPathComponent(selectedTemplate)
+            .appendingPathComponent(folderName)
 
         do {
             try FileManager.default.createDirectory(at: templateDir, withIntermediateDirectories: true)
 
-            let templatePath = templateDir.appendingPathComponent("\(resourceName).\(fileExtension)")
-            try templateContent.write(to: templatePath, atomically: true, encoding: .utf8)
-
-            let slug = selectedTemplate.lowercased()
-            if fileExtension == "html" {
-                appEnvironment.templateStore.upsertTemplate(
-                    slug: slug,
-                    name: selectedTemplate.capitalized,
-                    htmlContent: templateContent,
-                    textContent: nil,
-                    isCustom: true
-                )
-                storeLoadedTemplateContent(templateContent, format: "html")
-            } else if fileExtension == "txt" {
-                appEnvironment.templateStore.upsertTemplate(
-                    slug: slug,
-                    name: selectedTemplate.capitalized,
-                    htmlContent: nil,
-                    textContent: templateContent,
-                    isCustom: true
-                )
-                storeLoadedTemplateContent(templateContent, format: "txt")
+            if let html = htmlToSave {
+                let htmlPath = templateDir.appendingPathComponent("\(resourceName).html")
+                try html.write(to: htmlPath, atomically: true, encoding: .utf8)
             }
 
-            assetHasChanges = false
+            if let text = textToSave {
+                let textPath = templateDir.appendingPathComponent("\(resourceName).txt")
+                try text.write(to: textPath, atomically: true, encoding: .utf8)
+            }
+
+            appEnvironment.templateStore.upsertTemplate(
+                slug: slug,
+                name: folderName.capitalized,
+                htmlContent: htmlToSave,
+                textContent: textToSave,
+                isCustom: true
+            )
+
+            if htmlToSave != nil {
+                htmlHasChanges = false
+                htmlDraft = htmlContent
+            }
+
+            if textToSave != nil {
+                textHasChanges = false
+                textDraft = textContent
+            }
+
             return true
         } catch {
-            saveError = "Failed to save template: \(error.localizedDescription)"
+            Logger.error("TemplateEditor: Failed to save template assets for \(folderName): \(error)")
             return false
         }
     }
@@ -564,14 +594,14 @@ extension TemplateEditorView {
             return
         }
 
-        let fileExtension = currentFormat == "pdf" ? "html" : currentFormat
-        let initialContent = createEmptyTemplate(name: trimmedName, format: fileExtension)
+        let initialHTML = createEmptyTemplate(name: trimmedName, format: "html")
+        let initialText = createEmptyTemplate(name: trimmedName, format: "txt")
         let shouldBeDefault = availableTemplates.isEmpty
         appEnvironment.templateStore.upsertTemplate(
             slug: trimmedName,
             name: trimmedName.capitalized,
-            htmlContent: fileExtension == "html" ? initialContent : nil,
-            textContent: fileExtension == "txt" ? initialContent : nil,
+            htmlContent: initialHTML,
+            textContent: initialText,
             isCustom: true,
             markAsDefault: shouldBeDefault
         )
@@ -583,10 +613,7 @@ extension TemplateEditorView {
         }
         appEnvironment.requiresTemplateSetup = availableTemplates.isEmpty
         newTemplateName = ""
-
-        templateContent = initialContent
-        assetHasChanges = true
-        storeLoadedTemplateContent(initialContent, format: fileExtension)
+        loadTemplateAssets()
         loadManifest()
         loadSeed()
     }
@@ -624,7 +651,7 @@ extension TemplateEditorView {
         loadAvailableTemplates()
         selectedTemplate = candidateSlug
         defaultTemplateSlug = appEnvironment.templateStore.defaultTemplate()?.slug
-        loadTemplate()
+        loadTemplateAssets()
         loadManifest()
         loadSeed()
     }
@@ -658,19 +685,93 @@ extension TemplateEditorView {
 
         appEnvironment.requiresTemplateSetup = availableTemplates.isEmpty
         templatePendingDeletion = nil
-        loadTemplate()
+        loadTemplateAssets()
         loadManifest()
         loadSeed()
     }
 
+    @discardableResult
+    func saveAllChanges() -> Bool {
+        var success = saveTemplateAssets()
+        if manifestHasChanges {
+            success = saveManifest() && success
+        }
+        if seedHasChanges {
+            success = saveSeed() && success
+        }
+        return success
+    }
+
     func performRefresh() {
-        _ = savePendingChanges()
+        if saveAllChanges() {
+            refreshTemplatePreview(force: true)
+        }
+    }
+
+    func saveAndClose() {
+        guard saveAllChanges() else { return }
+        closeEditor()
+    }
+
+    func closeWithoutSaving() {
+        revertAllChanges()
+        closeEditor()
+    }
+
+    private func discardPendingChanges() {
+        htmlHasChanges = false
+        textHasChanges = false
+        manifestHasChanges = false
+        seedHasChanges = false
+        manifestValidationMessage = nil
+        seedValidationMessage = nil
+    }
+
+    func revertAllChanges() {
+        discardPendingChanges()
+        loadTemplateAssets()
+        loadManifest()
+        loadSeed()
+        showOverlay = false
+        overlayPDFDocument = nil
+        overlayFilename = nil
+        overlayPageCount = 0
         refreshTemplatePreview(force: true)
     }
 
-    func performClose() {
-        guard savePendingChanges() else { return }
-        closeEditor()
+    func handleTemplateSelectionChange(previousSlug: String) {
+        guard selectedTemplate != previousSlug else { return }
+        let previous = previousSlug
+        if saveAllChanges() == false {
+            selectedTemplate = previous
+            return
+        }
+        loadTemplateAssets()
+        loadManifest()
+        loadSeed()
+        refreshTemplatePreview(force: true)
+    }
+
+    func handleTabSelectionChange(previous: TemplateEditorTab, newValue: TemplateEditorTab) {
+        textEditorInsertion = nil
+        switch newValue {
+        case .pdfTemplate:
+            if htmlDraft == nil {
+                htmlDraft = htmlContent
+            }
+        case .txtTemplate:
+            if textDraft == nil {
+                textDraft = textContent
+            }
+        case .manifest:
+            if manifestContent.isEmpty {
+                loadManifest()
+            }
+        case .seed:
+            if seedContent.isEmpty {
+                loadSeed()
+            }
+        }
     }
 
     func createEmptyTemplate(name: String, format: String) -> String {
@@ -681,16 +782,6 @@ extension TemplateEditorView {
             return ""
         default:
             return ""
-        }
-    }
-    fileprivate func storeLoadedTemplateContent(_ content: String, format: String) {
-        switch format.lowercased() {
-        case "html":
-            htmlDraft = content
-        case "txt":
-            textDraft = content
-        default:
-            break
         }
     }
 
