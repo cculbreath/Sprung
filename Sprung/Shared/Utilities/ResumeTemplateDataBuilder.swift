@@ -29,25 +29,6 @@ private struct Implementation {
     let rootNode: TreeNode
     let manifest: TemplateManifest?
 
-    private static let fallbackSectionOrder: [String] = [
-        "meta",
-        "font-sizes",
-        "include-fonts",
-        "section-labels",
-        "contact",
-        "summary",
-        "job-titles",
-        "employment",
-        "education",
-        "skills-and-expertise",
-        "languages",
-        "projects-highlights",
-        "projects-and-hobbies",
-        "publications",
-        "keys-in-editor",
-        "more-info"
-    ]
-
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
 
@@ -96,6 +77,12 @@ private struct Implementation {
 
     private func buildSection(named sectionName: String) -> Any? {
         if let manifest,
+           let behavior = manifest.behavior(forSection: sectionName),
+           let override = buildSectionValue(for: behavior, sectionName: sectionName) {
+            return override
+        }
+
+        if let manifest,
            let section = manifest.section(for: sectionName),
            manifest.isFieldMetadataSynthesized(for: sectionName) == false,
            let value = buildSectionUsingDescriptors(named: sectionName, section: section) {
@@ -108,6 +95,53 @@ private struct Implementation {
         }
 
         return nodeValue(named: sectionName)
+    }
+
+    private func buildSectionValue(
+        for behavior: TemplateManifest.Section.Behavior,
+        sectionName: String
+    ) -> Any? {
+        let sectionNode = sectionNode(named: sectionName)
+
+        switch behavior {
+        case .fontSizes:
+            if let sectionNode,
+               let dictionary = buildNodeValue(sectionNode) {
+                let normalized = normalizeValue(dictionary, for: .fontSizes)
+                if isEmptyValue(normalized) == false {
+                    return normalized
+                }
+            }
+            if let fallback = buildFontSizesSection() {
+                return normalizeValue(fallback, for: .fontSizes)
+            }
+            return nil
+
+        case .includeFonts:
+            if let sectionNode,
+               let value = buildNodeValue(sectionNode) {
+                let normalized = normalizeValue(value, for: .includeFonts)
+                if isEmptyValue(normalized) == false {
+                    return normalized
+                }
+            }
+            let includeFonts = resume.includeFonts ? "true" : "false"
+            return normalizeValue(includeFonts, for: .includeFonts)
+
+        case .editorKeys:
+            if let sectionNode,
+               let value = buildNodeValue(sectionNode) {
+                let normalized = normalizeValue(value, for: .editorKeys)
+                if isEmptyValue(normalized) == false {
+                    return normalized
+                }
+            }
+            guard resume.importedEditorKeys.isEmpty == false else { return nil }
+            return normalizeValue(resume.importedEditorKeys, for: .editorKeys)
+
+        case .styling, .metadata, .applicantProfile:
+            return nil
+        }
     }
 
     private func buildSection(named sectionName: String, type: SectionType) -> Any? {
@@ -159,11 +193,6 @@ private struct Implementation {
     }
 
     private func buildArraySection(named sectionName: String) -> [Any]? {
-        if sectionName == "keys-in-editor",
-           !resume.importedEditorKeys.isEmpty {
-            return resume.importedEditorKeys
-        }
-
         guard let sectionNode = sectionNode(named: sectionName) else { return nil }
 
         let values = sectionNode.orderedChildren
@@ -174,10 +203,6 @@ private struct Implementation {
     }
 
     private func buildStringSection(named sectionName: String) -> Any? {
-        if sectionName == "include-fonts" {
-            return resume.includeFonts ? "true" : "false"
-        }
-
         guard let sectionNode = sectionNode(named: sectionName) else { return nil }
         guard let firstChild = sectionNode.orderedChildren.first else { return nil }
         let value = firstChild.value
@@ -349,46 +374,77 @@ private struct Implementation {
         for descriptor: TemplateManifest.Section.FieldDescriptor,
         node: TreeNode?
     ) -> Any? {
-        guard let node else { return nil }
+        if let bindingValue = resolveBinding(descriptor.binding) {
+            return bindingValue
+        }
 
         if descriptor.repeatable {
-            if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
-                var items: [[String: Any]] = []
-                for (index, child) in node.orderedChildren.enumerated() {
-                    if var object = buildObject(using: childrenDescriptors, node: child) {
-                        let keyCandidate = resolvedKey(from: child, fallback: "\(index)")
-                        decorateEntry(&object, descriptor: descriptor, key: keyCandidate)
-                        items.append(object)
-                    } else if var dict = buildNodeValue(child) as? [String: Any] {
-                        let keyCandidate = resolvedKey(from: child, fallback: "\(index)")
-                        decorateEntry(&dict, descriptor: descriptor, key: keyCandidate)
-                        items.append(dict)
-                    } else if let primitive = buildNodeValue(child) {
-                        var wrapper: [String: Any] = ["value": primitive]
-                        let keyCandidate = resolvedKey(from: child, fallback: "\(index)")
-                        decorateEntry(&wrapper, descriptor: descriptor, key: keyCandidate)
-                        items.append(wrapper)
+            if let node {
+                if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
+                    var items: [[String: Any]] = []
+                    for (index, child) in node.orderedChildren.enumerated() {
+                        if var object = buildObject(using: childrenDescriptors, node: child) {
+                            let keyCandidate = resolvedKey(from: child, fallback: "\(index)")
+                            decorateEntry(&object, descriptor: descriptor, key: keyCandidate)
+                            items.append(object)
+                        } else if var dict = buildNodeValue(child) as? [String: Any] {
+                            let keyCandidate = resolvedKey(from: child, fallback: "\(index)")
+                            decorateEntry(&dict, descriptor: descriptor, key: keyCandidate)
+                            items.append(dict)
+                        } else if let primitive = buildNodeValue(child) {
+                            var wrapper: [String: Any] = ["value": primitive]
+                            let keyCandidate = resolvedKey(from: child, fallback: "\(index)")
+                            decorateEntry(&wrapper, descriptor: descriptor, key: keyCandidate)
+                            items.append(wrapper)
+                        }
+                    }
+                    if items.isEmpty == false {
+                        return normalizeValue(items, for: descriptor.behavior)
+                    }
+                } else {
+                    let values = node.orderedChildren
+                        .map(\.value)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    if values.isEmpty == false {
+                        return normalizeValue(values, for: descriptor.behavior)
                     }
                 }
-                return items.isEmpty ? nil : items
             }
 
-            let values = node.orderedChildren
-                .map(\.value)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            return values.isEmpty ? nil : values
+            if let behavior = descriptor.behavior {
+                return fallbackValue(for: behavior, node: node)
+            }
+            return nil
         }
 
         if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
-            return buildObject(using: childrenDescriptors, node: node)
+            if let node,
+               let object = buildObject(using: childrenDescriptors, node: node) {
+                return normalizeValue(object, for: descriptor.behavior)
+            }
+
+            if let behavior = descriptor.behavior {
+                return fallbackValue(for: behavior, node: node)
+            }
+            return nil
         }
 
-        if node.hasChildren {
-            return buildNodeValue(node)
+        if let node {
+            if node.hasChildren, let nested = buildNodeValue(node) {
+                return normalizeValue(nested, for: descriptor.behavior)
+            }
+
+            if node.value.isEmpty == false {
+                return normalizeValue(node.value, for: descriptor.behavior)
+            }
         }
 
-        return node.value.isEmpty ? nil : node.value
+        if let behavior = descriptor.behavior {
+            return fallbackValue(for: behavior, node: node)
+        }
+
+        return nil
     }
 
     private func buildObject(
@@ -411,6 +467,143 @@ private struct Implementation {
     }
 
     // MARK: Helpers
+
+    private func resolveBinding(
+        _ binding: TemplateManifest.Section.FieldDescriptor.Binding?
+    ) -> Any? {
+        guard let binding else { return nil }
+        switch binding.source {
+        case .applicantProfile:
+            // Applicant profile binding is resolved when profile data is merged later.
+            return nil
+        }
+    }
+
+    private func fallbackValue(
+        for behavior: TemplateManifest.Section.FieldDescriptor.Behavior,
+        node: TreeNode?
+    ) -> Any? {
+        if let node,
+           let raw = buildNodeValue(node) {
+            let normalized = normalizeValue(raw, for: behavior)
+            if isEmptyValue(normalized) == false {
+                return normalized
+            }
+        }
+
+        switch behavior {
+        case .fontSizes:
+            if let fallback = buildFontSizesSection() {
+                return normalizeValue(fallback, for: behavior)
+            }
+            return nil
+
+        case .includeFonts:
+            let includeFonts = resume.includeFonts ? "true" : "false"
+            return normalizeValue(includeFonts, for: behavior)
+
+        case .editorKeys:
+            guard resume.importedEditorKeys.isEmpty == false else { return nil }
+            return normalizeValue(resume.importedEditorKeys, for: behavior)
+
+        case .sectionLabels:
+            guard resume.keyLabels.isEmpty == false else { return nil }
+            return normalizeValue(resume.keyLabels, for: behavior)
+
+        case .applicantProfile:
+            return nil
+        }
+    }
+
+    private func normalizeValue(
+        _ value: Any,
+        for behavior: TemplateManifest.Section.FieldDescriptor.Behavior?
+    ) -> Any {
+        guard let behavior else { return value }
+
+        switch behavior {
+        case .includeFonts:
+            if let string = value as? String {
+                return string
+            }
+            if let boolValue = value as? Bool {
+                return boolValue ? "true" : "false"
+            }
+            if let number = value as? NSNumber {
+                return number.boolValue ? "true" : "false"
+            }
+            return "\(value)"
+
+        case .fontSizes:
+            if let dict = value as? [String: String] {
+                return dict
+            }
+            if let dict = value as? [String: Any] {
+                var normalized: [String: String] = [:]
+                for (key, anyValue) in dict {
+                    if let stringValue = anyValue as? String {
+                        normalized[key] = stringValue
+                    } else if let number = anyValue as? NSNumber {
+                        normalized[key] = "\(number)pt"
+                    }
+                }
+                return normalized
+            }
+            return value
+
+        case .editorKeys:
+            if let strings = value as? [String] {
+                return strings
+            }
+            if let array = value as? [Any] {
+                return array.compactMap { element in
+                    if let string = element as? String, string.isEmpty == false {
+                        return string
+                    }
+                    return nil
+                }
+            }
+            if let single = value as? String, single.isEmpty == false {
+                return [single]
+            }
+            return value
+
+        case .sectionLabels:
+            if let dict = value as? [String: String] {
+                return dict
+            }
+            if let dict = value as? [String: Any] {
+                var normalized: [String: String] = [:]
+                for (key, anyValue) in dict {
+                    if let stringValue = anyValue as? String {
+                        normalized[key] = stringValue
+                    }
+                }
+                return normalized
+            }
+            return value
+
+        case .applicantProfile:
+            return value
+        }
+    }
+
+    private func isEmptyValue(_ value: Any) -> Bool {
+        switch value {
+        case let string as String:
+            return string.isEmpty
+        case let strings as [String]:
+            return strings.isEmpty
+        case let array as [Any]:
+            return array.isEmpty
+        case let dict as [String: Any]:
+            return dict.isEmpty
+        case let dict as [String: String]:
+            return dict.isEmpty
+        default:
+            return false
+        }
+    }
 
     private func resolvedKey(from node: TreeNode, fallback: String) -> String {
         if let source = node.schemaSourceKey, source.isEmpty == false {
@@ -764,18 +957,14 @@ private struct Implementation {
     }
 
     private static func orderedKeys(from keys: [String], manifest: TemplateManifest?) -> [String] {
+        guard let manifest else { return keys }
         var ordered: [String] = []
-        if let manifestOrder = manifest?.sectionOrder {
-            for key in manifestOrder where keys.contains(key) {
-                ordered.append(key)
-            }
-        } else {
-            for key in fallbackSectionOrder where keys.contains(key) {
-                ordered.append(key)
-            }
+        for key in manifest.sectionOrder where keys.contains(key) {
+            ordered.append(key)
         }
-        let extras = keys.filter { !ordered.contains($0) }.sorted()
-        ordered.append(contentsOf: extras)
+        for key in keys where !ordered.contains(key) {
+            ordered.append(key)
+        }
         return ordered
     }
 }

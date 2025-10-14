@@ -13,6 +13,15 @@ struct TemplateManifest: Codable {
             case fontSizes
         }
 
+        enum Behavior: String, Codable {
+            case styling
+            case fontSizes
+            case includeFonts
+            case editorKeys
+            case applicantProfile
+            case metadata
+        }
+
         struct FieldDescriptor: Codable {
             enum InputKind: String, Codable {
                 case text
@@ -26,6 +35,87 @@ struct TemplateManifest: Codable {
                 case email
                 case phone
                 case select
+            }
+
+            enum Behavior: String, Codable {
+                case fontSizes
+                case includeFonts
+                case editorKeys
+                case sectionLabels
+                case applicantProfile
+            }
+
+            enum BindingSource: String, Codable {
+                case applicantProfile
+            }
+
+            struct Binding: Codable {
+                let source: BindingSource
+                let path: [String]
+
+                init(source: BindingSource, path: [String]) {
+                    self.source = source
+                    self.path = path
+                }
+
+                init(from decoder: Decoder) throws {
+                    let container = try decoder.singleValueContainer()
+                    if let stringValue = try? container.decode(String.self) {
+                        let components = stringValue.split(separator: ".").map(String.init)
+                        guard let first = components.first,
+                              let resolvedSource = BindingSource(rawValue: first) else {
+                            throw DecodingError.dataCorruptedError(
+                                in: container,
+                                debugDescription: "Invalid binding string '\(stringValue)'"
+                            )
+                        }
+                        source = resolvedSource
+                        path = Array(components.dropFirst())
+                        return
+                    }
+
+                    let keyed = try decoder.container(keyedBy: CodingKeys.self)
+                    let rawSource = try keyed.decode(String.self, forKey: .source)
+                    guard let resolvedSource = BindingSource(rawValue: rawSource) else {
+                        throw DecodingError.dataCorruptedError(
+                            forKey: .source,
+                            in: keyed,
+                            debugDescription: "Unsupported binding source '\(rawSource)'"
+                        )
+                    }
+                    source = resolvedSource
+                    path = try keyed.decodeIfPresent([String].self, forKey: .path) ?? []
+                }
+
+                func encode(to encoder: Encoder) throws {
+                    if path.isEmpty {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(source.rawValue)
+                        return
+                    }
+
+                    var container = encoder.container(keyedBy: CodingKeys.self)
+                    try container.encode(source.rawValue, forKey: .source)
+                    try container.encode(path, forKey: .path)
+                }
+
+                private enum CodingKeys: String, CodingKey {
+                    case source
+                    case path
+                }
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case key
+                case input
+                case required
+                case repeatable
+                case validation
+                case titleTemplate
+                case children
+                case placeholder
+                case behavior
+                case binding
             }
 
             struct Validation: Codable {
@@ -59,17 +149,8 @@ struct TemplateManifest: Codable {
             let titleTemplate: String?
             let children: [FieldDescriptor]?
             let placeholder: String?
-
-            private enum CodingKeys: String, CodingKey {
-                case key
-                case input
-                case required
-                case repeatable
-                case validation
-                case titleTemplate
-                case children
-                case placeholder
-            }
+            let behavior: Behavior?
+            let binding: Binding?
 
             init(
                 key: String,
@@ -79,7 +160,9 @@ struct TemplateManifest: Codable {
                 validation: Validation? = nil,
                 titleTemplate: String? = nil,
                 children: [FieldDescriptor]? = nil,
-                placeholder: String? = nil
+                placeholder: String? = nil,
+                behavior: Behavior? = nil,
+                binding: Binding? = nil
             ) {
                 self.key = key
                 self.input = input
@@ -89,6 +172,8 @@ struct TemplateManifest: Codable {
                 self.titleTemplate = titleTemplate
                 self.children = children
                 self.placeholder = placeholder
+                self.behavior = behavior
+                self.binding = binding
             }
 
             init(from decoder: Decoder) throws {
@@ -101,6 +186,8 @@ struct TemplateManifest: Codable {
                 titleTemplate = try container.decodeIfPresent(String.self, forKey: .titleTemplate)
                 children = try container.decodeIfPresent([FieldDescriptor].self, forKey: .children)
                 placeholder = try container.decodeIfPresent(String.self, forKey: .placeholder)
+                behavior = try container.decodeIfPresent(Behavior.self, forKey: .behavior)
+                binding = try container.decodeIfPresent(Binding.self, forKey: .binding)
             }
 
             func encode(to encoder: Encoder) throws {
@@ -117,6 +204,8 @@ struct TemplateManifest: Codable {
                 try container.encodeIfPresent(titleTemplate, forKey: .titleTemplate)
                 try container.encodeIfPresent(children, forKey: .children)
                 try container.encodeIfPresent(placeholder, forKey: .placeholder)
+                try container.encodeIfPresent(behavior, forKey: .behavior)
+                try container.encodeIfPresent(binding, forKey: .binding)
             }
         }
 
@@ -129,23 +218,27 @@ struct TemplateManifest: Codable {
             case type
             case defaultValue = "default"
             case fields
+            case behavior
         }
 
         let type: Kind
         let defaultValue: JSONValue?
         var fields: [FieldDescriptor]
         var fieldMetadataSource: FieldMetadataSource
+        let behavior: Behavior?
 
         init(
             type: Kind,
             defaultValue: JSONValue?,
             fields: [FieldDescriptor] = [],
-            fieldMetadataSource: FieldMetadataSource = .declared
+            fieldMetadataSource: FieldMetadataSource = .declared,
+            behavior: Behavior? = nil
         ) {
             self.type = type
             self.defaultValue = defaultValue
             self.fields = fields
             self.fieldMetadataSource = fieldMetadataSource
+            self.behavior = behavior
         }
 
         init(from decoder: Decoder) throws {
@@ -154,6 +247,7 @@ struct TemplateManifest: Codable {
             defaultValue = try container.decodeIfPresent(JSONValue.self, forKey: .defaultValue)
             fields = try container.decodeIfPresent([FieldDescriptor].self, forKey: .fields) ?? []
             fieldMetadataSource = fields.isEmpty ? .synthesized : .declared
+            behavior = try container.decodeIfPresent(Behavior.self, forKey: .behavior)
         }
 
         func encode(to encoder: Encoder) throws {
@@ -163,6 +257,7 @@ struct TemplateManifest: Codable {
             if !fields.isEmpty {
                 try container.encode(fields, forKey: .fields)
             }
+            try container.encodeIfPresent(behavior, forKey: .behavior)
         }
 
         mutating func ensureFieldDescriptors(for sectionKey: String) {
@@ -349,6 +444,18 @@ struct TemplateManifest: Codable {
         sections[key]
     }
 
+    func behavior(forSection key: String) -> Section.Behavior? {
+        sections[key]?.behavior
+    }
+
+    func behavior(forField fieldKey: String, inSection sectionKey: String) -> Section.FieldDescriptor.Behavior? {
+        sections[sectionKey]?.fields.first(where: { $0.key == fieldKey })?.behavior
+    }
+
+    func binding(forField fieldKey: String, inSection sectionKey: String) -> Section.FieldDescriptor.Binding? {
+        sections[sectionKey]?.fields.first(where: { $0.key == fieldKey })?.binding
+    }
+
     func isFieldMetadataSynthesized(for key: String) -> Bool {
         synthesizedSectionKeys.contains(key)
     }
@@ -361,6 +468,18 @@ struct TemplateManifest: Codable {
             }
         }
         return context
+    }
+
+    func orderedSectionKeys(existingKeys: [String]) -> [String] {
+        var ordered: [String] = []
+        if !sectionOrder.isEmpty {
+            for key in sectionOrder where existingKeys.contains(key) {
+                ordered.append(key)
+            }
+        }
+        let extras = existingKeys.filter { !ordered.contains($0) }.sorted()
+        ordered.append(contentsOf: extras)
+        return ordered
     }
 
     static func normalize(_ value: Any) -> Any {
@@ -419,6 +538,61 @@ extension TemplateManifest {
 
     static func decode(from data: Data) throws -> TemplateManifest {
         try JSONDecoder().decode(TemplateManifest.self, from: data)
+    }
+}
+
+// MARK: - Applicant Profile Bindings
+
+extension TemplateManifest {
+    struct ApplicantProfileBinding {
+        let section: String
+        let path: [String]
+        let descriptor: Section.FieldDescriptor
+        let binding: Section.FieldDescriptor.Binding
+    }
+
+    func applicantProfileBindings() -> [ApplicantProfileBinding] {
+        var bindings: [ApplicantProfileBinding] = []
+        for (sectionKey, section) in sections {
+            collectApplicantProfileBindings(
+                in: section.fields,
+                sectionKey: sectionKey,
+                currentPath: [],
+                accumulator: &bindings
+            )
+        }
+        return bindings
+    }
+
+    private func collectApplicantProfileBindings(
+        in descriptors: [Section.FieldDescriptor],
+        sectionKey: String,
+        currentPath: [String],
+        accumulator: inout [ApplicantProfileBinding]
+    ) {
+        for descriptor in descriptors where descriptor.key != "*" {
+            let nextPath = currentPath + [descriptor.key]
+            if descriptor.repeatable { continue }
+            if let binding = descriptor.binding,
+               binding.source == .applicantProfile {
+                accumulator.append(
+                    ApplicantProfileBinding(
+                        section: sectionKey,
+                        path: nextPath,
+                        descriptor: descriptor,
+                        binding: binding
+                    )
+                )
+            }
+            if let children = descriptor.children, children.isEmpty == false {
+                collectApplicantProfileBindings(
+                    in: children,
+                    sectionKey: sectionKey,
+                    currentPath: nextPath,
+                    accumulator: &accumulator
+                )
+            }
+        }
     }
 }
 
