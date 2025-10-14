@@ -133,6 +133,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         
         // Use GRMustache to render the template
         let mustacheTemplate = try Mustache.Template(string: finalContent)
+        TemplateFilters.register(on: mustacheTemplate)
         let renderedContent = try mustacheTemplate.render(processedContext)
         
         // For HTML format, save debug output

@@ -53,6 +53,16 @@ final class ResumeDetailVM {
     /// the new node is initialized with placeholder name and value so it renders
     /// in the two-field editor; otherwise it defaults to a single-value entry.
     func addChild(to parent: TreeNode) {
+        guard parent.allowsChildAddition else {
+            Logger.debug("➕ addChild skipped: parent \(parent.name) does not allow manual mutations")
+            return
+        }
+        if let template = parent.orderedChildren.first {
+            let clone = template.makeTemplateClone(for: resume)
+            parent.addChild(clone)
+            refreshPDF()
+            return
+        }
         // Determine if this parent uses both name & value fields in its children
         let usesNameValue = parent.orderedChildren.contains { !$0.name.isEmpty && !$0.value.isEmpty }
         // Set up default placeholders
@@ -73,6 +83,7 @@ final class ResumeDetailVM {
             resume: resume
         )
         parent.addChild(newNode)
+        refreshPDF()
     }
 
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.

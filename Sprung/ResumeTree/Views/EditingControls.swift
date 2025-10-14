@@ -27,15 +27,17 @@ struct EditingControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                Button(action: {
-                    isEditing = false
-                    deleteNode()
-                }) {
-                    Image(systemName: "trash")
-                        .foregroundColor(isHoveringDelete ? .red : .secondary)
+                if node.allowsDeletion {
+                    Button(action: {
+                        isEditing = false
+                        deleteNode()
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(isHoveringDelete ? .red : .secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .onHover { isHoveringDelete = $0 }
                 }
-                .buttonStyle(PlainButtonStyle())
-                .onHover { isHoveringDelete = $0 }
 
                 VStack(alignment: .leading, spacing: 8) {
                     if allowNameEditing {
