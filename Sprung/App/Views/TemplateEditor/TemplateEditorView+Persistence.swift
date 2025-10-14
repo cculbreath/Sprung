@@ -186,38 +186,82 @@ extension TemplateEditorView {
 
             let manifest = TemplateManifestLoader.manifest(for: template)
             var profileChanges: [ProfileUpdateChange] = []
+            let profile = appEnvironment.applicantProfileStore.currentProfile()
+            var removalTargets: [(String, [String])] = []
+            var processedPaths: Set<String> = []
+            var updatedProfileKeyPaths: Set<String> = []
 
             if let manifest {
                 let bindings = manifest.applicantProfileBindings()
                 if bindings.isEmpty == false {
-                    let profile = appEnvironment.applicantProfileStore.currentProfile()
                     for binding in bindings {
-                        guard let field = profileField(for: binding.binding.path) else { continue }
+                        let bindingKey = makeBindingKey(section: binding.section, path: binding.path)
+                        processedPaths.insert(bindingKey)
                         guard let seedValue = extractStringValue(
                             section: binding.section,
                             path: binding.path,
                             from: seedDictionary
                         ), seedValue.isEmpty == false else { continue }
 
-                        let trimmedSeed = seedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let currentValue = profile[keyPath: field.keyPath]
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                        if trimmedSeed != currentValue {
-                            profileChanges.append(
-                                ProfileUpdateChange(
-                                    label: field.label,
-                                    keyPath: field.keyPath,
-                                    newValue: trimmedSeed,
-                                    currentValue: currentValue
+                        if let field = profileField(for: binding.binding.path) {
+                            let trimmedSeed = seedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let currentValue = profile[keyPath: field.keyPath]
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                            let profileKey = String(describing: field.keyPath)
+                            if trimmedSeed != currentValue,
+                               updatedProfileKeyPaths.insert(profileKey).inserted {
+                                profileChanges.append(
+                                    ProfileUpdateChange(
+                                        label: field.label,
+                                        keyPath: field.keyPath,
+                                        newValue: trimmedSeed,
+                                        currentValue: currentValue
+                                    )
                                 )
-                            )
+                            }
                         }
+
+                        removalTargets.append((binding.section, binding.path))
                     }
-                    seedDictionary = removeProfileData(from: seedDictionary, bindings: bindings)
                 }
-            } else {
-                seedDictionary.removeValue(forKey: "contact")
             }
+
+            for defaultPath in TemplateManifest.defaultApplicantProfilePaths {
+                let bindingKey = makeBindingKey(section: defaultPath.section, path: defaultPath.path)
+                guard processedPaths.contains(bindingKey) == false else { continue }
+                guard let seedValue = extractStringValue(
+                    section: defaultPath.section,
+                    path: defaultPath.path,
+                    from: seedDictionary
+                ), seedValue.isEmpty == false else { continue }
+
+                if let field = profileField(for: defaultPath.path) {
+                    let trimmedSeed = seedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let currentValue = profile[keyPath: field.keyPath]
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let profileKey = String(describing: field.keyPath)
+                    if trimmedSeed != currentValue,
+                       updatedProfileKeyPaths.insert(profileKey).inserted {
+                        profileChanges.append(
+                            ProfileUpdateChange(
+                                label: field.label,
+                                keyPath: field.keyPath,
+                                newValue: trimmedSeed,
+                                currentValue: currentValue
+                            )
+                        )
+                    }
+                }
+
+                removalTargets.append((defaultPath.section, defaultPath.path))
+                processedPaths.insert(bindingKey)
+            }
+
+            if removalTargets.isEmpty == false {
+                seedDictionary = removeProfileValues(removing: removalTargets, from: seedDictionary)
+            }
+
+            seedDictionary.removeValue(forKey: "contact")
 
             guard let formatted = prettyJSONString(from: seedDictionary) else {
                 seedValidationMessage = "Seed must be valid JSON."
@@ -299,12 +343,12 @@ extension TemplateEditorView {
         return nil
     }
 
-    private func removeProfileData(
-        from dictionary: [String: Any],
-        bindings: [TemplateManifest.ApplicantProfileBinding]
+    private func removeProfileValues(
+        removing targets: [(String, [String])],
+        from dictionary: [String: Any]
     ) -> [String: Any] {
-        bindings.reduce(dictionary) { partial, binding in
-            removeProfileValue(at: binding.path, inSection: binding.section, from: partial)
+        targets.reduce(dictionary) { partial, target in
+            removeProfileValue(at: target.1, inSection: target.0, from: partial)
         }
     }
 
@@ -322,6 +366,10 @@ extension TemplateEditorView {
             sanitized.removeValue(forKey: section)
         }
         return sanitized
+    }
+
+    private func makeBindingKey(section: String, path: [String]) -> String {
+        ([section] + path).joined(separator: ".")
     }
 
     private func removeValue(at path: [String], from value: Any) -> Any? {
