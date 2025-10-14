@@ -1,11 +1,41 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:1.00000,0.90653,0.66088,1.00000",
-      "display-p3:0.35203,0.68939,0.39051,1.00000"
+      "display-p3:0.53444,0.90936,0.59277,1.00000",
+      "display-p3:0.79760,0.82514,0.31686,1.00000"
     ]
   },
   "groups" : [
+    {
+      "blend-mode" : "normal",
+      "blur-material" : 0.3,
+      "layers" : [
+        {
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "orange sprung.png",
+          "name" : "orange sprung",
+          "position" : {
+            "scale" : 1.2,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "combined",
+      "name" : "Group",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
+      }
+    },
     {
       "blend-mode" : "normal",
       "blur-material-specializations" : [
@@ -23,17 +53,6 @@
       ],
       "layers" : [
         {
-          "image-name" : "orange sprung.png",
-          "name" : "orange sprung",
-          "position" : {
-            "scale" : 1.2,
-            "translation-in-points" : [
-              0,
-              0
-            ]
-          }
-        },
-        {
           "blend-mode" : "normal",
           "fill" : "none",
           "glass-specializations" : [
@@ -45,7 +64,7 @@
               "value" : true
             }
           ],
-          "hidden" : true,
+          "hidden" : false,
           "image-name" : "image_tp.png",
           "name" : "image_tp",
           "opacity" : 1,
@@ -58,7 +77,8 @@
           }
         }
       ],
-      "lighting" : "combined",
+      "lighting" : "individual",
+      "name" : "Group",
       "shadow-specializations" : [
         {
           "value" : {
@@ -119,9 +139,9 @@
     }
   ],
   "supported-platforms" : {
-    "circles" : [
-      "watchOS"
-    ],
-    "squares" : "shared"
+    "squares" : [
+      "iOS",
+      "macOS"
+    ]
   }
 }
