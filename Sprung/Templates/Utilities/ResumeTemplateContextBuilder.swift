@@ -215,27 +215,23 @@ struct ResumeTemplateContextBuilder {
     }
 
     private func removeContactSection(from dictionary: [String: Any], manifest: TemplateManifest?) -> [String: Any] {
-        guard let manifest else {
-            var sanitized = dictionary
-            sanitized.removeValue(forKey: "contact")
-            return sanitized
-        }
-
-        let targets = manifest.applicantProfileBindings()
-        guard targets.isEmpty == false else {
-            var sanitized = dictionary
-            sanitized.removeValue(forKey: "contact")
-            return sanitized
-        }
-
         var sanitized = dictionary
-        for target in targets {
-            sanitized = removeProfileValue(
-                at: target.path,
-                inSection: target.section,
-                from: sanitized
-            )
+        var processedKeys: Set<String> = []
+
+        if let manifest {
+            let targets = manifest.applicantProfileBindings()
+            for target in targets {
+                sanitized = removeProfileValue(
+                    at: target.path,
+                    inSection: target.section,
+                    from: sanitized
+                )
+                processedKeys.insert(makeBindingKey(section: target.section, path: target.path))
+            }
         }
+
+        sanitized = removeDefaultContactFields(from: sanitized, skipping: processedKeys)
+        sanitized.removeValue(forKey: "contact")
         return sanitized
     }
 
@@ -284,6 +280,21 @@ struct ResumeTemplateContextBuilder {
             return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
         }
         return nil
+    }
+
+    private func removeDefaultContactFields(
+        from dictionary: [String: Any],
+        skipping processed: Set<String>
+    ) -> [String: Any] {
+        TemplateManifest.defaultApplicantProfilePaths.reduce(dictionary) { partial, path in
+            let key = makeBindingKey(section: path.section, path: path.path)
+            guard processed.contains(key) == false else { return partial }
+            return removeProfileValue(at: path.path, inSection: path.section, from: partial)
+        }
+    }
+
+    private func makeBindingKey(section: String, path: [String]) -> String {
+        ([section] + path).joined(separator: ".")
     }
 
 }

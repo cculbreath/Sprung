@@ -551,6 +551,26 @@ extension TemplateManifest {
         let binding: Section.FieldDescriptor.Binding
     }
 
+    struct ApplicantProfilePath {
+        let section: String
+        let path: [String]
+    }
+
+    static let defaultApplicantProfilePaths: [ApplicantProfilePath] = [
+        ApplicantProfilePath(section: "basics", path: ["name"]),
+        ApplicantProfilePath(section: "basics", path: ["email"]),
+        ApplicantProfilePath(section: "basics", path: ["phone"]),
+        ApplicantProfilePath(section: "basics", path: ["url"]),
+        ApplicantProfilePath(section: "basics", path: ["website"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "address"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "city"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "region"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "state"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "postalCode"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "zip"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "code"])
+    ]
+
     func applicantProfileBindings() -> [ApplicantProfileBinding] {
         var bindings: [ApplicantProfileBinding] = []
         for (sectionKey, section) in sections {
