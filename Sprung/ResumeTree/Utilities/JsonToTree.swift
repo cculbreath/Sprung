@@ -31,6 +31,9 @@ class JsonToTree {
     }
 
     private func isInEditor(_ key: String) -> Bool {
+        if res.importedEditorKeys.isEmpty {
+            return true
+        }
         return res.importedEditorKeys.contains(key)
     }
 
