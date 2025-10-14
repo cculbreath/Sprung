@@ -19,7 +19,7 @@ struct TemplateEditorPreviewColumn: View {
     let isGeneratingLivePreview: Bool
     let selectedTab: TemplateEditorTab
     let pdfController: PDFPreviewController
-    let onReRenderText: () -> Void
+    let onForceRefresh: () -> Void
     let onSaveAndRefresh: () -> Void
     let hasUnsavedChanges: Bool
     let onPrepareOverlayOptions: () -> Void
@@ -94,25 +94,30 @@ struct TemplateEditorPreviewColumn: View {
             Spacer()
 
             HStack(spacing: 8) {
-                if isTextPreviewActive {
-                    Button(action: onReRenderText) {
-                        Image(systemName: "arrow.trianglehead.2.counterclockwise")
-                    }
-                    .help("Re-render text preview")
-                    .disabled(isGeneratingPreview)
-                } else {
-                    Button(action: onSaveAndRefresh) {
-                        Image(systemName: "checkmark.arrow.trianglehead.counterclockwise")
-                    }
-                    .help("Save changes and regenerate PDF preview")
-                    .disabled(isGeneratingPreview || !hasUnsavedChanges)
+                let refreshSymbol = hasUnsavedChanges ? "checkmark.arrow.trianglehead.counterclockwise" : "arrow.trianglehead.2.counterclockwise"
+                let refreshHelp = hasUnsavedChanges
+                    ? "Save changes and regenerate preview"
+                    : "Regenerate preview"
 
+                Button {
+                    if hasUnsavedChanges {
+                        onSaveAndRefresh()
+                    } else {
+                        onForceRefresh()
+                    }
+                } label: {
+                    Image(systemName: refreshSymbol)
+                }
+                .help(refreshHelp)
+
+                if !isTextPreviewActive {
                     Button {
                         pdfController.goToPreviousPage()
                     } label: {
                         Image(systemName: "chevron.left")
                     }
                     .disabled(!pdfController.canGoToPreviousPage)
+                    .help("Previous page")
 
                     Button {
                         pdfController.goToNextPage()
@@ -120,6 +125,7 @@ struct TemplateEditorPreviewColumn: View {
                         Image(systemName: "chevron.right")
                     }
                     .disabled(!pdfController.canGoToNextPage)
+                    .help("Next page")
 
                     Divider()
                         .frame(height: 16)
@@ -129,12 +135,14 @@ struct TemplateEditorPreviewColumn: View {
                     } label: {
                         Image(systemName: "minus.magnifyingglass")
                     }
+                    .help("Zoom out")
 
                     Button {
                         pdfController.zoomIn()
                     } label: {
                         Image(systemName: "plus.magnifyingglass")
                     }
+                    .help("Zoom in")
 
                     Button {
                         pdfController.resetZoom()
@@ -142,9 +150,7 @@ struct TemplateEditorPreviewColumn: View {
                         Image(systemName: "square.arrowtriangle.4.outward")
                     }
                     .help("Fit to page")
-                }
-
-                if isTextPreviewActive {
+                } else {
                     Divider()
                         .frame(height: 16)
                     Button {
@@ -200,6 +206,7 @@ struct TemplateEditorPreviewColumn: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(isGeneratingPreview)
+                .help("Select or manage overlay PDF")
 
                 if overlayDocument != nil {
                     HStack(spacing: 12) {
