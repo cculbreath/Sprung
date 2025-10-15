@@ -20,16 +20,18 @@ struct CoverLetterPDFView: View {
         self.coverLetter = coverLetter
         // Use provided applicant or create a default one
         // The real applicant will be loaded in onAppear
-        _applicant = State(initialValue: applicant ?? Applicant(
-            name: "Christopher Culbreath",
-            address: "7317 Shadywood Drive",
-            city: "Austin",
-            state: "Texas",
-            zip: "78745",
-            websites: "culbreath.net",
-            email: "cc@physicscloud.net",
-            phone: "(805) 234-0847"
-        ))
+        _applicant = State(
+            initialValue: applicant ?? Applicant(
+                name: "Alex Applicant",
+                address: "123 Sample Street",
+                city: "Sample City",
+                state: "Example State",
+                zip: "00000",
+                websites: "example.com",
+                email: "applicant@example.com",
+                phone: "(555) 010-0000"
+            )
+        )
     }
 
     var body: some View {
@@ -49,9 +51,9 @@ struct CoverLetterPDFView: View {
             }
         }
         .task {
-        loadApplicantProfile()
-        generatePDF()
-    }
+            loadApplicantProfile()
+            generatePDF()
+        }
     }
 
     private func generatePDF() {

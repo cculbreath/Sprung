@@ -32,8 +32,11 @@ class TextResumeGenerator {
         let context = try createTemplateContext(from: resume)
         let processedContext = preprocessContextForText(context, from: resume)
         
+        let translation = HandlebarsTranslator.translate(templateContent)
+        logTranslationWarnings(translation.warnings, template: template)
+
         // Render with Mustache
-        let mustacheTemplate = try Mustache.Template(string: templateContent)
+        let mustacheTemplate = try Mustache.Template(string: translation.template)
         TemplateFilters.register(on: mustacheTemplate)
         return try mustacheTemplate.render(processedContext)
     }
@@ -209,6 +212,13 @@ class TextResumeGenerator {
         } else if let location = dict["location"] as? String {
             let cleaned = location.trimmingCharacters(in: .whitespacesAndNewlines)
             dict["location"] = cleaned.isEmpty ? nil : cleaned
+        }
+    }
+
+    private func logTranslationWarnings(_ warnings: [String], template: String) {
+        guard warnings.isEmpty == false else { return }
+        for warning in warnings {
+            Logger.warning("Handlebars compatibility (\(template)): \(warning)")
         }
     }
 }

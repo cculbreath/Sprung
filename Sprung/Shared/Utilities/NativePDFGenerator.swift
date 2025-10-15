@@ -56,7 +56,10 @@ class NativePDFGenerator: NSObject, ObservableObject {
             Task { @MainActor in
                 do {
                     let context = try overrideContext ?? renderingContext(for: resume)
-                    let finalContent = preprocessTemplateForGRMustache(fixFontReferences(customHTML))
+                    let fontsFixed = fixFontReferences(customHTML)
+                    let translation = HandlebarsTranslator.translate(fontsFixed)
+                    logTranslationWarnings(translation.warnings, slug: resume.template?.slug ?? "custom")
+                    let finalContent = preprocessTemplateForGRMustache(translation.template)
                     let mustacheTemplate = try Mustache.Template(string: finalContent)
                     TemplateFilters.register(on: mustacheTemplate)
                     let htmlContent = try mustacheTemplate.render(context)
@@ -126,7 +129,10 @@ class NativePDFGenerator: NSObject, ObservableObject {
         let processedContext = preprocessContextForTemplate(rawContext, from: resume)
         
         // Fix font URLs for macOS system fonts and preprocess helpers
-        var finalContent = preprocessTemplateForGRMustache(fixFontReferences(content))
+        let fontsFixed = fixFontReferences(content)
+        let translation = HandlebarsTranslator.translate(fontsFixed)
+        logTranslationWarnings(translation.warnings, slug: template)
+        var finalContent = preprocessTemplateForGRMustache(translation.template)
         if format == "html", let css = templateStore.cssTemplateContent(slug: normalizedTemplate), !css.isEmpty {
             finalContent = "<style>\n\(css)\n</style>\n" + finalContent
         }
@@ -277,6 +283,13 @@ class NativePDFGenerator: NSObject, ObservableObject {
         processed = processed.replacingOccurrences(of: "{{yearOnly end}}", with: "{{this.end}}")
         
         return processed
+    }
+    
+    private func logTranslationWarnings(_ warnings: [String], slug: String) {
+        guard warnings.isEmpty == false else { return }
+        for warning in warnings {
+            Logger.warning("Handlebars compatibility (\(slug)): \(warning)")
+        }
     }
     
     private func fixFontReferences(_ template: String) -> String {
