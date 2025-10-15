@@ -202,6 +202,9 @@ struct ResumeTemplateContextBuilder {
 
         switch (base, overlay) {
         case let (baseDict as [String: Any], overlayDict as [String: Any]):
+            if shouldReplaceDictionary(base: baseDict, with: overlayDict) {
+                return overlayDict
+            }
             var merged = baseDict
             merge(into: &merged, with: overlayDict)
             return merged
@@ -211,6 +214,23 @@ struct ResumeTemplateContextBuilder {
             return overlayString.isEmpty ? (base ?? overlayString) : overlayString
         default:
             return overlay
+        }
+    }
+
+    private func shouldReplaceDictionary(base: [String: Any], with overlay: [String: Any]) -> Bool {
+        guard overlay.isEmpty == false else { return true }
+        if overlay.values.allSatisfy(isScalarValue) && base.values.allSatisfy(isScalarValue) {
+            return true
+        }
+        return false
+    }
+
+    private func isScalarValue(_ value: Any) -> Bool {
+        switch value {
+        case is String, is NSString, is NSNumber, is NSNull:
+            return true
+        default:
+            return false
         }
     }
 

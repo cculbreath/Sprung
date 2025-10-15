@@ -102,7 +102,7 @@ struct NodeHeaderView: View {
             StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
         }
         .padding(.horizontal, 10)
-        .padding(.leading, CGFloat(node.depth * 20))
+        .padding(.leading, CGFloat(node.viewDepth * 20))
         .padding(.vertical, 5)
         .onTapGesture {
             vm.toggleExpansion(for: node)

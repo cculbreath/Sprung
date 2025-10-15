@@ -22,6 +22,7 @@ extension TreeNode {
         }
 
         clearViewHierarchyState()
+        viewDepth = 0
         let context = ViewHierarchyContext(
             transparentKeys: Set(manifest.transparentKeys ?? []),
             editorLabels: manifest.editorLabels ?? [:]
@@ -42,7 +43,11 @@ extension TreeNode {
             }
 
             node.applyEditorLabel(forPath: pathComponents, context: context)
-            node.rebuildViewSubtree(using: context, path: pathComponents)
+            node.rebuildViewSubtree(
+                using: context,
+                path: pathComponents,
+                viewDepth: 1
+            )
             node.myIndex = index
             viewChildren.append(node)
         }
@@ -86,6 +91,7 @@ private extension TreeNode {
     func clearViewHierarchyState() {
         editorLabel = nil
         viewChildren = nil
+        viewDepth = 0
         for child in children ?? [] {
             child.clearViewHierarchyState()
         }
@@ -142,7 +148,12 @@ private extension TreeNode {
         editorLabel = context.label(for: path)
     }
 
-    func rebuildViewSubtree(using context: ViewHierarchyContext, path: [String]) {
+    func rebuildViewSubtree(
+        using context: ViewHierarchyContext,
+        path: [String],
+        viewDepth: Int
+    ) {
+        self.viewDepth = viewDepth
         guard let rawChildren = children, rawChildren.isEmpty == false else {
             viewChildren = nil
             return
@@ -156,15 +167,26 @@ private extension TreeNode {
 
             if context.transparentKeys.contains(child.name) || child.editorTransparent {
                 child.applyEditorLabel(forPath: childPath, context: context)
-                child.rebuildViewSubtree(using: context, path: childPath)
+                child.rebuildViewSubtree(
+                    using: context,
+                    path: childPath,
+                    viewDepth: viewDepth
+                )
                 if let promoted = child.viewChildren {
+                    for promotedChild in promoted {
+                        promotedChild.viewDepth = viewDepth + 1
+                    }
                     visibleChildren.append(contentsOf: promoted)
                 }
                 continue
             }
 
             child.applyEditorLabel(forPath: childPath, context: context)
-            child.rebuildViewSubtree(using: context, path: childPath)
+            child.rebuildViewSubtree(
+                using: context,
+                path: childPath,
+                viewDepth: viewDepth + 1
+            )
             visibleChildren.append(child)
         }
 

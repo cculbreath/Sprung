@@ -29,6 +29,8 @@ enum LeafStatus: String, Codable, Hashable {
     @Relationship(deleteRule: .noAction) var resume: Resume
     var status: LeafStatus
     var depth: Int = 0
+    /// Presentation depth derived from `viewChildren` hierarchy.
+    var viewDepth: Int = 0
 
     // Schema metadata (optional, derived from manifest descriptors)
     var schemaKey: String?
@@ -110,6 +112,7 @@ enum LeafStatus: String, Codable, Hashable {
         self.status = status
         includeInEditor = inEditor
         depth = parent.map { $0.depth + 1 } ?? 0
+        viewDepth = parent.map { $0.viewDepth + 1 } ?? 0
         self.resume = resume
         self.isTitleNode = isTitleNode // Initialize isTitleNode
     }
@@ -122,8 +125,10 @@ enum LeafStatus: String, Codable, Hashable {
         child.parent = self
         child.myIndex = (children?.count ?? 0)
         child.depth = depth + 1
+        child.viewDepth = viewDepth + 1
         if editorTransparent {
             child.depth = depth
+            child.viewDepth = viewDepth
         }
         children?.append(child)
         return child

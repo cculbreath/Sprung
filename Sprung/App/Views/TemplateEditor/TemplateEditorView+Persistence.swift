@@ -689,6 +689,26 @@ extension TemplateEditorView {
         loadManifest()
         loadSeed()
     }
+    
+    func renameTemplate(slug: String, newName: String) {
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        guard let template = appEnvironment.templateStore.template(slug: slug) else { return }
+        
+        // Simple approach: Just update the template name using upsertTemplate
+        // (Now that we fixed the bug in TemplateStore where name wasn't being updated)
+        appEnvironment.templateStore.upsertTemplate(
+            slug: slug,
+            name: trimmedName,
+            htmlContent: template.htmlContent,
+            textContent: template.textContent,
+            cssContent: template.cssContent,
+            isCustom: template.isCustom
+        )
+        
+        // Refresh the templates list  
+        loadAvailableTemplates()
+    }
 
     @discardableResult
     func saveAllChanges() -> Bool {

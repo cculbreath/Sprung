@@ -45,6 +45,11 @@ struct TemplateEditorView: View {
     @State var seedValidationMessage: String?
     @State var pendingProfileUpdate: ProfileUpdatePrompt?
 
+    // Template renaming state
+    @State var renamingTemplate: String?
+    @State var tempTemplateName: String = ""
+    @State var templateRefreshTrigger: Int = 0  // Force UI refresh
+
     // Live preview state
     @State var previewPDFData: Data?
     @State var previewTextContent: String?
@@ -432,10 +437,14 @@ struct TemplateEditorView: View {
             onMakeDefault: { makeTemplateDefault(slug: $0) },
             onDuplicateTemplate: { slug in duplicateTemplate(slug: slug) },
             onRequestDeleteTemplate: { slug in templatePendingDeletion = slug },
+            onRenameTemplate: { slug, newName in renameTemplate(slug: slug, newName: newName) },
             showingAddTemplate: $showingAddTemplate,
             textEditorInsertion: $textEditorInsertion,
+            renamingTemplate: $renamingTemplate,
+            tempTemplateName: $tempTemplateName,
             textFilters: textFilterReference
         )
+        .id(templateRefreshTrigger)  // Force refresh when this changes
             .background(Color(NSColor.controlBackgroundColor))
             .overlay(sidebarGrip, alignment: .trailing)
     }

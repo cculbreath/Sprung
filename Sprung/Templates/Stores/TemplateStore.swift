@@ -61,6 +61,7 @@ final class TemplateStore {
         let normalized = slug.lowercased()
         let now = Date()
         if let existing = template(slug: normalized) {
+            existing.name = name  // Fix: Update the name field
             if let htmlContent { existing.htmlContent = htmlContent }
             if let textContent { existing.textContent = textContent }
             if let cssContent { existing.cssContent = cssContent }

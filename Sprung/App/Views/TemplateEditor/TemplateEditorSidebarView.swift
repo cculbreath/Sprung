@@ -16,9 +16,14 @@ struct TemplateEditorSidebarView: View {
     let onMakeDefault: (String) -> Void
     let onDuplicateTemplate: (String) -> Void
     let onRequestDeleteTemplate: (String) -> Void
+    let onRenameTemplate: (String, String) -> Void
     @Binding var showingAddTemplate: Bool
     @Binding var textEditorInsertion: TextEditorInsertionRequest?
+    @Binding var renamingTemplate: String?
+    @Binding var tempTemplateName: String
     let textFilters: [TextFilterInfo]
+    
+    @FocusState private var isRenamingFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -77,7 +82,28 @@ struct TemplateEditorSidebarView: View {
             Image(systemName: templateIconName(template))
                 .foregroundColor(templateMatchesCurrentResume(template) ? .accentColor : .secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(templateDisplayName(template))
+                if renamingTemplate == template {
+                    // Show text field for renaming
+                    TextField("Template name", text: $tempTemplateName)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit {
+                            finishRenaming()
+                        }
+                        .onKeyPress(.escape) {
+                            cancelRenaming()
+                            return .handled
+                        }
+                        .focused($isRenamingFocused)
+                        .onAppear {
+                            isRenamingFocused = true
+                        }
+                } else {
+                    Text(templateDisplayName(template))
+                        .onTapGesture(count: 2) {
+                            startRenaming(template)
+                        }
+                }
+                
                 if templateMatchesCurrentResume(template) {
                     Text("Current resume")
                         .font(.caption2)
@@ -95,6 +121,9 @@ struct TemplateEditorSidebarView: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .contextMenu {
+            Button("Rename Template") {
+                startRenaming(template)
+            }
             Button("Duplicate Template") {
                 onDuplicateTemplate(template)
             }
@@ -107,6 +136,30 @@ struct TemplateEditorSidebarView: View {
             }
             .disabled(availableTemplates.count <= 1)
         }
+    }
+    
+    private func startRenaming(_ template: String) {
+        renamingTemplate = template
+        tempTemplateName = templateDisplayName(template)
+    }
+    
+    private func finishRenaming() {
+        guard let template = renamingTemplate else { return }
+        let trimmedName = tempTemplateName.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if !trimmedName.isEmpty && trimmedName != templateDisplayName(template) {
+            onRenameTemplate(template, trimmedName)
+        }
+        
+        renamingTemplate = nil
+        tempTemplateName = ""
+        isRenamingFocused = false
+    }
+    
+    private func cancelRenaming() {
+        renamingTemplate = nil
+        tempTemplateName = ""
+        isRenamingFocused = false
     }
 
     @ViewBuilder
