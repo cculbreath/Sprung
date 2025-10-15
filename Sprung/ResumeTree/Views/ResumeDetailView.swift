@@ -41,6 +41,12 @@ struct ResumeDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if let root = vm.rootNode {
+                    Text("Content")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 12)
+
                     ForEach(root.orderedViewChildren, id: \.id) { viewNode in
                         topLevelNodeView(viewNode)
                     }
@@ -48,6 +54,12 @@ struct ResumeDetailView: View {
 
                 // Show font size panel if fontSizeNodes exist
                 if vm.hasFontSizeNodes {
+                    Text("Style")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 16)
+
                     FontSizePanelView().padding(10)
                 }
             }
@@ -103,7 +115,7 @@ private struct RootLeafDisclosureView: View {
                 StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
             }
             .padding(.horizontal, 10)
-            .padding(.leading, CGFloat(node.depth * 20))
+            .padding(.leading, CGFloat(node.viewDepth * 20))
             .padding(.vertical, 5)
             .contentShape(Rectangle())
             .onTapGesture {
@@ -114,7 +126,7 @@ private struct RootLeafDisclosureView: View {
                 Divider()
 
                 NodeLeafView(node: node)
-                    .padding(.leading, CGFloat(node.depth) * 20)
+                    .padding(.leading, CGFloat(node.viewDepth) * 20)
                     .padding(.vertical, 4)
            }
         }

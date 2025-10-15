@@ -43,7 +43,7 @@ struct ContentView: View {
             // --- Detail Column ---
             VStack(alignment: .leading) {
                 if jobAppStore.selectedApp != nil {
-                    // Embed AppWindowView directly
+                    // Embed AppWindowView directly with background extension
                     AppWindowView(
                         selectedTab: $navigationState.selectedTab,
                         refPopup: $refPopup,
@@ -53,6 +53,13 @@ struct ContentView: View {
                         sheets: $sheets,
                         clarifyingQuestions: $clarifyingQuestions
                     )
+                    // Enable background extension for inspector overlay
+                    .background {
+                        // Background content that extends under the inspector
+                        Rectangle()
+                            .fill(.clear)
+                            .ignoresSafeArea(.all)
+                    }
 //                        .navigationTitle(" ")
                 } else {
                     // Placeholder when no job application is selected

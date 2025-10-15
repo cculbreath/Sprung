@@ -19,7 +19,8 @@ class TextResumeGenerator {
     
     /// Generate a text resume using the specified template
     func generateTextResume(for resume: Resume, template: String) throws -> String {
-        return try renderTemplate(for: resume, template: template)
+        let rendered = try renderTemplate(for: resume, template: template)
+        return sanitizeRenderedText(rendered)
     }
     // MARK: - Private Methods
     
@@ -146,6 +147,11 @@ class TextResumeGenerator {
         }
 
         return processed
+    }
+    
+    /// Decode HTML entities that may appear in rendered plain-text output
+    private func sanitizeRenderedText(_ text: String) -> String {
+        return text.decodingHTMLEntities()
     }
     
     private func convertEmploymentToArray(_ employment: [String: Any], from resume: Resume) -> [[String: Any]] {

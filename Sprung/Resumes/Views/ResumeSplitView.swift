@@ -24,7 +24,7 @@ struct ResumeSplitView: View {
     var body: some View {
         if let selApp = jobAppStore.selectedApp {
             if let selRes = selApp.selectedRes {
-                // Show the resume view if there's a selected resume
+                // Back to working custom inspector implementation
                 @Bindable var selApp = selApp
 
                 GeometryReader { geo in
@@ -170,21 +170,20 @@ private struct ResumeActionsBar: View {
         .padding(.bottom, 6)
     }
 }
+
 private struct ResumeInspectorColumn: View {
     @Binding var refresh: Bool
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            Color.white
-                .ignoresSafeArea()
-
-            ResumeInspectorView(refresh: $refresh)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(Color.black.opacity(0.08))
-                .frame(width: 1)
-        }
+        ResumeInspectorView(refresh: $refresh)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.regularMaterial, in: .rect(cornerRadius: 0))
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(Color.black.opacity(0.08))
+                    .frame(width: 1)
+            }
     }
 }
+
+
