@@ -56,6 +56,7 @@ struct TemplateEditorView: View {
     @State var htmlDraft: String?
     @State var textDraft: String?
     @State var isPreviewRefreshing: Bool = false
+    @State var previewErrorMessage: String?
     @State var showInspector: Bool = true
     @State var debounceTimer: Timer?
     @State var isGeneratingLivePreview: Bool = false
@@ -408,6 +409,7 @@ struct TemplateEditorView: View {
         TemplateEditorPreviewColumn(
             previewPDFData: previewPDFData,
             textPreview: previewTextContent,
+            previewError: previewErrorMessage,
             showOverlay: $showOverlay,
             overlayDocument: overlayPDFDocument,
             overlayPageIndex: overlayPageIndex,

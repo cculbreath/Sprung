@@ -1,154 +1,92 @@
-# Sprung
+# Sprung: Your AI-Powered Job Search Copilot for macOS
 
-Sprung is a native macOS application that stream-lines every
-step of the modern job–search workflow: collecting postings, tailoring
-résumés, generating cover letters, tracking application status and even
-auditing your material with Gen-AI.  The project is written entirely in Swift
-using SwiftUI for the interface and Swift Data for local persistence.
+[![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)](https://www.apple.com/macos/sonoma)
+[![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
+[![Xcode](https://img.shields.io/badge/Xcode-15.0%2B-blue.svg)](https://developer.apple.com/xcode/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
----
+Sprung is a native macOS application that streamlines your entire job search workflow. From finding job postings to crafting the perfect resume and cover letter, Sprung uses the power of generative AI to help you land your dream job.
 
-## Why another job-search app?
+![Sprung App Screenshot](https://via.placeholder.com/800x450.png?text=Sprung+App+Screenshot)
+*(Add a screenshot or GIF of the app here)*
 
-Most tools only focus on one piece of the puzzle (e.g. a résumé builder or
-an application tracker).  Sprung keeps everything in the same
-place **and** adds an opinionated AI layer so you can
+## ✨ Key Features
 
-* 📝 **Generate, review & version résumés** – import existing files or build
-  JSON-backed templates that can be exported to PDF through the
-  `resume.physicscloud.net` API.
-* 💌 **Write data-driven cover letters** – the AI module can
-  cross-reference a job posting with your skills, suggest talking points and
-  even read the final draft aloud with on-device TTS.
-* 🗃 **Track job applications** – store links, descriptions, salaries and
-  assign assets (résumés / cover letters) to each posting.
-* 🤖 **Chat with your documents** – ask follow-up questions, request
-  rewrites or let the model highlight missing keywords.
+*   **📝 AI-Powered Resume & Cover Letter Crafting:**
+    *   Generate, review, and version your resumes.
+    *   Build JSON-backed resume templates.
+    *   Export to professional-looking PDFs.
+    *   Write data-driven cover letters that are tailored to each job description.
+    *   Get AI-powered suggestions and talking points.
+    *   Listen to your cover letters with on-device Text-to-Speech.
 
-## High-level architecture
+*   **🗃️ Smart Job Application Tracking:**
+    *   Keep all your job applications in one place.
+    *   Store links, descriptions, salaries, and other important details.
+    *   Assign specific resumes and cover letters to each application.
 
-```
-┌──────────────────┐    Dependency container    ┌────────────────────┐
-│     SwiftUI      │ ─────────────────────────▶ │  LLM Facade + DTOs │
-│  (macOS target)  │  `.environment(AppDeps)`   │  (streaming/JSON)   │
-│                  │                            │                    │
-└────────┬─────────┘                            └────────┬───────────┘
-         │ observation                                async services
-         ▼                                               │
-┌──────────────────┐  SwiftData stores (JobApp, …) ┌──────▼───────────┐
-│   SwiftData      │ ─────────────────────────────▶│ Resume export &  │
-│  (Model layer)   │                               │ template builder │
-└──────────────────┘                               └──────────────────┘
-```
+*   **🤖 Interactive Document Chat:**
+    *   "Chat" with your resumes and cover letters.
+    *   Ask for feedback, request rewrites, and get suggestions for improvement.
+    *   Let the AI analyze your documents and highlight missing keywords.
 
-Key points
+*   **🎙️ AI Onboarding Interview:**
+    *   Get started quickly with an AI-powered onboarding interview that helps you build your applicant profile.
 
-• **AppDependencies** – A lightweight DI container constructed once per scene
-  ensures stores (`JobAppStore`, `EnabledLLMStore`, …) and services (`LLMFacade`,
-  `LLMService`) have stable lifetimes. Views receive them via
-  `.environment(deps.someStore)`.
+## 🚀 Why Sprung?
 
-• **SwiftData first** – All primary entities (`JobApp`, `Resume`, `CoverLetter`,
-  …) are `@Model` types. Their stores expose computed collections so SwiftUI
-  always reflects persistent state without manual refreshes.
+Most job search tools only solve one part of the problem. Sprung is an all-in-one solution that brings everything together in a single, beautiful, and native macOS application. With its powerful AI features, Sprung helps you create high-quality application materials that stand out from the crowd.
 
-• **LLM facade & adapters** – Feature code talks to a small DTO-based facade.
-  Vendor SDK types are contained in adapters (`SwiftOpenAIClient`) so switching
-  providers only touches the boundary layer.
+## 🛠️ Getting Started
 
-• **Export pipeline** – `ResumeTemplateProcessor` builds Mustache contexts from
-  the resume tree. `ResumeExportService` orchestrates template selection and
-  file I/O, while `NativePDFGenerator` and `TextResumeGenerator` focus purely on
-  rendering. UI sheets (menu commands, toolbar actions) invoke these services
-  through the injected dependencies.
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/cculbreath/Sprung.git
+    cd Sprung
+    ```
 
-For a deep dive into the AI sub-system take a look at
-`Sprung/AI/README.md`.
+2.  **Open the project in Xcode:**
+    ```bash
+    open Sprung.xcodeproj
+    ```
 
-## Folder overview
+3.  **Resolve Swift Package dependencies (first run):**
+    ```bash
+    xcodebuild -resolvePackageDependencies -project Sprung.xcodeproj -scheme Sprung
+    ```
 
-```
-Assets.xcassets/        App icons & custom SF Symbols
-Docs/                   Planning docs & canonical résumé JSON
-Sprung/        Source code (SwiftUI, SwiftData, AI module, …)
-├─ App/                 @main entry-point & high-level state
-├─ AI/                  LLM clients, services, providers & views
-├─ DataManagers/        SwiftData store helpers
-├─ Resumes/, CoverLetters/, JobApplications/ …
-├─ Shared/              Cross-feature utilities
-Tests/                  XCTRuntimeAssertions based unit tests
-```
+4.  **Add your API keys:**
+    *   You'll need API keys for OpenAI, Gemini, and/or OpenRouter.
+    *   Add them in the "Settings" screen of the app. Keys are securely stored in the macOS Keychain.
 
-## Requirements
+5.  **Build and run the app (⌘ + R).**
 
-* macOS 14 Sonoma or newer (because SwiftData + SwiftUI 5)
-* Xcode 15 or newer (Swift 5.9)
-* API keys
-  * `OPENAI_API_KEY` / `GEMINI_API_KEY` (environment or Keychain)
-  * OpenRouter (or compatible) key stored via the in-app settings UI. Keys are
-    persisted with `APIKeyManager` which wraps the macOS Keychain.
+## 🏗️ Technology & Architecture
 
-## Getting started
+Sprung is built with modern Apple technologies:
 
-1. Clone the repo
+*   **SwiftUI:** For a beautiful and responsive user interface.
+*   **SwiftData:** for robust and efficient data persistence.
+*   **Generative AI:** A flexible architecture that supports multiple LLMs (OpenAI, Gemini, OpenRouter).
 
-   ```bash
-   git clone https://github.com/your-org/Sprung.git
-   cd Sprung
-   ```
+The app uses a dependency injection pattern to manage dependencies and ensure a clean and maintainable codebase. For a deeper dive into the architecture, see [`docs/architecture.md`](docs/architecture.md).
 
-2. Open the Xcode project
+## 🙌 Contributing
 
-   ```bash
-   open Sprung.xcodeproj
-   ```
+We welcome contributions from the community! Whether you want to fix a bug, add a new feature, or improve the documentation, your help is appreciated.
 
-3. Add your API keys to the *Sprung* target → *Signing & 
-   Capabilities* → *Environment Variables* (or export them in your shell).
+Please read our [Contributing Guidelines](CONTRIBUTING.md) to get started.
 
-4. Build & run. The app stores exports alongside the résumé record and exposes
-   a quick preview inside the Resume Export panel.
+## 🗺️ Roadmap
 
-## Running tests
+We have exciting plans for the future of Sprung! Here are some of the things we're working on:
 
-`⌘` + `U` runs `xcodebuild test` for the `Sprung` scheme. Current
-coverage focuses on template builders and AI DTO transforms; UI coverage is
-manual for now.
+*   Expanding our test coverage.
+*   Adding more advanced AI features.
+*   Improving the resume export pipeline.
 
-## Manual smoke checklist
+For a more detailed look at our roadmap, please see [`docs/roadmap.md`](docs/roadmap.md).
 
-1. Launch the app, confirm the sidebar loads job applications, and switch tabs
-   (Listing → Resume → Cover Letters) to verify SwiftData-backed stores persist
-   selection state.
-2. Open **Clarify & Customize** from the toolbar, select a model, and ensure the
-   clarifying question sheet appears. Submit answers and confirm the revision
-   review sheet opens with streaming output when supported by the model.
-3. Export a résumé as PDF from the Résumé menu, verify the export succeeds, and
-   open the generated file from the export panel.
-4. Update the OpenRouter key in Settings → Debug Settings, then trigger a basic
-   AI action (e.g., résumé review) to confirm the facade reconfigures without a
-   restart.
+## 📄 License
 
-## Contributing
-
-Pull requests are welcome!  Please follow the existing code style
-(Swift-Format default) and keep **changes minimal & focused**.
-
-1. Fork → feature branch (`git checkout -b feature/my-thing`)
-2. Run `swift test` or `⌘U`
-3. Submit a PR describing *why* the change is needed.
-
-## Roadmap
-
-See `Docs/plan-and-progress.md` for the full migration checklist.  Short-term
-goals include
-
-• Expand integration tests around the resume export pipeline and template builder
-• Add streaming TTS controls with structured logging
-• Harden the résumé export API and move the key out of source-control
-
-## License
-
-The repository is currently *proprietary / all-rights-reserved* while I finish
-MVP development.  If you would like to use any part of the code please reach
-out first.
+Sprung is released under the MIT License. See [LICENSE](LICENSE) for details and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled dependency attributions.

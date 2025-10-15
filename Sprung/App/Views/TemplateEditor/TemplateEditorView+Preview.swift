@@ -23,12 +23,14 @@ extension TemplateEditorView {
         guard selectedTemplate.isEmpty == false else {
             previewPDFData = nil
             previewTextContent = nil
+            previewErrorMessage = nil
             return
         }
         guard !isPreviewRefreshing else { return }
         isPreviewRefreshing = true
         isGeneratingPreview = true
         isGeneratingLivePreview = true
+        previewErrorMessage = nil
 
         Task { @MainActor in
             defer {
@@ -41,10 +43,12 @@ extension TemplateEditorView {
                 let result = try await generateTemplatePreview()
                 previewPDFData = result.pdfData
                 previewTextContent = result.text
+                previewErrorMessage = nil
             } catch {
                 Logger.error("Template preview generation failed: \(error)")
                 previewPDFData = nil
                 previewTextContent = nil
+                previewErrorMessage = previewErrorDescription(from: error)
             }
         }
     }
@@ -169,7 +173,10 @@ extension TemplateEditorView {
     }
 
     private func renderMustache(template: String, context: [String: Any]) throws -> String {
-        let mustache = try Mustache.Template(string: template)
+        let translation = HandlebarsTranslator.translate(template)
+        logHandlebarsWarnings(translation.warnings)
+
+        let mustache = try Mustache.Template(string: translation.template)
         TemplateFilters.register(on: mustache)
         return try mustache.render(context)
     }
@@ -262,6 +269,22 @@ extension TemplateEditorView {
         return String(describing: type(of: value))
     }
 #endif
+
+    private func logHandlebarsWarnings(_ warnings: [String]) {
+        guard warnings.isEmpty == false else { return }
+        for warning in warnings {
+            Logger.warning("Template preview Handlebars compatibility: \(warning)")
+        }
+    }
+
+    private func previewErrorDescription(from error: Error) -> String {
+        let nsError = error as NSError
+        let baseMessage = nsError.localizedDescription
+        if nsError.domain.contains("GRMustache") {
+            return "Template rendering failed: \(baseMessage)"
+        }
+        return baseMessage.isEmpty ? String(describing: error) : baseMessage
+    }
 }
 
 private func loadManifestData(slug: String) -> Data? {

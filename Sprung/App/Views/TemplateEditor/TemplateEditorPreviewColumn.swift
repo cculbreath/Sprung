@@ -10,6 +10,7 @@ import SwiftUI
 struct TemplateEditorPreviewColumn: View {
     let previewPDFData: Data?
     let textPreview: String?
+    let previewError: String?
     @Binding var showOverlay: Bool
     let overlayDocument: PDFDocument?
     let overlayPageIndex: Int
@@ -53,7 +54,9 @@ struct TemplateEditorPreviewColumn: View {
     private func previewContent() -> some View {
         ZStack {
             Color(NSColor.textBackgroundColor)
-            if isTextPreviewActive {
+            if let error = previewError {
+                previewErrorView(error)
+            } else if isTextPreviewActive {
                 textPreviewView()
             } else if let pdfData = previewPDFData {
                 PDFPreviewView(
@@ -184,7 +187,12 @@ struct TemplateEditorPreviewColumn: View {
 
     @ViewBuilder
     private func previewFooter() -> some View {
-        if isTextPreviewActive {
+        if previewError != nil {
+            HStack { Spacer() }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(NSColor.windowBackgroundColor))
+        } else if isTextPreviewActive {
             HStack { Spacer() }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -258,6 +266,26 @@ struct TemplateEditorPreviewColumn: View {
             Text(message)
                 .font(.caption)
                 .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.textBackgroundColor))
+        .onAppear {
+            pdfController.updatePagingState()
+        }
+    }
+    
+    private func previewErrorView(_ message: String) -> some View {
+        VStack(alignment: .center, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 28))
+                .foregroundColor(.orange)
+            Text("Template preview failed")
+                .font(.headline)
+            Text(message)
+                .multilineTextAlignment(.center)
+                .font(.caption)
+                .foregroundStyle(Color.secondary)
+                .padding(.horizontal, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.textBackgroundColor))

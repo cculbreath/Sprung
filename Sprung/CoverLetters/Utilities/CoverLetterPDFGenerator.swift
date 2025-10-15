@@ -144,6 +144,33 @@ enum CoverLetterPDFGenerator {
         return df.string(from: Date())
     }
 
+    private static func containsLikelyPhoneNumber(_ text: String) -> Bool {
+        let digitCount = text.filter { $0.isNumber }.count
+        if digitCount >= 7 {
+            return true
+        }
+        return text.range(
+            of: #"(\+\d{1,3}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
+
+    private static func containsEmailAddress(_ text: String) -> Bool {
+        text.range(
+            of: #"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
+
+    private static func containsAddressKeyword(_ text: String) -> Bool {
+        let keywords = [
+            "street", "st.", "avenue", "ave", "road", "rd.", "boulevard", "blvd",
+            "suite", "apt", "lane", "ln.", "drive", "dr.", "city", "state", "zip",
+        ]
+        let lowercased = text.lowercased()
+        return keywords.contains(where: { lowercased.contains($0) })
+    }
+
     /// Paginated vector PDF generation using CoreText framesetter
     private static func createPaginatedPDFFromString(
         _ text: String,
@@ -451,21 +478,12 @@ enum CoverLetterPDFGenerator {
                         }
 
                         // Detect contact info lines (phone/address) using robust patterns
-                        if trimmedContent.contains("(") || trimmedContent.contains(")") || // Capture phone number patterns
-                            trimmedContent.contains("-") || // Capture phone or address patterns
-                            trimmedContent.contains("Shadywood") ||
-                            trimmedContent.contains("Austin") || trimmedContent.contains("Texas") ||
-                            trimmedContent.contains("Drive") || trimmedContent.contains("Dr")
-                        {
+                        if containsLikelyPhoneNumber(trimmedContent) || containsAddressKeyword(trimmedContent) {
                             contactInfoLineIndex = idx
                         }
 
                         // Detect email line with robust patterns
-                        if trimmedContent.contains("@") || // Universal email indicator
-                            trimmedContent.contains(".net") || trimmedContent.contains(".com") || // Domain extensions
-                            trimmedContent.contains("physics") || trimmedContent.contains("cloud") ||
-                            trimmedContent.contains("culbreath")
-                        { // Parts of common domains
+                        if containsEmailAddress(trimmedContent) {
                             emailLineIndex = idx
                         }
                     }

@@ -1,9 +1,28 @@
+# macOS and tooling artifacts
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
 # Ignore vendored and generated artifacts
 weasy-dist/
 weasy/
 .build/
 physcloudresume/scripts/
 test_*
+# Local tooling databases
+.opencode/
+.opencode.json
+
+# Private assets and notes (relocated outside the repo)
+debug/
+draft-archer/
+Notes/
+Resources/
+.swiftpm/
+DerivedData/
+**/xcuserdata/
+
 # Ignore root-level generated files
 Sprung.zip
 backup.txt
