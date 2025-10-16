@@ -14,7 +14,7 @@ struct FontSizePanelView: View {
 
     var body: some View {
         HStack {
-            ToggleChevronView(isExpanded: $isExpanded,)
+            ToggleChevronView(isExpanded: $isExpanded)
             Text("Font Sizes")
                 .font(.headline)
         }

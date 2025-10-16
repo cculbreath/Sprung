@@ -109,6 +109,11 @@ enum HandlebarsTranslator {
             return "{{\(expression)}}"
         }
 
+        if expression == "#resume" {
+            stack.append(SectionFrame(kind: .noopSection, name: "resume", hasElse: false))
+            return ""
+        }
+
         if expression.hasPrefix("#unless ") {
             return startConditionalSection(
                 name: String(expression.dropFirst(8)).trimmingCharacters(in: .whitespacesAndNewlines),
@@ -176,6 +181,18 @@ enum HandlebarsTranslator {
             )
         }
 
+        if expression == "/resume" {
+            guard let frame = stack.popLast() else {
+                warnings.append("Encountered '{{/resume}}' without an open section.")
+                return ""
+            }
+
+            if frame.kind != .noopSection {
+                warnings.append("Mismatched Handlebars section '{{/resume}}'; expected '{{#\(frame.name)}}'.")
+            }
+            return ""
+        }
+
         if expression.contains("@index") {
             warnings.append("Handlebars '@index' helper is not supported; leaving token unchanged.")
             return nil
@@ -225,6 +242,8 @@ enum HandlebarsTranslator {
             return "{{#\(safeName)}}"
         case .unlessSection:
             return "{{^\(safeName)}}"
+        case .noopSection:
+            return ""
         }
     }
 
@@ -234,6 +253,12 @@ enum HandlebarsTranslator {
     ) -> String {
         guard var frame = stack.popLast() else {
             warnings.append("Encountered '{{else}}' without an open section.")
+            return "{{else}}"
+        }
+
+        if frame.kind == .noopSection {
+            warnings.append("Encountered '{{else}}' inside '{{#\(frame.name)}}', which is not supported.")
+            stack.append(frame)
             return "{{else}}"
         }
 
@@ -251,6 +276,8 @@ enum HandlebarsTranslator {
             return "{{/\(frame.name)}}{{^\(frame.name)}}"
         case .unlessSection:
             return "{{/\(frame.name)}}{{#\(frame.name)}}"
+        case .noopSection:
+            return ""
         }
     }
 
@@ -270,7 +297,12 @@ enum HandlebarsTranslator {
             return "{{\(closingExpression)}}"
         }
 
-        return "{{/\(frame.name)}}"
+        switch frame.kind {
+        case .ifSection, .eachSection, .unlessSection:
+            return "{{/\(frame.name)}}"
+        case .noopSection:
+            return ""
+        }
     }
 
     private static func normalizeThisReferences(in template: String) -> String {
@@ -313,5 +345,6 @@ enum HandlebarsTranslator {
         case ifSection
         case unlessSection
         case eachSection
+        case noopSection
     }
 }

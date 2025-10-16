@@ -63,9 +63,26 @@ struct ResumeTemplateContextBuilder {
         if !profile.phone.isEmpty { contact["phone"] = profile.phone }
         if !profile.email.isEmpty { contact["email"] = profile.email }
         if !profile.websites.isEmpty { contact["website"] = profile.websites }
+        if !profile.picture.isEmpty { contact["picture"] = profile.picture }
         if !location.isEmpty { contact["location"] = location }
 
-        return contact.isEmpty ? [:] : ["contact": contact]
+        var basics: [String: Any] = [:]
+        if !profile.name.isEmpty { basics["name"] = profile.name }
+        if !profile.email.isEmpty { basics["email"] = profile.email }
+        if !profile.phone.isEmpty { basics["phone"] = profile.phone }
+        if !profile.websites.isEmpty { basics["website"] = profile.websites }
+        if !profile.picture.isEmpty { basics["picture"] = profile.picture }
+        if !location.isEmpty { basics["location"] = location }
+
+        var context: [String: Any] = [:]
+        if !contact.isEmpty {
+            context["contact"] = contact
+        }
+        if !basics.isEmpty {
+            context["basics"] = basics
+        }
+
+        return context
     }
 
     private func buildProfilePayload(using manifest: TemplateManifest, profile: ApplicantProfile) -> [String: Any] {
@@ -103,6 +120,8 @@ struct ResumeTemplateContextBuilder {
             return profile.phone
         case "url", "website":
             return profile.websites
+        case "picture", "image":
+            return profile.picture
         case "address":
             return profile.address
         case "city":

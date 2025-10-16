@@ -8,6 +8,7 @@
 import Foundation
 import Observation
 import SwiftData
+import SwiftUI
 
 /// View‑model for the resume editor panel (node tree + font panel).
 /// Encapsulates UI‑specific state so SwiftUI views no longer mutate the model
@@ -43,6 +44,14 @@ final class ResumeDetailVM {
         !resume.fontSizeNodes.isEmpty
     }
 
+    private let sectionVisibilityDefaults: [String: Bool]
+    private let sectionVisibilityLabels: [String: String]
+    private let sectionVisibilityKeys: [String]
+
+    var hasSectionVisibilityOptions: Bool {
+        !sectionVisibilityKeys.isEmpty
+    }
+
     // MARK: - Dependencies --------------------------------------------------
 
     private let exportCoordinator: ResumeExportCoordinator
@@ -50,6 +59,16 @@ final class ResumeDetailVM {
     init(resume: Resume, exportCoordinator: ResumeExportCoordinator) {
         self.resume = resume
         self.exportCoordinator = exportCoordinator
+        if let template = resume.template,
+           let manifest = TemplateManifestLoader.manifest(for: template) {
+            sectionVisibilityDefaults = manifest.sectionVisibilityDefaults ?? [:]
+            sectionVisibilityLabels = manifest.sectionVisibilityLabels ?? [:]
+            sectionVisibilityKeys = manifest.sectionVisibilityKeys()
+        } else {
+            sectionVisibilityDefaults = [:]
+            sectionVisibilityLabels = [:]
+            sectionVisibilityKeys = []
+        }
     }
 
     // MARK: - Intents -------------------------------------------------------
@@ -174,6 +193,42 @@ final class ResumeDetailVM {
         } else {
             expandedIDs.insert(node.id)
         }
+    }
+
+    // MARK: - Section Visibility -----------------------------------------
+
+    func sectionVisibilityBinding(for key: String) -> Binding<Bool> {
+        Binding(
+            get: { self.sectionVisibilityValue(for: key) },
+            set: { self.setSectionVisibility(key: key, isVisible: $0) }
+        )
+    }
+
+    func sectionVisibilityLabel(for key: String) -> String {
+        sectionVisibilityLabels[key] ?? key.replacingOccurrences(of: "-", with: " ").capitalized
+    }
+
+    func sectionVisibilityKeysOrdered() -> [String] {
+        sectionVisibilityKeys
+    }
+
+    private func sectionVisibilityValue(for key: String) -> Bool {
+        if let override = resume.sectionVisibilityOverrides[key] {
+            return override
+        }
+        return sectionVisibilityDefaults[key] ?? true
+    }
+
+    private func setSectionVisibility(key: String, isVisible: Bool) {
+        var overrides = resume.sectionVisibilityOverrides
+        let defaultValue = sectionVisibilityDefaults[key] ?? true
+        if isVisible == defaultValue {
+            overrides.removeValue(forKey: key)
+        } else {
+            overrides[key] = isVisible
+        }
+        resume.sectionVisibilityOverrides = overrides
+        refreshPDF()
     }
     
     // MARK: - Bulk Operations ---------------------------------------------

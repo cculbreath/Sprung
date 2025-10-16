@@ -18,6 +18,7 @@ class ApplicantProfile {
     var websites: String
     var email: String
     var phone: String
+    var picture: String
     var signatureData: Data?
 
     init(
@@ -30,6 +31,7 @@ class ApplicantProfile {
         websites: String = "example.com",
         email: String = "applicant@example.com",
         phone: String = "(555) 123-4567",
+        picture: String = "",
         signatureData: Data? = nil
     ) {
         self.name = name
@@ -41,6 +43,7 @@ class ApplicantProfile {
         self.websites = websites
         self.email = email
         self.phone = phone
+        self.picture = picture
         self.signatureData = signatureData
     }
 
@@ -71,7 +74,8 @@ struct Applicant {
         zip: String,
         websites: String,
         email: String,
-        phone: String
+        phone: String,
+        picture: String = ""
     ) {
         // Create a standalone ApplicantProfile without accessing MainActor-isolated code
         profile = ApplicantProfile(
@@ -82,7 +86,8 @@ struct Applicant {
             zip: zip,
             websites: websites,
             email: email,
-            phone: phone
+            phone: phone,
+            picture: picture
         )
     }
 
@@ -100,4 +105,5 @@ struct Applicant {
     var websites: String { profile.websites }
     var email: String { profile.email }
     var phone: String { profile.phone }
+    var picture: String { profile.picture }
 }

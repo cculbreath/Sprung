@@ -395,6 +395,8 @@ struct TemplateManifest: Codable {
     let editorLabels: [String: String]?
     let transparentKeys: [String]?
     let keysInEditor: [String]?
+    let sectionVisibilityDefaults: [String: Bool]?
+    let sectionVisibilityLabels: [String: String]?
 
     var usesSynthesizedMetadata: Bool {
         !synthesizedSectionKeys.isEmpty
@@ -407,7 +409,9 @@ struct TemplateManifest: Codable {
         sections: [String: Section],
         editorLabels: [String: String]? = nil,
         transparentKeys: [String]? = nil,
-        keysInEditor: [String]? = nil
+        keysInEditor: [String]? = nil,
+        sectionVisibilityDefaults: [String: Bool]? = nil,
+        sectionVisibilityLabels: [String: String]? = nil
     ) {
         self.slug = slug
         self.schemaVersion = schemaVersion
@@ -415,6 +419,8 @@ struct TemplateManifest: Codable {
         self.editorLabels = editorLabels
         self.transparentKeys = transparentKeys
         self.keysInEditor = keysInEditor
+        self.sectionVisibilityDefaults = sectionVisibilityDefaults
+        self.sectionVisibilityLabels = sectionVisibilityLabels
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
         for (key, var section) in sections {
@@ -436,6 +442,8 @@ struct TemplateManifest: Codable {
         editorLabels = try container.decodeIfPresent([String: String].self, forKey: .editorLabels)
         transparentKeys = try container.decodeIfPresent([String].self, forKey: .transparentKeys)
         keysInEditor = try container.decodeIfPresent([String].self, forKey: .keysInEditor)
+        sectionVisibilityDefaults = try container.decodeIfPresent([String: Bool].self, forKey: .sectionVisibilityDefaults)
+        sectionVisibilityLabels = try container.decodeIfPresent([String: String].self, forKey: .sectionVisibilityLabels)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
@@ -460,6 +468,8 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(editorLabels, forKey: .editorLabels)
         try container.encodeIfPresent(transparentKeys, forKey: .transparentKeys)
         try container.encodeIfPresent(keysInEditor, forKey: .keysInEditor)
+        try container.encodeIfPresent(sectionVisibilityDefaults, forKey: .sectionVisibilityDefaults)
+        try container.encodeIfPresent(sectionVisibilityLabels, forKey: .sectionVisibilityLabels)
         try container.encode(sections, forKey: .sections)
     }
 
@@ -536,6 +546,8 @@ struct TemplateManifest: Codable {
         case editorLabels
         case transparentKeys
         case keysInEditor = "keys-in-editor"
+        case sectionVisibilityDefaults = "section-visibility"
+        case sectionVisibilityLabels = "section-visibility-labels"
     }
 }
 
@@ -551,7 +563,9 @@ extension TemplateManifest {
             sections: sections,
             editorLabels: editorLabels,
             transparentKeys: transparentKeys,
-            keysInEditor: keysInEditor
+            keysInEditor: keysInEditor,
+            sectionVisibilityDefaults: sectionVisibilityDefaults,
+            sectionVisibilityLabels: sectionVisibilityLabels
         )
     }
 
@@ -567,6 +581,18 @@ extension TemplateManifest {
 
     static func decode(from data: Data) throws -> TemplateManifest {
         try JSONDecoder().decode(TemplateManifest.self, from: data)
+    }
+
+    func sectionVisibilityKeys() -> [String] {
+        guard let defaultKeys = sectionVisibilityDefaults?.keys else { return [] }
+        return Array(defaultKeys).sorted()
+    }
+
+    func sectionVisibilityLabel(for key: String) -> String {
+        if let label = sectionVisibilityLabels?[key] {
+            return label
+        }
+        return key.replacingOccurrences(of: "-", with: " ").capitalized
     }
 }
 
@@ -591,6 +617,7 @@ extension TemplateManifest {
         ApplicantProfilePath(section: "basics", path: ["phone"]),
         ApplicantProfilePath(section: "basics", path: ["url"]),
         ApplicantProfilePath(section: "basics", path: ["website"]),
+        ApplicantProfilePath(section: "basics", path: ["picture"]),
         ApplicantProfilePath(section: "basics", path: ["location", "address"]),
         ApplicantProfilePath(section: "basics", path: ["location", "city"]),
         ApplicantProfilePath(section: "basics", path: ["location", "region"]),
