@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OrderedCollections
 
 /// Builds a Mustache/JSON template context from a `Resume`'s tree representation
 /// without manual string concatenation. Replaces the legacy `TreeToJson` helper.
@@ -56,6 +57,10 @@ private struct Implementation {
         // Fallback for editor keys when the node is absent but metadata exists.
         if context["keys-in-editor"] == nil, !resume.importedEditorKeys.isEmpty {
             context["keys-in-editor"] = resume.importedEditorKeys
+        }
+
+        if let manifest {
+            applySectionVisibility(to: &context, manifest: manifest)
         }
 
         return context
@@ -178,6 +183,33 @@ private struct Implementation {
         }
 
         return result.isEmpty ? nil : result
+    }
+
+    private func applySectionVisibility(
+        to context: inout [String: Any],
+        manifest: TemplateManifest
+    ) {
+        var visibility = manifest.sectionVisibilityDefaults ?? [:]
+        let overrides = resume.sectionVisibilityOverrides
+        for (key, value) in overrides {
+            visibility[key] = value
+        }
+        guard visibility.isEmpty == false else { return }
+
+        for (sectionKey, isVisible) in visibility {
+            let boolKey = "\(sectionKey)Bool"
+            let baseVisible: Bool
+            if let numeric = context[boolKey] as? NSNumber {
+                baseVisible = numeric.boolValue
+            } else if let flag = context[boolKey] as? Bool {
+                baseVisible = flag
+            } else if let value = context[sectionKey] {
+                baseVisible = truthy(value)
+            } else {
+                baseVisible = false
+            }
+            context[boolKey] = baseVisible && isVisible
+        }
     }
 
     private func buildMapOfStringsSection(named sectionName: String) -> [String: String]? {
@@ -964,5 +996,22 @@ private struct Implementation {
             ordered.append(key)
         }
         return ordered
+    }
+
+    private func truthy(_ value: Any) -> Bool {
+        switch value {
+        case let number as NSNumber:
+            return number.boolValue
+        case let string as String:
+            return string.isEmpty == false
+        case let array as [Any]:
+            return array.isEmpty == false
+        case let dict as [String: Any]:
+            return dict.isEmpty == false
+        case let ordered as OrderedDictionary<String, Any>:
+            return ordered.isEmpty == false
+        default:
+            return true
+        }
     }
 }

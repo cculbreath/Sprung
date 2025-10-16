@@ -14,7 +14,16 @@ enum SchemaValidator {
         var warnings: [String] = []
 
         let allowedKeys: Set<String> = [
-            "name", "address", "city", "state", "zip", "phone", "email", "website", "signature_image"
+            "name",
+            "address",
+            "city",
+            "state",
+            "zip",
+            "phone",
+            "email",
+            "website",
+            "picture",
+            "signature_image"
         ]
         let requiredKeys: Set<String> = ["name", "email", "phone", "city", "state"]
 

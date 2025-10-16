@@ -30,7 +30,8 @@ class TextResumeGenerator {
         
         // Create and process context
         let context = try createTemplateContext(from: resume)
-        let processedContext = preprocessContextForText(context, from: resume)
+        var processedContext = preprocessContextForText(context, from: resume)
+        processedContext = HandlebarsContextAugmentor.augment(processedContext)
         
         let translation = HandlebarsTranslator.translate(templateContent)
         logTranslationWarnings(translation.warnings, template: template)

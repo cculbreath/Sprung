@@ -47,6 +47,22 @@ class Resume: Identifiable, Hashable {
         }
     }
 
+    @Attribute(.externalStorage)
+    private var sectionVisibilityData: Data?
+
+    var sectionVisibilityOverrides: [String: Bool] {
+        get {
+            guard let sectionVisibilityData,
+                  let decoded = try? JSONDecoder().decode([String: Bool].self, from: sectionVisibilityData) else {
+                return [:]
+            }
+            return decoded
+        }
+        set {
+            sectionVisibilityData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
     func label(_ key: String) -> String {
         if let myLabel = keyLabels[key] {
             return myLabel

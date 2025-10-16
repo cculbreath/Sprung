@@ -52,15 +52,24 @@ struct ResumeDetailView: View {
                     }
                 }
 
-                // Show font size panel if fontSizeNodes exist
-                if vm.hasFontSizeNodes {
+                let hasStylePanels = vm.hasFontSizeNodes || vm.hasSectionVisibilityOptions
+                if hasStylePanels {
                     Text("Style")
                         .font(.headline)
                         .fontWeight(.semibold)
                         .padding(.horizontal, 10)
                         .padding(.top, 16)
 
-                    FontSizePanelView().padding(10)
+                    VStack(alignment: .leading, spacing: 8) {
+                        if vm.hasSectionVisibilityOptions {
+                            SectionVisibilityPanelView()
+                                .padding(.horizontal, 10)
+                        }
+                        if vm.hasFontSizeNodes {
+                            FontSizePanelView()
+                                .padding(.horizontal, 10)
+                        }
+                    }
                 }
             }
         }

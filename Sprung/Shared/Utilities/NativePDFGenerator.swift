@@ -1,6 +1,7 @@
 import Foundation
 import WebKit
 import Mustache
+import OrderedCollections
 
 @MainActor
 class NativePDFGenerator: NSObject, ObservableObject {
@@ -85,7 +86,8 @@ class NativePDFGenerator: NSObject, ObservableObject {
     @MainActor
     func renderingContext(for resume: Resume) throws -> [String: Any] {
         let rawContext = try createTemplateContext(from: resume)
-        let processed = preprocessContextForTemplate(rawContext, from: resume)
+        var processed = preprocessContextForTemplate(rawContext, from: resume)
+        processed = HandlebarsContextAugmentor.augment(processed)
 #if DEBUG
         Logger.debug("NativePDFGenerator: context keys => \(processed.keys.sorted())")
 #endif
@@ -183,6 +185,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
             }
         }
 
+        applySectionVisibility(overrides: &merged, manifest: manifest, resume: resume)
         return merged
     }
 
@@ -219,6 +222,8 @@ class NativePDFGenerator: NSObject, ObservableObject {
             return profile.phone.isEmpty ? nil : profile.phone
         case "url", "website":
             return profile.websites.isEmpty ? nil : profile.websites
+        case "picture", "image":
+            return profile.picture.isEmpty ? nil : profile.picture
         case "address":
             return profile.address.isEmpty ? nil : profile.address
         case "city":
@@ -264,12 +269,58 @@ class NativePDFGenerator: NSObject, ObservableObject {
         return dictionary
     }
 
+    private func applySectionVisibility(
+        overrides context: inout [String: Any],
+        manifest: TemplateManifest,
+        resume: Resume
+    ) {
+        var visibility = manifest.sectionVisibilityDefaults ?? [:]
+        let resumeOverrides = resume.sectionVisibilityOverrides
+        for (key, value) in resumeOverrides {
+            visibility[key] = value
+        }
+
+        guard visibility.isEmpty == false else { return }
+
+        for (sectionKey, shouldDisplay) in visibility {
+            let boolKey = "\(sectionKey)Bool"
+            let baseVisible: Bool
+            if let numeric = context[boolKey] as? NSNumber {
+                baseVisible = numeric.boolValue
+            } else if let flag = context[boolKey] as? Bool {
+                baseVisible = flag
+            } else if let value = context[sectionKey] {
+                baseVisible = truthy(value)
+            } else {
+                baseVisible = false
+            }
+            context[boolKey] = baseVisible && shouldDisplay
+        }
+    }
+
     private func dictionaryValue(from value: Any?) -> [String: Any]? {
         guard let value else { return nil }
         if let dict = value as? [String: Any] {
             return dict
         }
         return nil
+    }
+
+    private func truthy(_ value: Any) -> Bool {
+        switch value {
+        case let number as NSNumber:
+            return number.boolValue
+        case let string as String:
+            return string.isEmpty == false
+        case let array as [Any]:
+            return array.isEmpty == false
+        case let dict as [String: Any]:
+            return dict.isEmpty == false
+        case let ordered as OrderedDictionary<String, Any>:
+            return ordered.isEmpty == false
+        default:
+            return true
+        }
     }
 
     private func preprocessTemplateForGRMustache(_ template: String) -> String {

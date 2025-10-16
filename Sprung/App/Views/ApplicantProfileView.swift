@@ -45,6 +45,10 @@ struct ApplicantProfileView: View {
                         TextField("Websites", text: $profile.websites)
                             .onChange(of: profile.websites) { _, _ in hasChanges = true }
                             .textFieldStyle(.roundedBorder)
+
+                        TextField("Picture URL or file path", text: $profile.picture)
+                            .onChange(of: profile.picture) { _, _ in hasChanges = true }
+                            .textFieldStyle(.roundedBorder)
                     }
 
                     Section("Mailing Address") {
