@@ -415,7 +415,7 @@ extension TemplateEditorView {
         appEnvironment.applicantProfileStore.save(profile)
         pendingProfileUpdate = nil
         seedValidationMessage = "Seed saved. Profile updated."
-        refreshTemplatePreview()
+        refreshTemplatePreview(force: true)
     }
 
     struct ProfileUpdateChange {
