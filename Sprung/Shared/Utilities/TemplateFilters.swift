@@ -15,6 +15,7 @@ enum TemplateFilters {
         template.register(sectionLineFilter, forKey: "sectionLine")
         template.register(joinFilter, forKey: "join")
         template.register(concatPairFilter, forKey: "concatPair")
+        template.register(htmlStripFilter, forKey: "htmlStrip")
         template.register(bulletListFilter, forKey: "bulletList")
         template.register(formatDateFilter, forKey: "formatDate")
         template.register(uppercaseFilter, forKey: "uppercase")
@@ -62,6 +63,11 @@ enum TemplateFilters {
 
         let combined = first + separator + second
         return combined.decodingHTMLEntities()
+    }
+
+    private static let htmlStripFilter = Filter { (value: String?) -> Any? in
+        guard let value, !value.isEmpty else { return nil }
+        return value.decodingHTMLEntities().removingHTMLTags()
     }
 
     private static let bulletListFilter = VariadicFilter { boxes -> Any? in
@@ -202,5 +208,17 @@ enum TemplateFilters {
 private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+private extension String {
+    func removingHTMLTags() -> String {
+        guard let data = data(using: .utf8) else { return self }
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.html,
+            .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+        let attributed = try? NSAttributedString(data: data, options: options, documentAttributes: nil)
+        return attributed?.string ?? self
     }
 }
