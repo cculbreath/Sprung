@@ -47,7 +47,24 @@ enum HandlebarsContextAugmentor {
             basics["capitalLabel"] = label.uppercased()
         }
 
+        if var location = basics["location"] as? [String: Any] {
+            if let state = stringValue(location["state"]), !state.isEmpty,
+               (stringValue(location["region"])?.isEmpty ?? true) {
+                location["region"] = state
+            } else if let region = stringValue(location["region"]), !region.isEmpty,
+                      (stringValue(location["state"])?.isEmpty ?? true) {
+                location["state"] = region
+            }
+            basics["location"] = location
+        }
+
+        let contactPieces = buildContactPieces(from: basics)
+        basics["contactLinePieces"] = contactPieces
+
         context["basics"] = basics
+        if !contactPieces.isEmpty {
+            context["contactLinePieces"] = contactPieces
+        }
 
         // Root-level toggles expected by common themes
         let basicsPicture = basics["picture"] ?? basics["image"]
@@ -61,6 +78,41 @@ enum HandlebarsContextAugmentor {
         if let location = basics["location"] as? [String: Any] {
             context["locationBool"] = truthy(location)
         }
+    }
+
+    private static func buildContactPieces(from basics: [String: Any]) -> [String] {
+        var pieces: [String] = []
+
+        if let location = basics["location"] as? [String: Any] {
+            let city = stringValue(location["city"])
+            let region = stringValue(location["region"])
+            let country = stringValue(location["countryCode"]) ?? stringValue(location["country"])
+
+            var locationParts: [String] = []
+            if let city, !city.isEmpty { locationParts.append(city) }
+            if let region, !region.isEmpty { locationParts.append(region) }
+            if let country, !country.isEmpty { locationParts.append(country) }
+
+            let locationString = locationParts.joined(separator: ", ")
+            if locationString.isEmpty == false {
+                pieces.append(locationString)
+            }
+        }
+
+        if let phone = stringValue(basics["phone"]), !phone.isEmpty {
+            pieces.append(phone)
+        }
+        if let email = stringValue(basics["email"]), !email.isEmpty {
+            pieces.append(email)
+        }
+
+        if let website = stringValue(basics["website"]), !website.isEmpty {
+            pieces.append(website)
+        } else if let url = stringValue(basics["url"]), !url.isEmpty {
+            pieces.append(url)
+        }
+
+        return pieces
     }
 
     private static func augmentTopLevelSectionFlags(in context: inout [String: Any]) {

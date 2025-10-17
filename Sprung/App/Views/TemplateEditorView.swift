@@ -111,6 +111,12 @@ struct TemplateEditorView: View {
             snippet: "{{ join(skills, \", \") }}"
         ),
         TextFilterInfo(
+            name: "contactLine",
+            signature: "center(join(basics.contactLinePieces, separator), width)",
+            description: "Centers a dot-separated contact line using the precomputed pieces array (location, phone, email, url).",
+            snippet: "{{{ center(join(basics.contactLinePieces, \" · \"), 80) }}}"
+        ),
+        TextFilterInfo(
             name: "bulletList",
             signature: "bulletList(array, width, indent, bullet, valueKey)",
             description: "Formats an array as bullet points. `valueKey` is optional for dictionary arrays.",
@@ -175,13 +181,6 @@ struct TemplateEditorView: View {
         }
     }
 
-    private func toggleInspectorVisibility() {
-        guard selectedTab == .pdfTemplate else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            showInspector.toggle()
-        }
-    }
-
     private func toggleSidebar() {
         withAnimation(.easeInOut(duration: 0.2)) {
             showSidebar.toggle()
@@ -243,13 +242,13 @@ struct TemplateEditorView: View {
             loadSeed()
             manifestHasChanges = false
             seedHasChanges = false
-            refreshTemplatePreview(force: true)
+            refreshTemplatePreview()
         }
         .onChange(of: selectedTemplate) { oldValue, _ in
             handleTemplateSelectionChange(previousSlug: oldValue)
         }
-        .onChange(of: selectedTab) { oldValue, newValue in
-            handleTabSelectionChange(previous: oldValue, newValue: newValue)
+        .onChange(of: selectedTab) { _, newValue in
+            handleTabSelectionChange(newValue: newValue)
         }
         .alert("Add New Template", isPresented: $showingAddTemplate) {
             TextField("Template name", text: $newTemplateName)
@@ -419,7 +418,7 @@ struct TemplateEditorView: View {
             isGeneratingLivePreview: isGeneratingLivePreview,
             selectedTab: selectedTab,
             pdfController: pdfController,
-            onForceRefresh: { refreshTemplatePreview(force: true) },
+            onForceRefresh: { refreshTemplatePreview() },
             onSaveAndRefresh: performRefresh,
             hasUnsavedChanges: hasAnyUnsavedChanges,
             onPrepareOverlayOptions: prepareOverlayOptions

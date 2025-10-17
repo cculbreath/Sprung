@@ -37,10 +37,6 @@ struct ResumeTemplateContextBuilder {
 
     // MARK: - Private helpers
 
-    func buildProfileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
-        profileContext(from: profile, manifest: manifest)
-    }
-
     private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
         if let manifest {
             let payload = buildProfilePayload(using: manifest, profile: profile)
@@ -55,7 +51,10 @@ struct ResumeTemplateContextBuilder {
         var location: [String: Any] = [:]
         if !profile.address.isEmpty { location["address"] = profile.address }
         if !profile.city.isEmpty { location["city"] = profile.city }
-        if !profile.state.isEmpty { location["state"] = profile.state }
+        if !profile.state.isEmpty {
+            location["state"] = profile.state
+            location["region"] = profile.state
+        }
         if !profile.zip.isEmpty { location["code"] = profile.zip }
 
         var contact: [String: Any] = [:]
@@ -355,13 +354,13 @@ private struct SeedContextNormalizer {
         for key in manifest.sectionOrder {
             guard let section = manifest.section(for: key),
                   let rawValue = normalized[key] else { continue }
-            normalized[key] = normalizeValue(rawValue, for: section, sectionKey: key)
+            normalized[key] = normalizeValue(rawValue, for: section)
         }
 
         // Include any sections not listed in sectionOrder
         for (key, value) in context where normalized[key] == nil {
             if let section = manifest.section(for: key) {
-                normalized[key] = normalizeValue(value, for: section, sectionKey: key)
+                normalized[key] = normalizeValue(value, for: section)
             } else {
                 normalized[key] = value
             }
@@ -372,12 +371,11 @@ private struct SeedContextNormalizer {
 
     private func normalizeValue(
         _ value: Any,
-        for section: TemplateManifest.Section,
-        sectionKey: String
+        for section: TemplateManifest.Section
     ) -> Any {
         switch section.type {
         case .array:
-            return normalizeArraySection(value, section: section)
+            return normalizeArraySection(value)
         case .arrayOfObjects:
             let descriptor = section.fields.first(where: { $0.key == "*" })
             return normalizeArrayOfObjectsSection(value, descriptor: descriptor)
@@ -395,7 +393,7 @@ private struct SeedContextNormalizer {
 
     // MARK: - Section handlers
 
-    private func normalizeArraySection(_ value: Any, section: TemplateManifest.Section) -> Any {
+    private func normalizeArraySection(_ value: Any) -> Any {
         if let array = value as? [Any] {
             return array
         }
