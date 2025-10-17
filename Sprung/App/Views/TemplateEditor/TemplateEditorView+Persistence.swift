@@ -415,6 +415,7 @@ extension TemplateEditorView {
         appEnvironment.applicantProfileStore.save(profile)
         pendingProfileUpdate = nil
         seedValidationMessage = "Seed saved. Profile updated."
+        refreshTemplatePreview()
     }
 
     struct ProfileUpdateChange {
@@ -594,8 +595,8 @@ extension TemplateEditorView {
             return
         }
 
-        let initialHTML = createEmptyTemplate(name: trimmedName, format: "html")
-        let initialText = createEmptyTemplate(name: trimmedName, format: "txt")
+        let initialHTML = createEmptyTemplate(format: "html")
+        let initialText = createEmptyTemplate(format: "txt")
         let shouldBeDefault = availableTemplates.isEmpty
         appEnvironment.templateStore.upsertTemplate(
             slug: trimmedName,
@@ -724,7 +725,7 @@ extension TemplateEditorView {
 
     func performRefresh() {
         if saveAllChanges() {
-            refreshTemplatePreview(force: true)
+            refreshTemplatePreview()
         }
     }
 
@@ -756,7 +757,7 @@ extension TemplateEditorView {
         overlayPDFDocument = nil
         overlayFilename = nil
         overlayPageCount = 0
-        refreshTemplatePreview(force: true)
+        refreshTemplatePreview()
     }
 
     func handleTemplateSelectionChange(previousSlug: String) {
@@ -769,10 +770,10 @@ extension TemplateEditorView {
         loadTemplateAssets()
         loadManifest()
         loadSeed()
-        refreshTemplatePreview(force: true)
+        refreshTemplatePreview()
     }
 
-    func handleTabSelectionChange(previous: TemplateEditorTab, newValue: TemplateEditorTab) {
+    func handleTabSelectionChange(newValue: TemplateEditorTab) {
         textEditorInsertion = nil
         switch newValue {
         case .pdfTemplate:
@@ -794,7 +795,7 @@ extension TemplateEditorView {
         }
     }
 
-    func createEmptyTemplate(name: String, format: String) -> String {
+    func createEmptyTemplate(format: String) -> String {
         switch format {
         case "html":
             return ""
