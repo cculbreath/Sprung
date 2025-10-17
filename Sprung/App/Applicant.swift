@@ -91,11 +91,6 @@ struct Applicant {
         )
     }
 
-    @MainActor
-    init(provider: ApplicantProfileProviding) {
-        self.profile = provider.currentProfile()
-    }
-
     // Forward properties to maintain backward compatibility
     var name: String { profile.name }
     var address: String { profile.address }

@@ -52,14 +52,6 @@ final class PDFPreviewController: ObservableObject {
         updatePagingState()
     }
 
-    func goToPage(at index: Int) {
-        guard let document = pdfView?.document,
-              index >= 0, index < document.pageCount,
-              let page = document.page(at: index) else { return }
-        pdfView?.go(to: page)
-        updatePagingState()
-    }
-
     func updatePagingState() {
         let next = pdfView?.canGoToNextPage ?? false
         let previous = pdfView?.canGoToPreviousPage ?? false

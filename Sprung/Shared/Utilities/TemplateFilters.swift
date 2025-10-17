@@ -47,15 +47,14 @@ enum TemplateFilters {
         guard let items = arrayOfStrings(from: arrayBox) else { return nil }
         let separator = string(from: boxes[safe: 1]) ?? " \u{00B7} "
         let joined = TextFormatHelpers.joiner(items, separator: separator)
-        let decoded = joined.decodingHTMLEntities()
-        return decoded.isEmpty ? nil : decoded
+        return joined.isEmpty ? nil : joined
     }
 
     private static let concatPairFilter = VariadicFilter { boxes -> Any? in
         guard boxes.count >= 2 else { return nil }
         let first = string(from: boxes[0])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let second = string(from: boxes[1])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let separator = string(from: boxes[safe: 2]) ?? ": "
+        let separator = string(from: boxes[safe: 2]) ?? " "
 
         if first.isEmpty && second.isEmpty { return nil }
         if second.isEmpty { return first.decodingHTMLEntities() }

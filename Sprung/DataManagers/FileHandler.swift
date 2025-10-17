@@ -58,10 +58,6 @@ class FileHandler {
         return directory
     }
 
-    static func artifactUrl(filename: String) -> URL {
-        artifactsDirectory().appendingPathComponent(filename)
-    }
-
     // Function to save JSON to Application Support
     static func saveJSONToFile(jsonString: String) -> URL? {
         let fileURL = FileHandler.jsonUrl()

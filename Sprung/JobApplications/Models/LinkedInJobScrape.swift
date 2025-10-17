@@ -13,7 +13,6 @@ import ObjectiveC
 private enum LinkedInScrapeTiming {
     static let requestTimeout: TimeInterval = 60
     static let fallbackCheckInterval: TimeInterval = 2
-    static let htmlExtractionDelay: TimeInterval = 2
     static let navigationTransitionDelay: TimeInterval = 2
     static let dynamicContentDelay: TimeInterval = 3
     static let debugWindowRevealDelay: TimeInterval = 10
