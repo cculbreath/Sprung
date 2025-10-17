@@ -26,7 +26,7 @@ extension TemplateEditorView {
             previewErrorMessage = nil
             return
         }
-        guard !isPreviewRefreshing else { return }
+        guard force || !isPreviewRefreshing else { return }
         isPreviewRefreshing = true
         isGeneratingPreview = true
         isGeneratingLivePreview = true
