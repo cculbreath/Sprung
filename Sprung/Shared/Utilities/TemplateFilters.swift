@@ -46,7 +46,8 @@ enum TemplateFilters {
         guard let items = arrayOfStrings(from: arrayBox) else { return nil }
         let separator = string(from: boxes[safe: 1]) ?? " \u{00B7} "
         let joined = TextFormatHelpers.joiner(items, separator: separator)
-        return joined.isEmpty ? nil : joined
+        let decoded = joined.decodingHTMLEntities()
+        return decoded.isEmpty ? nil : decoded
     }
 
     private static let bulletListFilter = VariadicFilter { boxes -> Any? in
