@@ -481,14 +481,6 @@ struct TemplateManifest: Codable {
         sections[key]?.behavior
     }
 
-    func behavior(forField fieldKey: String, inSection sectionKey: String) -> Section.FieldDescriptor.Behavior? {
-        sections[sectionKey]?.fields.first(where: { $0.key == fieldKey })?.behavior
-    }
-
-    func binding(forField fieldKey: String, inSection sectionKey: String) -> Section.FieldDescriptor.Binding? {
-        sections[sectionKey]?.fields.first(where: { $0.key == fieldKey })?.binding
-    }
-
     func isFieldMetadataSynthesized(for key: String) -> Bool {
         synthesizedSectionKeys.contains(key)
     }
@@ -501,18 +493,6 @@ struct TemplateManifest: Codable {
             }
         }
         return context
-    }
-
-    func orderedSectionKeys(existingKeys: [String]) -> [String] {
-        var ordered: [String] = []
-        if !sectionOrder.isEmpty {
-            for key in sectionOrder where existingKeys.contains(key) {
-                ordered.append(key)
-            }
-        }
-        let extras = existingKeys.filter { !ordered.contains($0) }.sorted()
-        ordered.append(contentsOf: extras)
-        return ordered
     }
 
     static func normalize(_ value: Any) -> Any {
@@ -554,31 +534,6 @@ struct TemplateManifest: Codable {
 // MARK: - Encoding helpers
 
 extension TemplateManifest {
-    func upgradingSchemaVersionIfNeeded() -> TemplateManifest {
-        guard schemaVersion < Self.currentSchemaVersion else { return self }
-        return TemplateManifest(
-            slug: slug,
-            schemaVersion: Self.currentSchemaVersion,
-            sectionOrder: sectionOrder,
-            sections: sections,
-            editorLabels: editorLabels,
-            transparentKeys: transparentKeys,
-            keysInEditor: keysInEditor,
-            sectionVisibilityDefaults: sectionVisibilityDefaults,
-            sectionVisibilityLabels: sectionVisibilityLabels
-        )
-    }
-
-    func encode(prettyPrinted: Bool = true) throws -> Data {
-        let encoder = JSONEncoder()
-        if prettyPrinted {
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        } else {
-            encoder.outputFormatting = [.sortedKeys]
-        }
-        return try encoder.encode(self)
-    }
-
     static func decode(from data: Data) throws -> TemplateManifest {
         try JSONDecoder().decode(TemplateManifest.self, from: data)
     }
@@ -588,12 +543,6 @@ extension TemplateManifest {
         return Array(defaultKeys).sorted()
     }
 
-    func sectionVisibilityLabel(for key: String) -> String {
-        if let label = sectionVisibilityLabels?[key] {
-            return label
-        }
-        return key.replacingOccurrences(of: "-", with: " ").capitalized
-    }
 }
 
 // MARK: - Applicant Profile Bindings
@@ -602,7 +551,6 @@ extension TemplateManifest {
     struct ApplicantProfileBinding {
         let section: String
         let path: [String]
-        let descriptor: Section.FieldDescriptor
         let binding: Section.FieldDescriptor.Binding
     }
 
@@ -655,7 +603,6 @@ extension TemplateManifest {
                     ApplicantProfileBinding(
                         section: sectionKey,
                         path: nextPath,
-                        descriptor: descriptor,
                         binding: binding
                     )
                 )

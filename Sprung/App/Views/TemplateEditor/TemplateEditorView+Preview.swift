@@ -140,7 +140,7 @@ extension TemplateEditorView {
 #endif
 
         // Render text
-        let textOutput = try renderMustache(template: textTemplate, context: renderingContext)
+        let textOutput = try renderMustache(template: textTemplate, context: renderingContext, isPlainText: true)
 
         // Render PDF via WKWebView using the HTML template
         let pdfData = try await pdfGenerator.generatePDFFromCustomTemplate(
@@ -172,13 +172,18 @@ extension TemplateEditorView {
         return nil
     }
 
-    private func renderMustache(template: String, context: [String: Any]) throws -> String {
+    private func renderMustache(template: String, context: [String: Any], isPlainText: Bool = false) throws -> String {
         let translation = HandlebarsTranslator.translate(template)
         logHandlebarsWarnings(translation.warnings)
 
         let mustache = try Mustache.Template(string: translation.template)
         TemplateFilters.register(on: mustache)
-        return try mustache.render(context)
+        let rendered = try mustache.render(context)
+        guard isPlainText else { return rendered }
+        return rendered
+            .decodingHTMLEntities()
+            .removingAnchorTags()
+    }
     }
 
     func prepareOverlayOptions() {
@@ -284,6 +289,18 @@ extension TemplateEditorView {
             return "Template rendering failed: \(baseMessage)"
         }
         return baseMessage.isEmpty ? String(describing: error) : baseMessage
+    }
+}
+
+private extension String {
+    func removingAnchorTags() -> String {
+        var output = self
+        let anchorPattern = "<a [^>]*>(.*?)</a>"
+        if let regex = try? NSRegularExpression(pattern: anchorPattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) {
+            let range = NSRange(location: 0, length: (output as NSString).length)
+            output = regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: "$1")
+        }
+        return output.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
     }
 }
 

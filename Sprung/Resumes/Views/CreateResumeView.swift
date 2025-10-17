@@ -12,8 +12,6 @@ import Foundation
 struct CreateResumeView: View {
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-    
-    var jobApp: JobApp
     var onCreateResume: (Template, [ResRef]) -> Void
     
     @State private var selectedTemplateID: UUID?
@@ -107,56 +105,5 @@ struct CreateResumeView: View {
                 }
             }
         }
-    }
-}
-
-/// A view showing the details of a ResRef (resume source document)
-struct ResRefDetailView: View {
-    var resRef: ResRef
-    
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Document: \(resRef.name)")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Button("Close") {
-                    dismiss()
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(.bottom, 8)
-            
-            Divider()
-            
-            // Show the document content in a scrollable text area
-            ScrollView {
-                Text(resRef.content)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-            }
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(8)
-            
-            HStack {
-                Spacer()
-                
-                if resRef.enabledByDefault {
-                    Label("Enabled by default", systemImage: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                } else {
-                    Label("Not enabled by default", systemImage: "circle")
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.top, 8)
-        }
-        .padding()
     }
 }

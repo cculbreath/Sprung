@@ -111,7 +111,6 @@ struct ResumeSplitView: View {
                 .sheet(isPresented: $showCreateResumeSheet) {
                     // Basic resume creation sheet
                     CreateResumeView(
-                        jobApp: selApp,
                         onCreateResume: { template, sources in
                             if resStore.create(
                                 jobApp: selApp,
@@ -185,5 +184,4 @@ private struct ResumeInspectorColumn: View {
             }
     }
 }
-
 

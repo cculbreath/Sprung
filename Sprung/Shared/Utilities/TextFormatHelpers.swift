@@ -219,8 +219,13 @@ struct TextFormatHelpers {
     }
     
     private static func stripTags(_ html: String) -> String {
-        // Remove HTML tags and the arrow character, then convert to uppercase
-        let cleaned = html.replacingOccurrences(of: #"<\/?[^>]+(>|$)|↪︎"#, with: "", options: .regularExpression)
-        return cleaned.uppercased()
+        guard let data = html.data(using: .utf8) else { return html.uppercased() }
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.html,
+            .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+        let attributed = try? NSAttributedString(data: data, options: options, documentAttributes: nil)
+        let cleaned = attributed?.string ?? html
+        return cleaned.replacingOccurrences(of: "↪︎", with: "").uppercased()
     }
 }

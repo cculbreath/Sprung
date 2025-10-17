@@ -21,7 +21,6 @@ final class OnboardingInterviewService {
     }
 
     struct PendingExtraction: @unchecked Sendable {
-        let fileId: String
         var rawExtraction: JSON
         var uncertainties: [String]
     }
@@ -459,7 +458,7 @@ final class OnboardingInterviewService {
         let extraction = ResumeRawExtractor.extract(from: data, filename: upload.name)
         let uncertainties = ["education", "experience"].filter { extraction[$0].type == .null }
 
-        pendingExtraction = PendingExtraction(fileId: fileId, rawExtraction: extraction, uncertainties: uncertainties)
+        pendingExtraction = PendingExtraction(rawExtraction: extraction, uncertainties: uncertainties)
 
         return JSON([
             "status": "awaiting_confirmation",
@@ -674,8 +673,7 @@ final class OnboardingInterviewService {
             guard let id = item["id"].string ?? item["title"].string else { return nil }
             let text = item["question"].string ?? item["text"].string ?? ""
             if text.isEmpty { return nil }
-            let target = item["target"].string ?? item["field"].string
-            return OnboardingQuestion(id: id, text: text, target: target)
+            return OnboardingQuestion(id: id, text: text)
         }
 
         let toolCalls = json["tool_calls"].arrayValue.compactMap { item -> ToolCall? in

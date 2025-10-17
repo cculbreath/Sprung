@@ -99,12 +99,10 @@ struct OnboardingMessage: Identifiable, Equatable {
 struct OnboardingQuestion: Identifiable, Equatable {
     let id: String
     let text: String
-    let target: String?
 
-    init(id: String, text: String, target: String? = nil) {
+    init(id: String, text: String) {
         self.id = id
         self.text = text
-        self.target = target
     }
 }
 
