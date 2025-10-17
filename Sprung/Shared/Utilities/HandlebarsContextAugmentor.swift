@@ -18,6 +18,7 @@ enum HandlebarsContextAugmentor {
         augmentSkills(in: &augmented)
         augmentEducation(in: &augmented)
         augmentAwards(in: &augmented)
+        augmentProjects(in: &augmented)
         augmentPublications(in: &augmented)
         augmentInterests(in: &augmented)
         augmentLanguages(in: &augmented)
@@ -214,6 +215,33 @@ enum HandlebarsContextAugmentor {
         }
 
         context["publications"] = publications
+    }
+
+    private static func augmentProjects(in context: inout [String: Any]) {
+        guard var projects = dictionaryArray(from: context["projects"]) else { return }
+
+        for index in projects.indices {
+            var item = projects[index]
+
+            let name = stringValue(item["name"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let description = stringValue(item["description"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            var combined = ""
+            if let name, !name.isEmpty {
+                combined = name
+            }
+            if let description, !description.isEmpty {
+                combined = combined.isEmpty ? description : "\(combined): \(description)"
+            }
+            if !combined.isEmpty {
+                item["projectLine"] = combined
+            }
+
+            item["projectKeywords"] = truthy(item["keywords"])
+            projects[index] = item
+        }
+
+        context["projects"] = projects
     }
 
     private static func augmentInterests(in context: inout [String: Any]) {

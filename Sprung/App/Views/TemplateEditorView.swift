@@ -117,6 +117,12 @@ struct TemplateEditorView: View {
             snippet: "{{{ center(join(basics.contactLinePieces, \" · \"), 80) }}}"
         ),
         TextFilterInfo(
+            name: "concatPair",
+            signature: "concatPair(first, second, separator?)",
+            description: "Concatenates two values with an optional separator (defaults to ': ').",
+            snippet: "{{ concatPair(name, description) }}"
+        ),
+        TextFilterInfo(
             name: "bulletList",
             signature: "bulletList(array, width, indent, bullet, valueKey)",
             description: "Formats an array as bullet points. `valueKey` is optional for dictionary arrays.",
