@@ -184,7 +184,6 @@ extension TemplateEditorView {
             .decodingHTMLEntities()
             .removingAnchorTags()
     }
-    }
 
     func prepareOverlayOptions() {
         overlayColorSelection = overlayColor
