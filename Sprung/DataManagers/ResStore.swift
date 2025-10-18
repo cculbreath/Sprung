@@ -254,8 +254,5 @@ final class ResStore: SwiftDataStore {
         modelContext.delete(res)
         saveContext()
     }
-
-    // Form functionality incomplete
-
     // `saveContext()` now lives in `SwiftDataStore`.
 }

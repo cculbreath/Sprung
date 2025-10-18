@@ -32,6 +32,14 @@ extension SwiftDataStore {
             return true
         } catch {
             #if DEBUG
+            Logger.error(
+                "SwiftData save failed: \(error.localizedDescription)",
+                category: .storage,
+                metadata: [
+                    "file": String(describing: file),
+                    "line": String(line)
+                ]
+            )
             #endif
             return false
         }

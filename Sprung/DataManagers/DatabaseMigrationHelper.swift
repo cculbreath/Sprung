@@ -64,40 +64,8 @@ class DatabaseMigrationHelper {
             Logger.warning("⚠️ Could not fix database schema: \(error)")
         }
         
-        // Try to create missing tables
-        attemptSchemaCreation(modelContext: modelContext)
-        
         // Mark migration as completed
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastDatabaseMigrationCheck")
         Logger.info("✅ Database schema migration completed")
     }
-    
-    private static func attemptSchemaCreation(modelContext: ModelContext) {
-        // SwiftData should automatically create tables when we insert the first object
-        // Create dummy objects to force table creation
-        let dummyConversationId = UUID()
-        let dummyContext = ConversationContext(conversationId: dummyConversationId, objectId: nil, objectType: .resume)
-        let dummyMessage = ConversationMessage(role: .system, content: "dummy")
-        
-        // Link them to ensure both tables are created with proper relationships
-        dummyContext.messages.append(dummyMessage)
-        
-        modelContext.insert(dummyContext)
-        modelContext.insert(dummyMessage)
-        
-        do {
-            try modelContext.save()
-            Logger.debug("✅ Created ConversationContext and ConversationMessage tables in default.store")
-            
-            // Now delete the dummy objects
-            modelContext.delete(dummyMessage)
-            modelContext.delete(dummyContext)
-            try modelContext.save()
-            Logger.debug("🧹 Cleaned up dummy objects")
-        } catch {
-            Logger.error("x Failed to create database schema: \(error)")
-            Logger.error("Error details: \(error.localizedDescription)")
-        }
-    }
-    
 }
