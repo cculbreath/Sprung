@@ -38,11 +38,11 @@ struct CoverLetterView: View {
                 )
             }
         } else {
-            Text(jobAppStore.selectedApp?.selectedRes == nil ? "job app nil" : "No nil fail")
-                .onAppear {
-                    if jobAppStore.selectedApp == nil {
-                    } else if jobAppStore.selectedApp?.selectedRes == nil {}
-                }
+            ContentUnavailableView(
+                "Select a Job Application",
+                systemImage: "briefcase",
+                description: Text("Choose a job application to create or review cover letters.")
+            )
         }
     }
 }
