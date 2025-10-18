@@ -14,7 +14,10 @@ enum TemplateManifestLoader {
         do {
             let manifest = try TemplateManifest.decode(from: data)
             if manifest.usesSynthesizedMetadata {
-                Logger.info("TemplateManifestLoader: Synthesized field descriptors for legacy manifest '\(slug)'")
+                Logger.info(
+                    "TemplateManifestLoader: legacy manifest '\(slug)' required synthesized field descriptors",
+                    category: .migration
+                )
             }
             return manifest
         } catch {

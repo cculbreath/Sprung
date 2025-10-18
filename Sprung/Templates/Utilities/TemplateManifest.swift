@@ -217,6 +217,8 @@ struct TemplateManifest: Codable {
             }
         }
 
+        /// Tracks whether section metadata was declared in the manifest or
+        /// synthesized at runtime for legacy templates (schema < v2024.09).
         enum FieldMetadataSource {
             case declared
             case synthesized
@@ -277,6 +279,10 @@ struct TemplateManifest: Codable {
             )
             fields = synthesized
             fieldMetadataSource = .synthesized
+            Logger.info(
+                "TemplateManifest: synthesized field descriptors for legacy section \(sectionKey)",
+                category: .migration
+            )
         }
 
         func defaultContextValue() -> Any? {

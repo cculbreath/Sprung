@@ -23,7 +23,7 @@ struct ResumeTemplateContextBuilder {
         var context = manifest?.makeDefaultContext() ?? [:]
         merge(into: &context, with: sanitizedFallback)
         merge(into: &context, with: sanitizedSeed)
-        merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest))
+        merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest, templateSlug: template.slug))
 
         addMissingKeys(from: sanitizedFallback, to: &context)
         addMissingKeys(from: sanitizedSeed, to: &context)
@@ -37,13 +37,18 @@ struct ResumeTemplateContextBuilder {
 
     // MARK: - Private helpers
 
-    private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
+    private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?, templateSlug: String?) -> [String: Any] {
         if let manifest {
             let payload = buildProfilePayload(using: manifest, profile: profile)
             if payload.isEmpty == false {
                 return payload
             }
         }
+        Logger.info(
+            "ResumeTemplateContextBuilder: using legacy applicant profile fallback",
+            category: .migration,
+            metadata: ["template": templateSlug ?? "unknown"]
+        )
         return legacyProfileContext(from: profile)
     }
 
