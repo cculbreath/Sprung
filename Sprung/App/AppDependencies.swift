@@ -51,11 +51,6 @@ final class AppDependencies {
         self.templateStore = templateStore
         let templateSeedStore = TemplateSeedStore(context: modelContext)
         self.templateSeedStore = templateSeedStore
-        TemplateSeedMigration.runIfNeeded(
-            context: modelContext,
-            templateStore: templateStore,
-            templateSeedStore: templateSeedStore
-        )
         TemplateTextResetMigration.runIfNeeded(templateStore: templateStore)
 
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)

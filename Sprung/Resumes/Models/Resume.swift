@@ -139,21 +139,6 @@ class Resume: Identifiable, Hashable {
         self.enabledSources = enabledSources
     }
 
-    func loadPDF(from fileURL: URL = FileHandler.pdfUrl(),
-                 completion: (() -> Void)? = nil)
-    {
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            defer { DispatchQueue.main.async { completion?() } }
-            do {
-                let data = try Data(contentsOf: fileURL)
-                DispatchQueue.main.async { self?.pdfData = data }
-            } catch {
-                Logger.debug("Error loading PDF from \(fileURL): \(error)")
-                DispatchQueue.main.async {}
-            }
-        }
-    }
-
     // MARK: - Hashable
 
     static func == (lhs: Resume, rhs: Resume) -> Bool {

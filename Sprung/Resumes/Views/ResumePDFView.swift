@@ -36,14 +36,6 @@ struct ResumePDFView: View {
                 }
             }
         }
-        .onAppear {
-            // Lazy-load a cached PDF if present on disk.
-            if resume.pdfData == nil,
-               let fileURL = FileHandler.readPdfUrl()
-            {
-                resume.loadPDF(from: fileURL)
-            }
-        }
         .id(resume.id) // Force view recreation when resume changes
     }
 }
