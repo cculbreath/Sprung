@@ -146,8 +146,7 @@ class ResumeReviseViewModel {
             
             // Defensive check: ensure reasoning modal is hidden for non-reasoning models
             if !supportsReasoning {
-                reasoningStreamManager.isVisible = false
-                reasoningStreamManager.clear()
+                reasoningStreamManager.hideAndClear()
             }
             
             let revisions: RevisionsContainer
@@ -252,15 +251,10 @@ class ResumeReviseViewModel {
             // Only show reasoning modal for models that support reasoning
             if supportsReasoning {
                 // Clear any previous reasoning content and reset state
-                reasoningStreamManager.clear()
-                
-                // Show reasoning modal for reasoning-enabled models
-                reasoningStreamManager.modelName = modelId
-                reasoningStreamManager.isVisible = true
+                reasoningStreamManager.startReasoning(modelName: modelId)
             } else {
                 // Defensive check: ensure reasoning modal is hidden for non-reasoning models
-                reasoningStreamManager.isVisible = false
-                reasoningStreamManager.clear()
+                reasoningStreamManager.hideAndClear()
             }
             
             let revisions: RevisionsContainer
@@ -333,8 +327,7 @@ class ResumeReviseViewModel {
         
         // Ensure reasoning modal is hidden before showing revision review
         Logger.debug("🔍 [ResumeReviseViewModel] Hiding reasoning modal")
-        reasoningStreamManager.isVisible = false
-        reasoningStreamManager.clear()
+        reasoningStreamManager.hideAndClear()
         
         // Show the revision review UI
         Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
@@ -671,13 +664,8 @@ class ResumeReviseViewModel {
         
         feedbackIndex -= 1
         
-        // Bounds check for resumeRevisions array
-        guard feedbackIndex < resumeRevisions.count else {
-            Logger.error("Navigation error: feedbackIndex \(feedbackIndex) out of bounds for resumeRevisions count \(resumeRevisions.count)")
-            feedbackIndex = min(feedbackIndex, resumeRevisions.count - 1)
-            return
-        }
-        
+        guard ensureFeedbackIndexInBounds() else { return }
+
         currentRevisionNode = resumeRevisions[feedbackIndex]
         
         // Restore or create feedback node for this revision
@@ -712,12 +700,8 @@ class ResumeReviseViewModel {
         
         feedbackIndex += 1
         
-        // Bounds check for resumeRevisions array
-        guard feedbackIndex < resumeRevisions.count else {
-            Logger.error("Navigation error: feedbackIndex \(feedbackIndex) out of bounds for resumeRevisions count \(resumeRevisions.count)")
-            feedbackIndex = resumeRevisions.count - 1
-            return
-        }
+        // Validate bounds after adjusting index
+        guard ensureFeedbackIndexInBounds() else { return }
         
         currentRevisionNode = resumeRevisions[feedbackIndex]
         
@@ -733,6 +717,27 @@ class ResumeReviseViewModel {
         }
         
         Logger.debug("Navigated to next revision: \(feedbackIndex + 1)/\(resumeRevisions.count)")
+    }
+
+    private func ensureFeedbackIndexInBounds() -> Bool {
+        guard !resumeRevisions.isEmpty else {
+            Logger.error("Navigation error: resumeRevisions collection is empty", category: .ui)
+            feedbackIndex = 0
+            currentRevisionNode = nil
+            currentFeedbackNode = nil
+            return false
+        }
+
+        guard feedbackIndex >= 0 && feedbackIndex < resumeRevisions.count else {
+            Logger.error(
+                "Navigation error: feedbackIndex \(feedbackIndex) out of bounds for resumeRevisions count \(resumeRevisions.count)",
+                category: .ui
+            )
+            feedbackIndex = max(0, min(feedbackIndex, resumeRevisions.count - 1))
+            return false
+        }
+
+        return true
     }
     
     /// Restore UI state from a saved feedback node

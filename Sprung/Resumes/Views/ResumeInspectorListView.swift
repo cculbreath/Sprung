@@ -1,5 +1,5 @@
 //
-//  ResumeInpectorListView.swift
+//  ResumeInspectorListView.swift
 //  Sprung
 //
 //  Created by Christopher Culbreath on 1/31/25.
@@ -53,8 +53,6 @@ struct ResumeInspectorListView: View {
         }
     }
 }
-
-// ResInspectorToggleView(res: $selApp.selectedRes)
 
 struct ResumeRowView: View {
     let resume: Resume
