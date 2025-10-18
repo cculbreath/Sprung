@@ -129,4 +129,18 @@ struct Applicant {
     var picture: String { profileDataURL ?? "" }
 
     private var profileDataURL: String? { profile.pictureDataURL() }
+
+    /// Provides a non-empty placeholder applicant for previews and fallbacks.
+    static var placeholder: Applicant {
+        Applicant(
+            name: "Alex Applicant",
+            address: "123 Sample Street",
+            city: "Sample City",
+            state: "Example State",
+            zip: "00000",
+            websites: "example.com",
+            email: "applicant@example.com",
+            phone: "(555) 010-0000"
+        )
+    }
 }

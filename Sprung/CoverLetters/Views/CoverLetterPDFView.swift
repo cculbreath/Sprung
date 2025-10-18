@@ -20,18 +20,7 @@ struct CoverLetterPDFView: View {
         self.coverLetter = coverLetter
         // Use provided applicant or create a default one
         // The real applicant will be loaded in onAppear
-        _applicant = State(
-            initialValue: applicant ?? Applicant(
-                name: "Alex Applicant",
-                address: "123 Sample Street",
-                city: "Sample City",
-                state: "Example State",
-                zip: "00000",
-                websites: "example.com",
-                email: "applicant@example.com",
-                phone: "(555) 010-0000"
-            )
-        )
+        _applicant = State(initialValue: applicant ?? .placeholder)
     }
 
     var body: some View {
@@ -45,9 +34,6 @@ struct CoverLetterPDFView: View {
                     .frame(maxHeight: .infinity)
             } else {
                 PDFKitView(data: pdfData)
-//                    .onAppear {
-//                        PDFDocument(data: pdfData)
-//                    }
             }
         }
         .task {
@@ -71,6 +57,10 @@ struct CoverLetterPDFView: View {
                     self.pdfData = generatedData
                     self.errorMessage = nil
                 } else {
+                    Logger.error(
+                        "CoverLetterPDFView: Generated PDF data was empty",
+                        category: .export
+                    )
                     self.errorMessage = "Could not generate PDF"
                 }
                 self.isLoading = false
@@ -95,7 +85,12 @@ struct PDFKitView: NSViewRepresentable {
 
         if let document = PDFDocument(data: data) {
             pdfView.document = document
-        } else {}
+        } else {
+            Logger.warning(
+                "PDFKitView: Failed to initialize PDFDocument during make phase",
+                category: .export
+            )
+        }
 
         return pdfView
     }
@@ -103,6 +98,11 @@ struct PDFKitView: NSViewRepresentable {
     func updateNSView(_ nsView: PDFView, context _: Context) {
         if let document = PDFDocument(data: data) {
             nsView.document = document
-        } else {}
+        } else {
+            Logger.warning(
+                "PDFKitView: Failed to update PDFDocument with new data",
+                category: .export
+            )
+        }
     }
 }
