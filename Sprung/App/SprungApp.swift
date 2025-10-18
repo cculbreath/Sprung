@@ -42,7 +42,7 @@ struct SprungApp: App {
                     launchState = .readOnly(message: Self.backupRestoreRequiredMessage(from: error))
                     Logger.error("🚨 Using in-memory ModelContainer; user data unavailable until restore completes", category: .appLifecycle)
                 } catch {
-                    Logger.critical("❌ Failed to create temporary in-memory ModelContainer: \(error)", category: .appLifecycle)
+                    Logger.error("❌ Failed to create temporary in-memory ModelContainer: \(error)", category: .appLifecycle)
                     let inMemoryConfig = ModelConfiguration(isStoredInMemoryOnly: true)
                     guard let fallbackContainer = try? Self.makeDirectModelContainer(configuration: inMemoryConfig) else {
                         preconditionFailure("Unable to create in-memory ModelContainer after migration failures: \(error)")

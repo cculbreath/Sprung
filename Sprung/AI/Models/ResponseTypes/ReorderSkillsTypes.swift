@@ -112,4 +112,9 @@ struct ReorderSkillsResponse: Codable, Equatable {
     init(reorderedSkillsAndExpertise: [ReorderedSkillNode]) {
         self.reorderedSkillsAndExpertise = reorderedSkillsAndExpertise
     }
+
+    func validate() -> Bool {
+        guard reorderedSkillsAndExpertise.isEmpty == false else { return false }
+        return reorderedSkillsAndExpertise.allSatisfy { UUID(uuidString: $0.id) != nil }
+    }
 }
