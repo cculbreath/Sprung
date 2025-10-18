@@ -10,7 +10,7 @@ import SwiftUI
 
 // A hover wrapper for each résumé reference row
 struct HoverableResRefRowView: View {
-    var sourceNode: ResRef // Replace with your actual model type
+    var sourceNode: ResRef
     @State private var isHovering: Bool = false
 
     var body: some View {
