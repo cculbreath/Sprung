@@ -136,10 +136,15 @@ private struct Implementation {
         case .styling:
             // Build the styling section including fontSizes
             var styling: [String: Any] = [:]
-            if let fontSizes = buildFontSizesSection() {
+            if let fontSizes = buildFontSizesSection() ?? defaultFontSizes(from: manifest) {
                 styling["fontSizes"] = fontSizes
             }
-            if resume.includeFonts {
+            if let margins = defaultPageMargins(from: manifest) {
+                styling["pageMargins"] = margins
+            }
+            if let includeFontsOverride = defaultIncludeFonts(from: manifest) {
+                styling["includeFonts"] = includeFontsOverride ? "true" : "false"
+            } else if resume.includeFonts {
                 styling["includeFonts"] = "true"
             }
             return styling.isEmpty ? nil : styling
@@ -398,6 +403,55 @@ private struct Implementation {
         }
         if descriptor.key == parent.name {
             return parent.orderedChildren.first
+        }
+        return nil
+    }
+
+    private func defaultFontSizes(from manifest: TemplateManifest?) -> [String: String]? {
+        guard let defaults = manifestDefaultDictionary(for: "styling"),
+              let fontSizes = defaults["fontSizes"] else { return nil }
+        return normalizeFontSizeMap(fontSizes)
+    }
+
+    private func defaultPageMargins(from manifest: TemplateManifest?) -> [String: String]? {
+        guard let defaults = manifestDefaultDictionary(for: "styling"),
+              let margins = defaults["pageMargins"] else { return nil }
+        return normalizeFontSizeMap(margins)
+    }
+
+    private func defaultIncludeFonts(from manifest: TemplateManifest?) -> Bool? {
+        guard let defaults = manifestDefaultDictionary(for: "styling"),
+              let include = defaults["includeFonts"] else { return nil }
+        if let boolValue = include as? Bool { return boolValue }
+        if let stringValue = include as? String {
+            return stringValue == "true"
+        }
+        return nil
+    }
+
+    private func manifestDefaultDictionary(for section: String) -> [String: Any]? {
+        guard let value = manifest?.section(for: section)?.defaultValue?.value else { return nil }
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
+        }
+        return nil
+    }
+
+    private func normalizeFontSizeMap(_ value: Any) -> [String: String]? {
+        if let dict = value as? [String: Any] {
+            var result: [String: String] = [:]
+            for (key, entry) in dict {
+                if let stringValue = entry as? String {
+                    result[key] = stringValue
+                }
+            }
+            return result.isEmpty ? nil : result
+        }
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return normalizeFontSizeMap(Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) }))
         }
         return nil
     }
