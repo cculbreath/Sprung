@@ -4,14 +4,12 @@ import Foundation
 import SwiftUI
 
 extension String {
-    /// Decodes HTML entities using Foundation's NSAttributedString
+    /// Decodes common HTML entities without altering existing whitespace.
     func decodingHTMLEntities() -> String {
-        guard let data = self.data(using: .utf8) else { return self }
-        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-            .documentType: NSAttributedString.DocumentType.html,
-            .characterEncoding: String.Encoding.utf8.rawValue
-        ]
-        guard let attributedString = try? NSAttributedString(data: data, options: options, documentAttributes: nil) else { return self }
-        return attributedString.string
+        if let decoded = CFXMLCreateStringByUnescapingEntities(nil, self as CFString, nil) {
+            let result = decoded as String
+            return result.replacingOccurrences(of: "\u{00A0}", with: " ")
+        }
+        return self
     }
 }

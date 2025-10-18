@@ -51,19 +51,6 @@ class TextResumeGenerator {
             templateContent = stored
         }
 
-        if templateContent == nil,
-           let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let userTemplatePath = documentsPath
-                .appendingPathComponent("Sprung")
-                .appendingPathComponent("Templates")
-                .appendingPathComponent(template)
-                .appendingPathComponent("\(resourceName).txt")
-            if let content = try? String(contentsOf: userTemplatePath, encoding: .utf8) {
-                templateContent = content
-                Logger.debug("Using user-modified text template from: \(userTemplatePath.path)")
-            }
-        }
-
         guard let content = templateContent else {
             throw NSError(domain: "TextResumeGenerator", code: 404, 
                          userInfo: [NSLocalizedDescriptionKey: "Template not found: \(template)"])

@@ -62,7 +62,9 @@ struct ResumeTemplateContextBuilder {
         if !profile.phone.isEmpty { contact["phone"] = profile.phone }
         if !profile.email.isEmpty { contact["email"] = profile.email }
         if !profile.websites.isEmpty { contact["website"] = profile.websites }
-        if !profile.picture.isEmpty { contact["picture"] = profile.picture }
+        if let picture = profile.pictureDataURL() {
+            contact["picture"] = picture
+        }
         if !location.isEmpty { contact["location"] = location }
 
         var basics: [String: Any] = [:]
@@ -70,7 +72,9 @@ struct ResumeTemplateContextBuilder {
         if !profile.email.isEmpty { basics["email"] = profile.email }
         if !profile.phone.isEmpty { basics["phone"] = profile.phone }
         if !profile.websites.isEmpty { basics["website"] = profile.websites }
-        if !profile.picture.isEmpty { basics["picture"] = profile.picture }
+        if let picture = profile.pictureDataURL() {
+            basics["picture"] = picture
+        }
         if !location.isEmpty { basics["location"] = location }
 
         var context: [String: Any] = [:]
@@ -120,7 +124,7 @@ struct ResumeTemplateContextBuilder {
         case "url", "website":
             return profile.websites
         case "picture", "image":
-            return profile.picture
+            return profile.pictureDataURL()
         case "address":
             return profile.address
         case "city":

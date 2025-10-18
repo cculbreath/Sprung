@@ -18,7 +18,8 @@ class ApplicantProfile {
     var websites: String
     var email: String
     var phone: String
-    var picture: String
+    @Attribute(.externalStorage) var pictureData: Data?
+    var pictureMimeType: String?
     var signatureData: Data?
 
     init(
@@ -31,7 +32,8 @@ class ApplicantProfile {
         websites: String = "example.com",
         email: String = "applicant@example.com",
         phone: String = "(555) 123-4567",
-        picture: String = "",
+        pictureData: Data? = nil,
+        pictureMimeType: String? = nil,
         signatureData: Data? = nil
     ) {
         self.name = name
@@ -43,7 +45,8 @@ class ApplicantProfile {
         self.websites = websites
         self.email = email
         self.phone = phone
-        self.picture = picture
+        self.pictureData = pictureData
+        self.pictureMimeType = pictureMimeType
         self.signatureData = signatureData
     }
 
@@ -56,6 +59,26 @@ class ApplicantProfile {
         }
 
         return nil
+    }
+
+    func getPictureImage() -> Image? {
+        guard let data = pictureData,
+              let nsImage = NSImage(data: data) else {
+            return nil
+        }
+        return Image(nsImage: nsImage)
+    }
+
+    func pictureDataURL() -> String? {
+        guard let pictureData else { return nil }
+        let mimeType = pictureMimeType ?? "image/png"
+        let base64 = pictureData.base64EncodedString()
+        return "data:\(mimeType);base64,\(base64)"
+    }
+
+    func updatePicture(data: Data?, mimeType: String?) {
+        pictureData = data
+        pictureMimeType = data == nil ? nil : (mimeType ?? pictureMimeType ?? "image/png")
     }
 }
 
@@ -75,7 +98,8 @@ struct Applicant {
         websites: String,
         email: String,
         phone: String,
-        picture: String = ""
+        pictureData: Data? = nil,
+        pictureMimeType: String? = nil
     ) {
         // Create a standalone ApplicantProfile without accessing MainActor-isolated code
         profile = ApplicantProfile(
@@ -87,7 +111,8 @@ struct Applicant {
             websites: websites,
             email: email,
             phone: phone,
-            picture: picture
+            pictureData: pictureData,
+            pictureMimeType: pictureMimeType
         )
     }
 
@@ -100,5 +125,8 @@ struct Applicant {
     var websites: String { profile.websites }
     var email: String { profile.email }
     var phone: String { profile.phone }
-    var picture: String { profile.picture }
+    var pictureDataURL: String? { profile.pictureDataURL() }
+    var picture: String { profileDataURL ?? "" }
+
+    private var profileDataURL: String? { profile.pictureDataURL() }
 }

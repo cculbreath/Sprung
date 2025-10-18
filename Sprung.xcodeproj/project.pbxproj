@@ -26,7 +26,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				Resources/Scripts,
 			);
 			target = 570FEC672C855BF50074D1E0 /* Sprung */;
 		};
@@ -37,9 +36,6 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				57F856C92E98390D0048FBA1 /* Exceptions for "Sprung" folder in "Sprung" target */,
-			);
-			explicitFolders = (
-				Resources/Scripts,
 			);
 			path = Sprung;
 			sourceTree = "<group>";

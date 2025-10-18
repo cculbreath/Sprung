@@ -3,19 +3,11 @@ import Foundation
 enum TemplateManifestLoader {
 
     static func manifest(for template: Template) -> TemplateManifest? {
-        if let data = template.manifestData,
-           let manifest = decode(from: data, slug: template.slug) {
-            return manifest
-        }
-        return manifest(forSlug: template.slug)
-    }
-
-    static func manifest(forSlug slug: String) -> TemplateManifest? {
-        guard let data = documentsManifest(slug: slug) else {
-            Logger.warning("TemplateManifestLoader: No manifest found for slug \(slug)")
+        guard let data = template.manifestData else {
+            Logger.warning("TemplateManifestLoader: No manifest data stored for slug \(template.slug)")
             return nil
         }
-        return decode(from: data, slug: slug)
+        return decode(from: data, slug: template.slug)
     }
 
     static func decode(from data: Data, slug: String) -> TemplateManifest? {
@@ -29,20 +21,5 @@ enum TemplateManifestLoader {
             Logger.error("TemplateManifestLoader: Failed to decode manifest for slug \(slug): \(error)")
             return nil
         }
-    }
-
-    private static func documentsManifest(slug: String) -> Data? {
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Sprung", isDirectory: true)
-            .appendingPathComponent("Templates", isDirectory: true)
-            .appendingPathComponent(slug, isDirectory: true)
-            .appendingPathComponent("\(slug)-manifest.json")
-
-        if let documentsURL,
-           let data = try? Data(contentsOf: documentsURL) {
-            return data
-        }
-
-        return nil
     }
 }

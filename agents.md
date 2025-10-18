@@ -23,6 +23,7 @@ This file provides comprehensive guidance for AI agents and developers working w
   - `Notes/ClaudeNotes/` - Various refactoring plans and architectural reviews
   - `Notes/RefactorNotes/` - Phase progress tracking and implementation guides
   - **Always read relevant documentation before starting LLM-related work**
+- **ABSOLUTE RULE FOR TEMPLATES**: The runtime app must **never** read template HTML, text, manifests, or seeds from the filesystem. All template data lives in SwiftData via `TemplateStore`/`TemplateSeedStore`. The repo’s `Sprung-private/…` files are for developer reference and copy/paste workflows only. Coding agents must not introduce or retain any `FileManager` lookups, document-directory fallbacks, or filesystem persistence for templates. Treat any filesystem access in template code as a critical regression.
 
 ### Package Dependencies
 The project uses Swift Package Manager with the following dependencies:
@@ -455,3 +456,11 @@ xcodebuild -project Sprung.xcodeproj -scheme Sprung test
 - See `Notes/RefactorNotes/` for phase progress tracking and implementation guides
 - See `Notes/CodeReviewFindings/` for detailed code review findings by module
 - See global `~/.claude/CLAUDE.md` for build verification strategy details
+- Use the `appleDocs` tool to pull first-party API references (e.g. `choose_technology "SwiftUI"` then `get_documentation "View/symbolEffect(_:options:value:)"`)
+
+## Apple Documentation Tooling
+- **Discovery workflow**: Call `appleDocs__discover_technologies` (optionally pass `{"page": n, "pageSize": m}`) to enumerate available frameworks. There are ~340 entries; page through until you find the framework you need.
+- **Select a framework**: Run `appleDocs__choose_technology` with either the framework name or identifier (for example, `{"name": "WebKit"}` or `{"identifier": "doc://com.apple.documentation/documentation/WebKit"}`).
+- **Find symbols**: Use `appleDocs__search_symbols` to locate related APIs (`{"query": "WKWebView"}`), then `appleDocs__get_documentation` with the returned symbol path to open detailed docs.
+- **Reset / switch**: Re-run `appleDocs__choose_technology` to switch contexts; the last selection remains active for subsequent `search` and `get_documentation` calls.
+- **Common technologies**: First page of `discover_technologies` today includes MetricKit, Vision, ReplayKit, Accelerate, ThreadNetwork, XcodeKit, SCSIControllerDriverKit, Visual Intelligence, DeveloperToolsSupport, Background Tasks, User Notifications UI, Dispatch, CarPlay, Metal, CryptoTokenKit, App Store Receipts, USBSerialDriverKit, BrowserEngineCore, CKTool JS, Core Animation, EventKit UI, IOBluetooth, Accounts, DriverKit, and App Intents. Continue paging for the full list.

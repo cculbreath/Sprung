@@ -1,7 +1,7 @@
 import Foundation
-import WebKit
 import Mustache
 import OrderedCollections
+import WebKit
 
 @MainActor
 class NativePDFGenerator: NSObject, ObservableObject {
@@ -109,19 +109,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
             templateContent = stored
         }
 
-        if templateContent == nil,
-           let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let userTemplatePath = documentsPath
-                .appendingPathComponent("Sprung")
-                .appendingPathComponent("Templates")
-                .appendingPathComponent(template)
-                .appendingPathComponent("\(resourceName).\(format)")
-            if let content = try? String(contentsOf: userTemplatePath, encoding: .utf8) {
-                templateContent = content
-                Logger.debug("Using user-modified template from: \(userTemplatePath.path)")
-            }
-        }
-
         guard let content = templateContent else {
             throw PDFGeneratorError.templateNotFound("\(resourceName).\(format)")
         }
@@ -223,7 +210,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         case "url", "website":
             return profile.websites.isEmpty ? nil : profile.websites
         case "picture", "image":
-            return profile.picture.isEmpty ? nil : profile.picture
+            return profile.pictureDataURL()
         case "address":
             return profile.address.isEmpty ? nil : profile.address
         case "city":
@@ -391,16 +378,69 @@ class NativePDFGenerator: NSObject, ObservableObject {
             throw PDFGeneratorError.webViewNotInitialized
         }
         
-        // Use the modern WKWebView PDF generation API
+        #if DEBUG
+        if let metrics = try? await fetchDocumentHeightMetrics(from: webView) {
+            Logger.debug(
+                """
+NativePDFGenerator: scrollHeight=\(String(format: "%.2f", metrics.scrollHeight)), \
+viewportHeight=\(String(format: "%.2f", metrics.viewportHeight)), \
+heightRatio=\(String(format: "%.2f", metrics.scrollHeight / metrics.viewportHeight))
+"""
+            )
+        }
+        #endif
+
         let configuration = WKPDFConfiguration()
-        // Set to full letter size - margins will be handled by CSS @page rule
         configuration.rect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter size in points
-        
+
         do {
-            let pdfData = try await webView.pdf(configuration: configuration)
-            return pdfData
+            return try await webView.pdf(configuration: configuration)
         } catch {
             throw PDFGeneratorError.pdfGenerationFailed
+        }
+    }
+
+    @MainActor
+    private func fetchDocumentHeightMetrics(from webView: WKWebView) async throws -> (scrollHeight: CGFloat, viewportHeight: CGFloat) {
+        let script = """
+        (() => {
+            const doc = document.documentElement;
+            const body = document.body;
+            const scrollHeight = Math.max(
+                doc ? doc.scrollHeight : 0,
+                body ? body.scrollHeight : 0
+            );
+            const viewportHeight = window.innerHeight
+                || (doc ? doc.clientHeight : 0)
+                || (body ? body.clientHeight : 0)
+                || 0;
+            return { scrollHeight, viewportHeight };
+        })();
+        """
+
+        return try await withCheckedThrowingContinuation { continuation in
+            webView.evaluateJavaScript(script) { result, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let dict = result as? [String: Any],
+                      let scrollNumber = dict["scrollHeight"] as? NSNumber,
+                      let viewportNumber = dict["viewportHeight"] as? NSNumber else {
+                    continuation.resume(
+                        throwing: PDFGeneratorError.pdfGenerationFailed
+                    )
+                    return
+                }
+
+                continuation.resume(
+                    returning: (
+                        scrollHeight: CGFloat(truncating: scrollNumber),
+                        viewportHeight: max(CGFloat(truncating: viewportNumber), 1)
+                    )
+                )
+            }
         }
     }
 }
