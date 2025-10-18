@@ -375,7 +375,7 @@ struct ResumeExportView: View {
                 )
 
                 do {
-                    try resume.textRes.write(to: fileURL, atomically: true, encoding: .utf8)
+                    try resume.textResume.write(to: fileURL, atomically: true, encoding: .utf8)
                     showToastNotification("Resume text has been exported to \"\(filename)\"")
                 } catch {
                     showToastNotification("Failed to export text: \(error.localizedDescription)")

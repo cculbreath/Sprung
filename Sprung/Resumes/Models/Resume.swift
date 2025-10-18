@@ -96,7 +96,8 @@ class Resume: Identifiable, Hashable {
         return dateFormatter.string(from: dateCreated)
     }
 
-    var textRes: String = ""
+    @Attribute(originalName: "textRes")
+    var textResume: String = ""
     var pdfData: Data?
 
     @Transient

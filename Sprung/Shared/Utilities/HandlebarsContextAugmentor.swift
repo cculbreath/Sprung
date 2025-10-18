@@ -161,7 +161,6 @@ enum HandlebarsContextAugmentor {
         for index in volunteer.indices {
             var item = volunteer[index]
             applyMonthYearFields(to: &item, startKey: "startDate", endKey: "endDate")
-            item["volunterHighlights"] = truthy(item["highlights"])
             item["volunteerHighlights"] = truthy(item["highlights"])
             volunteer[index] = item
         }

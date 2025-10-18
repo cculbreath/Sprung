@@ -9,10 +9,6 @@ import Foundation
 import AppKit
 import UniformTypeIdentifiers
 
-//  ResumeExportService.swift
-//  Extracted network export logic out of the Resume model so that the core
-//  data objects are no longer coupled to URLSession.
-
 
 @MainActor
 class ResumeExportService: ObservableObject {
@@ -50,7 +46,7 @@ class ResumeExportService: ObservableObject {
 
         // Generate text version using the template's text content (or fallback)
         let textContent = try textGenerator.generateTextResume(for: resume, template: slug)
-        resume.textRes = textContent
+        resume.textResume = textContent
     }
     
     @MainActor

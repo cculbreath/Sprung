@@ -56,15 +56,10 @@ class TextResumeGenerator {
                          userInfo: [NSLocalizedDescriptionKey: "Template not found: \(template)"])
         }
         
-        var sanitized = content
-        let legacySnippet = "{{{ center(join(job-titles, \" · \"), 80) }}}"
-        let updatedSnippet = "{{{ center(join(job-titles), 80) }}}"
-        if sanitized.contains(legacySnippet) {
-            Logger.debug("TextResumeGenerator: migrated legacy join syntax in template \(template)")
-            sanitized = sanitized.replacingOccurrences(of: legacySnippet, with: updatedSnippet)
-        }
-        sanitized = Self.migrateLegacyFormatDateCalls(in: sanitized)
-        return sanitized
+        return LegacyTemplateSyntaxMigrator.applyCompatibilityFixes(
+            to: content,
+            templateName: template
+        )
     }
     
     private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
@@ -211,14 +206,41 @@ class TextResumeGenerator {
     }
 }
 
-private extension TextResumeGenerator {
-    static func migrateLegacyFormatDateCalls(in template: String) -> String {
-        guard let regex = try? NSRegularExpression(
-            pattern: #"formatDate\(\s*([A-Za-z0-9_\.\-]+)\s*,\s*\"MMM yyyy\"\s*\)"#
-        ) else {
+private enum LegacyTemplateSyntaxMigrator {
+    private static let legacyJoinSnippet = "{{{ center(join(job-titles, \" · \"), 80) }}}"
+    private static let modernJoinSnippet = "{{{ center(join(job-titles), 80) }}}"
+    private static let formatDatePattern = #"formatDate\(\s*([A-Za-z0-9_\.\-]+)\s*,\s*\"MMM yyyy\"\s*\)"#
+
+    /// Applies compatibility shims for templates created before the 2024-09
+    /// manifest refresh. Plan to retire these migrations once all templates
+    /// have been edited through the new editor (target sunset: 2026-Q1).
+    static func applyCompatibilityFixes(to template: String, templateName: String) -> String {
+        var sanitized = migrateJoinSyntax(in: template, templateName: templateName)
+        sanitized = migrateLegacyFormatDateCalls(in: sanitized)
+        return sanitized
+    }
+
+    private static func migrateJoinSyntax(in template: String, templateName: String) -> String {
+        guard template.contains(legacyJoinSnippet) else { return template }
+
+        Logger.info(
+            "TextResumeGenerator: migrated legacy join syntax in template \(templateName)",
+            category: .migration
+        )
+
+        return template.replacingOccurrences(of: legacyJoinSnippet, with: modernJoinSnippet)
+    }
+
+    private static func migrateLegacyFormatDateCalls(in template: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: formatDatePattern) else {
             return template
         }
         let range = NSRange(template.startIndex..., in: template)
-        return regex.stringByReplacingMatches(in: template, options: [], range: range, withTemplate: "formatDate($1)")
+        return regex.stringByReplacingMatches(
+            in: template,
+            options: [],
+            range: range,
+            withTemplate: "formatDate($1)"
+        )
     }
 }

@@ -45,9 +45,9 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Custom Template Rendering
+
     @MainActor
-    // Text generation has been moved to TextResumeGenerator
-    
     func generatePDFFromCustomTemplate(
         for resume: Resume,
         customHTML: String,
@@ -94,8 +94,8 @@ class NativePDFGenerator: NSObject, ObservableObject {
         return processed
     }
     
-    // Custom text template generation has been moved to TextResumeGenerator
-    
+    /// Legacy helper retained for text exports. Text generation duties moved to
+    /// `TextResumeGenerator`, but PDF rendering still relies on this pipeline.
     @MainActor
     private func renderTemplate(for resume: Resume, template: String, format: String) throws -> String {
         let normalizedTemplate = template.lowercased()
