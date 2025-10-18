@@ -1,11 +1,10 @@
 import Foundation
 import NaturalLanguage
-import PDFKit
 import SwiftyJSON
 
 enum ArtifactSummarizer {
     static func summarize(data: Data, filename: String?, context: String?) -> JSON {
-        let text = plainText(from: data)
+        let text = WritingSampleAnalyzer.extractPlainText(from: data)
         let sentences = text
             .components(separatedBy: CharacterSet(charactersIn: ".!?"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -26,24 +25,6 @@ enum ArtifactSummarizer {
         }
 
         return JSON(card)
-    }
-
-    private static func plainText(from data: Data) -> String {
-        if let string = String(data: data, encoding: .utf8) {
-            return string
-        }
-
-        if let pdf = PDFDocument(data: data) {
-            var text = ""
-            for index in 0..<pdf.pageCount {
-                guard let page = pdf.page(at: index), let pageText = page.string else { continue }
-                text.append(pageText)
-                text.append("\n")
-            }
-            return text
-        }
-
-        return ""
     }
 
     private static func topKeywords(from text: String, limit: Int) -> [String] {

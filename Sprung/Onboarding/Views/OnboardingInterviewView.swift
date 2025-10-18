@@ -90,6 +90,7 @@ struct OnboardingInterviewView: View {
             HStack(spacing: 12) {
                 Button("Upload Résumé") { importResume() }
                 Button("Import Artifact") { importArtifact() }
+                Button("Import Writing Sample") { importWritingSample() }
 
                 HStack(spacing: 4) {
                     TextField("LinkedIn URL", text: $linkedInURL)
@@ -98,6 +99,12 @@ struct OnboardingInterviewView: View {
                     Button("Add") { registerLinkedIn() }
                         .buttonStyle(.bordered)
                 }
+
+                Toggle("Enable Writing Analysis", isOn: Binding(
+                    get: { service.allowWritingAnalysis },
+                    set: { interviewService.setWritingAnalysisConsent($0) }
+                ))
+                .toggleStyle(.switch)
 
                 Toggle("Allow Web Search", isOn: Binding(get: { service.allowWebSearch }, set: { interviewService.setWebSearchConsent($0) }))
                     .toggleStyle(.switch)
@@ -154,7 +161,7 @@ struct OnboardingInterviewView: View {
             }
         }
         .pickerStyle(.segmented)
-        .frame(width: 320)
+        .frame(width: 460)
     }
 
     // MARK: - Chat Panel
@@ -237,13 +244,8 @@ struct OnboardingInterviewView: View {
                     Text("Artifacts")
                         .font(.title2)
                         .bold()
-                    Spacer()
-                    Button("Open in Finder") {
-                        let url = FileHandler.artifactsDirectory()
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    }
-                    .buttonStyle(.bordered)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if !service.schemaIssues.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
@@ -278,8 +280,20 @@ struct OnboardingInterviewView: View {
                     }
                 }
 
+                if !service.artifacts.factLedger.isEmpty {
+                    FactLedgerListView(entries: service.artifacts.factLedger)
+                }
+
                 if let skillMap = service.artifacts.skillMap {
                     ArtifactSection(title: "Skill Evidence Map", content: formattedJSON(skillMap))
+                }
+
+                if let styleProfile = service.artifacts.styleProfile {
+                    StyleProfileView(profile: styleProfile)
+                }
+
+                if !service.artifacts.writingSamples.isEmpty {
+                    WritingSamplesListView(samples: service.artifacts.writingSamples)
                 }
 
                 if let context = service.artifacts.profileContext, !context.isEmpty {
@@ -364,6 +378,18 @@ struct OnboardingInterviewView: View {
             do {
                 let data = try Data(contentsOf: url)
                 _ = interviewService.registerArtifact(data: data, suggestedName: url.lastPathComponent)
+            } catch {
+                fileImportError = error.localizedDescription
+                showImportError = true
+            }
+        }
+    }
+
+    private func importWritingSample() {
+        openPanel(allowedTypes: [.pdf, .text, .plainText, .json]) { url in
+            do {
+                let data = try Data(contentsOf: url)
+                _ = interviewService.registerWritingSample(data: data, suggestedName: url.lastPathComponent)
             } catch {
                 fileImportError = error.localizedDescription
                 showImportError = true
@@ -491,6 +517,150 @@ private struct KnowledgeCardView: View {
                     Text(skills.joined(separator: ", "))
                         .font(.caption)
                 }
+            }
+        }
+    }
+}
+
+private struct FactLedgerListView: View {
+    let entries: [JSON]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Fact Ledger")
+                .font(.headline)
+
+            ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry["title"].string ?? "Entry #\(index + 1)")
+                        .font(.subheadline)
+                        .bold()
+                    if let summary = entry["summary"].string {
+                        Text(summary)
+                            .font(.body)
+                    }
+
+                    let value = entry["value"]
+                    if let valueArray = value.array {
+                        ForEach(Array(valueArray.enumerated()), id: \.offset) { valueIndex, item in
+                            if let text = item["summary"].string ?? item["value"].string {
+                                Text("• \(text)")
+                                    .font(.caption)
+                            } else if let string = item.string {
+                                Text("• \(string)")
+                                    .font(.caption)
+                            }
+                        }
+                    } else if let string = value.string {
+                        Text(string)
+                            .font(.caption)
+                    } else if let raw = value.rawString(options: [.prettyPrinted]) {
+                        Text(raw)
+                            .font(.system(.caption, design: .monospaced))
+                    }
+
+                    if let confidence = entry["confidence"].double {
+                        Text("Confidence: \(String(format: "%.2f", confidence))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(8)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+        }
+    }
+}
+
+private struct StyleProfileView: View {
+    let profile: JSON
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Style Profile")
+                .font(.headline)
+
+            let vector = profile["style_vector"]
+            VStack(alignment: .leading, spacing: 4) {
+                if let tone = vector["tone"].string {
+                    Label("Tone: \(tone)", systemImage: "waveform.path.ecg")
+                        .font(.subheadline)
+                }
+                if let avg = vector["avg_sentence_len"].double {
+                    Text("Average sentence length: \(String(format: "%.1f words", avg))")
+                        .font(.caption)
+                }
+                if let activeRatio = vector["active_voice_ratio"].double {
+                    Text("Active voice ratio: \(String(format: "%.0f%%", activeRatio * 100))")
+                        .font(.caption)
+                }
+                if let quant = vector["quant_density_per_100w"].double {
+                    Text("Quant density per 100 words: \(String(format: "%.2f", quant))")
+                        .font(.caption)
+                }
+            }
+
+            let samples = profile["samples"].arrayValue
+            if !samples.isEmpty {
+                Text("Samples (\(samples.count))")
+                    .font(.subheadline)
+                ForEach(samples.compactMap { $0["sample_id"].string ?? $0["id"].string }, id: \.self) { sampleId in
+                    Text("• \(sampleId)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct WritingSamplesListView: View {
+    let samples: [JSON]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Writing Samples")
+                .font(.headline)
+            ForEach(Array(samples.enumerated()), id: \.offset) { index, sample in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(sample["title"].string ?? sample["name"].string ?? "Sample #\(index + 1)")
+                        .font(.subheadline)
+                        .bold()
+                    if let summary = sample["summary"].string {
+                        Text(summary)
+                            .font(.caption)
+                    }
+                    let tone = sample["tone"].string ?? "—"
+                    let words = sample["word_count"].int ?? 0
+                    let avg = sample["avg_sentence_len"].double ?? 0
+                    let active = sample["active_voice_ratio"].double ?? 0
+                    let quant = sample["quant_density_per_100w"].double ?? 0
+
+                    Text("Tone: \(tone) • \(words) words • Avg sentence: \(String(format: "%.1f", avg)) words")
+                        .font(.caption)
+                    Text("Active voice: \(String(format: "%.0f%%", active * 100)) • Quant density: \(String(format: "%.2f", quant)) per 100 words")
+                        .font(.caption)
+
+                    let notable = sample["notable_phrases"].arrayValue.compactMap { $0.string }
+                    if !notable.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Notable phrases")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            ForEach(notable.prefix(3), id: \.self) { phrase in
+                                Text("• \(phrase)")
+                                    .font(.caption2)
+                            }
+                        }
+                    }
+                }
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
     }
