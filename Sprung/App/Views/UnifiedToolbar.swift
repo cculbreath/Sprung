@@ -166,15 +166,14 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Open Settings")
             }
             
-            // Legacy placeholder items to prevent crashes for previously customized toolbars
+            // Legacy toolbar identifiers retained for existing customizations
             ToolbarItem(id: "ttsReadAloud", placement: .primaryAction, showsByDefault: false) {
-                Button("Read Aloud") {
-                    // Legacy TTS button - functionality moved to menu
+                Button("Read Aloud", systemImage: "speaker.wave.2") {
+                    NotificationCenter.default.post(name: .triggerTTSButton, object: nil)
                 }
-                .disabled(true)
-                .help("TTS functionality moved to Cover Letter menu")
+                .help("Toggle text-to-speech playback")
             }
-            
+
             ToolbarItem(id: "separator", placement: .primaryAction, showsByDefault: false) {
                 Divider()
             }

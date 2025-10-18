@@ -23,19 +23,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingArtifactStore: OnboardingArtifactStore?
 
     func applicationDidFinishLaunching(_: Notification) {
-        // DEBUG: Remove existing SwiftData SQLite store files to avoid migration errors
-//        #if DEBUG
-//            let fm = FileManager.default
-//            if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-//                if let files = try? fm.contentsOfDirectory(at: appSupport, includingPropertiesForKeys: nil) {
-//                    for url in files where url.pathExtension == "sqlite" || url.pathExtension == "sqlite-shm" || url.pathExtension == "sqlite-wal" {
-//                        try? fm.removeItem(at: url)
-//                        Logger.debug("[DEBUG] Removed SwiftData store file at \(url.path)")
-//                    }
-//                }
-//            }
-//        #endif
-        
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.setupAppMenu()

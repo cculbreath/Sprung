@@ -68,17 +68,15 @@ extension TemplateEditorView {
             throw TemplatePreviewGeneratorError.templateUnavailable
         }
 
-#if DEBUG
-        Logger.debug("TemplatePreview[\(slug)]: HTML template length = \(htmlTemplate.count)")
-        Logger.debug("TemplatePreview[\(slug)]: text template length = \(textTemplate.count)")
-#endif
+        if Logger.isVerboseEnabled {
+            Logger.verbose("TemplatePreview[\(slug)]: HTML template length = \(htmlTemplate.count)")
+            Logger.verbose("TemplatePreview[\(slug)]: text template length = \(textTemplate.count)")
+        }
 
         let manifestData = templateRecord?.manifestData
-#if DEBUG
-        if manifestData == nil {
+        if manifestData == nil && Logger.isVerboseEnabled {
             Logger.warning("TemplateEditor: No manifest data available for slug \(slug)")
         }
-#endif
 
         let template = Template(
             name: templateName,
@@ -103,9 +101,9 @@ extension TemplateEditorView {
             throw TemplatePreviewGeneratorError.contextGenerationFailed
         }
 
-#if DEBUG
-        Logger.debug("TemplatePreview[\(slug)]: context keys => \(debugContextSummary(context))")
-#endif
+        if Logger.isVerboseEnabled {
+            Logger.verbose("TemplatePreview[\(slug)]: context keys => \(debugContextSummary(context))")
+        }
 
         let jobApp = JobApp()
         let resume = Resume(jobApp: jobApp, enabledSources: [], template: template)
@@ -113,21 +111,21 @@ extension TemplateEditorView {
         resume.importedEditorKeys = []
 
         let manifest = TemplateManifestLoader.manifest(for: template)
-#if DEBUG
-        if let manifest {
-            Logger.debug("TemplatePreview[\(slug)]: manifest sections => \(manifest.sectionOrder)")
-        } else {
-            Logger.debug("TemplatePreview[\(slug)]: manifest not found; relying on context order")
+        if Logger.isVerboseEnabled {
+            if let manifest {
+                Logger.verbose("TemplatePreview[\(slug)]: manifest sections => \(manifest.sectionOrder)")
+            } else {
+                Logger.verbose("TemplatePreview[\(slug)]: manifest not found; relying on context order")
+            }
         }
-#endif
         guard let rootNode = JsonToTree(resume: resume, context: context, manifest: manifest).buildTree() else {
             throw TemplatePreviewGeneratorError.treeGenerationFailed
         }
         resume.rootNode = rootNode
 
-#if DEBUG
-        Logger.debug("TemplatePreview[\(slug)]: tree sections => \(debugTreeSummary(rootNode))")
-#endif
+        if Logger.isVerboseEnabled {
+            Logger.verbose("TemplatePreview[\(slug)]: tree sections => \(debugTreeSummary(rootNode))")
+        }
 
         let pdfGenerator = NativePDFGenerator(
             templateStore: appEnvironment.templateStore,
@@ -135,9 +133,9 @@ extension TemplateEditorView {
         )
         let renderingContext = try pdfGenerator.renderingContext(for: resume)
 
-#if DEBUG
-        Logger.debug("TemplatePreview[\(slug)]: rendering context keys => \(debugContextSummary(renderingContext))")
-#endif
+        if Logger.isVerboseEnabled {
+            Logger.verbose("TemplatePreview[\(slug)]: rendering context keys => \(debugContextSummary(renderingContext))")
+        }
 
         // Render text
         let textOutput = try renderMustache(template: textTemplate, context: renderingContext, isPlainText: true)

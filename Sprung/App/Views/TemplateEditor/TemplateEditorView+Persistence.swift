@@ -274,30 +274,35 @@ extension TemplateEditorView {
     }
 
     private func profileField(for path: [String]) -> ProfileField? {
-        guard let first = path.first else { return nil }
-        switch first {
-        case "name":
-            return ProfileField(label: "Name", keyPath: \ApplicantProfile.name)
-        case "email":
-            return ProfileField(label: "Email", keyPath: \ApplicantProfile.email)
-        case "phone":
-            return ProfileField(label: "Phone", keyPath: \ApplicantProfile.phone)
-        case "url", "website":
-            return ProfileField(label: "Website", keyPath: \ApplicantProfile.websites)
-        case "address":
-            return ProfileField(label: "Address", keyPath: \ApplicantProfile.address)
-        case "city":
-            return ProfileField(label: "City", keyPath: \ApplicantProfile.city)
-        case "region", "state":
-            return ProfileField(label: "State", keyPath: \ApplicantProfile.state)
-        case "postalCode", "zip", "code":
-            return ProfileField(label: "Postal Code", keyPath: \ApplicantProfile.zip)
-        case "location":
-            let remainder = Array(path.dropFirst())
-            return profileField(for: remainder)
-        default:
-            return nil
+        var remaining = ArraySlice(path)
+
+        while let key = remaining.first {
+            switch key {
+            case "name":
+                return ProfileField(label: "Name", keyPath: \ApplicantProfile.name)
+            case "email":
+                return ProfileField(label: "Email", keyPath: \ApplicantProfile.email)
+            case "phone":
+                return ProfileField(label: "Phone", keyPath: \ApplicantProfile.phone)
+            case "url", "website":
+                return ProfileField(label: "Website", keyPath: \ApplicantProfile.websites)
+            case "address":
+                return ProfileField(label: "Address", keyPath: \ApplicantProfile.address)
+            case "city":
+                return ProfileField(label: "City", keyPath: \ApplicantProfile.city)
+            case "region", "state":
+                return ProfileField(label: "State", keyPath: \ApplicantProfile.state)
+            case "postalCode", "zip", "code":
+                return ProfileField(label: "Postal Code", keyPath: \ApplicantProfile.zip)
+            case "location":
+                remaining = remaining.dropFirst()
+                continue
+            default:
+                return nil
+            }
         }
+
+        return nil
     }
 
     private func extractStringValue(

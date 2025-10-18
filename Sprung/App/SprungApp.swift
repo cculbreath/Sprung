@@ -42,9 +42,12 @@ struct SprungApp: App {
                     launchState = .readOnly(message: Self.backupRestoreRequiredMessage(from: error))
                     Logger.error("🚨 Using in-memory ModelContainer; user data unavailable until restore completes", category: .appLifecycle)
                 } catch {
-                    Logger.error("❌ Failed to create temporary in-memory ModelContainer: \(error)", category: .appLifecycle)
+                    Logger.critical("❌ Failed to create temporary in-memory ModelContainer: \(error)", category: .appLifecycle)
                     let inMemoryConfig = ModelConfiguration(isStoredInMemoryOnly: true)
-                    resolvedContainer = try! Self.makeDirectModelContainer(configuration: inMemoryConfig)
+                    guard let fallbackContainer = try? Self.makeDirectModelContainer(configuration: inMemoryConfig) else {
+                        preconditionFailure("Unable to create in-memory ModelContainer after migration failures: \(error)")
+                    }
+                    resolvedContainer = fallbackContainer
                     launchState = .readOnly(message: Self.backupRestoreRequiredMessage(from: error))
                 }
             }
@@ -56,13 +59,6 @@ struct SprungApp: App {
         dependencies.appEnvironment.appState.isReadOnlyMode = launchState.isReadOnly
         self.appDependencies = dependencies
         self.appEnvironment = dependencies.appEnvironment
-        // Log after all properties are initialized
-        Logger.debug(
-            "🔴 SprungApp init - appState address: \(Unmanaged.passUnretained(appEnvironment.appState).toOpaque())",
-            category: .appLifecycle
-        )
-    
-
     }
     var body: some Scene {
         Window("", id: "myApp") {
@@ -110,20 +106,6 @@ struct SprungApp: App {
             }
             
             CommandGroup(after: .importExport) {
-                // Import functionality removed - ImportJobAppsFromURLsView was a rogue view
-                /*
-                Button("Import Job Applications from URLs...") {
-                    Logger.debug("🔵 Menu item clicked - Import Job Applications")
-                    Logger.debug("🔵 appState address in menu: \(Unmanaged.passUnretained(appState).toOpaque())")
-                    Logger.debug("🔵 Setting appState.showImportJobAppsSheet = true")
-                    appState.showImportJobAppsSheet = true
-                    Logger.debug("🔵 appState.showImportJobAppsSheet is now: \(appState.showImportJobAppsSheet)")
-                    
-                    // Try to trigger the import directly via notification
-                    NotificationCenter.default.post(name: NSNotification.Name("ShowImportJobApps"), object: nil)
-                }
-                .keyboardShortcut("i", modifiers: [.command, .shift])
-                */
             }
             
             
