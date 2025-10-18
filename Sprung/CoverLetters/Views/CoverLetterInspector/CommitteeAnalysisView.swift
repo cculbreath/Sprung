@@ -190,15 +190,17 @@ struct CommitteeAnalysisView: View {
                         }
                     }
                 } else if coverLetter.hasBeenAssessed {
-                    Logger.warning(
-                        "CommitteeAnalysisView: cover letter assessed without committee feedback",
-                        category: .ai,
-                        metadata: ["coverLetterID": coverLetter.id.uuidString]
-                    )
                     Text("Assessment completed, detailed analysis pending...")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .italic()
+                        .onAppear {
+                            Logger.warning(
+                                "CommitteeAnalysisView: cover letter assessed without committee feedback",
+                                category: .ai,
+                                metadata: ["coverLetterID": coverLetter.id.uuidString]
+                            )
+                        }
                 }
             }
             .padding(10)
