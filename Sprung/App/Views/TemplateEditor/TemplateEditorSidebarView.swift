@@ -55,6 +55,9 @@ struct TemplateEditorSidebarView: View {
                     ForEach(availableTemplates, id: \.self) { template in
                         templateRow(template)
                             .tag(template)
+                            .onTapGesture {
+                                selection.wrappedValue = template
+                            }
                     }
                 }
             }
@@ -120,6 +123,9 @@ struct TemplateEditorSidebarView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            startRenaming(template)
+        }
         .contextMenu {
             Button("Rename Template") {
                 startRenaming(template)

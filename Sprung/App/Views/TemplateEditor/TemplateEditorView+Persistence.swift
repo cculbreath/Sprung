@@ -53,8 +53,11 @@ extension TemplateEditorView {
 
         if let template = appEnvironment.templateStore.template(slug: slug),
            let data = template.manifestData,
-           let formatted = prettyJSONString(from: data) {
-            manifestContent = formatted
+           !data.isEmpty,
+           let overrides = decodeManifestOverrides(from: data, slug: slug),
+           let encoded = try? encodeManifestOverrides(overrides),
+           let string = String(data: encoded, encoding: .utf8) {
+            manifestContent = string
             manifestHasChanges = false
             return
         }
@@ -78,18 +81,10 @@ extension TemplateEditorView {
         }
 
         do {
-            let jsonObject = try JSONSerialization.jsonObject(with: rawData)
-            guard let formatted = prettyJSONString(from: jsonObject),
-                  let data = formatted.data(using: .utf8) else {
-                manifestValidationMessage = "Manifest must be a valid JSON object."
-                return false
-            }
-
-            // Decode to ensure it matches expected manifest structure
-            _ = try JSONDecoder().decode(TemplateManifest.self, from: data)
-
-            try appEnvironment.templateStore.updateManifest(slug: slug, manifestData: data)
-            manifestContent = formatted
+            let overrides = try decodeManifestOrThrow(from: rawData, slug: slug)
+            let encoded = try encodeManifestOverrides(overrides)
+            try appEnvironment.templateStore.updateManifest(slug: slug, manifestData: encoded)
+            manifestContent = String(data: encoded, encoding: .utf8) ?? manifestContent
             manifestHasChanges = false
             manifestValidationMessage = "Manifest saved."
             return true
@@ -107,14 +102,9 @@ extension TemplateEditorView {
         }
 
         do {
-            let jsonObject = try JSONSerialization.jsonObject(with: data)
-            guard let formatted = prettyJSONString(from: jsonObject),
-                  let normalized = formatted.data(using: .utf8) else {
-                manifestValidationMessage = "Manifest must be a valid JSON object."
-                return
-            }
-            _ = try JSONDecoder().decode(TemplateManifest.self, from: normalized)
-            manifestContent = formatted
+            let overrides = try decodeManifestOrThrow(from: data, slug: selectedTemplate.lowercased())
+            let encoded = try encodeManifestOverrides(overrides)
+            manifestContent = String(data: encoded, encoding: .utf8) ?? manifestContent
             manifestValidationMessage = "Manifest is valid."
         } catch {
             manifestValidationMessage = "Validation failed: \(error.localizedDescription)"
@@ -742,8 +732,70 @@ extension TemplateEditorView {
         }
     }
 
-    static func emptyManifest(slug _: String = "") -> String {
-        return ""
+    static func emptyManifest(slug: String = "") -> String {
+        let overrides = TemplateManifestOverrides(
+            sectionOrder: TemplateManifestDefaults.defaultSectionOrder,
+            styling: TemplateManifestOverrides.Styling(
+                fontSizes: TemplateManifestDefaults.recommendedFontSizes,
+                pageMargins: TemplateManifestDefaults.recommendedPageMargins,
+                includeFonts: false
+            ),
+            custom: TemplateManifestOverrides.Custom(
+                sectionLabels: TemplateManifestDefaults.defaultSectionLabels,
+                contactLabels: TemplateManifestDefaults.defaultContactLabels,
+                labels: TemplateManifestDefaults.defaultGeneralLabels,
+                colors: TemplateManifestDefaults.defaultColors,
+                layout: TemplateManifestDefaults.defaultLayout,
+                meta: TemplateManifestDefaults.defaultMeta
+            ),
+            sectionVisibility: TemplateManifestDefaults.defaultSectionVisibilityDefaults,
+            sectionVisibilityLabels: TemplateManifestDefaults.defaultSectionVisibilityLabels
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(overrides),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return string
     }
 
+    private func decodeManifestOverrides(from data: Data, slug: String) -> TemplateManifestOverrides? {
+        let decoder = JSONDecoder()
+        if let overrides = try? decoder.decode(TemplateManifestOverrides.self, from: data) {
+            return overrides
+        }
+
+        if let legacy = try? TemplateManifest.decode(from: data) {
+            let base = TemplateManifestDefaults.baseManifest(for: slug)
+            return TemplateManifestDefaults.overrides(fromLegacy: legacy, comparisonBase: base)
+        }
+
+        return nil
+    }
+
+    private func decodeManifestOrThrow(from data: Data, slug: String) throws -> TemplateManifestOverrides {
+        guard let overrides = decodeManifestOverrides(from: data, slug: slug) else {
+            throw ManifestError.invalidFormat
+        }
+        return overrides
+    }
+
+    private func encodeManifestOverrides(_ overrides: TemplateManifestOverrides) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(overrides)
+    }
+
+    private enum ManifestError: LocalizedError {
+        case invalidFormat
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidFormat:
+                return "Manifest must contain styling, UI, or custom field overrides."
+            }
+        }
+    }
 }
