@@ -48,6 +48,7 @@ class DatabaseSchemaFixer {
         try fixTreeNodeSchema(db: db)
         try fixResumeSchema(db: db)
         try fixResRefRelationshipSchema(db: db)
+        try fixConversationSchema(db: db)
         
         Logger.info("✅ Database schema fix completed")
     }
@@ -109,7 +110,22 @@ class DatabaseSchemaFixer {
         if !hasJoinTable {
             needsFixing = true
         }
-        
+
+        // Check conversation tables
+        let checkConversationContext = "SELECT name FROM sqlite_master WHERE type='table' AND name='ZCONVERSATIONCONTEXT';"
+        if sqlite3_prepare_v2(db, checkConversationContext, -1, &stmt, nil) == SQLITE_OK {
+            let exists = sqlite3_step(stmt) == SQLITE_ROW
+            if !exists { needsFixing = true }
+        }
+        sqlite3_finalize(stmt)
+
+        let checkConversationMessage = "SELECT name FROM sqlite_master WHERE type='table' AND name='ZCONVERSATIONMESSAGE';"
+        if sqlite3_prepare_v2(db, checkConversationMessage, -1, &stmt, nil) == SQLITE_OK {
+            let exists = sqlite3_step(stmt) == SQLITE_ROW
+            if !exists { needsFixing = true }
+        }
+        sqlite3_finalize(stmt)
+
         return needsFixing
     }
     
@@ -262,7 +278,43 @@ class DatabaseSchemaFixer {
             Logger.debug("✅ Z_10ENABLEDRESUMES join table already exists")
         }
     }
-    
+
+    private static func fixConversationSchema(db: OpaquePointer?) throws {
+        Logger.info("🔧 Ensuring conversation tables exist...")
+
+        let createContextTable = """
+            CREATE TABLE IF NOT EXISTS ZCONVERSATIONCONTEXT (
+                Z_PK INTEGER PRIMARY KEY,
+                Z_ENT INTEGER,
+                Z_OPT INTEGER,
+                ZID TEXT,
+                ZOBJECTID TEXT,
+                ZOBJECTTYPE TEXT,
+                ZLASTUPDATED REAL
+            );
+            """
+        if sqlite3_exec(db, createContextTable, nil, nil, nil) != SQLITE_OK {
+            Logger.warning("⚠️ Could not ensure ZCONVERSATIONCONTEXT table")
+        }
+
+        let createMessageTable = """
+            CREATE TABLE IF NOT EXISTS ZCONVERSATIONMESSAGE (
+                Z_PK INTEGER PRIMARY KEY,
+                Z_ENT INTEGER,
+                Z_OPT INTEGER,
+                ZID TEXT,
+                ZROLE TEXT,
+                ZCONTENT TEXT,
+                ZIMAGEDATA TEXT,
+                ZTIMESTAMP REAL,
+                ZCONTEXT INTEGER
+            );
+            """
+        if sqlite3_exec(db, createMessageTable, nil, nil, nil) != SQLITE_OK {
+            Logger.warning("⚠️ Could not ensure ZCONVERSATIONMESSAGE table")
+        }
+    }
+
     private static func getApplicationSupportDirectory() throws -> URL {
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         guard let appSupportURL = paths.first else {

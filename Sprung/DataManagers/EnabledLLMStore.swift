@@ -152,7 +152,7 @@ class EnabledLLMStore: SwiftDataStore {
                 sortBy: [SortDescriptor(\.lastUsed, order: .reverse)]
             )
             enabledModels = try modelContext.fetch(descriptor)
-            Logger.debug("🔄 Refreshed EnabledLLMStore: \\(enabledModels.count) enabled models")
+            Logger.debug("🔄 Refreshed EnabledLLMStore: \(enabledModels.count) enabled models")
         } catch {
             Logger.error("❌ Failed to refresh enabled models: \\(error)")
         }

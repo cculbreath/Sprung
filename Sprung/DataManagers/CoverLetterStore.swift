@@ -7,9 +7,7 @@
 
 import Foundation
 import SwiftData
-
-// Replaces hand‑rolled `saveContext()` duplication with a shared helper.
-import SwiftUI // Needed only for `@Observable` macro, already available.
+import SwiftUI
 
 @Observable
 @MainActor
@@ -41,9 +39,9 @@ final class CoverLetterStore: SwiftDataStore {
     @discardableResult
     func addLetter(letter: CoverLetter, to jobApp: JobApp) -> CoverLetter {
         jobApp.coverLetters.append(letter)
-        jobApp.selectedCover = letter // Set the newly added letter as selected
+        jobApp.selectedCover = letter
         modelContext.insert(letter)
-        //    saveContext() // Context will be saved by the caller or at appropriate points
+        saveContext()
         return letter
     }
 
@@ -57,7 +55,7 @@ final class CoverLetterStore: SwiftDataStore {
         // Name will be set by processResults after AI generation.
         // includeResumeRefs will also be handled by the generation logic.
         modelContext.insert(letter)
-        //      try? modelContext.save()
+        saveContext()
         return letter
     }
 

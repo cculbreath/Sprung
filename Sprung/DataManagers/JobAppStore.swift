@@ -42,8 +42,8 @@ final class JobAppStore: SwiftDataStore {
 
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus
-//    saveContext()
-        // Handle additional logic like saving or notifying listeners
+        saveContext()
+        // Handle additional logic like notifying listeners as needed
     }
 
     func addJobApp(_ jobApp: JobApp) -> JobApp? {
@@ -123,7 +123,7 @@ final class JobAppStore: SwiftDataStore {
         jobAppToSave.industries = form.industries
         jobAppToSave.jobApplyLink = form.jobApplyLink
         jobAppToSave.postingURL = form.postingURL
-//    saveContext()
+        saveContext()
     }
 
     func updateJobApp(_: JobApp) {
