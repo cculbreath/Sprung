@@ -16,8 +16,20 @@ enum Statuses: String, Codable, CaseIterable {
     case interview = "Interview Pending"
     case closed = "Closed"
     case followUp = "Follow up Required"
-    case abandonned = "Abandonned"
+    case abandonned = "Abandonned" // Legacy spelling maintained for persisted records
     case rejected = "Rejected"
+}
+
+extension Statuses {
+    /// Human-friendly label for UI surfaces.
+    var displayName: String {
+        switch self {
+        case .abandonned:
+            return "Abandoned"
+        default:
+            return rawValue
+        }
+    }
 }
 
 @Model class JobApp: Equatable, Identifiable, Decodable, Hashable {

@@ -7,17 +7,6 @@
 
 import SwiftUI
 
-// func binding(for optionalString: Binding<String?>, default value: String = "")
-// -> Binding<String>
-// {
-//    return Binding<String>(
-//        get: { optionalString.wrappedValue ?? value },
-//        set: { newValue in
-//            optionalString.wrappedValue = newValue.isEmpty ? nil : newValue
-//        }
-//    )
-// }
-
 struct JobAppPostingDetailsSection: View {
     @Binding var buttons: SaveButtons
 

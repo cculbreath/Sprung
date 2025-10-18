@@ -5,16 +5,15 @@
 //  Created by Christopher Culbreath on 4/19/25.
 //
 
-//  headless fetches can re‑use it without triggering a challenge again.
-//
-//  This file is macOS‑only; iOS would work the same but you may need to adapt
-//  persistence if you prefer Keychain.
-//
-
 import Foundation
 import WebKit
 
 @MainActor
+/// Persists Cloudflare `cf_clearance` cookies so headless fetches can bypass
+/// subsequent challenges.
+///
+/// Cookies are stored under the user's Application Support directory on macOS.
+/// When adapting this helper to iOS, prefer persisting data via the keychain.
 final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
     // MARK: Public -------------------------------------------------
 

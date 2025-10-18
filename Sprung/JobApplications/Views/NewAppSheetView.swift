@@ -52,7 +52,11 @@ struct NewAppSheetView: View {
                             .font(.caption)
                     }
                     if baddomain {
-                        VStack { Text("URL does not is not a supported job listing site").font(.caption).padding()
+                        VStack(spacing: 12) {
+                            Text("This URL is not from a supported job listing site.")
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
                             Button("OK") {
                                 isLoading = false
                                 isPresented = false

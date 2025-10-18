@@ -16,8 +16,8 @@ struct JobAppSectionView: View {
 
     var body: some View {
         Section(header: RoundedTagView(
-            tagText: status.rawValue,
-            backgroundColor: JobApp.pillColor(status.rawValue),
+            tagText: status.displayName,
+            backgroundColor: JobApp.pillColor(status),
             foregroundColor: .white
         )) {
             ForEach(jobApps) { jobApp in
