@@ -80,12 +80,13 @@ struct TemplateEditorEditorColumn: View {
     }
 
     private func saveButton() -> some View {
-        Button(action: onSaveAndRefresh) {
-            Image(systemName: "checkmark.arrow.trianglehead.counterclockwise")
-        }
-        .buttonStyle(.borderless)
-        .disabled(!hasUnsavedChanges)
-        .help("Save all changes and refresh previews")
+        TemplateRefreshButton(
+            hasUnsavedChanges: hasUnsavedChanges,
+            isAnimating: false,
+            isEnabled: hasUnsavedChanges,
+            help: "Save all changes and refresh previews",
+            action: onSaveAndRefresh
+        )
     }
 
     private func validateManifestButton() -> some View {

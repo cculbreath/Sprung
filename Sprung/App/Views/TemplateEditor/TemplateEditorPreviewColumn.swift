@@ -84,10 +84,6 @@ struct TemplateEditorPreviewColumn: View {
                         .font(.caption)
                         .foregroundStyle(Color.secondary)
                 }
-                if isGeneratingLivePreview || isGeneratingPreview {
-                    ProgressView()
-                        .controlSize(.small)
-                }
                 Text(isTextPreviewActive ? "Rendered from template default values." : "Generated from template seed data.")
                     .font(.caption2)
                     .foregroundStyle(Color.secondary)
@@ -97,21 +93,22 @@ struct TemplateEditorPreviewColumn: View {
             Spacer()
 
             HStack(spacing: 8) {
-                let refreshSymbol = hasUnsavedChanges ? "checkmark.arrow.trianglehead.counterclockwise" : "arrow.trianglehead.2.counterclockwise"
-                let refreshHelp = hasUnsavedChanges
-                    ? "Save changes and regenerate preview"
-                    : "Regenerate preview"
+                let isAnimatingRefresh = isGeneratingPreview || isGeneratingLivePreview
+                let refreshHelp = hasUnsavedChanges ? "Save changes and regenerate preview" : "Regenerate preview"
 
-                Button {
+                TemplateRefreshButton(
+                    hasUnsavedChanges: hasUnsavedChanges,
+                    isAnimating: isAnimatingRefresh,
+                    isEnabled: !isAnimatingRefresh,
+                    help: isAnimatingRefresh ? "Generating preview…" : refreshHelp,
+                    action: {
                     if hasUnsavedChanges {
                         onSaveAndRefresh()
                     } else {
                         onForceRefresh()
                     }
-                } label: {
-                    Image(systemName: refreshSymbol)
-                }
-                .help(refreshHelp)
+                    }
+                )
 
                 if !isTextPreviewActive {
                     Button {

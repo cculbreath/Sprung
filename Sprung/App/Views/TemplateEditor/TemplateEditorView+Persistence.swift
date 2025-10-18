@@ -20,36 +20,24 @@ extension TemplateEditorView {
         }
 
         let slug = selectedTemplate.lowercased()
-        let folderName = selectedTemplate
-        htmlContent = loadTemplateContent(slug: slug, folder: folderName, format: "html")
-        textContent = loadTemplateContent(slug: slug, folder: folderName, format: "txt")
+        htmlContent = loadTemplateContent(slug: slug, format: "html")
+        textContent = loadTemplateContent(slug: slug, format: "txt")
         htmlDraft = htmlContent
         textDraft = textContent
         htmlHasChanges = false
         textHasChanges = false
     }
 
-    private func loadTemplateContent(slug: String, folder: String, format: String) -> String {
-        if let template = appEnvironment.templateStore.template(slug: slug) {
-            if format == "html", let stored = template.htmlContent {
-                return stored
-            }
-            if format == "txt", let stored = template.textContent {
-                return stored
-            }
+    private func loadTemplateContent(slug: String, format: String) -> String {
+        guard let template = appEnvironment.templateStore.template(slug: slug) else {
+            return ""
         }
-
-        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let templatePath = documentsPath
-                .appendingPathComponent("Sprung")
-                .appendingPathComponent("Templates")
-                .appendingPathComponent(folder)
-                .appendingPathComponent("\(folder)-template.\(format)")
-            if let content = try? String(contentsOf: templatePath, encoding: .utf8) {
-                return content
-            }
+        if format == "html" {
+            return template.htmlContent ?? ""
         }
-
+        if format == "txt" {
+            return template.textContent ?? ""
+        }
         return ""
     }
 
@@ -67,12 +55,6 @@ extension TemplateEditorView {
            let data = template.manifestData,
            let formatted = prettyJSONString(from: data) {
             manifestContent = formatted
-            manifestHasChanges = false
-            return
-        }
-
-        if let documentsContent = manifestStringFromDocuments(slug: slug) {
-            manifestContent = documentsContent
             manifestHasChanges = false
             return
         }
@@ -479,18 +461,6 @@ extension TemplateEditorView {
         }
     }
 
-    func manifestStringFromDocuments(slug: String) -> String? {
-        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            return nil
-        }
-        let manifestURL = documentsPath
-            .appendingPathComponent("Sprung")
-            .appendingPathComponent("Templates")
-            .appendingPathComponent(slug)
-            .appendingPathComponent("\(slug)-manifest.json")
-        return try? String(contentsOf: manifestURL, encoding: .utf8)
-    }
-
     func prettyJSONString(from data: Data) -> String? {
         guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
             return nil
@@ -511,60 +481,30 @@ extension TemplateEditorView {
         guard selectedTemplate.isEmpty == false else { return true }
 
         let slug = selectedTemplate.lowercased()
-        let folderName = selectedTemplate
-        let resourceName = "\(folderName)-template"
-
         let htmlToSave = htmlHasChanges ? htmlContent : nil
         let textToSave = textHasChanges ? textContent : nil
 
         guard htmlToSave != nil || textToSave != nil else { return true }
 
-        guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            Logger.error("TemplateEditor: Unable to locate Documents directory while saving template")
-            return false
+        appEnvironment.templateStore.upsertTemplate(
+            slug: slug,
+            name: selectedTemplate.capitalized,
+            htmlContent: htmlToSave,
+            textContent: textToSave,
+            isCustom: true
+        )
+
+        if htmlToSave != nil {
+            htmlHasChanges = false
+            htmlDraft = htmlContent
         }
 
-        let templateDir = documentsPath
-            .appendingPathComponent("Sprung")
-            .appendingPathComponent("Templates")
-            .appendingPathComponent(folderName)
-
-        do {
-            try FileManager.default.createDirectory(at: templateDir, withIntermediateDirectories: true)
-
-            if let html = htmlToSave {
-                let htmlPath = templateDir.appendingPathComponent("\(resourceName).html")
-                try html.write(to: htmlPath, atomically: true, encoding: .utf8)
-            }
-
-            if let text = textToSave {
-                let textPath = templateDir.appendingPathComponent("\(resourceName).txt")
-                try text.write(to: textPath, atomically: true, encoding: .utf8)
-            }
-
-            appEnvironment.templateStore.upsertTemplate(
-                slug: slug,
-                name: folderName.capitalized,
-                htmlContent: htmlToSave,
-                textContent: textToSave,
-                isCustom: true
-            )
-
-            if htmlToSave != nil {
-                htmlHasChanges = false
-                htmlDraft = htmlContent
-            }
-
-            if textToSave != nil {
-                textHasChanges = false
-                textDraft = textContent
-            }
-
-            return true
-        } catch {
-            Logger.error("TemplateEditor: Failed to save template assets for \(folderName): \(error)")
-            return false
+        if textToSave != nil {
+            textHasChanges = false
+            textDraft = textContent
         }
+
+        return true
     }
 
     func loadAvailableTemplates() {
@@ -659,15 +599,6 @@ extension TemplateEditorView {
 
     func deleteTemplate(slug: String) {
         guard availableTemplates.count > 1 else { return }
-
-        // Remove user overrides from Documents directory if present
-        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let templateDir = documentsPath
-                .appendingPathComponent("Sprung")
-                .appendingPathComponent("Templates")
-                .appendingPathComponent(slug)
-            try? FileManager.default.removeItem(at: templateDir)
-        }
 
         appEnvironment.templateStore.deleteTemplate(slug: slug.lowercased())
         appEnvironment.templateSeedStore.deleteSeed(forSlug: slug.lowercased())

@@ -117,9 +117,15 @@ struct TemplateEditorView: View {
             snippet: "{{{ center(join(basics.contactLinePieces, \" · \"), 80) }}}"
         ),
         TextFilterInfo(
+            name: "projectLine",
+            signature: "projects[].projectLine",
+            description: "Precomputed \"Name: Description\" string for each project entry. Useful for wrapping without custom separators.",
+            snippet: "{{{ wrap(projectLine, 80, 0, 0) }}}"
+        ),
+        TextFilterInfo(
             name: "concatPair",
             signature: "concatPair(first, second, separator?)",
-            description: "Concatenates two values with an optional separator (defaults to ': ').",
+            description: "Concatenates two values with an optional separator value pulled from context (defaults to a single space).",
             snippet: "{{ concatPair(name, description) }}"
         ),
         TextFilterInfo(

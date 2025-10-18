@@ -17,7 +17,9 @@ struct ResumeTemplateDataBuilder {
         guard let rootNode = resume.rootNode else {
             throw BuilderError.missingRootNode
         }
-        let manifest = resume.template.flatMap { TemplateManifestLoader.manifest(for: $0) }
+        let manifest = resume.template.flatMap { template in
+            TemplateManifestLoader.manifest(for: template)
+        }
         let implementation = Implementation(resume: resume, rootNode: rootNode, manifest: manifest)
         return implementation.buildContext()
     }
