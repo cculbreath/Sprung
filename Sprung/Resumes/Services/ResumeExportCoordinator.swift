@@ -34,12 +34,6 @@ final class ResumeExportCoordinator {
         let workItem = DispatchWorkItem { [weak self, weak resume] in
             guard let self, let resume else { return }
 
-            guard self.saveJSON(for: resume) != nil else {
-                resume.isExporting = false
-                onFinish?()
-                return
-            }
-
             Task { @MainActor in
                 defer {
                     resume.isExporting = false
@@ -71,14 +65,6 @@ final class ResumeExportCoordinator {
     func ensureFreshRenderedText(for resume: Resume) async throws {
         cancelPendingExport(for: resume)
 
-        guard saveJSON(for: resume) != nil else {
-            throw NSError(
-                domain: "ResumeExportCoordinator",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Unable to persist resume JSON prior to export."]
-            )
-        }
-
         resume.isExporting = true
         defer { resume.isExporting = false }
 
@@ -88,16 +74,5 @@ final class ResumeExportCoordinator {
             Logger.error("Immediate export failed: \(error)")
             throw error
         }
-    }
-
-    // MARK: - Helpers
-
-    private func saveJSON(for resume: Resume) -> URL? {
-        let jsonString = resume.jsonTxt
-        guard let url = FileHandler.saveJSONToFile(jsonString: jsonString) else {
-            Logger.error("Failed to write resume JSON to disk for export.")
-            return nil
-        }
-        return url
     }
 }
