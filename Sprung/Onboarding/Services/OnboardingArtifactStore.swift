@@ -1,68 +1,65 @@
 import Foundation
 import SwiftyJSON
+import SwiftData
 
 @MainActor
-final class OnboardingArtifactStore {
-    private enum ArtifactFile: String {
-        case applicantProfile = "applicant_profile.json"
-        case defaultValues = "default_values.json"
-        case knowledgeCards = "knowledge_cards.json"
-        case skillIndex = "skills_index.json"
-        case profileContext = "profile_context.txt"
-        case needsVerification = "needs_verification.json"
-        case conversationState = "onboarding_conversation.json"
+final class OnboardingArtifactStore: SwiftDataStore {
+    private enum Constants {
+        static let fetchDescriptor = FetchDescriptor<OnboardingArtifactRecord>()
     }
 
-    private let fileManager: FileManager
-    private let directory: URL
+    let modelContext: ModelContext
+    private var cachedRecord: OnboardingArtifactRecord?
 
-    init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
-        self.directory = FileHandler.artifactsDirectory()
+    init(context: ModelContext) {
+        self.modelContext = context
     }
 
     func loadArtifacts() -> OnboardingArtifacts {
-        let applicantProfile = readJSON(.applicantProfile)
-        let defaultValues = readJSON(.defaultValues)
-        let knowledgeCards = readJSON(.knowledgeCards)?.arrayValue ?? []
-        let skillMap = readJSON(.skillIndex)
-        let profileContext = readString(.profileContext)
-        let needsVerification = readJSON(.needsVerification)?.arrayValue.compactMap { $0.string } ?? []
+        let record = ensureRecord()
 
         return OnboardingArtifacts(
-            applicantProfile: applicantProfile,
-            defaultValues: defaultValues,
-            knowledgeCards: knowledgeCards,
-            skillMap: skillMap,
-            profileContext: profileContext,
-            needsVerification: needsVerification
+            applicantProfile: decodeJSON(from: record.applicantProfileData),
+            defaultValues: decodeJSON(from: record.defaultValuesData),
+            knowledgeCards: decodeJSONArray(from: record.knowledgeCardsData),
+            skillMap: decodeJSON(from: record.skillMapData),
+            factLedger: decodeJSONArray(from: record.factLedgerData),
+            styleProfile: decodeJSON(from: record.styleProfileData),
+            writingSamples: decodeJSONArray(from: record.writingSamplesData),
+            profileContext: record.profileContext,
+            needsVerification: record.needsVerification
         )
     }
 
     @discardableResult
     func mergeApplicantProfile(patch: JSON) -> JSON {
-        let merged = merge(jsonAt: .applicantProfile, with: patch)
-        writeJSON(merged, to: .applicantProfile)
+        let record = ensureRecord()
+        let merged = mergeJSONData(&record.applicantProfileData, patch: patch)
+        touch(record)
+        saveContext()
         return merged
     }
 
     @discardableResult
     func mergeDefaultValues(patch: JSON) -> JSON {
-        let merged = merge(jsonAt: .defaultValues, with: patch)
-        writeJSON(merged, to: .defaultValues)
+        let record = ensureRecord()
+        let merged = mergeJSONData(&record.defaultValuesData, patch: patch)
+        touch(record)
+        saveContext()
         return merged
     }
 
     @discardableResult
     func appendKnowledgeCards(_ cards: [JSON]) -> [JSON] {
         guard !cards.isEmpty else {
-            return readJSON(.knowledgeCards)?.arrayValue ?? []
+            return decodeJSONArray(from: ensureRecord().knowledgeCardsData)
         }
 
-        var existing = readJSON(.knowledgeCards)?.arrayValue ?? []
+        let record = ensureRecord()
+        var existing = decodeJSONArray(from: record.knowledgeCardsData)
         var seenTitles = Set(existing.compactMap { $0["title"].string?.lowercased() })
 
-        for card in cards {
+        for card in cards where card.type == .dictionary {
             guard let title = card["title"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !title.isEmpty else { continue }
             let normalized = title.lowercased()
@@ -71,29 +68,36 @@ final class OnboardingArtifactStore {
             seenTitles.insert(normalized)
         }
 
-        let json = JSON(existing)
-        writeJSON(json, to: .knowledgeCards)
+        record.knowledgeCardsData = encodeJSONArray(existing)
+        touch(record)
+        saveContext()
         return existing
     }
 
     @discardableResult
     func mergeSkillMap(patch: JSON) -> JSON {
-        let merged = merge(jsonAt: .skillIndex, with: patch)
-        writeJSON(merged, to: .skillIndex)
+        let record = ensureRecord()
+        let merged = mergeJSONData(&record.skillMapData, patch: patch)
+        touch(record)
+        saveContext()
         return merged
     }
 
     func updateProfileContext(_ value: String) {
-        writeString(value, to: .profileContext)
+        let record = ensureRecord()
+        record.profileContext = value
+        touch(record)
+        saveContext()
     }
 
     @discardableResult
     func appendNeedsVerification(_ values: [String]) -> [String] {
+        let record = ensureRecord()
         guard !values.isEmpty else {
-            return readJSON(.needsVerification)?.arrayValue.compactMap { $0.string } ?? []
+            return record.needsVerification
         }
 
-        var existing = Set(readJSON(.needsVerification)?.arrayValue.compactMap { $0.string } ?? [])
+        var existing = Set(record.needsVerification)
         for item in values {
             let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
@@ -101,60 +105,157 @@ final class OnboardingArtifactStore {
             }
         }
         let sorted = existing.sorted()
-        writeJSON(JSON(sorted), to: .needsVerification)
+        record.needsVerification = sorted
+        touch(record)
+        saveContext()
         return sorted
     }
 
-    // MARK: - Private Helpers
+    @discardableResult
+    func appendFactLedgerEntries(_ entries: [JSON]) -> [JSON] {
+        guard !entries.isEmpty else {
+            return decodeJSONArray(from: ensureRecord().factLedgerData)
+        }
 
-    private func merge(jsonAt file: ArtifactFile, with patch: JSON) -> JSON {
+        let record = ensureRecord()
+        var existing = decodeJSONArray(from: record.factLedgerData)
+        var seen = Set(existing.compactMap { normalizedIdentifier(for: $0, preferredKeys: ["id", "claim_id", "statement", "title"]) })
+
+        for entry in entries where entry.type == .dictionary {
+            if let identifier = normalizedIdentifier(for: entry, preferredKeys: ["id", "claim_id", "statement", "title"]) {
+                if seen.contains(identifier) { continue }
+                seen.insert(identifier)
+            }
+            existing.append(entry)
+        }
+
+        record.factLedgerData = encodeJSONArray(existing)
+        touch(record)
+        saveContext()
+        return existing
+    }
+
+    func saveStyleProfile(_ profile: JSON?) {
+        let record = ensureRecord()
+        if let profile, profile.type != .null {
+            record.styleProfileData = encodeJSON(profile)
+        } else {
+            record.styleProfileData = nil
+        }
+        touch(record)
+        saveContext()
+    }
+
+    @discardableResult
+    func saveWritingSamples(_ samples: [JSON]) -> [JSON] {
+        let record = ensureRecord()
+        guard !samples.isEmpty else {
+            record.writingSamplesData = nil
+            touch(record)
+            saveContext()
+            return []
+        }
+
+        var existing = decodeJSONArray(from: record.writingSamplesData)
+        var seen = Set(existing.compactMap { normalizedIdentifier(for: $0, preferredKeys: ["id", "sample_id"]) })
+
+        for sample in samples where sample.type == .dictionary {
+            if let identifier = normalizedIdentifier(for: sample, preferredKeys: ["id", "sample_id"]) {
+                if let index = existing.firstIndex(where: {
+                    normalizedIdentifier(for: $0, preferredKeys: ["id", "sample_id"]) == identifier
+                }) {
+                    existing[index] = mergeJSON(base: existing[index], patch: sample)
+                    continue
+                }
+                if seen.contains(identifier) { continue }
+                seen.insert(identifier)
+            }
+            existing.append(sample)
+        }
+
+        record.writingSamplesData = encodeJSONArray(existing)
+        touch(record)
+        saveContext()
+        return existing
+    }
+
+    // MARK: - Conversation State
+
+    func loadConversationState() -> OpenAIConversationState? {
+        guard let data = ensureRecord().conversationStateData else { return nil }
+        let decoder = JSONDecoder()
+        return try? decoder.decode(OpenAIConversationState.self, from: data)
+    }
+
+    func saveConversationState(_ state: OpenAIConversationState) {
+        let record = ensureRecord()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        record.conversationStateData = try? encoder.encode(state)
+        touch(record)
+        saveContext()
+    }
+
+    func clearConversationState() {
+        let record = ensureRecord()
+        record.conversationStateData = nil
+        touch(record)
+        saveContext()
+    }
+
+    // MARK: - Helpers
+
+    private func ensureRecord() -> OnboardingArtifactRecord {
+        if let cachedRecord {
+            return cachedRecord
+        }
+
+        if let existing = try? modelContext.fetch(Constants.fetchDescriptor).first {
+            cachedRecord = existing
+            return existing
+        }
+
+        let record = OnboardingArtifactRecord()
+        modelContext.insert(record)
+        cachedRecord = record
+        saveContext()
+        return record
+    }
+
+    private func mergeJSONData(_ data: inout Data?, patch: JSON) -> JSON {
         guard patch != .null else {
-            return readJSON(file) ?? JSON()
+            return decodeJSON(from: data) ?? JSON()
         }
 
-        let base = readJSON(file) ?? JSON()
+        let base = decodeJSON(from: data) ?? JSON()
+        let merged: JSON
         if base.type == .null {
-            return patch
+            merged = patch
+        } else {
+            merged = mergeJSON(base: base, patch: patch)
         }
-        return mergeJSON(base: base, patch: patch)
+        data = encodeJSON(merged)
+        return merged
     }
 
-    private func readJSON(_ file: ArtifactFile) -> JSON? {
-        let url = directory.appendingPathComponent(file.rawValue)
-        guard fileManager.fileExists(atPath: url.path) else { return nil }
-        do {
-            let data = try Data(contentsOf: url)
-            let jsonObject = try JSON(data: data)
-            return jsonObject
-        } catch {
-            Logger.error("Failed to read JSON artifact at \(url.lastPathComponent): \(error)")
-            return nil
-        }
+    private func decodeJSON(from data: Data?) -> JSON? {
+        guard let data else { return nil }
+        return try? JSON(data: data)
     }
 
-    private func writeJSON(_ json: JSON, to file: ArtifactFile) {
-        let url = directory.appendingPathComponent(file.rawValue)
-        do {
-            let data = try json.rawData(options: [.prettyPrinted])
-            try data.write(to: url, options: .atomic)
-        } catch {
-            Logger.error("Failed to write JSON artifact at \(url.lastPathComponent): \(error)")
-        }
+    private func decodeJSONArray(from data: Data?) -> [JSON] {
+        guard let json = decodeJSON(from: data), json.type == .array else { return [] }
+        return json.arrayValue
     }
 
-    private func readString(_ file: ArtifactFile) -> String? {
-        let url = directory.appendingPathComponent(file.rawValue)
-        guard fileManager.fileExists(atPath: url.path) else { return nil }
-        return try? String(contentsOf: url, encoding: .utf8)
+    private func encodeJSON(_ json: JSON?) -> Data? {
+        guard let json, json.type != .null else { return nil }
+        return try? json.rawData()
     }
 
-    private func writeString(_ string: String, to file: ArtifactFile) {
-        let url = directory.appendingPathComponent(file.rawValue)
-        do {
-            try string.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-            Logger.error("Failed to write text artifact at \(url.lastPathComponent): \(error)")
-        }
+    private func encodeJSONArray(_ array: [JSON]) -> Data? {
+        guard !array.isEmpty else { return nil }
+        return try? JSON(array).rawData()
     }
 
     private func mergeJSON(base: JSON, patch: JSON) -> JSON {
@@ -176,41 +277,16 @@ final class OnboardingArtifactStore {
         return result
     }
 
-    // MARK: - Conversation State
-
-    func loadConversationState() -> OpenAIConversationState? {
-        let url = directory.appendingPathComponent(ArtifactFile.conversationState.rawValue)
-        guard fileManager.fileExists(atPath: url.path) else { return nil }
-        do {
-            let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            return try decoder.decode(OpenAIConversationState.self, from: data)
-        } catch {
-            Logger.error("Failed to load onboarding conversation state: \(error)")
-            return nil
-        }
-    }
-
-    func saveConversationState(_ state: OpenAIConversationState) {
-        let url = directory.appendingPathComponent(ArtifactFile.conversationState.rawValue)
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(state)
-            try data.write(to: url, options: .atomic)
-        } catch {
-            Logger.error("Failed to persist onboarding conversation state: \(error)")
-        }
-    }
-
-    func clearConversationState() {
-        let url = directory.appendingPathComponent(ArtifactFile.conversationState.rawValue)
-        if fileManager.fileExists(atPath: url.path) {
-            do {
-                try fileManager.removeItem(at: url)
-            } catch {
-                Logger.warning("Unable to remove onboarding conversation state: \(error)")
+    private func normalizedIdentifier(for json: JSON, preferredKeys: [String]) -> String? {
+        for key in preferredKeys {
+            if let value = json[key].string?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+                return value.lowercased()
             }
         }
+        return nil
+    }
+
+    private func touch(_ record: OnboardingArtifactRecord) {
+        record.updatedAt = Date()
     }
 }

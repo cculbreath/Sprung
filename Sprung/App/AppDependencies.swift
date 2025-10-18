@@ -60,7 +60,7 @@ final class AppDependencies {
 
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
-        let onboardingArtifactStore = OnboardingArtifactStore()
+        let onboardingArtifactStore = OnboardingArtifactStore(context: modelContext)
         self.onboardingArtifactStore = onboardingArtifactStore
 
         // Core export orchestration
@@ -152,6 +152,7 @@ final class AppDependencies {
             llmFacade: llmFacade,
             artifactStore: onboardingArtifactStore,
             applicantProfileStore: applicantProfileStore,
+            coverRefStore: coverRefStore,
             openAIConversationService: openAIConversationService
         )
         self.onboardingInterviewService = onboardingInterviewService

@@ -10,6 +10,7 @@ final class OnboardingInterviewService {
             case resume
             case linkedInProfile
             case artifact
+            case writingSample
         }
 
         let id: String
@@ -34,6 +35,7 @@ final class OnboardingInterviewService {
     private let llmFacade: LLMFacade
     private let artifactStore: OnboardingArtifactStore
     private let applicantProfileStore: ApplicantProfileStore
+    private let coverRefStore: CoverRefStore?
     private let openAIConversationService: OpenAIResponsesConversationService?
 
     private var conversationId: UUID?
@@ -46,11 +48,12 @@ final class OnboardingInterviewService {
     private(set) var artifacts: OnboardingArtifacts
     private(set) var messages: [OnboardingMessage] = []
     private(set) var nextQuestions: [OnboardingQuestion] = []
-    private(set) var currentPhase: OnboardingPhase = .coreFacts
+    private(set) var currentPhase: OnboardingPhase = .resumeIntake
     private(set) var isProcessing = false
     private(set) var isActive = false
     private(set) var lastError: String?
     private(set) var allowWebSearch = false
+    private(set) var allowWritingAnalysis = false
     private(set) var pendingExtraction: PendingExtraction?
     private(set) var uploadedItems: [UploadedItem] = []
     private(set) var schemaIssues: [String] = []
@@ -59,11 +62,13 @@ final class OnboardingInterviewService {
         llmFacade: LLMFacade,
         artifactStore: OnboardingArtifactStore,
         applicantProfileStore: ApplicantProfileStore,
+        coverRefStore: CoverRefStore? = nil,
         openAIConversationService: OpenAIResponsesConversationService? = nil
     ) {
         self.llmFacade = llmFacade
         self.artifactStore = artifactStore
         self.applicantProfileStore = applicantProfileStore
+        self.coverRefStore = coverRefStore
         self.openAIConversationService = openAIConversationService
         self.artifacts = artifactStore.loadArtifacts()
         refreshSchemaIssues()
@@ -89,9 +94,10 @@ final class OnboardingInterviewService {
         isProcessing = false
         lastError = nil
         pendingExtraction = nil
+        allowWritingAnalysis = false
         processedToolIdentifiers.removeAll()
         refreshArtifacts()
-        currentPhase = .coreFacts
+        currentPhase = .resumeIntake
     }
 
     func setPhase(_ phase: OnboardingPhase) {
@@ -133,6 +139,28 @@ final class OnboardingInterviewService {
         let note = isAllowed ? "✅ Web search enabled for this interview." : "🚫 Web search disabled for this interview."
         messages.append(OnboardingMessage(role: .system, text: note))
 
+        let messageText = payload.rawString(options: [.sortedKeys]) ?? payload.description
+        Task { [weak self] in
+            await self?.sendControlMessage(
+                messageText,
+                conversationId: conversationId,
+                modelId: modelId
+            )
+        }
+    }
+
+    func setWritingAnalysisConsent(_ isAllowed: Bool) {
+        allowWritingAnalysis = isAllowed
+        let note = isAllowed
+            ? "✍️ Writing-style analysis enabled. summarize_writing and persist_style_profile tools may run."
+            : "🛑 Writing-style analysis disabled. Any pending summarize_writing or persist_style_profile calls will be rejected."
+        messages.append(OnboardingMessage(role: .system, text: note))
+
+        guard let conversationId, let modelId else { return }
+        let payload = JSON([
+            "type": "writing_analysis_consent",
+            "allowed": isAllowed
+        ])
         let messageText = payload.rawString(options: [.sortedKeys]) ?? payload.description
         Task { [weak self] in
             await self?.sendControlMessage(
@@ -343,6 +371,21 @@ final class OnboardingInterviewService {
         return item
     }
 
+    @discardableResult
+    func registerWritingSample(data: Data, suggestedName: String) -> UploadedItem {
+        let item = UploadedItem(
+            id: UUID().uuidString,
+            name: suggestedName,
+            kind: .writingSample,
+            data: data,
+            url: nil,
+            createdAt: Date()
+        )
+        addUpload(item)
+        appendSystemMessage("Writing sample ‘\(item.name)’ ready. Tool: summarize_writing or persist_style_profile will reference fileId \(item.id)")
+        return item
+    }
+
     private func addUpload(_ item: UploadedItem) {
         uploadsById[item.id] = item
         uploadedItems = uploadsById.values.sorted { $0.createdAt < $1.createdAt }
@@ -365,8 +408,21 @@ final class OnboardingInterviewService {
             _ = artifactStore.appendKnowledgeCards(parsed.knowledgeCards)
         }
 
+        if !parsed.factLedgerEntries.isEmpty {
+            _ = artifactStore.appendFactLedgerEntries(parsed.factLedgerEntries)
+        }
+
         if let skillMap = parsed.skillMapDelta {
             _ = artifactStore.mergeSkillMap(patch: skillMap)
+        }
+
+        if let styleProfile = parsed.styleProfile {
+            artifactStore.saveStyleProfile(styleProfile)
+        }
+
+        if !parsed.writingSamples.isEmpty {
+            _ = artifactStore.saveWritingSamples(parsed.writingSamples)
+            persistWritingSamplesToCoverRefs(samples: parsed.writingSamples)
         }
 
         if let profileContext = parsed.profileContext?.trimmingCharacters(in: .whitespacesAndNewlines), !profileContext.isEmpty {
@@ -434,6 +490,8 @@ final class OnboardingInterviewService {
             return try await executeParseLinkedIn(call)
         case "summarize_artifact":
             return try executeSummarizeArtifact(call)
+        case "summarize_writing":
+            return try executeSummarizeWriting(call)
         case "web_lookup":
             return try await executeWebLookup(call)
         case "persist_delta":
@@ -445,6 +503,14 @@ final class OnboardingInterviewService {
         case "persist_skill_map":
             try executePersistSkillMap(call)
             return JSON(["status": "saved"])
+        case "persist_facts_from_card":
+            try executePersistFactsFromCard(call)
+            return JSON(["status": "saved"])
+        case "persist_style_profile":
+            try executePersistStyleProfile(call)
+            return JSON(["status": "saved"])
+        case "verify_conflicts":
+            return try executeVerifyConflicts(call)
         default:
             throw OnboardingError.unsupportedTool(call.tool)
         }
@@ -511,6 +577,28 @@ final class OnboardingInterviewService {
         return card
     }
 
+    private func executeSummarizeWriting(_ call: ToolCall) throws -> JSON {
+        guard allowWritingAnalysis else {
+            throw OnboardingError.writingAnalysisNotAllowed
+        }
+        guard let fileId = call.arguments["fileId"].string,
+              let upload = uploadsById[fileId],
+              let data = upload.data else {
+            throw OnboardingError.missingResource("writing sample data")
+        }
+
+        let context = call.arguments["context"].string
+        let summary = WritingSampleAnalyzer.analyze(
+            data: data,
+            filename: upload.name,
+            context: context,
+            sampleId: fileId
+        )
+        _ = artifactStore.saveWritingSamples([summary])
+        refreshArtifacts()
+        return summary
+    }
+
     private func executeWebLookup(_ call: ToolCall) async throws -> JSON {
         guard allowWebSearch else {
             throw OnboardingError.webSearchNotAllowed
@@ -523,6 +611,105 @@ final class OnboardingInterviewService {
         return JSON([
             "results": JSON(result.entries),
             "notices": JSON(result.notices)
+        ])
+    }
+
+    private func executePersistFactsFromCard(_ call: ToolCall) throws {
+        let factsArray = call.arguments["facts"].array ?? call.arguments["entries"].array ?? call.arguments["fact_ledger"].array ?? []
+        guard !factsArray.isEmpty else {
+            throw OnboardingError.invalidArguments("persist_facts_from_card expects non-empty facts array")
+        }
+
+        let validation = SchemaValidator.validateFactLedger(factsArray)
+        guard validation.errors.isEmpty else {
+            throw OnboardingError.invalidArguments("Fact ledger validation failed: \(validation.errors.joined(separator: "; "))")
+        }
+
+        _ = artifactStore.appendFactLedgerEntries(factsArray)
+        refreshArtifacts()
+    }
+
+    private func executePersistStyleProfile(_ call: ToolCall) throws {
+        guard allowWritingAnalysis else {
+            throw OnboardingError.writingAnalysisNotAllowed
+        }
+
+        let styleVector = call.arguments["style_vector"]
+        guard styleVector.type == .dictionary else {
+            throw OnboardingError.invalidArguments("Style profile requires style_vector object")
+        }
+
+        let samplesJSON = call.arguments["samples"]
+        guard let sampleArray = samplesJSON.array, !sampleArray.isEmpty else {
+            throw OnboardingError.invalidArguments("Style profile requires at least one writing sample reference")
+        }
+
+        var payloadDictionary: [String: Any] = [:]
+        payloadDictionary["style_vector"] = styleVector.dictionaryObject ?? styleVector.object
+        payloadDictionary["samples"] = samplesJSON.arrayObject ?? []
+
+        let payload = JSON(payloadDictionary)
+        let validation = SchemaValidator.validateStyleProfile(payload)
+        guard validation.errors.isEmpty else {
+            throw OnboardingError.invalidArguments("Style profile validation failed: \(validation.errors.joined(separator: "; "))")
+        }
+
+        artifactStore.saveStyleProfile(payload)
+
+        _ = artifactStore.saveWritingSamples(sampleArray)
+        persistWritingSamplesToCoverRefs(samples: sampleArray)
+
+        refreshArtifacts()
+    }
+
+    private func persistWritingSamplesToCoverRefs(samples: [JSON]) {
+        guard let coverRefStore else { return }
+        var didPersist = false
+
+        for sample in samples {
+            guard let sampleId = sample["sample_id"].string ?? sample["id"].string,
+                  let upload = uploadsById[sampleId],
+                  let data = upload.data else {
+                continue
+            }
+
+            let name = sample["title"].string ??
+                sample["name"].string ??
+                upload.name
+            let content = WritingSampleAnalyzer.extractPlainText(from: data)
+            guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+
+            if let existing = coverRefStore.storedCoverRefs.first(where: { $0.id == sampleId }) {
+                existing.content = content
+                existing.name = name
+                didPersist = coverRefStore.saveContext() || didPersist
+            } else {
+                let newRef = CoverRef(name: name, content: content, enabledByDefault: false, type: .writingSample)
+                newRef.id = sampleId
+                coverRefStore.addCoverRef(newRef)
+                didPersist = true
+            }
+        }
+
+        if didPersist {
+            Logger.info("✅ Persisted writing samples to CoverRef store.")
+        }
+    }
+
+    private func executeVerifyConflicts(_ call: ToolCall) throws -> JSON {
+        let latest = artifactStore.loadArtifacts()
+        guard let defaultValues = latest.defaultValues else {
+            return JSON([
+                "status": "complete",
+                "conflicts": []
+            ])
+        }
+
+        let conflicts = detectTimelineConflicts(in: defaultValues)
+        let status = conflicts.isEmpty ? "none" : "conflicts_found"
+        return JSON([
+            "status": status,
+            "conflicts": JSON(conflicts)
         ])
     }
 
@@ -569,6 +756,18 @@ final class OnboardingInterviewService {
             let result = SchemaValidator.validateDefaultValues(defaults)
             issues.append(contentsOf: result.errors)
         }
+        if !artifacts.factLedger.isEmpty {
+            let result = SchemaValidator.validateFactLedger(artifacts.factLedger)
+            issues.append(contentsOf: result.errors)
+        }
+        if let styleProfile = artifacts.styleProfile {
+            let result = SchemaValidator.validateStyleProfile(styleProfile)
+            issues.append(contentsOf: result.errors)
+        }
+        if !artifacts.writingSamples.isEmpty {
+            let result = SchemaValidator.validateWritingSamples(artifacts.writingSamples)
+            issues.append(contentsOf: result.errors)
+        }
         schemaIssues = issues
     }
 
@@ -607,6 +806,16 @@ final class OnboardingInterviewService {
             _ = artifactStore.mergeDefaultValues(patch: patch)
         case "skill_map", "skills_index":
             _ = artifactStore.mergeSkillMap(patch: patch)
+        case "fact_ledger":
+            if let entries = patch.array {
+                _ = artifactStore.appendFactLedgerEntries(entries)
+            }
+        case "style_profile":
+            artifactStore.saveStyleProfile(patch)
+        case "writing_samples":
+            if let entries = patch.array {
+                _ = artifactStore.saveWritingSamples(entries)
+            }
         default:
             Logger.warning("OnboardingInterviewService: unhandled delta target \(target)")
         }
@@ -635,13 +844,139 @@ final class OnboardingInterviewService {
         applicantProfileStore.save(profile)
     }
 
+    private func detectTimelineConflicts(in defaultValues: JSON) -> [JSON] {
+        let employment = defaultValues["employment"].arrayValue
+        struct EmploymentInterval {
+            let identifier: String
+            let title: String
+            let company: String
+            let startDate: Date
+            let startRaw: String
+            let endDate: Date?
+            let endRaw: String?
+        }
+
+        var intervals: [EmploymentInterval] = []
+
+        for (index, job) in employment.enumerated() {
+            let identifier = job["id"].string ?? "employment[\(index)]"
+            let title = job["title"].string ?? "Role"
+            let company = job["company"].string ?? "Company"
+            let startRaw = job["start_date"].string ??
+                job["start"].string ??
+                job["timeline"]["start"].string ?? ""
+            guard
+                let startDate = parsePartialDate(from: startRaw)
+            else { continue }
+
+            let endRaw = job["end_date"].string ??
+                job["end"].string ??
+                job["timeline"]["end"].string
+            let endDate = parsePartialDate(from: endRaw)
+
+            let interval = EmploymentInterval(
+                identifier: identifier,
+                title: title,
+                company: company,
+                startDate: startDate,
+                startRaw: startRaw,
+                endDate: endDate,
+                endRaw: endRaw
+            )
+            intervals.append(interval)
+        }
+
+        guard intervals.count > 1 else { return [] }
+
+        var conflicts: [JSON] = []
+        for i in 0..<(intervals.count - 1) {
+            for j in (i + 1)..<intervals.count {
+                let first = intervals[i]
+                let second = intervals[j]
+
+                let firstEnd = first.endDate ?? .distantFuture
+                let secondEnd = second.endDate ?? .distantFuture
+
+                let rangesOverlap = first.startDate <= secondEnd && second.startDate <= firstEnd
+                guard rangesOverlap else { continue }
+
+                let entryPayload: [String: Any] = [
+                    "type": "timeline_overlap",
+                    "entries": [
+                        [
+                            "id": first.identifier,
+                            "title": first.title,
+                            "company": first.company,
+                            "range": formattedRange(startRaw: first.startRaw, endRaw: first.endRaw)
+                        ],
+                        [
+                            "id": second.identifier,
+                            "title": second.title,
+                            "company": second.company,
+                            "range": formattedRange(startRaw: second.startRaw, endRaw: second.endRaw)
+                        ]
+                    ],
+                    "message": "Employment entries for \(first.title) @ \(first.company) and \(second.title) @ \(second.company) overlap. Confirm whether the roles were concurrent or adjust the timeline.",
+                    "suggested_fix": "Verify start/end months and ensure at most one role per interval unless positions were concurrent."
+                ]
+                conflicts.append(JSON(entryPayload))
+            }
+        }
+
+        return conflicts
+    }
+
+    private func parsePartialDate(from value: String?) -> Date? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+        if let date = isoFormatter.date(from: value) {
+            return date
+        }
+
+        if value.count == 7, value.contains("-") {
+            let components = value.split(separator: "-")
+            if components.count == 2,
+               let year = Int(components[0]),
+               let month = Int(components[1]) {
+                var dateComponents = DateComponents()
+                dateComponents.year = year
+                dateComponents.month = month
+                dateComponents.day = 1
+                return Calendar.current.date(from: dateComponents)
+            }
+        }
+
+        if value.count == 4, let year = Int(value) {
+            var dateComponents = DateComponents()
+            dateComponents.year = year
+            dateComponents.month = 1
+            dateComponents.day = 1
+            return Calendar.current.date(from: dateComponents)
+        }
+
+        return nil
+    }
+
+    private func formattedRange(startRaw: String, endRaw: String?) -> String {
+        let startDisplay = startRaw.isEmpty ? "?" : startRaw
+        let endDisplay = endRaw?.isEmpty == false ? endRaw! : "Present"
+        return "\(startDisplay) – \(endDisplay)"
+    }
+
     // MARK: - Parsing
 
     private struct ParsedLLMOutput {
         let assistantReply: String
         let deltaUpdates: [JSON]
         let knowledgeCards: [JSON]
+        let factLedgerEntries: [JSON]
         let skillMapDelta: JSON?
+        let styleProfile: JSON?
+        let writingSamples: [JSON]
         let profileContext: String?
         let needsVerification: [String]
         let nextQuestions: [OnboardingQuestion]
@@ -665,7 +1000,10 @@ final class OnboardingInterviewService {
         }
 
         let knowledgeCards = json["knowledge_cards"].arrayValue
+        let factLedgerEntries = json["fact_ledger"].arrayValue
         let skillMapDelta: JSON? = json["skill_map_delta"].type == .null ? nil : json["skill_map_delta"]
+        let styleProfile: JSON? = json["style_profile"].type == .null ? nil : json["style_profile"]
+        let writingSamples = json["writing_samples"].arrayValue
         let profileContext = json["profile_context"].string
         let needsVerification = json["needs_verification"].arrayValue.compactMap { $0.string }
 
@@ -686,7 +1024,10 @@ final class OnboardingInterviewService {
             assistantReply: assistantReply,
             deltaUpdates: deltaUpdates,
             knowledgeCards: knowledgeCards,
+            factLedgerEntries: factLedgerEntries,
             skillMapDelta: skillMapDelta,
+            styleProfile: styleProfile,
+            writingSamples: writingSamples,
             profileContext: profileContext,
             needsVerification: needsVerification,
             nextQuestions: questions,
@@ -727,6 +1068,7 @@ final class OnboardingInterviewService {
         case missingResource(String)
         case invalidArguments(String)
         case webSearchNotAllowed
+        case writingAnalysisNotAllowed
 
         var errorDescription: String? {
             switch self {
@@ -742,6 +1084,8 @@ final class OnboardingInterviewService {
                 return message
             case .webSearchNotAllowed:
                 return "Web lookup requested without user consent"
+            case .writingAnalysisNotAllowed:
+                return "Writing-style analysis requested without explicit user consent"
             }
         }
     }
@@ -750,53 +1094,53 @@ final class OnboardingInterviewService {
 private enum PromptBuilder {
     static func systemPrompt() -> String {
         """
-        SYSTEM
-        ────────────────────────────────────────────
-        You are the Onboarding Interviewer for a résumé app.
-        Your mission is to transform a live conversation into verified, schema-driven artifacts that power job search automation.
+        You are the LLM interviewer for Sprung, a résumé and cover-letter customization app.
 
-        OPERATING PRINCIPLES
-        - Coach first, then extract structured data. Encourage storytelling, metrics, and evidence.
-        - Never persist unconfirmed information. Mark uncertainties in needs_verification until resolved.
-        - Respect phase directives delivered as JSON objects with "type": "phase_transition". Switch goals immediately when received.
-        - Keep the conversation tight: summarize, checkpoint, and synthesize to avoid runaway context.
+        OBJECTIVE
+        Lead the user through an artifact-first onboarding workflow that captures:
+        1. ApplicantProfile and DefaultValues parsed from a résumé or LinkedIn profile.
+        2. Artifact summaries (ResRefs), fact ledger entries, and skill→evidence mappings.
+        3. Writing samples analysed into a style_vector, with full texts persisted separately.
 
-        PHASE PROTOCOL
-        1. Core Facts — Confirm identity details and establish the default résumé structure (ApplicantProfile + DefaultValues).
-        2. Deep Dive — Elicit narrative evidence, produce knowledge_cards, and extend the skills_index with verifiable metrics.
-        3. Personal Context — Capture goals, preferences, constraints, and clear any outstanding gaps before handoff.
+        RULES
+        - Emit exactly one JSON object per turn with the schema below; no extra prose.
+        - Prefer asking for concrete artifacts (uploads or URLs) before relying on conversation.
+        - Request confirmations before invoking persistence tools.
+        - Respect consent signals: web and writing-style analysis only proceed when explicitly allowed.
+        - Mark unresolved items under needs_verification with short descriptions.
 
-        CONTROL SIGNALS
-        - phase_transition directives arrive as JSON and outline the current phase, focus, and expected outputs—adjust your plan immediately.
-        - web_search_consent messages communicate whether outbound web lookups are permitted; never call web_lookup when allowed is false.
+        TOOLS
+        - parse_resume {fileId}: Parse résumé uploads into ApplicantProfile + DefaultValues.
+        - parse_linkedin {url|fileId}: Extract data from LinkedIn URLs or HTML exports.
+        - summarize_artifact {fileId, context?}: Generate a ResRef knowledge card for supporting materials.
+        - summarize_writing {fileId, context?}: Analyse writing samples to produce style metrics (requires opt-in).
+        - web_lookup {query, context?}: Perform web research only if consented.
+        - verify_conflicts {}: Ask the host app to check for timeline overlaps or data issues.
+        - persist_delta {target, delta}: Commit confirmed patches to ApplicantProfile, DefaultValues, or related structures.
+        - persist_card {card}: Persist a verified ResRef/knowledge card.
+        - persist_facts_from_card {facts}: Add validated entries to the fact ledger.
+        - persist_skill_map {skillMapDelta}: Merge confirmed skill↔evidence updates.
+        - persist_style_profile {samples, style_vector}: Save style profile metrics and register samples (requires opt-in).
 
-        TOOLBOX
-        - parse_resume {fileId}: parse uploaded résumé data. Always confirm extractions with the user.
-        - parse_linkedin {url|fileId}: ingest a LinkedIn profile (HTML or URL) and highlight uncertain fields.
-        - summarize_artifact {fileId, context?}: produce a knowledge card for supporting materials (projects, papers, decks).
-        - web_lookup {query, context?}: confirm public references (only when the user has granted consent).
-        - persist_delta / persist_card / persist_skill_map: save user-confirmed changes to local artifacts.
-
-        OUTPUT CONTRACT
-        Every response must be a single JSON object containing:
+        OUTPUT JSON CONTRACT
         {
           "assistant_reply": String,
-          "delta_update": [ { "target": "...", "value": {...} } ]?,
-          "knowledge_cards": [ {...} ]?,
-          "skill_map_delta": { ... }?,
+          "delta_update": [ { "target": String, "value": Any } ]?,
+          "knowledge_cards": [ Object ]?,
+          "fact_ledger": [ Object ]?,
+          "skill_map_delta": Object?,
           "profile_context": String?,
           "needs_verification": [ String ]?,
           "next_questions": [ { "id": String, "question": String, "target": String? } ]?,
           "tool_calls": [ { "id": String, "tool": String, "args": Object } ]?
         }
-        Do not emit freeform prose outside this object.
+        Use null instead of omitting when a field applies but no data is available. Never emit multiple JSON blocks.
 
-        INTERVIEW STYLE
-        - Ask for the latest résumé PDF or LinkedIn URL immediately when none is confirmed.
-        - Confirm extracted fields aloud and invite corrections before persisting.
-        - Demand quantification: numbers, percentages, dollars, before/after states, collaborators, and scope.
-        - Invite uploads or URLs for supporting artifacts; summarize them with summarize_artifact when provided.
-        - Seek user consent before web_lookup calls and disclose any external gathering you perform.
+        STYLE
+        - Be concise and conversational (≤4 follow-ups per topic).
+        - Coach the user toward quantified, verifiable statements.
+        - Surface opportunities to upload artifacts or writing samples at each phase.
+        - Summarize progress regularly and highlight remaining uncertainties.
         """
     }
 
@@ -815,6 +1159,18 @@ private enum PromptBuilder {
         }
         if let skillMap = artifacts.skillMap, let raw = skillMap.rawString(options: []) {
             message += "\nExisting skills_index: \(raw)"
+        }
+        if !artifacts.factLedger.isEmpty,
+           let raw = JSON(artifacts.factLedger).rawString(options: []) {
+            message += "\nExisting fact_ledger entries: \(raw)"
+        }
+        if let styleProfile = artifacts.styleProfile,
+           let raw = styleProfile.rawString(options: []) {
+            message += "\nExisting style_profile: \(raw)"
+        }
+        if !artifacts.writingSamples.isEmpty,
+           let raw = JSON(artifacts.writingSamples).rawString(options: []) {
+            message += "\nKnown writing_samples: \(raw)"
         }
         if let context = artifacts.profileContext {
             message += "\nCurrent profile_context: \(context)"
@@ -846,6 +1202,18 @@ private enum PromptBuilder {
         }
         if let skillMap = artifacts.skillMap, let raw = skillMap.rawString(options: []) {
             message += "\nExisting skills_index: \(raw)"
+        }
+        if !artifacts.factLedger.isEmpty,
+           let raw = JSON(artifacts.factLedger).rawString(options: []) {
+            message += "\nExisting fact_ledger entries: \(raw)"
+        }
+        if let styleProfile = artifacts.styleProfile,
+           let raw = styleProfile.rawString(options: []) {
+            message += "\nExisting style_profile: \(raw)"
+        }
+        if !artifacts.writingSamples.isEmpty,
+           let raw = JSON(artifacts.writingSamples).rawString(options: []) {
+            message += "\nKnown writing_samples: \(raw)"
         }
         if let context = artifacts.profileContext {
             message += "\nCurrent profile_context: \(context)"
