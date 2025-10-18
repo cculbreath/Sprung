@@ -27,29 +27,28 @@ protocol TTSCapable {
     )
 }
 
-/// A placeholder implementation of TTSCapable that returns errors for all requests
-class PlaceholderTTSClient: TTSCapable {
+/// A fallback implementation used when no TTS provider is configured.
+/// Logs a warning and surfaces a consistent error to the caller.
+final class UnavailableTTSClient: TTSCapable {
     private let errorMessage: String
-    
+
     init(errorMessage: String = "TTS service unavailable") {
         self.errorMessage = errorMessage
     }
-    
+
     func sendTTSRequest(
         text: String,
         voice: String,
         instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
-        _ = instructions // Unused parameter
-        let error = NSError(
-            domain: "TTSCapable",
-            code: 4001,
-            userInfo: [NSLocalizedDescriptionKey: errorMessage]
+        Logger.warning(
+            "UnavailableTTSClient dropping request for voice \(voice): \(errorMessage)",
+            category: .ai
         )
-        onComplete(.failure(error))
+        onComplete(.failure(makeError()))
     }
-    
+
     func sendTTSStreamingRequest(
         text: String,
         voice: String,
@@ -57,12 +56,18 @@ class PlaceholderTTSClient: TTSCapable {
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
-        _ = instructions // Unused parameter
-        let error = NSError(
-            domain: "TTSCapable",
+        Logger.warning(
+            "UnavailableTTSClient dropping streaming request for voice \(voice): \(errorMessage)",
+            category: .ai
+        )
+        onComplete(makeError())
+    }
+
+    private func makeError() -> NSError {
+        NSError(
+            domain: "TTSCapable.Unavailable",
             code: 4001,
             userInfo: [NSLocalizedDescriptionKey: errorMessage]
         )
-        onComplete(error)
     }
 }

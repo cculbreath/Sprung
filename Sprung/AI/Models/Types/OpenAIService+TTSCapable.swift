@@ -6,10 +6,10 @@
 import Foundation
 import SwiftOpenAI
 
-/// Wrapper to make OpenAIService conform to TTSCapable protocol
-/// Since OpenAIService in our fork already has createSpeech and createStreamingSpeech methods,
-/// we just need to bridge them to the TTSCapable interface
-class OpenAIServiceTTSWrapper: TTSCapable {
+/// Bridges the SwiftOpenAI fork to the `TTSCapable` protocol until the SDK
+/// exposes native conformance. Remove this adapter when the upstream
+/// dependency ships a direct implementation.
+final class OpenAIServiceTTSWrapper: TTSCapable {
     private let service: OpenAIService
     
     init(service: OpenAIService) {
@@ -70,4 +70,3 @@ class OpenAIServiceTTSWrapper: TTSCapable {
         }
     }
 }
-

@@ -121,7 +121,7 @@ class OpenAITTSProvider {
             // Create a placeholder client that will handle errors gracefully
             Logger.warning("🚨 Creating TTS provider with empty API key - TTS will be disabled")
             // Use a placeholder client that will return errors instead of crashing
-            ttsClient = PlaceholderTTSClient(errorMessage: "TTS service unavailable - invalid OpenAI API key")
+            ttsClient = UnavailableTTSClient(errorMessage: "TTS service unavailable - invalid OpenAI API key")
         } else {
             // Create a direct OpenAI client for TTS (not OpenRouter)
             Logger.debug("🔑 Creating dedicated OpenAI TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")

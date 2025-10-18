@@ -308,7 +308,7 @@ class ResumeReviewService: @unchecked Sendable {
     func sendReorderSkillsRequest(
         resume: Resume,
         modelId: String,
-        onComplete: @escaping (Result<ReorderSkillsResponseContainer, Error>) -> Void
+        onComplete: @escaping (Result<ReorderSkillsResponse, Error>) -> Void
     ) {
         guard let jobApp = resume.jobApp else {
             onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1010, userInfo: [NSLocalizedDescriptionKey: "No job application associated with this resume."])))
@@ -327,8 +327,8 @@ class ResumeReviewService: @unchecked Sendable {
                     modelId: modelId
                 )
                 
-                let responseContainer = ReorderSkillsResponseContainer(reorderedSkillsAndExpertise: reorderedNodes)
-                onComplete(.success(responseContainer))
+                let response = ReorderSkillsResponse(reorderedSkillsAndExpertise: reorderedNodes)
+                onComplete(.success(response))
             } catch {
                 Logger.error("SkillReorderService error: \(error.localizedDescription)")
                 onComplete(.failure(error))
