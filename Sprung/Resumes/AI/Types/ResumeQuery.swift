@@ -176,7 +176,7 @@ import SwiftUI
                 withJSONObject: exportDict, options: .prettyPrinted
             )
             let returnString = String(data: updatableJsonData, encoding: .utf8) ?? ""
-            Logger.verbose("🫥🫥🫥🫥🫥🫥 UPDATABLE NODES 🫥🫥🫥🫥🫥🫥")
+            Logger.verbose("🔄 Updatable resume nodes preview")
             Logger.verbose(truncateString(returnString, maxLength: 250))
             return returnString
         } catch {
@@ -212,25 +212,6 @@ import SwiftUI
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
         
 
-        // Generate language that controls how strongly we emphasize achievements
-//        switch res.attentionGrab {
-//        case 0:
-//            attentionGrabLanguage = ""
-//        case 1:
-//            attentionGrabLanguage =
-//                "Highlight key skills and experiences, but maintain a balanced, professional tone."
-//        case 2:
-//            attentionGrabLanguage =
-//                "Make the resume stand out by emphasizing relevant skills and achievements. Maintain clear, concise language."
-//        case 3:
-//            attentionGrabLanguage =
-//                "Strongly emphasize achievements and distinct accomplishments to make a memorable impression."
-//        case 4:
-//            attentionGrabLanguage =
-//                "Push for very memorable, eye-catching statements. Risk-taking is acceptable to stand out, but the content must remain truthful."
-//        default:
-//            attentionGrabLanguage = ""
-//        }
 
         // Build the improved prompt
         let prompt = """
@@ -433,6 +414,11 @@ import SwiftUI
 
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch {}
+        } catch {
+            Logger.warning(
+                "Failed to persist debug prompt to Downloads: \(error.localizedDescription)",
+                category: .diagnostics
+            )
+        }
     }
 }

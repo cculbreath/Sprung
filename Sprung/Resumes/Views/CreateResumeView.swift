@@ -74,13 +74,19 @@ struct CreateResumeView: View {
                 Spacer()
                 
                 Button(action: {
-                    if let templateID = selectedTemplateID,
-                       let selectedTemplate = templates.first(where: { $0.id == templateID }) {
-                        onCreateResume(selectedTemplate, resRefStore.resRefs)
-                        dismiss()
-                    } else {
-                        // No template selected; allow user to try again
+                    guard
+                        let templateID = selectedTemplateID,
+                        let selectedTemplate = templates.first(where: { $0.id == templateID })
+                    else {
+                        Logger.warning(
+                            "CreateResumeView: Create tapped without a template selection",
+                            category: .ui
+                        )
+                        return
                     }
+
+                    onCreateResume(selectedTemplate, resRefStore.resRefs)
+                    dismiss()
                 }) {
                     HStack {
                         Image(systemName: "doc.badge.plus")

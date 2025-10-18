@@ -267,6 +267,12 @@ class ReasoningStreamManager {
         modelName = ""
         isStreaming = false
     }
+
+    /// Hides the reasoning interface and clears any accumulated state.
+    func hideAndClear() {
+        clear()
+        isVisible = false
+    }
     
     /// Start a new reasoning session with model information
     func startReasoning(modelName: String) {
