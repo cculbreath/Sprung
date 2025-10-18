@@ -359,7 +359,7 @@ struct OnboardingInterviewView: View {
     }
 
     private func formattedJSON(_ json: JSON) -> String {
-        json.rawString(options: [.prettyPrinted]) ?? json.rawString() ?? ""
+        json.rawString(options: .prettyPrinted) ?? json.rawString() ?? ""
     }
 
     private func importResume() {
@@ -554,7 +554,7 @@ private struct FactLedgerListView: View {
                     } else if let string = value.string {
                         Text(string)
                             .font(.caption)
-                    } else if let raw = value.rawString(options: [.prettyPrinted]) {
+                    } else if let raw = value.rawString(options: .prettyPrinted) {
                         Text(raw)
                             .font(.system(.caption, design: .monospaced))
                     }
@@ -667,7 +667,7 @@ private struct WritingSamplesListView: View {
 }
 
 private struct ExtractionReviewSheet: View {
-    let extraction: OnboardingInterviewService.PendingExtraction
+    let extraction: OnboardingPendingExtraction
     let onConfirm: (JSON, String?) -> Void
     let onCancel: () -> Void
 
@@ -676,14 +676,14 @@ private struct ExtractionReviewSheet: View {
     @State private var errorMessage: String?
 
     init(
-        extraction: OnboardingInterviewService.PendingExtraction,
+        extraction: OnboardingPendingExtraction,
         onConfirm: @escaping (JSON, String?) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.extraction = extraction
         self.onConfirm = onConfirm
         self.onCancel = onCancel
-        self._jsonText = State(initialValue: extraction.rawExtraction.rawString(options: [.prettyPrinted]) ?? extraction.rawExtraction.description)
+        self._jsonText = State(initialValue: extraction.rawExtraction.rawString(options: .prettyPrinted) ?? extraction.rawExtraction.description)
     }
 
     var body: some View {
