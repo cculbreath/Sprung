@@ -45,8 +45,8 @@ import Foundation
 
         // Resume text replacement
         let resumeText: String
-        if !resume.textRes.isEmpty {
-            resumeText = resume.textRes
+        if !resume.textResume.isEmpty {
+            resumeText = resume.textResume
         } else if let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
                   let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]) {
             resumeText = String(data: data, encoding: .utf8) ?? ""

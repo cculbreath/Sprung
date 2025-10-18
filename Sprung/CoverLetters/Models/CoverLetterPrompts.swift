@@ -75,7 +75,7 @@ enum CoverLetterPrompts {
 
             **Text Version of Résumé to be Submitted with Application:**
 
-            \(resume.textRes)
+            \(resume.textResume)
 
             \(applicant.name) has also included writing samples from cover letters they wrote for earlier applications that they are particularly satisfied with. These samples demonstrate \(applicant.name)'s preferred writing style and voice that should be emulated:
 

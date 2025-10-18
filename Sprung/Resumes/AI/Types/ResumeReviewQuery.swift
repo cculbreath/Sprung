@@ -39,7 +39,7 @@ import Foundation
         prompt = prompt.replacingOccurrences(of: "{companyName}", with: jobApp.companyName)
         prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
 
-        let resumeText = resume.textRes
+        let resumeText = resume.textResume
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resumeText)
 
         if includeImage {

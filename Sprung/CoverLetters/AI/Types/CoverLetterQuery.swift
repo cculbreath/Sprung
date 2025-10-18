@@ -160,8 +160,8 @@ struct BestCoverLetterResponse: Codable {
     }
     
     var resumeText: String {
-        if !resume.textRes.isEmpty {
-            return resume.textRes
+        if !resume.textResume.isEmpty {
+            return resume.textResume
         }
         Logger.debug("⚠️BLANK TEXT RES⚠️")
         guard let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),

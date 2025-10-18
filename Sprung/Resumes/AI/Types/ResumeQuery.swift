@@ -147,7 +147,7 @@ import SwiftUI
     }
 
     var resumeText: String {
-        res.textRes
+        res.textResume
     }
 
     var resumeJson: String {

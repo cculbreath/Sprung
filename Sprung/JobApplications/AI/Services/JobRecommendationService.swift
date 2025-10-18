@@ -213,9 +213,9 @@ class JobRecommendationService {
             return cached
         }
 
-        if !resume.textRes.isEmpty {
-            resumeContextCache[resume.id] = resume.textRes
-            return resume.textRes
+        if !resume.textResume.isEmpty {
+            resumeContextCache[resume.id] = resume.textResume
+            return resume.textResume
         }
 
         guard let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
