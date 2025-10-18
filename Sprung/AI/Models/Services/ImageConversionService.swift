@@ -9,8 +9,6 @@ import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-import AppKit
-import PDFKit
 
 /// Service for converting PDF data to images
 class ImageConversionService {

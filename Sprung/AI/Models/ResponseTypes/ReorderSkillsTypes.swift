@@ -10,11 +10,13 @@ import Foundation
 /// Represents a skill node with reordering information from the LLM
 struct ReorderedSkillNode: Codable, Equatable {
     var id: String
-    var originalValue: String // Echoed back by LLM for context
-    var newPosition: Int // New position in the ordered list (0-based index)
-    var reasonForReordering: String // Brief explanation for the reordering
-    
-    // For backward compatibility with existing code
+    /// Echoed back by the LLM for context in change logs.
+    var originalValue: String
+    /// New position in the ordered list (0-based index).
+    var newPosition: Int
+    /// Brief explanation returned by the LLM.
+    var reasonForReordering: String
+    /// Indicates when the node represents a section title rather than an item.
     var isTitleNode: Bool = false
 
     // Alternative coding keys for different LLM response formats
@@ -78,8 +80,8 @@ struct ReorderedSkillNode: Codable, Equatable {
     }
 }
 
-/// Container for the array of reordered skills from the LLM
-struct ReorderSkillsResponseContainer: Codable, Equatable {
+/// Canonical response used throughout the app for skill reordering.
+struct ReorderSkillsResponse: Codable, Equatable {
     var reorderedSkillsAndExpertise: [ReorderedSkillNode]
 
     enum CodingKeys: String, CodingKey {
@@ -110,28 +112,4 @@ struct ReorderSkillsResponseContainer: Codable, Equatable {
     init(reorderedSkillsAndExpertise: [ReorderedSkillNode]) {
         self.reorderedSkillsAndExpertise = reorderedSkillsAndExpertise
     }
-}
-
-/// Simplified response structure for the unified AppLLM system
-/// This follows the same pattern as JobRecommendation in JobRecommendationProvider
-struct ReorderSkillsResponse: Codable {
-    let reorderedSkillsAndExpertise: [SimpleReorderedSkill]
-    
-    enum CodingKeys: String, CodingKey {
-        case reorderedSkillsAndExpertise = "reordered_skills_and_expertise"
-    }
-    
-    func validate() -> Bool {
-        // Basic validation - ensure we have skills and all have valid UUIDs
-        return !reorderedSkillsAndExpertise.isEmpty && 
-               reorderedSkillsAndExpertise.allSatisfy { UUID(uuidString: $0.id) != nil }
-    }
-}
-
-/// Simplified skill node structure for the unified system
-struct SimpleReorderedSkill: Codable {
-    let id: String
-    let originalValue: String
-    let newPosition: Int
-    let reasonForReordering: String
 }

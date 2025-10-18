@@ -69,7 +69,7 @@ class ReorderSkillsService {
     
     // MARK: - Private Helper Methods
     
-    private func getReorderSuggestions(resume: Resume, selectedModel: String) async -> Result<ReorderSkillsResponseContainer, Error> {
+    private func getReorderSuggestions(resume: Resume, selectedModel: String) async -> Result<ReorderSkillsResponse, Error> {
         await withCheckedContinuation { continuation in
             reviewService.sendReorderSkillsRequest(
                 resume: resume,
@@ -81,7 +81,7 @@ class ReorderSkillsService {
         }
     }
     
-    private func generateOrderingMessages(resume: Resume, reorderResponse: ReorderSkillsResponseContainer) -> (statusMessage: String, changeMessage: String) {
+    private func generateOrderingMessages(resume: Resume, reorderResponse: ReorderSkillsResponse) -> (statusMessage: String, changeMessage: String) {
         // Collect current order of skills and their data
         var currentNodes: [(id: String, name: String, position: Int)] = []
         var skillsSectionNode: TreeNode?
