@@ -104,7 +104,7 @@ final class AppDependencies {
         let requestExecutor = LLMRequestExecutor()
         let llmService = LLMService(requestExecutor: requestExecutor)
         self.llmService = llmService
-        // Phase 6: Introduce facade backed by SwiftOpenAI adapter and temporarily bridge conversation flows
+        // Bridge SwiftOpenAI responses into the unified LLM facade until AppLLM fully owns conversation flows.
         let client = SwiftOpenAIClient(executor: requestExecutor)
         let llmFacade = LLMFacade(
             client: client,

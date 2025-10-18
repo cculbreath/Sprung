@@ -62,7 +62,6 @@ struct ResumeCustomizeButton: View {
         }
         
         do {
-            // Defensive check: ensure reasoning modal is not visible before starting workflow
             Logger.debug("🛡️ [ResumeCustomizeButton] Starting fresh workflow with model: \(modelId)")
             reasoningStreamManager.hideAndClear()
             

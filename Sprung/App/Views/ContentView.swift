@@ -60,7 +60,6 @@ struct ContentView: View {
                             .fill(.clear)
                             .ignoresSafeArea(.all)
                     }
-//                        .navigationTitle(" ")
                 } else {
                     // Placeholder when no job application is selected
                     VStack {
