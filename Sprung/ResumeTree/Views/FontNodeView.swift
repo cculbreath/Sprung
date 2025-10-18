@@ -65,6 +65,4 @@ struct FontNodeView: View {
 
         .cornerRadius(5)
     }
-
-    // MARK: - Actions
 }

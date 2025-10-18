@@ -163,7 +163,12 @@ struct LeafDropDelegate: DropDelegate {
         // Save changes to SwiftData
         do {
             try parent.resume.modelContext?.save()
-        } catch {}
+        } catch {
+            Logger.warning(
+                "Failed to save reordered nodes: \(error.localizedDescription)",
+                category: .storage
+            )
+        }
 
         // Notify the Resume model
         appEnvironment.resumeExportCoordinator.debounceExport(resume: parent.resume)

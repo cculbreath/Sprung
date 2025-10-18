@@ -154,7 +154,12 @@ struct NodeDropDelegate: DropDelegate {
         
         do {
             try parent.resume.modelContext?.save()
-        } catch {}
+        } catch {
+            Logger.warning(
+                "Failed to persist dragged node reorder: \(error.localizedDescription)",
+                category: .storage
+            )
+        }
         
         appEnvironment.resumeExportCoordinator.debounceExport(resume: parent.resume)
     }
