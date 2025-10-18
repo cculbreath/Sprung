@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 class ResRef: Identifiable, Codable {
-    var id: UUID // Change from String to UUID
+    var id: UUID
     var content: String
     var name: String
     var enabledByDefault: Bool
@@ -21,7 +21,7 @@ class ResRef: Identifiable, Codable {
         name: String = "", content: String = "",
         enabledByDefault: Bool = false
     ) {
-        id = UUID() // Ensure UUID is used correctly
+        id = UUID()
         self.content = content
         self.name = name
         self.enabledByDefault = enabledByDefault
