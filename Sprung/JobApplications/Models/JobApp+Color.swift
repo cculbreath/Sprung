@@ -11,22 +11,33 @@ import SwiftUI
 /// Keeping them in an extension prevents the core data model from depending
 /// on the UI framework.
 extension JobApp {
-    /// Maps a `Status` string (case‑insensitive) to a colour used in the UI.
-    ///
-    /// Usage: `backgroundColor: JobApp.pillColor(status.rawValue)`
-    static func pillColor(_ myCase: String) -> Color {
-        switch myCase.lowercased() {
-        case "closed": return .gray
-        case "follow up": return .yellow
-        case "interview": return .pink
-        case "submitted": return .indigo
-        case "unsubmitted": return .cyan
-        case "in progress": return .mint
-        case "new": return .green
-        case "abandoned": return .secondary
-        case "abandonned": return .secondary
-        case "rejected": return .black
-        default: return .black
+    /// Maps a status to the colour used in the UI components.
+    static func pillColor(_ status: Statuses) -> Color {
+        switch status {
+        case .closed: return .gray
+        case .followUp: return .yellow
+        case .interview: return .pink
+        case .submitted: return .indigo
+        case .unsubmitted: return .cyan
+        case .inProgress: return .mint
+        case .new: return .green
+        case .abandonned: return .secondary
+        case .rejected: return .black
         }
+    }
+
+    /// Backwards-compatible mapping when only a raw string is available.
+    static func pillColor(_ rawStatus: String) -> Color {
+        let trimmed = rawStatus.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let match = Statuses.allCases.first(where: { $0.rawValue.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return pillColor(match)
+        }
+
+        if trimmed.caseInsensitiveCompare("abandoned") == .orderedSame {
+            return pillColor(.abandonned)
+        }
+
+        return .black
     }
 }

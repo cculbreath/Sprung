@@ -5,12 +5,11 @@
 //  Created by Christopher Culbreath on 4/19/25.
 //
 
-//  the same implementation.
-//
-
 import Foundation
 
 extension JobApp {
+    /// Downloads job listing HTML while presenting a desktop user agent and attaching
+    /// any cached Cloudflare clearance cookie. Retries when a challenge page is detected.
     // Common HTTP header strings (shared by all job‑scrape requests)
     static let desktopUA =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
