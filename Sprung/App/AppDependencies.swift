@@ -151,6 +151,7 @@ final class AppDependencies {
             llmFacade: llmFacade,
             artifactStore: onboardingArtifactStore,
             applicantProfileStore: applicantProfileStore,
+            experienceDefaultsStore: experienceDefaultsStore,
             coverRefStore: coverRefStore,
             openAIConversationService: openAIConversationService
         )

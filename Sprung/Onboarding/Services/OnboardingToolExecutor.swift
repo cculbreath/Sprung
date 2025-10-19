@@ -5,6 +5,7 @@ import SwiftyJSON
 final class OnboardingToolExecutor {
     private let artifactStore: OnboardingArtifactStore
     private let applicantProfileStore: ApplicantProfileStore
+    private let experienceDefaultsStore: ExperienceDefaultsStore
     private weak var coverRefStore: CoverRefStore?
     private let uploadRegistry: OnboardingUploadRegistry
     private let artifactValidator: OnboardingArtifactValidator
@@ -16,6 +17,7 @@ final class OnboardingToolExecutor {
     init(
         artifactStore: OnboardingArtifactStore,
         applicantProfileStore: ApplicantProfileStore,
+        experienceDefaultsStore: ExperienceDefaultsStore,
         coverRefStore: CoverRefStore?,
         uploadRegistry: OnboardingUploadRegistry,
         artifactValidator: OnboardingArtifactValidator,
@@ -26,6 +28,7 @@ final class OnboardingToolExecutor {
     ) {
         self.artifactStore = artifactStore
         self.applicantProfileStore = applicantProfileStore
+        self.experienceDefaultsStore = experienceDefaultsStore
         self.coverRefStore = coverRefStore
         self.uploadRegistry = uploadRegistry
         self.artifactValidator = artifactValidator
@@ -95,7 +98,11 @@ final class OnboardingToolExecutor {
             let merged = artifactStore.mergeApplicantProfile(patch: patch)
             applyApplicantProfilePatch(merged)
         case "default_values":
-            _ = artifactStore.mergeDefaultValues(patch: patch)
+            let merged = artifactStore.mergeDefaultValues(patch: patch)
+            if merged.type == .dictionary {
+                let draft = ExperienceDefaultsDecoder.draft(from: merged)
+                experienceDefaultsStore.save(draft: draft)
+            }
         case "skill_map", "skills_index":
             _ = artifactStore.mergeSkillMap(patch: patch)
         case "fact_ledger":
@@ -358,15 +365,35 @@ final class OnboardingToolExecutor {
 
         let profile = applicantProfileStore.currentProfile()
 
-        if let name = patch["name"].string { profile.name = name }
-        if let address = patch["address"].string { profile.address = address }
-        if let city = patch["city"].string { profile.city = city }
-        if let state = patch["state"].string { profile.state = state }
-        if let zip = patch["zip"].string { profile.zip = zip }
-        if let phone = patch["phone"].string { profile.phone = phone }
-        if let email = patch["email"].string { profile.email = email }
-        if let website = patch["website"].string { profile.websites = website }
-        if let country = patch["country_code"].string ?? patch["country"].string { profile.countryCode = country }
+        if let name = patch["name"].string?.trimmed() { profile.name = name }
+        if let label = patch["label"].string?.trimmed() { profile.label = label }
+        if let summary = patch["summary"].string { profile.summary = summary }
+        if let address = patch["address"].string?.trimmed() { profile.address = address }
+        if let city = patch["city"].string?.trimmed() { profile.city = city }
+        if let state = patch["state"].string?.trimmed() { profile.state = state }
+        if let zip = patch["zip"].string?.trimmed() { profile.zip = zip }
+        if let phone = patch["phone"].string?.trimmed() { profile.phone = phone }
+        if let email = patch["email"].string?.trimmed() { profile.email = email }
+        if let website = patch["website"].string?.trimmed() { profile.websites = website }
+        if let country = patch["country_code"].string?.trimmed() ?? patch["country"].string?.trimmed() {
+            profile.countryCode = country
+        }
+
+        if let location = patch["location"].dictionary {
+            if let address = location["address"]?.string?.trimmed() { profile.address = address }
+            if let city = location["city"]?.string?.trimmed() { profile.city = city }
+            if let state = location["region"]?.string?.trimmed() ?? location["state"]?.string?.trimmed() {
+                profile.state = state
+            }
+            if let postal = location["postalCode"]?.string?.trimmed() ?? location["zip"]?.string?.trimmed() ?? location["code"]?.string?.trimmed() {
+                profile.zip = postal
+            }
+            if let country = location["countryCode"]?.string?.trimmed() { profile.countryCode = country }
+        }
+
+        if let profilesArray = patch["profiles"].array {
+            mergeSocialProfiles(from: profilesArray, into: profile)
+        }
 
         if let signatureBase64 = patch["signature_image"].string,
            let data = Data(base64Encoded: signatureBase64) {
@@ -374,5 +401,42 @@ final class OnboardingToolExecutor {
         }
 
         applicantProfileStore.save(profile)
+    }
+
+    private func mergeSocialProfiles(from jsonArray: [JSON], into profile: ApplicantProfile) {
+        guard jsonArray.isEmpty == false else { return }
+
+        var existingKeys: Set<String> = Set(
+            profile.profiles.map { profile in
+                normalizedSocialKey(network: profile.network, username: profile.username, url: profile.url)
+            }
+        )
+
+        for entry in jsonArray where entry.type == .dictionary {
+            let network = entry["network"].string?.trimmed() ?? ""
+            let username = entry["username"].string?.trimmed() ?? ""
+            let url = entry["url"].string?.trimmed() ?? ""
+
+            guard network.isEmpty == false || username.isEmpty == false || url.isEmpty == false else {
+                continue
+            }
+
+            let key = normalizedSocialKey(network: network, username: username, url: url)
+            guard existingKeys.contains(key) == false else { continue }
+            existingKeys.insert(key)
+
+            let social = ApplicantSocialProfile(network: network, username: username, url: url, applicant: profile)
+            profile.profiles.append(social)
+        }
+    }
+
+    private func normalizedSocialKey(network: String, username: String, url: String) -> String {
+        [network.lowercased(), username.lowercased(), url.lowercased()].joined(separator: "|")
+    }
+}
+
+private extension String {
+    func trimmed() -> String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

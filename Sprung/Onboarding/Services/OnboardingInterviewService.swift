@@ -8,6 +8,7 @@ final class OnboardingInterviewService {
     private let llmFacade: LLMFacade
     private let artifactStore: OnboardingArtifactStore
     private let applicantProfileStore: ApplicantProfileStore
+    private let experienceDefaultsStore: ExperienceDefaultsStore
     private let coverRefStore: CoverRefStore?
     private let openAIConversationService: OpenAIResponsesConversationService?
 
@@ -38,6 +39,7 @@ final class OnboardingInterviewService {
         llmFacade: LLMFacade,
         artifactStore: OnboardingArtifactStore,
         applicantProfileStore: ApplicantProfileStore,
+        experienceDefaultsStore: ExperienceDefaultsStore,
         coverRefStore: CoverRefStore? = nil,
         openAIConversationService: OpenAIResponsesConversationService? = nil,
         uploadRegistry: OnboardingUploadRegistry? = nil
@@ -45,6 +47,7 @@ final class OnboardingInterviewService {
         self.llmFacade = llmFacade
         self.artifactStore = artifactStore
         self.applicantProfileStore = applicantProfileStore
+        self.experienceDefaultsStore = experienceDefaultsStore
         self.coverRefStore = coverRefStore
         self.openAIConversationService = openAIConversationService
         self.uploadRegistry = uploadRegistry ?? OnboardingUploadRegistry()
@@ -56,6 +59,7 @@ final class OnboardingInterviewService {
         OnboardingToolExecutor(
             artifactStore: artifactStore,
             applicantProfileStore: applicantProfileStore,
+            experienceDefaultsStore: experienceDefaultsStore,
             coverRefStore: coverRefStore,
             uploadRegistry: uploadRegistry,
             artifactValidator: artifactValidator,
