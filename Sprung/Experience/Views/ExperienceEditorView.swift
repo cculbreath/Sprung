@@ -409,7 +409,7 @@ private struct WorkExperienceSectionView: View {
 
                     ExperienceTextEditor("Summary", text: $item.summary, onChange: onChange)
 
-                    HighlightListEditor(title: "Highlights", items: $item.highlights, onChange: onChange)
+                    SingleLineHighlightListEditor(items: $item.highlights, onChange: onChange)
                 }
             }
 
@@ -779,6 +779,37 @@ private struct HighlightListEditor: View {
                     }
                 } content: {
                     ExperienceTextEditor("Highlight", text: $item.text, onChange: onChange)
+                }
+            }
+
+            Button("Add Highlight") {
+                items.append(HighlightDraft())
+                onChange()
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+}
+
+private struct SingleLineHighlightListEditor: View {
+    @Binding var items: [HighlightDraft]
+    var onChange: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Highlights")
+                .font(.headline)
+
+            ForEach($items) { $item in
+                ExperienceCard {
+                    if let index = items.firstIndex(where: { $0.id == item.id }) {
+                        items.remove(at: index)
+                        onChange()
+                    }
+                } content: {
+                    ExperienceFieldRow {
+                        ExperienceTextField("Highlight", text: $item.text, onChange: onChange)
+                    }
                 }
             }
 

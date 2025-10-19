@@ -45,13 +45,16 @@ struct ResumeTemplateContextBuilder {
     // MARK: - Private helpers
 
     private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?, templateSlug: String?) -> [String: Any] {
-        if let manifest {
-            let payload = buildProfilePayload(using: manifest, profile: profile)
-            if payload.isEmpty == false {
-                return payload
-            }
+        let fallbackContext = modernProfileContext(from: profile)
+        guard let manifest else {
+            return fallbackContext
         }
-        return modernProfileContext(from: profile)
+
+        let payload = buildProfilePayload(using: manifest, profile: profile)
+        guard payload.isEmpty == false else {
+            return fallbackContext
+        }
+        return mergeProfilePayload(payload, fallback: fallbackContext)
     }
 
     private func modernProfileContext(from profile: ApplicantProfile) -> [String: Any] {
@@ -104,6 +107,37 @@ struct ResumeTemplateContextBuilder {
             payload[binding.section] = updatedSection
         }
         return payload
+    }
+
+    private func mergeProfilePayload(_ payload: [String: Any], fallback: [String: Any]) -> [String: Any] {
+        var merged = payload
+        for (key, fallbackValue) in fallback {
+            guard let existing = merged[key] else {
+                merged[key] = fallbackValue
+                continue
+            }
+
+            if var existingDict = existing as? [String: Any],
+               let fallbackDict = fallbackValue as? [String: Any] {
+                merged[key] = mergeDictionaries(existingDict, fallback: fallbackDict)
+                continue
+            }
+
+            if let existingArray = existing as? [Any],
+               existingArray.isEmpty,
+               let fallbackArray = fallbackValue as? [Any] {
+                merged[key] = fallbackArray
+            }
+        }
+        return merged
+    }
+
+    private func mergeDictionaries(_ existing: [String: Any], fallback: [String: Any]) -> [String: Any] {
+        var merged = existing
+        for (key, fallbackValue) in fallback where merged[key] == nil {
+            merged[key] = fallbackValue
+        }
+        return merged
     }
 
     private func applicantProfileValue(
