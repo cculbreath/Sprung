@@ -303,8 +303,8 @@ enum TemplateManifestDefaults {
     private static func basicsSection() -> TemplateManifest.Section {
         let fields: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true, binding: ["name"]),
-            field("label", input: .text),
-            field("summary", input: .textarea),
+            field("label", input: .text, binding: ["label"]),
+            field("summary", input: .textarea, binding: ["summary"]),
             field("email", input: .email, binding: ["email"]),
             field("phone", input: .phone, binding: ["phone"]),
             field("url", input: .url, binding: ["url"]),

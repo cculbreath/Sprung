@@ -190,7 +190,7 @@ struct ApplicantProfileView: View {
                                 }
                             }
                         } label: {
-                            Text("Online Profiles")
+                            Text("Social Links")
                                 .font(.headline)
                         }
 

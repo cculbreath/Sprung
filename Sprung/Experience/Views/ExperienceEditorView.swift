@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ExperienceEditorView: View {
     @Environment(ExperienceDefaultsStore.self) private var defaultsStore: ExperienceDefaultsStore
+    @Environment(\.dismiss) private var dismiss
     @State private var draft = ExperienceDefaultsDraft()
     @State private var originalDraft = ExperienceDefaultsDraft()
     @State private var isLoading = true
@@ -61,15 +62,16 @@ struct ExperienceEditorView: View {
             Spacer()
 
             Button("Cancel") {
-                draft = originalDraft
-                hasChanges = false
-                saveState = .idle
+                cancelAndClose()
             }
             .disabled(isLoading || hasChanges == false)
 
             Button("Save") {
                 Task {
-                    await saveDraft()
+                    let didSave = await saveDraft()
+                    if didSave {
+                        dismiss()
+                    }
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -170,13 +172,21 @@ struct ExperienceEditorView: View {
     }
 
     @MainActor
-    private func saveDraft() async {
-        guard hasChanges else { return }
+    private func saveDraft() async -> Bool {
+        guard hasChanges else { return true }
         saveState = .saving
         defaultsStore.save(draft: draft)
         originalDraft = draft
         hasChanges = false
         saveState = .saved
+        return true
+    }
+
+    private func cancelAndClose() {
+        draft = originalDraft
+        hasChanges = false
+        saveState = .idle
+        dismiss()
     }
 }
 

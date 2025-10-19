@@ -15,9 +15,6 @@ final class Template {
     var isCustom: Bool
     var isDefault: Bool
 
-    @Relationship(deleteRule: .cascade, inverse: \TemplateAsset.template)
-    var assets: [TemplateAsset]
-
     @Relationship(deleteRule: .cascade)
     var seeds: [TemplateSeed]
 
@@ -36,7 +33,6 @@ final class Template {
         isDefault: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        assets: [TemplateAsset] = [],
         seeds: [TemplateSeed] = []
     ) {
         self.id = id
@@ -50,7 +46,6 @@ final class Template {
         self.isDefault = isDefault
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.assets = assets
         self.resumes = []
         self.seeds = seeds
     }
