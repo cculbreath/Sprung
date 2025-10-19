@@ -27,6 +27,7 @@ final class AppDependencies {
     let templateStore: TemplateStore
     let templateSeedStore: TemplateSeedStore
     let experienceDefaultsStore: ExperienceDefaultsStore
+    let careerKeywordStore: CareerKeywordStore
     let applicantProfileStore: ApplicantProfileStore
     let onboardingArtifactStore: OnboardingArtifactStore
     let onboardingInterviewService: OnboardingInterviewService
@@ -54,6 +55,8 @@ final class AppDependencies {
         self.templateSeedStore = templateSeedStore
         let experienceDefaultsStore = ExperienceDefaultsStore(context: modelContext)
         self.experienceDefaultsStore = experienceDefaultsStore
+        let careerKeywordStore = CareerKeywordStore()
+        self.careerKeywordStore = careerKeywordStore
 
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
@@ -166,6 +169,7 @@ final class AppDependencies {
             templateStore: templateStore,
             templateSeedStore: templateSeedStore,
             experienceDefaultsStore: experienceDefaultsStore,
+            careerKeywordStore: careerKeywordStore,
             resumeExportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
             onboardingInterviewService: onboardingInterviewService,
