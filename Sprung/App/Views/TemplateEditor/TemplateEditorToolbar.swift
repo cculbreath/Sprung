@@ -5,6 +5,7 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
     var hasUnsavedChanges: Bool
     var onToggleSidebar: () -> Void
     var onOpenApplicant: () -> Void
+    var onOpenExperience: () -> Void
     var onCloseWithoutSaving: () -> Void
     var onRevert: () -> Void
     var onSaveAndClose: () -> Void
@@ -12,6 +13,7 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
     var body: some CustomizableToolbarContent {
         navigationItems
         applicantItem
+        experienceItem
         closeWithoutSavingItem
         revertItem
         saveItem
@@ -34,6 +36,15 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
                 Label("Applicant Profile", systemImage: "person.crop.square")
             }
             .help("Open Applicant Profile Editor")
+        }
+    }
+
+    private var experienceItem: some CustomizableToolbarContent {
+        ToolbarItem(id: "experienceEditor", placement: .navigation, showsByDefault: true) {
+            Button(action: onOpenExperience) {
+                Label("Experience Defaults", systemImage: "briefcase")
+            }
+            .help("Open Experience Editor")
         }
     }
 

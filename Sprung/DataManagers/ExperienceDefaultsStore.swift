@@ -6,6 +6,8 @@ import SwiftData
 protocol ExperienceDefaultsProviding: AnyObject {
     func currentDefaults() -> ExperienceDefaults
     func save(_ defaults: ExperienceDefaults)
+    func loadDraft() -> ExperienceDefaultsDraft
+    func save(draft: ExperienceDefaultsDraft)
 }
 
 @MainActor
@@ -36,6 +38,18 @@ final class ExperienceDefaultsStore: SwiftDataStore, ExperienceDefaultsProviding
     }
 
     func save(_ defaults: ExperienceDefaults) {
+        cachedDefaults = defaults
+        saveContext()
+    }
+
+    func loadDraft() -> ExperienceDefaultsDraft {
+        let defaults = currentDefaults()
+        return ExperienceDefaultsDraft(model: defaults)
+    }
+
+    func save(draft: ExperienceDefaultsDraft) {
+        let defaults = currentDefaults()
+        draft.apply(to: defaults, in: modelContext)
         cachedDefaults = defaults
         saveContext()
     }
