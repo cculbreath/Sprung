@@ -183,19 +183,22 @@ enum TemplateManifestDefaults {
     static func manifest(for template: Template) -> TemplateManifest {
         let base = baseManifest(for: template.slug)
         guard let data = template.manifestData, !data.isEmpty else {
+            Logger.debug("TemplateManifestDefaults: no overrides for slug \(template.slug), using base manifest")
             return base
         }
 
         if let overrides = try? JSONDecoder().decode(TemplateManifestOverrides.self, from: data) {
+            Logger.debug("TemplateManifestDefaults: applying overrides for slug \(template.slug)")
             return apply(overrides: overrides, to: base, slug: template.slug)
         }
 
         if let legacy = try? TemplateManifest.decode(from: data) {
+            Logger.debug("TemplateManifestDefaults: converting legacy manifest for slug \(template.slug)")
             let overrides = overrides(fromLegacy: legacy, comparisonBase: base)
             return apply(overrides: overrides, to: base, slug: template.slug)
         }
 
-        Logger.warning("TemplateManifestLoader: Unable to decode manifest overrides for slug \(template.slug); falling back to defaults.")
+        Logger.warning("TemplateManifestDefaults: Unable to decode manifest overrides for slug \(template.slug); falling back to defaults.")
         return base
     }
 

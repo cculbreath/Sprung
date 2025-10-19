@@ -138,14 +138,18 @@ private struct Implementation {
             var styling: [String: Any] = [:]
             if let fontSizes = buildFontSizesSection() ?? defaultFontSizes(from: manifest) {
                 styling["fontSizes"] = fontSizes
+                Logger.debug("ResumeTemplateDataBuilder: using fontSizes => \(fontSizes)")
             }
             if let margins = defaultPageMargins(from: manifest) {
                 styling["pageMargins"] = margins
+                Logger.debug("ResumeTemplateDataBuilder: using pageMargins => \(margins)")
             }
             if let includeFontsOverride = defaultIncludeFonts(from: manifest) {
                 styling["includeFonts"] = includeFontsOverride ? "true" : "false"
+                Logger.debug("ResumeTemplateDataBuilder: using includeFonts override => \(includeFontsOverride)")
             } else if resume.includeFonts {
                 styling["includeFonts"] = "true"
+                Logger.debug("ResumeTemplateDataBuilder: includeFonts set from resume flag")
             }
             return styling.isEmpty ? nil : styling
 
@@ -409,14 +413,24 @@ private struct Implementation {
 
     private func defaultFontSizes(from manifest: TemplateManifest?) -> [String: String]? {
         guard let defaults = manifestDefaultDictionary(for: "styling"),
-              let fontSizes = defaults["fontSizes"] else { return nil }
-        return normalizeFontSizeMap(fontSizes)
+              let fontSizes = defaults["fontSizes"] else {
+            Logger.debug("ResumeTemplateDataBuilder: no fontSizes default found in manifest")
+            return nil
+        }
+        let normalized = normalizeFontSizeMap(fontSizes)
+        Logger.debug("ResumeTemplateDataBuilder: manifest fontSizes default => \(normalized ?? [:])")
+        return normalized
     }
 
     private func defaultPageMargins(from manifest: TemplateManifest?) -> [String: String]? {
         guard let defaults = manifestDefaultDictionary(for: "styling"),
-              let margins = defaults["pageMargins"] else { return nil }
-        return normalizeFontSizeMap(margins)
+              let margins = defaults["pageMargins"] else {
+            Logger.debug("ResumeTemplateDataBuilder: no pageMargins default found in manifest")
+            return nil
+        }
+        let normalized = normalizeFontSizeMap(margins)
+        Logger.debug("ResumeTemplateDataBuilder: manifest pageMargins default => \(normalized ?? [:])")
+        return normalized
     }
 
     private func defaultIncludeFonts(from manifest: TemplateManifest?) -> Bool? {
