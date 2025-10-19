@@ -567,6 +567,8 @@ extension TemplateManifest {
 
     static let defaultApplicantProfilePaths: [ApplicantProfilePath] = [
         ApplicantProfilePath(section: "basics", path: ["name"]),
+        ApplicantProfilePath(section: "basics", path: ["label"]),
+        ApplicantProfilePath(section: "basics", path: ["summary"]),
         ApplicantProfilePath(section: "basics", path: ["email"]),
         ApplicantProfilePath(section: "basics", path: ["phone"]),
         ApplicantProfilePath(section: "basics", path: ["url"]),
@@ -578,7 +580,8 @@ extension TemplateManifest {
         ApplicantProfilePath(section: "basics", path: ["location", "state"]),
         ApplicantProfilePath(section: "basics", path: ["location", "postalCode"]),
         ApplicantProfilePath(section: "basics", path: ["location", "zip"]),
-        ApplicantProfilePath(section: "basics", path: ["location", "code"])
+        ApplicantProfilePath(section: "basics", path: ["location", "code"]),
+        ApplicantProfilePath(section: "basics", path: ["location", "countryCode"])
     ]
 
     func applicantProfileBindings() -> [ApplicantProfileBinding] {
