@@ -274,8 +274,6 @@ extension TemplateEditorView {
                 return ProfileField(label: "Email", keyPath: \ApplicantProfile.email)
             case "phone":
                 return ProfileField(label: "Phone", keyPath: \ApplicantProfile.phone)
-            case "label":
-                return ProfileField(label: "Professional Label", keyPath: \ApplicantProfile.label)
             case "url", "website":
                 return ProfileField(label: "Website", keyPath: \ApplicantProfile.websites)
             case "address":
