@@ -481,12 +481,16 @@ extension TemplateEditorView {
 
         guard htmlToSave != nil || textToSave != nil else { return true }
 
+        let existingTemplate = appEnvironment.templateStore.template(slug: slug)
+        let resolvedName = existingTemplate?.name ?? selectedTemplate.capitalized
+        let resolvedIsCustom = existingTemplate?.isCustom ?? true
+
         appEnvironment.templateStore.upsertTemplate(
             slug: slug,
-            name: selectedTemplate.capitalized,
+            name: resolvedName,
             htmlContent: htmlToSave,
             textContent: textToSave,
-            isCustom: true
+            isCustom: resolvedIsCustom
         )
 
         if htmlToSave != nil {
