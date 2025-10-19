@@ -18,6 +18,7 @@ final class ResStore: SwiftDataStore {
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
     private let templateSeedStore: TemplateSeedStore
+    private let experienceDefaultsStore: ExperienceDefaultsStore
 
     // MARK: - Initialiser
 
@@ -25,12 +26,14 @@ final class ResStore: SwiftDataStore {
         context: ModelContext,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
-        templateSeedStore: TemplateSeedStore
+        templateSeedStore: TemplateSeedStore,
+        experienceDefaultsStore: ExperienceDefaultsStore
     ) {
         modelContext = context
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
         self.templateSeedStore = templateSeedStore
+        self.experienceDefaultsStore = experienceDefaultsStore
     }
 
     @discardableResult
@@ -49,11 +52,13 @@ final class ResStore: SwiftDataStore {
             jobApp.status = .inProgress
         }
 
-        let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: templateSeedStore)
+        let contextBuilder = ResumeTemplateContextBuilder(
+            templateSeedStore: templateSeedStore,
+            experienceDefaultsStore: experienceDefaultsStore
+        )
         let applicantProfile = applicantProfileStore.currentProfile()
         guard let context = contextBuilder.buildContext(
             for: template,
-            fallbackJSON: nil,
             applicantProfile: applicantProfile
         ) else {
             Logger.error("ResStore.create: Failed to build resume context dictionary for template \(template.slug)")

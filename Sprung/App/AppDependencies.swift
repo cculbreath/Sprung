@@ -75,7 +75,8 @@ final class AppDependencies {
             context: modelContext,
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
-            templateSeedStore: templateSeedStore
+            templateSeedStore: templateSeedStore,
+            experienceDefaultsStore: experienceDefaultsStore
         )
         self.resRefStore = ResRefStore(context: modelContext)
         self.coverRefStore = CoverRefStore(context: modelContext)
