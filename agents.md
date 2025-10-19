@@ -23,6 +23,7 @@ This file provides comprehensive guidance for AI agents and developers working w
   - `Notes/ClaudeNotes/` - Various refactoring plans and architectural reviews
   - `Notes/RefactorNotes/` - Phase progress tracking and implementation guides
   - **Always read relevant documentation before starting LLM-related work**
+- Global resume defaults now live in SwiftData via the Experience Editor (`ExperienceDefaultsStore`). Use the Experience Editor (menu/toolbar entry "Experience Editor…") to manage non-template seed values. Template seeds should only capture template-specific overrides.
 - **ABSOLUTE RULE FOR TEMPLATES**: The runtime app must **never** read template HTML, text, manifests, or seeds from the filesystem. All template data lives in SwiftData via `TemplateStore`/`TemplateSeedStore`. The repo’s `Sprung-private/…` files are for developer reference and copy/paste workflows only. Coding agents must not introduce or retain any `FileManager` lookups, document-directory fallbacks, or filesystem persistence for templates. Treat any filesystem access in template code as a critical regression.
 
 ### Package Dependencies
