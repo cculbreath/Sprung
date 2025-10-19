@@ -19,6 +19,7 @@ enum TemplateFilters {
         template.register(bulletListFilter, forKey: "bulletList")
         template.register(formatDateFilter, forKey: "formatDate")
         template.register(uppercaseFilter, forKey: "uppercase")
+        template.register(hasContentFilter, forKey: "hasContent")
     }
 
     // MARK: - Individual Filters
@@ -138,6 +139,76 @@ enum TemplateFilters {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
         return trimmed.uppercased()
+    }
+
+    private static func hasDisplayableContent(_ box: MustacheBox) -> Bool {
+        if let arrayBoxes = box.arrayValue, !arrayBoxes.isEmpty {
+            if arrayBoxes.contains(where: { hasDisplayableContent($0) }) {
+                return true
+            }
+        }
+
+        if let dictionaryBoxes = box.dictionaryValue, !dictionaryBoxes.isEmpty {
+            if dictionaryBoxes.contains(where: { key, value in
+                guard key != "custom" else { return false }
+                return hasDisplayableContent(value)
+            }) {
+                return true
+            }
+        }
+
+        if let value = box.value {
+            return hasMeaningfulContent(value)
+        }
+
+        return false
+    }
+
+    private static func hasMeaningfulContent(_ value: Any?) -> Bool {
+        guard let value else { return false }
+
+        if value is NSNull { return false }
+
+        if let boolValue = value as? Bool {
+            return boolValue
+        }
+
+        if let numberValue = value as? NSNumber {
+            return true
+        }
+
+        if let stringValue = value as? String {
+            return !stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        if let arrayValue = value as? [Any] {
+            return arrayValue.contains { hasMeaningfulContent($0) }
+        }
+
+        if let dictionaryValue = value as? [String: Any] {
+            return dictionaryValue.contains { key, entry in
+                guard key != "custom" else { return false }
+                return hasMeaningfulContent(entry)
+            }
+        }
+
+        if let convertible = value as? CustomStringConvertible {
+            return !convertible.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        return true
+    }
+    
+    private static let hasContentFilter = VariadicFilter { boxes -> Any? in
+        guard !boxes.isEmpty else { return nil }
+
+        for box in boxes {
+            if hasDisplayableContent(box) {
+                return true
+            }
+        }
+
+        return nil
     }
 
     // MARK: - Helpers
