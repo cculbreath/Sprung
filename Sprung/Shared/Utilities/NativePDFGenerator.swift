@@ -172,6 +172,12 @@ class NativePDFGenerator: NSObject, ObservableObject {
             }
         }
 
+#if DEBUG
+        if Logger.isVerboseEnabled, let basics = merged["basics"] {
+            Logger.debug("NativePDFGenerator: basics context => \(basics)")
+        }
+#endif
+
         applySectionVisibility(overrides: &merged, manifest: manifest, resume: resume)
         return merged
     }
