@@ -26,6 +26,7 @@ final class AppDependencies {
     let resumeExportCoordinator: ResumeExportCoordinator
     let templateStore: TemplateStore
     let templateSeedStore: TemplateSeedStore
+    let experienceDefaultsStore: ExperienceDefaultsStore
     let applicantProfileStore: ApplicantProfileStore
     let onboardingArtifactStore: OnboardingArtifactStore
     let onboardingInterviewService: OnboardingInterviewService
@@ -51,6 +52,8 @@ final class AppDependencies {
         self.templateStore = templateStore
         let templateSeedStore = TemplateSeedStore(context: modelContext)
         self.templateSeedStore = templateSeedStore
+        let experienceDefaultsStore = ExperienceDefaultsStore(context: modelContext)
+        self.experienceDefaultsStore = experienceDefaultsStore
         TemplateTextResetMigration.runIfNeeded(templateStore: templateStore)
 
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
@@ -161,6 +164,7 @@ final class AppDependencies {
             debugSettingsStore: debugSettingsStore,
             templateStore: templateStore,
             templateSeedStore: templateSeedStore,
+            experienceDefaultsStore: experienceDefaultsStore,
             resumeExportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
             onboardingInterviewService: onboardingInterviewService,

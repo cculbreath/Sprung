@@ -21,6 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var llmService: LLMService?
     var onboardingInterviewService: OnboardingInterviewService?
     var onboardingArtifactStore: OnboardingArtifactStore?
+    var experienceDefaultsStore: ExperienceDefaultsStore?
 
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
@@ -112,7 +113,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let container = self.modelContainer,
                let enabledLLMStore = self.enabledLLMStore,
                let applicantProfileStore = self.applicantProfileStore,
-               let llmService = self.llmService {
+               let llmService = self.llmService,
+               let experienceDefaultsStore = self.experienceDefaultsStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
 
@@ -122,6 +124,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.navigationState)
                     .environment(enabledLLMStore)
                     .environment(applicantProfileStore)
+                    .environment(experienceDefaultsStore)
                     .environment(appEnvironment.openRouterService)
                     .environment(llmService)
                     .environment(debugSettingsStore)
@@ -181,6 +184,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment)
                     .environment(appEnvironment.appState)
                     .environment(applicantProfileStore)
+                    .environment(appEnvironment.experienceDefaultsStore)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let container = modelContainer {
@@ -241,6 +245,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .environment(appEnvironment)
                         .environment(appEnvironment.appState)
                         .environment(appEnvironment.navigationState)
+                        .environment(appEnvironment.experienceDefaultsStore)
                         .environment(appEnvironment.applicantProfileStore)
                 ))
             } else if let modelContainer = self.modelContainer {

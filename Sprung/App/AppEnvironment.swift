@@ -20,6 +20,7 @@ final class AppEnvironment {
     let debugSettingsStore: DebugSettingsStore
     let templateStore: TemplateStore
     let templateSeedStore: TemplateSeedStore
+    let experienceDefaultsStore: ExperienceDefaultsStore
     let resumeExportCoordinator: ResumeExportCoordinator
     let applicantProfileStore: ApplicantProfileStore
     let onboardingInterviewService: OnboardingInterviewService
@@ -35,6 +36,7 @@ final class AppEnvironment {
         debugSettingsStore: DebugSettingsStore,
         templateStore: TemplateStore,
         templateSeedStore: TemplateSeedStore,
+        experienceDefaultsStore: ExperienceDefaultsStore,
         resumeExportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
         onboardingInterviewService: OnboardingInterviewService,
@@ -48,6 +50,7 @@ final class AppEnvironment {
         self.debugSettingsStore = debugSettingsStore
         self.templateStore = templateStore
         self.templateSeedStore = templateSeedStore
+        self.experienceDefaultsStore = experienceDefaultsStore
         self.resumeExportCoordinator = resumeExportCoordinator
         self.applicantProfileStore = applicantProfileStore
         self.onboardingInterviewService = onboardingInterviewService

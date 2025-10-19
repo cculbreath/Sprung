@@ -1,0 +1,42 @@
+import Foundation
+import Observation
+import SwiftData
+
+@MainActor
+protocol ExperienceDefaultsProviding: AnyObject {
+    func currentDefaults() -> ExperienceDefaults
+    func save(_ defaults: ExperienceDefaults)
+}
+
+@MainActor
+@Observable
+final class ExperienceDefaultsStore: SwiftDataStore, ExperienceDefaultsProviding {
+    let modelContext: ModelContext
+    private var cachedDefaults: ExperienceDefaults?
+
+    init(context: ModelContext) {
+        self.modelContext = context
+    }
+
+    func currentDefaults() -> ExperienceDefaults {
+        if let cachedDefaults {
+            return cachedDefaults
+        }
+
+        if let existing = try? modelContext.fetch(FetchDescriptor<ExperienceDefaults>()).first {
+            cachedDefaults = existing
+            return existing
+        }
+
+        let defaults = ExperienceDefaults()
+        modelContext.insert(defaults)
+        saveContext()
+        cachedDefaults = defaults
+        return defaults
+    }
+
+    func save(_ defaults: ExperienceDefaults) {
+        cachedDefaults = defaults
+        saveContext()
+    }
+}
