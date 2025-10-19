@@ -43,6 +43,7 @@ struct TemplateEditorView: View {
     @State var seedContent: String = ""
     @State var seedHasChanges: Bool = false
     @State var seedValidationMessage: String?
+    @State var customFieldWarningMessage: String?
     @State var pendingProfileUpdate: ProfileUpdatePrompt?
 
     // Template renaming state
@@ -262,12 +263,22 @@ struct TemplateEditorView: View {
             manifestHasChanges = false
             seedHasChanges = false
             refreshTemplatePreview()
+            refreshCustomFieldWarnings()
         }
         .onChange(of: selectedTemplate) { oldValue, _ in
             handleTemplateSelectionChange(previousSlug: oldValue)
         }
         .onChange(of: selectedTab) { _, newValue in
             handleTabSelectionChange(newValue: newValue)
+        }
+        .onChange(of: textContent) { _, _ in
+            refreshCustomFieldWarnings()
+        }
+        .onChange(of: manifestContent) { _, _ in
+            refreshCustomFieldWarnings()
+        }
+        .onChange(of: seedContent) { _, _ in
+            refreshCustomFieldWarnings()
         }
         .alert("Add New Template", isPresented: $showingAddTemplate) {
             TextField("Template name", text: $newTemplateName)
@@ -411,6 +422,7 @@ struct TemplateEditorView: View {
             seedHasChanges: $seedHasChanges,
             manifestValidationMessage: $manifestValidationMessage,
             seedValidationMessage: $seedValidationMessage,
+            customFieldWarningMessage: $customFieldWarningMessage,
             textEditorInsertion: $textEditorInsertion,
             selectedResume: selectedResume,
             onTemplateChange: { tab, updatedContent in

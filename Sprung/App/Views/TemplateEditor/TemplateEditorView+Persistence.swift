@@ -736,6 +736,7 @@ extension TemplateEditorView {
     func performRefresh() {
         if saveAllChanges() {
             refreshTemplatePreview()
+            refreshCustomFieldWarnings()
         }
     }
 
@@ -762,12 +763,13 @@ extension TemplateEditorView {
         discardPendingChanges()
         loadTemplateAssets()
         loadManifest()
-        loadSeed()
-        showOverlay = false
-        overlayPDFDocument = nil
-        overlayFilename = nil
-        overlayPageCount = 0
-        refreshTemplatePreview()
+       loadSeed()
+       showOverlay = false
+       overlayPDFDocument = nil
+       overlayFilename = nil
+       overlayPageCount = 0
+       refreshTemplatePreview()
+        refreshCustomFieldWarnings()
     }
 
     func handleTemplateSelectionChange(previousSlug: String) {
@@ -778,9 +780,10 @@ extension TemplateEditorView {
             return
         }
         loadTemplateAssets()
-        loadManifest()
-        loadSeed()
-        refreshTemplatePreview()
+       loadManifest()
+       loadSeed()
+       refreshTemplatePreview()
+        refreshCustomFieldWarnings()
     }
 
     func handleTabSelectionChange(newValue: TemplateEditorTab) {
@@ -881,5 +884,107 @@ extension TemplateEditorView {
                 return "Manifest must contain styling, UI, or custom field overrides."
             }
         }
+    }
+
+    func refreshCustomFieldWarnings() {
+        guard selectedTemplate.isEmpty == false else {
+            customFieldWarningMessage = nil
+            return
+        }
+
+        let slug = selectedTemplate.lowercased()
+        let baseManifest = TemplateManifestDefaults.baseManifest(for: slug)
+
+        let trimmedManifest = manifestContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedManifest: TemplateManifest
+
+        if trimmedManifest.isEmpty {
+            resolvedManifest = baseManifest
+        } else if let data = manifestContent.data(using: .utf8),
+                  let overrides = decodeManifestOverrides(from: data, slug: slug) {
+            resolvedManifest = TemplateManifestDefaults.apply(
+                overrides: overrides,
+                to: baseManifest,
+                slug: slug
+            )
+        } else {
+            customFieldWarningMessage = "Fix manifest JSON to verify custom fields coverage."
+            return
+        }
+
+        let manifestKeys = resolvedManifest.customFieldKeyPaths()
+
+        let trimmedSeed = seedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let seedKeys: Set<String>
+        if trimmedSeed.isEmpty {
+            seedKeys = []
+        } else if let data = seedContent.data(using: .utf8),
+                  let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            seedKeys = TemplateEditorView.collectCustomFieldKeys(from: jsonObject)
+        } else {
+            customFieldWarningMessage = "Fix default values JSON to verify custom fields coverage."
+            return
+        }
+
+        let definedKeys = manifestKeys.union(seedKeys)
+        guard definedKeys.isEmpty == false else {
+            customFieldWarningMessage = nil
+            return
+        }
+
+        let usedKeys = TemplateEditorView.extractCustomFieldReferences(from: textContent)
+        let missing = definedKeys.subtracting(usedKeys)
+
+        if missing.isEmpty {
+            customFieldWarningMessage = nil
+        } else {
+            let list = missing.sorted().joined(separator: ", ")
+            customFieldWarningMessage = "Text template omits custom fields: \(list). They will be missing from plain-text resumes and LLM outputs."
+        }
+    }
+
+    private static let customFieldReferenceRegex: NSRegularExpression = {
+        let pattern = #"custom(?:\.[A-Za-z0-9_\-]+)+"#
+        return try! NSRegularExpression(pattern: pattern, options: [])
+    }()
+
+    static func extractCustomFieldReferences(from template: String) -> Set<String> {
+        let range = NSRange(template.startIndex..<template.endIndex, in: template)
+        let matches = customFieldReferenceRegex.matches(in: template, options: [], range: range)
+        return Set(matches.compactMap { match in
+            guard let matchRange = Range(match.range, in: template) else { return nil }
+            return String(template[matchRange])
+        })
+    }
+
+    static func collectCustomFieldKeys(from dictionary: [String: Any]) -> Set<String> {
+        guard let customValue = dictionary["custom"] else { return [] }
+        var results: Set<String> = []
+        collectCustomFieldKeys(from: customValue, currentPath: ["custom"], accumulator: &results)
+        return results
+    }
+
+    private static func collectCustomFieldKeys(
+        from value: Any,
+        currentPath: [String],
+        accumulator: inout Set<String>
+    ) {
+        if let dict = value as? [String: Any] {
+            for (key, entry) in dict {
+                collectCustomFieldKeys(
+                    from: entry,
+                    currentPath: currentPath + [key],
+                    accumulator: &accumulator
+                )
+            }
+            return
+        }
+
+        if let array = value as? [Any] {
+            accumulator.insert(currentPath.joined(separator: "."))
+            return
+        }
+
+        accumulator.insert(currentPath.joined(separator: "."))
     }
 }

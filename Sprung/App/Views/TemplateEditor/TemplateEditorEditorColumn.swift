@@ -17,6 +17,7 @@ struct TemplateEditorEditorColumn: View {
     @Binding var seedHasChanges: Bool
     @Binding var manifestValidationMessage: String?
     @Binding var seedValidationMessage: String?
+    @Binding var customFieldWarningMessage: String?
     @Binding var textEditorInsertion: TextEditorInsertionRequest?
     let selectedResume: Resume?
     let onTemplateChange: (TemplateEditorTab, String) -> Void
@@ -50,6 +51,10 @@ struct TemplateEditorEditorColumn: View {
             .padding(.trailing, 16)
 
             controlsRow()
+            
+            if selectedTab == .txtTemplate, let warning = customFieldWarningMessage {
+                warningBanner(text: warning)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -183,5 +188,21 @@ struct TemplateEditorEditorColumn: View {
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func warningBanner(text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            Text(text)
+                .font(.footnote)
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
     }
 }
