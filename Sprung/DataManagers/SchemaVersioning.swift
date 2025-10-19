@@ -27,7 +27,6 @@ enum SprungSchema {
         ConversationMessage.self,
         EnabledLLM.self,
         Template.self,
-        TemplateAsset.self,
         TemplateSeed.self,
         ExperienceDefaults.self,
         WorkExperienceDefault.self,
