@@ -491,6 +491,49 @@ struct TemplateManifest: Codable {
         synthesizedSectionKeys.contains(key)
     }
 
+    func customFieldKeyPaths() -> Set<String> {
+        guard let customSection = sections["custom"] else { return [] }
+        var results: Set<String> = []
+        collectCustomFieldPaths(
+            in: customSection.fields,
+            currentPath: ["custom"],
+            accumulator: &results
+        )
+        return results
+    }
+
+    private func collectCustomFieldPaths(
+        in descriptors: [Section.FieldDescriptor],
+        currentPath: [String],
+        accumulator: inout Set<String>
+    ) {
+        for descriptor in descriptors {
+            if descriptor.key == "*" {
+                if let children = descriptor.children, children.isEmpty == false {
+                    collectCustomFieldPaths(
+                        in: children,
+                        currentPath: currentPath,
+                        accumulator: &accumulator
+                    )
+                } else {
+                    accumulator.insert(currentPath.joined(separator: "."))
+                }
+                continue
+            }
+
+            let nextPath = currentPath + [descriptor.key]
+            if let children = descriptor.children, children.isEmpty == false {
+                collectCustomFieldPaths(
+                    in: children,
+                    currentPath: nextPath,
+                    accumulator: &accumulator
+                )
+            } else {
+                accumulator.insert(nextPath.joined(separator: "."))
+            }
+        }
+    }
+
     func makeDefaultContext() -> [String: Any] {
         var context: [String: Any] = [:]
         for key in sectionOrder {
