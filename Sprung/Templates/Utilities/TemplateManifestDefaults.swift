@@ -95,7 +95,8 @@ enum TemplateManifestDefaults {
         "publications": "Publications",
         "languages": "Languages",
         "interests": "Interests",
-        "references": "References"
+        "references": "References",
+        "meta": "Metadata"
     ]
 
     static let defaultSectionLabels: [String: String] = [
@@ -111,7 +112,8 @@ enum TemplateManifestDefaults {
         "publications": "Publications",
         "languages": "Languages",
         "interests": "Interests",
-        "references": "References"
+        "references": "References",
+        "meta": "Metadata"
     ]
 
     static let defaultContactLabels: [String: String] = [
@@ -478,7 +480,8 @@ enum TemplateManifestDefaults {
                     field("publications", input: .text),
                     field("languages", input: .text),
                     field("interests", input: .text),
-                    field("references", input: .text)
+                    field("references", input: .text),
+                    field("meta", input: .text)
                 ]
             ),
             objectField(
