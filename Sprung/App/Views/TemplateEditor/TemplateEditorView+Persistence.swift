@@ -178,27 +178,27 @@ extension TemplateEditorView {
                             from: seedDictionary
                         ), seedValue.isEmpty == false else { continue }
 
-                        if let field = profileField(for: binding.binding.path) {
-                            let trimmedSeed = seedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let currentValue = profile[keyPath: field.keyPath]
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                            let profileKey = String(describing: field.keyPath)
-                            if trimmedSeed != currentValue,
-                               updatedProfileKeyPaths.insert(profileKey).inserted {
-                                profileChanges.append(
-                                    ProfileUpdateChange(
-                                        label: field.label,
-                                        keyPath: field.keyPath,
-                                        newValue: trimmedSeed,
-                                        currentValue: currentValue
-                                    )
+                    if let field = profileField(for: binding.binding.path) {
+                        let trimmedSeed = seedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let currentValue = profile[keyPath: field.keyPath]
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        let profileKey = String(describing: field.keyPath)
+                        if trimmedSeed != currentValue,
+                           updatedProfileKeyPaths.insert(profileKey).inserted {
+                            profileChanges.append(
+                                ProfileUpdateChange(
+                                    label: field.label,
+                                    keyPath: field.keyPath,
+                                    newValue: trimmedSeed,
+                                    currentValue: currentValue
                                 )
-                            }
+                            )
                         }
 
                         removalTargets.append((binding.section, binding.path))
                     }
                 }
+            }
             }
 
             for defaultPath in TemplateManifest.defaultApplicantProfilePaths {
