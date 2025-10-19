@@ -90,12 +90,14 @@ extension TemplateEditorView {
             updatedAt: templateRecord?.updatedAt ?? Date()
         )
 
-        let contextBuilder = ResumeTemplateContextBuilder(templateSeedStore: appEnvironment.templateSeedStore)
+        let contextBuilder = ResumeTemplateContextBuilder(
+            templateSeedStore: appEnvironment.templateSeedStore,
+            experienceDefaultsStore: appEnvironment.experienceDefaultsStore
+        )
         let applicantProfile = appEnvironment.applicantProfileStore.currentProfile()
 
         guard let context = contextBuilder.buildContext(
             for: template,
-            fallbackJSON: nil,
             applicantProfile: applicantProfile
         ) else {
             throw TemplatePreviewGeneratorError.contextGenerationFailed

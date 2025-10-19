@@ -3,29 +3,36 @@ import OrderedCollections
 
 struct ResumeTemplateContextBuilder {
     private let templateSeedStore: TemplateSeedStore
+    private let experienceDefaultsStore: ExperienceDefaultsStore
 
-    init(templateSeedStore: TemplateSeedStore) {
+    init(
+        templateSeedStore: TemplateSeedStore,
+        experienceDefaultsStore: ExperienceDefaultsStore
+    ) {
         self.templateSeedStore = templateSeedStore
+        self.experienceDefaultsStore = experienceDefaultsStore
     }
+
     @MainActor
     func buildContext(
         for template: Template,
-        fallbackJSON: String?,
         applicantProfile: ApplicantProfile
     ) -> [String: Any]? {
         let manifest = TemplateManifestLoader.manifest(for: template)
-        let fallback = fallbackJSON.flatMap { Self.parseJSON(from: $0) } ?? [:]
         let seedJSON = templateSeedStore.seed(for: template)?.jsonString ?? ""
         let seed = Self.parseJSON(from: seedJSON)
-        let sanitizedFallback = removeContactSection(from: fallback, manifest: manifest)
         let sanitizedSeed = removeContactSection(from: seed, manifest: manifest)
 
+        let experienceDefaults = experienceDefaultsStore.currentDefaults()
+        let experienceSeed = ExperienceDefaultsEncoder.makeSeedDictionary(from: experienceDefaults)
+        let sanitizedExperience = removeContactSection(from: experienceSeed, manifest: manifest)
+
         var context = manifest?.makeDefaultContext() ?? [:]
-        merge(into: &context, with: sanitizedFallback)
+        merge(into: &context, with: sanitizedExperience)
         merge(into: &context, with: sanitizedSeed)
         merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest, templateSlug: template.slug))
 
-        addMissingKeys(from: sanitizedFallback, to: &context)
+        addMissingKeys(from: sanitizedExperience, to: &context)
         addMissingKeys(from: sanitizedSeed, to: &context)
 
         if let manifest {
@@ -44,48 +51,38 @@ struct ResumeTemplateContextBuilder {
                 return payload
             }
         }
-        Logger.info(
-            "ResumeTemplateContextBuilder: using legacy applicant profile fallback",
-            category: .migration,
-            metadata: ["template": templateSlug ?? "unknown"]
-        )
-        return legacyProfileContext(from: profile)
+        return modernProfileContext(from: profile)
     }
 
-    private func legacyProfileContext(from profile: ApplicantProfile) -> [String: Any] {
+    private func modernProfileContext(from profile: ApplicantProfile) -> [String: Any] {
         var location: [String: Any] = [:]
-        if !profile.address.isEmpty { location["address"] = profile.address }
-        if !profile.city.isEmpty { location["city"] = profile.city }
-        if !profile.state.isEmpty {
-            location["state"] = profile.state
-            location["region"] = profile.state
+        if let value = sanitizedString(profile.address) { location["address"] = value }
+        if let value = sanitizedString(profile.city) { location["city"] = value }
+        if let value = sanitizedString(profile.state) {
+            location["state"] = value
+            location["region"] = value
         }
-        if !profile.zip.isEmpty { location["code"] = profile.zip }
-
-        var contact: [String: Any] = [:]
-        if !profile.name.isEmpty { contact["name"] = profile.name }
-        if !profile.phone.isEmpty { contact["phone"] = profile.phone }
-        if !profile.email.isEmpty { contact["email"] = profile.email }
-        if !profile.websites.isEmpty { contact["website"] = profile.websites }
-        if let picture = profile.pictureDataURL() {
-            contact["picture"] = picture
-        }
-        if !location.isEmpty { contact["location"] = location }
+        if let value = sanitizedString(profile.zip) { location["postalCode"] = value }
+        if let value = sanitizedString(profile.countryCode) { location["countryCode"] = value }
 
         var basics: [String: Any] = [:]
-        if !profile.name.isEmpty { basics["name"] = profile.name }
-        if !profile.email.isEmpty { basics["email"] = profile.email }
-        if !profile.phone.isEmpty { basics["phone"] = profile.phone }
-        if !profile.websites.isEmpty { basics["website"] = profile.websites }
+        if let value = sanitizedString(profile.name) { basics["name"] = value }
+        if let value = sanitizedString(profile.label) { basics["label"] = value }
+        if let value = sanitizedString(profile.summary) { basics["summary"] = value }
+        if let value = sanitizedString(profile.email) { basics["email"] = value }
+        if let value = sanitizedString(profile.phone) { basics["phone"] = value }
+        if let value = sanitizedString(profile.websites) { basics["website"] = value }
         if let picture = profile.pictureDataURL() {
             basics["picture"] = picture
         }
         if !location.isEmpty { basics["location"] = location }
 
-        var context: [String: Any] = [:]
-        if !contact.isEmpty {
-            context["contact"] = contact
+        let profiles = makeProfilesPayload(from: profile)
+        if profiles.isEmpty == false {
+            basics["profiles"] = profiles
         }
+
+        var context: [String: Any] = [:]
         if !basics.isEmpty {
             context["basics"] = basics
         }
@@ -117,11 +114,30 @@ struct ResumeTemplateContextBuilder {
         return profileValue(for: binding.path, profile: profile)
     }
 
+    private func sanitizedString(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func makeProfilesPayload(from profile: ApplicantProfile) -> [[String: String]] {
+        profile.profiles.compactMap { social -> [String: String]? in
+            var entry: [String: String] = [:]
+            if let value = sanitizedString(social.network) { entry["network"] = value }
+            if let value = sanitizedString(social.username) { entry["username"] = value }
+            if let value = sanitizedString(social.url) { entry["url"] = value }
+            return entry.isEmpty ? nil : entry
+        }
+    }
+
     private func profileValue(for path: [String], profile: ApplicantProfile) -> Any? {
         guard let first = path.first else { return nil }
         switch first {
         case "name":
             return profile.name
+        case "label":
+            return sanitizedString(profile.label)
+        case "summary":
+            return sanitizedString(profile.summary)
         case "email":
             return profile.email
         case "phone":
@@ -140,6 +156,17 @@ struct ResumeTemplateContextBuilder {
             return profile.zip
         case "countryCode":
             return profile.countryCode
+        case "profiles":
+            let payload = makeProfilesPayload(from: profile)
+            guard payload.isEmpty == false else { return nil }
+            let remainder = Array(path.dropFirst())
+            guard let next = remainder.first else { return payload }
+            if next == "*" {
+                let finalKey = remainder.dropFirst().first
+                guard let key = finalKey else { return payload }
+                return payload.compactMap { $0[key] }
+            }
+            return payload.compactMap { $0[next] }
         case "location":
             let remainder = Array(path.dropFirst())
             if remainder.isEmpty { return nil }
