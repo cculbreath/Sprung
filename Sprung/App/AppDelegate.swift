@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingInterviewService: OnboardingInterviewService?
     var onboardingArtifactStore: OnboardingArtifactStore?
     var experienceDefaultsStore: ExperienceDefaultsStore?
+    var careerKeywordStore: CareerKeywordStore?
 
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
@@ -125,7 +126,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let enabledLLMStore = self.enabledLLMStore,
                let applicantProfileStore = self.applicantProfileStore,
                let llmService = self.llmService,
-               let experienceDefaultsStore = self.experienceDefaultsStore {
+               let experienceDefaultsStore = self.experienceDefaultsStore,
+               let careerKeywordStore = self.careerKeywordStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
 
@@ -136,6 +138,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(enabledLLMStore)
                     .environment(applicantProfileStore)
                     .environment(experienceDefaultsStore)
+                    .environment(careerKeywordStore)
                     .environment(appEnvironment.openRouterService)
                     .environment(llmService)
                     .environment(debugSettingsStore)
@@ -196,6 +199,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.appState)
                     .environment(applicantProfileStore)
                     .environment(appEnvironment.experienceDefaultsStore)
+                    .environment(appEnvironment.careerKeywordStore)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let container = modelContainer {
@@ -263,6 +267,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .environment(appEnvironment.appState)
                         .environment(appEnvironment.navigationState)
                         .environment(appEnvironment.experienceDefaultsStore)
+                        .environment(appEnvironment.careerKeywordStore)
                         .environment(appEnvironment.applicantProfileStore)
                 ))
             } else if let modelContainer = self.modelContainer {
@@ -358,17 +363,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .environment(appEnvironment)
                         .environment(appEnvironment.appState)
                         .environment(experienceDefaultsStore)
+                        .environment(appEnvironment.careerKeywordStore)
                 ))
             } else if let modelContainer,
-                      let experienceDefaultsStore {
+                      let experienceDefaultsStore,
+                      let careerKeywordStore {
                 hostingView = NSHostingView(rootView: AnyView(
                     editorView
                         .modelContainer(modelContainer)
                         .environment(experienceDefaultsStore)
+                        .environment(careerKeywordStore)
                 ))
-            } else if let experienceDefaultsStore {
+            } else if let experienceDefaultsStore,
+                      let careerKeywordStore {
                 hostingView = NSHostingView(rootView: AnyView(
-                    editorView.environment(experienceDefaultsStore)
+                    editorView
+                        .environment(experienceDefaultsStore)
+                        .environment(careerKeywordStore)
                 ))
             } else {
                 hostingView = NSHostingView(rootView: AnyView(editorView))
