@@ -287,6 +287,10 @@ extension TemplateEditorView {
             switch key {
             case "name":
                 return ProfileField(label: "Name", keyPath: \ApplicantProfile.name)
+            case "label":
+                return ProfileField(label: "Professional Label", keyPath: \ApplicantProfile.label)
+            case "summary":
+                return ProfileField(label: "Summary", keyPath: \ApplicantProfile.summary)
             case "email":
                 return ProfileField(label: "Email", keyPath: \ApplicantProfile.email)
             case "phone":
@@ -301,6 +305,8 @@ extension TemplateEditorView {
                 return ProfileField(label: "State", keyPath: \ApplicantProfile.state)
             case "postalCode", "zip", "code":
                 return ProfileField(label: "Postal Code", keyPath: \ApplicantProfile.zip)
+            case "countryCode":
+                return ProfileField(label: "Country Code", keyPath: \ApplicantProfile.countryCode)
             case "location":
                 remaining = remaining.dropFirst()
                 continue
