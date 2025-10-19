@@ -122,6 +122,8 @@ struct ResumeTemplateContextBuilder {
         switch first {
         case "name":
             return profile.name
+        case "label":
+            return profile.label
         case "email":
             return profile.email
         case "phone":

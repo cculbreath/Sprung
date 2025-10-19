@@ -213,6 +213,8 @@ class NativePDFGenerator: NSObject, ObservableObject {
         switch first {
         case "name":
             return profile.name.isEmpty ? nil : profile.name
+        case "label":
+            return profile.label.isEmpty ? nil : profile.label
         case "email":
             return profile.email.isEmpty ? nil : profile.email
         case "phone":
