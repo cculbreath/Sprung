@@ -18,7 +18,6 @@ class ApplicantProfile {
     var websites: String
     var email: String
     var phone: String
-    var label: String
     @Attribute(.externalStorage) var pictureData: Data?
     var pictureMimeType: String?
     var signatureData: Data?
@@ -33,7 +32,6 @@ class ApplicantProfile {
         websites: String = "example.com",
         email: String = "applicant@example.com",
         phone: String = "(555) 123-4567",
-        label: String = "",
         pictureData: Data? = nil,
         pictureMimeType: String? = nil,
         signatureData: Data? = nil
@@ -47,7 +45,6 @@ class ApplicantProfile {
         self.websites = websites
         self.email = email
         self.phone = phone
-        self.label = label
         self.pictureData = pictureData
         self.pictureMimeType = pictureMimeType
         self.signatureData = signatureData
@@ -101,7 +98,6 @@ struct Applicant {
         websites: String,
         email: String,
         phone: String,
-        label: String,
         pictureData: Data? = nil,
         pictureMimeType: String? = nil
     ) {
@@ -115,7 +111,6 @@ struct Applicant {
             websites: websites,
             email: email,
             phone: phone,
-            label: label,
             pictureData: pictureData,
             pictureMimeType: pictureMimeType
         )
@@ -130,7 +125,6 @@ struct Applicant {
     var websites: String { profile.websites }
     var email: String { profile.email }
     var phone: String { profile.phone }
-    var label: String { profile.label }
     var pictureDataURL: String? { profile.pictureDataURL() }
     var picture: String { profileDataURL ?? "" }
 
@@ -146,8 +140,7 @@ struct Applicant {
             zip: "00000",
             websites: "example.com",
             email: "applicant@example.com",
-            phone: "(555) 010-0000",
-            label: "Software Developer"
+            phone: "(555) 010-0000"
         )
     }
 }
