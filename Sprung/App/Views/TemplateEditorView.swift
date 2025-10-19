@@ -208,6 +208,13 @@ struct TemplateEditorView: View {
             }
         }
     }
+
+    private func openExperienceEditor() {
+        Task { @MainActor in
+            NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
+            NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil)
+        }
+    }
     
     
     private var resumeTemplateIdentifier: String? {
@@ -350,6 +357,7 @@ struct TemplateEditorView: View {
                 hasUnsavedChanges: hasAnyUnsavedChanges,
                 onToggleSidebar: toggleSidebar,
                 onOpenApplicant: openApplicantEditor,
+                onOpenExperience: openExperienceEditor,
                 onCloseWithoutSaving: {
                     closeWithoutSaving()
                 },

@@ -14,6 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var applicantProfileWindow: NSWindow?
     var templateEditorWindow: NSWindow?
     var onboardingInterviewWindow: NSWindow?
+    var experienceEditorWindow: NSWindow?
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
@@ -100,7 +101,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: "T"
         )
         templateMenuItem.target = self
+        templateMenuItem.keyEquivalentModifierMask = [.command, .shift]
         appMenu.insertItem(templateMenuItem, at: aboutSeparatorIndex + 2)
+
+        let experienceMenuItem = NSMenuItem(
+            title: "Experience Editor...",
+            action: #selector(showExperienceEditorWindow),
+            keyEquivalent: "E"
+        )
+        experienceMenuItem.keyEquivalentModifierMask = [.command, .shift]
+        experienceMenuItem.target = self
+        appMenu.insertItem(experienceMenuItem, at: aboutSeparatorIndex + 3)
     }
 
     @MainActor @objc func showSettingsWindow() {
@@ -224,7 +235,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func windowWillClose(_ notification: Notification) {
-        if notification.object as? NSWindow == applicantProfileWindow {}
+        if notification.object as? NSWindow == applicantProfileWindow {
+            applicantProfileWindow = nil
+        } else if notification.object as? NSWindow == templateEditorWindow {
+            templateEditorWindow = nil
+        } else if notification.object as? NSWindow == experienceEditorWindow {
+            experienceEditorWindow = nil
+        }
     }
     
     @objc func showTemplateEditorWindow() {
@@ -320,6 +337,65 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         onboardingInterviewWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func showExperienceEditorWindow() {
+        if let window = experienceEditorWindow, !window.isVisible {
+            experienceEditorWindow = nil
+        }
+
+        if experienceEditorWindow == nil {
+            let editorView = ExperienceEditorView()
+            let hostingView: NSHostingView<AnyView>
+
+            if let modelContainer,
+               let appEnvironment,
+               let experienceDefaultsStore {
+                hostingView = NSHostingView(rootView: AnyView(
+                    editorView
+                        .modelContainer(modelContainer)
+                        .environment(appEnvironment)
+                        .environment(appEnvironment.appState)
+                        .environment(experienceDefaultsStore)
+                ))
+            } else if let modelContainer,
+                      let experienceDefaultsStore {
+                hostingView = NSHostingView(rootView: AnyView(
+                    editorView
+                        .modelContainer(modelContainer)
+                        .environment(experienceDefaultsStore)
+                ))
+            } else if let experienceDefaultsStore {
+                hostingView = NSHostingView(rootView: AnyView(
+                    editorView.environment(experienceDefaultsStore)
+                ))
+            } else {
+                hostingView = NSHostingView(rootView: AnyView(editorView))
+            }
+
+            experienceEditorWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1180, height: 780),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            experienceEditorWindow?.title = "Experience Editor"
+            experienceEditorWindow?.tabbingMode = .disallowed
+            experienceEditorWindow?.contentView = hostingView
+            experienceEditorWindow?.isReleasedWhenClosed = false
+            experienceEditorWindow?.center()
+            experienceEditorWindow?.minSize = NSSize(width: 960, height: 680)
+
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowWillClose(_:)),
+                name: NSWindow.willCloseNotification,
+                object: experienceEditorWindow
+            )
+        }
+
+        experienceEditorWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

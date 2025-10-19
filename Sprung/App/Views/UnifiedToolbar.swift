@@ -128,6 +128,20 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Open Template Editor")
             }
 
+            ToolbarItem(id: "experienceEditor", placement: .primaryAction, showsByDefault: true) {
+                Button(action: {
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
+                        NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil)
+                    }
+                }) {
+                    Label("Experience", systemImage: "briefcase")
+                        .font(.system(size: 14, weight: .light))
+                }
+                .buttonStyle(.automatic)
+                .help("Open Experience Editor")
+            }
+
             ToolbarItem(id: "showSources", placement: .primaryAction, showsByDefault: true) {
                 Button(action: {
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {

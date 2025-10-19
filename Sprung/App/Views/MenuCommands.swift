@@ -46,6 +46,7 @@ extension Notification.Name {
     static let showSettings = Notification.Name("showSettings")
     static let showApplicantProfile = Notification.Name("showApplicantProfile")
     static let showTemplateEditor = Notification.Name("showTemplateEditor")
+    static let showExperienceEditor = Notification.Name("showExperienceEditor")
     
     // Menu-to-Toolbar Bridge Commands (for programmatically triggering toolbar buttons)
     static let triggerBestJobButton = Notification.Name("triggerBestJobButton")

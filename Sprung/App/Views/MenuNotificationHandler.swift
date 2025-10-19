@@ -244,6 +244,16 @@ class MenuNotificationHandler {
         }
 
         NotificationCenter.default.addObserver(
+            forName: .showExperienceEditor,
+            object: nil,
+            queue: .main
+        ) { _ in
+            if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                appDelegate.showExperienceEditorWindow()
+            }
+        }
+
+        NotificationCenter.default.addObserver(
             forName: .startOnboardingInterview,
             object: nil,
             queue: .main
