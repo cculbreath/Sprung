@@ -47,6 +47,10 @@ struct ApplicantProfileView: View {
                                 TextField("Websites", text: $profile.websites)
                                     .onChange(of: profile.websites) { _, _ in hasChanges = true }
                                     .textFieldStyle(.roundedBorder)
+
+                                TextField("Professional Label", text: $profile.label)
+                                    .onChange(of: profile.label) { _, _ in hasChanges = true }
+                                    .textFieldStyle(.roundedBorder)
                             }
                         } label: {
                             Text("Personal Information")
