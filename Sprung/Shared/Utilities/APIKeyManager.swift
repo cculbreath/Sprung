@@ -2,7 +2,7 @@
 //  APIKeyManager.swift
 //  Sprung
 //
-//  Keychain-backed storage for API keys with optional UserDefaults migration.
+//  Keychain-backed storage for API keys.
 //
 
 import Foundation
@@ -66,29 +66,4 @@ struct APIKeyManager {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// One-time migration of keys from UserDefaults to Keychain.
-    static func migrateFromUserDefaults() {
-        let defaults = UserDefaults.standard
-
-        // OpenRouter
-        if get(.openRouter) == nil, let val = defaults.string(forKey: APIKeyType.openRouter.rawValue), !val.isEmpty {
-            if set(.openRouter, value: val) {
-                Logger.debug("🔑 Migrated OpenRouter API key to Keychain")
-            }
-        }
-
-        // OpenAI (optional, used by TTS)
-        if get(.openAI) == nil, let val = defaults.string(forKey: APIKeyType.openAI.rawValue), !val.isEmpty, val != "none" {
-            if set(.openAI, value: val) {
-                Logger.debug("🔑 Migrated OpenAI API key to Keychain")
-            }
-        }
-
-        // ScrapingDog
-        if get(.scrapingDog) == nil, let val = defaults.string(forKey: APIKeyType.scrapingDog.rawValue), !val.isEmpty, val != "none" {
-            if set(.scrapingDog, value: val) {
-                Logger.debug("🔑 Migrated ScrapingDog API key to Keychain")
-            }
-        }
-    }
 }

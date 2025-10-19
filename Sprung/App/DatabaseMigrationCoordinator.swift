@@ -25,8 +25,7 @@ final class DatabaseMigrationCoordinator {
         self.modelValidationService = modelValidationService
     }
 
-    func performStartupMigrations(modelContext: ModelContext) {
-        DatabaseMigrationHelper.checkAndMigrateIfNeeded(modelContext: modelContext)
+    func performStartupMigrations() {
         migrateSelectedModelsFromUserDefaults()
         migrateReasoningCapabilities()
         scheduleModelValidation()

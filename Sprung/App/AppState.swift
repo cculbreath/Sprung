@@ -44,8 +44,6 @@ class AppState {
     }
 
     private func updateOpenRouterConfiguration(configureClient: Bool) {
-        // Ensure migration from UserDefaults to Keychain (one-time, idempotent)
-        APIKeyManager.migrateFromUserDefaults()
         let key = normalizedKey(for: .openRouter)
         openRouterApiKey = key
 
