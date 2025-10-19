@@ -173,8 +173,12 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
 
 #if DEBUG
-        if Logger.isVerboseEnabled, let basics = merged["basics"] {
-            Logger.debug("NativePDFGenerator: basics context => \(basics)")
+        if Logger.isVerboseEnabled, let basics = merged["basics"] as? [String: Any] {
+            var sanitized = basics
+            if sanitized["image"] != nil {
+                sanitized["image"] = "<omitted>"
+            }
+            Logger.debug("NativePDFGenerator: basics context => \(sanitized)")
         }
 #endif
 
