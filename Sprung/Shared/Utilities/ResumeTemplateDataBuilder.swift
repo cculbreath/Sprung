@@ -31,6 +31,15 @@ private struct Implementation {
     let resume: Resume
     let rootNode: TreeNode
     let manifest: TemplateManifest?
+    private static let fontSizeScaleFactor = Decimal(3) / Decimal(4)
+    private static let fontSizeFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.usesGroupingSeparator = false
+        return formatter
+    }()
 
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
@@ -136,9 +145,10 @@ private struct Implementation {
         case .styling:
             // Build the styling section including fontSizes
             var styling: [String: Any] = [:]
-            if let fontSizes = buildFontSizesSection() ?? defaultFontSizes(from: manifest) {
-                styling["fontSizes"] = fontSizes
-                Logger.debug("ResumeTemplateDataBuilder: using fontSizes => \(fontSizes)")
+            if let rawFontSizes = buildFontSizesSection() ?? defaultFontSizes(from: manifest) {
+                let scaledFontSizes = scaleFontSizes(rawFontSizes)
+                styling["fontSizes"] = scaledFontSizes
+                Logger.debug("ResumeTemplateDataBuilder: using scaled fontSizes => \(scaledFontSizes)")
             }
             if let margins = defaultPageMargins(from: manifest) {
                 styling["pageMargins"] = margins
@@ -173,7 +183,8 @@ private struct Implementation {
         case .arrayOfObjects:
             return buildArrayOfObjectsSection(named: sectionName)
         case .fontSizes:
-            return buildFontSizesSection()
+            guard let fontSizes = buildFontSizesSection() else { return nil }
+            return scaleFontSizes(fontSizes)
         }
     }
 
@@ -316,6 +327,57 @@ private struct Implementation {
         return result
     }
 
+    private func scaleFontSizes(_ dictionary: [String: String]) -> [String: String] {
+        var scaled: [String: String] = [:]
+        for (key, value) in dictionary {
+            scaled[key] = scaledFontSizeString(from: value)
+        }
+        return scaled
+    }
+
+    private func scaledFontSizeString(from value: String) -> String {
+        guard let decimal = parseFontSizeValue(from: value) else {
+            return value
+        }
+
+        let scaledDecimal = decimal * Self.fontSizeScaleFactor
+        let formatted = formatFontDecimal(scaledDecimal)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if trimmed.hasSuffix("pt") {
+            return "\(formatted)pt"
+        }
+        if trimmed.hasSuffix("px") {
+            return "\(formatted)px"
+        }
+        return formatted
+    }
+
+    private func parseFontSizeValue(from string: String) -> Decimal? {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return nil }
+
+        let lowercased = trimmed.lowercased()
+        if lowercased == "inherit" || lowercased == "auto" {
+            return nil
+        }
+
+        var sanitized = trimmed
+        if lowercased.hasSuffix("pt") || lowercased.hasSuffix("px") {
+            sanitized = String(sanitized.dropLast(2))
+        }
+        sanitized = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Decimal(string: sanitized)
+    }
+
+    private func formatFontDecimal(_ decimal: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: decimal)
+        if let formatted = Self.fontSizeFormatter.string(from: number) {
+            return formatted
+        }
+        return number.stringValue
+    }
+
     // MARK: - Descriptor Helpers
 
     private func buildSectionUsingDescriptors(
@@ -340,7 +402,7 @@ private struct Implementation {
             let arrayNode = node(for: descriptor, in: sectionNode)
             return buildValue(for: descriptor, node: arrayNode)
 
-        case .mapOfStrings, .fontSizes:
+        case .mapOfStrings:
             guard let sectionNode else { return nil }
             var result: [String: String] = [:]
             for descriptor in descriptors where descriptor.key != "*" {
@@ -350,6 +412,17 @@ private struct Implementation {
                 }
             }
             return result.isEmpty ? nil : result
+        case .fontSizes:
+            guard let sectionNode else { return nil }
+            var result: [String: String] = [:]
+            for descriptor in descriptors where descriptor.key != "*" {
+                let childNode = node(for: descriptor, in: sectionNode)
+                if let value = buildValue(for: descriptor, node: childNode) as? String {
+                    result[descriptor.key] = value
+                }
+            }
+            guard result.isEmpty == false else { return nil }
+            return scaleFontSizes(result)
 
         case .object:
             guard let sectionNode else { return nil }
@@ -636,7 +709,7 @@ private struct Implementation {
 
         case .fontSizes:
             if let dict = value as? [String: String] {
-                return dict
+                return scaleFontSizes(dict)
             }
             if let dict = value as? [String: Any] {
                 var normalized: [String: String] = [:]
@@ -647,7 +720,7 @@ private struct Implementation {
                         normalized[key] = "\(number)pt"
                     }
                 }
-                return normalized
+                return scaleFontSizes(normalized)
             }
             return value
 
