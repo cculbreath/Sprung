@@ -158,6 +158,7 @@ extension TemplateEditorView {
                 seedValidationMessage = "Seed must be a JSON object."
                 return false
             }
+            let originalSeedDictionary = seedDictionary
 
             let manifest = TemplateManifestLoader.manifest(for: template)
             var profileChanges: [ProfileUpdateChange] = []
@@ -237,6 +238,22 @@ extension TemplateEditorView {
             }
 
             seedDictionary.removeValue(forKey: "contact")
+
+            let allowedRemovalPaths = removalTargets
+                .map { pathDescription(for: [$0.0] + $0.1) }
+                + ["contact"]
+
+            let unexpectedRemovalPaths = unexpectedSeedRemovals(
+                original: originalSeedDictionary,
+                sanitized: seedDictionary,
+                allowedPaths: allowedRemovalPaths
+            )
+
+            guard unexpectedRemovalPaths.isEmpty else {
+                let joined = unexpectedRemovalPaths.joined(separator: ", ")
+                seedValidationMessage = "Seed not saved. Remove or reconfigure unsupported key(s): \(joined)."
+                return false
+            }
 
             guard let formatted = prettyJSONString(from: seedDictionary) else {
                 seedValidationMessage = "Seed must be valid JSON."
@@ -382,6 +399,63 @@ extension TemplateEditorView {
             return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
         }
         return nil
+    }
+
+    private func unexpectedSeedRemovals(
+        original: [String: Any],
+        sanitized: [String: Any],
+        allowedPaths: [String]
+    ) -> [String] {
+        let removals = removedKeyPaths(
+            original: original,
+            sanitized: sanitized,
+            currentPath: []
+        )
+        guard removals.isEmpty == false else { return [] }
+        return removals
+            .map { pathDescription(for: $0) }
+            .filter { path in
+                if allowedPaths.contains(path) {
+                    return false
+                }
+                if allowedPaths.contains(where: { $0.hasPrefix(path + ".") }) {
+                    return false
+                }
+                return true
+            }
+    }
+
+    private func removedKeyPaths(
+        original: Any,
+        sanitized: Any?,
+        currentPath: [String]
+    ) -> [[String]] {
+        guard let originalDict = original as? [String: Any] else {
+            return []
+        }
+
+        guard let sanitizedDict = sanitized as? [String: Any] else {
+            return [currentPath].filter { $0.isEmpty == false }
+        }
+
+        var missing: [[String]] = []
+        for (key, value) in originalDict {
+            let nextPath = currentPath + [key]
+            if sanitizedDict[key] == nil {
+                missing.append(nextPath)
+            } else {
+                missing.append(contentsOf: removedKeyPaths(
+                    original: value,
+                    sanitized: sanitizedDict[key],
+                    currentPath: nextPath
+                ))
+            }
+        }
+        return missing
+    }
+
+    private func pathDescription(for path: [String]) -> String {
+        path.joined(separator: ".")
     }
 
     func applyProfileUpdate(_ prompt: ProfileUpdatePrompt) {
