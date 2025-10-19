@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Observation
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -16,6 +17,8 @@ struct ApplicantProfileView: View {
     @State private var successMessage = ""
     @State private var hasChanges = false
     @State private var isLoading = true
+    @State private var selectedProfileID: UUID?
+    @State private var hoveredProfileID: UUID?
 
     init() {
         // Initialize with a default profile, then update it in onAppear
@@ -36,6 +39,10 @@ struct ApplicantProfileView: View {
                                     .onChange(of: profile.name) { _, _ in hasChanges = true }
                                     .textFieldStyle(.roundedBorder)
 
+                                TextField("Professional Label", text: $profile.label)
+                                    .onChange(of: profile.label) { _, _ in hasChanges = true }
+                                    .textFieldStyle(.roundedBorder)
+
                                 TextField("Email", text: $profile.email)
                                     .onChange(of: profile.email) { _, _ in hasChanges = true }
                                     .textFieldStyle(.roundedBorder)
@@ -50,6 +57,28 @@ struct ApplicantProfileView: View {
                             }
                         } label: {
                             Text("Personal Information")
+                                .font(.headline)
+                        }
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Summary")
+                                    .font(.subheadline.weight(.medium))
+                                Text("Use a succinct 2–3 sentence summary that highlights your focus areas.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                TextEditor(text: $profile.summary)
+                                    .onChange(of: profile.summary) { _, _ in hasChanges = true }
+                                    .frame(minHeight: 120)
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                                    )
+                            }
+                        } label: {
+                            Text("Professional Summary")
                                 .font(.headline)
                         }
 
@@ -101,6 +130,67 @@ struct ApplicantProfileView: View {
                             }
                         } label: {
                             Text("Profile Photo")
+                                .font(.headline)
+                        }
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 12) {
+                                if profile.profiles.isEmpty {
+                                    VStack(alignment: .center, spacing: 8) {
+                                        Text("No profiles added yet.")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .strokeBorder(Color.gray.opacity(0.15), lineWidth: 1)
+                                    )
+                                } else {
+                                    VStack(spacing: 8) {
+                                        ForEach(profile.profiles) { social in
+                                            ApplicantSocialProfileRow(
+                                                socialProfile: social,
+                                                isSelected: selectedProfileID == social.id,
+                                                isHovered: hoveredProfileID == social.id,
+                                                onSelect: {
+                                                    selectedProfileID = social.id
+                                                },
+                                                onHoverChange: { hovering in
+                                                    hoveredProfileID = hovering ? social.id : nil
+                                                },
+                                                onDelete: {
+                                                    removeProfile(social)
+                                                },
+                                                onEdit: {
+                                                    hasChanges = true
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                HStack(spacing: 8) {
+                                    Button {
+                                        addProfile()
+                                    } label: {
+                                        Label("Add Profile", systemImage: "plus")
+                                    }
+                                    .buttonStyle(.bordered)
+
+                                    Button {
+                                        removeSelectedProfile()
+                                    } label: {
+                                        Label("Remove Selected", systemImage: "minus")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(selectedProfileID == nil)
+
+                                    Spacer()
+                                }
+                            }
+                        } label: {
+                            Text("Online Profiles")
                                 .font(.headline)
                         }
 
@@ -267,14 +357,92 @@ struct ApplicantProfileView: View {
         profileStore.save(profile)
         successMessage = "Profile saved successfully"
         hasChanges = false
+        selectedProfileID = nil
+        hoveredProfileID = nil
 
         // Clear success message after a delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             successMessage = ""
         }
     }
+
+    private func addProfile() {
+        let newProfile = ApplicantSocialProfile()
+        newProfile.applicant = profile
+        profile.profiles.append(newProfile)
+        selectedProfileID = newProfile.id
+        hoveredProfileID = newProfile.id
+        hasChanges = true
+    }
+
+    private func removeSelectedProfile() {
+        guard let selectedProfileID else { return }
+        guard let target = profile.profiles.first(where: { $0.id == selectedProfileID }) else { return }
+        removeProfile(target)
+    }
+
+    private func removeProfile(_ target: ApplicantSocialProfile) {
+        guard let index = profile.profiles.firstIndex(where: { $0.id == target.id }) else { return }
+        let removed = profile.profiles.remove(at: index)
+        selectedProfileID = nil
+        hoveredProfileID = nil
+        removed.applicant = nil
+        if let context = profile.modelContext {
+            context.delete(removed)
+        }
+        hasChanges = true
+    }
 }
 
-#Preview {
-    ApplicantProfileView()
+private struct ApplicantSocialProfileRow: View {
+    @Bindable var socialProfile: ApplicantSocialProfile
+    var isSelected: Bool
+    var isHovered: Bool
+    var onSelect: () -> Void
+    var onHoverChange: (Bool) -> Void
+    var onDelete: () -> Void
+    var onEdit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            TextField("Network", text: $socialProfile.network)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: socialProfile.network) { _, _ in onEdit() }
+
+            TextField("Username", text: $socialProfile.username)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: socialProfile.username) { _, _ in onEdit() }
+
+            TextField("URL", text: $socialProfile.url)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: socialProfile.url) { _, _ in onEdit() }
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? Color.accentColor : Color.gray.opacity(0.15), lineWidth: isSelected ? 2 : 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+                )
+        )
+        .overlay(alignment: .topTrailing) {
+            if isHovered {
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .padding(6)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
+        }
+        .onHover { hovering in
+            onHoverChange(hovering)
+        }
+    }
 }

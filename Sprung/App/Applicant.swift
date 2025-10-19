@@ -8,8 +8,35 @@ import SwiftData
 import SwiftUI
 
 @Model
+final class ApplicantSocialProfile {
+    @Attribute(.unique) var id: UUID
+    var network: String
+    var username: String
+    var url: String
+
+    @Relationship(deleteRule: .nullify, inverse: \ApplicantProfile.profiles)
+    var applicant: ApplicantProfile?
+
+    init(
+        id: UUID = UUID(),
+        network: String = "",
+        username: String = "",
+        url: String = "",
+        applicant: ApplicantProfile? = nil
+    ) {
+        self.id = id
+        self.network = network
+        self.username = username
+        self.url = url
+        self.applicant = applicant
+    }
+}
+
+@Model
 class ApplicantProfile {
     var name: String
+    var label: String
+    var summary: String
     var address: String
     var city: String
     var state: String
@@ -18,12 +45,15 @@ class ApplicantProfile {
     var websites: String
     var email: String
     var phone: String
+    @Relationship(deleteRule: .cascade) var profiles: [ApplicantSocialProfile]
     @Attribute(.externalStorage) var pictureData: Data?
     var pictureMimeType: String?
     var signatureData: Data?
 
     init(
         name: String = "John Doe",
+        label: String = "Software Engineer",
+        summary: String = "Experienced engineer focused on building high-quality macOS applications.",
         address: String = "123 Main Street",
         city: String = "Austin",
         state: String = "Texas",
@@ -32,11 +62,14 @@ class ApplicantProfile {
         websites: String = "example.com",
         email: String = "applicant@example.com",
         phone: String = "(555) 123-4567",
+        profiles: [ApplicantSocialProfile] = [],
         pictureData: Data? = nil,
         pictureMimeType: String? = nil,
         signatureData: Data? = nil
     ) {
         self.name = name
+        self.label = label
+        self.summary = summary
         self.address = address
         self.city = city
         self.state = state
@@ -45,6 +78,7 @@ class ApplicantProfile {
         self.websites = websites
         self.email = email
         self.phone = phone
+        self.profiles = profiles
         self.pictureData = pictureData
         self.pictureMimeType = pictureMimeType
         self.signatureData = signatureData
@@ -91,6 +125,8 @@ struct Applicant {
 
     init(
         name: String,
+        label: String,
+        summary: String,
         address: String,
         city: String,
         state: String,
@@ -98,12 +134,15 @@ struct Applicant {
         websites: String,
         email: String,
         phone: String,
+        profiles: [ApplicantSocialProfile] = [],
         pictureData: Data? = nil,
         pictureMimeType: String? = nil
     ) {
         // Create a standalone ApplicantProfile without accessing MainActor-isolated code
         profile = ApplicantProfile(
             name: name,
+            label: label,
+            summary: summary,
             address: address,
             city: city,
             state: state,
@@ -111,6 +150,7 @@ struct Applicant {
             websites: websites,
             email: email,
             phone: phone,
+            profiles: profiles,
             pictureData: pictureData,
             pictureMimeType: pictureMimeType
         )
@@ -118,6 +158,8 @@ struct Applicant {
 
     // Forward properties to maintain backward compatibility
     var name: String { profile.name }
+    var label: String { profile.label }
+    var summary: String { profile.summary }
     var address: String { profile.address }
     var city: String { profile.city }
     var state: String { profile.state }
@@ -134,6 +176,8 @@ struct Applicant {
     static var placeholder: Applicant {
         Applicant(
             name: "Alex Applicant",
+            label: "Product Designer",
+            summary: "Design leader focused on crafting elegant user experiences across macOS and iOS.",
             address: "123 Sample Street",
             city: "Sample City",
             state: "Example State",
