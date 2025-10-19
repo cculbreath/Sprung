@@ -56,10 +56,7 @@ class TextResumeGenerator {
                          userInfo: [NSLocalizedDescriptionKey: "Template not found: \(template)"])
         }
         
-        return LegacyTemplateSyntaxMigrator.applyCompatibilityFixes(
-            to: content,
-            templateName: template
-        )
+        return content
     }
     
     private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
@@ -203,44 +200,5 @@ class TextResumeGenerator {
         for warning in warnings {
             Logger.warning("Handlebars compatibility (\(template)): \(warning)")
         }
-    }
-}
-
-private enum LegacyTemplateSyntaxMigrator {
-    private static let legacyJoinSnippet = "{{{ center(join(job-titles, \" · \"), 80) }}}"
-    private static let modernJoinSnippet = "{{{ center(join(job-titles), 80) }}}"
-    private static let formatDatePattern = #"formatDate\(\s*([A-Za-z0-9_\.\-]+)\s*,\s*\"MMM yyyy\"\s*\)"#
-
-    /// Applies compatibility shims for templates created before the 2024-09
-    /// manifest refresh. Plan to retire these migrations once all templates
-    /// have been edited through the new editor (target sunset: 2026-Q1).
-    static func applyCompatibilityFixes(to template: String, templateName: String) -> String {
-        var sanitized = migrateJoinSyntax(in: template, templateName: templateName)
-        sanitized = migrateLegacyFormatDateCalls(in: sanitized)
-        return sanitized
-    }
-
-    private static func migrateJoinSyntax(in template: String, templateName: String) -> String {
-        guard template.contains(legacyJoinSnippet) else { return template }
-
-        Logger.info(
-            "TextResumeGenerator: migrated legacy join syntax in template \(templateName)",
-            category: .migration
-        )
-
-        return template.replacingOccurrences(of: legacyJoinSnippet, with: modernJoinSnippet)
-    }
-
-    private static func migrateLegacyFormatDateCalls(in template: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: formatDatePattern) else {
-            return template
-        }
-        let range = NSRange(template.startIndex..., in: template)
-        return regex.stringByReplacingMatches(
-            in: template,
-            options: [],
-            range: range,
-            withTemplate: "formatDate($1)"
-        )
     }
 }

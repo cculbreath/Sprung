@@ -854,11 +854,6 @@ extension TemplateEditorView {
             return overrides
         }
 
-        if let legacy = try? TemplateManifest.decode(from: data) {
-            let base = TemplateManifestDefaults.baseManifest(for: slug)
-            return TemplateManifestDefaults.overrides(fromLegacy: legacy, comparisonBase: base)
-        }
-
         return nil
     }
 

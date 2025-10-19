@@ -54,7 +54,6 @@ final class AppDependencies {
         self.templateSeedStore = templateSeedStore
         let experienceDefaultsStore = ExperienceDefaultsStore(context: modelContext)
         self.experienceDefaultsStore = experienceDefaultsStore
-        TemplateTextResetMigration.runIfNeeded(templateStore: templateStore)
 
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
@@ -179,7 +178,7 @@ final class AppDependencies {
             enabledLLMStore: enabledLLMStore,
             modelValidationService: modelValidationService
         )
-        migrationCoordinator.performStartupMigrations(modelContext: modelContext)
+        migrationCoordinator.performStartupMigrations()
 
         llmService.initialize(
             appState: appState,

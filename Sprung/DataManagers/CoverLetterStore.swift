@@ -31,9 +31,6 @@ final class CoverLetterStore: SwiftDataStore {
         modelContext = context
         coverRefStore = refStore
         self.applicantProfileStore = applicantProfileStore
-
-        // Perform one-time migration for existing cover letters
-        performMigrationForGeneratedFlag()
     }
 
     @discardableResult
@@ -143,47 +140,5 @@ final class CoverLetterStore: SwiftDataStore {
     func exportPDF(from coverLetter: CoverLetter) -> Data {
         let applicant = Applicant(profile: applicantProfileStore.currentProfile())
         return exportService.exportPDF(from: coverLetter, applicant: applicant)
-    }
-
-    // MARK: - Migration
-
-    /// One-time migration to set generated = true for all existing cover letters with content
-    @MainActor
-    private func performMigrationForGeneratedFlag() {
-        // Use AppStorage to track migration status
-        let migrationKey = "CoverLetterGeneratedFlagMigrationCompleted"
-        let defaults = UserDefaults.standard
-
-        // Only run migration once
-        if defaults.bool(forKey: migrationKey) {
-            return
-        }
-
-        do {
-            // Fetch all cover letters
-            let descriptor = FetchDescriptor<CoverLetter>()
-            let allCoverLetters = try modelContext.fetch(descriptor)
-
-            var updatedCount = 0
-
-            // Update only those with content but not marked as generated
-            for letter in allCoverLetters {
-                if !letter.content.isEmpty && !letter.generated {
-                    letter.generated = true
-                    updatedCount += 1
-                }
-            }
-
-            if updatedCount > 0 {
-                Logger.debug("Migration: Set generated=true for \(updatedCount) cover letters with content")
-                saveContext()
-            }
-
-            // Mark migration as completed
-            defaults.set(true, forKey: migrationKey)
-
-        } catch {
-            Logger.debug("Failed to perform cover letter migration: \(error.localizedDescription)")
-        }
     }
 }

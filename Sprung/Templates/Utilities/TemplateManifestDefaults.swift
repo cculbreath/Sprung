@@ -194,12 +194,6 @@ enum TemplateManifestDefaults {
             return apply(overrides: overrides, to: base, slug: template.slug)
         }
 
-        if let legacy = try? TemplateManifest.decode(from: data) {
-            Logger.debug("TemplateManifestDefaults: converting legacy manifest for slug \(template.slug)")
-            let overrides = overrides(fromLegacy: legacy, comparisonBase: base)
-            return apply(overrides: overrides, to: base, slug: template.slug)
-        }
-
         Logger.warning("TemplateManifestDefaults: Unable to decode manifest overrides for slug \(template.slug); falling back to defaults.")
         return base
     }
@@ -233,48 +227,6 @@ enum TemplateManifestDefaults {
             sectionVisibilityDefaults: sectionVisibilityDefaults,
             sectionVisibilityLabels: sectionVisibilityLabels
         )
-    }
-
-    static func overrides(fromLegacy legacy: TemplateManifest, comparisonBase base: TemplateManifest) -> TemplateManifestOverrides {
-        var overrides = TemplateManifestOverrides()
-
-        if legacy.sectionOrder != base.sectionOrder {
-            overrides.sectionOrder = legacy.sectionOrder
-        }
-
-        if legacy.sectionVisibilityDefaults != base.sectionVisibilityDefaults {
-            overrides.sectionVisibility = legacy.sectionVisibilityDefaults
-        }
-
-        if legacy.sectionVisibilityLabels != base.sectionVisibilityLabels {
-            overrides.sectionVisibilityLabels = legacy.sectionVisibilityLabels
-        }
-
-        if legacy.transparentKeys != base.transparentKeys {
-            overrides.transparentKeys = legacy.transparentKeys
-        }
-
-        if legacy.keysInEditor != base.keysInEditor {
-            overrides.keysInEditor = legacy.keysInEditor
-        }
-
-        if legacy.editorLabels != base.editorLabels {
-            overrides.editorLabels = legacy.editorLabels
-        }
-
-        if let legacyStyling = legacy.sections["styling"],
-           let baseStyling = base.sections["styling"],
-           let delta = legacyStyling.stylingOverride(relativeTo: baseStyling) {
-            overrides.styling = delta
-        }
-
-        if let legacyCustom = legacy.sections["custom"],
-           let baseCustom = base.sections["custom"],
-           let delta = legacyCustom.customOverride(relativeTo: baseCustom) {
-            overrides.custom = delta
-        }
-
-        return overrides
     }
 
     // MARK: - Base Manifest Construction
