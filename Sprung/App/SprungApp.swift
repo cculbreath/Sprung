@@ -69,12 +69,14 @@ struct SprungApp: App {
                 .environment(appDependencies.resumeExportCoordinator)
                 .environment(appDependencies.templateStore)
                 .environment(appDependencies.templateSeedStore)
+                .environment(appDependencies.experienceDefaultsStore)
                 .onAppear {
                     // Pass environment and dependencies to AppDelegate for windows
                     appDelegate.appEnvironment = appEnvironment
                     appDelegate.modelContainer = modelContainer
                     appDelegate.enabledLLMStore = appDependencies.enabledLLMStore
                     appDelegate.applicantProfileStore = appDependencies.applicantProfileStore
+                    appDelegate.experienceDefaultsStore = appDependencies.experienceDefaultsStore
                     appDelegate.llmService = appDependencies.llmService
                     appDelegate.onboardingInterviewService = appDependencies.onboardingInterviewService
                     appDelegate.onboardingArtifactStore = appDependencies.onboardingArtifactStore
