@@ -309,6 +309,14 @@ struct ResumeTemplateContextBuilder {
             var merged = baseDict
             merge(into: &merged, with: overlayDict)
             return merged
+        case let (baseArray as [Any], overlayArray as [Any]):
+            guard overlayArray.isEmpty == false else { return baseArray }
+            if let merged = mergeCustomOverlay(baseArray: baseArray, overlayArray: overlayArray) {
+                return merged
+            }
+            return overlayArray
+        case (nil, let overlayArray as [Any]):
+            return overlayArray
         case (_, let overlayArray as [Any]):
             return overlayArray.isEmpty ? (base ?? overlayArray) : overlayArray
         case (_, let overlayString as String):
@@ -316,6 +324,46 @@ struct ResumeTemplateContextBuilder {
         default:
             return overlay
         }
+    }
+
+    private func mergeCustomOverlay(baseArray: [Any], overlayArray: [Any]) -> [Any]? {
+        var result = baseArray
+        var didMerge = false
+
+        for (position, element) in overlayArray.enumerated() {
+            guard let overlayDict = element as? [String: Any] else { return nil }
+            guard overlayDict.keys.allSatisfy({ $0 == "custom" || $0 == "__key" }) else { return nil }
+            guard let overlayCustom = overlayDict["custom"] else { continue }
+
+            let targetIndex: Int?
+            if let identifier = overlayDict["__key"] as? String {
+                targetIndex = baseArray.enumerated().first(where: { entry in
+                    guard let baseDict = dictionaryValue(from: entry.element) else { return false }
+                    if let key = baseDict["__key"] as? String, key == identifier { return true }
+                    if let title = baseDict["title"] as? String, title == identifier { return true }
+                    return false
+                })?.offset
+            } else {
+                targetIndex = position < result.count ? position : nil
+            }
+
+            if let index = targetIndex,
+               index < result.count,
+               var baseDict = dictionaryValue(from: result[index]) {
+                baseDict["custom"] = mergeValue(baseDict["custom"], with: overlayCustom)
+                result[index] = baseDict
+                didMerge = true
+            } else {
+                var newEntry: [String: Any] = ["custom": overlayCustom]
+                if let identifier = overlayDict["__key"] as? String {
+                    newEntry["__key"] = identifier
+                }
+                result.append(newEntry)
+                didMerge = true
+            }
+        }
+
+        return didMerge ? result : nil
     }
 
     private func shouldReplaceDictionary(base: [String: Any], with overlay: [String: Any]) -> Bool {

@@ -827,14 +827,6 @@ extension TemplateEditorView {
                 pageMargins: TemplateManifestDefaults.recommendedPageMargins,
                 includeFonts: false
             ),
-            custom: TemplateManifestOverrides.Custom(
-                sectionLabels: TemplateManifestDefaults.defaultSectionLabels,
-                contactLabels: TemplateManifestDefaults.defaultContactLabels,
-                labels: TemplateManifestDefaults.defaultGeneralLabels,
-                colors: TemplateManifestDefaults.defaultColors,
-                layout: TemplateManifestDefaults.defaultLayout,
-                meta: TemplateManifestDefaults.defaultMeta
-            ),
             sectionVisibility: TemplateManifestDefaults.defaultSectionVisibilityDefaults,
             sectionVisibilityLabels: TemplateManifestDefaults.defaultSectionVisibilityLabels
         )
