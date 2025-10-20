@@ -32,6 +32,7 @@ private struct Implementation {
     let rootNode: TreeNode
     let manifest: TemplateManifest?
     private let fontScaler = FontSizeScaler()
+    private let titleRenderer = TitleTemplateRenderer()
 
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
@@ -740,7 +741,7 @@ private struct Implementation {
         guard let descriptor else { return }
 
         if let template = descriptor.titleTemplate {
-            for placeholder in TitleTemplateRenderer.placeholders(in: template) {
+            for placeholder in titleRenderer.placeholders(in: template) {
                 guard entry[placeholder] == nil else { continue }
                 if ["employer", "company", "school", "institution"].contains(placeholder) {
                     entry[placeholder] = key
@@ -755,7 +756,7 @@ private struct Implementation {
 
         var meta: [String: Any] = [:]
         if let template = descriptor.titleTemplate,
-           let computed = TitleTemplateRenderer.render(template, context: titleContext) {
+           let computed = titleRenderer.render(template, context: titleContext) {
             meta["title"] = computed
         }
 
@@ -948,8 +949,8 @@ private struct Implementation {
         }
     }
 
-    private enum TitleTemplateRenderer {
-        static func placeholders(in template: String) -> [String] {
+    private struct TitleTemplateRenderer {
+        func placeholders(in template: String) -> [String] {
             guard let regex = try? NSRegularExpression(pattern: "\\{\\{\\s*([^}]+)\\s*\\}\\}") else {
                 return []
             }
@@ -970,7 +971,7 @@ private struct Implementation {
             }
         }
 
-        static func render(_ template: String, context: [String: Any]) -> String? {
+        func render(_ template: String, context: [String: Any]) -> String? {
             guard let regex = try? NSRegularExpression(pattern: "\\{\\{\\s*([^}]+)\\s*\\}\\}") else {
                 return nil
             }
@@ -994,7 +995,7 @@ private struct Implementation {
             return result
         }
 
-        private static func lookupValue(
+        private func lookupValue(
             forKeyPath keyPath: String,
             context: [String: Any]
         ) -> String? {
