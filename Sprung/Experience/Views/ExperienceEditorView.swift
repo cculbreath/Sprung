@@ -29,6 +29,10 @@ struct ExperienceEditorView: View {
         )
     }
 
+    private var activeSectionRenderers: [AnyExperienceSectionRenderer] {
+        ExperienceSectionRenderers.all.filter { $0.isEnabled(in: draft) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -113,81 +117,8 @@ struct ExperienceEditorView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        if draft.isWorkEnabled {
-                            WorkExperienceSectionView(
-                                items: $draft.work,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isVolunteerEnabled {
-                            VolunteerExperienceSectionView(
-                                items: $draft.volunteer,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isEducationEnabled {
-                            EducationExperienceSectionView(
-                                items: $draft.education,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isProjectsEnabled {
-                            ProjectExperienceSectionView(
-                                items: $draft.projects,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isSkillsEnabled {
-                            SkillExperienceSectionView(
-                                items: $draft.skills,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isAwardsEnabled {
-                            AwardExperienceSectionView(
-                                items: $draft.awards,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isCertificatesEnabled {
-                            CertificateExperienceSectionView(
-                                items: $draft.certificates,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isPublicationsEnabled {
-                            PublicationExperienceSectionView(
-                                items: $draft.publications,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isLanguagesEnabled {
-                            LanguageExperienceSectionView(
-                                items: $draft.languages,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isInterestsEnabled {
-                            InterestExperienceSectionView(
-                                items: $draft.interests,
-                                callbacks: sectionCallbacks
-                            )
-                        }
-
-                        if draft.isReferencesEnabled {
-                            ReferenceExperienceSectionView(
-                                items: $draft.references,
-                                callbacks: sectionCallbacks
-                            )
+                        ForEach(activeSectionRenderers) { renderer in
+                            renderer.render(in: $draft, callbacks: sectionCallbacks)
                         }
                     }
                     .padding(24)
