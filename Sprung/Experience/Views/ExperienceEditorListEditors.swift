@@ -194,8 +194,12 @@ struct KeywordChipsEditor: View {
                         .textFieldStyle(.roundedBorder)
                         .focused($isInputFocused)
                         .onSubmit(commitPendingKeyword)
-                        .onChange(of: inputText, perform: handleDelimitedInput)
-                        .onChange(of: isInputFocused, perform: handleFocusChange)
+                        .onChange(of: inputText) { _, newValue in
+                            handleDelimitedInput(newValue)
+                        }
+                        .onChange(of: isInputFocused) { _, isFocused in
+                            handleFocusChange(isFocused)
+                        }
 
                     if suggestions.isEmpty == false {
                         SuggestionList(
