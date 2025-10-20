@@ -313,7 +313,8 @@ final class ProjectExperienceDefault {
     var startDate: String
     var endDate: String
     var url: String
-    var entity: String
+    @Attribute(originalName: "entity")
+    var organization: String
     var type: String
 
     @Relationship(deleteRule: .cascade, inverse: \ProjectHighlightDefault.project)
@@ -334,7 +335,7 @@ final class ProjectExperienceDefault {
         startDate: String = "",
         endDate: String = "",
         url: String = "",
-        entity: String = "",
+        organization: String = "",
         type: String = "",
         highlights: [ProjectHighlightDefault] = [],
         keywords: [ProjectKeywordDefault] = [],
@@ -347,7 +348,7 @@ final class ProjectExperienceDefault {
         self.startDate = startDate
         self.endDate = endDate
         self.url = url
-        self.entity = entity
+        self.organization = organization
         self.type = type
         self.highlights = highlights
         self.keywords = keywords

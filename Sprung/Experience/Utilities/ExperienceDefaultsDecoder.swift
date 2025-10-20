@@ -121,7 +121,7 @@ enum ExperienceDefaultsDecoder {
         draft.startDate = json["startDate"].stringValue.trimmed()
         draft.endDate = json["endDate"].stringValue.trimmed()
         draft.url = json["url"].stringValue.trimmed()
-        draft.entity = json["entity"].stringValue.trimmed()
+        draft.organization = json["entity"].stringValue.trimmed()
         draft.type = json["type"].stringValue.trimmed()
         draft.highlights = json["highlights"].arrayValue.map {
             var highlight = ProjectHighlightDraft()
@@ -209,11 +209,5 @@ enum ExperienceDefaultsDecoder {
             role.role = json.stringValue.trimmed()
         }
         return role
-    }
-}
-
-private extension String {
-    func trimmed() -> String {
-        trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

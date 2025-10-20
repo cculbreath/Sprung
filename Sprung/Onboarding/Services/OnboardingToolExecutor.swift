@@ -434,9 +434,3 @@ final class OnboardingToolExecutor {
         [network.lowercased(), username.lowercased(), url.lowercased()].joined(separator: "|")
     }
 }
-
-private extension String {
-    func trimmed() -> String {
-        trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
