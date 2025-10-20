@@ -32,6 +32,9 @@ private struct Implementation {
     let rootNode: TreeNode
     let manifest: TemplateManifest?
     private let fontScaler = FontSizeScaler()
+    private var valueNormalizer: SectionValueNormalizer {
+        SectionValueNormalizer(resume: resume, manifest: manifest, fontScaler: fontScaler)
+    }
     private let titleRenderer = TitleTemplateRenderer()
     private let descriptorValidator = DescriptorValueValidator()
 
@@ -103,52 +106,52 @@ private struct Implementation {
         case .fontSizes:
             if let sectionNode,
                let dictionary = buildNodeValue(sectionNode) {
-                let normalized = normalizeValue(dictionary, for: .fontSizes)
+                let normalized = valueNormalizer.normalize(dictionary, for: .fontSizes)
                 Logger.debug("raw fontsizes: \(dictionary)")
-                if isEmptyValue(normalized) == false {
+                if valueNormalizer.isEmpty(normalized) == false {
                     return normalized
                 }
             }
             if let fallback = buildFontSizesSection() {
-                return normalizeValue(fallback, for: .fontSizes)
+                return valueNormalizer.normalize(fallback, for: .fontSizes)
             }
             return nil
 
         case .includeFonts:
             if let sectionNode,
                let value = buildNodeValue(sectionNode) {
-                let normalized = normalizeValue(value, for: .includeFonts)
-                if isEmptyValue(normalized) == false {
+                let normalized = valueNormalizer.normalize(value, for: .includeFonts)
+                if valueNormalizer.isEmpty(normalized) == false {
                     return normalized
                 }
             }
             let includeFonts = resume.includeFonts ? "true" : "false"
-            return normalizeValue(includeFonts, for: .includeFonts)
+            return valueNormalizer.normalize(includeFonts, for: .includeFonts)
 
         case .editorKeys:
             if let sectionNode,
                let value = buildNodeValue(sectionNode) {
-                let normalized = normalizeValue(value, for: .editorKeys)
-                if isEmptyValue(normalized) == false {
+                let normalized = valueNormalizer.normalize(value, for: .editorKeys)
+                if valueNormalizer.isEmpty(normalized) == false {
                     return normalized
                 }
             }
             guard resume.importedEditorKeys.isEmpty == false else { return nil }
-            return normalizeValue(resume.importedEditorKeys, for: .editorKeys)
+            return valueNormalizer.normalize(resume.importedEditorKeys, for: .editorKeys)
 
         case .styling:
             // Build the styling section including fontSizes
             var styling: [String: Any] = [:]
-            if let rawFontSizes = buildFontSizesSection() ?? defaultFontSizes(from: manifest) {
+            if let rawFontSizes = buildFontSizesSection() ?? valueNormalizer.defaultFontSizes() {
                 let scaledFontSizes = fontScaler.scaleFontSizes(rawFontSizes)
                 styling["fontSizes"] = scaledFontSizes
                 Logger.debug("ResumeTemplateDataBuilder: using scaled fontSizes => \(scaledFontSizes)")
             }
-            if let margins = defaultPageMargins(from: manifest) {
+            if let margins = valueNormalizer.defaultPageMargins() {
                 styling["pageMargins"] = margins
                 Logger.debug("ResumeTemplateDataBuilder: using pageMargins => \(margins)")
             }
-            if let includeFontsOverride = defaultIncludeFonts(from: manifest) {
+            if let includeFontsOverride = valueNormalizer.defaultIncludeFonts() {
                 styling["includeFonts"] = includeFontsOverride ? "true" : "false"
                 Logger.debug("ResumeTemplateDataBuilder: using includeFonts override => \(includeFontsOverride)")
             } else if resume.includeFonts {
@@ -421,65 +424,6 @@ private struct Implementation {
         return nil
     }
 
-    private func defaultFontSizes(from manifest: TemplateManifest?) -> [String: String]? {
-        guard let defaults = manifestDefaultDictionary(for: "styling"),
-              let fontSizes = defaults["fontSizes"] else {
-            Logger.debug("ResumeTemplateDataBuilder: no fontSizes default found in manifest")
-            return nil
-        }
-        let normalized = normalizeFontSizeMap(fontSizes)
-        Logger.debug("ResumeTemplateDataBuilder: manifest fontSizes default => \(normalized ?? [:])")
-        return normalized
-    }
-
-    private func defaultPageMargins(from manifest: TemplateManifest?) -> [String: String]? {
-        guard let defaults = manifestDefaultDictionary(for: "styling"),
-              let margins = defaults["pageMargins"] else {
-            Logger.debug("ResumeTemplateDataBuilder: no pageMargins default found in manifest")
-            return nil
-        }
-        let normalized = normalizeFontSizeMap(margins)
-        Logger.debug("ResumeTemplateDataBuilder: manifest pageMargins default => \(normalized ?? [:])")
-        return normalized
-    }
-
-    private func defaultIncludeFonts(from manifest: TemplateManifest?) -> Bool? {
-        guard let defaults = manifestDefaultDictionary(for: "styling"),
-              let include = defaults["includeFonts"] else { return nil }
-        if let boolValue = include as? Bool { return boolValue }
-        if let stringValue = include as? String {
-            return stringValue == "true"
-        }
-        return nil
-    }
-
-    private func manifestDefaultDictionary(for section: String) -> [String: Any]? {
-        guard let value = manifest?.section(for: section)?.defaultValue?.value else { return nil }
-        if let dict = value as? [String: Any] {
-            return dict
-        }
-        if let ordered = value as? OrderedDictionary<String, Any> {
-            return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
-        }
-        return nil
-    }
-
-    private func normalizeFontSizeMap(_ value: Any) -> [String: String]? {
-        if let dict = value as? [String: Any] {
-            var result: [String: String] = [:]
-            for (key, entry) in dict {
-                if let stringValue = entry as? String {
-                    result[key] = stringValue
-                }
-            }
-            return result.isEmpty ? nil : result
-        }
-        if let ordered = value as? OrderedDictionary<String, Any> {
-            return normalizeFontSizeMap(Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) }))
-        }
-        return nil
-    }
-
     private func buildValue(
         for descriptor: TemplateManifest.Section.FieldDescriptor,
         node: TreeNode?
@@ -509,7 +453,7 @@ private struct Implementation {
                         }
                     }
                     if items.isEmpty == false {
-                        return normalizeValue(items, for: descriptor.behavior)
+                        return valueNormalizer.normalize(items, for: descriptor.behavior)
                     }
                 } else {
                     let values = node.orderedChildren
@@ -517,7 +461,7 @@ private struct Implementation {
                         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                         .filter { !$0.isEmpty }
                     if values.isEmpty == false {
-                        return normalizeValue(values, for: descriptor.behavior)
+                        return valueNormalizer.normalize(values, for: descriptor.behavior)
                     }
                 }
             }
@@ -531,7 +475,7 @@ private struct Implementation {
         if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
             if let node,
                let object = buildObject(using: childrenDescriptors, node: node) {
-                return normalizeValue(object, for: descriptor.behavior)
+                return valueNormalizer.normalize(object, for: descriptor.behavior)
             }
 
             if let behavior = descriptor.behavior {
@@ -542,11 +486,11 @@ private struct Implementation {
 
         if let node {
             if node.hasChildren, let nested = buildNodeValue(node) {
-                return normalizeValue(nested, for: descriptor.behavior)
+                return valueNormalizer.normalize(nested, for: descriptor.behavior)
             }
 
             if node.value.isEmpty == false {
-                return normalizeValue(node.value, for: descriptor.behavior)
+                return valueNormalizer.normalize(node.value, for: descriptor.behavior)
             }
         }
 
@@ -595,8 +539,8 @@ private struct Implementation {
     ) -> Any? {
         if let node,
            let raw = buildNodeValue(node) {
-            let normalized = normalizeValue(raw, for: behavior)
-            if isEmptyValue(normalized) == false {
+            let normalized = valueNormalizer.normalize(raw, for: behavior)
+            if valueNormalizer.isEmpty(normalized) == false {
                 return normalized
             }
         }
@@ -604,114 +548,24 @@ private struct Implementation {
         switch behavior {
         case .fontSizes:
             if let fallback = buildFontSizesSection() {
-                return normalizeValue(fallback, for: behavior)
+                return valueNormalizer.normalize(fallback, for: behavior)
             }
             return nil
 
         case .includeFonts:
             let includeFonts = resume.includeFonts ? "true" : "false"
-            return normalizeValue(includeFonts, for: behavior)
+            return valueNormalizer.normalize(includeFonts, for: behavior)
 
         case .editorKeys:
             guard resume.importedEditorKeys.isEmpty == false else { return nil }
-            return normalizeValue(resume.importedEditorKeys, for: behavior)
+            return valueNormalizer.normalize(resume.importedEditorKeys, for: behavior)
 
         case .sectionLabels:
             guard resume.keyLabels.isEmpty == false else { return nil }
-            return normalizeValue(resume.keyLabels, for: behavior)
+            return valueNormalizer.normalize(resume.keyLabels, for: behavior)
 
         case .applicantProfile:
             return nil
-        }
-    }
-
-    private func normalizeValue(
-        _ value: Any,
-        for behavior: TemplateManifest.Section.FieldDescriptor.Behavior?
-    ) -> Any {
-        guard let behavior else { return value }
-
-        switch behavior {
-        case .includeFonts:
-            if let string = value as? String {
-                return string
-            }
-            if let boolValue = value as? Bool {
-                return boolValue ? "true" : "false"
-            }
-            if let number = value as? NSNumber {
-                return number.boolValue ? "true" : "false"
-            }
-            return "\(value)"
-
-        case .fontSizes:
-            if let dict = value as? [String: String] {
-                return fontScaler.scaleFontSizes(dict)
-            }
-            if let dict = value as? [String: Any] {
-                var normalized: [String: String] = [:]
-                for (key, anyValue) in dict {
-                    if let stringValue = anyValue as? String {
-                        normalized[key] = stringValue
-                    } else if let number = anyValue as? NSNumber {
-                        normalized[key] = "\(number)pt"
-                    }
-                }
-                return fontScaler.scaleFontSizes(normalized)
-            }
-            return value
-
-        case .editorKeys:
-            if let strings = value as? [String] {
-                return strings
-            }
-            if let array = value as? [Any] {
-                return array.compactMap { element in
-                    if let string = element as? String, string.isEmpty == false {
-                        return string
-                    }
-                    return nil
-                }
-            }
-            if let single = value as? String, single.isEmpty == false {
-                return [single]
-            }
-            return value
-
-        case .sectionLabels:
-            if let dict = value as? [String: String] {
-                return dict
-            }
-            if let dict = value as? [String: Any] {
-                var normalized: [String: String] = [:]
-                for (key, anyValue) in dict {
-                    if let stringValue = anyValue as? String {
-                        normalized[key] = stringValue
-                    }
-                }
-                return normalized
-            }
-            return value
-
-        case .applicantProfile:
-            return value
-        }
-    }
-
-    private func isEmptyValue(_ value: Any) -> Bool {
-        switch value {
-        case let string as String:
-            return string.isEmpty
-        case let strings as [String]:
-            return strings.isEmpty
-        case let array as [Any]:
-            return array.isEmpty
-        case let dict as [String: Any]:
-            return dict.isEmpty
-        case let dict as [String: String]:
-            return dict.isEmpty
-        default:
-            return false
         }
     }
 
@@ -992,6 +846,163 @@ private struct FontSizeScaler {
             return formatted
         }
         return number.stringValue
+    }
+}
+
+// MARK: - Section Value Normalization
+
+private struct SectionValueNormalizer {
+    let resume: Resume
+    let manifest: TemplateManifest?
+    let fontScaler: FontSizeScaler
+
+    func normalize(
+        _ value: Any,
+        for behavior: TemplateManifest.Section.FieldDescriptor.Behavior?
+    ) -> Any {
+        guard let behavior else { return value }
+
+        switch behavior {
+        case .includeFonts:
+            if let string = value as? String {
+                return string
+            }
+            if let boolValue = value as? Bool {
+                return boolValue ? "true" : "false"
+            }
+            if let number = value as? NSNumber {
+                return number.boolValue ? "true" : "false"
+            }
+            return "\(value)"
+
+        case .fontSizes:
+            if let dict = value as? [String: String] {
+                return fontScaler.scaleFontSizes(dict)
+            }
+            if let dict = value as? [String: Any] {
+                var normalized: [String: String] = [:]
+                for (key, anyValue) in dict {
+                    if let stringValue = anyValue as? String {
+                        normalized[key] = stringValue
+                    } else if let number = anyValue as? NSNumber {
+                        normalized[key] = "\(number)pt"
+                    }
+                }
+                return fontScaler.scaleFontSizes(normalized)
+            }
+            return value
+
+        case .editorKeys:
+            if let strings = value as? [String] {
+                return strings
+            }
+            if let array = value as? [Any] {
+                return array.compactMap { element in
+                    if let string = element as? String, string.isEmpty == false {
+                        return string
+                    }
+                    return nil
+                }
+            }
+            if let single = value as? String, single.isEmpty == false {
+                return [single]
+            }
+            return value
+
+        case .sectionLabels:
+            if let dict = value as? [String: String] {
+                return dict
+            }
+            if let dict = value as? [String: Any] {
+                var normalized: [String: String] = [:]
+                for (key, anyValue) in dict {
+                    if let stringValue = anyValue as? String {
+                        normalized[key] = stringValue
+                    }
+                }
+                return normalized
+            }
+            return value
+
+        case .applicantProfile:
+            return value
+        }
+    }
+
+    func isEmpty(_ value: Any) -> Bool {
+        switch value {
+        case let string as String:
+            return string.isEmpty
+        case let strings as [String]:
+            return strings.isEmpty
+        case let array as [Any]:
+            return array.isEmpty
+        case let dict as [String: Any]:
+            return dict.isEmpty
+        case let dict as [String: String]:
+            return dict.isEmpty
+        default:
+            return false
+        }
+    }
+
+    func defaultFontSizes() -> [String: String]? {
+        guard let defaults = manifestDefaultDictionary(for: "styling"),
+              let fontSizes = defaults["fontSizes"] else {
+            Logger.debug("ResumeTemplateDataBuilder: no fontSizes default found in manifest")
+            return nil
+        }
+        let normalized = normalizeStringMap(fontSizes)
+        Logger.debug("ResumeTemplateDataBuilder: manifest fontSizes default => \(normalized ?? [:])")
+        return normalized
+    }
+
+    func defaultPageMargins() -> [String: String]? {
+        guard let defaults = manifestDefaultDictionary(for: "styling"),
+              let margins = defaults["pageMargins"] else {
+            Logger.debug("ResumeTemplateDataBuilder: no pageMargins default found in manifest")
+            return nil
+        }
+        let normalized = normalizeStringMap(margins)
+        Logger.debug("ResumeTemplateDataBuilder: manifest pageMargins default => \(normalized ?? [:])")
+        return normalized
+    }
+
+    func defaultIncludeFonts() -> Bool? {
+        guard let defaults = manifestDefaultDictionary(for: "styling"),
+              let include = defaults["includeFonts"] else { return nil }
+        if let boolValue = include as? Bool { return boolValue }
+        if let stringValue = include as? String {
+            return stringValue == "true"
+        }
+        return nil
+    }
+
+    private func manifestDefaultDictionary(for section: String) -> [String: Any]? {
+        guard let value = manifest?.section(for: section)?.defaultValue?.value else { return nil }
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) })
+        }
+        return nil
+    }
+
+    private func normalizeStringMap(_ value: Any) -> [String: String]? {
+        if let dict = value as? [String: Any] {
+            var result: [String: String] = [:]
+            for (key, entry) in dict {
+                if let stringValue = entry as? String {
+                    result[key] = stringValue
+                }
+            }
+            return result.isEmpty ? nil : result
+        }
+        if let ordered = value as? OrderedDictionary<String, Any> {
+            return normalizeStringMap(Dictionary(uniqueKeysWithValues: ordered.map { ($0.key, $0.value) }))
+        }
+        return nil
     }
 }
 
