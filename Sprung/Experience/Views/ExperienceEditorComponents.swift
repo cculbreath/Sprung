@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ExperienceSectionViewCallbacks {
     var isEditing: (UUID) -> Bool
@@ -191,5 +192,104 @@ func dateRangeDescription(_ start: String, _ end: String) -> String? {
         return endTrim
     case (false, false):
         return "\(startTrim) – \(endTrim)"
+    }
+}
+
+struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View where Item: Identifiable & Equatable, Item.ID == UUID {
+    @Binding var items: [Item]
+    let metadata: ExperienceSectionMetadata
+    let callbacks: ExperienceSectionViewCallbacks
+    let newItem: () -> Item
+    let title: (Item) -> String
+    let subtitle: (Item) -> String?
+    let editorBuilder: (Binding<Item>, ExperienceSectionViewCallbacks) -> Editor
+    let summaryBuilder: (Item) -> Summary
+    @State private var draggingID: UUID?
+
+    var body: some View {
+        sectionContainer(title: metadata.title, subtitle: metadata.subtitle) {
+            ForEach($items) { item in
+                let entry = item.wrappedValue
+                let entryID = entry.id
+                let editing = callbacks.isEditing(entryID)
+                ExperienceCard(
+                    onDelete: { delete(entryID) },
+                    onToggleEdit: { callbacks.toggleEditing(entryID) },
+                    isEditing: editing
+                ) {
+                    ExperienceEntryHeader(
+                        title: title(entry),
+                        subtitle: subtitle(entry)
+                    )
+
+                    if editing {
+                        editorBuilder(item, callbacks)
+                    } else {
+                        summaryBuilder(entry)
+                    }
+                }
+                .onDrag {
+                    draggingID = entryID
+                    return NSItemProvider(object: entryID.uuidString as NSString)
+                }
+                .onDrop(
+                    of: [.plainText],
+                    delegate: ExperienceReorderDropDelegate(
+                        target: entry,
+                        items: $items,
+                        draggingID: $draggingID,
+                        onChange: callbacks.onChange
+                    )
+                )
+            }
+
+            if items.isEmpty == false {
+                ExperienceSectionTrailingDropArea(
+                    items: $items,
+                    draggingID: $draggingID,
+                    onChange: callbacks.onChange
+                )
+            }
+
+            ExperienceAddButton(title: metadata.addButtonTitle) {
+                addNewItem()
+            }
+        }
+    }
+
+    private func delete(_ id: UUID) {
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            callbacks.endEditing(id)
+            items.remove(at: index)
+            callbacks.onChange()
+        }
+    }
+
+    private func addNewItem() {
+        let entry = newItem()
+        let entryID = entry.id
+        items.append(entry)
+        callbacks.beginEditing(entryID)
+        callbacks.onChange()
+    }
+}
+
+struct ExperienceSectionTrailingDropArea<Item: Identifiable & Equatable>: View where Item.ID == UUID {
+    @Binding var items: [Item]
+    @Binding var draggingID: UUID?
+    var onChange: () -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(height: 10)
+            .contentShape(Rectangle())
+            .onDrop(
+                of: [.plainText],
+                delegate: ExperienceReorderTrailingDropDelegate(
+                    items: $items,
+                    draggingID: $draggingID,
+                    onChange: onChange
+                )
+            )
     }
 }
