@@ -58,6 +58,11 @@ final class AppDependencies {
         let careerKeywordStore = CareerKeywordStore()
         self.careerKeywordStore = careerKeywordStore
 
+        TemplateDefaultsImporter(
+            templateStore: templateStore,
+            templateSeedStore: templateSeedStore
+        ).installDefaultsIfNeeded()
+
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
         let onboardingArtifactStore = OnboardingArtifactStore(context: modelContext)

@@ -183,6 +183,7 @@ extension TemplateEditorView {
         return rendered
             .decodingHTMLEntities()
             .removingAnchorTags()
+            .collapsingConsecutiveBlankLines()
     }
 
     func prepareOverlayOptions() {

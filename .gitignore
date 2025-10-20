@@ -23,6 +23,9 @@ Resources/
 DerivedData/
 **/xcuserdata/
 old-code-reports/
+!Sprung/Resources/
+!Sprung/Resources/TemplateDefaults/
+!Sprung/Resources/TemplateDefaults/**
 
 # Ignore root-level generated files
 Sprung.zip
@@ -38,3 +41,8 @@ clean-commit-msg.sh
 agents.md
 
 .swift-module-cache/
+agents.md
+.periphery.yml
+.gitignore
+.claude
+build.log

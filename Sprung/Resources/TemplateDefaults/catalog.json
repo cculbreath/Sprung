@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2025-10-20T05:18:05.403425+00:00",
+  "templates": [
+    {
+      "isDefault": false,
+      "name": "Aleo",
+      "paths": {
+        "html": "aleo/aleo.html",
+        "manifest": "aleo/aleo.manifest.json",
+        "seed": "aleo/aleo.seed.json",
+        "text": "aleo/aleo.txt"
+      },
+      "slug": "aleo"
+    },
+    {
+      "isDefault": false,
+      "name": "Ethel",
+      "paths": {
+        "html": "ethel/ethel.html",
+        "manifest": "ethel/ethel.manifest.json",
+        "seed": "ethel/ethel.seed.json",
+        "text": "ethel/ethel.txt"
+      },
+      "slug": "ethel"
+    },
+    {
+      "isDefault": true,
+      "name": "Fraunces",
+      "paths": {
+        "html": "fraunces/fraunces.html",
+        "manifest": "fraunces/fraunces.manifest.json",
+        "seed": "fraunces/fraunces.seed.json",
+        "text": "fraunces/fraunces.txt"
+      },
+      "slug": "fraunces"
+    }
+  ],
+  "version": 1
+}
