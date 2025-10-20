@@ -293,3 +293,112 @@ struct ExperienceSectionTrailingDropArea<Item: Identifiable & Equatable>: View w
             )
     }
 }
+
+struct ExperienceFieldDescriptor<Model> {
+    enum Control {
+        case textField
+        case textEditor
+    }
+
+    let label: String
+    let keyPath: WritableKeyPath<Model, String>
+    let control: Control
+
+    static func textField(_ label: String, _ keyPath: WritableKeyPath<Model, String>) -> ExperienceFieldDescriptor<Model> {
+        ExperienceFieldDescriptor(label: label, keyPath: keyPath, control: .textField)
+    }
+
+    static func textEditor(_ label: String, _ keyPath: WritableKeyPath<Model, String>) -> ExperienceFieldDescriptor<Model> {
+        ExperienceFieldDescriptor(label: label, keyPath: keyPath, control: .textEditor)
+    }
+}
+
+enum ExperienceFieldLayout<Model> {
+    case row([ExperienceFieldDescriptor<Model>])
+    case block(ExperienceFieldDescriptor<Model>)
+}
+
+struct ExperienceFieldFactory<Model>: View {
+    let layout: [ExperienceFieldLayout<Model>]
+    @Binding var model: Model
+    let onChange: () -> Void
+
+    var body: some View {
+        ForEach(Array(layout.enumerated()), id: \.offset) { _, layout in
+            switch layout {
+            case .row(let descriptors):
+                ExperienceFieldRow {
+                    ForEach(Array(descriptors.enumerated()), id: \.offset) { _, descriptor in
+                        fieldView(descriptor)
+                    }
+                }
+            case .block(let descriptor):
+                fieldView(descriptor)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func fieldView(_ descriptor: ExperienceFieldDescriptor<Model>) -> some View {
+        let binding = Binding(
+            get: { model[keyPath: descriptor.keyPath] },
+            set: { model[keyPath: descriptor.keyPath] = $0 }
+        )
+
+        switch descriptor.control {
+        case .textField:
+            ExperienceTextField(descriptor.label, text: binding, onChange: onChange)
+        case .textEditor:
+            ExperienceTextEditor(descriptor.label, text: binding, onChange: onChange)
+        }
+    }
+}
+
+struct SummaryFieldDescriptor<Model> {
+    let render: (Model) -> AnyView
+
+    static func row(label: String, keyPath: KeyPath<Model, String>) -> SummaryFieldDescriptor<Model> {
+        SummaryFieldDescriptor { entry in
+            AnyView(SummaryRow(label: label, value: entry[keyPath: keyPath]))
+        }
+    }
+
+    static func optionalRow(label: String, value: @escaping (Model) -> String?) -> SummaryFieldDescriptor<Model> {
+        SummaryFieldDescriptor { entry in
+            let renderedValue = value(entry) ?? ""
+            return AnyView(SummaryRow(label: label, value: renderedValue))
+        }
+    }
+
+    static func textBlock(label: String, keyPath: KeyPath<Model, String>) -> SummaryFieldDescriptor<Model> {
+        SummaryFieldDescriptor { entry in
+            AnyView(SummaryTextBlock(label: label, value: entry[keyPath: keyPath]))
+        }
+    }
+
+    static func bulletList(label: String? = nil, values: @escaping (Model) -> [String]) -> SummaryFieldDescriptor<Model> {
+        SummaryFieldDescriptor { entry in
+            AnyView(SummaryBulletList(label: label, items: values(entry)))
+        }
+    }
+
+    static func chipGroup(label: String, values: @escaping (Model) -> [String]) -> SummaryFieldDescriptor<Model> {
+        SummaryFieldDescriptor { entry in
+            AnyView(SummaryChipGroup(label: label, values: values(entry)))
+        }
+    }
+}
+
+struct SummarySectionFactory<Model>: View {
+    let entry: Model
+    let descriptors: [SummaryFieldDescriptor<Model>]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(descriptors.enumerated()), id: \.offset) { _, descriptor in
+                descriptor.render(entry)
+            }
+        }
+        .padding(.top, 4)
+    }
+}

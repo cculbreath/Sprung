@@ -21,22 +21,19 @@ struct WorkExperienceEditor: View {
     @Binding var item: WorkExperienceDraft
     var onChange: () -> Void
 
+    private static let fieldLayout: [ExperienceFieldLayout<WorkExperienceDraft>] = [
+        .row([.textField("Company", \.name), .textField("Role", \.position)]),
+        .row([.textField("Location", \.location), .textField("URL", \.url)]),
+        .row([.textField("Start Date", \.startDate), .textField("End Date", \.endDate)]),
+        .block(.textEditor("Summary", \.summary))
+    ]
+
     var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Company", text: $item.name, onChange: onChange)
-            ExperienceTextField("Role", text: $item.position, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Location", text: $item.location, onChange: onChange)
-            ExperienceTextField("URL", text: $item.url, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Start Date", text: $item.startDate, onChange: onChange)
-            ExperienceTextField("End Date", text: $item.endDate, onChange: onChange)
-        }
-
-        ExperienceTextEditor("Summary", text: $item.summary, onChange: onChange)
-
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
         SingleLineHighlightListEditor(items: $item.highlights, onChange: onChange)
     }
 }
@@ -44,17 +41,16 @@ struct WorkExperienceEditor: View {
 struct WorkExperienceSummaryView: View {
     let entry: WorkExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<WorkExperienceDraft>] = [
+        .row(label: "Company", keyPath: \.name),
+        .row(label: "Location", keyPath: \.location),
+        .optionalRow(label: "Dates") { dateRangeDescription($0.startDate, $0.endDate) },
+        .textBlock(label: "Summary", keyPath: \.summary),
+        .bulletList { $0.highlights.map(\.text) }
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Company", value: entry.name)
-            SummaryRow(label: "Location", value: entry.location)
-            if let range = dateRangeDescription(entry.startDate, entry.endDate) {
-                SummaryRow(label: "Dates", value: range)
-            }
-            SummaryTextBlock(label: "Summary", value: entry.summary)
-            SummaryBulletList(items: entry.highlights.map { $0.text })
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -62,20 +58,19 @@ struct VolunteerExperienceEditor: View {
     @Binding var item: VolunteerExperienceDraft
     var onChange: () -> Void
 
-    var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Organization", text: $item.organization, onChange: onChange)
-            ExperienceTextField("Role", text: $item.position, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("URL", text: $item.url, onChange: onChange)
-            ExperienceTextField("Start Date", text: $item.startDate, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("End Date", text: $item.endDate, onChange: onChange)
-        }
+    private static let fieldLayout: [ExperienceFieldLayout<VolunteerExperienceDraft>] = [
+        .row([.textField("Organization", \.organization), .textField("Role", \.position)]),
+        .row([.textField("URL", \.url), .textField("Start Date", \.startDate)]),
+        .row([.textField("End Date", \.endDate)]),
+        .block(.textEditor("Summary", \.summary))
+    ]
 
-        ExperienceTextEditor("Summary", text: $item.summary, onChange: onChange)
+    var body: some View {
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
         VolunteerHighlightListEditor(items: $item.highlights, onChange: onChange)
     }
 }
@@ -83,16 +78,15 @@ struct VolunteerExperienceEditor: View {
 struct VolunteerExperienceSummaryView: View {
     let entry: VolunteerExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<VolunteerExperienceDraft>] = [
+        .row(label: "Organization", keyPath: \.organization),
+        .optionalRow(label: "Dates") { dateRangeDescription($0.startDate, $0.endDate) },
+        .textBlock(label: "Summary", keyPath: \.summary),
+        .bulletList { $0.highlights.map(\.text) }
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Organization", value: entry.organization)
-            if let range = dateRangeDescription(entry.startDate, entry.endDate) {
-                SummaryRow(label: "Dates", value: range)
-            }
-            SummaryTextBlock(label: "Summary", value: entry.summary)
-            SummaryBulletList(items: entry.highlights.map { $0.text })
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -100,23 +94,19 @@ struct EducationExperienceEditor: View {
     @Binding var item: EducationExperienceDraft
     var onChange: () -> Void
 
-    var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Institution", text: $item.institution, onChange: onChange)
-            ExperienceTextField("URL", text: $item.url, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Study Type", text: $item.studyType, onChange: onChange)
-            ExperienceTextField("Area of Study", text: $item.area, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Start Date", text: $item.startDate, onChange: onChange)
-            ExperienceTextField("End Date", text: $item.endDate, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Score / GPA", text: $item.score, onChange: onChange)
-        }
+    private static let fieldLayout: [ExperienceFieldLayout<EducationExperienceDraft>] = [
+        .row([.textField("Institution", \.institution), .textField("URL", \.url)]),
+        .row([.textField("Study Type", \.studyType), .textField("Area of Study", \.area)]),
+        .row([.textField("Start Date", \.startDate), .textField("End Date", \.endDate)]),
+        .row([.textField("Score / GPA", \.score)])
+    ]
 
+    var body: some View {
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
         CourseListEditor(items: $item.courses, onChange: onChange)
     }
 }
@@ -124,18 +114,17 @@ struct EducationExperienceEditor: View {
 struct EducationExperienceSummaryView: View {
     let entry: EducationExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<EducationExperienceDraft>] = [
+        .row(label: "Institution", keyPath: \.institution),
+        .optionalRow(label: "Dates") { dateRangeDescription($0.startDate, $0.endDate) },
+        .row(label: "Study Type", keyPath: \.studyType),
+        .row(label: "Area", keyPath: \.area),
+        .row(label: "Score", keyPath: \.score),
+        .bulletList(label: "Courses") { $0.courses.map(\.name) }
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Institution", value: entry.institution)
-            if let range = dateRangeDescription(entry.startDate, entry.endDate) {
-                SummaryRow(label: "Dates", value: range)
-            }
-            SummaryRow(label: "Study Type", value: entry.studyType)
-            SummaryRow(label: "Area", value: entry.area)
-            SummaryRow(label: "Score", value: entry.score)
-            SummaryBulletList(label: "Courses", items: entry.courses.map { $0.name })
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -143,22 +132,19 @@ struct ProjectExperienceEditor: View {
     @Binding var item: ProjectExperienceDraft
     var onChange: () -> Void
 
+    private static let fieldLayout: [ExperienceFieldLayout<ProjectExperienceDraft>] = [
+        .row([.textField("Name", \.name), .textField("URL", \.url)]),
+        .row([.textField("Start Date", \.startDate), .textField("End Date", \.endDate)]),
+        .row([.textField("Entity", \.organization), .textField("Type", \.type)]),
+        .block(.textEditor("Description", \.description))
+    ]
+
     var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Name", text: $item.name, onChange: onChange)
-            ExperienceTextField("URL", text: $item.url, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Start Date", text: $item.startDate, onChange: onChange)
-            ExperienceTextField("End Date", text: $item.endDate, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Entity", text: $item.organization, onChange: onChange)
-            ExperienceTextField("Type", text: $item.type, onChange: onChange)
-        }
-
-        ExperienceTextEditor("Description", text: $item.description, onChange: onChange)
-
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
         ProjectHighlightListEditor(items: $item.highlights, onChange: onChange)
         KeywordChipsEditor(title: "Keywords", keywords: $item.keywords, onChange: onChange)
         RoleListEditor(title: "Roles", items: $item.roles, onChange: onChange)
@@ -168,19 +154,18 @@ struct ProjectExperienceEditor: View {
 struct ProjectExperienceSummaryView: View {
     let entry: ProjectExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<ProjectExperienceDraft>] = [
+        .optionalRow(label: "Dates") { dateRangeDescription($0.startDate, $0.endDate) },
+        .row(label: "Entity", keyPath: \.organization),
+        .row(label: "Type", keyPath: \.type),
+        .textBlock(label: "Description", keyPath: \.description),
+        .bulletList { $0.highlights.map(\.text) },
+        .chipGroup(label: "Keywords") { $0.keywords.map(\.keyword) },
+        .chipGroup(label: "Roles") { $0.roles.map(\.role) }
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let range = dateRangeDescription(entry.startDate, entry.endDate) {
-                SummaryRow(label: "Dates", value: range)
-            }
-            SummaryRow(label: "Entity", value: entry.organization)
-            SummaryRow(label: "Type", value: entry.type)
-            SummaryTextBlock(label: "Description", value: entry.description)
-            SummaryBulletList(items: entry.highlights.map { $0.text })
-            SummaryChipGroup(label: "Keywords", values: entry.keywords.map { $0.keyword })
-            SummaryChipGroup(label: "Roles", values: entry.roles.map { $0.role })
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -188,12 +173,16 @@ struct SkillExperienceEditor: View {
     @Binding var item: SkillExperienceDraft
     var onChange: () -> Void
 
-    var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Skill", text: $item.name, onChange: onChange)
-            ExperienceTextField("Level", text: $item.level, onChange: onChange)
-        }
+    private static let fieldLayout: [ExperienceFieldLayout<SkillExperienceDraft>] = [
+        .row([.textField("Skill", \.name), .textField("Level", \.level)])
+    ]
 
+    var body: some View {
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
         KeywordChipsEditor(title: "Keywords", keywords: $item.keywords, onChange: onChange)
     }
 }
@@ -201,12 +190,13 @@ struct SkillExperienceEditor: View {
 struct SkillExperienceSummaryView: View {
     let entry: SkillExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<SkillExperienceDraft>] = [
+        .row(label: "Level", keyPath: \.level),
+        .chipGroup(label: "Keywords") { $0.keywords.map(\.keyword) }
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Level", value: entry.level)
-            SummaryChipGroup(label: "Keywords", values: entry.keywords.map { $0.keyword })
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -214,29 +204,32 @@ struct AwardExperienceEditor: View {
     @Binding var item: AwardExperienceDraft
     var onChange: () -> Void
 
-    var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Title", text: $item.title, onChange: onChange)
-            ExperienceTextField("Date", text: $item.date, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Awarder", text: $item.awarder, onChange: onChange)
-        }
+    private static let fieldLayout: [ExperienceFieldLayout<AwardExperienceDraft>] = [
+        .row([.textField("Title", \.title), .textField("Date", \.date)]),
+        .row([.textField("Awarder", \.awarder)]),
+        .block(.textEditor("Summary", \.summary))
+    ]
 
-        ExperienceTextEditor("Summary", text: $item.summary, onChange: onChange)
+    var body: some View {
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
     }
 }
 
 struct AwardExperienceSummaryView: View {
     let entry: AwardExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<AwardExperienceDraft>] = [
+        .row(label: "Awarder", keyPath: \.awarder),
+        .row(label: "Date", keyPath: \.date),
+        .textBlock(label: "Summary", keyPath: \.summary)
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Awarder", value: entry.awarder)
-            SummaryRow(label: "Date", value: entry.date)
-            SummaryTextBlock(label: "Summary", value: entry.summary)
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -244,28 +237,31 @@ struct CertificateExperienceEditor: View {
     @Binding var item: CertificateExperienceDraft
     var onChange: () -> Void
 
+    private static let fieldLayout: [ExperienceFieldLayout<CertificateExperienceDraft>] = [
+        .row([.textField("Name", \.name), .textField("Issuer", \.issuer)]),
+        .row([.textField("Date", \.date), .textField("URL", \.url)])
+    ]
+
     var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Name", text: $item.name, onChange: onChange)
-            ExperienceTextField("Issuer", text: $item.issuer, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Date", text: $item.date, onChange: onChange)
-            ExperienceTextField("URL", text: $item.url, onChange: onChange)
-        }
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
     }
 }
 
 struct CertificateExperienceSummaryView: View {
     let entry: CertificateExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<CertificateExperienceDraft>] = [
+        .row(label: "Issuer", keyPath: \.issuer),
+        .row(label: "Date", keyPath: \.date),
+        .row(label: "URL", keyPath: \.url)
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Issuer", value: entry.issuer)
-            SummaryRow(label: "Date", value: entry.date)
-            SummaryRow(label: "URL", value: entry.url)
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -273,31 +269,33 @@ struct PublicationExperienceEditor: View {
     @Binding var item: PublicationExperienceDraft
     var onChange: () -> Void
 
-    var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Title", text: $item.name, onChange: onChange)
-            ExperienceTextField("Publisher", text: $item.publisher, onChange: onChange)
-        }
-        ExperienceFieldRow {
-            ExperienceTextField("Release Date", text: $item.releaseDate, onChange: onChange)
-            ExperienceTextField("URL", text: $item.url, onChange: onChange)
-        }
+    private static let fieldLayout: [ExperienceFieldLayout<PublicationExperienceDraft>] = [
+        .row([.textField("Title", \.name), .textField("Publisher", \.publisher)]),
+        .row([.textField("Release Date", \.releaseDate), .textField("URL", \.url)]),
+        .block(.textEditor("Summary", \.summary))
+    ]
 
-        ExperienceTextEditor("Summary", text: $item.summary, onChange: onChange)
+    var body: some View {
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
     }
 }
 
 struct PublicationExperienceSummaryView: View {
     let entry: PublicationExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<PublicationExperienceDraft>] = [
+        .row(label: "Publisher", keyPath: \.publisher),
+        .row(label: "Release Date", keyPath: \.releaseDate),
+        .row(label: "URL", keyPath: \.url),
+        .textBlock(label: "Summary", keyPath: \.summary)
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Publisher", value: entry.publisher)
-            SummaryRow(label: "Release Date", value: entry.releaseDate)
-            SummaryRow(label: "URL", value: entry.url)
-            SummaryTextBlock(label: "Summary", value: entry.summary)
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -305,23 +303,29 @@ struct LanguageExperienceEditor: View {
     @Binding var item: LanguageExperienceDraft
     var onChange: () -> Void
 
+    private static let fieldLayout: [ExperienceFieldLayout<LanguageExperienceDraft>] = [
+        .row([.textField("Language", \.language), .textField("Fluency", \.fluency)])
+    ]
+
     var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Language", text: $item.language, onChange: onChange)
-            ExperienceTextField("Fluency", text: $item.fluency, onChange: onChange)
-        }
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
     }
 }
 
 struct LanguageExperienceSummaryView: View {
     let entry: LanguageExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<LanguageExperienceDraft>] = [
+        .row(label: "Language", keyPath: \.language),
+        .row(label: "Fluency", keyPath: \.fluency)
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Language", value: entry.language)
-            SummaryRow(label: "Fluency", value: entry.fluency)
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -329,10 +333,16 @@ struct InterestExperienceEditor: View {
     @Binding var item: InterestExperienceDraft
     var onChange: () -> Void
 
+    private static let fieldLayout: [ExperienceFieldLayout<InterestExperienceDraft>] = [
+        .row([.textField("Name", \.name)])
+    ]
+
     var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Name", text: $item.name, onChange: onChange)
-        }
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
         KeywordChipsEditor(title: "Keywords", keywords: $item.keywords, onChange: onChange)
     }
 }
@@ -340,12 +350,13 @@ struct InterestExperienceEditor: View {
 struct InterestExperienceSummaryView: View {
     let entry: InterestExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<InterestExperienceDraft>] = [
+        .row(label: "Name", keyPath: \.name),
+        .chipGroup(label: "Keywords") { $0.keywords.map(\.keyword) }
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Name", value: entry.name)
-            SummaryChipGroup(label: "Keywords", values: entry.keywords.map { $0.keyword })
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
@@ -353,31 +364,36 @@ struct ReferenceExperienceEditor: View {
     @Binding var item: ReferenceExperienceDraft
     var onChange: () -> Void
 
+    private static let fieldLayout: [ExperienceFieldLayout<ReferenceExperienceDraft>] = [
+        .row([.textField("Name", \.name)]),
+        .block(.textEditor("Reference", \.reference)),
+        .row([.textField("URL", \.url)])
+    ]
+
     var body: some View {
-        ExperienceFieldRow {
-            ExperienceTextField("Name", text: $item.name, onChange: onChange)
-        }
-        ExperienceTextEditor("Reference", text: $item.reference, onChange: onChange)
-        ExperienceFieldRow {
-            ExperienceTextField("URL", text: $item.url, onChange: onChange)
-        }
+        ExperienceFieldFactory(
+            layout: Self.fieldLayout,
+            model: $item,
+            onChange: onChange
+        )
     }
 }
 
 struct ReferenceExperienceSummaryView: View {
     let entry: ReferenceExperienceDraft
 
+    private static let descriptors: [SummaryFieldDescriptor<ReferenceExperienceDraft>] = [
+        .row(label: "Name", keyPath: \.name),
+        .textBlock(label: "Reference", keyPath: \.reference),
+        .row(label: "URL", keyPath: \.url)
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Name", value: entry.name)
-            SummaryTextBlock(label: "Reference", value: entry.reference)
-            SummaryRow(label: "URL", value: entry.url)
-        }
-        .padding(.top, 4)
+        SummarySectionFactory(entry: entry, descriptors: Self.descriptors)
     }
 }
 
-private struct SummaryRow: View {
+struct SummaryRow: View {
     let label: String
     let value: String
 
@@ -396,7 +412,7 @@ private struct SummaryRow: View {
     }
 }
 
-private struct SummaryTextBlock: View {
+struct SummaryTextBlock: View {
     let label: String
     let value: String
 
@@ -415,7 +431,7 @@ private struct SummaryTextBlock: View {
     }
 }
 
-private struct SummaryBulletList: View {
+struct SummaryBulletList: View {
     var label: String?
     let items: [String]
 
@@ -444,7 +460,7 @@ private struct SummaryBulletList: View {
     }
 }
 
-private struct SummaryChipGroup: View {
+struct SummaryChipGroup: View {
     let label: String
     let values: [String]
 
