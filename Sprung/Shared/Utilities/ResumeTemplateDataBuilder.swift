@@ -31,15 +31,7 @@ private struct Implementation {
     let resume: Resume
     let rootNode: TreeNode
     let manifest: TemplateManifest?
-    private static let fontSizeScaleFactor = Decimal(3) / Decimal(4)
-    private static let fontSizeFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.usesGroupingSeparator = false
-        return formatter
-    }()
+    private let fontScaler = FontSizeScaler()
 
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
@@ -146,7 +138,7 @@ private struct Implementation {
             // Build the styling section including fontSizes
             var styling: [String: Any] = [:]
             if let rawFontSizes = buildFontSizesSection() ?? defaultFontSizes(from: manifest) {
-                let scaledFontSizes = scaleFontSizes(rawFontSizes)
+                let scaledFontSizes = fontScaler.scaleFontSizes(rawFontSizes)
                 styling["fontSizes"] = scaledFontSizes
                 Logger.debug("ResumeTemplateDataBuilder: using scaled fontSizes => \(scaledFontSizes)")
             }
@@ -184,7 +176,7 @@ private struct Implementation {
             return buildArrayOfObjectsSection(named: sectionName)
         case .fontSizes:
             guard let fontSizes = buildFontSizesSection() else { return nil }
-            return scaleFontSizes(fontSizes)
+            return fontScaler.scaleFontSizes(fontSizes)
         }
     }
 
@@ -317,66 +309,9 @@ private struct Implementation {
     }
 
     private func buildFontSizesSection() -> [String: String]? {
-        let sortedNodes = resume.fontSizeNodes.sorted { $0.index < $1.index }
-        guard !sortedNodes.isEmpty else { return nil }
-
-        var result: [String: String] = [:]
-        for node in sortedNodes {
-            result[node.key] = node.fontString
-        }
-        return result
+        fontScaler.buildFontSizes(from: resume.fontSizeNodes)
     }
 
-    private func scaleFontSizes(_ dictionary: [String: String]) -> [String: String] {
-        var scaled: [String: String] = [:]
-        for (key, value) in dictionary {
-            scaled[key] = scaledFontSizeString(from: value)
-        }
-        return scaled
-    }
-
-    private func scaledFontSizeString(from value: String) -> String {
-        guard let decimal = parseFontSizeValue(from: value) else {
-            return value
-        }
-
-        let scaledDecimal = decimal * Self.fontSizeScaleFactor
-        let formatted = formatFontDecimal(scaledDecimal)
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        if trimmed.hasSuffix("pt") {
-            return "\(formatted)pt"
-        }
-        if trimmed.hasSuffix("px") {
-            return "\(formatted)px"
-        }
-        return formatted
-    }
-
-    private func parseFontSizeValue(from string: String) -> Decimal? {
-        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return nil }
-
-        let lowercased = trimmed.lowercased()
-        if lowercased == "inherit" || lowercased == "auto" {
-            return nil
-        }
-
-        var sanitized = trimmed
-        if lowercased.hasSuffix("pt") || lowercased.hasSuffix("px") {
-            sanitized = String(sanitized.dropLast(2))
-        }
-        sanitized = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Decimal(string: sanitized)
-    }
-
-    private func formatFontDecimal(_ decimal: Decimal) -> String {
-        let number = NSDecimalNumber(decimal: decimal)
-        if let formatted = Self.fontSizeFormatter.string(from: number) {
-            return formatted
-        }
-        return number.stringValue
-    }
 
     // MARK: - Descriptor Helpers
 
@@ -422,7 +357,7 @@ private struct Implementation {
                 }
             }
             guard result.isEmpty == false else { return nil }
-            return scaleFontSizes(result)
+            return fontScaler.scaleFontSizes(result)
 
         case .object:
             guard let sectionNode else { return nil }
@@ -709,7 +644,7 @@ private struct Implementation {
 
         case .fontSizes:
             if let dict = value as? [String: String] {
-                return scaleFontSizes(dict)
+                return fontScaler.scaleFontSizes(dict)
             }
             if let dict = value as? [String: Any] {
                 var normalized: [String: String] = [:]
@@ -720,7 +655,7 @@ private struct Implementation {
                         normalized[key] = "\(number)pt"
                     }
                 }
-                return scaleFontSizes(normalized)
+                return fontScaler.scaleFontSizes(normalized)
             }
             return value
 
@@ -1156,5 +1091,79 @@ private struct Implementation {
         default:
             return true
         }
+    }
+}
+
+// MARK: - Font Size Utilities
+
+private struct FontSizeScaler {
+    private static let scaleFactor = Decimal(3) / Decimal(4)
+    private static let formatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.usesGroupingSeparator = false
+        return formatter
+    }()
+
+    func buildFontSizes(from nodes: [FontSizeNode]) -> [String: String]? {
+        guard nodes.isEmpty == false else { return nil }
+        var result: [String: String] = [:]
+        for node in nodes.sorted(by: { $0.index < $1.index }) {
+            result[node.key] = node.fontString
+        }
+        return result
+    }
+
+    func scaleFontSizes(_ fontSizes: [String: String]) -> [String: String] {
+        var scaled: [String: String] = [:]
+        for (key, value) in fontSizes {
+            scaled[key] = scaledFontSizeString(from: value)
+        }
+        return scaled
+    }
+
+    private func scaledFontSizeString(from value: String) -> String {
+        guard let decimal = parseFontSizeValue(from: value) else {
+            return value
+        }
+
+        let scaledDecimal = decimal * Self.scaleFactor
+        let formatted = formatFontDecimal(scaledDecimal)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if trimmed.hasSuffix("pt") {
+            return "\(formatted)pt"
+        }
+        if trimmed.hasSuffix("px") {
+            return "\(formatted)px"
+        }
+        return formatted
+    }
+
+    private func parseFontSizeValue(from string: String) -> Decimal? {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return nil }
+
+        let lowercased = trimmed.lowercased()
+        if lowercased == "inherit" || lowercased == "auto" {
+            return nil
+        }
+
+        var sanitized = trimmed
+        if lowercased.hasSuffix("pt") || lowercased.hasSuffix("px") {
+            sanitized = String(sanitized.dropLast(2))
+        }
+        sanitized = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Decimal(string: sanitized)
+    }
+
+    private func formatFontDecimal(_ decimal: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: decimal)
+        if let formatted = Self.formatter.string(from: number) {
+            return formatted
+        }
+        return number.stringValue
     }
 }
