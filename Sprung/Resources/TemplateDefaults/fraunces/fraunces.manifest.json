@@ -1,0 +1,87 @@
+{
+  "custom": {
+    "fields": [
+      {
+        "allowsManualMutations": true,
+        "input": "text",
+        "key": "jobTitles",
+        "repeatable": true
+      },
+      {
+        "input": "textarea",
+        "key": "moreInfo"
+      },
+      {
+        "children": [
+          {
+            "input": "text",
+            "key": "work"
+          },
+          {
+            "input": "text",
+            "key": "projects"
+          },
+          {
+            "input": "text",
+            "key": "education"
+          },
+          {
+            "input": "text",
+            "key": "skills"
+          }
+        ],
+        "key": "sectionLabels"
+      }
+    ]
+  },
+  "keys-in-editor": [
+    "work",
+    "projects",
+    "education",
+    "skills",
+    "custom",
+    "styling"
+  ],
+  "section-visibility": {
+    "education": true,
+    "projects": true,
+    "skills": true,
+    "work": true
+  },
+  "section-visibility-labels": {
+    "education": "Education",
+    "projects": "Projects",
+    "skills": "Skills",
+    "work": "Work Experience"
+  },
+  "sectionOrder": [
+    "basics",
+    "work",
+    "projects",
+    "education",
+    "skills",
+    "custom"
+  ],
+  "styling": {
+    "fontSizes": {
+      "boxTitles": "20pt",
+      "contact": "11pt",
+      "degreeNames": "12pt",
+      "employerName": "11pt",
+      "moreInfo": "11pt",
+      "name": "40pt",
+      "projectText": "10pt",
+      "schools": "11pt",
+      "sectionTitle": "16pt",
+      "skillDescriptions": "10pt",
+      "skillNames": "11.5pt",
+      "summary": "12pt",
+      "workDates": "11pt",
+      "workHighlights": "10pt"
+    }
+  },
+  "transparentKeys": [
+    "basics",
+    "custom"
+  ]
+}

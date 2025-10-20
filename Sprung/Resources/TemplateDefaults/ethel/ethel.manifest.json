@@ -1,0 +1,135 @@
+{
+  "custom": {
+    "fields": [
+      {
+        "children": [
+          {
+            "input": "text",
+            "key": "work"
+          },
+          {
+            "input": "text",
+            "key": "projects"
+          },
+          {
+            "input": "text",
+            "key": "education"
+          },
+          {
+            "input": "text",
+            "key": "skills"
+          }
+        ],
+        "key": "sectionLabels"
+      }
+    ]
+  },
+  "keys-in-editor": [
+    "basics.label",
+    "work",
+    "projects",
+    "education",
+    "skills",
+    "custom",
+    "styling"
+  ],
+  "section-visibility": {
+    "education": true,
+    "projects": true,
+    "skills": true,
+    "work": true
+  },
+  "section-visibility-labels": {
+    "education": "Education",
+    "projects": "Projects",
+    "skills": "Skills",
+    "work": "Work Experience"
+  },
+  "sectionOrder": [
+    "basics",
+    "work",
+    "projects",
+    "education",
+    "skills",
+    "custom"
+  ],
+  "sections": {
+    "education": {
+      "default": [
+        {
+          "custom": {
+            "location": "San Luis Obispo, CA"
+          }
+        }
+      ],
+      "fields": [
+        {
+          "input": "text",
+          "key": "institution",
+          "required": true
+        },
+        {
+          "input": "url",
+          "key": "url"
+        },
+        {
+          "input": "text",
+          "key": "studyType"
+        },
+        {
+          "input": "text",
+          "key": "area"
+        },
+        {
+          "input": "date",
+          "key": "startDate"
+        },
+        {
+          "input": "date",
+          "key": "endDate"
+        },
+        {
+          "input": "text",
+          "key": "score"
+        },
+        {
+          "allowsManualMutations": true,
+          "input": "text",
+          "key": "courses",
+          "repeatable": true
+        },
+        {
+          "children": [
+            {
+              "input": "text",
+              "key": "location",
+              "placeholder": "San Luis Obispo, CA"
+            }
+          ],
+          "key": "custom"
+        }
+      ],
+      "titleTemplate": "{{studyType}} in {{area}}",
+      "type": "arrayOfObjects"
+    }
+  },
+  "styling": {
+    "fontSizes": {
+      "date": "8pt",
+      "decoratorLine": "0pt",
+      "detailHeading": "8pt",
+      "detailPlace": "7.5pt",
+      "email": "7pt",
+      "mainContent": "6.75pt",
+      "name": "20pt",
+      "sectionTitleMain": "10pt",
+      "sidebarContent": "7.5pt",
+      "sidebarHeading": "9pt",
+      "subtitle": "9pt"
+    }
+  },
+  "transparentKeys": [
+    "basics",
+    "custom"
+  ]
+}

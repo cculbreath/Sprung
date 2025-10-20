@@ -16,6 +16,7 @@ enum TemplateFilters {
         template.register(joinFilter, forKey: "join")
         template.register(concatPairFilter, forKey: "concatPair")
         template.register(htmlStripFilter, forKey: "htmlStrip")
+        template.register(htmlDecodeFilter, forKey: "htmlDecode")
         template.register(bulletListFilter, forKey: "bulletList")
         template.register(formatDateFilter, forKey: "formatDate")
         template.register(uppercaseFilter, forKey: "uppercase")
@@ -27,7 +28,8 @@ enum TemplateFilters {
     private static let centerFilter = VariadicFilter { boxes -> Any? in
         guard let text = string(from: boxes.first) else { return nil }
         let width = intArgument(from: boxes, index: 1, defaultValue: 80)
-        return TextFormatHelpers.wrapper(text, width: width, centered: true)
+        let decoded = text.decodingHTMLEntities()
+        return TextFormatHelpers.wrapper(decoded, width: width, centered: true)
     }
 
     private static let wrapFilter = VariadicFilter { boxes -> Any? in
@@ -35,20 +37,22 @@ enum TemplateFilters {
         let width = intArgument(from: boxes, index: 1, defaultValue: 80)
         let left = intArgument(from: boxes, index: 2, defaultValue: 0)
         let right = intArgument(from: boxes, index: 3, defaultValue: 0)
-        return TextFormatHelpers.wrapper(text, width: width, leftMargin: left, rightMargin: right)
+        let decoded = text.decodingHTMLEntities()
+        return TextFormatHelpers.wrapper(decoded, width: width, leftMargin: left, rightMargin: right)
     }
 
     private static let sectionLineFilter = VariadicFilter { boxes -> Any? in
         guard let label = string(from: boxes.first), !label.isEmpty else { return nil }
         let width = intArgument(from: boxes, index: 1, defaultValue: 80)
-        return TextFormatHelpers.sectionLine(label, width: width)
+        return TextFormatHelpers.sectionLine(label.decodingHTMLEntities(), width: width)
     }
 
     private static let joinFilter = VariadicFilter { boxes -> Any? in
         guard let arrayBox = boxes.first else { return nil }
         guard let items = arrayOfStrings(from: arrayBox) else { return nil }
         let separator = string(from: boxes[safe: 1]) ?? " \u{00B7} "
-        let joined = TextFormatHelpers.joiner(items, separator: separator)
+        let decodedItems = items.map { $0.decodingHTMLEntities() }
+        let joined = TextFormatHelpers.joiner(decodedItems, separator: separator)
         return joined.isEmpty ? nil : joined
     }
 
@@ -71,6 +75,11 @@ enum TemplateFilters {
         return value.decodingHTMLEntities().removingHTMLTags()
     }
 
+    private static let htmlDecodeFilter = Filter { (value: String?) -> Any? in
+        guard let value, !value.isEmpty else { return nil }
+        return value.decodingHTMLEntities()
+    }
+
     private static let bulletListFilter = VariadicFilter { boxes -> Any? in
         guard let source = boxes.first else { return nil }
         let width = intArgument(from: boxes, index: 1, defaultValue: 80)
@@ -80,9 +89,13 @@ enum TemplateFilters {
 
         let items: [String]
         if let strings = arrayOfStrings(from: source) {
-            items = strings
+            items = strings.map { $0.decodingHTMLEntities() }
         } else if let dicts = arrayOfDictionaries(from: source) {
-            items = dicts.compactMap { ($0[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            items = dicts.compactMap {
+                ($0[key] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .decodingHTMLEntities()
+            }
         } else {
             return nil
         }

@@ -134,7 +134,9 @@ class TextResumeGenerator {
     
     /// Decode HTML entities that may appear in rendered plain-text output
     private func sanitizeRenderedText(_ text: String) -> String {
-        return text.decodingHTMLEntities()
+        return text
+            .decodingHTMLEntities()
+            .collapsingConsecutiveBlankLines()
     }
     
     private func convertEmploymentToArray(_ employment: [String: Any], from resume: Resume) -> [[String: Any]] {

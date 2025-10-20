@@ -118,6 +118,12 @@ struct TemplateEditorView: View {
             snippet: "{{{ center(join(basics.contactLinePieces, \" · \"), 80) }}}"
         ),
         TextFilterInfo(
+            name: "htmlDecode",
+            signature: "htmlDecode(text)",
+            description: "Decodes HTML entities without stripping tags.",
+            snippet: "{{{ htmlDecode(position) }}}"
+        ),
+        TextFilterInfo(
             name: "projectLine",
             signature: "projects[].projectLine",
             description: "Precomputed \"Name: Description\" string for each project entry. Useful for wrapping without custom separators.",

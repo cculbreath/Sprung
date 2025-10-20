@@ -1,0 +1,10 @@
+{
+  "custom": {
+    "sectionLabels": {
+      "education": "Education",
+      "projects": "Projects",
+      "skills": "Skills & Expertise",
+      "work": "Work Experience"
+    }
+  }
+}

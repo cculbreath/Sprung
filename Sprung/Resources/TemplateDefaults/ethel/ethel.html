@@ -1,0 +1,521 @@
+ <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <style>
+  /* Normalize CSS - Basic Reset */
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: letter portrait;
+    margin: var(--page-margin-top) var(--page-margin-right) var(--page-margin-bottom) var(--page-margin-left);
+  }
+
+  :root {
+    --page-width: 8.5in;
+    --page-height: 11in;
+    --page-margin-top: {{#custom.pageMargins.top}}{{custom.pageMargins.top}}{{/custom.pageMargins.top}}{{^custom.pageMargins.top}}0.4in{{/
+  custom.pageMargins.top}};
+    --page-margin-right: {{#custom.pageMargins.right}}{{custom.pageMargins.right}}{{/custom.pageMargins.right}}{{^custom.pageMargins.right}}0.4in{{/
+  custom.pageMargins.right}};
+    --page-margin-bottom: {{#custom.pageMargins.bottom}}{{custom.pageMargins.bottom}}{{/custom.pageMargins.bottom}}{{^custom.pageMargins.bottom}}0.65in{{/
+  custom.pageMargins.bottom}};
+    --page-margin-left: {{#custom.pageMargins.left}}{{custom.pageMargins.left}}{{/custom.pageMargins.left}}{{^custom.pageMargins.left}}0.4in{{/
+  custom.pageMargins.left}};
+    --page-content-width: calc(var(--page-width) - var(--page-margin-left) - var(--page-margin-right));
+    --main-width: calc(6in * 0.66);
+--sidebar-width: calc(2.5in * 0.66);
+    --decorator-horizontal-margin: 0.2in;
+    --sidebar-horizontal-padding: 0.2in;
+    --decorator-outer-offset-top: 10px;
+    --decorator-outer-offset-left: -5.5px;
+    --decorator-border-width: 1px;
+    --decorator-outer-dim: 9px;
+    --decorator-border: 1px solid #ccc;
+    --row-blocks-padding-top: 5pt;
+    --date-block-width: 0.6in;
+    --main-blocks-title-icon-offset-left: -19pt;
+  }
+
+  body {
+hyphens: none;
+    width: var(--page-content-width);
+    min-height: var(--page-height);
+    margin: 0;
+    display: grid;
+    grid-template-columns: var(--main-width) var(--sidebar-width);
+    column-gap: 0;
+    font-family: "Open Sans", sans-serif;
+    font-weight: 300;
+    line-height: 1.25;
+    color: #444;
+  }
+
+  h1, h2, h3 {
+    margin: 0;
+    color: #000;
+  }
+
+  li {
+    list-style-type: none;
+  }
+
+  #main {
+    grid-column: 1;
+    width: 100%;
+    padding: 0.25in 0.25in 0 0.25in;
+    font-size: {{{styling.fontSizes.mainContent}}};
+  }
+
+  #sidebar {
+    grid-column: 2;
+    position: relative;
+    width: 100%;
+    padding: 0.3in var(--sidebar-horizontal-padding);
+    background-color: #f2f2f2;
+    font-size: {{{styling.fontSizes.sidebarContent}}};
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    box-sizing: border-box;
+  }
+
+  /* Main Section */
+
+  #title, h1, h2 {
+    text-transform: uppercase;
+  }
+
+  #title {
+    position: relative;
+    left: 0.55in;
+    margin-bottom: .2in;
+    line-height: 1.2;
+  }
+
+  #title h1 {
+    font-weight: 600;
+    font-size: {{{styling.fontSizes.name}}};
+    line-height: 1.5;
+  }
+
+  #title h1 strong {
+    margin: auto 2pt auto 4pt;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    font-size: {{{styling.fontSizes.subtitle}}};
+  }
+
+  .main-block {
+    margin-top: 0.08in;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #main h2 {
+    position: relative;
+    top: var(--row-blocks-padding-top);
+    left: calc((var(--date-block-width) + var(--decorator-horizontal-margin)));
+    font-weight: 400;
+    font-size: {{{styling.fontSizes.sectionTitleMain}}};
+    color: #555;
+  }
+
+  #main h2 > i {
+    position: absolute;
+    left: var(--main-blocks-title-icon-offset-left);
+    z-index: 1;
+    color: #444;
+  }
+
+  #main h2::after {
+    height: calc(var(--row-blocks-padding-top) * 2);
+    position: relative;
+    top: calc(-1 * var(--row-blocks-padding-top));
+    left: calc(-1 * var(--decorator-horizontal-margin));
+    display: block;
+    border-left: var(--decorator-border);
+    z-index: 0;
+    line-height: 0;
+    font-size: {{{styling.fontSizes.decoratorLine}}};
+    content: ' ';
+  }
+
+  #main h2 > .fa-graduation-cap {
+    left: calc(var(--main-blocks-title-icon-offset-left) - 2pt);
+    top: 2pt;
+  }
+
+  #main h2 > .fa-suitcase {
+    top: 1pt;
+  }
+
+  #main h2 > .fa-folder-open {
+    top: 1.5pt;
+  }
+
+  .blocks {
+    display: flex;
+    flex-flow: row nowrap;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .blocks > div {
+    padding-top: var(--row-blocks-padding-top);
+  }
+
+  .date {
+    flex: 0 0 var(--date-block-width);
+    padding-top: calc(var(--row-blocks-padding-top) + 2.5pt) !important;
+    padding-right: var(--decorator-horizontal-margin);
+    font-size: {{{styling.fontSizes.date}}};
+    text-align: right;
+    line-height: 1;
+  }
+
+  .date span {
+    display: block;
+  }
+
+  .date span:nth-child(2)::before {
+    position: relative;
+    top: 1pt;
+    right: 5.5pt;
+    display: block;
+    height: 10pt;
+    content: '|';
+  }
+
+  .decorator {
+    flex: 0 0 0;
+    position: relative;
+    width: 2pt;
+    min-height: 100%;
+    border-left: var(--decorator-border);
+  }
+
+  .decorator::before {
+    position: absolute;
+    top: var(--decorator-outer-offset-top);
+    left: var(--decorator-outer-offset-left);
+    content: ' ';
+    display: block;
+    width: var(--decorator-outer-dim);
+    height: var(--decorator-outer-dim);
+    border-radius: calc(var(--decorator-outer-dim) / 2);
+    background-color: #fff;
+  }
+
+  .decorator::after {
+    position: absolute;
+    top: calc(var(--decorator-outer-offset-top) + var(--decorator-border-width));
+    left: calc(var(--decorator-outer-offset-left) + var(--decorator-border-width));
+    content: ' ';
+    display: block;
+    width: calc(var(--decorator-outer-dim) - (var(--decorator-border-width) * 2));
+    height: calc(var(--decorator-outer-dim) - (var(--decorator-border-width) * 2));
+    border-radius: calc((var(--decorator-outer-dim) - (var(--decorator-border-width) * 2)) / 2);
+    background-color: #555;
+  }
+
+  .blocks:last-child .decorator {
+    margin-bottom: 0.25in;
+  }
+
+  .details {
+    flex: 1 0 0;
+    padding-left: var(--decorator-horizontal-margin);
+    padding-top: calc(var(--row-blocks-padding-top) - 0.5pt) !important;
+  }
+
+  .details header {
+    color: #000;
+  }
+
+  .details h3 {
+    font-size: {{{styling.fontSizes.detailHeading}}};
+  }
+
+  .main-block:not(.concise) .details div {
+    margin: 0 0 0 0
+  }
+
+  .main-block:not(.concise) .blocks:last-child .details div {
+    margin-bottom: 0;
+  }
+
+  .main-block.concise .details div:not(.concise) {
+    padding: 0.05in 0 0.07in 0;
+  }
+
+  .details .place {
+    float: left;
+    font-size: {{{styling.fontSizes.detailPlace}}};
+  }
+
+  .details .location {
+    float: right;
+  }
+
+  .details div {
+    clear: both;
+  }
+
+  .details .location::before {
+    display: inline-block;
+    position: relative;
+    right: 3pt;
+    top: 0.25pt;
+    content: "📍";
+  }
+.details > header.work{
+  margin-bottom: 1.1rem; /* or any spacing unit you want */
+}
+  #main ul {
+    padding-left: 0.07in;
+    margin: 0.04in 0;
+  }
+
+  #main li {
+    margin: 0 0 0.015in 0;
+  }
+
+  #main li::before {
+    position: relative;
+    margin-left: -4.25pt;
+    content: '• ';
+  }
+	#contact {
+hyphens: none;
+}
+  .details .concise ul {
+    margin: 0 !important;
+    -webkit-columns: 2;
+    -moz-columns: 2;
+    columns: 2;
+  }
+
+  .details .concise li {
+    margin: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  /* Sidebar */
+
+  #sidebar h1 {
+    font-weight: 400;
+    font-size: {{{styling.fontSizes.sidebarHeading}}};
+  }
+
+  .side-block {
+    margin-top: 0.0in;
+    width: 100%;
+  }
+
+  #contact {
+    width: 100%;
+margin-bottom: 1rem;
+  }
+
+  #contact ul {
+    margin-top: 0.05in;
+    padding-left: 0;
+    font-family: "Source Code Pro", monospace;
+    font-weight: 400;
+    line-height: 1.75;
+  }
+
+  #skills {
+    line-height: 1.5;
+  }
+
+  #skills ul {
+    margin: 0 0 0.15in;
+    padding: 0;
+  }
+
+  /* Icon replacements for print */
+  .profile-block {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 0;
+  }
+
+  .profile-photo {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 0 0 0.25in;
+    margin: 0;
+  }
+	.email {
+	font-size: {{{styling.fontSizes.email}}};
+}
+  .profile-photo img {
+    width: 1.1in;
+    height: 1.1in;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2pt solid #fff;
+    box-shadow: 0 0 4px rgba(0,0,0,0.18);
+  }
+
+  .fa-suitcase::before { content: "💼 "; }
+  .fa-folder-open::before { content: "📁 "; }
+  .fa-graduation-cap::before { content: "🎓 "; }
+      </style>
+    </head>
+    <body lang="en">
+      <section id="main">
+        <header id="title">
+          <h1>{{{basics.name}}}</h1>
+          <span class="subtitle">{{{basics.label}}}</span>
+        </header>
+
+        {{#workBool}}
+        <section class="main-block">
+          <h2>
+            <i class="fa fa-suitcase"></i> {{custom.sectionLabels.work}}
+          </h2>
+          {{#work}}
+          <section class="blocks">
+            <div class="date">
+              <span>{{ formatDate(startDate) }}</span>
+              <span>{{ formatDate(endDate) }}</span>
+            </div>
+            <div class="decorator">
+            </div>
+            <div class="details">
+              <header class="work">
+                <h3>{{position}}</h3>
+                <span class="place">{{name}}</span>
+               <span class="location">{{location}}</span>
+              </header>
+
+              {{#highlights}}
+              <div>
+                <ul>
+                  <li>{{.}}</li>
+                </ul>
+              </div>
+              {{/highlights}}
+            </div>
+          </section>
+          {{/work}}
+        </section>
+        {{/workBool}}
+
+        {{#projectsBool}}
+        <section class="main-block">
+          <h2>
+            <i class="fa fa-folder-open"></i> {{custom.sectionLabels.projects}}
+          </h2>
+          {{#projects}}
+          <section class="blocks">
+<div class="date"></div>
+            <div class="decorator">
+            </div>
+            <div class="details">
+              <header>
+                <h3>{{name}}</h3>
+<span> {{description}}</span>
+              </header>
+              {{#highlights}}
+              <div>
+                <ul>
+                  <li>{{.}}</li>
+                </ul>
+              </div>
+              {{/highlights}}
+            </div>
+          </section>
+          {{/projects}}
+        </section>
+        {{/projectsBool}}
+
+        {{#educationBool}}
+        <section class="main-block concise">
+          <h2>
+            <i class="fa fa-graduation-cap"></i> {{custom.sectionLabels.education}}
+          </h2>
+          {{#education}}
+          <section class="blocks">
+            <div class="date">
+            <span>{{ formatDate(endDate) }}</span>
+            </div>
+            <div class="decorator">
+            </div>
+            <div class="details">
+              <header>
+                <h3>{{studyType}} in {{area}}</h3><span class="place">{{institution}}</span>
+<span class="location">{{custom.location}}</span>
+              </header>
+              <div>{{score}}</div>
+              {{#courses}}
+              <div class="concise">
+                <ul>
+                  
+                  <li>{{.}}</li>
+                  
+                </ul>
+              </div>
+              {{/courses}}
+            </div>
+          </section>
+          {{/education}}
+        </section>
+        {{/educationBool}}
+      </section>
+
+      <aside id="sidebar">
+        
+        <div class="side-block profile-block">
+          <div class="profile-photo">
+            <img src="{{{basics.image}}}" alt="{{basics.name}}">
+          </div>
+        </div>
+        
+        <div class="side-block" id="contact">
+          <h1>Contact Info</h1>
+          <ul>
+            
+            <li><i class="fa fa-map-marker"></i>
+              {{basics.location.city}}, {{basics.location.region}}
+            </li>
+            
+            <li><i class="fa fa-globe"></i> {{basics.url}}</li>
+            {{#basics.profiles}}
+            <li><i class="fa fa-linkedin"></i> {{network}}({{username}})</li>
+            {{/basics.profiles}}
+           <li><span class="email"> {{basics.email}}</span></li>
+            <li><i class="fa fa-phone"></i> {{basics.phone}}</li>
+          </ul>
+        </div>
+
+        {{#skillsBool}}
+        <div class="side-block" id="skills">
+          <h1>{{custom.sectionLabels.skills}}</h1>
+          {{#skills}}
+          <ul>
+            <li>{{name}}</li>
+				<ul>
+            {{#keywords}}
+            <li>{{.}}</li>
+            {{/keywords}}
+          </ul>
+          {{/skills}}
+        </div>
+        {{/skillsBool}}
+      </aside>
+    </body>
+  </html>
