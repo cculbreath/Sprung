@@ -740,7 +740,7 @@ private struct Implementation {
         guard let descriptor else { return }
 
         if let template = descriptor.titleTemplate {
-            for placeholder in TitleRenderer.placeholders(in: template) {
+            for placeholder in TitleTemplateRenderer.placeholders(in: template) {
                 guard entry[placeholder] == nil else { continue }
                 if ["employer", "company", "school", "institution"].contains(placeholder) {
                     entry[placeholder] = key
@@ -755,7 +755,7 @@ private struct Implementation {
 
         var meta: [String: Any] = [:]
         if let template = descriptor.titleTemplate,
-           let computed = TitleRenderer.render(template, context: titleContext) {
+           let computed = TitleTemplateRenderer.render(template, context: titleContext) {
             meta["title"] = computed
         }
 
@@ -948,7 +948,7 @@ private struct Implementation {
         }
     }
 
-    private enum TitleRenderer {
+    private enum TitleTemplateRenderer {
         static func placeholders(in template: String) -> [String] {
             guard let regex = try? NSRegularExpression(pattern: "\\{\\{\\s*([^}]+)\\s*\\}\\}") else {
                 return []
