@@ -161,7 +161,7 @@ extension ExperienceDefaultsDraft {
                 startDate: draft.startDate,
                 endDate: draft.endDate,
                 url: draft.url,
-                entity: draft.entity,
+                organization: draft.organization,
                 type: draft.type,
                 highlights: highlights,
                 keywords: keywords,
@@ -422,7 +422,7 @@ struct ProjectExperienceDraft: Identifiable, Equatable {
     var startDate: String = ""
     var endDate: String = ""
     var url: String = ""
-    var entity: String = ""
+    var organization: String = ""
     var type: String = ""
     var highlights: [ProjectHighlightDraft] = []
     var keywords: [KeywordDraft] = []
@@ -437,7 +437,7 @@ struct ProjectExperienceDraft: Identifiable, Equatable {
         startDate = model.startDate
         endDate = model.endDate
         url = model.url
-        entity = model.entity
+        organization = model.organization
         type = model.type
         highlights = model.highlights.map(ProjectHighlightDraft.init)
         keywords = model.keywords.map { KeywordDraft(id: $0.id, keyword: $0.keyword) }

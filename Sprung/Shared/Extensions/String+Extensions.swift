@@ -12,4 +12,9 @@ extension String {
         }
         return self
     }
+
+    /// Returns the string trimmed of surrounding whitespace and newlines.
+    func trimmed() -> String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

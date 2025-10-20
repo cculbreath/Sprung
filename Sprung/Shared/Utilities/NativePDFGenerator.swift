@@ -217,6 +217,10 @@ class NativePDFGenerator: NSObject, ObservableObject {
             return profile.email.isEmpty ? nil : profile.email
         case "phone":
             return profile.phone.isEmpty ? nil : profile.phone
+        case "label":
+            return profile.label.isEmpty ? nil : profile.label
+        case "summary":
+            return profile.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : profile.summary
         case "url", "website":
             return profile.websites.isEmpty ? nil : profile.websites
         case "picture", "image":

@@ -39,6 +39,19 @@ struct ResumeTemplateContextBuilder {
             context = SeedContextNormalizer(manifest: manifest).normalize(context)
         }
 
+        if Logger.isVerboseEnabled {
+            if let basics = context["basics"] as? [String: Any] {
+                Logger.verbose("ResumeTemplateContextBuilder: basics keys = \(Array(basics.keys))", category: .general)
+                if let summary = basics["summary"] {
+                    Logger.verbose("ResumeTemplateContextBuilder: basics.summary = \(summary)", category: .general)
+                } else {
+                    Logger.verbose("ResumeTemplateContextBuilder: basics.summary missing", category: .general)
+                }
+            } else {
+                Logger.verbose("ResumeTemplateContextBuilder: basics section missing", category: .general)
+            }
+        }
+
         return context
     }
 

@@ -154,7 +154,7 @@ enum ExperienceDefaultsEncoder {
         if let value = sanitized(model.startDate) { payload["startDate"] = value }
         if let value = sanitized(model.endDate) { payload["endDate"] = value }
         if let value = sanitized(model.url) { payload["url"] = value }
-        if let value = sanitized(model.entity) { payload["entity"] = value }
+        if let value = sanitized(model.organization) { payload["entity"] = value }
         if let value = sanitized(model.type) { payload["type"] = value }
         let highlights = model.highlights.compactMap { sanitized($0.text) }
         if highlights.isEmpty == false { payload["highlights"] = highlights }
