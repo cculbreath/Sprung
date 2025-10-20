@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum ExperienceSectionKey: String, CaseIterable, Identifiable {
     case work
@@ -16,35 +17,15 @@ enum ExperienceSectionKey: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var displayName: String {
-        switch self {
-        case .work: return "Work"
-        case .volunteer: return "Volunteer"
-        case .education: return "Education"
-        case .projects: return "Projects"
-        case .skills: return "Skills"
-        case .awards: return "Awards"
-        case .certificates: return "Certificates"
-        case .publications: return "Publications"
-        case .languages: return "Languages"
-        case .interests: return "Interests"
-        case .references: return "References"
-        }
+        metadata.title
     }
 
     var addButtonTitle: String {
-        switch self {
-        case .work: return "⊕ Add Work History"
-        case .volunteer: return "⊕ Add Volunteer Work"
-        case .education: return "⊕ Add Education"
-        case .projects: return "⊕ Add Project"
-        case .skills: return "⊕ Add Skill"
-        case .awards: return "⊕ Add Award"
-        case .certificates: return "⊕ Add Certificate"
-        case .publications: return "⊕ Add Publication"
-        case .languages: return "⊕ Add Language"
-        case .interests: return "⊕ Add Interest"
-        case .references: return "⊕ Add Reference"
-        }
+        metadata.addButtonTitle
+    }
+
+    var metadata: ExperienceSectionMetadata {
+        ExperienceSectionMetadata.forKey(self)
     }
 }
 
@@ -59,17 +40,17 @@ struct ExperienceSchemaNode: Identifiable {
 }
 
 struct ExperienceSchemaSection: Identifiable {
-    let id = UUID()
     let key: ExperienceSectionKey
-    let title: String
     let nodes: [ExperienceSchemaNode]
+
+    var id: ExperienceSectionKey { key }
+    var metadata: ExperienceSectionMetadata { key.metadata }
 }
 
 enum ExperienceSchema {
     static let sections: [ExperienceSchemaSection] = [
         ExperienceSchemaSection(
             key: .work,
-            title: "Work Experience",
             nodes: [
                 field("name"),
                 field("position"),
@@ -83,7 +64,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .volunteer,
-            title: "Volunteer Experience",
             nodes: [
                 field("organization"),
                 field("position"),
@@ -96,7 +76,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .education,
-            title: "Education",
             nodes: [
                 field("institution"),
                 field("url"),
@@ -110,7 +89,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .projects,
-            title: "Projects",
             nodes: [
                 field("name"),
                 field("description"),
@@ -126,7 +104,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .skills,
-            title: "Skills",
             nodes: [
                 field("name"),
                 field("level"),
@@ -135,7 +112,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .awards,
-            title: "Awards",
             nodes: [
                 field("title"),
                 field("date"),
@@ -145,7 +121,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .certificates,
-            title: "Certificates",
             nodes: [
                 field("name"),
                 field("date"),
@@ -155,7 +130,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .publications,
-            title: "Publications",
             nodes: [
                 field("name"),
                 field("publisher"),
@@ -166,7 +140,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .languages,
-            title: "Languages",
             nodes: [
                 field("language"),
                 field("fluency")
@@ -174,7 +147,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .interests,
-            title: "Interests",
             nodes: [
                 field("name"),
                 group("keywords", children: [field("keyword")])
@@ -182,7 +154,6 @@ enum ExperienceSchema {
         ),
         ExperienceSchemaSection(
             key: .references,
-            title: "References",
             nodes: [
                 field("name"),
                 field("reference"),
@@ -191,11 +162,135 @@ enum ExperienceSchema {
         )
     ]
 
+    static let sectionsByKey: [ExperienceSectionKey: ExperienceSchemaSection] = {
+        Dictionary(uniqueKeysWithValues: sections.map { ($0.key, $0) })
+    }()
+
+    static func section(for key: ExperienceSectionKey) -> ExperienceSchemaSection {
+        if let section = sectionsByKey[key] {
+            return section
+        }
+        Logger.warning("📚 Missing experience schema section for key \(key.rawValue)")
+        return ExperienceSchemaSection(key: key, nodes: [])
+    }
+
     private static func field(_ name: String) -> ExperienceSchemaNode {
         ExperienceSchemaNode(kind: .field(name))
     }
 
     private static func group(_ name: String, children: [ExperienceSchemaNode]) -> ExperienceSchemaNode {
         ExperienceSchemaNode(kind: .group(name, children))
+    }
+}
+
+struct ExperienceSectionMetadata {
+    let key: ExperienceSectionKey
+    let title: String
+    let subtitle: String?
+    let addButtonTitle: String
+    let isEnabledKeyPath: WritableKeyPath<ExperienceDefaultsDraft, Bool>
+
+    func toggleBinding(in draft: Binding<ExperienceDefaultsDraft>) -> Binding<Bool> {
+        Binding(
+            get: { draft.wrappedValue[keyPath: isEnabledKeyPath] },
+            set: { newValue in
+                draft.wrappedValue[keyPath: isEnabledKeyPath] = newValue
+            }
+        )
+    }
+}
+
+extension ExperienceSectionMetadata {
+    static func forKey(_ key: ExperienceSectionKey) -> ExperienceSectionMetadata {
+        switch key {
+        case .work:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Work Experience",
+                subtitle: "Default roles and accomplishments for new resumes",
+                addButtonTitle: "⊕ Add Work History",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isWorkEnabled
+            )
+        case .volunteer:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Volunteer Experience",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Volunteer Work",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isVolunteerEnabled
+            )
+        case .education:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Education",
+                subtitle: "Preconfigured studies, courses, and achievements",
+                addButtonTitle: "⊕ Add Education",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isEducationEnabled
+            )
+        case .projects:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Projects",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Project",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isProjectsEnabled
+            )
+        case .skills:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Skills",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Skill",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isSkillsEnabled
+            )
+        case .awards:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Awards",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Award",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isAwardsEnabled
+            )
+        case .certificates:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Certificates",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Certificate",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isCertificatesEnabled
+            )
+        case .publications:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Publications",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Publication",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isPublicationsEnabled
+            )
+        case .languages:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Languages",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Language",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isLanguagesEnabled
+            )
+        case .interests:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Interests",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Interest",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isInterestsEnabled
+            )
+        case .references:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "References",
+                subtitle: nil,
+                addButtonTitle: "⊕ Add Reference",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isReferencesEnabled
+            )
+        }
     }
 }

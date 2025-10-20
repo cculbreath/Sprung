@@ -19,6 +19,16 @@ struct ExperienceEditorView: View {
         case error(String)
     }
 
+    private var sectionCallbacks: ExperienceSectionViewCallbacks {
+        ExperienceSectionViewCallbacks(
+            isEditing: isEditingEntry,
+            beginEditing: beginEditingEntry,
+            toggleEditing: toggleEditingEntry,
+            endEditing: endEditingEntry,
+            onChange: markDirty
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -106,121 +116,77 @@ struct ExperienceEditorView: View {
                         if draft.isWorkEnabled {
                             WorkExperienceSectionView(
                                 items: $draft.work,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isVolunteerEnabled {
                             VolunteerExperienceSectionView(
                                 items: $draft.volunteer,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isEducationEnabled {
                             EducationExperienceSectionView(
                                 items: $draft.education,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isProjectsEnabled {
                             ProjectExperienceSectionView(
                                 items: $draft.projects,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isSkillsEnabled {
                             SkillExperienceSectionView(
                                 items: $draft.skills,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isAwardsEnabled {
                             AwardExperienceSectionView(
                                 items: $draft.awards,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isCertificatesEnabled {
                             CertificateExperienceSectionView(
                                 items: $draft.certificates,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isPublicationsEnabled {
                             PublicationExperienceSectionView(
                                 items: $draft.publications,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isLanguagesEnabled {
                             LanguageExperienceSectionView(
                                 items: $draft.languages,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isInterestsEnabled {
                             InterestExperienceSectionView(
                                 items: $draft.interests,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
 
                         if draft.isReferencesEnabled {
                             ReferenceExperienceSectionView(
                                 items: $draft.references,
-                                isEditing: isEditingEntry,
-                                beginEditing: beginEditingEntry,
-                                toggleEditing: toggleEditingEntry,
-                                endEditing: endEditingEntry,
-                                onChange: markDirty
+                                callbacks: sectionCallbacks
                             )
                         }
                     }

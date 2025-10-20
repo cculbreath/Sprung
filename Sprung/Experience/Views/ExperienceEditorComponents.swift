@@ -1,6 +1,14 @@
 import AppKit
 import SwiftUI
 
+struct ExperienceSectionViewCallbacks {
+    var isEditing: (UUID) -> Bool
+    var beginEditing: (UUID) -> Void
+    var toggleEditing: (UUID) -> Void
+    var endEditing: (UUID) -> Void
+    var onChange: () -> Void
+}
+
 struct ExperienceCard<Content: View>: View {
     let onDelete: () -> Void
     var onToggleEdit: (() -> Void)? = nil
