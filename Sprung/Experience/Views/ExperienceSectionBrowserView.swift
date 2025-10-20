@@ -22,10 +22,10 @@ struct ExperienceSectionBrowserView: View {
                         .padding(.bottom, 4)
                     } label: {
                         HStack {
-                            Text(section.title)
+                            Text(section.metadata.title)
                                 .font(.subheadline)
                             Spacer()
-                            Toggle("", isOn: sectionToggle(for: section.key))
+                            Toggle("", isOn: sectionToggle(for: section))
                                 .labelsHidden()
                                 .toggleStyle(.checkbox)
                         }
@@ -84,30 +84,7 @@ struct ExperienceSectionBrowserView: View {
         )
     }
 
-    private func sectionToggle(for key: ExperienceSectionKey) -> Binding<Bool> {
-        switch key {
-        case .work:
-            return $draft.isWorkEnabled
-        case .volunteer:
-            return $draft.isVolunteerEnabled
-        case .education:
-            return $draft.isEducationEnabled
-        case .projects:
-            return $draft.isProjectsEnabled
-        case .skills:
-            return $draft.isSkillsEnabled
-        case .awards:
-            return $draft.isAwardsEnabled
-        case .certificates:
-            return $draft.isCertificatesEnabled
-        case .publications:
-            return $draft.isPublicationsEnabled
-        case .languages:
-            return $draft.isLanguagesEnabled
-        case .interests:
-            return $draft.isInterestsEnabled
-        case .references:
-            return $draft.isReferencesEnabled
-        }
+    private func sectionToggle(for section: ExperienceSchemaSection) -> Binding<Bool> {
+        section.metadata.toggleBinding(in: $draft)
     }
 }
