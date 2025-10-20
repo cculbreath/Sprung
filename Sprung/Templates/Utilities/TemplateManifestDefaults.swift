@@ -99,49 +99,6 @@ enum TemplateManifestDefaults {
         "meta": "Metadata"
     ]
 
-    static let defaultSectionLabels: [String: String] = [
-        "basics": "Contact",
-        "summary": "Summary",
-        "work": "Work Experience",
-        "volunteer": "Volunteer Work",
-        "education": "Education",
-        "projects": "Projects",
-        "skills": "Skills",
-        "awards": "Awards",
-        "certificates": "Certificates",
-        "publications": "Publications",
-        "languages": "Languages",
-        "interests": "Interests",
-        "references": "References",
-        "meta": "Metadata"
-    ]
-
-    static let defaultContactLabels: [String: String] = [
-        "phone": "Phone",
-        "email": "Email",
-        "url": "Website",
-        "location": "Location"
-    ]
-
-    static let defaultGeneralLabels: [String: String] = [
-        "present": "Present"
-    ]
-
-    static let defaultColors: [String: String] = [
-        "link": "#0a4cff",
-        "border": "#000000"
-    ]
-
-    static let defaultLayout: [String: String] = [
-        "leftColumnWidth": "3.1in",
-        "gutter": "1em"
-    ]
-
-    static let defaultMeta: [String: String] = [
-        "titleSuffix": "Resume",
-        "previewBackground": "#000000"
-    ]
-
     static let recommendedFontSizes: [String: String] = [
         "boxTitles": "16pt",
         "contact": "8pt",
@@ -407,77 +364,10 @@ enum TemplateManifestDefaults {
     }
 
     private static func customSection() -> TemplateManifest.Section {
-        let defaultValue: [String: Any] = [
-            "sectionLabels": defaultSectionLabels,
-            "contactLabels": defaultContactLabels,
-            "labels": defaultGeneralLabels,
-            "colors": defaultColors,
-            "layout": defaultLayout,
-            "meta": defaultMeta
-        ]
-
-        let fields: [TemplateManifest.Section.FieldDescriptor] = [
-            objectField(
-                "sectionLabels",
-                children: [
-                    field("basics", input: .text),
-                    field("summary", input: .text),
-                    field("work", input: .text),
-                    field("volunteer", input: .text),
-                    field("education", input: .text),
-                    field("projects", input: .text),
-                    field("skills", input: .text),
-                    field("awards", input: .text),
-                    field("certificates", input: .text),
-                    field("publications", input: .text),
-                    field("languages", input: .text),
-                    field("interests", input: .text),
-                    field("references", input: .text),
-                    field("meta", input: .text)
-                ]
-            ),
-            objectField(
-                "contactLabels",
-                children: [
-                    field("phone", input: .text),
-                    field("email", input: .text),
-                    field("url", input: .text),
-                    field("location", input: .text)
-                ]
-            ),
-            objectField(
-                "labels",
-                children: [
-                    field("present", input: .text)
-                ]
-            ),
-            objectField(
-                "colors",
-                children: [
-                    field("link", input: .text),
-                    field("border", input: .text)
-                ]
-            ),
-            objectField(
-                "layout",
-                children: [
-                    field("leftColumnWidth", input: .text),
-                    field("gutter", input: .text)
-                ]
-            ),
-            objectField(
-                "meta",
-                children: [
-                    field("titleSuffix", input: .text),
-                    field("previewBackground", input: .text)
-                ]
-            )
-        ]
-
-        return TemplateManifest.Section(
+        TemplateManifest.Section(
             type: .object,
-            defaultValue: TemplateManifest.JSONValue(value: defaultValue),
-            fields: fields
+            defaultValue: nil,
+            fields: []
         )
     }
 
