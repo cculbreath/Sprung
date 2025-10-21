@@ -82,7 +82,15 @@ struct UnifiedToolbar: CustomizableToolbarContent {
         Group {
             ToolbarItem(id: "startOnboardingInterview", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
-                    NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
+                    Task { @MainActor in
+                        Logger.info("🎙️ Toolbar interview button tapped", category: .ui)
+                        NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
+                        if !NSApp.sendAction(#selector(AppDelegate.showOnboardingInterviewWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            Logger.debug("🔁 Toolbar fallback to AppDelegate direct invocation", category: .ui)
+                            delegate.showOnboardingInterviewWindow()
+                        }
+                    }
                 }) {
                     Label("Interview", systemImage: "bubble.left.and.text.bubble.right")
                         .font(.system(size: 14, weight: .light))

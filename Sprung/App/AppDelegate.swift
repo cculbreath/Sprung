@@ -299,6 +299,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func showOnboardingInterviewWindow() {
+        Logger.info(
+            "🎬 showOnboardingInterviewWindow invoked (existing window: \(onboardingInterviewWindow != nil))",
+            category: .ui
+        )
         if let window = onboardingInterviewWindow, !window.isVisible {
             onboardingInterviewWindow = nil
         }
@@ -339,10 +343,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onboardingInterviewWindow?.isReleasedWhenClosed = false
             onboardingInterviewWindow?.center()
             onboardingInterviewWindow?.minSize = NSSize(width: 860, height: 600)
+
+            Logger.info("🆕 Created onboarding interview window", category: .ui)
         }
 
         onboardingInterviewWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        Logger.info("✅ Onboarding interview window presented", category: .ui)
     }
 
     @objc func showExperienceEditorWindow() {

@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var hasVisitedResumeTab: Bool = false
     @State private var refPopup: Bool = false
     @State private var didPromptTemplateEditor = false
+    @State private var menuHandler = MenuNotificationHandler()
 
     var body: some View {
         // Bindable references for selection binding
@@ -134,6 +135,15 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            Logger.debug("🎯 ContentView configuring MenuNotificationHandler", category: .ui)
+            menuHandler.configure(
+                jobAppStore: jobAppStore,
+                coverLetterStore: coverLetterStore,
+                sheets: $sheets,
+                selectedTab: $navigationState.selectedTab,
+                showSlidingList: $showSlidingList
+            )
+
             Logger.debug(
                 "🟡 ContentView appeared - restoring navigation state",
                 category: .ui
