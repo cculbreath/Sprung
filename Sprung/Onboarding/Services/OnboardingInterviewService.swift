@@ -22,6 +22,10 @@ final class OnboardingInterviewService {
     private lazy var toolExecutor: OnboardingToolExecutor = makeToolExecutor()
     private var processedToolIdentifiers: Set<String> = []
 
+    private var defaultBackend: LLMFacade.Backend = .openAI
+    private var defaultAllowWebSearch = true
+    private var preferredModelId: String?
+
     private(set) var artifacts: OnboardingArtifacts
     private(set) var messages: [OnboardingMessage] = []
     private(set) var nextQuestions: [OnboardingQuestion] = []
@@ -29,11 +33,23 @@ final class OnboardingInterviewService {
     private(set) var isProcessing = false
     private(set) var isActive = false
     private(set) var lastError: String?
-    private(set) var allowWebSearch = false
+    private(set) var allowWebSearch = true
     private(set) var allowWritingAnalysis = false
     private(set) var pendingExtraction: OnboardingPendingExtraction?
     private(set) var uploadedItems: [OnboardingUploadedItem] = []
     private(set) var schemaIssues: [String] = []
+    private(set) var wizardStep: OnboardingWizardStep = .introduction
+    private(set) var completedWizardSteps: Set<OnboardingWizardStep> = []
+    private(set) var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
+    private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
+
+    var preferredBackend: LLMFacade.Backend {
+        defaultBackend
+    }
+
+    var preferredModelIdForDisplay: String? {
+        preferredModelId
+    }
 
     init(
         llmFacade: LLMFacade,
@@ -52,7 +68,9 @@ final class OnboardingInterviewService {
         self.openAIConversationService = openAIConversationService
         self.uploadRegistry = uploadRegistry ?? OnboardingUploadRegistry()
         self.artifacts = artifactStore.loadArtifacts()
+        self.allowWebSearch = defaultAllowWebSearch
         refreshSchemaIssues()
+        recalculateWizardStatuses()
     }
 
     private func makeToolExecutor() -> OnboardingToolExecutor {
@@ -85,22 +103,28 @@ final class OnboardingInterviewService {
         nextQuestions.removeAll()
         conversationId = nil
         modelId = nil
-        backend = .openRouter
+        backend = defaultBackend
         isActive = false
         isProcessing = false
         lastError = nil
         pendingExtraction = nil
         allowWritingAnalysis = false
+        allowWebSearch = defaultAllowWebSearch
         processedToolIdentifiers.removeAll()
         uploadRegistry.reset()
         uploadedItems = []
+        pendingUploadRequests.removeAll()
+        completedWizardSteps.removeAll()
+        wizardStep = .introduction
         refreshArtifacts()
         currentPhase = .resumeIntake
+        recalculateWizardStatuses()
     }
 
     func setPhase(_ phase: OnboardingPhase) {
         guard currentPhase != phase else { return }
         currentPhase = phase
+        syncWizardStepWithCurrentPhase(force: true)
 
         guard let conversationId, let modelId else { return }
 
@@ -128,6 +152,7 @@ final class OnboardingInterviewService {
 
     func setWebSearchConsent(_ isAllowed: Bool) {
         allowWebSearch = isAllowed
+        defaultAllowWebSearch = isAllowed
         guard let conversationId, let modelId else { return }
 
         let payload = JSON([
@@ -170,16 +195,29 @@ final class OnboardingInterviewService {
     }
 
     func startInterview(modelId: String, backend: LLMFacade.Backend = .openRouter) async {
+        preferredModelId = modelId
         reset()
-        self.modelId = modelId
-        self.backend = backend
-        guard llmFacade.hasBackend(backend) else {
+        let desiredBackend = backend
+        let resolvedBackend: LLMFacade.Backend
+        if llmFacade.hasBackend(desiredBackend) {
+            resolvedBackend = desiredBackend
+        } else if llmFacade.hasBackend(defaultBackend) {
+            resolvedBackend = defaultBackend
+        } else if let fallback = llmFacade.availableBackends().first {
+            resolvedBackend = fallback
+        } else {
             lastError = OnboardingError.backendUnsupported.errorDescription
             return
         }
-        lastError = nil
 
-        if backend == .openAI, let openAIConversationService {
+        self.modelId = modelId
+        self.backend = resolvedBackend
+        defaultBackend = resolvedBackend
+        lastError = nil
+        completedWizardSteps.insert(.introduction)
+        transitionWizard(to: .resumeIntake)
+
+        if resolvedBackend == .openAI, let openAIConversationService {
             if let savedState = artifactStore.loadConversationState(), savedState.modelId == modelId {
                 let resumeId = await openAIConversationService.registerPersistedConversation(savedState)
                 conversationId = resumeId
@@ -188,6 +226,7 @@ final class OnboardingInterviewService {
                 await sendControlMessage(resumePrompt, conversationId: resumeId, modelId: modelId)
                 if lastError == nil {
                     isActive = true
+                    syncWizardStepWithCurrentPhase()
                     return
                 } else {
                     Logger.warning("Resume attempt failed, starting fresh session instead.")
@@ -209,12 +248,13 @@ final class OnboardingInterviewService {
                 systemPrompt: systemPrompt,
                 userMessage: kickoff,
                 modelId: modelId,
-                backend: backend
+                backend: resolvedBackend
             )
             self.conversationId = conversationId
             try await handleLLMResponse(response)
             isActive = true
-            if backend == .openAI {
+            syncWizardStepWithCurrentPhase()
+            if resolvedBackend == .openAI {
                 await persistConversationStateIfNeeded()
             } else {
                 artifactStore.clearConversationState()
@@ -261,6 +301,10 @@ final class OnboardingInterviewService {
         guard pendingExtraction != nil, let conversationId, let modelId else { return }
 
         pendingExtraction = nil
+        if wizardStep == .resumeIntake {
+            completedWizardSteps.insert(.resumeIntake)
+            recalculateWizardStatuses()
+        }
 
         let payload = JSON([
             "type": "resume_extraction_confirmation",
@@ -340,8 +384,12 @@ final class OnboardingInterviewService {
     }
 
     @discardableResult
-    func registerArtifact(data: Data, suggestedName: String) -> OnboardingUploadedItem {
-        let item = uploadRegistry.registerArtifact(data: data, suggestedName: suggestedName)
+    func registerArtifact(
+        data: Data,
+        suggestedName: String,
+        kind: OnboardingUploadedItem.Kind = .artifact
+    ) -> OnboardingUploadedItem {
+        let item = uploadRegistry.registerArtifact(data: data, suggestedName: suggestedName, kind: kind)
         refreshUploadedItems()
         appendSystemMessage("Artifact ‘\(item.name)’ available. Tool: summarize_artifact with fileId \(item.id)")
         return item
@@ -407,15 +455,20 @@ final class OnboardingInterviewService {
             try await processToolCalls(parsed.toolCalls)
         }
 
+        syncWizardStepWithCurrentPhase()
         await persistConversationStateIfNeeded()
     }
 
     private func processToolCalls(_ calls: [OnboardingToolCall]) async throws {
-        guard let conversationId, let modelId else { return }
+        guard conversationId != nil, modelId != nil else { return }
 
         var responses: [JSON] = []
 
         for call in calls where !processedToolIdentifiers.contains(call.identifier) {
+            if handleCustomToolCall(call, responses: &responses) {
+                processedToolIdentifiers.insert(call.identifier)
+                continue
+            }
             let result = try await toolExecutor.execute(call)
             processedToolIdentifiers.insert(call.identifier)
             let payload: [String: Any] = [
@@ -427,26 +480,7 @@ final class OnboardingInterviewService {
             responses.append(JSON(payload))
         }
 
-        guard !responses.isEmpty else { return }
-
-        let responseWrapper = JSON([
-            "tool_responses": responses
-        ])
-
-        isProcessing = true
-        do {
-            let response = try await llmFacade.continueConversation(
-                userMessage: responseWrapper.rawString(options: [.sortedKeys]) ?? responseWrapper.description,
-                modelId: modelId,
-                conversationId: conversationId,
-                backend: backend
-            )
-            try await handleLLMResponse(response)
-        } catch {
-            lastError = error.localizedDescription
-            Logger.error("OnboardingInterviewService.processToolCalls failed: \(error)")
-        }
-        isProcessing = false
+        await sendToolResponses(responses)
     }
 
     // MARK: - Artifact Helpers
@@ -464,7 +498,179 @@ final class OnboardingInterviewService {
         messages.append(OnboardingMessage(role: .system, text: text))
     }
 
-    // MARK: - Delta Handling
+    // MARK: - Wizard State & Requests
+
+    private func transitionWizard(to step: OnboardingWizardStep) {
+        wizardStep = step
+        for prior in OnboardingWizardStep.allCases where prior.rawValue < step.rawValue {
+            completedWizardSteps.insert(prior)
+        }
+        recalculateWizardStatuses()
+    }
+
+    private func syncWizardStepWithCurrentPhase(force: Bool = false) {
+        guard isActive || force else { return }
+        transitionWizard(to: wizardStepForPhase(currentPhase))
+    }
+
+    private func wizardStepForPhase(_ phase: OnboardingPhase) -> OnboardingWizardStep {
+        switch phase {
+        case .resumeIntake:
+            return .resumeIntake
+        case .artifactDiscovery:
+            return .artifactDiscovery
+        case .writingCorpus:
+            return .writingCorpus
+        case .wrapUp:
+            return .wrapUp
+        }
+    }
+
+    private func recalculateWizardStatuses() {
+        var statuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
+        for step in OnboardingWizardStep.allCases {
+            if step == wizardStep {
+                statuses[step] = .current
+            } else if completedWizardSteps.contains(step) {
+                statuses[step] = .completed
+            } else {
+                statuses[step] = .pending
+            }
+        }
+        wizardStepStatuses = statuses
+    }
+
+    func setPreferredDefaults(modelId: String?, backend: LLMFacade.Backend, webSearchAllowed: Bool) {
+        preferredModelId = modelId
+        defaultBackend = backend
+        defaultAllowWebSearch = webSearchAllowed
+        if !isActive {
+            allowWebSearch = webSearchAllowed
+            self.backend = backend
+        }
+    }
+
+    func completeUploadRequest(id: UUID, with item: OnboardingUploadedItem) async {
+        guard let index = pendingUploadRequests.firstIndex(where: { $0.id == id }) else { return }
+        let request = pendingUploadRequests.remove(at: index)
+        recalculateWizardStatuses()
+
+        let result = JSON([
+            "tool": "prompt_user_for_upload",
+            "id": request.toolCallId,
+            "status": "user_uploaded",
+            "result": [
+                "file_id": item.id,
+                "filename": item.name,
+                "kind": item.kind.rawValue
+            ]
+        ])
+
+        await sendToolResponses([result])
+    }
+
+    func declineUploadRequest(id: UUID, reason: String? = nil) async {
+        guard let index = pendingUploadRequests.firstIndex(where: { $0.id == id }) else { return }
+        let request = pendingUploadRequests.remove(at: index)
+        recalculateWizardStatuses()
+
+        var payload: [String: Any] = [
+            "tool": "prompt_user_for_upload",
+            "id": request.toolCallId,
+            "status": "declined"
+        ]
+        if let reason {
+            payload["message"] = reason
+        }
+
+        await sendToolResponses([JSON(payload)])
+    }
+
+    func fulfillUploadRequest(id: UUID, fileURL: URL) async {
+        guard let request = pendingUploadRequests.first(where: { $0.id == id }) else { return }
+
+        do {
+            let item: OnboardingUploadedItem
+            switch request.kind {
+            case .resume:
+                item = try registerResume(fileURL: fileURL)
+            case .writingSample:
+                let data = try Data(contentsOf: fileURL)
+                item = registerWritingSample(data: data, suggestedName: fileURL.lastPathComponent)
+            case .artifact:
+                let data = try Data(contentsOf: fileURL)
+                item = registerArtifact(data: data, suggestedName: fileURL.lastPathComponent)
+            case .generic:
+                let data = try Data(contentsOf: fileURL)
+                item = registerArtifact(
+                    data: data,
+                    suggestedName: fileURL.lastPathComponent,
+                    kind: OnboardingUploadedItem.Kind.generic
+                )
+            case .linkedIn:
+                let linkText = try String(contentsOf: fileURL, encoding: .utf8)
+                guard let url = URL(string: linkText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                    throw OnboardingError.invalidArguments("LinkedIn upload did not contain a valid URL")
+                }
+                item = registerLinkedInProfile(url: url)
+            }
+            await completeUploadRequest(id: id, with: item)
+        } catch {
+            lastError = error.localizedDescription
+            Logger.error("OnboardingInterviewService.fulfillUploadRequest failed: \(error)")
+        }
+    }
+
+    func fulfillUploadRequest(id: UUID, link: URL) async {
+        let item = registerLinkedInProfile(url: link)
+        await completeUploadRequest(id: id, with: item)
+    }
+
+    private func handleCustomToolCall(_ call: OnboardingToolCall, responses: inout [JSON]) -> Bool {
+        switch call.tool {
+        case "prompt_user_for_upload":
+            if pendingUploadRequests.contains(where: { $0.toolCallId == call.identifier }) {
+                return true
+            }
+            let request = OnboardingUploadRequest.fromToolCall(call)
+            pendingUploadRequests.append(request)
+            recalculateWizardStatuses()
+            appendSystemMessage("📁 \(request.metadata.title): \(request.metadata.instructions)")
+            let acknowledgement = JSON([
+                "tool": call.tool,
+                "id": call.identifier,
+                "status": "awaiting_user"
+            ])
+            responses.append(acknowledgement)
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func sendToolResponses(_ responses: [JSON]) async {
+        guard let conversationId, let modelId else { return }
+        guard !responses.isEmpty else { return }
+
+        let responseWrapper = JSON([
+            "tool_responses": responses
+        ])
+
+        isProcessing = true
+        do {
+            let response = try await llmFacade.continueConversation(
+                userMessage: responseWrapper.rawString(options: [.sortedKeys]) ?? responseWrapper.description,
+                modelId: modelId,
+                conversationId: conversationId,
+                backend: backend
+            )
+            try await handleLLMResponse(response)
+        } catch {
+            lastError = error.localizedDescription
+            Logger.error("OnboardingInterviewService.sendToolResponses failed: \(error)")
+        }
+        isProcessing = false
+    }
 
     // MARK: - Errors
 

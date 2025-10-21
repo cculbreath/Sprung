@@ -56,7 +56,8 @@ enum OnboardingLLMResponseParser {
         let toolCalls = json["tool_calls"].arrayValue.compactMap { item -> OnboardingToolCall? in
             guard let name = item["tool"].string else { return nil }
             let identifier = item["id"].string ?? UUID().uuidString
-            return OnboardingToolCall(identifier: identifier, tool: name, arguments: item["args"])
+            let arguments = item["args"].type == .null ? item["arguments"] : item["args"]
+            return OnboardingToolCall(identifier: identifier, tool: name, arguments: arguments)
         }
 
         return OnboardingLLMResponse(
