@@ -67,6 +67,10 @@ final class OnboardingToolExecutor {
             return JSON(["status": "saved"])
         case "verify_conflicts":
             return try executeVerifyConflicts()
+        case "prompt_user_for_upload":
+            return JSON([
+                "status": "awaiting_user"
+            ])
         default:
             throw OnboardingInterviewService.OnboardingError.unsupportedTool(call.tool)
         }

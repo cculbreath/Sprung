@@ -15,10 +15,27 @@ import Combine
 class EnabledLLMStore: SwiftDataStore {
     var enabledModels: [EnabledLLM] = []
     unowned let modelContext: ModelContext
+    private let defaultModelSeeds: [(id: String, displayName: String, provider: String)] = [
+        ("anthropic/haiku-4.5", "Anthropic Claude Haiku 4.5", "Anthropic"),
+        ("anthropic/claude-opus-4.1", "Anthropic Claude Opus 4.1", "Anthropic"),
+        ("anthropic/claude-sonnet-4.5", "Anthropic Claude Sonnet 4.5", "Anthropic"),
+        ("deepseek/deepseek-v3.1-terminus", "DeepSeek Terminus v3.1", "DeepSeek"),
+        ("deepseek/deepseek-v3.2-exp", "DeepSeek v3.2 Experimental", "DeepSeek"),
+        ("google/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Google"),
+        ("google/gemini-2.5-pro", "Gemini 2.5 Pro", "Google"),
+        ("openai/gpt-4.1", "GPT-4.1", "OpenAI"),
+        ("openai/gpt-5", "GPT-5", "OpenAI"),
+        ("openai/gpt-5-chat", "GPT-5 Chat", "OpenAI"),
+        ("openai/gpt-5-pro", "GPT-5 Pro", "OpenAI"),
+        ("openai/o3", "OpenAI o3", "OpenAI"),
+        ("x-ai/grok-4", "Grok 4", "xAI"),
+        ("x-ai/grok-4-fast", "Grok 4 Fast", "xAI")
+    ]
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         loadEnabledModels()
+        seedDefaultModelsIfNeeded()
     }
     
     private func loadEnabledModels() {
@@ -169,5 +186,19 @@ class EnabledLLMStore: SwiftDataStore {
             return true
         }
         return model.isEnabled
+    }
+
+    private func seedDefaultModelsIfNeeded() {
+        guard enabledModels.isEmpty else { return }
+
+        let now = Date()
+        for seed in defaultModelSeeds {
+            let record = getOrCreateModel(id: seed.id, displayName: seed.displayName, provider: seed.provider)
+            record.isEnabled = true
+            record.dateAdded = now
+            record.lastUsed = now
+        }
+        try? modelContext.save()
+        refreshEnabledModels()
     }
 }

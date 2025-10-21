@@ -35,11 +35,11 @@ final class OnboardingUploadRegistry {
         return store(item)
     }
 
-    func registerArtifact(data: Data, suggestedName: String) -> OnboardingUploadedItem {
+    func registerArtifact(data: Data, suggestedName: String, kind: OnboardingUploadedItem.Kind = .artifact) -> OnboardingUploadedItem {
         let item = OnboardingUploadedItem(
             id: UUID().uuidString,
             name: suggestedName,
-            kind: .artifact,
+            kind: kind,
             data: data,
             url: nil,
             createdAt: Date()
@@ -87,6 +87,7 @@ struct OnboardingUploadedItem: Identifiable, Equatable, Sendable {
         case linkedInProfile
         case artifact
         case writingSample
+        case generic
     }
 
     let id: String
