@@ -20,6 +20,7 @@ class MenuNotificationHandler {
     private var sheets: Binding<AppSheets>?
     private var selectedTab: Binding<TabList>?
     private var showSlidingList: Binding<Bool>?
+    private var observersConfigured = false
     
     init() {}
     
@@ -31,12 +32,20 @@ class MenuNotificationHandler {
         selectedTab: Binding<TabList>,
         showSlidingList: Binding<Bool>
     ) {
+        Logger.info("🛠️ MenuNotificationHandler configure invoked", category: .ui)
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.sheets = sheets
         self.selectedTab = selectedTab
         self.showSlidingList = showSlidingList
-        
+
+        guard !observersConfigured else {
+            Logger.debug("♻️ MenuNotificationHandler already configured; skipping observer setup", category: .ui)
+            return
+        }
+
+        observersConfigured = true
+        Logger.debug("✅ MenuNotificationHandler registering NotificationCenter observers", category: .ui)
         setupNotificationObservers()
     }
     
@@ -258,7 +267,9 @@ class MenuNotificationHandler {
             object: nil,
             queue: .main
         ) { _ in
+            Logger.info("📨 Received startOnboardingInterview notification", category: .ui)
             if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                Logger.debug("🎯 Dispatching to AppDelegate.showOnboardingInterviewWindow", category: .ui)
                 appDelegate.showOnboardingInterviewWindow()
             }
         }

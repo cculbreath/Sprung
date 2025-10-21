@@ -24,10 +24,6 @@ struct AppWindowView: View {
     // Centralized sheet state management for all app windows/modals
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
-    
-    // Menu notification handler
-    @State private var menuHandler = MenuNotificationHandler()
-    
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
@@ -50,15 +46,6 @@ struct AppWindowView: View {
             }
         }
         .id($tabRefresh.wrappedValue)
-        .onAppear {
-            menuHandler.configure(
-                jobAppStore: jobAppStore,
-                coverLetterStore: coverLetterStore,
-                sheets: $sheets,
-                selectedTab: $selectedTab,
-                showSlidingList: $showSlidingList
-            )
-        }
         .modifier(AppWindowViewModifiers(
             jobAppStore: jobAppStore,
             sheets: $sheets,

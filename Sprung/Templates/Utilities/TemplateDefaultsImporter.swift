@@ -94,6 +94,12 @@ struct TemplateDefaultsImporter {
         if let url = bundle.url(forResource: "catalog", withExtension: "json", subdirectory: "TemplateDefaults") {
             return url
         }
+
+        if let flattened = bundle.url(forResource: "catalog", withExtension: "json") {
+            Logger.debug("🧭 TemplateDefaultsImporter: using flattened catalog resource fallback.", category: .migration)
+            return flattened
+        }
+
         throw TemplateDefaultsImporterError.catalogNotFound
     }
 
@@ -102,6 +108,21 @@ struct TemplateDefaultsImporter {
         do {
             return try String(contentsOf: fileURL, encoding: .utf8)
         } catch {
+            let lastComponent = URL(fileURLWithPath: relativePath).lastPathComponent
+            let flattenedURL = baseDirectory.appendingPathComponent(lastComponent)
+
+            if flattenedURL != fileURL, FileManager.default.fileExists(atPath: flattenedURL.path) {
+                Logger.debug(
+                    "📁 TemplateDefaultsImporter: falling back to flattened resource for \(relativePath).",
+                    category: .migration
+                )
+                do {
+                    return try String(contentsOf: flattenedURL, encoding: .utf8)
+                } catch {
+                    throw TemplateDefaultsImporterError.unableToLoadFile(flattenedURL)
+                }
+            }
+
             throw TemplateDefaultsImporterError.unableToLoadFile(fileURL)
         }
     }

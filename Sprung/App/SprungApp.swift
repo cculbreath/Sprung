@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import AppKit
 
 
 @main
@@ -226,7 +227,13 @@ struct SprungApp: App {
         .commands {
             CommandMenu("Interview") {
                 Button("Initiate Onboarding Interview") {
+                    Logger.info("🎙️ Menu command requested onboarding interview", category: .ui)
                     NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
+                    if !NSApp.sendAction(#selector(AppDelegate.showOnboardingInterviewWindow), to: nil, from: nil),
+                       let delegate = NSApplication.shared.delegate as? AppDelegate {
+                        Logger.debug("🔁 Menu command fallback to AppDelegate direct invocation", category: .ui)
+                        delegate.showOnboardingInterviewWindow()
+                    }
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift, .option])
             }
