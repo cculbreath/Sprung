@@ -93,6 +93,48 @@ final class LLMFacade {
         }
     }
 
+    private func makeStreamingHandle(
+        conversationId: UUID?,
+        sourceStream: AsyncThrowingStream<LLMStreamChunkDTO, Error>
+    ) -> LLMStreamingHandle {
+        let handleId = UUID()
+        let stream = AsyncThrowingStream<LLMStreamChunkDTO, Error> { continuation in
+            let task = Task {
+                defer {
+                    Task { @MainActor in
+                        self.activeStreamingTasks.removeValue(forKey: handleId)
+                    }
+                }
+                do {
+                    for try await chunk in sourceStream {
+                        if Task.isCancelled { break }
+                        continuation.yield(chunk)
+                    }
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            registerStreamingTask(task, for: handleId)
+
+            continuation.onTermination = { @Sendable _ in
+                Task { @MainActor in
+                    self.cancelStreaming(handleId: handleId)
+                }
+            }
+        }
+
+        let cancelClosure: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor in
+                self?.cancelStreaming(handleId: handleId)
+            }
+        }
+
+        return LLMStreamingHandle(conversationId: conversationId, stream: stream, cancel: cancelClosure)
+    }
+
     // MARK: - Capability Validation
 
     private func enabledModelRecord(for modelId: String) -> EnabledLLM? {
@@ -329,48 +371,66 @@ final class LLMFacade {
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> LLMStreamingHandle {
-        var required: [ModelCapability] = []
-        if reasoning != nil { required.append(.reasoning) }
-        if jsonSchema != nil { required.append(.structuredOutput) }
-        try await validate(modelId: modelId, requires: required)
-
-        let (conversationId, sourceStream) = try await llmService.startConversationStreaming(
+        try await startConversationStreaming(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
             modelId: modelId,
             temperature: temperature,
             reasoning: reasoning,
-            jsonSchema: jsonSchema
+            jsonSchema: jsonSchema,
+            backend: .openRouter
         )
+    }
 
-        let handleId = UUID()
-        let stream = AsyncThrowingStream<LLMStreamChunkDTO, Error> { continuation in
-            let task = Task {
-                defer {
-                    _ = Task { @MainActor in
-                        self.activeStreamingTasks.removeValue(forKey: handleId)
-                    }
-                }
-                do {
-                    for try await chunk in sourceStream {
-                        if Task.isCancelled { break }
-                        continuation.yield(chunk)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            registerStreamingTask(task, for: handleId)
+    func startConversationStreaming(
+        systemPrompt: String? = nil,
+        userMessage: String,
+        modelId: String,
+        temperature: Double? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        jsonSchema: JSONSchema? = nil,
+        backend: Backend,
+        images: [Data] = []
+    ) async throws -> LLMStreamingHandle {
+        if backend == .openRouter {
+            var required: [ModelCapability] = []
+            if reasoning != nil { required.append(.reasoning) }
+            if jsonSchema != nil { required.append(.structuredOutput) }
+            try await validate(modelId: modelId, requires: required)
+
+            let (conversationId, sourceStream) = try await llmService.startConversationStreaming(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId,
+                temperature: temperature,
+                reasoning: reasoning,
+                jsonSchema: jsonSchema
+            )
+
+            return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
 
-        let cancelClosure: @Sendable () -> Void = { [weak self] in
-            Task { @MainActor in
-                self?.cancelStreaming(handleId: handleId)
+        if backend == .openAI {
+            guard reasoning == nil else {
+                throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
             }
+            guard jsonSchema == nil else {
+                throw LLMError.clientError("Structured outputs are not supported for OpenAI Responses streaming")
+            }
+            guard let service = conversationServices[.openAI] as? LLMStreamingConversationService else {
+                throw LLMError.clientError("OpenAI streaming conversation service is unavailable")
+            }
+            let (conversationId, sourceStream) = try await service.startConversationStreaming(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId,
+                temperature: temperature,
+                images: images
+            )
+            return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
 
-        return LLMStreamingHandle(conversationId: conversationId, stream: stream, cancel: cancelClosure)
+        throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
     }
 
     func continueConversationStreaming(
@@ -383,52 +443,46 @@ final class LLMFacade {
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
     ) async throws -> LLMStreamingHandle {
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
+        if backend == .openRouter {
+            var required: [ModelCapability] = images.isEmpty ? [] : [.vision]
+            if reasoning != nil { required.append(.reasoning) }
+            if jsonSchema != nil { required.append(.structuredOutput) }
+            try await validate(modelId: modelId, requires: required)
+
+            let sourceStream = llmService.continueConversationStreaming(
+                userMessage: userMessage,
+                modelId: modelId,
+                conversationId: conversationId,
+                images: images,
+                temperature: temperature,
+                reasoning: reasoning,
+                jsonSchema: jsonSchema
+            )
+
+            return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
-        var required: [ModelCapability] = images.isEmpty ? [] : [.vision]
-        if reasoning != nil { required.append(.reasoning) }
-        if jsonSchema != nil { required.append(.structuredOutput) }
-        try await validate(modelId: modelId, requires: required)
 
-        let sourceStream = llmService.continueConversationStreaming(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            images: images,
-            temperature: temperature,
-            reasoning: reasoning,
-            jsonSchema: jsonSchema
-        )
-
-        let handleId = UUID()
-        let stream = AsyncThrowingStream<LLMStreamChunkDTO, Error> { continuation in
-            let task = Task {
-                defer {
-                    _ = Task { @MainActor in
-                        self.activeStreamingTasks.removeValue(forKey: handleId)
-                    }
-                }
-                do {
-                    for try await chunk in sourceStream {
-                        if Task.isCancelled { break }
-                        continuation.yield(chunk)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
+        if backend == .openAI {
+            guard reasoning == nil else {
+                throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
             }
-            registerStreamingTask(task, for: handleId)
-        }
-
-        let cancelClosure: @Sendable () -> Void = { [weak self] in
-            Task { @MainActor in
-                self?.cancelStreaming(handleId: handleId)
+            guard jsonSchema == nil else {
+                throw LLMError.clientError("Structured outputs are not supported for OpenAI Responses streaming")
             }
+            guard let service = conversationServices[.openAI] as? LLMStreamingConversationService else {
+                throw LLMError.clientError("OpenAI streaming conversation service is unavailable")
+            }
+            let sourceStream = try await service.continueConversationStreaming(
+                userMessage: userMessage,
+                modelId: modelId,
+                conversationId: conversationId,
+                images: images,
+                temperature: temperature
+            )
+            return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
 
-        return LLMStreamingHandle(conversationId: conversationId, stream: stream, cancel: cancelClosure)
+        throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
     }
 
     func continueConversation(

@@ -26,6 +26,24 @@ protocol LLMConversationService: AnyObject {
     ) async throws -> String
 }
 
+protocol LLMStreamingConversationService: LLMConversationService {
+    func startConversationStreaming(
+        systemPrompt: String?,
+        userMessage: String,
+        modelId: String,
+        temperature: Double?,
+        images: [Data]
+    ) async throws -> (UUID, AsyncThrowingStream<LLMStreamChunkDTO, Error>)
+
+    func continueConversationStreaming(
+        userMessage: String,
+        modelId: String,
+        conversationId: UUID,
+        images: [Data],
+        temperature: Double?
+    ) async throws -> AsyncThrowingStream<LLMStreamChunkDTO, Error>
+}
+
 final class OpenRouterConversationService: LLMConversationService {
     private let service: LLMService
 

@@ -14,6 +14,7 @@ final class OnboardingInterviewService {
 
     private var conversationId: UUID?
     private var modelId: String?
+    private var activeModelId: String?
     private var backend: LLMFacade.Backend = .openRouter
 
     private let uploadRegistry: OnboardingUploadRegistry
@@ -42,6 +43,11 @@ final class OnboardingInterviewService {
     private(set) var completedWizardSteps: Set<OnboardingWizardStep> = []
     private(set) var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
     private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
+    private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
+    private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
+    private(set) var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
+    private(set) var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] = []
+    private(set) var pendingContactsRequest: OnboardingContactsFetchRequest?
 
     var preferredBackend: LLMFacade.Backend {
         defaultBackend
@@ -104,6 +110,7 @@ final class OnboardingInterviewService {
         conversationId = nil
         modelId = nil
         backend = defaultBackend
+        activeModelId = nil
         isActive = false
         isProcessing = false
         lastError = nil
@@ -114,6 +121,11 @@ final class OnboardingInterviewService {
         uploadRegistry.reset()
         uploadedItems = []
         pendingUploadRequests.removeAll()
+        pendingChoicePrompt = nil
+        pendingApplicantProfileRequest = nil
+        pendingSectionToggleRequest = nil
+        pendingSectionEntryRequests.removeAll()
+        pendingContactsRequest = nil
         completedWizardSteps.removeAll()
         wizardStep = .introduction
         refreshArtifacts()
@@ -126,7 +138,7 @@ final class OnboardingInterviewService {
         currentPhase = phase
         syncWizardStepWithCurrentPhase(force: true)
 
-        guard let conversationId, let modelId else { return }
+        guard let conversationId else { return }
 
         let directive = OnboardingPromptBuilder.phaseDirective(for: phase)
         let directiveText = directive.rawString(options: [.sortedKeys]) ?? directive.description
@@ -144,8 +156,7 @@ final class OnboardingInterviewService {
         Task { [weak self] in
             await self?.sendControlMessage(
                 directiveText,
-                conversationId: conversationId,
-                modelId: modelId
+                conversationId: conversationId
             )
         }
     }
@@ -153,7 +164,7 @@ final class OnboardingInterviewService {
     func setWebSearchConsent(_ isAllowed: Bool) {
         allowWebSearch = isAllowed
         defaultAllowWebSearch = isAllowed
-        guard let conversationId, let modelId else { return }
+        guard let conversationId else { return }
 
         let payload = JSON([
             "type": "web_search_consent",
@@ -166,20 +177,14 @@ final class OnboardingInterviewService {
         Task { [weak self] in
             await self?.sendControlMessage(
                 messageText,
-                conversationId: conversationId,
-                modelId: modelId
+                conversationId: conversationId
             )
         }
     }
 
     func setWritingAnalysisConsent(_ isAllowed: Bool) {
         allowWritingAnalysis = isAllowed
-        let note = isAllowed
-            ? "✍️ Writing-style analysis enabled. summarize_writing and persist_style_profile tools may run."
-            : "🛑 Writing-style analysis disabled. Any pending summarize_writing or persist_style_profile calls will be rejected."
-        messages.append(OnboardingMessage(role: .system, text: note))
-
-        guard let conversationId, let modelId else { return }
+        guard let conversationId else { return }
         let payload = JSON([
             "type": "writing_analysis_consent",
             "allowed": isAllowed
@@ -188,8 +193,7 @@ final class OnboardingInterviewService {
         Task { [weak self] in
             await self?.sendControlMessage(
                 messageText,
-                conversationId: conversationId,
-                modelId: modelId
+                conversationId: conversationId
             )
         }
     }
@@ -214,6 +218,8 @@ final class OnboardingInterviewService {
         self.backend = resolvedBackend
         defaultBackend = resolvedBackend
         lastError = nil
+        let normalizedModelId = resolvedBackend == .openAI ? modelId.replacingOccurrences(of: "openai/", with: "") : modelId
+        activeModelId = normalizedModelId
         completedWizardSteps.insert(.introduction)
         transitionWizard(to: .resumeIntake)
 
@@ -223,7 +229,7 @@ final class OnboardingInterviewService {
                 conversationId = resumeId
                 messages.append(OnboardingMessage(role: .system, text: "♻️ Resuming previous onboarding interview with saved OpenAI thread."))
                 let resumePrompt = OnboardingPromptBuilder.resumeMessage(with: artifacts, phase: currentPhase)
-                await sendControlMessage(resumePrompt, conversationId: resumeId, modelId: modelId)
+                await sendControlMessage(resumePrompt, conversationId: resumeId)
                 if lastError == nil {
                     isActive = true
                     syncWizardStepWithCurrentPhase()
@@ -244,21 +250,33 @@ final class OnboardingInterviewService {
             let systemPrompt = OnboardingPromptBuilder.systemPrompt()
             let kickoff = OnboardingPromptBuilder.kickoffMessage(with: artifacts, phase: currentPhase)
 
-            let (conversationId, response) = try await llmFacade.startConversation(
-                systemPrompt: systemPrompt,
-                userMessage: kickoff,
-                modelId: modelId,
-                backend: resolvedBackend
-            )
-            self.conversationId = conversationId
-            try await handleLLMResponse(response)
-            isActive = true
-            syncWizardStepWithCurrentPhase()
             if resolvedBackend == .openAI {
+                let handle = try await llmFacade.startConversationStreaming(
+                    systemPrompt: systemPrompt,
+                    userMessage: kickoff,
+                    modelId: (activeModelId ?? normalizedModelId),
+                    backend: resolvedBackend
+                )
+                guard let conversationId = handle.conversationId else {
+                    throw LLMError.clientError("Failed to establish OpenAI conversation")
+                }
+                self.conversationId = conversationId
+                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                try await handleLLMResponse(responseText, updatingMessageId: messageId)
                 await persistConversationStateIfNeeded()
             } else {
+                let (conversationId, response) = try await llmFacade.startConversation(
+                    systemPrompt: systemPrompt,
+                    userMessage: kickoff,
+                    modelId: (activeModelId ?? normalizedModelId),
+                    backend: resolvedBackend
+                )
+                self.conversationId = conversationId
+                try await handleLLMResponse(response)
                 artifactStore.clearConversationState()
             }
+            isActive = true
+            syncWizardStepWithCurrentPhase()
         } catch {
             lastError = error.localizedDescription
             Logger.error("OnboardingInterviewService.startInterview failed: \(error)")
@@ -268,8 +286,12 @@ final class OnboardingInterviewService {
     }
 
     func send(userMessage: String) async {
-        guard let conversationId, let modelId else {
+        guard let conversationId else {
             lastError = "Interview has not been started"
+            return
+        }
+        guard let resolvedModelId = resolvedModelIdentifier() else {
+            lastError = "Interview model is unavailable"
             return
         }
 
@@ -278,13 +300,25 @@ final class OnboardingInterviewService {
         lastError = nil
 
         do {
-            let response = try await llmFacade.continueConversation(
-                userMessage: userMessage,
-                modelId: modelId,
-                conversationId: conversationId,
-                backend: backend
-            )
-            try await handleLLMResponse(response)
+            if backend == .openAI {
+                let handle = try await llmFacade.continueConversationStreaming(
+                    userMessage: userMessage,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                try await handleLLMResponse(responseText, updatingMessageId: messageId)
+                await persistConversationStateIfNeeded()
+            } else {
+                let response = try await llmFacade.continueConversation(
+                    userMessage: userMessage,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                try await handleLLMResponse(response)
+            }
         } catch {
             lastError = error.localizedDescription
             Logger.error("OnboardingInterviewService.send failed: \(error)")
@@ -298,7 +332,7 @@ final class OnboardingInterviewService {
     }
 
     func confirmPendingExtraction(updatedExtraction: JSON, notes: String?) async {
-        guard pendingExtraction != nil, let conversationId, let modelId else { return }
+        guard pendingExtraction != nil, let conversationId else { return }
 
         pendingExtraction = nil
         if wizardStep == .resumeIntake {
@@ -315,14 +349,33 @@ final class OnboardingInterviewService {
         messages.append(OnboardingMessage(role: .user, text: "Confirmed resume extraction."))
         isProcessing = true
 
+        guard let resolvedModelId = resolvedModelIdentifier() else {
+            lastError = "Interview model is unavailable"
+            isProcessing = false
+            return
+        }
+
         do {
-            let response = try await llmFacade.continueConversation(
-                userMessage: payload.rawString(options: [.sortedKeys]) ?? payload.description,
-                modelId: modelId,
-                conversationId: conversationId,
-                backend: backend
-            )
-            try await handleLLMResponse(response)
+            let payloadText = payload.rawString(options: [.sortedKeys]) ?? payload.description
+            if backend == .openAI {
+                let handle = try await llmFacade.continueConversationStreaming(
+                    userMessage: payloadText,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                try await handleLLMResponse(responseText, updatingMessageId: messageId)
+                await persistConversationStateIfNeeded()
+            } else {
+                let response = try await llmFacade.continueConversation(
+                    userMessage: payloadText,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                try await handleLLMResponse(response)
+            }
         } catch {
             lastError = error.localizedDescription
             Logger.error("OnboardingInterviewService.confirmPendingExtraction failed: \(error)")
@@ -333,21 +386,38 @@ final class OnboardingInterviewService {
 
     private func sendControlMessage(
         _ messageText: String,
-        conversationId: UUID,
-        modelId: String
+        conversationId: UUID
     ) async {
-        guard conversationId == self.conversationId, modelId == self.modelId else { return }
+        guard conversationId == self.conversationId else { return }
         isProcessing = true
         lastError = nil
 
+        guard let resolvedModelId = resolvedModelIdentifier() else {
+            lastError = "Interview model is unavailable"
+            isProcessing = false
+            return
+        }
+
         do {
-            let response = try await llmFacade.continueConversation(
-                userMessage: messageText,
-                modelId: modelId,
-                conversationId: conversationId,
-                backend: backend
-            )
-            try await handleLLMResponse(response)
+            if backend == .openAI {
+                let handle = try await llmFacade.continueConversationStreaming(
+                    userMessage: messageText,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                try await handleLLMResponse(responseText, updatingMessageId: messageId)
+                await persistConversationStateIfNeeded()
+            } else {
+                let response = try await llmFacade.continueConversation(
+                    userMessage: messageText,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                try await handleLLMResponse(response)
+            }
         } catch {
             lastError = error.localizedDescription
             Logger.error("OnboardingInterviewService.sendControlMessage failed: \(error)")
@@ -409,11 +479,20 @@ final class OnboardingInterviewService {
 
     // MARK: - Response Handling
 
-    private func handleLLMResponse(_ responseText: String) async throws {
+    private func handleLLMResponse(
+        _ responseText: String,
+        updatingMessageId messageId: UUID? = nil
+    ) async throws {
         let parsed = try OnboardingLLMResponseParser.parse(responseText)
 
         if !parsed.assistantReply.isEmpty {
-            messages.append(OnboardingMessage(role: .assistant, text: parsed.assistantReply))
+            if let messageId = messageId {
+                appendOrUpdateAssistantMessage(id: messageId, text: parsed.assistantReply)
+            } else {
+                messages.append(OnboardingMessage(role: .assistant, text: parsed.assistantReply))
+            }
+        } else if let messageId = messageId {
+            removeMessage(withId: messageId)
         }
 
         if !parsed.deltaUpdates.isEmpty {
@@ -459,6 +538,159 @@ final class OnboardingInterviewService {
         await persistConversationStateIfNeeded()
     }
 
+    private func streamAssistantResponse(from handle: LLMStreamingHandle) async throws -> (String, UUID) {
+        let mainMessageId = appendAssistantPlaceholder()
+        var accumulatedText = ""
+
+        var reasoningState: (id: UUID, text: String)?
+        struct ToolStreamState {
+            var messageId: UUID
+            var inputBuffer: String
+            var status: String
+            var isComplete: Bool
+        }
+        var toolStates: [String: ToolStreamState] = [:]
+
+        func formatToolPayload(_ text: String) -> String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "" }
+            let maxLength = 600
+            if trimmed.count <= maxLength {
+                return trimmed
+            }
+            let index = trimmed.index(trimmed.startIndex, offsetBy: maxLength)
+            return String(trimmed[..<index]) + "…"
+        }
+
+        func updateReasoningMessage(with delta: String) {
+            let trimmed = delta.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+
+            var text = reasoningState?.text ?? ""
+            text += (text.isEmpty ? "" : " ") + trimmed
+            let messageId = reasoningState?.id ?? appendAssistantMessage("🧠 \(text)")
+
+            appendOrUpdateAssistantMessage(id: messageId, text: "🧠 \(text)")
+            reasoningState = (messageId, text)
+        }
+
+        func finalizeReasoningIfNeeded() {
+            guard let state = reasoningState else { return }
+            if !state.text.isEmpty {
+                let display = "🧠 \(state.text)\n✅ Reasoning complete."
+                appendOrUpdateAssistantMessage(id: state.id, text: display)
+            }
+        }
+
+        func updateToolMessage(for event: LLMToolStreamEvent) {
+            var state = toolStates[event.callId]
+            if state == nil {
+                let initialStatus = event.status ?? "Tool call started."
+                let messageId = appendAssistantMessage("🔧 \(initialStatus)")
+                state = ToolStreamState(
+                    messageId: messageId,
+                    inputBuffer: "",
+                    status: initialStatus,
+                    isComplete: false
+                )
+            }
+
+            if let payload = event.payload {
+                if event.appendsPayload {
+                    state?.inputBuffer += payload
+                } else {
+                    state?.inputBuffer = payload
+                }
+            }
+
+            if let status = event.status {
+                state?.status = status
+            }
+
+            if event.isComplete {
+                state?.isComplete = true
+            }
+
+            if let state {
+                var display = "🔧 Tool \(event.callId)"
+                display += "\n\(state.status)"
+                if !state.inputBuffer.isEmpty {
+                    let preview = formatToolPayload(state.inputBuffer)
+                    if !preview.isEmpty {
+                        display += "\n" + preview
+                    }
+                }
+                if state.isComplete {
+                    display += "\n✅ Tool complete."
+                }
+                appendOrUpdateAssistantMessage(id: state.messageId, text: display)
+                toolStates[event.callId] = state
+            }
+        }
+
+        func finalizeToolMessages() {
+            for (id, state) in toolStates {
+                if state.isComplete {
+                    continue
+                }
+                var updated = state
+                updated.isComplete = true
+                var display = "🔧 Tool \(id)"
+                display += "\n\(state.status)"
+                if !state.inputBuffer.isEmpty {
+                    let preview = formatToolPayload(state.inputBuffer)
+                    if !preview.isEmpty {
+                        display += "\n" + preview
+                    }
+                }
+                display += "\n✅ Tool complete."
+                appendOrUpdateAssistantMessage(id: state.messageId, text: display)
+                toolStates[id] = updated
+            }
+        }
+
+        do {
+            for try await chunk in handle.stream {
+                if let event = chunk.event {
+                    switch event {
+                    case .tool(let toolEvent):
+                        updateToolMessage(for: toolEvent)
+                    case .status(let message, let isComplete):
+                        let statusId = appendAssistantMessage("ℹ️ \(message)")
+                        if isComplete {
+                            appendOrUpdateAssistantMessage(id: statusId, text: "ℹ️ \(message)\n✅ Complete.")
+                        }
+                    }
+                }
+
+                if let reasoning = chunk.reasoning {
+                    updateReasoningMessage(with: reasoning)
+                }
+
+                if let content = chunk.content, !content.isEmpty {
+                    accumulatedText += content
+                    appendOrUpdateAssistantMessage(id: mainMessageId, text: accumulatedText)
+                }
+
+                if chunk.isFinished {
+                    finalizeReasoningIfNeeded()
+                    finalizeToolMessages()
+                }
+            }
+        } catch {
+            removeMessage(withId: mainMessageId)
+            if let state = reasoningState {
+                removeMessage(withId: state.id)
+            }
+            for state in toolStates.values {
+                removeMessage(withId: state.messageId)
+            }
+            throw error
+        }
+
+        return (accumulatedText, mainMessageId)
+    }
+
     private func processToolCalls(_ calls: [OnboardingToolCall]) async throws {
         guard conversationId != nil, modelId != nil else { return }
 
@@ -496,6 +728,38 @@ final class OnboardingInterviewService {
 
     private func appendSystemMessage(_ text: String) {
         messages.append(OnboardingMessage(role: .system, text: text))
+    }
+
+    @discardableResult
+    private func appendAssistantMessage(_ text: String) -> UUID {
+        let message = OnboardingMessage(role: .assistant, text: text)
+        messages.append(message)
+        return message.id
+    }
+
+    private func appendOrUpdateAssistantMessage(id: UUID, text: String) {
+        if let index = messages.firstIndex(where: { $0.id == id }) {
+            let existing = messages[index]
+            messages[index] = OnboardingMessage(
+                id: existing.id,
+                role: existing.role,
+                text: text,
+                timestamp: existing.timestamp
+            )
+        }
+    }
+
+    @discardableResult
+    private func appendAssistantPlaceholder() -> UUID {
+        let placeholder = OnboardingMessage(role: .assistant, text: "")
+        messages.append(placeholder)
+        return placeholder.id
+    }
+
+    private func removeMessage(withId id: UUID) {
+        if let index = messages.firstIndex(where: { $0.id == id }) {
+            messages.remove(at: index)
+        }
     }
 
     // MARK: - Wizard State & Requests
@@ -626,6 +890,198 @@ final class OnboardingInterviewService {
         await completeUploadRequest(id: id, with: item)
     }
 
+    // MARK: - Choice Prompt Handling
+
+    func resolveChoicePrompt(selectionIds: [String]) async {
+        guard let prompt = pendingChoicePrompt else { return }
+        pendingChoicePrompt = nil
+
+        let result = JSON([
+            "tool": "ask_user_options",
+            "id": prompt.toolCallId,
+            "status": "ok",
+            "selection": JSON(selectionIds)
+        ])
+
+        await sendToolResponses([result])
+    }
+
+    func cancelChoicePrompt(reason: String? = nil) async {
+        guard let prompt = pendingChoicePrompt else { return }
+        pendingChoicePrompt = nil
+        var payload: [String: Any] = [
+            "tool": "ask_user_options",
+            "id": prompt.toolCallId,
+            "status": "cancelled"
+        ]
+        if let reason {
+            payload["message"] = reason
+        }
+        await sendToolResponses([JSON(payload)])
+    }
+
+    // MARK: - Applicant Profile Validation
+
+    func approveApplicantProfileDraft(_ draft: ApplicantProfileDraft) async {
+        let profile = applicantProfileStore.currentProfile()
+        draft.apply(to: profile)
+        applicantProfileStore.save(profile)
+        let json = draft.toJSON()
+        _ = artifactStore.mergeApplicantProfile(patch: json)
+        refreshArtifacts()
+        await broadcastResumeSnapshot(reason: "applicant_profile_validated")
+        await completeApplicantProfileValidation(approvedProfile: json)
+    }
+
+    func completeApplicantProfileValidation(approvedProfile: JSON) async {
+        guard let request = pendingApplicantProfileRequest else { return }
+        pendingApplicantProfileRequest = nil
+
+        let payload = JSON([
+            "tool": "validate_applicant_profile",
+            "id": request.toolCallId,
+            "status": "ok",
+            "profile": approvedProfile
+        ])
+        await sendToolResponses([payload])
+    }
+
+    func declineApplicantProfileValidation(reason: String? = nil) async {
+        guard let request = pendingApplicantProfileRequest else { return }
+        pendingApplicantProfileRequest = nil
+
+        var payload: [String: Any] = [
+            "tool": "validate_applicant_profile",
+            "id": request.toolCallId,
+            "status": "cancelled"
+        ]
+        if let reason {
+            payload["message"] = reason
+        }
+        await sendToolResponses([JSON(payload)])
+    }
+
+    // MARK: - Resume Section Enablement
+
+    func completeSectionToggleSelection(enabledSections: [String]) async {
+        guard let request = pendingSectionToggleRequest else { return }
+        pendingSectionToggleRequest = nil
+
+        let keys = Set(
+            enabledSections.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0) }
+        )
+
+        var draft = experienceDefaultsStore.loadDraft()
+        draft.setEnabledSections(keys)
+        experienceDefaultsStore.save(draft: draft)
+        updateDefaultValuesArtifact(from: draft)
+        await broadcastResumeSnapshot(reason: "resume_sections_enabled")
+
+        let payload = JSON([
+            "tool": "validate_enabled_resume_sections",
+            "id": request.toolCallId,
+            "status": "ok",
+            "enabled_sections": JSON(enabledSections)
+        ])
+        await sendToolResponses([payload])
+    }
+
+    func cancelSectionToggleSelection(reason: String? = nil) async {
+        guard let request = pendingSectionToggleRequest else { return }
+        pendingSectionToggleRequest = nil
+
+        var payload: [String: Any] = [
+            "tool": "validate_enabled_resume_sections",
+            "id": request.toolCallId,
+            "status": "cancelled"
+        ]
+        if let reason {
+            payload["message"] = reason
+        }
+        await sendToolResponses([JSON(payload)])
+    }
+
+    // MARK: - Section Entry Validation
+
+    func completeSectionEntryRequest(id: UUID, approvedEntries: [JSON]) async {
+        guard let index = pendingSectionEntryRequests.firstIndex(where: { $0.id == id }) else { return }
+        let request = pendingSectionEntryRequests.remove(at: index)
+
+        if let sectionKey = ExperienceSectionKey.fromOnboardingIdentifier(request.section) {
+            do {
+                try await applySectionEntries(sectionKey: sectionKey, entries: approvedEntries)
+            } catch {
+                lastError = error.localizedDescription
+                Logger.error("OnboardingInterviewService.completeSectionEntryRequest failed: \(error)")
+            }
+        } else {
+            Logger.warning("OnboardingInterviewService: Unknown section \(request.section)")
+        }
+
+        let payload = JSON([
+            "tool": "validate_section_entries",
+            "id": request.toolCallId,
+            "status": "ok",
+            "validated_entries": JSON(approvedEntries)
+        ])
+        await sendToolResponses([payload])
+    }
+
+    func declineSectionEntryRequest(id: UUID, reason: String? = nil) async {
+        guard let index = pendingSectionEntryRequests.firstIndex(where: { $0.id == id }) else { return }
+        let request = pendingSectionEntryRequests.remove(at: index)
+
+        var payload: [String: Any] = [
+            "tool": "validate_section_entries",
+            "id": request.toolCallId,
+            "status": "cancelled"
+        ]
+        if let reason {
+            payload["message"] = reason
+        }
+        await sendToolResponses([JSON(payload)])
+    }
+
+    // MARK: - Contacts Fetch Handling
+
+    func completeContactsFetch(profile: JSON) async {
+        guard let request = pendingContactsRequest else { return }
+        pendingContactsRequest = nil
+
+        let payload = JSON([
+            "tool": "fetch_from_system_contacts",
+            "id": request.toolCallId,
+            "status": "ok",
+            "profile": profile
+        ])
+        await sendToolResponses([payload])
+    }
+
+    func declineContactsFetch(reason: String? = nil) async {
+        guard let request = pendingContactsRequest else { return }
+        pendingContactsRequest = nil
+
+        var payload: [String: Any] = [
+            "tool": "fetch_from_system_contacts",
+            "id": request.toolCallId,
+            "status": "cancelled"
+        ]
+        if let reason {
+            payload["message"] = reason
+        }
+        await sendToolResponses([JSON(payload)])
+    }
+
+    func fetchApplicantProfileFromContacts() async {
+        guard let request = pendingContactsRequest else { return }
+        do {
+            let profileJSON = try await SystemContactsFetcher.fetchApplicantProfile(requestedFields: request.requestedFields)
+            await completeContactsFetch(profile: profileJSON)
+        } catch {
+            await declineContactsFetch(reason: error.localizedDescription)
+        }
+    }
+
     private func handleCustomToolCall(_ call: OnboardingToolCall, responses: inout [JSON]) -> Bool {
         switch call.tool {
         case "prompt_user_for_upload":
@@ -643,13 +1099,61 @@ final class OnboardingInterviewService {
             ])
             responses.append(acknowledgement)
             return true
+        case "ask_user_options":
+            pendingChoicePrompt = OnboardingChoicePrompt.fromToolCall(call)
+            let acknowledgement = JSON([
+                "tool": call.tool,
+                "id": call.identifier,
+                "status": "awaiting_user"
+            ])
+            responses.append(acknowledgement)
+            return true
+        case "validate_applicant_profile":
+            pendingApplicantProfileRequest = OnboardingApplicantProfileRequest.fromToolCall(call)
+            let acknowledgement = JSON([
+                "tool": call.tool,
+                "id": call.identifier,
+                "status": "awaiting_user"
+            ])
+            responses.append(acknowledgement)
+            return true
+        case "validate_enabled_resume_sections":
+            pendingSectionToggleRequest = OnboardingSectionToggleRequest.fromToolCall(call)
+            let acknowledgement = JSON([
+                "tool": call.tool,
+                "id": call.identifier,
+                "status": "awaiting_user"
+            ])
+            responses.append(acknowledgement)
+            return true
+        case "validate_section_entries":
+            let request = OnboardingSectionEntryRequest.fromToolCall(call)
+            if !pendingSectionEntryRequests.contains(where: { $0.toolCallId == call.identifier }) {
+                pendingSectionEntryRequests.append(request)
+            }
+            let acknowledgement = JSON([
+                "tool": call.tool,
+                "id": call.identifier,
+                "status": "awaiting_user"
+            ])
+            responses.append(acknowledgement)
+            return true
+        case "fetch_from_system_contacts":
+            pendingContactsRequest = OnboardingContactsFetchRequest.fromToolCall(call)
+            let acknowledgement = JSON([
+                "tool": call.tool,
+                "id": call.identifier,
+                "status": "awaiting_user"
+            ])
+            responses.append(acknowledgement)
+            return true
         default:
             return false
         }
     }
 
     private func sendToolResponses(_ responses: [JSON]) async {
-        guard let conversationId, let modelId else { return }
+        guard let conversationId else { return }
         guard !responses.isEmpty else { return }
 
         let responseWrapper = JSON([
@@ -657,19 +1161,91 @@ final class OnboardingInterviewService {
         ])
 
         isProcessing = true
+
+        guard let resolvedModelId = resolvedModelIdentifier() else {
+            lastError = "Interview model is unavailable"
+            isProcessing = false
+            return
+        }
+
         do {
-            let response = try await llmFacade.continueConversation(
-                userMessage: responseWrapper.rawString(options: [.sortedKeys]) ?? responseWrapper.description,
-                modelId: modelId,
-                conversationId: conversationId,
-                backend: backend
-            )
-            try await handleLLMResponse(response)
+            let payload = responseWrapper.rawString(options: [.sortedKeys]) ?? responseWrapper.description
+            if backend == .openAI {
+                let handle = try await llmFacade.continueConversationStreaming(
+                    userMessage: payload,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                try await handleLLMResponse(responseText, updatingMessageId: messageId)
+                await persistConversationStateIfNeeded()
+            } else {
+                let response = try await llmFacade.continueConversation(
+                    userMessage: payload,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                try await handleLLMResponse(response)
+            }
         } catch {
             lastError = error.localizedDescription
             Logger.error("OnboardingInterviewService.sendToolResponses failed: \(error)")
         }
         isProcessing = false
+    }
+
+    private func applySectionEntries(sectionKey: ExperienceSectionKey, entries: [JSON]) async throws {
+        guard let codec = ExperienceSectionCodecs.all.first(where: { $0.key == sectionKey }) else {
+            throw OnboardingError.invalidArguments("Unsupported section \(sectionKey.rawValue)")
+        }
+
+        var decodedDraft = ExperienceDefaultsDraft()
+        let jsonArray = JSON(entries)
+        codec.decodeSection(from: jsonArray, into: &decodedDraft)
+
+        var draft = experienceDefaultsStore.loadDraft()
+        draft.replaceSection(sectionKey, with: decodedDraft)
+        experienceDefaultsStore.save(draft: draft)
+        updateDefaultValuesArtifact(from: draft)
+        await broadcastResumeSnapshot(reason: "resume_section_updated_\(sectionKey.rawValue)")
+    }
+
+
+    private func resolvedModelIdentifier() -> String? {
+        if let activeModelId { return activeModelId }
+        if let modelId {
+            return backend == .openAI ? modelId.replacingOccurrences(of: "openai/", with: "") : modelId
+        }
+        return nil
+    }
+
+    private func updateDefaultValuesArtifact(from draft: ExperienceDefaultsDraft) {
+        let seed = ExperienceDefaultsEncoder.makeSeedDictionary(from: draft)
+        let json = JSON(seed)
+        _ = artifactStore.mergeDefaultValues(patch: json)
+        refreshArtifacts()
+    }
+
+    private func broadcastResumeSnapshot(reason: String) async {
+        guard let conversationId else { return }
+        let latest = artifactStore.loadArtifacts()
+
+        var payloadDict: [String: Any] = [
+            "type": "resume_snapshot",
+            "reason": reason
+        ]
+        if let profile = latest.applicantProfile?.dictionaryObject {
+            payloadDict["applicant_profile"] = profile
+        }
+        if let defaults = latest.defaultValues?.dictionaryObject {
+            payloadDict["default_values"] = defaults
+        }
+
+        let payload = JSON(payloadDict)
+        let messageText = payload.rawString(options: [.sortedKeys]) ?? payload.description
+        await sendControlMessage(messageText, conversationId: conversationId)
     }
 
     // MARK: - Errors
