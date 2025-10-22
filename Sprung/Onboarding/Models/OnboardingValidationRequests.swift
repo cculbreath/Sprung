@@ -118,7 +118,11 @@ struct OnboardingSectionToggleRequest: Identifiable, Equatable {
     }
 
     static func fromToolCall(_ call: OnboardingToolCall) -> OnboardingSectionToggleRequest {
-        let sections = call.arguments["sections"].arrayValue.compactMap { $0.string?.lowercased() }
+        let sectionValues = call.arguments["sections"].arrayValue
+            .compactMap { $0.string?.lowercased() }
+        let enabledValues = call.arguments["enabledSections"].arrayValue
+            .compactMap { $0.string?.lowercased() }
+        let sections = Array(Set(sectionValues + enabledValues)).sorted()
         let rationale = call.arguments["rationale"].string ?? call.arguments["notes"].string
         return OnboardingSectionToggleRequest(
             toolCallId: call.identifier,
