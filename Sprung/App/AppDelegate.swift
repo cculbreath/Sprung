@@ -1,22 +1,5 @@
 
-final class BorderlessOverlayWindow: NSWindow {
-    init(contentRect: NSRect) {
-        super.init(
-            contentRect: contentRect,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        isMovableByWindowBackground = true
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
-        backgroundColor = NSColor.clear
-        isOpaque = false
-            }
 
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
-}
 
 //
 //  AppDelegate.swift
