@@ -18,7 +18,21 @@ enum OnboardingToolCatalog {
                     properties: [
                         "prompt": ToolProperty(type: "string", description: "Primary prompt shown above the options."),
                         "question": ToolProperty(type: "string", description: "Alternate field for the user-facing question."),
-                        "options": ToolProperty(type: "array", description: "Array of option objects. Each option should include id/title/description fields."),
+                        "options": ToolProperty(
+                            type: "array",
+                            description: "Array of option objects. Each option should include id/title/description fields.",
+                            items: ToolArrayItems(
+                                type: "object",
+                                description: "Option payload presented to the user.",
+                                properties: [
+                                    "id": ToolProperty(type: "string", description: "Unique identifier for the option."),
+                                    "title": ToolProperty(type: "string", description: "Primary label shown to the user."),
+                                    "description": ToolProperty(type: "string", description: "Supporting detail for the option.")
+                                ],
+                                required: ["id", "title"],
+                                allowAdditionalProperties: false
+                            )
+                        ),
                         "selection_style": ToolProperty(type: "string", description: "Selection style such as 'single', 'multiple', or 'button'."),
                         "multiple": ToolProperty(type: "boolean", description: "Whether multiple selections are allowed."),
                         "allow_cancel": ToolProperty(type: "boolean", description: "Whether the user can cancel the prompt."),
@@ -40,7 +54,11 @@ enum OnboardingToolCatalog {
                     type: "object",
                     properties: [
                         "profile": ToolProperty(type: "object", description: "Partial or complete ApplicantProfile data to review."),
-                        "sources": ToolProperty(type: "array", description: "Array of strings describing where data was sourced from."),
+                        "sources": ToolProperty(
+                            type: "array",
+                            description: "Array of strings describing where data was sourced from.",
+                            items: ToolArrayItems(type: "string", description: "Origin identifier for captured data.")
+                        ),
                         "section": ToolProperty(type: "string", description: "Specific profile section to focus on (e.g., contact, summary)."),
                         "context": ToolProperty(type: "string", description: "Optional instructions or notes for the reviewer.")
                     ],
@@ -59,7 +77,11 @@ enum OnboardingToolCatalog {
                 parameters: ToolParameters(
                     type: "object",
                     properties: [
-                        "fields": ToolProperty(type: "array", description: "Array of ApplicantProfile fields to request.")
+                        "fields": ToolProperty(
+                            type: "array",
+                            description: "Array of ApplicantProfile fields to request.",
+                            items: ToolArrayItems(type: "string", description: "ApplicantProfile field name to fetch.")
+                        )
                     ],
                     required: ["fields"]
                 )
@@ -76,8 +98,16 @@ enum OnboardingToolCatalog {
                 parameters: ToolParameters(
                     type: "object",
                     properties: [
-                        "sections": ToolProperty(type: "array", description: "Array of section identifiers to toggle."),
-                        "enabledSections": ToolProperty(type: "array", description: "Optional synonym for sections; use when emphasising enabled set."),
+                        "sections": ToolProperty(
+                            type: "array",
+                            description: "Array of section identifiers to toggle.",
+                            items: ToolArrayItems(type: "string", description: "Section identifier to enable or disable.")
+                        ),
+                        "enabledSections": ToolProperty(
+                            type: "array",
+                            description: "Optional synonym for sections; use when emphasising enabled set.",
+                            items: ToolArrayItems(type: "string", description: "Section identifier included in the enabled list.")
+                        ),
                         "context": ToolProperty(type: "string", description: "Optional rationale or instructions for the selection.")
                     ],
                     required: ["sections"]
@@ -96,7 +126,15 @@ enum OnboardingToolCatalog {
                     type: "object",
                     properties: [
                         "section": ToolProperty(type: "string", description: "Resume section key, e.g., work, education, projects."),
-                        "entries": ToolProperty(type: "array", description: "Full array of proposed entries for the section."),
+                        "entries": ToolProperty(
+                            type: "array",
+                            description: "Full array of proposed entries for the section.",
+                            items: ToolArrayItems(
+                                type: "object",
+                                description: "Resume section entry payload.",
+                                allowAdditionalProperties: true
+                            )
+                        ),
                         "mode": ToolProperty(type: "string", description: "Optional hint such as 'create' or 'update'."),
                         "context": ToolProperty(type: "string", description: "Optional narrative for the reviewer.")
                     ],
@@ -119,8 +157,16 @@ enum OnboardingToolCatalog {
                         "prompt": ToolProperty(type: "string", description: "Primary message explaining what to upload."),
                         "instructions": ToolProperty(type: "string", description: "Detailed guidance for the user."),
                         "title": ToolProperty(type: "string", description: "Form title for the upload request."),
-                        "accepts": ToolProperty(type: "array", description: "Array of allowed file extensions."),
-                        "acceptedFileTypes": ToolProperty(type: "array", description: "Synonym for accepts."),
+                        "accepts": ToolProperty(
+                            type: "array",
+                            description: "Array of allowed file extensions.",
+                            items: ToolArrayItems(type: "string", description: "Accepted file extension (e.g., pdf).")
+                        ),
+                        "acceptedFileTypes": ToolProperty(
+                            type: "array",
+                            description: "Synonym for accepts.",
+                            items: ToolArrayItems(type: "string", description: "Accepted file extension (e.g., pdf).")
+                        ),
                         "allow_multiple": ToolProperty(type: "boolean", description: "Whether multiple files can be uploaded."),
                         "followup_tool": ToolProperty(type: "string", description: "Optional tool to automatically call after upload."),
                         "followup_args": ToolProperty(type: "object", description: "Arguments to forward to the follow-up tool."),
@@ -237,9 +283,33 @@ enum OnboardingToolCatalog {
                 parameters: ToolParameters(
                     type: "object",
                     properties: [
-                        "facts": ToolProperty(type: "array", description: "Array of fact ledger entries to append."),
-                        "entries": ToolProperty(type: "array", description: "Synonym for facts; used when referencing entry arrays."),
-                        "fact_ledger": ToolProperty(type: "array", description: "Alternate payload name containing fact ledger entries.")
+                        "facts": ToolProperty(
+                            type: "array",
+                            description: "Array of fact ledger entries to append.",
+                            items: ToolArrayItems(
+                                type: "object",
+                                description: "Fact ledger entry payload.",
+                                allowAdditionalProperties: true
+                            )
+                        ),
+                        "entries": ToolProperty(
+                            type: "array",
+                            description: "Synonym for facts; used when referencing entry arrays.",
+                            items: ToolArrayItems(
+                                type: "object",
+                                description: "Fact ledger entry payload.",
+                                allowAdditionalProperties: true
+                            )
+                        ),
+                        "fact_ledger": ToolProperty(
+                            type: "array",
+                            description: "Alternate payload name containing fact ledger entries.",
+                            items: ToolArrayItems(
+                                type: "object",
+                                description: "Fact ledger entry payload.",
+                                allowAdditionalProperties: true
+                            )
+                        )
                     ],
                     required: []
                 )
@@ -251,7 +321,15 @@ enum OnboardingToolCatalog {
                     type: "object",
                     properties: [
                         "style_vector": ToolProperty(type: "object", description: "Computed style vector payload."),
-                        "samples": ToolProperty(type: "array", description: "Array of writing sample summaries supporting the style vector."),
+                        "samples": ToolProperty(
+                            type: "array",
+                            description: "Array of writing sample summaries supporting the style vector.",
+                            items: ToolArrayItems(
+                                type: "object",
+                                description: "Writing sample summary payload.",
+                                allowAdditionalProperties: true
+                            )
+                        ),
                         "context": ToolProperty(type: "string", description: "Optional metadata about the style analysis.")
                     ],
                     required: ["style_vector", "samples"]
