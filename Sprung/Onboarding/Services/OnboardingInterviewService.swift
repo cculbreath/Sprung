@@ -24,8 +24,6 @@ final class OnboardingInterviewService {
     @ObservationIgnored
     private lazy var toolPipeline: OnboardingInterviewToolPipeline = makeToolPipeline()
     @ObservationIgnored
-    private var wizardProgress = InterviewWizardProgress()
-    @ObservationIgnored
     private lazy var consentManager: OnboardingInterviewConsentManager = makeConsentManager()
     @ObservationIgnored
     private lazy var uploadManager: OnboardingInterviewUploadManager = {
@@ -40,27 +38,40 @@ final class OnboardingInterviewService {
     private var defaultAllowWebSearch = true
     private var preferredModelId: String?
 
+    // Extracted managers
+    private let messageManager = OnboardingInterviewMessageManager()
+    private let requestManager = OnboardingInterviewRequestManager()
+    private let wizardManager = OnboardingInterviewWizardManager()
+    @ObservationIgnored
+    private lazy var streamHandler: OnboardingInterviewStreamHandler = makeStreamHandler()
+    @ObservationIgnored
+    private lazy var requestHandler: OnboardingInterviewRequestHandler = makeRequestHandler()
+    @ObservationIgnored
+    private lazy var responseProcessor: OnboardingInterviewResponseProcessor = makeResponseProcessor()
+
     private(set) var artifacts: OnboardingArtifacts
-    private(set) var messages: [OnboardingMessage] = []
-    private(set) var nextQuestions: [OnboardingQuestion] = []
     private(set) var currentPhase: OnboardingPhase = .resumeIntake
     private(set) var isProcessing = false
     private(set) var isActive = false
     private(set) var lastError: String?
     private(set) var allowWebSearch = true
     private(set) var allowWritingAnalysis = false
-    private(set) var pendingExtraction: OnboardingPendingExtraction?
     private(set) var uploadedItems: [OnboardingUploadedItem] = []
     private(set) var schemaIssues: [String] = []
-    private(set) var wizardStep: OnboardingWizardStep = .introduction
-    private(set) var completedWizardSteps: Set<OnboardingWizardStep> = []
-    private(set) var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
-    private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
-    private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
-    private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
-    private(set) var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
-    private(set) var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] = []
-    private(set) var pendingContactsRequest: OnboardingContactsFetchRequest?
+
+    // Delegate to managers for these properties
+    var messages: [OnboardingMessage] { messageManager.messages }
+    var nextQuestions: [OnboardingQuestion] { messageManager.nextQuestions }
+    var wizardStep: OnboardingWizardStep { wizardManager.wizardStep }
+    var completedWizardSteps: Set<OnboardingWizardStep> { wizardManager.completedWizardSteps }
+    var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] { wizardManager.wizardStepStatuses }
+    var pendingUploadRequests: [OnboardingUploadRequest] { requestManager.pendingUploadRequests }
+    var pendingChoicePrompt: OnboardingChoicePrompt? { requestManager.pendingChoicePrompt }
+    var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest? { requestManager.pendingApplicantProfileRequest }
+    var pendingSectionToggleRequest: OnboardingSectionToggleRequest? { requestManager.pendingSectionToggleRequest }
+    var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] { requestManager.pendingSectionEntryRequests }
+    var pendingContactsRequest: OnboardingContactsFetchRequest? { requestManager.pendingContactsRequest }
+    var pendingExtraction: OnboardingPendingExtraction? { requestManager.pendingExtraction }
 
     var preferredBackend: LLMFacade.Backend {
         defaultBackend
@@ -89,8 +100,41 @@ final class OnboardingInterviewService {
         self.artifacts = artifactStore.loadArtifacts()
         self.allowWebSearch = defaultAllowWebSearch
         refreshSchemaIssues()
-        applyWizardSnapshot(wizardProgress.currentSnapshot())
+        wizardManager.currentSnapshot()
         _ = uploadManager
+    }
+
+    private func makeStreamHandler() -> OnboardingInterviewStreamHandler {
+        OnboardingInterviewStreamHandler(messageManager: messageManager)
+    }
+
+    private func makeRequestHandler() -> OnboardingInterviewRequestHandler {
+        OnboardingInterviewRequestHandler(
+            requestManager: requestManager,
+            wizardManager: wizardManager,
+            artifactStore: artifactStore,
+            applicantProfileStore: applicantProfileStore,
+            experienceDefaultsStore: experienceDefaultsStore,
+            sendToolResponses: { [weak self] responses in
+                await self?.sendToolResponses(responses)
+            },
+            broadcastResumeSnapshot: { [weak self] reason in
+                await self?.broadcastResumeSnapshot(reason: reason)
+            }
+        )
+    }
+
+    private func makeResponseProcessor() -> OnboardingInterviewResponseProcessor {
+        OnboardingInterviewResponseProcessor(
+            messageManager: messageManager,
+            artifactStore: artifactStore,
+            toolExecutor: toolExecutor,
+            toolPipeline: toolPipeline,
+            wizardManager: wizardManager,
+            refreshArtifacts: { [weak self] in self?.refreshArtifacts() },
+            syncWizardStep: { [weak self] in self?.syncWizardStepWithCurrentPhase() },
+            persistConversationState: { [weak self] in await self?.persistConversationStateIfNeeded() }
+        )
     }
 
     private func makeToolExecutor() -> OnboardingToolExecutor {
@@ -104,7 +148,7 @@ final class OnboardingInterviewService {
             allowWebSearch: { [weak self] in self?.allowWebSearch ?? false },
             allowWritingAnalysis: { [weak self] in self?.allowWritingAnalysis ?? false },
             refreshArtifacts: { [weak self] in self?.refreshArtifacts() },
-            setPendingExtraction: { [weak self] extraction in self?.pendingExtraction = extraction }
+            setPendingExtraction: { [weak self] extraction in self?.requestManager.setPendingExtraction(extraction) }
         )
     }
 
@@ -143,8 +187,9 @@ final class OnboardingInterviewService {
     // MARK: - Session Lifecycle
 
     func reset() {
-        messages.removeAll()
-        nextQuestions.removeAll()
+        messageManager.reset()
+        requestManager.reset()
+        wizardManager.reset()
         conversationId = nil
         modelId = nil
         backend = defaultBackend
@@ -152,20 +197,12 @@ final class OnboardingInterviewService {
         isActive = false
         isProcessing = false
         lastError = nil
-        pendingExtraction = nil
         allowWritingAnalysis = false
         allowWebSearch = defaultAllowWebSearch
         uploadManager.reset()
         uploadedItems = []
-        pendingUploadRequests.removeAll()
-        pendingChoicePrompt = nil
-        pendingApplicantProfileRequest = nil
-        pendingSectionToggleRequest = nil
-        pendingSectionEntryRequests.removeAll()
-        pendingContactsRequest = nil
         refreshArtifacts()
         currentPhase = .resumeIntake
-        applyWizardSnapshot(wizardProgress.reset())
         toolPipeline.reset()
     }
 
@@ -180,13 +217,13 @@ final class OnboardingInterviewService {
         let directiveText = directive.rawString(options: [.sortedKeys]) ?? directive.description
 
         let headline = "🔄 Entering \(phase.displayName): \(phase.focusSummary)"
-        messages.append(OnboardingMessage(role: .system, text: headline))
+        messageManager.appendSystemMessage(headline)
 
         if !phase.interviewPrompts.isEmpty {
             let promptList = phase.interviewPrompts.enumerated().map { index, item in
                 "\(index + 1). \(item)"
             }.joined(separator: "\n")
-            messages.append(OnboardingMessage(role: .system, text: "Phase prompts:\n\(promptList)"))
+            messageManager.appendSystemMessage("Phase prompts:\n\(promptList)")
         }
 
         Task { [weak self] in
@@ -232,14 +269,14 @@ final class OnboardingInterviewService {
         lastError = nil
         let normalizedModelId = resolvedBackend == .openAI ? modelId.replacingOccurrences(of: "openai/", with: "") : modelId
         activeModelId = normalizedModelId
-        applyWizardSnapshot(wizardProgress.markCompleted(.introduction))
-        applyWizardSnapshot(wizardProgress.transition(to: .resumeIntake))
+        wizardManager.markCompleted(.introduction)
+        wizardManager.transition(to: .resumeIntake)
 
         if resolvedBackend == .openAI, let openAIConversationService {
             if let savedState = artifactStore.loadConversationState(), savedState.modelId == modelId {
                 let resumeId = await openAIConversationService.registerPersistedConversation(savedState)
                 conversationId = resumeId
-                messages.append(OnboardingMessage(role: .system, text: "♻️ Resuming previous onboarding interview with saved OpenAI thread."))
+                messageManager.appendSystemMessage("♻️ Resuming previous onboarding interview with saved OpenAI thread.")
                 let resumePrompt = OnboardingPromptBuilder.resumeMessage(with: artifacts, phase: currentPhase)
                 await sendControlMessage(resumePrompt, conversationId: resumeId)
                 if lastError == nil {
@@ -307,7 +344,7 @@ final class OnboardingInterviewService {
             return
         }
 
-        messages.append(OnboardingMessage(role: .user, text: userMessage))
+        messageManager.appendUserMessage(userMessage)
         isProcessing = true
         lastError = nil
 
@@ -340,15 +377,15 @@ final class OnboardingInterviewService {
     }
 
     func cancelPendingExtraction() {
-        pendingExtraction = nil
+        _ = requestManager.clearPendingExtraction()
     }
 
     func confirmPendingExtraction(updatedExtraction: JSON, notes: String?) async {
-        guard pendingExtraction != nil, let conversationId else { return }
+        guard requestManager.pendingExtraction != nil, let conversationId else { return }
 
-        pendingExtraction = nil
+        _ = requestManager.clearPendingExtraction()
         if wizardStep == .resumeIntake {
-            applyWizardSnapshot(wizardProgress.markCompleted(.resumeIntake))
+            wizardManager.markCompleted(.resumeIntake)
         }
 
         let payload = JSON([
@@ -357,7 +394,7 @@ final class OnboardingInterviewService {
             "notes": notes ?? ""
         ])
 
-        messages.append(OnboardingMessage(role: .user, text: "Confirmed resume extraction."))
+        messageManager.appendUserMessage("Confirmed resume extraction.")
         isProcessing = true
 
         guard let resolvedModelId = resolvedModelIdentifier() else {
@@ -478,212 +515,11 @@ final class OnboardingInterviewService {
         _ responseText: String,
         updatingMessageId messageId: UUID? = nil
     ) async throws {
-        let parsed = try OnboardingLLMResponseParser.parse(responseText)
-
-        if !parsed.assistantReply.isEmpty {
-            if let messageId = messageId {
-                appendOrUpdateAssistantMessage(id: messageId, text: parsed.assistantReply)
-            } else {
-                messages.append(OnboardingMessage(role: .assistant, text: parsed.assistantReply))
-            }
-        } else if let messageId = messageId {
-            removeMessage(withId: messageId)
-        }
-
-        if !parsed.deltaUpdates.isEmpty {
-            try await toolExecutor.applyDeltaUpdates(parsed.deltaUpdates)
-        }
-
-        if !parsed.knowledgeCards.isEmpty {
-            _ = artifactStore.appendKnowledgeCards(parsed.knowledgeCards)
-        }
-
-        if !parsed.factLedgerEntries.isEmpty {
-            _ = artifactStore.appendFactLedgerEntries(parsed.factLedgerEntries)
-        }
-
-        if let skillMap = parsed.skillMapDelta {
-            _ = artifactStore.mergeSkillMap(patch: skillMap)
-        }
-
-        if let styleProfile = parsed.styleProfile {
-            artifactStore.saveStyleProfile(styleProfile)
-        }
-
-        if !parsed.writingSamples.isEmpty {
-            toolExecutor.saveWritingSamples(parsed.writingSamples)
-        }
-
-        if let profileContext = parsed.profileContext?.trimmingCharacters(in: .whitespacesAndNewlines), !profileContext.isEmpty {
-            artifactStore.updateProfileContext(profileContext)
-        }
-
-        if !parsed.needsVerification.isEmpty {
-            _ = artifactStore.appendNeedsVerification(parsed.needsVerification)
-        }
-
-        refreshArtifacts()
-        nextQuestions = parsed.nextQuestions
-
-        if !parsed.toolCalls.isEmpty {
-            try await toolPipeline.process(parsed.toolCalls)
-        }
-
-        syncWizardStepWithCurrentPhase()
-        await persistConversationStateIfNeeded()
+        try await responseProcessor.handleLLMResponse(responseText, updatingMessageId: messageId)
     }
 
     private func streamAssistantResponse(from handle: LLMStreamingHandle) async throws -> (String, UUID) {
-        let mainMessageId = appendAssistantPlaceholder()
-        var accumulatedText = ""
-
-        var reasoningState: (id: UUID, text: String)?
-        struct ToolStreamState {
-            var messageId: UUID
-            var inputBuffer: String
-            var status: String
-            var isComplete: Bool
-        }
-        var toolStates: [String: ToolStreamState] = [:]
-
-        func formatToolPayload(_ text: String) -> String {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return "" }
-            let maxLength = 600
-            if trimmed.count <= maxLength {
-                return trimmed
-            }
-            let index = trimmed.index(trimmed.startIndex, offsetBy: maxLength)
-            return String(trimmed[..<index]) + "…"
-        }
-
-        func updateReasoningMessage(with delta: String) {
-            let trimmed = delta.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
-
-            var text = reasoningState?.text ?? ""
-            text += (text.isEmpty ? "" : " ") + trimmed
-            let messageId = reasoningState?.id ?? appendAssistantMessage("🧠 \(text)")
-
-            appendOrUpdateAssistantMessage(id: messageId, text: "🧠 \(text)")
-            reasoningState = (messageId, text)
-        }
-
-        func finalizeReasoningIfNeeded() {
-            guard let state = reasoningState else { return }
-            if !state.text.isEmpty {
-                let display = "🧠 \(state.text)\n✅ Reasoning complete."
-                appendOrUpdateAssistantMessage(id: state.id, text: display)
-            }
-        }
-
-        func updateToolMessage(for event: LLMToolStreamEvent) {
-            var state = toolStates[event.callId]
-            if state == nil {
-                let initialStatus = event.status ?? "Tool call started."
-                let messageId = appendAssistantMessage("🔧 \(initialStatus)")
-                state = ToolStreamState(
-                    messageId: messageId,
-                    inputBuffer: "",
-                    status: initialStatus,
-                    isComplete: false
-                )
-            }
-
-            if let payload = event.payload {
-                if event.appendsPayload {
-                    state?.inputBuffer += payload
-                } else {
-                    state?.inputBuffer = payload
-                }
-            }
-
-            if let status = event.status {
-                state?.status = status
-            }
-
-            if event.isComplete {
-                state?.isComplete = true
-            }
-
-            if let state {
-                var display = "🔧 Tool \(event.callId)"
-                display += "\n\(state.status)"
-                if !state.inputBuffer.isEmpty {
-                    let preview = formatToolPayload(state.inputBuffer)
-                    if !preview.isEmpty {
-                        display += "\n" + preview
-                    }
-                }
-                if state.isComplete {
-                    display += "\n✅ Tool complete."
-                }
-                appendOrUpdateAssistantMessage(id: state.messageId, text: display)
-                toolStates[event.callId] = state
-            }
-        }
-
-        func finalizeToolMessages() {
-            for (id, state) in toolStates {
-                if state.isComplete {
-                    continue
-                }
-                var updated = state
-                updated.isComplete = true
-                var display = "🔧 Tool \(id)"
-                display += "\n\(state.status)"
-                if !state.inputBuffer.isEmpty {
-                    let preview = formatToolPayload(state.inputBuffer)
-                    if !preview.isEmpty {
-                        display += "\n" + preview
-                    }
-                }
-                display += "\n✅ Tool complete."
-                appendOrUpdateAssistantMessage(id: state.messageId, text: display)
-                toolStates[id] = updated
-            }
-        }
-
-        do {
-            for try await chunk in handle.stream {
-                if let event = chunk.event {
-                    switch event {
-                    case .tool(let toolEvent):
-                        updateToolMessage(for: toolEvent)
-                    case .status(let message, let isComplete):
-                        let statusId = appendAssistantMessage("ℹ️ \(message)")
-                        if isComplete {
-                            appendOrUpdateAssistantMessage(id: statusId, text: "ℹ️ \(message)\n✅ Complete.")
-                        }
-                    }
-                }
-
-                if let reasoning = chunk.reasoning {
-                    updateReasoningMessage(with: reasoning)
-                }
-
-                if let content = chunk.content, !content.isEmpty {
-                    accumulatedText += content
-                    appendOrUpdateAssistantMessage(id: mainMessageId, text: accumulatedText)
-                }
-
-                if chunk.isFinished {
-                    finalizeReasoningIfNeeded()
-                    finalizeToolMessages()
-                }
-            }
-        } catch {
-            removeMessage(withId: mainMessageId)
-            if let state = reasoningState {
-                removeMessage(withId: state.id)
-            }
-            for state in toolStates.values {
-                removeMessage(withId: state.messageId)
-            }
-            throw error
-        }
-
-        return (accumulatedText, mainMessageId)
+        return try await streamHandler.streamAssistantResponse(from: handle)
     }
 
     // MARK: - Artifact Helpers
@@ -698,56 +534,18 @@ final class OnboardingInterviewService {
     }
 
     private func appendSystemMessage(_ text: String) {
-        messages.append(OnboardingMessage(role: .system, text: text))
-    }
-
-    @discardableResult
-    private func appendAssistantMessage(_ text: String) -> UUID {
-        let message = OnboardingMessage(role: .assistant, text: text)
-        messages.append(message)
-        return message.id
-    }
-
-    private func appendOrUpdateAssistantMessage(id: UUID, text: String) {
-        if let index = messages.firstIndex(where: { $0.id == id }) {
-            let existing = messages[index]
-            messages[index] = OnboardingMessage(
-                id: existing.id,
-                role: existing.role,
-                text: text,
-                timestamp: existing.timestamp
-            )
-        }
-    }
-
-    @discardableResult
-    private func appendAssistantPlaceholder() -> UUID {
-        let placeholder = OnboardingMessage(role: .assistant, text: "")
-        messages.append(placeholder)
-        return placeholder.id
-    }
-
-    private func removeMessage(withId id: UUID) {
-        if let index = messages.firstIndex(where: { $0.id == id }) {
-            messages.remove(at: index)
-        }
+        messageManager.appendSystemMessage(text)
     }
 
     // MARK: - Wizard State & Requests
 
     private func transitionWizard(to step: OnboardingWizardStep) {
-        applyWizardSnapshot(wizardProgress.transition(to: step))
+        wizardManager.transition(to: step)
     }
 
     private func syncWizardStepWithCurrentPhase(force: Bool = false) {
         guard isActive || force else { return }
-        applyWizardSnapshot(wizardProgress.sync(with: currentPhase))
-    }
-
-    private func applyWizardSnapshot(_ snapshot: InterviewWizardProgress.Snapshot) {
-        wizardStep = snapshot.currentStep
-        completedWizardSteps = snapshot.completedSteps
-        wizardStepStatuses = snapshot.statuses
+        wizardManager.sync(with: currentPhase)
     }
 
     func setPreferredDefaults(modelId: String?, backend: LLMFacade.Backend, webSearchAllowed: Bool) {
@@ -761,43 +559,15 @@ final class OnboardingInterviewService {
     }
 
     func completeUploadRequest(id: UUID, with item: OnboardingUploadedItem) async {
-        guard let index = pendingUploadRequests.firstIndex(where: { $0.id == id }) else { return }
-        let request = pendingUploadRequests.remove(at: index)
-        applyWizardSnapshot(wizardProgress.currentSnapshot())
-
-        let result = JSON([
-            "tool": "prompt_user_for_upload",
-            "id": request.toolCallId,
-            "status": "user_uploaded",
-            "result": [
-                "file_id": item.id,
-                "filename": item.name,
-                "kind": item.kind.rawValue
-            ]
-        ])
-
-        await sendToolResponses([result])
+        await requestHandler.completeUploadRequest(id: id, with: item)
     }
 
     func declineUploadRequest(id: UUID, reason: String? = nil) async {
-        guard let index = pendingUploadRequests.firstIndex(where: { $0.id == id }) else { return }
-        let request = pendingUploadRequests.remove(at: index)
-        applyWizardSnapshot(wizardProgress.currentSnapshot())
-
-        var payload: [String: Any] = [
-            "tool": "prompt_user_for_upload",
-            "id": request.toolCallId,
-            "status": "declined"
-        ]
-        if let reason {
-            payload["message"] = reason
-        }
-
-        await sendToolResponses([JSON(payload)])
+        await requestHandler.declineUploadRequest(id: id, reason: reason)
     }
 
     func fulfillUploadRequest(id: UUID, fileURL: URL) async {
-        guard let request = pendingUploadRequests.first(where: { $0.id == id }) else { return }
+        guard let request = requestManager.uploadRequest(id: id) else { return }
 
         do {
             let item: OnboardingUploadedItem
@@ -839,204 +609,73 @@ final class OnboardingInterviewService {
     // MARK: - Choice Prompt Handling
 
     func resolveChoicePrompt(selectionIds: [String]) async {
-        guard let prompt = pendingChoicePrompt else { return }
-        pendingChoicePrompt = nil
-
-        let result = JSON([
-            "tool": "ask_user_options",
-            "id": prompt.toolCallId,
-            "status": "ok",
-            "selection": JSON(selectionIds)
-        ])
-
-        await sendToolResponses([result])
+        await requestHandler.resolveChoicePrompt(selectionIds: selectionIds)
     }
 
     func cancelChoicePrompt(reason: String? = nil) async {
-        guard let prompt = pendingChoicePrompt else { return }
-        pendingChoicePrompt = nil
-        var payload: [String: Any] = [
-            "tool": "ask_user_options",
-            "id": prompt.toolCallId,
-            "status": "cancelled"
-        ]
-        if let reason {
-            payload["message"] = reason
-        }
-        await sendToolResponses([JSON(payload)])
+        await requestHandler.cancelChoicePrompt(reason: reason)
     }
 
     // MARK: - Applicant Profile Validation
 
     func approveApplicantProfileDraft(_ draft: ApplicantProfileDraft) async {
-        let profile = applicantProfileStore.currentProfile()
-        draft.apply(to: profile)
-        applicantProfileStore.save(profile)
-        let json = draft.toJSON()
-        _ = artifactStore.mergeApplicantProfile(patch: json)
+        await requestHandler.approveApplicantProfileDraft(draft)
         refreshArtifacts()
-        await broadcastResumeSnapshot(reason: "applicant_profile_validated")
-        await completeApplicantProfileValidation(approvedProfile: json)
     }
 
     func completeApplicantProfileValidation(approvedProfile: JSON) async {
-        guard let request = pendingApplicantProfileRequest else { return }
-        pendingApplicantProfileRequest = nil
-
-        let payload = JSON([
-            "tool": "validate_applicant_profile",
-            "id": request.toolCallId,
-            "status": "ok",
-            "profile": approvedProfile
-        ])
-        await sendToolResponses([payload])
+        await requestHandler.completeApplicantProfileValidation(approvedProfile: approvedProfile)
     }
 
     func declineApplicantProfileValidation(reason: String? = nil) async {
-        guard let request = pendingApplicantProfileRequest else { return }
-        pendingApplicantProfileRequest = nil
-
-        var payload: [String: Any] = [
-            "tool": "validate_applicant_profile",
-            "id": request.toolCallId,
-            "status": "cancelled"
-        ]
-        if let reason {
-            payload["message"] = reason
-        }
-        await sendToolResponses([JSON(payload)])
+        await requestHandler.declineApplicantProfileValidation(reason: reason)
     }
 
     // MARK: - Resume Section Enablement
 
     func completeSectionToggleSelection(enabledSections: [String]) async {
-        guard let request = pendingSectionToggleRequest else { return }
-        pendingSectionToggleRequest = nil
-
-        let keys = Set(
-            enabledSections.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0) }
-        )
-
-        var draft = experienceDefaultsStore.loadDraft()
-        draft.setEnabledSections(keys)
-        experienceDefaultsStore.save(draft: draft)
-        updateDefaultValuesArtifact(from: draft)
-        await broadcastResumeSnapshot(reason: "resume_sections_enabled")
-
-        let payload = JSON([
-            "tool": "validate_enabled_resume_sections",
-            "id": request.toolCallId,
-            "status": "ok",
-            "enabled_sections": JSON(enabledSections)
-        ])
-        await sendToolResponses([payload])
+        await requestHandler.completeSectionToggleSelection(enabledSections: enabledSections)
+        refreshArtifacts()
     }
 
     func cancelSectionToggleSelection(reason: String? = nil) async {
-        guard let request = pendingSectionToggleRequest else { return }
-        pendingSectionToggleRequest = nil
-
-        var payload: [String: Any] = [
-            "tool": "validate_enabled_resume_sections",
-            "id": request.toolCallId,
-            "status": "cancelled"
-        ]
-        if let reason {
-            payload["message"] = reason
-        }
-        await sendToolResponses([JSON(payload)])
+        await requestHandler.cancelSectionToggleSelection(reason: reason)
     }
 
     // MARK: - Section Entry Validation
 
     func completeSectionEntryRequest(id: UUID, approvedEntries: [JSON]) async {
-        guard let index = pendingSectionEntryRequests.firstIndex(where: { $0.id == id }) else { return }
-        let request = pendingSectionEntryRequests.remove(at: index)
-
-        if let sectionKey = ExperienceSectionKey.fromOnboardingIdentifier(request.section) {
-            do {
-                try await applySectionEntries(sectionKey: sectionKey, entries: approvedEntries)
-            } catch {
-                lastError = error.localizedDescription
-                Logger.error("OnboardingInterviewService.completeSectionEntryRequest failed: \(error)")
-            }
-        } else {
-            Logger.warning("OnboardingInterviewService: Unknown section \(request.section)")
-        }
-
-        let payload = JSON([
-            "tool": "validate_section_entries",
-            "id": request.toolCallId,
-            "status": "ok",
-            "validated_entries": JSON(approvedEntries)
-        ])
-        await sendToolResponses([payload])
+        await requestHandler.completeSectionEntryRequest(id: id, approvedEntries: approvedEntries)
+        refreshArtifacts()
     }
 
     func declineSectionEntryRequest(id: UUID, reason: String? = nil) async {
-        guard let index = pendingSectionEntryRequests.firstIndex(where: { $0.id == id }) else { return }
-        let request = pendingSectionEntryRequests.remove(at: index)
-
-        var payload: [String: Any] = [
-            "tool": "validate_section_entries",
-            "id": request.toolCallId,
-            "status": "cancelled"
-        ]
-        if let reason {
-            payload["message"] = reason
-        }
-        await sendToolResponses([JSON(payload)])
+        await requestHandler.declineSectionEntryRequest(id: id, reason: reason)
     }
 
     // MARK: - Contacts Fetch Handling
 
     func completeContactsFetch(profile: JSON) async {
-        guard let request = pendingContactsRequest else { return }
-        pendingContactsRequest = nil
-
-        let payload = JSON([
-            "tool": "fetch_from_system_contacts",
-            "id": request.toolCallId,
-            "status": "ok",
-            "profile": profile
-        ])
-        await sendToolResponses([payload])
+        await requestHandler.completeContactsFetch(profile: profile)
     }
 
     func declineContactsFetch(reason: String? = nil) async {
-        guard let request = pendingContactsRequest else { return }
-        pendingContactsRequest = nil
-
-        var payload: [String: Any] = [
-            "tool": "fetch_from_system_contacts",
-            "id": request.toolCallId,
-            "status": "cancelled"
-        ]
-        if let reason {
-            payload["message"] = reason
-        }
-        await sendToolResponses([JSON(payload)])
+        await requestHandler.declineContactsFetch(reason: reason)
     }
 
     func fetchApplicantProfileFromContacts() async {
-        guard let request = pendingContactsRequest else { return }
-        do {
-            let profileJSON = try await SystemContactsFetcher.fetchApplicantProfile(requestedFields: request.requestedFields)
-            await completeContactsFetch(profile: profileJSON)
-        } catch {
-            await declineContactsFetch(reason: error.localizedDescription)
-        }
+        await requestHandler.fetchApplicantProfileFromContacts()
     }
 
     private func handleCustomToolCall(_ call: OnboardingToolCall) -> OnboardingInterviewToolPipeline.CustomResult {
         switch call.tool {
         case "prompt_user_for_upload":
-            if pendingUploadRequests.contains(where: { $0.toolCallId == call.identifier }) {
+            if requestManager.pendingUploadRequests.contains(where: { $0.toolCallId == call.identifier }) {
                 return .handled()
             }
             let request = OnboardingUploadRequest.fromToolCall(call)
-            pendingUploadRequests.append(request)
-            applyWizardSnapshot(wizardProgress.currentSnapshot())
+            requestManager.addUploadRequest(request)
+            wizardManager.currentSnapshot()
             appendSystemMessage("📁 \(request.metadata.title): \(request.metadata.instructions)")
             let acknowledgement = JSON([
                 "tool": call.tool,
@@ -1045,8 +684,8 @@ final class OnboardingInterviewService {
             ])
             return .handled([acknowledgement])
         case "ask_user_options":
-            pendingChoicePrompt = OnboardingChoicePrompt.fromToolCall(call)
-            applyWizardSnapshot(wizardProgress.currentSnapshot())
+            requestManager.setChoicePrompt(OnboardingChoicePrompt.fromToolCall(call))
+            wizardManager.currentSnapshot()
             let acknowledgement = JSON([
                 "tool": call.tool,
                 "id": call.identifier,
@@ -1054,8 +693,8 @@ final class OnboardingInterviewService {
             ])
             return .handled([acknowledgement])
         case "validate_applicant_profile":
-            pendingApplicantProfileRequest = OnboardingApplicantProfileRequest.fromToolCall(call)
-            applyWizardSnapshot(wizardProgress.currentSnapshot())
+            requestManager.setApplicantProfileRequest(OnboardingApplicantProfileRequest.fromToolCall(call))
+            wizardManager.currentSnapshot()
             let acknowledgement = JSON([
                 "tool": call.tool,
                 "id": call.identifier,
@@ -1063,8 +702,8 @@ final class OnboardingInterviewService {
             ])
             return .handled([acknowledgement])
         case "validate_enabled_resume_sections":
-            pendingSectionToggleRequest = OnboardingSectionToggleRequest.fromToolCall(call)
-            applyWizardSnapshot(wizardProgress.currentSnapshot())
+            requestManager.setSectionToggleRequest(OnboardingSectionToggleRequest.fromToolCall(call))
+            wizardManager.currentSnapshot()
             let acknowledgement = JSON([
                 "tool": call.tool,
                 "id": call.identifier,
@@ -1073,10 +712,8 @@ final class OnboardingInterviewService {
             return .handled([acknowledgement])
         case "validate_section_entries":
             let request = OnboardingSectionEntryRequest.fromToolCall(call)
-            if !pendingSectionEntryRequests.contains(where: { $0.toolCallId == call.identifier }) {
-                pendingSectionEntryRequests.append(request)
-                applyWizardSnapshot(wizardProgress.currentSnapshot())
-            }
+            requestManager.addSectionEntryRequest(request)
+            wizardManager.currentSnapshot()
             let acknowledgement = JSON([
                 "tool": call.tool,
                 "id": call.identifier,
@@ -1084,8 +721,8 @@ final class OnboardingInterviewService {
             ])
             return .handled([acknowledgement])
         case "fetch_from_system_contacts":
-            pendingContactsRequest = OnboardingContactsFetchRequest.fromToolCall(call)
-            applyWizardSnapshot(wizardProgress.currentSnapshot())
+            requestManager.setContactsRequest(OnboardingContactsFetchRequest.fromToolCall(call))
+            wizardManager.currentSnapshot()
             let acknowledgement = JSON([
                 "tool": call.tool,
                 "id": call.identifier,
@@ -1141,36 +778,12 @@ final class OnboardingInterviewService {
         isProcessing = false
     }
 
-    private func applySectionEntries(sectionKey: ExperienceSectionKey, entries: [JSON]) async throws {
-        guard let codec = ExperienceSectionCodecs.all.first(where: { $0.key == sectionKey }) else {
-            throw OnboardingError.invalidArguments("Unsupported section \(sectionKey.rawValue)")
-        }
-
-        var decodedDraft = ExperienceDefaultsDraft()
-        let jsonArray = JSON(entries)
-        codec.decodeSection(from: jsonArray, into: &decodedDraft)
-
-        var draft = experienceDefaultsStore.loadDraft()
-        draft.replaceSection(sectionKey, with: decodedDraft)
-        experienceDefaultsStore.save(draft: draft)
-        updateDefaultValuesArtifact(from: draft)
-        await broadcastResumeSnapshot(reason: "resume_section_updated_\(sectionKey.rawValue)")
-    }
-
-
     private func resolvedModelIdentifier() -> String? {
         if let activeModelId { return activeModelId }
         if let modelId {
             return backend == .openAI ? modelId.replacingOccurrences(of: "openai/", with: "") : modelId
         }
         return nil
-    }
-
-    private func updateDefaultValuesArtifact(from draft: ExperienceDefaultsDraft) {
-        let seed = ExperienceDefaultsEncoder.makeSeedDictionary(from: draft)
-        let json = JSON(seed)
-        _ = artifactStore.mergeDefaultValues(patch: json)
-        refreshArtifacts()
     }
 
     private func broadcastResumeSnapshot(reason: String) async {
