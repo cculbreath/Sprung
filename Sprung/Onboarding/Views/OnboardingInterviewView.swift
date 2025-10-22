@@ -19,31 +19,39 @@ struct OnboardingInterviewView: View {
         @Bindable var uiState = viewModel
         let actions = OnboardingInterviewActionHandler(service: service)
 
-        return ZStack {
-            OnboardingInterviewBackgroundView()
+        return
+            Group{
+                VStack(spacing: 20) {
+                    Spacer(minLength: 28)
 
-            VStack(spacing: 20) {
-                Spacer(minLength: 28)
+                    OnboardingInterviewStepProgressView(service: service)
+                        .padding(.horizontal, 32)
 
-                OnboardingInterviewStepProgressView(service: service)
+                    mainCard(service: service, state: uiState, actions: actions)
+
+                    OnboardingInterviewBottomBar(
+                        showBack: shouldShowBackButton(for: service.wizardStep),
+                        continueTitle: continueButtonTitle(for: service.wizardStep),
+                        isContinueDisabled: isContinueDisabled(service: service),
+                        onShowSettings: openSettings,
+                        onBack: { handleBack(service: service, actions: actions) },
+                        onCancel: { handleCancel(actions: actions) },
+                        onContinue: { handleContinue(service: service, actions: actions) }
+                    )
                     .padding(.horizontal, 32)
-
-                mainCard(service: service, state: uiState, actions: actions)
-
-                OnboardingInterviewBottomBar(
-                    showBack: shouldShowBackButton(for: service.wizardStep),
-                    continueTitle: continueButtonTitle(for: service.wizardStep),
-                    isContinueDisabled: isContinueDisabled(service: service),
-                    onShowSettings: openSettings,
-                    onBack: { handleBack(service: service, actions: actions) },
-                    onCancel: { handleCancel(actions: actions) },
-                    onContinue: { handleContinue(service: service, actions: actions) }
-                )
-                .padding(.horizontal, 32)
-                .padding(.bottom, 0)
+                    .padding(.bottom)
+                }
             }
-        }
-        .frame(minWidth: 1040, minHeight: 700)
+
+            .frame(minWidth: 1040)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 24)
+            .background(
+                .thickMaterial,
+                in: RoundedRectangle(cornerRadius: 44, style: .continuous)
+            )
+            .compositingGroup()
+            .shadow(color: Color.black.opacity(0.5), radius: 30, y: 22)
         .task {
             uiState.configureIfNeeded(
                 service: service,
@@ -131,11 +139,7 @@ private extension OnboardingInterviewView {
                 )
             }
         }
-        .frame(maxWidth: 880, maxHeight: 620, alignment: .center)
-        .padding(.horizontal, 32)
-        .padding(.vertical, 24)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 44, style: .continuous))
-        .shadow(color: Color.black.opacity(0.12), radius: 30, y: 22)
+
         .padding(.horizontal, 40)
     }
 
