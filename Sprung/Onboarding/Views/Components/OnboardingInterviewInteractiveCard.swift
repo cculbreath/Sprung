@@ -10,6 +10,8 @@ struct OnboardingInterviewInteractiveCard: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
+        let cornerRadius: CGFloat = 32
+
         HStack(spacing: 0) {
             OnboardingInterviewToolPane(
                 service: service,
@@ -28,11 +30,14 @@ struct OnboardingInterviewInteractiveCard: View {
                 onOpenSettings: onOpenSettings
             )
         }
+        .padding(.vertical, 32)
+        .padding(.horizontal, 28)
+        .frame(minHeight: 540)
         .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
