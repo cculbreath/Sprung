@@ -39,9 +39,12 @@ final class OnboardingInterviewService {
     private var preferredModelId: String?
 
     // Extracted managers
-    private let messageManager = OnboardingInterviewMessageManager()
-    private let requestManager = OnboardingInterviewRequestManager()
-    private let wizardManager = OnboardingInterviewWizardManager()
+    @ObservationIgnored
+    private lazy var messageManager: OnboardingInterviewMessageManager = makeMessageManager()
+    @ObservationIgnored
+    private lazy var requestManager: OnboardingInterviewRequestManager = makeRequestManager()
+    @ObservationIgnored
+    private lazy var wizardManager: OnboardingInterviewWizardManager = makeWizardManager()
     @ObservationIgnored
     private lazy var streamHandler: OnboardingInterviewStreamHandler = makeStreamHandler()
     @ObservationIgnored
@@ -59,19 +62,19 @@ final class OnboardingInterviewService {
     private(set) var uploadedItems: [OnboardingUploadedItem] = []
     private(set) var schemaIssues: [String] = []
 
-    // Delegate to managers for these properties
-    var messages: [OnboardingMessage] { messageManager.messages }
-    var nextQuestions: [OnboardingQuestion] { messageManager.nextQuestions }
-    var wizardStep: OnboardingWizardStep { wizardManager.wizardStep }
-    var completedWizardSteps: Set<OnboardingWizardStep> { wizardManager.completedWizardSteps }
-    var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] { wizardManager.wizardStepStatuses }
-    var pendingUploadRequests: [OnboardingUploadRequest] { requestManager.pendingUploadRequests }
-    var pendingChoicePrompt: OnboardingChoicePrompt? { requestManager.pendingChoicePrompt }
-    var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest? { requestManager.pendingApplicantProfileRequest }
-    var pendingSectionToggleRequest: OnboardingSectionToggleRequest? { requestManager.pendingSectionToggleRequest }
-    var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] { requestManager.pendingSectionEntryRequests }
-    var pendingContactsRequest: OnboardingContactsFetchRequest? { requestManager.pendingContactsRequest }
-    var pendingExtraction: OnboardingPendingExtraction? { requestManager.pendingExtraction }
+    // Observable state updated by managers
+    private(set) var messages: [OnboardingMessage] = []
+    private(set) var nextQuestions: [OnboardingQuestion] = []
+    private(set) var wizardStep: OnboardingWizardStep = .introduction
+    private(set) var completedWizardSteps: Set<OnboardingWizardStep> = []
+    private(set) var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
+    private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
+    private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
+    private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
+    private(set) var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
+    private(set) var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] = []
+    private(set) var pendingContactsRequest: OnboardingContactsFetchRequest?
+    private(set) var pendingExtraction: OnboardingPendingExtraction?
 
     var preferredBackend: LLMFacade.Backend {
         defaultBackend
@@ -102,6 +105,41 @@ final class OnboardingInterviewService {
         refreshSchemaIssues()
         wizardManager.currentSnapshot()
         _ = uploadManager
+    }
+
+    private func makeMessageManager() -> OnboardingInterviewMessageManager {
+        OnboardingInterviewMessageManager(
+            onMessagesChanged: { [weak self] messages in
+                self?.messages = messages
+            },
+            onNextQuestionsChanged: { [weak self] questions in
+                self?.nextQuestions = questions
+            }
+        )
+    }
+
+    private func makeRequestManager() -> OnboardingInterviewRequestManager {
+        OnboardingInterviewRequestManager(
+            onStateChanged: { [weak self] state in
+                self?.pendingUploadRequests = state.pendingUploadRequests
+                self?.pendingChoicePrompt = state.pendingChoicePrompt
+                self?.pendingApplicantProfileRequest = state.pendingApplicantProfileRequest
+                self?.pendingSectionToggleRequest = state.pendingSectionToggleRequest
+                self?.pendingSectionEntryRequests = state.pendingSectionEntryRequests
+                self?.pendingContactsRequest = state.pendingContactsRequest
+                self?.pendingExtraction = state.pendingExtraction
+            }
+        )
+    }
+
+    private func makeWizardManager() -> OnboardingInterviewWizardManager {
+        OnboardingInterviewWizardManager(
+            onStateChanged: { [weak self] state in
+                self?.wizardStep = state.wizardStep
+                self?.completedWizardSteps = state.completedWizardSteps
+                self?.wizardStepStatuses = state.wizardStepStatuses
+            }
+        )
     }
 
     private func makeStreamHandler() -> OnboardingInterviewStreamHandler {
@@ -381,7 +419,7 @@ final class OnboardingInterviewService {
     }
 
     func confirmPendingExtraction(updatedExtraction: JSON, notes: String?) async {
-        guard requestManager.pendingExtraction != nil, let conversationId else { return }
+        guard pendingExtraction != nil, let conversationId else { return }
 
         _ = requestManager.clearPendingExtraction()
         if wizardStep == .resumeIntake {
@@ -664,13 +702,14 @@ final class OnboardingInterviewService {
     }
 
     func fetchApplicantProfileFromContacts() async {
-        await requestHandler.fetchApplicantProfileFromContacts()
+        guard let request = pendingContactsRequest else { return }
+        await requestHandler.fetchApplicantProfileFromContacts(request: request)
     }
 
     private func handleCustomToolCall(_ call: OnboardingToolCall) -> OnboardingInterviewToolPipeline.CustomResult {
         switch call.tool {
         case "prompt_user_for_upload":
-            if requestManager.pendingUploadRequests.contains(where: { $0.toolCallId == call.identifier }) {
+            if pendingUploadRequests.contains(where: { $0.toolCallId == call.identifier }) {
                 return .handled()
             }
             let request = OnboardingUploadRequest.fromToolCall(call)
