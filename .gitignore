@@ -46,3 +46,5 @@ agents.md
 .gitignore
 .claude
 build.log
+
+consolelog.txt

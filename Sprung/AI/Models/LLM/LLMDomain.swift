@@ -59,6 +59,7 @@ struct LLMToolStreamEvent: Sendable {
     var payload: String?
     var appendsPayload: Bool
     var isComplete: Bool
+    var toolName: String?
 }
 
 // MARK: - Responses

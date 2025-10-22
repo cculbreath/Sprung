@@ -130,7 +130,7 @@ struct ResumeTemplateContextBuilder {
                 continue
             }
 
-            if var existingDict = existing as? [String: Any],
+            if let existingDict = existing as? [String: Any],
                let fallbackDict = fallbackValue as? [String: Any] {
                 merged[key] = mergeDictionaries(existingDict, fallback: fallbackDict)
                 continue
@@ -245,7 +245,7 @@ struct ResumeTemplateContextBuilder {
         existing: Any?
     ) -> Any {
         guard let first = path.first else { return value }
-        var dictionary = dictionaryValue(from: existing) ?? [:]
+        var dictionary = dictionaryValue(from: existing as Any) ?? [:]
         let remainder = Array(path.dropFirst())
         if remainder.isEmpty {
             dictionary[first] = value
@@ -415,7 +415,7 @@ struct ResumeTemplateContextBuilder {
         inSection section: String,
         from dictionary: [String: Any]
     ) -> [String: Any] {
-        guard var sectionValue = dictionary[section] else { return dictionary }
+        guard let sectionValue = dictionary[section] else { return dictionary }
         let updatedSection = removeValue(at: path, from: sectionValue)
 
         var sanitized = dictionary

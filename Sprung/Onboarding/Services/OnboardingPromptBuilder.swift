@@ -1,6 +1,22 @@
 import Foundation
 import SwiftyJSON
 
+struct OnboardingPromptSpec {
+    let message: String
+    let preferredModelId: String?
+    let reasoning: OpenRouterReasoning?
+
+    init(
+        message: String,
+        preferredModelId: String? = nil,
+        reasoning: OpenRouterReasoning? = nil
+    ) {
+        self.message = message
+        self.preferredModelId = preferredModelId
+        self.reasoning = reasoning
+    }
+}
+
 enum OnboardingPromptBuilder {
     static func systemPrompt() -> String {
         """
@@ -26,9 +42,14 @@ enum OnboardingPromptBuilder {
         - Surface opportunities to upload artifacts or writing samples at each phase.
         - Summarize progress regularly and highlight remaining uncertainties.
 
+        SCHEMA
+        - Include every tool argument specified in the schema. Use an empty string (\"\"), empty array ([]), or empty object ({}) when the real value is unknown.
+        - ApplicantProfile strings must always be present; return \"\" for any contact field you cannot populate yet and [] for empty collections.
+        - Provide default selections such as \"selection_style\": \"single\" and explicit booleans for flags like \"multiple\" or \"allow_cancel\".
+
         TOOLS
         - Use ask_user_options to present radio-button or checkbox choices, including situations where the user should choose how to provide data.
-        - Use validate_applicant_profile to confirm ApplicantProfile details with a human-editable form. You may pass empty or partial data when requesting manual entry.
+        - Use validate_applicant_profile to confirm ApplicantProfile details with a human-editable form. Always include every field; use \"\" when data is unknown.
         - Use fetch_from_system_contacts when the user consents to sourcing ApplicantProfile fields from the macOS Contacts (“Me”) card.
         - Use validate_enabled_resume_sections to confirm which JSON Resume sections apply before collecting entries for them.
         - Use validate_section_entries for any JSON Resume section additions or edits. Always provide the full array for the section you're validating; the user-approved data replaces the prior contents entirely.
@@ -37,7 +58,7 @@ enum OnboardingPromptBuilder {
         """
     }
 
-    static func kickoffMessage(with artifacts: OnboardingArtifacts, phase: OnboardingPhase) -> String {
+    static func kickoffPrompt(with artifacts: OnboardingArtifacts, phase: OnboardingPhase) -> OnboardingPromptSpec {
         var message = "We are beginning an onboarding interview."
 
         if let profile = artifacts.applicantProfile, let raw = profile.rawString(options: []) {
@@ -77,10 +98,14 @@ enum OnboardingPromptBuilder {
         message += "\nExpected outputs: \(phase.expectedOutputs.joined(separator: " | "))"
 
         message += "\nPlease greet the user, summarize the overall onboarding goals and the immediate objective, then immediately call ask_user_options with four radio-button choices for sourcing contact info: (a) résumé or uploaded document, (b) LinkedIn or another URL, (c) macOS Contacts / vCard, (d) Manual entry."
-        return message
+        return OnboardingPromptSpec(
+            message: message,
+            preferredModelId: "openai/gpt-5-nano",
+            reasoning: nil
+        )
     }
 
-    static func resumeMessage(with artifacts: OnboardingArtifacts, phase: OnboardingPhase) -> String {
+    static func resumePrompt(with artifacts: OnboardingArtifacts, phase: OnboardingPhase) -> OnboardingPromptSpec {
         var message = "We are resuming the onboarding interview."
 
         if let profile = artifacts.applicantProfile, let raw = profile.rawString(options: []) {
@@ -123,7 +148,7 @@ enum OnboardingPromptBuilder {
         message += "\nFocus summary: \(phase.focusSummary)"
 
         message += "\nPlease provide a concise recap of confirmed progress, recap open needs_verification items, and continue with the next best questions for this phase."
-        return message
+        return OnboardingPromptSpec(message: message)
     }
 
     static func phaseDirective(for phase: OnboardingPhase) -> JSON {

@@ -43,8 +43,6 @@ class TextResumeGenerator {
     }
     
     private func loadTextTemplate(named template: String) throws -> String {
-        let resourceName = "\(template.lowercased())-template"
-
         var templateContent: String?
 
         if let stored = templateStore.textTemplateContent(slug: template.lowercased()) {

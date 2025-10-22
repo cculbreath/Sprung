@@ -11,7 +11,7 @@ struct OnboardingInterviewIntroductionCard: View {
                 .frame(width: 160, height: 160)
 
             VStack(spacing: 8) {
-                Text("Welcome to Sprung Onboarding")
+                Text("Welcome to Sprung!")
                     .font(.system(size: 34, weight: .bold, design: .default))
                     .multilineTextAlignment(.center)
                 Text("We’ll confirm your contact details, enable the right résumé sections, and collect highlights so Sprung can advocate for you.")
@@ -59,6 +59,9 @@ private struct OnboardingInterviewHighlights: View {
                 .foregroundStyle(Color.accentColor)
             Text(text)
                 .font(.body)
+                .multilineTextAlignment(.leading)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
