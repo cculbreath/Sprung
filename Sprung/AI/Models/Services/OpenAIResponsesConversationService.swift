@@ -12,7 +12,7 @@ import Foundation
 import SwiftOpenAI
 
 struct OpenAIConversationState: Codable, Equatable {
-    let remoteConversationId: String
+    let remoteConversationId: String?
     let lastResponseId: String
     let systemPrompt: String?
     let modelId: String
@@ -20,7 +20,7 @@ struct OpenAIConversationState: Codable, Equatable {
 
 actor OpenAIResponsesConversationService: LLMStreamingConversationService {
     private struct ConversationState {
-        let remoteConversationId: String
+        let remoteConversationId: String?
         var lastResponseId: String
         let systemPrompt: String?
         let modelId: String
@@ -201,8 +201,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             temperature: temperature ?? defaultTemperature,
             text: TextConfiguration(format: .text)
         )
-        if let state {
-            parameters.conversation = .id(state.remoteConversationId)
+        if let state, let remoteConversationId = state.remoteConversationId {
+            parameters.conversation = .id(remoteConversationId)
         }
         // Ensure we do not enable parallel tool calls until explicit support exists.
         parameters.parallelToolCalls = false
@@ -440,7 +440,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         systemPrompt: String?,
         modelId: String
     ) async {
-        guard let remoteConversationId, let lastResponseId else { return }
+        guard let lastResponseId else { return }
         if conversations[localConversationId] == nil {
             conversations[localConversationId] = ConversationState(
                 remoteConversationId: remoteConversationId,
@@ -458,7 +458,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         systemPrompt: String?,
         modelId: String
     ) async {
-        guard let remoteConversationId, let lastResponseId else { return }
+        guard let lastResponseId else { return }
         if var existing = conversations[localConversationId] {
             existing.lastResponseId = lastResponseId
             conversations[localConversationId] = existing
@@ -472,7 +472,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         }
     }
 
-    private func extractConversationId(from response: ResponseModel) -> String {
+    private func extractConversationId(from response: ResponseModel) -> String? {
         if let conversation = response.conversation {
             switch conversation {
             case .id(let identifier):
@@ -481,7 +481,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                 return object.id
             }
         }
-        return response.id
+        return nil
     }
 
     private func extractText(from response: ResponseModel) -> String? {

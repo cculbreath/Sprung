@@ -1,3 +1,23 @@
+
+final class BorderlessOverlayWindow: NSWindow {
+    init(contentRect: NSRect) {
+        super.init(
+            contentRect: contentRect,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        isMovableByWindowBackground = true
+        titleVisibility = .hidden
+        titlebarAppearsTransparent = true
+        backgroundColor = NSColor.clear
+        isOpaque = false
+            }
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 //
 //  AppDelegate.swift
 //  Sprung
@@ -323,6 +343,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.navigationState)
                     .environment(enabledLLMStore)
                     .environment(appEnvironment.applicantProfileStore)
+                    .environment(appEnvironment.experienceDefaultsStore)
                     .environment(onboardingService)
 
                 hostingView = NSHostingView(rootView: AnyView(root))
@@ -332,14 +353,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 hostingView = NSHostingView(rootView: AnyView(interviewView))
             }
 
-            onboardingInterviewWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 980, height: 700),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
+            onboardingInterviewWindow = BorderlessOverlayWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 980, height: 700)
             )
-            onboardingInterviewWindow?.title = "Onboarding Interview"
-            onboardingInterviewWindow?.tabbingMode = .disallowed
             onboardingInterviewWindow?.contentView = hostingView
             onboardingInterviewWindow?.isReleasedWhenClosed = false
             onboardingInterviewWindow?.center()
