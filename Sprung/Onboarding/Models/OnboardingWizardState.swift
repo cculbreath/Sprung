@@ -98,7 +98,16 @@ struct OnboardingUploadRequest: Identifiable, Equatable {
 
     static func fromToolCall(_ call: OnboardingToolCall) -> OnboardingUploadRequest {
         let kind = UploadKind(raw: call.arguments["kind"].stringValue)
-        let accepts = call.arguments["accepts"].arrayValue.compactMap { $0.string?.lowercased() }
+        let acceptValues = (
+            call.arguments["accepts"].arrayValue +
+            call.arguments["acceptedFileTypes"].arrayValue
+        )
+        .compactMap { $0.string?.lowercased() }
+        let accepts = acceptValues.reduce(into: [String]()) { result, next in
+            if !result.contains(next) {
+                result.append(next)
+            }
+        }
         let instructions = call.arguments["instructions"].string ??
             call.arguments["prompt"].string ??
             "Please provide the requested file."

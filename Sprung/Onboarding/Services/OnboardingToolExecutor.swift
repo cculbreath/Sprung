@@ -343,7 +343,12 @@ final class OnboardingToolExecutor {
             throw OnboardingInterviewService.OnboardingError.invalidArguments("persist_delta missing target")
         }
         let delta = call.arguments["delta"]
-        try await applyPatch(target: target, patch: delta)
+        let valueFallback = call.arguments["value"]
+        let payload = delta.type == .null ? valueFallback : delta
+        guard payload.type != .null else {
+            throw OnboardingInterviewService.OnboardingError.invalidArguments("persist_delta requires delta or value payload")
+        }
+        try await applyPatch(target: target, patch: payload)
     }
 
     private func executePersistCard(_ call: OnboardingToolCall) throws {
