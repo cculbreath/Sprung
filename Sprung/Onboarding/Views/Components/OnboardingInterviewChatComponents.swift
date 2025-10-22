@@ -66,28 +66,61 @@ struct MessageBubble: View {
 }
 
 struct LLMActivityView: View {
-    @State private var phase: CGFloat = 0
+    private let gradientColors: [Color] = [
+        Color(red: 1.0, green: 0.58, blue: 0.2),
+        Color(red: 0.98, green: 0.32, blue: 0.62),
+        Color(red: 0.62, green: 0.35, blue: 0.95),
+        Color(red: 0.15, green: 0.65, blue: 0.97)
+    ]
+
+    private let rotationDuration: Double = 1.2
 
     var body: some View {
         TimelineView(.animation) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            let value = sin(time * 1.6)
-            ZStack {
-                Circle()
-                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 8)
-                AngularGradient(
-                    gradient: Gradient(colors: [.accentColor, .purple, .pink, .accentColor]),
-                    center: .center,
-                    angle: .degrees(value * 180)
-                )
-                .mask(
-                    Circle()
-                        .trim(from: 0.0, to: 0.75)
-                        .stroke(style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                )
-                .rotationEffect(.degrees(value * 120))
-            }
-            .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: value)
+            let timestamp = timeline.date.timeIntervalSinceReferenceDate
+            let progress = (timestamp.truncatingRemainder(dividingBy: rotationDuration)) / rotationDuration
+            spinner
+                .rotationEffect(.degrees(progress * 360))
         }
+        .frame(width: 44, height: 44)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var spinner: some View {
+        let gradient = AngularGradient(
+            gradient: Gradient(colors: gradientColors + [gradientColors.first ?? .accentColor]),
+            center: .center
+        )
+
+        return ZStack {
+            Circle()
+                .fill(gradient)
+
+            Circle()
+                .fill(gradient)
+                .blur(radius: 8)
+                .opacity(0.85)
+
+            Circle()
+                .fill(gradient)
+                .blur(radius: 18)
+                .opacity(0.65)
+
+            Circle()
+                .fill(gradient)
+                .blur(radius: 38)
+                .opacity(0.35)
+
+            Circle()
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .padding(14)
+
+            Circle()
+                .strokeBorder(Color.white.opacity(0.7), lineWidth: 4)
+                .padding(10)
+        }
+        .compositingGroup()
+        .shadow(color: gradientColors.last?.opacity(0.35) ?? .clear, radius: 22, y: 12)
     }
 }

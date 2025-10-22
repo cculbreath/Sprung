@@ -8,7 +8,12 @@ struct OnboardingInterviewChatPanel: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        let horizontalPadding: CGFloat = 32
+        let topPadding: CGFloat = 28
+        let bottomPadding: CGFloat = 28
+        let sectionSpacing: CGFloat = 20
+
+        return VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
@@ -33,22 +38,26 @@ struct OnboardingInterviewChatPanel: View {
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
             }
+            .padding(.top, topPadding)
+            .padding(.horizontal, horizontalPadding)
 
             if shouldShowProcessingIndicator(for: service) {
                 HStack(spacing: 12) {
                     LLMActivityView()
-                        .frame(width: 36, height: 36)
                     Text("Assistant is thinking…")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .padding(.top, sectionSpacing)
+                .padding(.horizontal, horizontalPadding)
                 .transition(.opacity)
             }
 
             if !service.nextQuestions.isEmpty {
                 Divider()
+                    .padding(.top, sectionSpacing)
+                    .padding(.horizontal, horizontalPadding)
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(service.nextQuestions) { question in
@@ -62,12 +71,15 @@ struct OnboardingInterviewChatPanel: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    .padding(.horizontal, 12)
                 }
+                .padding(.horizontal, horizontalPadding)
             }
 
             Divider()
+                .padding(.top, sectionSpacing)
+                .padding(.horizontal, horizontalPadding)
 
             HStack(alignment: .center, spacing: 12) {
                 TextField(
@@ -95,7 +107,8 @@ struct OnboardingInterviewChatPanel: View {
                         service.isProcessing
                 )
             }
-            .padding(.all, 16)
+            .padding(.top, sectionSpacing)
+            .padding(.horizontal, horizontalPadding)
 
             HStack(spacing: 6) {
                 Text(modelStatusDescription)
@@ -107,8 +120,9 @@ struct OnboardingInterviewChatPanel: View {
                 .buttonStyle(.link)
                 .font(.caption)
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 8)
+            .padding(.top, 8)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.bottom, bottomPadding)
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
     }
