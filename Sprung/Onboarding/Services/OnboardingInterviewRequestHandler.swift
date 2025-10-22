@@ -235,8 +235,7 @@ final class OnboardingInterviewRequestHandler {
         await sendToolResponses([JSON(payload)])
     }
 
-    func fetchApplicantProfileFromContacts() async {
-        guard let request = requestManager.pendingContactsRequest else { return }
+    func fetchApplicantProfileFromContacts(request: OnboardingContactsFetchRequest) async {
         do {
             let profileJSON = try await SystemContactsFetcher.fetchApplicantProfile(requestedFields: request.requestedFields)
             await completeContactsFetch(profile: profileJSON)

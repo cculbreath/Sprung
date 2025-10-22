@@ -1,16 +1,43 @@
 import Foundation
-import Observation
 
 @MainActor
-@Observable
 final class OnboardingInterviewRequestManager {
-    private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
-    private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
-    private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
-    private(set) var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
-    private(set) var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] = []
-    private(set) var pendingContactsRequest: OnboardingContactsFetchRequest?
-    private(set) var pendingExtraction: OnboardingPendingExtraction?
+    // Callbacks to update service's observable properties
+    private let onStateChanged: (RequestState) -> Void
+
+    private var pendingUploadRequests: [OnboardingUploadRequest] = []
+    private var pendingChoicePrompt: OnboardingChoicePrompt?
+    private var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
+    private var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
+    private var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] = []
+    private var pendingContactsRequest: OnboardingContactsFetchRequest?
+    private var pendingExtraction: OnboardingPendingExtraction?
+
+    struct RequestState {
+        var pendingUploadRequests: [OnboardingUploadRequest]
+        var pendingChoicePrompt: OnboardingChoicePrompt?
+        var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
+        var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
+        var pendingSectionEntryRequests: [OnboardingSectionEntryRequest]
+        var pendingContactsRequest: OnboardingContactsFetchRequest?
+        var pendingExtraction: OnboardingPendingExtraction?
+    }
+
+    init(onStateChanged: @escaping (RequestState) -> Void) {
+        self.onStateChanged = onStateChanged
+    }
+
+    private func notifyStateChanged() {
+        onStateChanged(RequestState(
+            pendingUploadRequests: pendingUploadRequests,
+            pendingChoicePrompt: pendingChoicePrompt,
+            pendingApplicantProfileRequest: pendingApplicantProfileRequest,
+            pendingSectionToggleRequest: pendingSectionToggleRequest,
+            pendingSectionEntryRequests: pendingSectionEntryRequests,
+            pendingContactsRequest: pendingContactsRequest,
+            pendingExtraction: pendingExtraction
+        ))
+    }
 
     func reset() {
         pendingUploadRequests.removeAll()
@@ -20,6 +47,7 @@ final class OnboardingInterviewRequestManager {
         pendingSectionEntryRequests.removeAll()
         pendingContactsRequest = nil
         pendingExtraction = nil
+        notifyStateChanged()
     }
 
     // MARK: - Upload Request Management
@@ -27,6 +55,7 @@ final class OnboardingInterviewRequestManager {
     func addUploadRequest(_ request: OnboardingUploadRequest) {
         if !pendingUploadRequests.contains(where: { $0.toolCallId == request.toolCallId }) {
             pendingUploadRequests.append(request)
+            notifyStateChanged()
         }
     }
 
@@ -34,7 +63,9 @@ final class OnboardingInterviewRequestManager {
         guard let index = pendingUploadRequests.firstIndex(where: { $0.id == id }) else {
             return nil
         }
-        return pendingUploadRequests.remove(at: index)
+        let removed = pendingUploadRequests.remove(at: index)
+        notifyStateChanged()
+        return removed
     }
 
     func uploadRequest(id: UUID) -> OnboardingUploadRequest? {
@@ -45,11 +76,13 @@ final class OnboardingInterviewRequestManager {
 
     func setChoicePrompt(_ prompt: OnboardingChoicePrompt?) {
         pendingChoicePrompt = prompt
+        notifyStateChanged()
     }
 
     func clearChoicePrompt() -> OnboardingChoicePrompt? {
         let prompt = pendingChoicePrompt
         pendingChoicePrompt = nil
+        notifyStateChanged()
         return prompt
     }
 
@@ -57,11 +90,13 @@ final class OnboardingInterviewRequestManager {
 
     func setApplicantProfileRequest(_ request: OnboardingApplicantProfileRequest?) {
         pendingApplicantProfileRequest = request
+        notifyStateChanged()
     }
 
     func clearApplicantProfileRequest() -> OnboardingApplicantProfileRequest? {
         let request = pendingApplicantProfileRequest
         pendingApplicantProfileRequest = nil
+        notifyStateChanged()
         return request
     }
 
@@ -69,11 +104,13 @@ final class OnboardingInterviewRequestManager {
 
     func setSectionToggleRequest(_ request: OnboardingSectionToggleRequest?) {
         pendingSectionToggleRequest = request
+        notifyStateChanged()
     }
 
     func clearSectionToggleRequest() -> OnboardingSectionToggleRequest? {
         let request = pendingSectionToggleRequest
         pendingSectionToggleRequest = nil
+        notifyStateChanged()
         return request
     }
 
@@ -82,6 +119,7 @@ final class OnboardingInterviewRequestManager {
     func addSectionEntryRequest(_ request: OnboardingSectionEntryRequest) {
         if !pendingSectionEntryRequests.contains(where: { $0.toolCallId == request.toolCallId }) {
             pendingSectionEntryRequests.append(request)
+            notifyStateChanged()
         }
     }
 
@@ -89,18 +127,22 @@ final class OnboardingInterviewRequestManager {
         guard let index = pendingSectionEntryRequests.firstIndex(where: { $0.id == id }) else {
             return nil
         }
-        return pendingSectionEntryRequests.remove(at: index)
+        let removed = pendingSectionEntryRequests.remove(at: index)
+        notifyStateChanged()
+        return removed
     }
 
     // MARK: - Contacts Request Management
 
     func setContactsRequest(_ request: OnboardingContactsFetchRequest?) {
         pendingContactsRequest = request
+        notifyStateChanged()
     }
 
     func clearContactsRequest() -> OnboardingContactsFetchRequest? {
         let request = pendingContactsRequest
         pendingContactsRequest = nil
+        notifyStateChanged()
         return request
     }
 
@@ -108,11 +150,13 @@ final class OnboardingInterviewRequestManager {
 
     func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) {
         pendingExtraction = extraction
+        notifyStateChanged()
     }
 
     func clearPendingExtraction() -> OnboardingPendingExtraction? {
         let extraction = pendingExtraction
         pendingExtraction = nil
+        notifyStateChanged()
         return extraction
     }
 }

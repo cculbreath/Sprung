@@ -1,14 +1,21 @@
 import Foundation
-import Observation
 
 @MainActor
-@Observable
 final class OnboardingInterviewWizardManager {
-    private(set) var wizardStep: OnboardingWizardStep = .introduction
-    private(set) var completedWizardSteps: Set<OnboardingWizardStep> = []
-    private(set) var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
+    // Callback to update service's observable properties
+    private let onStateChanged: (WizardState) -> Void
 
     private var wizardProgress = InterviewWizardProgress()
+
+    struct WizardState {
+        var wizardStep: OnboardingWizardStep
+        var completedWizardSteps: Set<OnboardingWizardStep>
+        var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus]
+    }
+
+    init(onStateChanged: @escaping (WizardState) -> Void) {
+        self.onStateChanged = onStateChanged
+    }
 
     func reset() {
         applySnapshot(wizardProgress.reset())
@@ -31,8 +38,10 @@ final class OnboardingInterviewWizardManager {
     }
 
     private func applySnapshot(_ snapshot: InterviewWizardProgress.Snapshot) {
-        wizardStep = snapshot.currentStep
-        completedWizardSteps = snapshot.completedSteps
-        wizardStepStatuses = snapshot.statuses
+        onStateChanged(WizardState(
+            wizardStep: snapshot.currentStep,
+            completedWizardSteps: snapshot.completedSteps,
+            wizardStepStatuses: snapshot.statuses
+        ))
     }
 }
