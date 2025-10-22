@@ -57,7 +57,7 @@ struct SwiftDataBackupManager {
         try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
 
         // Collect candidate files (.sqlite, .sqlite-shm, .sqlite-wal, .store variants)
-        let contents = try (try? FileManager.default.contentsOfDirectory(at: appSupport, includingPropertiesForKeys: nil)) ?? []
+        let contents = (try? FileManager.default.contentsOfDirectory(at: appSupport, includingPropertiesForKeys: nil)) ?? []
         let candidates = contents.filter { url in
             let name = url.lastPathComponent.lowercased()
             return name.hasSuffix(".sqlite") || name.hasSuffix(".sqlite-shm") || name.hasSuffix(".sqlite-wal") || name.contains("default.store")

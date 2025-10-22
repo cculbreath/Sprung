@@ -186,7 +186,7 @@ enum TemplateFilters {
             return boolValue
         }
 
-        if let numberValue = value as? NSNumber {
+        if value is NSNumber {
             return true
         }
 

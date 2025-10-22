@@ -967,7 +967,7 @@ extension TemplateEditorView {
             return
         }
 
-        if let array = value as? [Any] {
+        if value is [Any] {
             accumulator.insert(currentPath.joined(separator: "."))
             return
         }
