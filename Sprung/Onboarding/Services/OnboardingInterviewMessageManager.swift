@@ -30,7 +30,12 @@ final class OnboardingInterviewMessageManager {
     }
 
     func appendSystemMessage(_ text: String) {
-        messages.append(OnboardingMessage(role: .system, text: text))
+        messages.append(
+            OnboardingMessage(
+                role: .system,
+                text: normalized(text, for: .system)
+            )
+        )
         onMessagesChanged(messages)
     }
 
@@ -41,7 +46,10 @@ final class OnboardingInterviewMessageManager {
 
     @discardableResult
     func appendAssistantMessage(_ text: String) -> UUID {
-        let message = OnboardingMessage(role: .assistant, text: text)
+        let message = OnboardingMessage(
+            role: .assistant,
+            text: normalized(text, for: .assistant)
+        )
         messages.append(message)
         onMessagesChanged(messages)
         return message.id
@@ -49,7 +57,10 @@ final class OnboardingInterviewMessageManager {
 
     @discardableResult
     func appendAssistantPlaceholder() -> UUID {
-        let placeholder = OnboardingMessage(role: .assistant, text: "")
+        let placeholder = OnboardingMessage(
+            role: .assistant,
+            text: normalized("", for: .assistant)
+        )
         messages.append(placeholder)
         onMessagesChanged(messages)
         return placeholder.id
@@ -61,7 +72,7 @@ final class OnboardingInterviewMessageManager {
             messages[index] = OnboardingMessage(
                 id: existing.id,
                 role: existing.role,
-                text: text,
+                text: normalized(text, for: existing.role),
                 timestamp: existing.timestamp
             )
             onMessagesChanged(messages)
@@ -73,5 +84,13 @@ final class OnboardingInterviewMessageManager {
             messages.remove(at: index)
             onMessagesChanged(messages)
         }
+    }
+
+    private func normalized(_ text: String, for role: OnboardingMessage.Role) -> String {
+        guard role != .user else { return text }
+        return text
+            .replacingOccurrences(of: "\\r\\n", with: "\n")
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\t", with: "\t")
     }
 }

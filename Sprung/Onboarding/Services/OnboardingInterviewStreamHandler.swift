@@ -1,4 +1,5 @@
 import Foundation
+import SwiftyJSON
 
 @MainActor
 final class OnboardingInterviewStreamHandler {
@@ -21,12 +22,58 @@ final class OnboardingInterviewStreamHandler {
         }
         var toolStates: [String: ToolStreamState] = [:]
 
+        func sanitizeStreamText(_ raw: String) -> String {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "" }
+
+            let json = JSON(parseJSON: trimmed)
+            guard json.type != .unknown else { return trimmed }
+
+            let flattened = flattenStreamJSON(json)
+            let joined = flattened.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            return joined.isEmpty ? trimmed : joined
+        }
+
+        func flattenStreamJSON(_ json: JSON) -> [String] {
+            switch json.type {
+            case .string:
+                let value = json.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? [] : [value]
+            case .number:
+                return [json.numberValue.stringValue]
+            case .bool:
+                return [json.boolValue ? "true" : "false"]
+            case .array:
+                return json.arrayValue.flatMap { flattenStreamJSON($0) }
+            case .dictionary:
+                var dictionary = json.dictionaryValue
+                if dictionary.keys.count == 1, let nested = dictionary["json_keys"] {
+                    return flattenStreamJSON(nested)
+                }
+                return dictionary
+                    .sorted(by: { $0.key < $1.key })
+                    .flatMap { key, value -> [String] in
+                        let flattened = flattenStreamJSON(value)
+                        guard !flattened.isEmpty else { return [] }
+                        if flattened.count == 1, !flattened[0].contains("\n") {
+                            return ["\(key.capitalized): \(flattened[0])"]
+                        } else {
+                            var result: [String] = ["\(key.capitalized):"]
+                            result.append(contentsOf: flattened.map { "• \($0)" })
+                            return result
+                        }
+                    }
+            default:
+                return []
+            }
+        }
+
         func updateReasoningMessage(with delta: String) {
-            let trimmed = delta.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = sanitizeStreamText(delta)
             guard !trimmed.isEmpty else { return }
 
             var text = reasoningState?.text ?? ""
-            text += (text.isEmpty ? "" : " ") + trimmed
+            text += text.isEmpty ? trimmed : "\n\(trimmed)"
             let messageId = reasoningState?.id ?? messageManager.appendAssistantMessage("🧠 \(text)")
 
             messageManager.updateMessage(id: messageId, text: "🧠 \(text)")
@@ -44,26 +91,35 @@ final class OnboardingInterviewStreamHandler {
         func updateToolMessage(for event: LLMToolStreamEvent) {
             var state = toolStates[event.callId]
             if state == nil {
-                let initialStatus = event.status ?? "Tool call started."
-                let messageId = messageManager.appendAssistantMessage("🔧 \(initialStatus)")
+                let initialStatusRaw = event.status ?? "Tool call started."
+                let initialStatus = sanitizeStreamText(initialStatusRaw)
+                let statusText = initialStatus.isEmpty ? initialStatusRaw : initialStatus
+                let messageId = messageManager.appendAssistantMessage("🔧 Tool \(event.callId)\n\(statusText)")
                 state = ToolStreamState(
                     messageId: messageId,
                     inputBuffer: "",
-                    status: initialStatus,
+                    status: statusText,
                     isComplete: false
                 )
             }
 
             if let payload = event.payload {
-                if event.appendsPayload {
-                    state?.inputBuffer += payload
-                } else {
-                    state?.inputBuffer = payload
+                let cleanedPayload = sanitizeStreamText(payload)
+                if !cleanedPayload.isEmpty {
+                    if event.appendsPayload {
+                        if let buffer = state?.inputBuffer, !buffer.isEmpty {
+                            state?.inputBuffer += "\n"
+                        }
+                        state?.inputBuffer += cleanedPayload
+                    } else {
+                        state?.inputBuffer = cleanedPayload
+                    }
                 }
             }
 
             if let status = event.status {
-                state?.status = status
+                let cleanedStatus = sanitizeStreamText(status)
+                state?.status = cleanedStatus.isEmpty ? status : cleanedStatus
             }
 
             if event.isComplete {
@@ -115,9 +171,11 @@ final class OnboardingInterviewStreamHandler {
                     case .tool(let toolEvent):
                         updateToolMessage(for: toolEvent)
                     case .status(let message, let isComplete):
-                        let statusId = messageManager.appendAssistantMessage("ℹ️ \(message)")
+                        let cleanedMessage = sanitizeStreamText(message)
+                        let statusText = cleanedMessage.isEmpty ? message : cleanedMessage
+                        let statusId = messageManager.appendAssistantMessage("ℹ️ \(statusText)")
                         if isComplete {
-                            messageManager.updateMessage(id: statusId, text: "ℹ️ \(message)\n✅ Complete.")
+                            messageManager.updateMessage(id: statusId, text: "ℹ️ \(statusText)\n✅ Complete.")
                         }
                     }
                 }
