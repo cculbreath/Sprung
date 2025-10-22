@@ -7,66 +7,82 @@ struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewService.self) private var interviewService
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore
+    @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
 
-    @State private var selectedModelId: String = ""
-    @State private var userInput: String = ""
-    @State private var shouldAutoScroll = true
-    @State private var webSearchAllowed: Bool = true
-    @State private var writingAnalysisAllowed: Bool = false
-    @State private var showImportError = false
-    @State private var importErrorText: String?
+    @State private var viewModel = OnboardingInterviewViewModel(
+        fallbackModelId: "openai/gpt-5"
+    )
 
     @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
-    @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = false
-
-    private let fallbackModelId = "openai/gpt-5"
+    @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
 
     var body: some View {
         @Bindable var service = interviewService
+        @Bindable var uiState = viewModel
+        let actions = OnboardingInterviewActionHandler(service: service)
 
-        VStack(spacing: 0) {
-            wizardHeader(service: service)
-            Divider()
-            mainContent(service: service)
-            Divider()
-            bottomBar(service: service)
+        return ZStack {
+            OnboardingInterviewBackgroundView()
+
+            VStack(spacing: 20) {
+                Spacer(minLength: 28)
+
+                stepProgressView(service: service)
+                    .padding(.horizontal, 32)
+
+                mainCard(service: service, actions: actions)
+
+                bottomBar(service: service, actions: actions)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 0)
+            }
         }
         .frame(minWidth: 1040, minHeight: 700)
-        .background(Color(nsColor: .windowBackgroundColor))
         .task {
-            initializeSelectionsIfNeeded(service: service)
+            uiState.configureIfNeeded(
+                service: service,
+                defaultModelId: defaultModelId,
+                defaultWebSearchAllowed: defaultWebSearchAllowed,
+                defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
+                availableModelIds: openAIModels.map(\.modelId)
+            )
+            updateServiceDefaults()
         }
-        .onChange(of: defaultModelId) { _, _ in
-            syncModelSelection(applyingDefaults: true)
+        .onChange(of: defaultModelId) { _, newValue in
+            uiState.handleDefaultModelChange(
+                newValue: newValue,
+                availableModelIds: openAIModels.map(\.modelId)
+            )
             updateServiceDefaults()
         }
         .onChange(of: defaultWebSearchAllowed) { _, newValue in
             if !service.isActive {
-                webSearchAllowed = newValue
+                uiState.webSearchAllowed = newValue
                 updateServiceDefaults()
             }
         }
         .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
             if !service.isActive {
-                writingAnalysisAllowed = newValue
+                uiState.writingAnalysisAllowed = newValue
             }
         }
         .onChange(of: service.allowWebSearch) { _, newValue in
             if service.isActive {
-                webSearchAllowed = newValue
+                uiState.webSearchAllowed = newValue
             }
         }
         .onChange(of: service.allowWritingAnalysis) { _, newValue in
             if service.isActive {
-                writingAnalysisAllowed = newValue
+                uiState.writingAnalysisAllowed = newValue
             }
         }
         .sheet(isPresented: Binding(
             get: { service.pendingExtraction != nil },
             set: { newValue in
                 if !newValue {
-                    interviewService.cancelPendingExtraction()
+                    actions.cancelPendingExtraction()
                 }
             }
         )) {
@@ -74,89 +90,110 @@ struct OnboardingInterviewView: View {
                 ExtractionReviewSheet(
                     extraction: pending,
                     onConfirm: { updated, notes in
-                        Task { await interviewService.confirmPendingExtraction(updatedExtraction: updated, notes: notes) }
+                        Task { await actions.confirmPendingExtraction(updated, notes: notes) }
                     },
                     onCancel: {
-                        interviewService.cancelPendingExtraction()
+                        actions.cancelPendingExtraction()
                     }
                 )
             }
         }
-        .alert("Import Failed", isPresented: $showImportError, presenting: importErrorText) { _ in
-            Button("OK") { importErrorText = nil }
+        .alert("Import Failed", isPresented: $uiState.showImportError, presenting: uiState.importErrorText) { _ in
+            Button("OK") { uiState.clearImportError() }
         } message: { message in
             Text(message)
         }
     }
 }
 
-// MARK: - Header & Layout
+// MARK: - Layout
 
 private extension OnboardingInterviewView {
-    func wizardHeader(service: OnboardingInterviewService) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Onboarding Interview")
-                        .font(.largeTitle)
-                        .bold()
-                    Text(headerSubtitle(for: service.wizardStep))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if service.isProcessing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .progressViewStyle(.circular)
-                        .padding(.trailing, 4)
-                }
-
-                Button("Options…") {
-                    NSApp.sendAction(#selector(AppDelegate.showSettingsWindow), to: nil, from: nil)
-                }
-                .buttonStyle(.bordered)
+    func mainCard(service: OnboardingInterviewService, actions: OnboardingInterviewActionHandler) -> some View {
+        Group {
+            if service.wizardStep == .introduction {
+                introductionCard
+            } else {
+                interactiveCard(service: service, actions: actions)
             }
-
-            stepProgressView(service: service)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 24)
-        .padding(.bottom, 12)
+        .frame(maxWidth: 880, maxHeight: 620, alignment: .center)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 24)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 44, style: .continuous))
+        .shadow(color: Color.black.opacity(0.12), radius: 30, y: 22)
+        .padding(.horizontal, 40)
     }
 
-    func headerSubtitle(for step: OnboardingWizardStep) -> String {
-        switch step {
-        case .introduction:
-            return "Get ready to capture résumé data, artifacts, and writing samples."
-        case .resumeIntake:
-            return "Review parsed résumé details before diving into deeper questions."
-        case .artifactDiscovery:
-            return "Surface impactful work and supporting evidence."
-        case .writingCorpus:
-            return "Collect writing samples to build a style profile."
-        case .wrapUp:
-            return "Confirm what we captured and note any follow-up items."
+    var introductionCard: some View {
+        VStack(spacing: 28) {
+            Image("custom.onboardinginterview")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundColor(.accentColor)
+                .scaledToFit()
+                .frame(width: 160, height: 160)
+
+            VStack(spacing: 8) {
+                Text("Welcome to Sprung Onboarding")
+                    .font(.system(size: 34, weight: .bold, design: .default))
+                    .multilineTextAlignment(.center)
+                Text("We’ll confirm your contact details, enable the right résumé sections, and collect highlights so Sprung can advocate for you.")
+                    .font(.title3)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            }
+
+            onboardingHighlights()
+                .frame(maxWidth: 520)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    func onboardingHighlights() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Part 1 Goals")
+                .font(.headline)
+                .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 12) {
+                highlightRow(systemImage: "person.text.rectangle", text: "Confirm contact info from a résumé, LinkedIn, macOS Contacts, or manual entry.")
+                highlightRow(systemImage: "list.number", text: "Choose the JSON Resume sections that describe your experience.")
+                highlightRow(systemImage: "tray.full", text: "Review every section entry before it’s saved to your profile.")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    func highlightRow(systemImage: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(Color.accentColor)
+            Text(text)
+                .font(.body)
+        }
+    }
+
+    func interactiveCard(service: OnboardingInterviewService, actions: OnboardingInterviewActionHandler) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            stepLayout(service: service, actions: actions)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
     func stepProgressView(service: OnboardingInterviewService) -> some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: 32) {
             ForEach(OnboardingWizardStep.allCases) { step in
                 let status = service.wizardStepStatuses[step] ?? .pending
-                VStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: progressIcon(for: status))
                         .foregroundStyle(progressColor(for: status))
                         .font(.title3)
                     Text(step.title)
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 120)
+                        .font(status == .current ? .headline : .subheadline)
+                        .foregroundStyle(status == .pending ? Color.secondary : Color.primary)
                 }
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -164,7 +201,7 @@ private extension OnboardingInterviewView {
     func progressIcon(for status: OnboardingWizardStepStatus) -> String {
         switch status {
         case .pending: return "circle"
-        case .current: return "circle.fill"
+        case .current: return "circle.inset.filled"
         case .completed: return "checkmark.circle.fill"
         }
     }
@@ -177,234 +214,147 @@ private extension OnboardingInterviewView {
         }
     }
 
-    func mainContent(service: OnboardingInterviewService) -> some View {
-        Group {
-            switch service.wizardStep {
-            case .introduction:
-                introductionContent(service: service)
-            default:
-                stepLayout(service: service)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    func introductionContent(service: OnboardingInterviewService) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Welcome to the onboarding interview wizard.")
-                        .font(.title2)
-                        .bold()
-                    Text("You'll confirm résumé data, share high-impact work, and optionally upload writing samples so Sprung can build evidence-backed résumés and tailored cover letters.")
-                        .font(.body)
-                }
-
-                onboardingKeyChecklist
-
-                modelSelectionBlock()
-
-                Toggle("Allow web search during interview (helps find public references)", isOn: Binding(
-                    get: { webSearchAllowed },
-                    set: { newValue in
-                        webSearchAllowed = newValue
-                        defaultWebSearchAllowed = newValue
-                        if service.isActive {
-                            service.setWebSearchConsent(newValue)
-                        } else {
-                            updateServiceDefaults()
-                        }
-                    }
-                ))
-                .toggleStyle(.switch)
-
-                Toggle("Allow writing-style analysis when prompted", isOn: Binding(
-                    get: { writingAnalysisAllowed || (!service.isActive && defaultWritingAnalysisAllowed) },
-                    set: { newValue in
-                        writingAnalysisAllowed = newValue
-                        defaultWritingAnalysisAllowed = newValue
-                        if service.isActive {
-                            service.setWritingAnalysisConsent(newValue)
-                        }
-                    }
-                ))
-                .toggleStyle(.switch)
-
-                if appEnvironment.appState.openAiApiKey.isEmpty {
-                    Label("Add an OpenAI API key in Settings before beginning.", systemImage: "exclamationmark.shield")
-                        .foregroundStyle(.red)
-                        .font(.callout)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("What to expect")
-                        .font(.headline)
-                    ForEach(OnboardingWizardStep.allCases.filter { $0 != .introduction }) { step in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "checkmark.seal")
-                                    .foregroundStyle(.secondary)
-                                Text(step.title)
-                                    .font(.subheadline)
-                                    .bold()
-                            }
-                            Text(step.subtitle)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 26)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: 760, alignment: .leading)
-            .padding(.horizontal, 32)
-            .padding(.vertical, 32)
-        }
-    }
-
-    @ViewBuilder
-    func modelSelectionBlock() -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Interview model")
-                .font(.headline)
-
-            if openAIModels.isEmpty {
-                Label("Enable OpenAI responses models via Options… → API Keys.", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-            } else {
-                Picker("Model", selection: Binding(
-                    get: { selectedModelId.isEmpty ? currentModelId() : selectedModelId },
-                    set: { newValue in
-                        selectedModelId = newValue
-                        defaultModelId = newValue
-                        updateServiceDefaults()
-                    }
-                )) {
-                    ForEach(openAIModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 260, alignment: .leading)
-
-                Text("The onboarding workflow uses the OpenAI Responses API. Choose a responses-capable model to continue.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    var onboardingKeyChecklist: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Upload your latest résumé or LinkedIn profile on the next step.", systemImage: "doc.richtext")
-            Label("Share artifacts—papers, repos, decks—to build knowledge cards and a fact ledger.", systemImage: "folder.badge.person.crop")
-            Label("Optionally upload writing samples so Sprung can mirror your tone.", systemImage: "character.cursor.ibeam")
-        }
-        .labelStyle(.titleAndIcon)
-        .font(.callout)
-        .foregroundStyle(.secondary)
-    }
-
-    func stepLayout(service: OnboardingInterviewService) -> some View {
+    func stepLayout(service: OnboardingInterviewService, actions: OnboardingInterviewActionHandler) -> some View {
         HStack(spacing: 0) {
-            stepDetail(service: service)
-                .frame(minWidth: 340, maxWidth: 380)
+            toolInteractionPane(service: service, actions: actions)
+                .frame(minWidth: 340, maxWidth: 420)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
             Divider()
-            chatPanel(service: service)
+            chatPanel(service: service, state: viewModel, actions: actions)
         }
+        .background(
+            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    func stepDetail(service: OnboardingInterviewService) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(detailHeadline(for: service.wizardStep))
-                    .font(.title3)
-                    .bold()
+    func toolInteractionPane(service: OnboardingInterviewService, actions: OnboardingInterviewActionHandler) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let badge = statusBadgeText(service: service) {
+                badge
+            }
 
-                Text(detailSubtitle(for: service.wizardStep))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-
-                if let error = service.lastError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                }
-
-                if service.wizardStep == .resumeIntake {
-                    Toggle("Allow web search this session", isOn: Binding(
-                        get: { webSearchAllowed },
-                        set: { newValue in
-                            webSearchAllowed = newValue
-                            defaultWebSearchAllowed = newValue
-                            if service.isActive {
-                                service.setWebSearchConsent(newValue)
-                            } else {
-                                updateServiceDefaults()
-                            }
-                        }
-                    ))
-                    .toggleStyle(.switch)
-                }
-
-                if service.wizardStep == .writingCorpus {
-                    Toggle("Enable writing-style analysis", isOn: Binding(
-                        get: { writingAnalysisAllowed || (!service.isActive && defaultWritingAnalysisAllowed) },
-                        set: { newValue in
-                            writingAnalysisAllowed = newValue
-                            defaultWritingAnalysisAllowed = newValue
-                            if service.isActive {
-                                service.setWritingAnalysisConsent(newValue)
-                            }
-                        }
-                    ))
-                    .toggleStyle(.switch)
-                }
-
-                let stepRequests = uploadRequests(for: service.wizardStep, service: service)
-                if !stepRequests.isEmpty {
+            let requests = uploadRequests(for: service.wizardStep, service: service)
+            if let contactsRequest = service.pendingContactsRequest {
+                ContactsPermissionCard(
+                    request: contactsRequest,
+                    onAllow: {
+                        Task { await actions.fetchApplicantProfileFromContacts() }
+                    },
+                    onDecline: {
+                        Task { await actions.declineContactsFetch(reason: "User declined contacts access") }
+                    }
+                )
+            } else if let prompt = service.pendingChoicePrompt {
+                InterviewChoicePromptCard(
+                    prompt: prompt,
+                    onSubmit: { selection in
+                        Task { await actions.resolveChoice(selectionIds: selection) }
+                    },
+                    onCancel: {
+                        Task { await actions.cancelChoicePrompt(reason: "User dismissed choice prompt") }
+                    }
+                )
+            } else if let profileRequest = service.pendingApplicantProfileRequest {
+                ApplicantProfileReviewCard(
+                    request: profileRequest,
+                    fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
+                    onConfirm: { draft in
+                        Task { await actions.approveApplicantProfile(draft: draft) }
+                    },
+                    onCancel: {
+                        Task { await actions.declineApplicantProfile(reason: "User cancelled applicant profile validation") }
+                    }
+                )
+            } else if let sectionToggle = service.pendingSectionToggleRequest {
+                ResumeSectionsToggleCard(
+                    request: sectionToggle,
+                    existingDraft: experienceDefaultsStore.loadDraft(),
+                    onConfirm: { enabled in
+                        Task { await actions.completeSectionToggleSelection(enabled: enabled) }
+                    },
+                    onCancel: {
+                        Task { await actions.cancelSectionToggleSelection(reason: "User cancelled section toggle") }
+                    }
+                )
+            } else if let entryRequest = service.pendingSectionEntryRequests.first {
+                ResumeSectionEntriesCard(
+                    request: entryRequest,
+                    existingDraft: experienceDefaultsStore.loadDraft(),
+                    onConfirm: { approved in
+                        Task { await actions.completeSectionEntryRequest(id: entryRequest.id, approvedEntries: approved) }
+                    },
+                    onCancel: {
+                        Task { await actions.declineSectionEntryRequest(id: entryRequest.id, reason: "User cancelled section validation") }
+                    }
+                )
+            } else if !requests.isEmpty {
+                ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Pending uploads")
-                            .font(.headline)
-                        ForEach(stepRequests) { request in
+                        ForEach(requests) { request in
                             UploadRequestCard(
                                 request: request,
-                                onSelectFile: { openPanel(for: request) },
+                                onSelectFile: { openPanel(for: request, actions: actions) },
                                 onProvideLink: { url in
-                                    Task { await interviewService.fulfillUploadRequest(id: request.id, link: url) }
+                                    Task { await actions.completeUploadRequest(id: request.id, link: url) }
                                 },
                                 onDecline: {
-                                    Task { await interviewService.declineUploadRequest(id: request.id) }
+                                    Task { await actions.declineUploadRequest(id: request.id) }
                                 }
                             )
                         }
                     }
                 }
-
-                if !service.uploadedItems.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Uploaded items")
-                            .font(.headline)
-                        ForEach(service.uploadedItems) { item in
-                            Label("\(item.kind.rawValue.capitalized): \(item.name)", systemImage: "doc")
-                                .font(.caption)
-                        }
-                    }
-                }
-
-                if service.wizardStep == .wrapUp {
-                    WrapUpSummaryView(artifacts: service.artifacts, schemaIssues: service.schemaIssues)
-                }
+            } else {
+                Spacer()
             }
-            .padding(.vertical, 24)
-            .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.vertical, 24)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    func statusBadgeText(service: OnboardingInterviewService) -> Text? {
+        switch service.wizardStep {
+        case .resumeIntake:
+            let text = badgeText(service: service, introCompleted: service.completedWizardSteps.contains(.resumeIntake))
+            return text.isEmpty ? nil : Text(text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case .artifactDiscovery:
+            let text = badgeText(service: service, introCompleted: true)
+            return text.isEmpty ? nil : Text(text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case .writingCorpus, .wrapUp, .introduction:
+            return nil
+        }
+    }
+
+    private func badgeText(service: OnboardingInterviewService, introCompleted: Bool) -> String {
+        if !service.pendingUploadRequests.isEmpty {
+            return "Upload the requested files"
+        }
+        if service.pendingContactsRequest != nil {
+            return "Allow access to macOS Contacts"
+        }
+        if let choicePrompt = service.pendingChoicePrompt {
+            return "Action required: " + (choicePrompt.prompt.isEmpty ? "please choose an option" : choicePrompt.prompt)
+        }
+        if service.pendingApplicantProfileRequest != nil {
+            return "Action required: review applicant profile"
+        }
+        if service.pendingSectionToggleRequest != nil {
+            return "Confirm applicable résumé sections"
+        }
+        if service.pendingSectionEntryRequests.first != nil {
+            return "Review section entries"
+        }
+        if service.pendingUploadRequests.isEmpty && introCompleted == false {
+            return ""
+        }
+        return ""
     }
 
     func detailHeadline(for step: OnboardingWizardStep) -> String {
@@ -412,13 +362,13 @@ private extension OnboardingInterviewView {
         case .introduction:
             return "Overview"
         case .resumeIntake:
-            return "Résumé Intake"
+            return "Applicant Profile"
         case .artifactDiscovery:
             return "Artifact Discovery"
         case .writingCorpus:
             return "Writing Corpus"
         case .wrapUp:
-            return "Review & Export"
+            return "Review & Finish"
         }
     }
 
@@ -427,20 +377,20 @@ private extension OnboardingInterviewView {
         case .introduction:
             return "Preview what the interview covers before you begin."
         case .resumeIntake:
-            return "Upload your résumé or LinkedIn data and confirm the parsed extraction."
+            return "Confirm your contact details before we explore the rest of your experience."
         case .artifactDiscovery:
-            return "Share high-impact work artifacts so we can summarize accomplishments and metrics."
+            return "Validate résumé sections and review each entry that will appear in your profile."
         case .writingCorpus:
-            return "Provide representative writing samples to build your style profile."
+            return "Provide writing samples so Sprung can mirror your tone."
         case .wrapUp:
-            return "Review captured data, knowledge cards, and outstanding verification items."
+            return "Review what we captured and note any follow-up items."
         }
     }
 
-    func bottomBar(service: OnboardingInterviewService) -> some View {
+    func bottomBar(service: OnboardingInterviewService, actions: OnboardingInterviewActionHandler) -> some View {
         HStack(spacing: 12) {
-            Button("Cancel") {
-                interviewService.reset()
+            Button("Options…") {
+                NSApp.sendAction(#selector(AppDelegate.showSettingsWindow), to: nil, from: nil)
             }
             .buttonStyle(.bordered)
 
@@ -448,12 +398,17 @@ private extension OnboardingInterviewView {
 
             if shouldShowBackButton(for: service.wizardStep) {
                 Button("Go Back") {
-                    handleBack(service: service)
+                    handleBack(service: service, actions: actions)
                 }
             }
 
+            Button("Cancel") {
+                handleCancel(actions: actions)
+            }
+            .buttonStyle(.bordered)
+
             Button(continueButtonTitle(for: service.wizardStep)) {
-                handleContinue(service: service)
+                handleContinue(service: service, actions: actions)
             }
             .buttonStyle(.borderedProminent)
             .disabled(isContinueDisabled(service: service))
@@ -481,17 +436,29 @@ private extension OnboardingInterviewView {
         switch service.wizardStep {
         case .introduction:
             return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
+        case .resumeIntake:
+            return service.isProcessing ||
+                service.pendingChoicePrompt != nil ||
+                service.pendingApplicantProfileRequest != nil ||
+                service.pendingContactsRequest != nil
+        case .artifactDiscovery:
+            return service.isProcessing ||
+                service.pendingSectionToggleRequest != nil ||
+                !service.pendingSectionEntryRequests.isEmpty
         default:
             return service.isProcessing
         }
     }
 
-    func handleContinue(service: OnboardingInterviewService) {
+    func handleContinue(service: OnboardingInterviewService, actions: OnboardingInterviewActionHandler) {
         switch service.wizardStep {
         case .introduction:
-            beginInterview()
+            beginInterview(actions: actions)
         case .resumeIntake:
-            if service.isActive {
+            if service.isActive,
+               service.pendingChoicePrompt == nil,
+               service.pendingApplicantProfileRequest == nil,
+               service.pendingContactsRequest == nil {
                 service.setPhase(.artifactDiscovery)
             }
         case .artifactDiscovery:
@@ -499,15 +466,15 @@ private extension OnboardingInterviewView {
         case .writingCorpus:
             service.setPhase(.wrapUp)
         case .wrapUp:
-            interviewService.reset()
+            handleCancel(actions: actions)
         }
     }
 
-    func handleBack(service: OnboardingInterviewService) {
+    func handleBack(service: OnboardingInterviewService, actions: OnboardingInterviewActionHandler) {
         switch service.wizardStep {
         case .resumeIntake:
-            interviewService.reset()
-            initializeSelectionsIfNeeded(service: service)
+            actions.resetInterview()
+            reinitializeUIState(service: service)
         case .artifactDiscovery:
             service.setPhase(.resumeIntake)
         case .writingCorpus:
@@ -518,12 +485,20 @@ private extension OnboardingInterviewView {
             break
         }
     }
+
+    func handleCancel(actions: OnboardingInterviewActionHandler) {
+        actions.resetInterview()
+        reinitializeUIState(service: interviewService)
+        if let window = NSApp.windows.first(where: { $0 is BorderlessOverlayWindow }) {
+            window.orderOut(nil)
+        }
+    }
 }
 
 // MARK: - Chat
 
 private extension OnboardingInterviewView {
-    func chatPanel(service: OnboardingInterviewService) -> some View {
+    func chatPanel(service: OnboardingInterviewService, state: OnboardingInterviewViewModel, actions: OnboardingInterviewActionHandler) -> some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -535,12 +510,39 @@ private extension OnboardingInterviewView {
                     }
                     .padding(20)
                 }
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: Color.black.opacity(0.18), radius: 20, y: 16)
                 .onChange(of: service.messages.count) { _, _ in
-                    if shouldAutoScroll, let lastId = service.messages.last?.id {
+                    if state.shouldAutoScroll, let lastId = service.messages.last?.id {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(lastId, anchor: .bottom)
+                        }
+                    }
+                }
+                .onAppear {
+                    if state.shouldAutoScroll, let lastId = service.messages.last?.id {
                         proxy.scrollTo(lastId, anchor: .bottom)
                     }
                 }
+            }
+
+            if service.isProcessing &&
+                service.pendingChoicePrompt == nil &&
+                service.pendingApplicantProfileRequest == nil &&
+                service.pendingSectionToggleRequest == nil &&
+                service.pendingSectionEntryRequests.isEmpty &&
+                service.pendingContactsRequest == nil {
+                HStack(spacing: 12) {
+                    LLMActivityView()
+                        .frame(width: 36, height: 36)
+                    Text("Assistant is thinking…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .transition(.opacity)
             }
 
             if !service.nextQuestions.isEmpty {
@@ -548,7 +550,7 @@ private extension OnboardingInterviewView {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(service.nextQuestions) { question in
-                            Button(action: { send(question.text) }) {
+                            Button(action: { send(question.text, state: state, actions: actions) }) {
                                 Text(question.text)
                                     .padding(.vertical, 6)
                                     .padding(.horizontal, 12)
@@ -566,30 +568,50 @@ private extension OnboardingInterviewView {
             Divider()
 
             HStack(alignment: .center, spacing: 12) {
-                TextField("Type your response…", text: $userInput, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...5)
-                    .disabled(!service.isActive || service.isProcessing)
-                    .onSubmit { send(userInput) }
+                TextField(
+                    "Type your response…",
+                    text: Binding(
+                        get: { state.userInput },
+                        set: { state.userInput = $0 }
+                    ),
+                    axis: .vertical
+                )
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...5)
+                .disabled(!service.isActive || service.isProcessing)
+                .onSubmit { send(state.userInput, state: state, actions: actions) }
 
                 Button {
-                    send(userInput)
+                    send(state.userInput, state: state, actions: actions)
                 } label: {
                     Label("Send", systemImage: "paperplane.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !service.isActive || service.isProcessing)
+                .disabled(state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !service.isActive || service.isProcessing)
             }
             .padding(.all, 16)
+
+            HStack(spacing: 6) {
+                Text(modelStatusDescription(service: service))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Change in Settings…") {
+                    openSettings()
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 8)
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    func send(_ text: String) {
+    func send(_ text: String, state: OnboardingInterviewViewModel, actions: OnboardingInterviewActionHandler) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        userInput = ""
-        Task { await interviewService.send(userMessage: trimmed) }
+        state.userInput = ""
+        Task { await actions.sendMessage(trimmed) }
     }
 }
 
@@ -611,7 +633,7 @@ private extension OnboardingInterviewView {
         }
     }
 
-    func openPanel(for request: OnboardingUploadRequest) {
+    func openPanel(for request: OnboardingUploadRequest, actions: OnboardingInterviewActionHandler) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = request.metadata.allowMultiple
         panel.canChooseDirectories = false
@@ -628,7 +650,7 @@ private extension OnboardingInterviewView {
                 urls = panel.urls.prefix(1).map { $0 }
             }
             for url in urls {
-                Task { await interviewService.fulfillUploadRequest(id: request.id, fileURL: url) }
+                Task { await actions.completeUploadRequest(id: request.id, fileURL: url) }
             }
         }
     }
@@ -656,56 +678,31 @@ private extension OnboardingInterviewView {
 // MARK: - Actions & Defaults
 
 private extension OnboardingInterviewView {
-    func initializeSelectionsIfNeeded(service: OnboardingInterviewService) {
-        syncModelSelection(applyingDefaults: true)
-        if service.isActive {
-            webSearchAllowed = service.allowWebSearch
-            writingAnalysisAllowed = service.allowWritingAnalysis
-        } else {
-            webSearchAllowed = defaultWebSearchAllowed
-            writingAnalysisAllowed = defaultWritingAnalysisAllowed
-        }
-        updateServiceDefaults()
-    }
-
-    func syncModelSelection(applyingDefaults: Bool = false) {
-        if !selectedModelId.isEmpty && !applyingDefaults {
-            return
-        }
-
-        let ids = openAIModels.map(\.modelId)
-        if ids.contains(defaultModelId) {
-            selectedModelId = defaultModelId
-        } else if ids.contains(fallbackModelId) {
-            selectedModelId = fallbackModelId
-        } else if let first = ids.first {
-            selectedModelId = first
-        } else {
-            selectedModelId = fallbackModelId
-        }
-    }
-
-    func currentModelId() -> String {
-        if !selectedModelId.isEmpty {
-            return selectedModelId
-        }
-        return fallbackModelId
-    }
-
     func updateServiceDefaults() {
         interviewService.setPreferredDefaults(
-            modelId: currentModelId(),
+            modelId: viewModel.currentModelId,
             backend: .openAI,
-            webSearchAllowed: webSearchAllowed
+            webSearchAllowed: viewModel.webSearchAllowed
         )
     }
 
-    func beginInterview() {
-        let modelId = currentModelId()
+    func openSettings() {
+        NSApp.sendAction(#selector(AppDelegate.showSettingsWindow), to: nil, from: nil)
+    }
+
+    func modelStatusDescription(service: OnboardingInterviewService) -> String {
+        let rawId = service.preferredModelIdForDisplay ?? viewModel.currentModelId
+        let display = rawId.split(separator: "/").last.map(String.init) ?? rawId
+        let webText = service.allowWebSearch ? "on" : "off"
+        return "Using \(display) with web search \(webText)."
+    }
+
+    func beginInterview(actions: OnboardingInterviewActionHandler) {
+        let modelId = viewModel.currentModelId
         Task {
-            await interviewService.startInterview(modelId: modelId, backend: .openAI)
-            if writingAnalysisAllowed {
-                interviewService.setWritingAnalysisConsent(true)
+            await actions.startInterview(modelId: modelId, backend: .openAI)
+            if viewModel.writingAnalysisAllowed {
+                actions.setWritingAnalysisConsent(true)
             }
         }
     }
@@ -717,6 +714,17 @@ private extension OnboardingInterviewView {
                 (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
+    }
+
+    func reinitializeUIState(service: OnboardingInterviewService) {
+        viewModel.configureIfNeeded(
+            service: service,
+            defaultModelId: defaultModelId,
+            defaultWebSearchAllowed: defaultWebSearchAllowed,
+            defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
+            availableModelIds: openAIModels.map(\.modelId)
+        )
+        updateServiceDefaults()
     }
 }
 
@@ -897,7 +905,7 @@ private struct MessageBubble: View {
             if message.role == .user { Spacer() }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                Text(message.text)
+                Text(displayText)
                     .padding(12)
                     .background(backgroundColor)
                     .foregroundStyle(.primary)
@@ -923,6 +931,33 @@ private struct MessageBubble: View {
         case .system:
             return Color.gray.opacity(0.15)
         }
+    }
+
+    private var displayText: String {
+        switch message.role {
+        case .assistant:
+            return parseAssistantReply(from: message.text)
+        case .user, .system:
+            return message.text
+        }
+    }
+
+    private func parseAssistantReply(from text: String) -> String {
+        if let data = text.data(using: .utf8),
+           let json = try? JSON(data: data),
+           let reply = json["assistant_reply"].string {
+            return reply
+        }
+        if let range = text.range(of: "\"assistant_reply\":") {
+            let substring = text[range.upperBound...]
+            if let closingQuote = substring.firstIndex(of: "\"") {
+                let trimmed = substring[closingQuote...].dropFirst()
+                if let end = trimmed.firstIndex(of: "\"") {
+                    return String(trimmed[..<end])
+                }
+            }
+        }
+        return text
     }
 }
 
@@ -1158,5 +1193,29 @@ private struct ExtractionReviewSheet: View {
         }
         .padding(24)
         .frame(minWidth: 560, minHeight: 480)
+    }
+}
+
+
+private struct LLMActivityView: View {
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let value = sin(time * 1.6)
+            ZStack {
+                Circle()
+                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 8)
+                AngularGradient(gradient: Gradient(colors: [.accentColor, .purple, .pink, .accentColor]), center: .center, angle: .degrees(value * 180))
+                    .mask(
+                        Circle()
+                            .trim(from: 0.0, to: 0.75)
+                            .stroke(style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    )
+                    .rotationEffect(.degrees(value * 120))
+            }
+            .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: value)
+        }
     }
 }

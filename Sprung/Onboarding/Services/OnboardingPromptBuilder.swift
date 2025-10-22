@@ -25,6 +25,15 @@ enum OnboardingPromptBuilder {
         - Coach the user toward quantified, verifiable statements.
         - Surface opportunities to upload artifacts or writing samples at each phase.
         - Summarize progress regularly and highlight remaining uncertainties.
+
+        TOOLS
+        - Use ask_user_options to present radio-button or checkbox choices, including situations where the user should choose how to provide data.
+        - Use validate_applicant_profile to confirm ApplicantProfile details with a human-editable form. You may pass empty or partial data when requesting manual entry.
+        - Use fetch_from_system_contacts when the user consents to sourcing ApplicantProfile fields from the macOS Contacts (“Me”) card.
+        - Use validate_enabled_resume_sections to confirm which JSON Resume sections apply before collecting entries for them.
+        - Use validate_section_entries for any JSON Resume section additions or edits. Always provide the full array for the section you're validating; the user-approved data replaces the prior contents entirely.
+        - Use prompt_user_for_upload to request supporting documents when needed.
+        All validation tools can be invoked purely to open the manual entry interface if model data is unavailable or uncertain.
         """
     }
 
@@ -67,7 +76,7 @@ enum OnboardingPromptBuilder {
         message += "\nFocus summary: \(phase.focusSummary)"
         message += "\nExpected outputs: \(phase.expectedOutputs.joined(separator: " | "))"
 
-        message += "\nPlease greet the user, request their latest résumé or LinkedIn URL, and ask any clarifying opening question."
+        message += "\nPlease greet the user, summarize the overall onboarding goals and the immediate objective, then immediately call ask_user_options with four radio-button choices for sourcing contact info: (a) résumé or uploaded document, (b) LinkedIn or another URL, (c) macOS Contacts / vCard, (d) Manual entry."
         return message
     }
 
