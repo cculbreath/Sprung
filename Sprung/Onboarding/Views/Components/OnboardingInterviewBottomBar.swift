@@ -14,7 +14,8 @@ struct OnboardingInterviewBottomBar: View {
             Button("Options…") {
                 onShowSettings()
             }
-            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .buttonStyle(.glass)
 
             Spacer()
 
@@ -22,17 +23,24 @@ struct OnboardingInterviewBottomBar: View {
                 Button("Go Back") {
                     onBack()
                 }
+                .buttonBorderShape(.capsule)
+                .buttonStyle(.glass)
+
+
             }
 
             Button("Cancel") {
                 onCancel()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.glass)
+            .buttonBorderShape(.capsule)
+
 
             Button(continueTitle) {
                 onContinue()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.capsule)
             .disabled(isContinueDisabled)
         }
         .padding(.horizontal, 24)

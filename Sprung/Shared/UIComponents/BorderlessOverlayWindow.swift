@@ -22,8 +22,9 @@ final class BorderlessOverlayWindow: NSWindow {
 
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
-        level = .floating
+        hasShadow = false
+        level = .normal
+        collectionBehavior = [.moveToActiveSpace]
         ignoresMouseEvents = false
         collectionBehavior = [.transient, .moveToActiveSpace]
 

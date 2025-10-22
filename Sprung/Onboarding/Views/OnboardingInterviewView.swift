@@ -19,39 +19,58 @@ struct OnboardingInterviewView: View {
         @Bindable var uiState = viewModel
         let actions = OnboardingInterviewActionHandler(service: service)
 
-        return
-            Group{
-                VStack(spacing: 20) {
-                    Spacer(minLength: 28)
+        // --- Card visual constants ---
+        let corner: CGFloat = 44
+        let shadowR: CGFloat = 30
+        let shadowY: CGFloat = 22
+        let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
 
-                    OnboardingInterviewStepProgressView(service: service)
-                        .padding(.horizontal, 32)
+        VStack(spacing: 0) {
+            // Progress bar anchored close to top
+            OnboardingInterviewStepProgressView(service: service)
+                .padding(.top, 28)
+                .padding(.bottom, 36)
+                .padding(.horizontal, 32)
 
-                    mainCard(service: service, state: uiState, actions: actions)
+            // Main body centered within available space
+            VStack(spacing: 24) {
+                mainCard(service: service, state: uiState, actions: actions)
 
-                    OnboardingInterviewBottomBar(
-                        showBack: shouldShowBackButton(for: service.wizardStep),
-                        continueTitle: continueButtonTitle(for: service.wizardStep),
-                        isContinueDisabled: isContinueDisabled(service: service),
-                        onShowSettings: openSettings,
-                        onBack: { handleBack(service: service, actions: actions) },
-                        onCancel: { handleCancel(actions: actions) },
-                        onContinue: { handleContinue(service: service, actions: actions) }
-                    )
-                    .padding(.horizontal, 32)
-                    .padding(.bottom)
-                }
+                Spacer(minLength: 24) // centers body relative to bottom bar
+
+                OnboardingInterviewBottomBar(
+                    showBack: shouldShowBackButton(for: service.wizardStep),
+                    continueTitle: continueButtonTitle(for: service.wizardStep),
+                    isContinueDisabled: isContinueDisabled(service: service),
+                    onShowSettings: openSettings,
+                    onBack: { handleBack(service: service, actions: actions) },
+                    onCancel: { handleCancel(actions: actions) },
+                    onContinue: { handleContinue(service: service, actions: actions) }
+                )
+                .padding(.horizontal, 32)
+                .padding(.bottom, 6)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(minWidth: 1040)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 24)
+        .mask(cardShape) // clip content to rounded shape
+        .background(
+            cardShape.fill(.thickMaterial)
+        )
+        .overlay(
+            cardShape
+                .stroke(.clear)
+                .shadow(color: .black.opacity(0.5), radius: shadowR, y: shadowY)
+                .allowsHitTesting(false)
+        )
+        .padding(.top, shadowR)
+        .padding(.leading, shadowR)
+        .padding(.trailing, shadowR)
+        .padding(.bottom, shadowR + abs(shadowY))
 
-            .frame(minWidth: 1040)
-            .padding(.horizontal, 32)
-            .padding(.vertical, 24)
-            .background(
-                .thickMaterial,
-                in: RoundedRectangle(cornerRadius: 44, style: .continuous)
-            )
-            .compositingGroup()
-            .shadow(color: Color.black.opacity(0.5), radius: 30, y: 22)
+        // --- Lifecycle bindings and tasks ---
         .task {
             uiState.configureIfNeeded(
                 service: service,
@@ -139,18 +158,17 @@ private extension OnboardingInterviewView {
                 )
             }
         }
-
         .padding(.horizontal, 40)
     }
 
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
         switch step {
-        case .wrapUp:
-            return "Finish"
-        case .introduction:
-            return "Begin Interview"
-        default:
-            return "Continue"
+            case .wrapUp:
+                return "Finish"
+            case .introduction:
+                return "Begin Interview"
+            default:
+                return "Continue"
         }
     }
 
@@ -160,19 +178,19 @@ private extension OnboardingInterviewView {
 
     func isContinueDisabled(service: OnboardingInterviewService) -> Bool {
         switch service.wizardStep {
-        case .introduction:
-            return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
-        case .resumeIntake:
-            return service.isProcessing ||
+            case .introduction:
+                return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
+            case .resumeIntake:
+                return service.isProcessing ||
                 service.pendingChoicePrompt != nil ||
                 service.pendingApplicantProfileRequest != nil ||
                 service.pendingContactsRequest != nil
-        case .artifactDiscovery:
-            return service.isProcessing ||
+            case .artifactDiscovery:
+                return service.isProcessing ||
                 service.pendingSectionToggleRequest != nil ||
                 !service.pendingSectionEntryRequests.isEmpty
-        default:
-            return service.isProcessing
+            default:
+                return service.isProcessing
         }
     }
 
@@ -181,21 +199,21 @@ private extension OnboardingInterviewView {
         actions: OnboardingInterviewActionHandler
     ) {
         switch service.wizardStep {
-        case .introduction:
-            beginInterview(actions: actions)
-        case .resumeIntake:
-            if service.isActive,
-               service.pendingChoicePrompt == nil,
-               service.pendingApplicantProfileRequest == nil,
-               service.pendingContactsRequest == nil {
-                service.setPhase(.artifactDiscovery)
-            }
-        case .artifactDiscovery:
-            service.setPhase(.writingCorpus)
-        case .writingCorpus:
-            service.setPhase(.wrapUp)
-        case .wrapUp:
-            handleCancel(actions: actions)
+            case .introduction:
+                beginInterview(actions: actions)
+            case .resumeIntake:
+                if service.isActive,
+                   service.pendingChoicePrompt == nil,
+                   service.pendingApplicantProfileRequest == nil,
+                   service.pendingContactsRequest == nil {
+                    service.setPhase(.artifactDiscovery)
+                }
+            case .artifactDiscovery:
+                service.setPhase(.writingCorpus)
+            case .writingCorpus:
+                service.setPhase(.wrapUp)
+            case .wrapUp:
+                handleCancel(actions: actions)
         }
     }
 
@@ -204,17 +222,17 @@ private extension OnboardingInterviewView {
         actions: OnboardingInterviewActionHandler
     ) {
         switch service.wizardStep {
-        case .resumeIntake:
-            actions.resetInterview()
-            reinitializeUIState(service: service)
-        case .artifactDiscovery:
-            service.setPhase(.resumeIntake)
-        case .writingCorpus:
-            service.setPhase(.artifactDiscovery)
-        case .wrapUp:
-            service.setPhase(.writingCorpus)
-        case .introduction:
-            break
+            case .resumeIntake:
+                actions.resetInterview()
+                reinitializeUIState(service: service)
+            case .artifactDiscovery:
+                service.setPhase(.resumeIntake)
+            case .writingCorpus:
+                service.setPhase(.artifactDiscovery)
+            case .wrapUp:
+                service.setPhase(.writingCorpus)
+            case .introduction:
+                break
         }
     }
 
@@ -264,7 +282,7 @@ private extension OnboardingInterviewView {
             .filter { $0.modelId.lowercased().hasPrefix("openai/") }
             .sorted { lhs, rhs in
                 (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
-                    < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
+                < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
 
