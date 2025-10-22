@@ -336,13 +336,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 hostingView = NSHostingView(rootView: AnyView(interviewView))
             }
 
+            let innerXPadding: CGFloat = 32 * 2        // = 64
+            let minCardWidth = 1040 + innerXPadding    // = 1104
+            let outerPad: CGFloat = 30                 // same as shadowR (left/right)
+            let windowW = minCardWidth + outerPad*2    // = 1164
+
             onboardingInterviewWindow = BorderlessOverlayWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 980, height: 700)
+                contentRect: NSRect(x: 0, y: 0, width: windowW, height: 700)
             )
+            hostingView.wantsLayer = true
+            hostingView.layer?.masksToBounds = false
             onboardingInterviewWindow?.contentView = hostingView
             onboardingInterviewWindow?.isReleasedWhenClosed = false
             onboardingInterviewWindow?.center()
-            onboardingInterviewWindow?.minSize = NSSize(width: 860, height: 600)
+            onboardingInterviewWindow?.minSize = NSSize(width: windowW, height: 600)
 
             Logger.info("🆕 Created onboarding interview window", category: .ui)
         }
