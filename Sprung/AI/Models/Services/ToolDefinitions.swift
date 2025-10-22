@@ -5,6 +5,22 @@ struct ToolDefinition: Codable, Sendable {
     let name: String
     let description: String
     let parameters: ToolParameters
+    let strict: Bool
+    let displayMessage: String?
+
+    init(
+        name: String,
+        description: String,
+        parameters: ToolParameters,
+        strict: Bool = true,
+        displayMessage: String? = nil
+    ) {
+        self.name = name
+        self.description = description
+        self.parameters = parameters
+        self.strict = strict
+        self.displayMessage = displayMessage
+    }
 }
 
 struct ToolParameters: Codable, Sendable {
@@ -20,6 +36,7 @@ struct ToolProperty: Codable, Sendable {
     let properties: [String: ToolProperty]?
     let required: [String]?
     let allowAdditionalProperties: Bool?
+    let nullable: Bool
 
     init(
         type: String,
@@ -27,7 +44,8 @@ struct ToolProperty: Codable, Sendable {
         items: ToolArrayItems? = nil,
         properties: [String: ToolProperty]? = nil,
         required: [String]? = nil,
-        allowAdditionalProperties: Bool? = nil
+        allowAdditionalProperties: Bool? = nil,
+        nullable: Bool = false
     ) {
         self.type = type
         self.description = description
@@ -35,6 +53,7 @@ struct ToolProperty: Codable, Sendable {
         self.properties = properties
         self.required = required
         self.allowAdditionalProperties = allowAdditionalProperties
+        self.nullable = nullable
     }
 }
 
@@ -66,7 +85,7 @@ extension ToolDefinition {
             Tool.FunctionTool(
                 name: name,
                 parameters: parameters.asJSONSchema(description: description),
-                strict: true,
+                strict: strict,
                 description: description
             )
         )
@@ -91,8 +110,10 @@ private extension ToolParameters {
 
 private extension ToolProperty {
     func asJSONSchema() -> JSONSchema {
-        JSONSchema(
-            type: resolvedSchemaType(),
+        let schemaType = resolvedSchemaType()
+
+        return JSONSchema(
+            type: finalSchemaType(basedOn: schemaType),
             description: description,
             properties: properties?.mapValues { $0.asJSONSchema() },
             items: items?.asJSONSchema(),
@@ -122,12 +143,25 @@ private extension ToolProperty {
         }
     }
 
-    var resolvedAdditionalProperties: Bool {
-        if let allowAdditionalProperties {
-            return allowAdditionalProperties
+    func finalSchemaType(basedOn baseType: JSONSchemaType) -> JSONSchemaType {
+        guard nullable else {
+            return baseType
         }
 
-        return resolvedSchemaType() == .object
+        switch baseType {
+        case .union(let types):
+            if types.contains(.null) {
+                return baseType
+            } else {
+                return .union(types + [.null])
+            }
+        default:
+            return .union([baseType, .null])
+        }
+    }
+
+    var resolvedAdditionalProperties: Bool {
+        return allowAdditionalProperties ?? false
     }
 }
 
@@ -164,10 +198,6 @@ private extension ToolArrayItems {
     }
 
     var resolvedAdditionalProperties: Bool {
-        if let allowAdditionalProperties {
-            return allowAdditionalProperties
-        }
-
-        return resolvedSchemaType() == .object
+        return allowAdditionalProperties ?? false
     }
 }

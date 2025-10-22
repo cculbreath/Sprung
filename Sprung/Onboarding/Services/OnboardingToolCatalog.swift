@@ -29,7 +29,7 @@ enum OnboardingToolCatalog {
                                     "title": ToolProperty(type: "string", description: "Primary label shown to the user."),
                                     "description": ToolProperty(type: "string", description: "Supporting detail for the option.")
                                 ],
-                                required: ["id", "title"],
+                                required: ["id", "title", "description"],
                                 allowAdditionalProperties: false
                             )
                         ),
@@ -38,8 +38,9 @@ enum OnboardingToolCatalog {
                         "allow_cancel": ToolProperty(type: "boolean", description: "Whether the user can cancel the prompt."),
                         "context": ToolProperty(type: "string", description: "Optional reasoning or next-step guidance for the user.")
                     ],
-                    required: ["options"]
-                )
+                    required: ["prompt", "question", "options", "selection_style", "multiple", "allow_cancel", "context"]
+                ),
+                displayMessage: "💬 Presenting options for you to choose from..."
             ),
             ToolDefinition(
                 name: "validate_applicant_profile",
@@ -53,7 +54,58 @@ enum OnboardingToolCatalog {
                 parameters: ToolParameters(
                     type: "object",
                     properties: [
-                        "profile": ToolProperty(type: "object", description: "Partial or complete ApplicantProfile data to review."),
+                        "profile": ToolProperty(
+                            type: "object",
+                            description: "Partial or complete ApplicantProfile data to review.",
+                            properties: [
+                                "name": ToolProperty(type: "string", description: "Full name of the applicant."),
+                                "label": ToolProperty(type: "string", description: "Professional headline or title."),
+                                "summary": ToolProperty(type: "string", description: "Short professional summary."),
+                                "website": ToolProperty(type: "string", description: "Primary personal website or portfolio link."),
+                                "email": ToolProperty(type: "string", description: "Primary email address."),
+                                "phone": ToolProperty(type: "string", description: "Primary phone number."),
+                                "location": ToolProperty(
+                                    type: "object",
+                                    description: "Structured location fields for the applicant.",
+                                    properties: [
+                                        "address": ToolProperty(type: "string", description: "Street address or mailing address."),
+                                        "city": ToolProperty(type: "string", description: "City of residence."),
+                                        "region": ToolProperty(type: "string", description: "State or region of residence."),
+                                        "postalCode": ToolProperty(type: "string", description: "Postal or ZIP code."),
+                                        "countryCode": ToolProperty(type: "string", description: "ISO country code.")
+                                    ],
+                                    required: ["address", "city", "region", "postalCode", "countryCode"],
+                                    allowAdditionalProperties: false
+                                ),
+                                "socialProfiles": ToolProperty(
+                                    type: "array",
+                                    description: "Social profile entries for the applicant.",
+                                    items: ToolArrayItems(
+                                        type: "object",
+                                        description: "Social profile entry.",
+                                        properties: [
+                                            "id": ToolProperty(type: "string", description: "Stable identifier for the social profile."),
+                                            "network": ToolProperty(type: "string", description: "Social network name (e.g., LinkedIn)."),
+                                            "username": ToolProperty(type: "string", description: "Username or handle on the network."),
+                                            "url": ToolProperty(type: "string", description: "Profile URL.")
+                                        ],
+                                        required: ["id", "network", "username", "url"],
+                                        allowAdditionalProperties: false
+                                    )
+                                )
+                            ],
+                            required: [
+                                "name",
+                                "label",
+                                "summary",
+                                "website",
+                                "email",
+                                "phone",
+                                "location",
+                                "socialProfiles"
+                            ],
+                            allowAdditionalProperties: false
+                        ),
                         "sources": ToolProperty(
                             type: "array",
                             description: "Array of strings describing where data was sourced from.",
@@ -62,8 +114,9 @@ enum OnboardingToolCatalog {
                         "section": ToolProperty(type: "string", description: "Specific profile section to focus on (e.g., contact, summary)."),
                         "context": ToolProperty(type: "string", description: "Optional instructions or notes for the reviewer.")
                     ],
-                    required: []
-                )
+                    required: ["profile", "sources", "section", "context"]
+                ),
+                displayMessage: "📝 Preparing profile form for your review..."
             ),
             ToolDefinition(
                 name: "fetch_from_system_contacts",
@@ -84,7 +137,8 @@ enum OnboardingToolCatalog {
                         )
                     ],
                     required: ["fields"]
-                )
+                ),
+                displayMessage: "📇 Fetching from your macOS Contacts..."
             ),
             ToolDefinition(
                 name: "validate_enabled_resume_sections",
@@ -110,8 +164,9 @@ enum OnboardingToolCatalog {
                         ),
                         "context": ToolProperty(type: "string", description: "Optional rationale or instructions for the selection.")
                     ],
-                    required: ["sections"]
-                )
+                    required: ["sections", "enabledSections", "context"]
+                ),
+                displayMessage: "✅ Preparing section checklist for your review..."
             ),
             ToolDefinition(
                 name: "validate_section_entries",
@@ -132,14 +187,27 @@ enum OnboardingToolCatalog {
                             items: ToolArrayItems(
                                 type: "object",
                                 description: "Resume section entry payload.",
-                                allowAdditionalProperties: true
+                                properties: [
+                                    "title": ToolProperty(type: "string", description: "Entry identifier or heading."),
+                                    "value": ToolProperty(
+                                        type: "array",
+                                        description: "Ordered values for this entry.",
+                                        items: ToolArrayItems(
+                                            type: "string",
+                                            description: "Value component string."
+                                        )
+                                    )
+                                ],
+                                required: ["title", "value"],
+                                allowAdditionalProperties: false
                             )
                         ),
                         "mode": ToolProperty(type: "string", description: "Optional hint such as 'create' or 'update'."),
                         "context": ToolProperty(type: "string", description: "Optional narrative for the reviewer.")
                     ],
-                    required: ["section", "entries"]
-                )
+                    required: ["section", "entries", "mode", "context"]
+                ),
+                displayMessage: "📋 Loading entries for your review..."
             ),
             ToolDefinition(
                 name: "prompt_user_for_upload",
@@ -169,11 +237,28 @@ enum OnboardingToolCatalog {
                         ),
                         "allow_multiple": ToolProperty(type: "boolean", description: "Whether multiple files can be uploaded."),
                         "followup_tool": ToolProperty(type: "string", description: "Optional tool to automatically call after upload."),
-                        "followup_args": ToolProperty(type: "object", description: "Arguments to forward to the follow-up tool."),
+                        "followup_args": ToolProperty(
+                            type: "object",
+                            description: "Arguments to forward to the follow-up tool.",
+                            properties: [:],
+                            allowAdditionalProperties: false
+                        ),
                         "context": ToolProperty(type: "string", description: "Optional rationale for the upload.")
                     ],
-                    required: ["prompt"]
-                )
+                    required: [
+                        "kind",
+                        "prompt",
+                        "instructions",
+                        "title",
+                        "accepts",
+                        "acceptedFileTypes",
+                        "allow_multiple",
+                        "followup_tool",
+                        "followup_args",
+                        "context"
+                    ]
+                ),
+                displayMessage: "📤 Requesting file upload..."
             )
         ]
 
@@ -187,7 +272,8 @@ enum OnboardingToolCatalog {
                         "fileId": ToolProperty(type: "string", description: "Identifier of the uploaded resume file.")
                     ],
                     required: ["fileId"]
-                )
+                ),
+                displayMessage: "📄 Parsing your resume..."
             ),
             ToolDefinition(
                 name: "parse_linkedin",
@@ -196,10 +282,11 @@ enum OnboardingToolCatalog {
                     type: "object",
                     properties: [
                         "url": ToolProperty(type: "string", description: "LinkedIn profile URL to fetch."),
-                        "fileId": ToolProperty(type: "string", description: "Optional ID of an uploaded LinkedIn HTML file.")
+                        "fileId": ToolProperty(type: "string", description: "Optional ID of an uploaded LinkedIn HTML file.", nullable: true)
                     ],
-                    required: []
-                )
+                    required: ["url", "fileId"]
+                ),
+                displayMessage: "💼 Extracting LinkedIn profile data..."
             ),
             ToolDefinition(
                 name: "summarize_artifact",
@@ -210,7 +297,7 @@ enum OnboardingToolCatalog {
                         "fileId": ToolProperty(type: "string", description: "Identifier of the uploaded artifact."),
                         "context": ToolProperty(type: "string", description: "Optional context to influence the summary.")
                     ],
-                    required: ["fileId"]
+                    required: ["fileId", "context"]
                 )
             ),
             ToolDefinition(
@@ -222,7 +309,7 @@ enum OnboardingToolCatalog {
                         "fileId": ToolProperty(type: "string", description: "Identifier of the uploaded writing sample."),
                         "context": ToolProperty(type: "string", description: "Optional context or instructions for tone.")
                     ],
-                    required: ["fileId"]
+                    required: ["fileId", "context"]
                 )
             ),
             ToolDefinition(
@@ -234,7 +321,7 @@ enum OnboardingToolCatalog {
                         "query": ToolProperty(type: "string", description: "Search query string to execute."),
                         "context": ToolProperty(type: "string", description: "Purpose or justification for the lookup.")
                     ],
-                    required: ["query"]
+                    required: ["query", "context"]
                 )
             )
         ]
@@ -251,8 +338,9 @@ enum OnboardingToolCatalog {
                         "value": ToolProperty(type: "object", description: "Synonym for delta; use when providing the final value."),
                         "context": ToolProperty(type: "string", description: "Optional note for auditing or communication.")
                     ],
-                    required: ["target"]
-                )
+                    required: ["target", "delta", "value", "context"]
+                ),
+                strict: false
             ),
             ToolDefinition(
                 name: "persist_card",
@@ -263,7 +351,8 @@ enum OnboardingToolCatalog {
                         "card": ToolProperty(type: "object", description: "Knowledge card payload to store.")
                     ],
                     required: ["card"]
-                )
+                ),
+                strict: false
             ),
             ToolDefinition(
                 name: "persist_skill_map",
@@ -274,8 +363,9 @@ enum OnboardingToolCatalog {
                         "skillMapDelta": ToolProperty(type: "object", description: "JSON delta describing skill updates."),
                         "context": ToolProperty(type: "string", description: "Optional explanation of the change.")
                     ],
-                    required: ["skillMapDelta"]
-                )
+                    required: ["skillMapDelta", "context"]
+                ),
+                strict: false
             ),
             ToolDefinition(
                 name: "persist_facts_from_card",
@@ -311,8 +401,9 @@ enum OnboardingToolCatalog {
                             )
                         )
                     ],
-                    required: []
-                )
+                    required: ["facts", "entries", "fact_ledger"]
+                ),
+                strict: false
             ),
             ToolDefinition(
                 name: "persist_style_profile",
@@ -332,8 +423,9 @@ enum OnboardingToolCatalog {
                         ),
                         "context": ToolProperty(type: "string", description: "Optional metadata about the style analysis.")
                     ],
-                    required: ["style_vector", "samples"]
-                )
+                    required: ["style_vector", "samples", "context"]
+                ),
+                strict: false
             ),
             ToolDefinition(
                 name: "verify_conflicts",
@@ -350,4 +442,8 @@ enum OnboardingToolCatalog {
     }()
 
     static let functionTools: [Tool] = all.map(\.asFunctionTool)
+
+    static func displayMessage(for toolName: String) -> String? {
+        all.first(where: { $0.name == toolName })?.displayMessage
+    }
 }

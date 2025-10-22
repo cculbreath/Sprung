@@ -14,13 +14,15 @@ final class OnboardingInterviewStreamHandler {
         var accumulatedText = ""
 
         var reasoningState: (id: UUID, text: String)?
-        struct ToolStreamState {
-            var messageId: UUID
-            var inputBuffer: String
-            var status: String
-            var isComplete: Bool
-        }
-        var toolStates: [String: ToolStreamState] = [:]
+    struct ToolStreamState {
+        var messageId: UUID
+        var inputBuffer: String
+        var status: String
+        var isComplete: Bool
+        var toolName: String?
+    }
+    var toolStates: [String: ToolStreamState] = [:]
+    var completedToolCalls: [[String: Any]] = []
 
         func sanitizeStreamText(_ raw: String) -> String {
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -46,7 +48,7 @@ final class OnboardingInterviewStreamHandler {
             case .array:
                 return json.arrayValue.flatMap { flattenStreamJSON($0) }
             case .dictionary:
-                var dictionary = json.dictionaryValue
+                let dictionary = json.dictionaryValue
                 if dictionary.keys.count == 1, let nested = dictionary["json_keys"] {
                     return flattenStreamJSON(nested)
                 }
@@ -88,57 +90,72 @@ final class OnboardingInterviewStreamHandler {
             }
         }
 
+        func recordCompletedToolCall(callId: String, state: ToolStreamState) {
+            let argsString = state.inputBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !argsString.isEmpty else { return }
+
+            if let data = argsString.data(using: .utf8),
+               let object = try? JSONSerialization.jsonObject(with: data) {
+                let entry: [String: Any] = [
+                    "id": callId,
+                    "tool": state.toolName ?? "unknown",
+                    "arguments": object,
+                    "args": object
+                ]
+                completedToolCalls.append(entry)
+            } else {
+                completedToolCalls.append([
+                    "id": callId,
+                    "tool": state.toolName ?? "unknown",
+                    "arguments": argsString,
+                    "args": argsString
+                ])
+            }
+        }
+
         func updateToolMessage(for event: LLMToolStreamEvent) {
             var state = toolStates[event.callId]
             if state == nil {
-                let initialStatusRaw = event.status ?? "Tool call started."
-                let initialStatus = sanitizeStreamText(initialStatusRaw)
-                let statusText = initialStatus.isEmpty ? initialStatusRaw : initialStatus
-                let messageId = messageManager.appendAssistantMessage("🔧 Tool \(event.callId)\n\(statusText)")
+                let displayMsg = event.toolName.flatMap { OnboardingToolCatalog.displayMessage(for: $0) }
+                var messageId: UUID? = nil
+                if let displayMsg {
+                    messageId = messageManager.appendAssistantMessage(displayMsg)
+                }
                 state = ToolStreamState(
-                    messageId: messageId,
+                    messageId: messageId ?? UUID(),
                     inputBuffer: "",
-                    status: statusText,
-                    isComplete: false
+                    status: "",
+                    isComplete: false,
+                    toolName: event.toolName
                 )
             }
 
-            if let payload = event.payload {
-                let cleanedPayload = sanitizeStreamText(payload)
-                if !cleanedPayload.isEmpty {
-                    if event.appendsPayload {
-                        if let buffer = state?.inputBuffer, !buffer.isEmpty {
-                            state?.inputBuffer += "\n"
-                        }
-                        state?.inputBuffer += cleanedPayload
-                    } else {
-                        state?.inputBuffer = cleanedPayload
-                    }
-                }
+            if let toolName = event.toolName {
+                state?.toolName = toolName
             }
 
-            if let status = event.status {
-                let cleanedStatus = sanitizeStreamText(status)
-                state?.status = cleanedStatus.isEmpty ? status : cleanedStatus
+            if let payload = event.payload {
+                if event.appendsPayload {
+                    if !payload.isEmpty {
+                        if let buffer = state?.inputBuffer, !buffer.isEmpty {
+                            state?.inputBuffer += payload
+                        } else {
+                            state?.inputBuffer = payload
+                        }
+                    }
+                } else {
+                    state?.inputBuffer = payload
+                }
             }
 
             if event.isComplete {
                 state?.isComplete = true
+                if let finalState = state {
+                    recordCompletedToolCall(callId: event.callId, state: finalState)
+                }
             }
 
             if let state {
-                var display = "🔧 Tool \(event.callId)"
-                display += "\n\(state.status)"
-                if !state.inputBuffer.isEmpty {
-                    let preview = formatToolPayload(state.inputBuffer)
-                    if !preview.isEmpty {
-                        display += "\n" + preview
-                    }
-                }
-                if state.isComplete {
-                    display += "\n✅ Tool complete."
-                }
-                messageManager.updateMessage(id: state.messageId, text: display)
                 toolStates[event.callId] = state
             }
         }
@@ -150,16 +167,6 @@ final class OnboardingInterviewStreamHandler {
                 }
                 var updated = state
                 updated.isComplete = true
-                var display = "🔧 Tool \(id)"
-                display += "\n\(state.status)"
-                if !state.inputBuffer.isEmpty {
-                    let preview = formatToolPayload(state.inputBuffer)
-                    if !preview.isEmpty {
-                        display += "\n" + preview
-                    }
-                }
-                display += "\n✅ Tool complete."
-                messageManager.updateMessage(id: state.messageId, text: display)
                 toolStates[id] = updated
             }
         }
@@ -185,8 +192,11 @@ final class OnboardingInterviewStreamHandler {
                 }
 
                 if let content = chunk.content, !content.isEmpty {
-                    accumulatedText += content
-                    messageManager.updateMessage(id: mainMessageId, text: accumulatedText)
+                    let cleanedContent = stripJSONFormatting(from: content)
+                    if !cleanedContent.isEmpty {
+                        accumulatedText += cleanedContent
+                        messageManager.updateMessage(id: mainMessageId, text: accumulatedText)
+                    }
                 }
 
                 if chunk.isFinished {
@@ -199,10 +209,19 @@ final class OnboardingInterviewStreamHandler {
             if let state = reasoningState {
                 messageManager.removeMessage(withId: state.id)
             }
-            for state in toolStates.values {
-                messageManager.removeMessage(withId: state.messageId)
-            }
             throw error
+        }
+
+        if accumulatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !completedToolCalls.isEmpty {
+            let responseDict: [String: Any] = [
+                "assistant_reply": "",
+                "tool_calls": completedToolCalls
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: responseDict),
+               let jsonString = String(data: data, encoding: .utf8) {
+                accumulatedText = jsonString
+            }
         }
 
         return (accumulatedText, mainMessageId)
@@ -217,5 +236,32 @@ final class OnboardingInterviewStreamHandler {
         }
         let index = trimmed.index(trimmed.startIndex, offsetBy: maxLength)
         return String(trimmed[..<index]) + "…"
+    }
+
+    private func stripJSONFormatting(from text: String) -> String {
+        var cleaned = text
+
+        if cleaned.hasPrefix("\"") && cleaned.hasSuffix("\"") && cleaned.count > 1 {
+            cleaned = String(cleaned.dropFirst().dropLast())
+        }
+
+        if cleaned.hasPrefix("{\"assistant_reply\":\"") {
+            cleaned = cleaned
+                .replacingOccurrences(of: "{\"assistant_reply\":\"", with: "")
+                .replacingOccurrences(of: "\"}", with: "")
+        }
+
+        if cleaned.hasPrefix("{\"text\":\"") {
+            cleaned = cleaned
+                .replacingOccurrences(of: "{\"text\":\"", with: "")
+                .replacingOccurrences(of: "\"}", with: "")
+        }
+
+        cleaned = cleaned
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\t", with: "\t")
+            .replacingOccurrences(of: "\\\"", with: "\"")
+
+        return cleaned
     }
 }

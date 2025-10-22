@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftyJSON
+import SwiftOpenAI
 
 @MainActor
 @Observable
@@ -13,6 +14,7 @@ final class OnboardingInterviewService {
     private let openAIConversationService: OpenAIResponsesConversationService?
 
     private var conversationId: UUID?
+    private var conversationModelId: String?
     private var modelId: String?
     private var activeModelId: String?
     private var backend: LLMFacade.Backend = .openRouter
@@ -61,6 +63,7 @@ final class OnboardingInterviewService {
     private(set) var allowWritingAnalysis = false
     private(set) var uploadedItems: [OnboardingUploadedItem] = []
     private(set) var schemaIssues: [String] = []
+    private let networkRetryDelayNanoseconds: UInt64 = 500_000_000
 
     // Observable state updated by managers
     private(set) var messages: [OnboardingMessage] = []
@@ -229,6 +232,7 @@ final class OnboardingInterviewService {
         requestManager.reset()
         wizardManager.reset()
         conversationId = nil
+        conversationModelId = nil
         modelId = nil
         backend = defaultBackend
         activeModelId = nil
@@ -306,6 +310,7 @@ final class OnboardingInterviewService {
         defaultBackend = resolvedBackend
         lastError = nil
         let normalizedModelId = resolvedBackend == .openAI ? modelId.replacingOccurrences(of: "openai/", with: "") : modelId
+        let defaultNormalizedModelId = normalizedModelId
         activeModelId = normalizedModelId
         wizardManager.markCompleted(.introduction)
         wizardManager.transition(to: .resumeIntake)
@@ -315,8 +320,8 @@ final class OnboardingInterviewService {
                 let resumeId = await openAIConversationService.registerPersistedConversation(savedState)
                 conversationId = resumeId
                 messageManager.appendSystemMessage("♻️ Resuming previous onboarding interview with saved OpenAI thread.")
-                let resumePrompt = OnboardingPromptBuilder.resumeMessage(with: artifacts, phase: currentPhase)
-                await sendControlMessage(resumePrompt, conversationId: resumeId)
+                let resumeSpec = OnboardingPromptBuilder.resumePrompt(with: artifacts, phase: currentPhase)
+                await sendControlMessage(resumeSpec.message, conversationId: resumeId)
                 if lastError == nil {
                     isActive = true
                     syncWizardStepWithCurrentPhase()
@@ -335,33 +340,61 @@ final class OnboardingInterviewService {
 
         do {
             let systemPrompt = OnboardingPromptBuilder.systemPrompt()
-            let kickoff = OnboardingPromptBuilder.kickoffMessage(with: artifacts, phase: currentPhase)
+            let kickoffSpec = OnboardingPromptBuilder.kickoffPrompt(with: artifacts, phase: currentPhase)
+            let kickoffMessage = kickoffSpec.message
+            let selectedKickoffModelId = kickoffSpec.preferredModelId ?? preferredModelId ?? modelId
+            let normalizedKickoffModelId = resolvedBackend == .openAI
+                ? selectedKickoffModelId.replacingOccurrences(of: "openai/", with: "")
+                : selectedKickoffModelId
+            let kickoffReasoning = resolvedBackend == .openRouter ? kickoffSpec.reasoning : nil
+
+            preferredModelId = kickoffSpec.preferredModelId ?? preferredModelId ?? modelId
+            activeModelId = normalizedKickoffModelId
+
+            var didRetry = false
+            let retryHandler: (Int) -> Void = { attempt in
+                didRetry = true
+                self.messageManager.appendSystemMessage("⚠️ Network connection lost. Retrying (\(attempt + 1))…")
+            }
 
             if resolvedBackend == .openAI {
-                let handle = try await llmFacade.startConversationStreaming(
-                    systemPrompt: systemPrompt,
-                    userMessage: kickoff,
-                    modelId: (activeModelId ?? normalizedModelId),
-                    backend: resolvedBackend
-                )
-                guard let conversationId = handle.conversationId else {
-                    throw LLMError.clientError("Failed to establish OpenAI conversation")
+                try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                    let handle = try await llmFacade.startConversationStreaming(
+                        systemPrompt: systemPrompt,
+                        userMessage: kickoffMessage,
+                        modelId: normalizedKickoffModelId,
+                        reasoning: kickoffReasoning,
+                        backend: resolvedBackend
+                    )
+                    guard let handleConversationId = handle.conversationId else {
+                        throw LLMError.clientError("Failed to establish OpenAI conversation")
+                    }
+                    let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                    self.conversationId = handleConversationId
+                    self.conversationModelId = normalizedKickoffModelId
+                    try await handleLLMResponse(responseText, updatingMessageId: messageId)
+                    await persistConversationStateIfNeeded()
                 }
-                self.conversationId = conversationId
-                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
-                try await handleLLMResponse(responseText, updatingMessageId: messageId)
-                await persistConversationStateIfNeeded()
             } else {
-                let (conversationId, response) = try await llmFacade.startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: kickoff,
-                    modelId: (activeModelId ?? normalizedModelId),
-                    backend: resolvedBackend
-                )
-                self.conversationId = conversationId
-                try await handleLLMResponse(response)
-                artifactStore.clearConversationState()
+                try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                    let (newConversationId, response) = try await llmFacade.startConversation(
+                        systemPrompt: systemPrompt,
+                        userMessage: kickoffMessage,
+                        modelId: selectedKickoffModelId,
+                        backend: resolvedBackend
+                    )
+                    self.conversationId = newConversationId
+                    try await handleLLMResponse(response)
+                    artifactStore.clearConversationState()
+                }
             }
+
+            if didRetry {
+                messageManager.appendSystemMessage("✅ Connection re-established.")
+            }
+
+            preferredModelId = self.modelId ?? preferredModelId
+            activeModelId = defaultNormalizedModelId
             isActive = true
             syncWizardStepWithCurrentPhase()
         } catch {
@@ -373,7 +406,7 @@ final class OnboardingInterviewService {
     }
 
     func send(userMessage: String) async {
-        guard let conversationId else {
+        guard conversationId != nil || backend == .openAI else {
             lastError = "Interview has not been started"
             return
         }
@@ -387,24 +420,37 @@ final class OnboardingInterviewService {
         lastError = nil
 
         do {
+            var didRetry = false
+            let retryHandler: (Int) -> Void = { attempt in
+                didRetry = true
+                self.messageManager.appendSystemMessage("⚠️ Network connection lost while sending your message. Retrying (\(attempt + 1))…")
+            }
+
             if backend == .openAI {
-                let handle = try await llmFacade.continueConversationStreaming(
-                    userMessage: userMessage,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
+                let (responseText, messageId) = try await sendMessageWithModelSwitching(
+                    userMessage,
+                    resolvedModelId: resolvedModelId,
+                    retryHandler: retryHandler
                 )
-                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
                 try await handleLLMResponse(responseText, updatingMessageId: messageId)
                 await persistConversationStateIfNeeded()
             } else {
-                let response = try await llmFacade.continueConversation(
-                    userMessage: userMessage,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
-                )
-                try await handleLLMResponse(response)
+                guard let conversationId else {
+                    throw LLMError.clientError("Non-OpenAI backends require conversation ID")
+                }
+                try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                    let response = try await llmFacade.continueConversation(
+                        userMessage: userMessage,
+                        modelId: resolvedModelId,
+                        conversationId: conversationId,
+                        backend: backend
+                    )
+                    try await handleLLMResponse(response)
+                }
+            }
+
+            if didRetry {
+                messageManager.appendSystemMessage("✅ Connection re-established.")
             }
         } catch {
             lastError = error.localizedDescription
@@ -443,24 +489,34 @@ final class OnboardingInterviewService {
 
         do {
             let payloadText = payload.rawString(options: [.sortedKeys]) ?? payload.description
+            var didRetry = false
+            let retryHandler: (Int) -> Void = { attempt in
+                didRetry = true
+                self.messageManager.appendSystemMessage("⚠️ Network connection lost while confirming resume details. Retrying (\(attempt + 1))…")
+            }
+
             if backend == .openAI {
-                let handle = try await llmFacade.continueConversationStreaming(
-                    userMessage: payloadText,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
+                let (responseText, messageId) = try await sendMessageWithModelSwitching(
+                    payloadText,
+                    resolvedModelId: resolvedModelId,
+                    retryHandler: retryHandler
                 )
-                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
                 try await handleLLMResponse(responseText, updatingMessageId: messageId)
                 await persistConversationStateIfNeeded()
             } else {
-                let response = try await llmFacade.continueConversation(
-                    userMessage: payloadText,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
-                )
-                try await handleLLMResponse(response)
+                try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                    let response = try await llmFacade.continueConversation(
+                        userMessage: payloadText,
+                        modelId: resolvedModelId,
+                        conversationId: conversationId,
+                        backend: backend
+                    )
+                    try await handleLLMResponse(response)
+                }
+            }
+
+            if didRetry {
+                messageManager.appendSystemMessage("✅ Connection re-established.")
             }
         } catch {
             lastError = error.localizedDescription
@@ -485,24 +541,34 @@ final class OnboardingInterviewService {
         }
 
         do {
+            var didRetry = false
+            let retryHandler: (Int) -> Void = { attempt in
+                didRetry = true
+                self.messageManager.appendSystemMessage("⚠️ Network connection lost while coordinating the interview. Retrying (\(attempt + 1))…")
+            }
+
             if backend == .openAI {
-                let handle = try await llmFacade.continueConversationStreaming(
-                    userMessage: messageText,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
+                let (responseText, messageId) = try await sendMessageWithModelSwitching(
+                    messageText,
+                    resolvedModelId: resolvedModelId,
+                    retryHandler: retryHandler
                 )
-                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
                 try await handleLLMResponse(responseText, updatingMessageId: messageId)
                 await persistConversationStateIfNeeded()
             } else {
-                let response = try await llmFacade.continueConversation(
-                    userMessage: messageText,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
-                )
-                try await handleLLMResponse(response)
+                try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                    let response = try await llmFacade.continueConversation(
+                        userMessage: messageText,
+                        modelId: resolvedModelId,
+                        conversationId: conversationId,
+                        backend: backend
+                    )
+                    try await handleLLMResponse(response)
+                }
+            }
+
+            if didRetry {
+                messageManager.appendSystemMessage("✅ Connection re-established.")
             }
         } catch {
             lastError = error.localizedDescription
@@ -561,6 +627,41 @@ final class OnboardingInterviewService {
     }
 
     // MARK: - Artifact Helpers
+
+    private func performWithNetworkRetry<T>(
+        maxAttempts: Int = 2,
+        onRetry: @escaping (Int) -> Void = { _ in },
+        action: @escaping () async throws -> T
+    ) async throws -> T {
+        var attempt = 0
+
+        while true {
+            do {
+                return try await action()
+            } catch {
+                if isNetworkConnectionLost(error) && attempt < maxAttempts - 1 {
+                    onRetry(attempt)
+                    attempt += 1
+                    do {
+                        try await Task.sleep(nanoseconds: networkRetryDelayNanoseconds)
+                    } catch {
+                        if Task.isCancelled { throw CancellationError() }
+                    }
+                    continue
+                }
+                throw error
+            }
+        }
+    }
+
+    private func isNetworkConnectionLost(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            return urlError.code == .networkConnectionLost
+        }
+
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorNetworkConnectionLost
+    }
 
     private func refreshArtifacts() {
         artifacts = artifactStore.loadArtifacts()
@@ -791,24 +892,34 @@ final class OnboardingInterviewService {
 
         do {
             let payload = responseWrapper.rawString(options: [.sortedKeys]) ?? responseWrapper.description
+            var didRetry = false
+            let retryHandler: (Int) -> Void = { attempt in
+                didRetry = true
+                self.messageManager.appendSystemMessage("⚠️ Network connection lost while syncing tool results. Retrying (\(attempt + 1))…")
+            }
+
             if backend == .openAI {
-                let handle = try await llmFacade.continueConversationStreaming(
-                    userMessage: payload,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
+                let (responseText, messageId) = try await sendMessageWithModelSwitching(
+                    payload,
+                    resolvedModelId: resolvedModelId,
+                    retryHandler: retryHandler
                 )
-                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
                 try await handleLLMResponse(responseText, updatingMessageId: messageId)
                 await persistConversationStateIfNeeded()
             } else {
-                let response = try await llmFacade.continueConversation(
-                    userMessage: payload,
-                    modelId: resolvedModelId,
-                    conversationId: conversationId,
-                    backend: backend
-                )
-                try await handleLLMResponse(response)
+                try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                    let response = try await llmFacade.continueConversation(
+                        userMessage: payload,
+                        modelId: resolvedModelId,
+                        conversationId: conversationId,
+                        backend: backend
+                    )
+                    try await handleLLMResponse(response)
+                }
+            }
+
+            if didRetry {
+                messageManager.appendSystemMessage("✅ Connection re-established.")
             }
         } catch {
             lastError = error.localizedDescription
@@ -843,6 +954,104 @@ final class OnboardingInterviewService {
         let payload = JSON(payloadDict)
         let messageText = payload.rawString(options: [.sortedKeys]) ?? payload.description
         await sendControlMessage(messageText, conversationId: conversationId)
+    }
+
+    // MARK: - Model Switching
+
+    func switchModel(to modelId: String) async {
+        guard backend == .openAI else {
+            Logger.warning("Model switching is only supported for OpenAI backend")
+            return
+        }
+
+        let normalizedModelId = modelId.replacingOccurrences(of: "openai/", with: "")
+
+        guard normalizedModelId != conversationModelId else {
+            Logger.info("Already using model \(normalizedModelId), no switch needed")
+            return
+        }
+
+        Logger.info("Switching from model \(conversationModelId ?? "none") to \(normalizedModelId)")
+
+        conversationId = nil
+        conversationModelId = normalizedModelId
+        activeModelId = normalizedModelId
+        preferredModelId = modelId
+
+        messageManager.appendSystemMessage("🔄 Switching to \(normalizedModelId)")
+    }
+
+    private func buildMessageHistoryForReplay() -> [InputItem] {
+        var inputItems: [InputItem] = []
+
+        for message in messages {
+            let role: String
+            switch message.role {
+            case .user:
+                role = "user"
+            case .assistant:
+                role = "assistant"
+            case .system:
+                continue
+            }
+
+            let inputMessage = InputMessage(
+                role: role,
+                content: .text(message.text)
+            )
+            inputItems.append(.message(inputMessage))
+        }
+
+        return inputItems
+    }
+
+    private func sendMessageWithModelSwitching(
+        _ userMessage: String,
+        resolvedModelId: String,
+        retryHandler: @escaping (Int) -> Void
+    ) async throws -> (String, UUID) {
+        let modelChanged = conversationModelId != nil && conversationModelId != resolvedModelId
+
+        if modelChanged {
+            Logger.info("Model changed from \(conversationModelId!) to \(resolvedModelId), replaying history")
+            let systemPrompt = OnboardingPromptBuilder.systemPrompt()
+            let messageHistory = buildMessageHistoryForReplay()
+
+            return try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                guard let openAIConversationService else {
+                    throw LLMError.clientError("OpenAI conversation service unavailable")
+                }
+                let (newConversationId, stream) = try await openAIConversationService.startConversationStreamingWithHistory(
+                    systemPrompt: systemPrompt,
+                    messageHistory: messageHistory,
+                    userMessage: userMessage,
+                    modelId: resolvedModelId,
+                    temperature: nil
+                )
+                let handle = LLMStreamingHandle(
+                    conversationId: newConversationId,
+                    stream: stream,
+                    cancel: {}
+                )
+                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                self.conversationId = newConversationId
+                self.conversationModelId = resolvedModelId
+                return (responseText, messageId)
+            }
+        } else if let conversationId {
+            return try await performWithNetworkRetry(onRetry: retryHandler) { [self] in
+                let handle = try await llmFacade.continueConversationStreaming(
+                    userMessage: userMessage,
+                    modelId: resolvedModelId,
+                    conversationId: conversationId,
+                    backend: backend
+                )
+                let (responseText, messageId) = try await streamAssistantResponse(from: handle)
+                return (responseText, messageId)
+            }
+        } else {
+            throw LLMError.clientError("No conversation ID available")
+        }
     }
 
     // MARK: - Errors

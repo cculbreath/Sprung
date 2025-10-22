@@ -135,6 +135,43 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         return (localConversationId, stream)
     }
 
+    func startConversationStreamingWithHistory(
+        systemPrompt: String?,
+        messageHistory: [InputItem],
+        userMessage: String,
+        modelId: String,
+        temperature: Double?
+    ) async throws -> (UUID, AsyncThrowingStream<LLMStreamChunkDTO, Error>) {
+        var inputItems = messageHistory
+        let message = InputMessage(role: "user", content: .text(userMessage))
+        inputItems.append(.message(message))
+
+        var parameters = ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(modelId),
+            conversation: nil,
+            instructions: systemPrompt,
+            previousResponseId: nil,
+            store: true,
+            temperature: temperature ?? defaultTemperature,
+            text: TextConfiguration(format: .text)
+        )
+        parameters.parallelToolCalls = false
+        parameters.tools = onboardingToolSchemas
+        parameters.stream = true
+
+        let localConversationId = UUID()
+        let stream = try await streamConversation(
+            parameters: parameters,
+            localConversationId: localConversationId,
+            existingState: nil,
+            systemPrompt: systemPrompt,
+            modelId: modelId
+        )
+
+        return (localConversationId, stream)
+    }
+
     func continueConversationStreaming(
         userMessage: String,
         modelId: String,
@@ -280,6 +317,64 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     isFinished: false
                                 )
                             )
+                        case .outputItemAdded(let added):
+                            if case let .functionCall(functionCall) = added.item {
+                                let initialArguments = functionCall.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+                                continuation.yield(
+                                    LLMStreamChunkDTO(
+                                        content: nil,
+                                        reasoning: nil,
+                                        event: .tool(
+                                            LLMToolStreamEvent(
+                                                callId: functionCall.id,
+                                                status: functionCall.status ?? "Tool call started.",
+                                                payload: initialArguments.isEmpty ? nil : initialArguments,
+                                                appendsPayload: false,
+                                                isComplete: false,
+                                                toolName: functionCall.name
+                                            )
+                                        ),
+                                        isFinished: false
+                                    )
+                                )
+                            }
+                        case .functionCallArgumentsDelta(let delta):
+                            continuation.yield(
+                                LLMStreamChunkDTO(
+                                    content: nil,
+                                    reasoning: nil,
+                                    event: .tool(
+                                        LLMToolStreamEvent(
+                                            callId: delta.itemId,
+                                            status: "Receiving tool arguments…",
+                                            payload: delta.delta,
+                                            appendsPayload: true,
+                                            isComplete: false,
+                                            toolName: nil
+                                        )
+                                    ),
+                                    isFinished: false
+                                )
+                            )
+                        case .functionCallArgumentsDone(let done):
+                            let trimmed = done.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+                            continuation.yield(
+                                LLMStreamChunkDTO(
+                                    content: nil,
+                                    reasoning: nil,
+                                    event: .tool(
+                                        LLMToolStreamEvent(
+                                            callId: done.itemId,
+                                            status: "Tool arguments finalized.",
+                                            payload: trimmed,
+                                            appendsPayload: false,
+                                            isComplete: true,
+                                            toolName: done.name
+                                        )
+                                    ),
+                                    isFinished: false
+                                )
+                            )
                         case .customToolCallInputDelta(let delta):
                             let payload = delta.delta.trimmingCharacters(in: .whitespacesAndNewlines)
                             continuation.yield(
@@ -292,7 +387,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                             status: "Preparing tool input…",
                                             payload: payload,
                                             appendsPayload: true,
-                                            isComplete: false
+                                            isComplete: false,
+                                            toolName: nil
                                         )
                                     ),
                                     isFinished: false
@@ -310,7 +406,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                             status: "Tool input submitted.",
                                             payload: payload.isEmpty ? nil : payload,
                                             appendsPayload: false,
-                                            isComplete: false
+                                            isComplete: false,
+                                            toolName: nil
                                         )
                                     ),
                                     isFinished: false
@@ -327,7 +424,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                             status: "Tool execution in progress…",
                                             payload: nil,
                                             appendsPayload: false,
-                                            isComplete: false
+                                            isComplete: false,
+                                            toolName: nil
                                         )
                                     ),
                                     isFinished: false
@@ -344,7 +442,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                             status: "Tool execution completed.",
                                             payload: nil,
                                             appendsPayload: false,
-                                            isComplete: true
+                                            isComplete: true,
+                                            toolName: nil
                                         )
                                     ),
                                     isFinished: false
@@ -361,7 +460,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                             status: "Tool execution failed.",
                                             payload: nil,
                                             appendsPayload: false,
-                                            isComplete: true
+                                            isComplete: true,
+                                            toolName: nil
                                         )
                                     ),
                                     isFinished: false
