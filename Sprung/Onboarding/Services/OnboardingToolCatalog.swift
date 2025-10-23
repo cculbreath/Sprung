@@ -43,12 +43,12 @@ enum OnboardingToolCatalog {
                 displayMessage: "💬 Presenting options for you to choose from..."
             ),
             ToolDefinition(
-                name: "validate_applicant_profile",
+                name: "validate_and_save_applicant_profile",
                 description: """
-                Present an editable ApplicantProfile form for confirmation or correction. Call when the model has low confidence or needs human review.
+                Present an editable ApplicantProfile form for confirmation or correction. Call this tool when you exausted the available resources completing as many of the ApplicantProfile values as possible and you want those values to be saved into the resume database. The user will provide any missing values and verify the values that you've identified from the available resources before they are saved into the application database. 
 
                 When the tool returns {"status":"waiting_for_user"}:
-                - Tell the user: "Please review or complete your profile in the form to the left. We'll resume once you've submitted your changes."
+                - Tell the user: "Please complete your profile using the form to the left. You can also edit any provided values that may be incorrect. We'll resume once you've approved the final values."
                 - Pause additional reasoning until the user responds.
                 """,
                 parameters: ToolParameters(
@@ -123,9 +123,6 @@ enum OnboardingToolCatalog {
                 description: """
                 Retrieve ApplicantProfile fields from the user's macOS Contacts ("Me") card. Only call after explicit consent.
 
-                When the tool returns {"status":"waiting_for_user"}:
-                - Say: "I'll continue once you've granted or declined permission to access your Contacts card."
-                - Do not continue reasoning until the user acts.
                 """,
                 parameters: ToolParameters(
                     type: "object",
