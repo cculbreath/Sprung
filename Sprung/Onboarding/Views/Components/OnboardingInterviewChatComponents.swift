@@ -67,10 +67,10 @@ struct MessageBubble: View {
 
 struct LLMActivityView: View {
     private let gradientColors: [Color] = [
-        Color(red: 1.0, green: 0.58, blue: 0.2),
-        Color(red: 0.98, green: 0.32, blue: 0.62),
-        Color(red: 0.62, green: 0.35, blue: 0.95),
-        Color(red: 0.15, green: 0.65, blue: 0.97)
+        Color(red: 1.0, green: 0.38, blue: 0.0),
+        Color(red: 0.95, green: 0.15, blue: 0.55),
+        Color(red: 0.56, green: 0.17, blue: 0.95),
+        Color(red: 0.0, green: 0.54, blue: 0.98)
     ]
 
     private let rotationDuration: Double = 1.2
@@ -82,7 +82,7 @@ struct LLMActivityView: View {
             spinner
                 .rotationEffect(.degrees(progress * 360))
         }
-        .frame(width: 44, height: 44)
+        .frame(width: 48, height: 48)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -95,32 +95,34 @@ struct LLMActivityView: View {
 
         return ZStack {
             Circle()
-                .fill(gradient)
+                .stroke(gradient, lineWidth: 22)
 
             Circle()
-                .fill(gradient)
-                .blur(radius: 8)
-                .opacity(0.85)
+                .stroke(gradient, lineWidth: 22)
+                .blur(radius: 10)
+                .opacity(0.9)
 
             Circle()
-                .fill(gradient)
-                .blur(radius: 18)
-                .opacity(0.65)
+                .stroke(gradient, lineWidth: 22)
+                .blur(radius: 26)
+                .opacity(0.7)
 
             Circle()
-                .fill(gradient)
-                .blur(radius: 38)
-                .opacity(0.35)
+                .stroke(gradient, lineWidth: 22)
+                .blur(radius: 44)
+                .opacity(0.45)
 
             Circle()
                 .fill(Color(nsColor: .controlBackgroundColor))
-                .padding(14)
+                .padding(18)
 
             Circle()
-                .strokeBorder(Color.white.opacity(0.7), lineWidth: 4)
-                .padding(10)
+                .stroke(Color.white.opacity(0.9), lineWidth: 4)
+                .padding(16)
         }
-        .compositingGroup()
-        .shadow(color: gradientColors.last?.opacity(0.35) ?? .clear, radius: 22, y: 12)
+        .saturation(1.4)
+        .brightness(0.05)
+        .shadow(color: gradientColors.first?.opacity(0.4) ?? .clear, radius: 26, y: 14)
+        .shadow(color: gradientColors.last?.opacity(0.3) ?? .clear, radius: 20, y: -8)
     }
 }
