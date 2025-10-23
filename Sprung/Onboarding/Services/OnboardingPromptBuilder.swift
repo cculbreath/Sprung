@@ -47,10 +47,21 @@ enum OnboardingPromptBuilder {
         - ApplicantProfile strings must always be present; return \"\" for any contact field you cannot populate yet and [] for empty collections.
         - Provide default selections such as \"selection_style\": \"single\" and explicit booleans for flags like \"multiple\" or \"allow_cancel\".
 
-        TOOLS
+        TOOLS AND WAITING PATTERN
+        When you call a tool that requires user input (ask_user_options, validate_applicant_profile, validate_section_entries, prompt_user_for_upload, etc.), it will immediately return {\"status\": \"waiting_for_user\"}.
+
+        CRITICAL: When you receive {\"status\": \"waiting_for_user\"}:
+        1. Respond with a brief message acknowledging the form/prompt you've shown (e.g., \"Please make your selection in the form to the left. We'll continue once you've chosen an option.\")
+        2. DO NOT call any other tools
+        3. DO NOT continue with additional reasoning or questions
+        4. STOP and wait for the user's response
+
+        The user's selection will be sent back to you in a subsequent message, at which point you can proceed with the next step.
+
+        TOOL USAGE:
         - Use ask_user_options to present radio-button or checkbox choices, including situations where the user should choose how to provide data.
         - Use validate_applicant_profile to confirm ApplicantProfile details with a human-editable form. Always include every field; use \"\" when data is unknown.
-        - Use fetch_from_system_contacts when the user consents to sourcing ApplicantProfile fields from the macOS Contacts (“Me”) card.
+        - Use fetch_from_system_contacts when the user consents to sourcing ApplicantProfile fields from the macOS Contacts ("Me") card.
         - Use validate_enabled_resume_sections to confirm which JSON Resume sections apply before collecting entries for them.
         - Use validate_section_entries for any JSON Resume section additions or edits. Always provide the full array for the section you're validating; the user-approved data replaces the prior contents entirely.
         - Use prompt_user_for_upload to request supporting documents when needed.
@@ -97,7 +108,22 @@ enum OnboardingPromptBuilder {
         message += "\nFocus summary: \(phase.focusSummary)"
         message += "\nExpected outputs: \(phase.expectedOutputs.joined(separator: " | "))"
 
-        message += "\nPlease greet the user, summarize the overall onboarding goals and the immediate objective, then immediately call ask_user_options with four radio-button choices for sourcing contact info: (a) résumé or uploaded document, (b) LinkedIn or another URL, (c) macOS Contacts / vCard, (d) Manual entry."
+        message += """
+
+KICKOFF WORKFLOW:
+1. Greet the user warmly
+2. Explain that you'll be asking questions and collecting documents to build up a store of information to generate accurate and tailored resumes
+3. Explain that you'll start with the basics: name, address, contact information, etc.
+4. Ask the user: "Do you have a document or resource that I can use for this information?"
+5. Immediately call the ask_user_options tool with these four radio-button options:
+   - id: "resume_doc", title: "Résumé or uploaded document", description: "Parse fields from your most recent résumé or CV"
+   - id: "linkedin", title: "LinkedIn or URL", description: "Parse fields from a LinkedIn profile or other public URL"
+   - id: "macos_contacts", title: "macOS Contacts / vCard", description: "Use your macOS Contacts card or vCard export"
+   - id: "manual_entry", title: "Manual entry", description: "Enter contact details manually"
+6. The tool will return {"status": "waiting_for_user"}
+7. When you see this status, respond with: "Please make your selection in the form to the left. We'll continue once you've chosen an option."
+8. STOP. Do not call any other tools or continue reasoning. Wait for the user's response.
+"""
         return OnboardingPromptSpec(
             message: message,
             preferredModelId: "openai/gpt-5-nano",
