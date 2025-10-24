@@ -30,9 +30,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
     private let defaultTemperature: Double = 1.0
     private var conversations: [UUID: ConversationState] = [:]
 
-    private var onboardingToolSchemas: [Tool] {
-        OnboardingToolCatalog.functionTools
-    }
+    private var onboardingToolSchemas: [Tool] { [] }
 
     init(service: OpenAIService) {
         self.service = service
