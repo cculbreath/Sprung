@@ -62,6 +62,7 @@ final class OnboardingInterviewService {
     private var preferredBackendValue: LLMFacade.Backend = .openAI
     private var pendingChoiceContinuationId: UUID?
     private var pendingValidationContinuationId: UUID?
+    private var uploadContinuationIds: [UUID: UUID] = [:]
     private var systemPrompt: String
 
     // MARK: - Init
@@ -79,6 +80,7 @@ final class OnboardingInterviewService {
         toolRegistry.register(SubmitForValidationTool(service: self))
         toolRegistry.register(PersistDataTool(dataStore: dataStore))
         toolRegistry.register(GetMacOSContactCardTool())
+        toolRegistry.register(GetUserUploadTool(service: self))
     }
 
     // MARK: - Interview Lifecycle
@@ -122,6 +124,9 @@ final class OnboardingInterviewService {
         pendingValidationPrompt = nil
         pendingChoiceContinuationId = nil
         pendingValidationContinuationId = nil
+        uploadContinuationIds.removeAll()
+        pendingUploadRequests.removeAll()
+        uploadedItems.removeAll()
         messages.removeAll()
         nextQuestions.removeAll()
         lastError = nil
@@ -207,6 +212,14 @@ final class OnboardingInterviewService {
         isProcessing = false
     }
 
+    func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
+        removeUploadRequest(id: request.id)
+        pendingUploadRequests.append(request)
+        uploadContinuationIds[request.id] = continuationId
+        isProcessing = false
+        updateWaitingState(.upload)
+    }
+
     func clearValidationPrompt(continuationId: UUID) {
         if pendingValidationContinuationId == continuationId {
             pendingValidationPrompt = nil
@@ -248,6 +261,46 @@ final class OnboardingInterviewService {
         await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
+    func completeUploadRequest(id: UUID, fileURLs: [URL]) async {
+        guard let continuationId = uploadContinuationIds[id] else { return }
+        removeUploadRequest(id: id)
+        uploadContinuationIds.removeValue(forKey: id)
+
+        if !fileURLs.isEmpty {
+            let newItems = fileURLs.map {
+                OnboardingUploadedItem(
+                    id: UUID(),
+                    filename: $0.lastPathComponent,
+                    url: $0,
+                    uploadedAt: Date()
+                )
+            }
+            uploadedItems.append(contentsOf: newItems)
+        }
+
+        var payload = JSON()
+        if fileURLs.isEmpty {
+            payload["status"].string = "skipped"
+        } else {
+            payload["status"].string = "uploaded"
+            let filesJSON = fileURLs.map { url -> JSON in
+                var json = JSON()
+                json["url"].string = url.absoluteString
+                json["filename"].string = url.lastPathComponent
+                return json
+            }
+            payload["files"] = JSON(filesJSON)
+        }
+
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
+
+    func skipUploadRequest(id: UUID) async {
+        await completeUploadRequest(id: id, fileURLs: [])
+    }
+
     // MARK: - Callback Handling
 
     func handleProcessingStateChange(_ processing: Bool) {
@@ -269,9 +322,9 @@ final class OnboardingInterviewService {
 
     func updateWaitingState(_ waiting: InterviewSession.Waiting?) {
         switch waiting {
-        case .selection, .validation:
+        case .selection, .validation, .upload:
             wizardStepStatuses[wizardStep] = .current
-        case .upload, .none:
+        case .none:
             wizardStepStatuses[wizardStep] = nil
         }
     }
@@ -287,6 +340,8 @@ final class OnboardingInterviewService {
         pendingValidationPrompt = nil
         pendingChoiceContinuationId = nil
         pendingValidationContinuationId = nil
+        pendingUploadRequests.removeAll()
+        uploadContinuationIds.removeAll()
         nextQuestions.removeAll()
         lastError = nil
     }
@@ -323,6 +378,10 @@ final class OnboardingInterviewService {
             callbacks: callbacks,
             systemPrompt: systemPrompt
         )
+    }
+
+    private func removeUploadRequest(id: UUID) {
+        pendingUploadRequests.removeAll { $0.id == id }
     }
 
     private static func defaultSystemPrompt() -> String {

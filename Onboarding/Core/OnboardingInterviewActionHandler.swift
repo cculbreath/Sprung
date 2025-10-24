@@ -97,16 +97,17 @@ struct OnboardingInterviewActionHandler {
         debugLog("Section entry request declined: \(reason)")
     }
 
-    func completeUploadRequest(id: UUID, fileURL: URL) async {
-        debugLog("Upload handling is not implemented in milestone M0. Ignoring file at \(fileURL).")
+    func completeUploadRequest(id: UUID, fileURLs: [URL]) async {
+        await service.completeUploadRequest(id: id, fileURLs: fileURLs)
     }
 
     func completeUploadRequest(id: UUID, link: URL) async {
-        debugLog("Upload handling is not implemented in milestone M0. Ignoring link \(link).")
+        await service.completeUploadRequest(id: id, fileURLs: [])
+        debugLog("Link-based uploads are not supported yet. Ignored link \(link).")
     }
 
     func declineUploadRequest(id: UUID) async {
-        debugLog("Upload request declined for id \(id).")
+        await service.skipUploadRequest(id: id)
     }
 
     func confirmPendingExtraction(_ json: JSON, notes: String?) async {
@@ -117,4 +118,3 @@ struct OnboardingInterviewActionHandler {
         debugLog("Pending extraction cancelled.")
     }
 }
-
