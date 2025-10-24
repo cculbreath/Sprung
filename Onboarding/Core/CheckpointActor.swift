@@ -11,6 +11,8 @@ struct InterviewCheckpoint: Codable {
     let timestamp: Date
     let phase: InterviewPhase
     let objectivesDone: [String]
+    let applicantProfile: String?
+    let skeletonTimeline: String?
 }
 
 actor Checkpoints {
@@ -30,12 +32,16 @@ actor Checkpoints {
         return directory.appendingPathComponent("Interview.checkpoints.json")
     }()
 
-    func save(from session: InterviewSession) async {
+    func save(from session: InterviewSession, applicantProfile: JSON?, skeletonTimeline: JSON?) async {
+        let profileString = applicantProfile?.rawString(options: .sortedKeys)
+        let timelineString = skeletonTimeline?.rawString(options: .sortedKeys)
         history.append(
             InterviewCheckpoint(
                 timestamp: Date(),
                 phase: session.phase,
-                objectivesDone: Array(session.objectivesDone)
+                objectivesDone: Array(session.objectivesDone),
+                applicantProfile: profileString,
+                skeletonTimeline: timelineString
             )
         )
 
@@ -51,7 +57,7 @@ actor Checkpoints {
         }
     }
 
-    func restoreLatest() async -> InterviewSession? {
+    func restoreLatest() async -> (InterviewSession, JSON?, JSON?)? {
         guard
             let data = try? Data(contentsOf: url),
             let checkpoints = try? JSONDecoder().decode([InterviewCheckpoint].self, from: data),
@@ -63,7 +69,9 @@ actor Checkpoints {
         var session = InterviewSession()
         session.phase = latest.phase
         session.objectivesDone = Set(latest.objectivesDone)
-        return session
+
+        let profileJSON = latest.applicantProfile.flatMap { JSON(parseJSON: $0) }
+        let timelineJSON = latest.skeletonTimeline.flatMap { JSON(parseJSON: $0) }
+        return (session, profileJSON, timelineJSON)
     }
 }
-

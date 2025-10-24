@@ -122,7 +122,11 @@ actor InterviewOrchestrator {
             await state.completeObjective("applicant_profile")
             await callbacks.emitAssistantMessage("✅ Applicant profile captured.")
             let session = await state.currentSession()
-            await checkpoints.save(from: session)
+            await checkpoints.save(
+                from: session,
+                applicantProfile: applicantProfileData,
+                skeletonTimeline: skeletonTimelineData
+            )
         } catch ToolError.userCancelled {
             await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
         } catch {
@@ -135,7 +139,11 @@ actor InterviewOrchestrator {
             await state.completeObjective("skeleton_timeline")
             await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.")
             let session = await state.currentSession()
-            await checkpoints.save(from: session)
+            await checkpoints.save(
+                from: session,
+                applicantProfile: applicantProfileData,
+                skeletonTimeline: skeletonTimelineData
+            )
         } catch ToolError.userCancelled {
             await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.")
         } catch {
@@ -338,7 +346,11 @@ actor InterviewOrchestrator {
 
         try await handleResponse(response)
         let session = await state.currentSession()
-        await checkpoints.save(from: session)
+        await checkpoints.save(
+            from: session,
+            applicantProfile: applicantProfileData,
+            skeletonTimeline: skeletonTimelineData
+        )
     }
 
     private func callTool(name: String, arguments: JSON) async throws -> JSON {

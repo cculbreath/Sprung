@@ -82,11 +82,11 @@ struct OnboardingInterviewActionHandler {
     }
 
     func completeSectionToggleSelection(enabled: [String]) async {
-        debugLog("Section toggle handling is not implemented in milestone M0.")
+        await service.resolveSectionToggle(enabled: enabled)
     }
 
     func cancelSectionToggleSelection(reason: String) async {
-        debugLog("Section toggle selection cancelled: \(reason)")
+        await service.rejectSectionToggle(reason: reason)
     }
 
     func completeSectionEntryRequest(id: UUID, approvedEntries: [JSON]) async {
