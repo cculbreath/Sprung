@@ -83,7 +83,7 @@ private struct ContactCardRequest {
 }
 
 private func requestContactsAccess() async throws {
-    try await withCheckedThrowingContinuation { continuation in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         CNContactStore().requestAccess(for: .contacts) { granted, error in
             if let error {
                 continuation.resume(throwing: ContactError.other(error))
@@ -153,4 +153,3 @@ private func makeResponse(from contact: CNContact) -> JSON {
     response["status"].string = "fetched"
     return response
 }
-

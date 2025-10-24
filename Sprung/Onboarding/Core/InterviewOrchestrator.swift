@@ -149,6 +149,18 @@ actor InterviewOrchestrator {
         } catch {
             await callbacks.handleError("Failed to build skeleton timeline: \(error.localizedDescription)")
         }
+
+        let current = await state.currentSession()
+        if current.objectivesDone.contains("skeleton_timeline") && !current.objectivesDone.contains("enabled_sections") {
+            await state.completeObjective("enabled_sections")
+            await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.")
+            let updatedSession = await state.currentSession()
+            await checkpoints.save(
+                from: updatedSession,
+                applicantProfile: applicantProfileData,
+                skeletonTimeline: skeletonTimelineData
+            )
+        }
     }
 
     private func collectApplicantProfile() async throws -> JSON {
