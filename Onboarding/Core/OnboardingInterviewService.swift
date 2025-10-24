@@ -62,6 +62,7 @@ final class OnboardingInterviewService {
     private var preferredBackendValue: LLMFacade.Backend = .openAI
     private var pendingChoiceContinuationId: UUID?
     private var pendingValidationContinuationId: UUID?
+    private var applicantProfileContinuationId: UUID?
     private var uploadContinuationIds: [UUID: UUID] = [:]
     private var systemPrompt: String
 
@@ -124,6 +125,8 @@ final class OnboardingInterviewService {
         pendingValidationPrompt = nil
         pendingChoiceContinuationId = nil
         pendingValidationContinuationId = nil
+        applicantProfileContinuationId = nil
+        pendingApplicantProfileRequest = nil
         uploadContinuationIds.removeAll()
         pendingUploadRequests.removeAll()
         uploadedItems.removeAll()
@@ -204,12 +207,62 @@ final class OnboardingInterviewService {
         await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
+    // MARK: - Applicant Profile Handling
+
+    func presentApplicantProfileRequest(_ request: OnboardingApplicantProfileRequest, continuationId: UUID) {
+        pendingApplicantProfileRequest = request
+        applicantProfileContinuationId = continuationId
+        isProcessing = false
+        updateWaitingState(.validation)
+    }
+
+    func clearApplicantProfileRequest(continuationId: UUID) {
+        guard applicantProfileContinuationId == continuationId else { return }
+        pendingApplicantProfileRequest = nil
+        applicantProfileContinuationId = nil
+    }
+
+    func resolveApplicantProfile(with draft: ApplicantProfileDraft) async {
+        guard
+            let continuationId = applicantProfileContinuationId,
+            let request = pendingApplicantProfileRequest
+        else { return }
+
+        let resolvedJSON = draft.toJSON()
+        let status: String = resolvedJSON == request.proposedProfile ? "approved" : "modified"
+
+        var payload = JSON()
+        payload["status"].string = status
+        payload["data"] = resolvedJSON
+
+        clearApplicantProfileRequest(continuationId: continuationId)
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
+
+    func rejectApplicantProfile(reason: String) async {
+        guard let continuationId = applicantProfileContinuationId else { return }
+
+        var payload = JSON()
+        payload["status"].string = "rejected"
+        if !reason.isEmpty {
+            payload["userNotes"].string = reason
+        }
+
+        clearApplicantProfileRequest(continuationId: continuationId)
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
+
     // MARK: - Validation Prompt Handling
 
     func presentValidationPrompt(prompt: OnboardingValidationPrompt, continuationId: UUID) {
         pendingValidationPrompt = prompt
         pendingValidationContinuationId = continuationId
         isProcessing = false
+        updateWaitingState(.validation)
     }
 
     func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
@@ -340,8 +393,11 @@ final class OnboardingInterviewService {
         pendingValidationPrompt = nil
         pendingChoiceContinuationId = nil
         pendingValidationContinuationId = nil
+        pendingApplicantProfileRequest = nil
+        applicantProfileContinuationId = nil
         pendingUploadRequests.removeAll()
         uploadContinuationIds.removeAll()
+        uploadedItems.removeAll()
         nextQuestions.removeAll()
         lastError = nil
     }

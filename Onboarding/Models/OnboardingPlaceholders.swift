@@ -146,6 +146,11 @@ struct OnboardingValidationPrompt: Identifiable {
 struct OnboardingApplicantProfileRequest {
     var proposedProfile: JSON
     var sources: [String]
+
+    init(proposedProfile: JSON, sources: [String] = []) {
+        self.proposedProfile = proposedProfile
+        self.sources = sources
+    }
 }
 
 struct OnboardingSectionToggleRequest {
