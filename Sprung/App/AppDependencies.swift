@@ -126,6 +126,7 @@ final class AppDependencies {
         )
 
         var openAIConversationService: OpenAIResponsesConversationService?
+        var onboardingOpenAIService: OpenAIService?
 
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
@@ -136,6 +137,7 @@ final class AppDependencies {
             let conversationService = OpenAIResponsesConversationService(service: openAIService)
             llmFacade.registerConversationService(conversationService, for: .openAI)
             openAIConversationService = conversationService
+            onboardingOpenAIService = openAIService
             Logger.info("✅ OpenAI backend registered for onboarding conversations", category: .appLifecycle)
         }
 
@@ -154,14 +156,7 @@ final class AppDependencies {
         )
         self.resumeReviseViewModel = resumeReviseViewModel
 
-        let onboardingInterviewService = OnboardingInterviewService(
-            llmFacade: llmFacade,
-            artifactStore: onboardingArtifactStore,
-            applicantProfileStore: applicantProfileStore,
-            experienceDefaultsStore: experienceDefaultsStore,
-            coverRefStore: coverRefStore,
-            openAIConversationService: openAIConversationService
-        )
+        let onboardingInterviewService = OnboardingInterviewService(openAIService: onboardingOpenAIService)
         self.onboardingInterviewService = onboardingInterviewService
 
         self.appEnvironment = AppEnvironment(

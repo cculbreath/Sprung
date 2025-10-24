@@ -31,6 +31,23 @@ struct OnboardingInterviewToolPane: View {
                         Task { await actions.cancelChoicePrompt(reason: "User dismissed choice prompt") }
                     }
                 )
+            } else if let validation = service.pendingValidationPrompt {
+                OnboardingValidationReviewCard(
+                    prompt: validation,
+                    onSubmit: { decision, updated, notes in
+                        Task {
+                            await actions.submitValidation(
+                                status: decision.rawValue,
+                                updatedData: updated,
+                                changes: nil,
+                                notes: notes
+                            )
+                        }
+                    },
+                    onCancel: {
+                        Task { await actions.cancelValidation(reason: "User cancelled validation review") }
+                    }
+                )
             } else if let profileRequest = service.pendingApplicantProfileRequest {
                 ApplicantProfileReviewCard(
                     request: profileRequest,

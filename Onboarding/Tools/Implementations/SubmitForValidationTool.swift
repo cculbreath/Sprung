@@ -1,0 +1,124 @@
+//
+//  SubmitForValidationTool.swift
+//  Sprung
+//
+//  Displays collected data for user review and captures their decision.
+//
+
+import Foundation
+import SwiftyJSON
+import SwiftOpenAI
+
+struct SubmitForValidationTool: InterviewTool {
+    private static let schema: JSONSchema = {
+        let properties: [String: JSONSchema] = [
+            "dataType": JSONSchema(
+                type: .string,
+                description: "Type of data being validated. e.g. applicantProfile, experience, education, knowledgeCard."
+            ),
+            "data": JSONSchema(
+                type: .object,
+                description: "The data object to display to the user for validation.",
+                additionalProperties: true
+            ),
+            "message": JSONSchema(
+                type: .string,
+                description: "Optional context message for the user."
+            )
+        ]
+
+        return JSONSchema(
+            type: .object,
+            description: "Parameters for the submit_for_validation tool.",
+            properties: properties,
+            required: ["dataType", "data"],
+            additionalProperties: false
+        )
+    }()
+
+    private let service: OnboardingInterviewService
+    private let dateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    var name: String { "submit_for_validation" }
+    var description: String { "Display collected data to the user for review, capturing approval or requested changes." }
+    var parameters: JSONSchema { Self.schema }
+
+    init(service: OnboardingInterviewService) {
+        self.service = service
+    }
+
+    func execute(_ params: JSON) async throws -> ToolResult {
+        let payload = try ValidationPayload(json: params)
+        let tokenId = UUID()
+
+        await service.presentValidationPrompt(
+            prompt: payload.toValidationPrompt(),
+            continuationId: tokenId
+        )
+
+        let token = ContinuationToken(
+            id: tokenId,
+            toolName: name,
+            resumeHandler: { input in
+                await service.clearValidationPrompt(continuationId: tokenId)
+
+                if input["cancelled"].boolValue {
+                    return .error(.userCancelled)
+                }
+
+                guard let status = input["status"].string, !status.isEmpty else {
+                    return .error(.invalidParameters("Validation response requires a status value."))
+                }
+
+                var response = JSON()
+                response["status"].string = status
+
+                if input["data"] != .null {
+                    response["data"] = input["data"]
+                }
+
+                if input["changes"] != .null {
+                    response["changes"] = input["changes"]
+                }
+
+                if let notes = input["userNotes"].string, !notes.isEmpty {
+                    response["userNotes"].string = notes
+                }
+
+                response["timestamp"].string = dateFormatter.string(from: Date())
+                return .immediate(response)
+            }
+        )
+
+        return .waiting(message: "Awaiting user validation review", continuation: token)
+    }
+}
+
+private struct ValidationPayload {
+    let dataType: String
+    let payload: JSON
+    let message: String?
+
+    init(json: JSON) throws {
+        guard let dataType = json["dataType"].string, !dataType.isEmpty else {
+            throw ToolError.invalidParameters("dataType must be a non-empty string")
+        }
+        let data = json["data"]
+        guard data != .null else {
+            throw ToolError.invalidParameters("data must be an object containing the payload to review")
+        }
+
+        self.dataType = dataType
+        self.payload = data
+        self.message = json["message"].string
+    }
+
+    func toValidationPrompt() -> OnboardingValidationPrompt {
+        OnboardingValidationPrompt(dataType: dataType, payload: payload, message: message)
+    }
+}
+

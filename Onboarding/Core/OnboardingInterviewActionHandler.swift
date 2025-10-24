@@ -1,0 +1,120 @@
+//
+//  OnboardingInterviewActionHandler.swift
+//  Sprung
+//
+//  Thin command facade used by SwiftUI views to drive the onboarding interview
+//  runtime. Most advanced actions are stubbed for post-M0 milestones.
+//
+
+import Foundation
+import SwiftyJSON
+
+@MainActor
+struct OnboardingInterviewActionHandler {
+    private let service: OnboardingInterviewService
+
+    init(service: OnboardingInterviewService) {
+        self.service = service
+    }
+
+    // MARK: - Core actions
+
+    func startInterview(modelId: String, backend: LLMFacade.Backend) async {
+        await service.startInterview(modelId: modelId, backend: backend)
+    }
+
+    func sendMessage(_ text: String) async {
+        await service.sendMessage(text)
+    }
+
+    func resetInterview() {
+        service.resetInterview()
+    }
+
+    func setWritingAnalysisConsent(_ allowed: Bool) {
+        service.setWritingAnalysisConsent(allowed)
+    }
+
+    // MARK: - Tool-driven actions
+
+    func resolveChoice(selectionIds: [String]) async {
+        await service.resolveChoice(selectionIds: selectionIds)
+    }
+
+    func cancelChoicePrompt(reason: String) async {
+        await service.cancelChoicePrompt(reason: reason)
+    }
+
+    func submitValidation(
+        status: String,
+        updatedData: JSON? = nil,
+        changes: JSON? = nil,
+        notes: String? = nil
+    ) async {
+        await service.submitValidationResponse(
+            status: status,
+            updatedData: updatedData,
+            changes: changes,
+            notes: notes
+        )
+    }
+
+    func cancelValidation(reason: String) async {
+        await service.cancelValidation(reason: reason)
+    }
+
+    // MARK: - Stubs for future milestones
+
+    func fetchApplicantProfileFromContacts() async {
+        debugLog("Contacts fetch is not implemented in milestone M0.")
+    }
+
+    func declineContactsFetch(reason: String) async {
+        debugLog("Contacts fetch declined: \(reason)")
+    }
+
+    func approveApplicantProfile(draft: ApplicantProfileDraft) async {
+        debugLog("Applicant profile approval is deferred to later milestones.")
+    }
+
+    func declineApplicantProfile(reason: String) async {
+        debugLog("Applicant profile declined: \(reason)")
+    }
+
+    func completeSectionToggleSelection(enabled: [String]) async {
+        debugLog("Section toggle handling is not implemented in milestone M0.")
+    }
+
+    func cancelSectionToggleSelection(reason: String) async {
+        debugLog("Section toggle selection cancelled: \(reason)")
+    }
+
+    func completeSectionEntryRequest(id: UUID, approvedEntries: [JSON]) async {
+        debugLog("Section entry review is not implemented in milestone M0.")
+    }
+
+    func declineSectionEntryRequest(id: UUID, reason: String) async {
+        debugLog("Section entry request declined: \(reason)")
+    }
+
+    func completeUploadRequest(id: UUID, fileURL: URL) async {
+        debugLog("Upload handling is not implemented in milestone M0. Ignoring file at \(fileURL).")
+    }
+
+    func completeUploadRequest(id: UUID, link: URL) async {
+        debugLog("Upload handling is not implemented in milestone M0. Ignoring link \(link).")
+    }
+
+    func declineUploadRequest(id: UUID) async {
+        debugLog("Upload request declined for id \(id).")
+    }
+
+    func confirmPendingExtraction(_ json: JSON, notes: String?) async {
+        debugLog("Extraction confirmation is not implemented in milestone M0.")
+    }
+
+    func cancelPendingExtraction() {
+        debugLog("Pending extraction cancelled.")
+    }
+}
+
