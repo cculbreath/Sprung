@@ -65,8 +65,8 @@ final class OnboardingInterviewService {
     private var pendingValidationContinuationId: UUID?
     private var applicantProfileContinuationId: UUID?
     private var uploadContinuationIds: [UUID: UUID] = [:]
-    @ObservationIgnored private(set) var applicantProfileJSON: JSON?
-    @ObservationIgnored private(set) var skeletonTimelineJSON: JSON?
+    private(set) var applicantProfileJSON: JSON?
+    private(set) var skeletonTimelineJSON: JSON?
     private var systemPrompt: String
 
     // MARK: - Init
@@ -134,6 +134,10 @@ final class OnboardingInterviewService {
         uploadContinuationIds.removeAll()
         pendingUploadRequests.removeAll()
         uploadedItems.removeAll()
+        applicantProfileJSON = nil
+        skeletonTimelineJSON = nil
+        artifacts.applicantProfile = nil
+        artifacts.skeletonTimeline = nil
         messages.removeAll()
         nextQuestions.removeAll()
         lastError = nil
@@ -402,6 +406,10 @@ final class OnboardingInterviewService {
         pendingUploadRequests.removeAll()
         uploadContinuationIds.removeAll()
         uploadedItems.removeAll()
+        applicantProfileJSON = nil
+        skeletonTimelineJSON = nil
+        artifacts.applicantProfile = nil
+        artifacts.skeletonTimeline = nil
         nextQuestions.removeAll()
         lastError = nil
     }
@@ -456,10 +464,12 @@ final class OnboardingInterviewService {
         let profile = applicantProfileStore.currentProfile()
         draft.apply(to: profile)
         applicantProfileStore.save(profile)
+        artifacts.applicantProfile = json
     }
 
     private func storeSkeletonTimeline(_ json: JSON) {
         skeletonTimelineJSON = json
+        artifacts.skeletonTimeline = json
     }
 
     private func removeUploadRequest(id: UUID) {

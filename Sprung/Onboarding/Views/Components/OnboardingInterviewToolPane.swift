@@ -1,4 +1,5 @@
 import AppKit
+import SwiftyJSON
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -115,6 +116,10 @@ struct OnboardingInterviewToolPane: View {
                 artifacts: service.artifacts,
                 schemaIssues: service.schemaIssues
             )
+        } else if service.wizardStep == .resumeIntake, let profile = service.applicantProfileJSON {
+            ApplicantProfileSummaryCard(profile: profile)
+        } else if service.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
+            SkeletonTimelineSummaryCard(timeline: timeline)
         } else {
             Spacer()
         }
@@ -212,9 +217,113 @@ struct OnboardingInterviewToolPane: View {
         if service.pendingSectionEntryRequests.first != nil {
             return "Review section entries"
         }
+        if service.applicantProfileJSON != nil, service.wizardStep == .resumeIntake {
+            return "Applicant profile captured"
+        }
+        if service.skeletonTimelineJSON != nil, service.wizardStep == .artifactDiscovery {
+            return "Skeleton timeline ready"
+        }
         if service.pendingUploadRequests.isEmpty && introCompleted == false {
             return ""
         }
         return ""
+    }
+}
+
+private struct ApplicantProfileSummaryCard: View {
+    let profile: JSON
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Applicant Profile")
+                .font(.headline)
+            if let name = nonEmpty(profile["name"].string) {
+                Label(name, systemImage: "person.fill")
+            }
+            if let label = nonEmpty(profile["label"].string) {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            if let email = nonEmpty(profile["email"].string) {
+                Label(email, systemImage: "envelope")
+                    .font(.footnote)
+            }
+            if let phone = nonEmpty(profile["phone"].string) {
+                Label(phone, systemImage: "phone")
+                    .font(.footnote)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return value
+    }
+}
+
+private struct SkeletonTimelineSummaryCard: View {
+    let timeline: JSON
+
+    var body: some View {
+        let experiences = timeline["experiences"].arrayValue
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Skeleton Timeline")
+                .font(.headline)
+            if experiences.isEmpty {
+                Text("No experiences extracted yet.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(experiences.prefix(3).indices, id: \.self) { index in
+                    let entry = experiences[index]
+                    TimelineEntryRow(entry: entry)
+                }
+                if experiences.count > 3 {
+                    Text("…and \(experiences.count - 3) more entries")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct TimelineEntryRow: View {
+    let entry: JSON
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(entry["title"].stringValue.isEmpty ? "Untitled Role" : entry["title"].stringValue)
+                .font(.subheadline.weight(.semibold))
+            if let org = nonEmpty(entry["organization"].string) {
+                Text(org)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            let start = entry["start"].stringValue
+            let end = entry["end"].stringValue
+            if !start.isEmpty || !end.isEmpty {
+                Text("\(start.isEmpty ? "????" : start) – \(end.isEmpty ? "present" : end)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(8)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return value
     }
 }
