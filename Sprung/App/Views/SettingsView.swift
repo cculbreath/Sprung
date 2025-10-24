@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "openai/gpt-5"
+    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
 
@@ -54,6 +55,8 @@ struct SettingsView: View {
 
             Section {
                 onboardingInterviewModelPicker
+
+                pdfExtractionModelPicker
 
                 Toggle("Allow web search during interviews by default", isOn: Binding(
                     get: { onboardingWebSearchAllowed },
@@ -148,11 +151,45 @@ private extension SettingsView {
         }
     }
 
+    var pdfExtractionModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if allOpenRouterModels.isEmpty {
+                Label("Enable OpenRouter models in Options… before adjusting the PDF extraction model.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else {
+                Picker("PDF Extraction Model", selection: $pdfExtractionModelId) {
+                    ForEach(allOpenRouterModels, id: \.modelId) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text("Model used to extract structured data from resume PDFs. Gemini 2.0 Flash is recommended for cost-effective multimodal extraction.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+    }
+
     var openAIModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .filter { $0.modelId.lowercased().hasPrefix("openai/") }
             .sorted { lhs, rhs in
                 (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
+                    < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
+            }
+    }
+
+    var allOpenRouterModels: [EnabledLLM] {
+        enabledLLMStore.enabledModels
+            .sorted { lhs, rhs in
+                // Sort Gemini 2.0 Flash first, then alphabetically
+                if lhs.modelId == "google/gemini-2.0-flash" { return true }
+                if rhs.modelId == "google/gemini-2.0-flash" { return false }
+                return (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }

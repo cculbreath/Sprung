@@ -198,15 +198,16 @@ class InterviewUI: ObservableObject {
 
 ### **M1 – Phase 1 usable**
 
-* Applicant profile (manual \+ optional macOS “Me” card)  
-* Skeleton timeline from resume upload (parsing can be naive)  
+* Applicant profile (manual \+ optional macOS "Me" card)
+* Skeleton timeline from resume upload (parsing can be naive - improved in M2 with OpenRouter PDF extraction, see `pdf_extraction_specification.md`)
 * User validation loop (approve/modify)
 
 ### **M2 – Deep dive basics**
 
-* One experience interview end-to-end  
-* Generate a single Knowledge Card and validate it  
+* One experience interview end-to-end
+* Generate a single Knowledge Card and validate it
 * Save artifacts (text only at first)
+* **OpenRouter PDF extraction** - Replace naive text extraction with Gemini 2.0 Flash for OCR, layout preservation, and multimodal processing
 
 ### **M3 – Personal-use polish**
 

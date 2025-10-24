@@ -158,18 +158,20 @@ enum ToolError: Error {
   }  
 }
 
-**Response:**  
-{  
-  "uploads": \[  
-    {  
-      "id": "upload\_abc123",  
-      "filename": "resume.pdf",  
-      "storageUrl": "file:///artifacts/abc123.pdf",  
-      "extractedText": "John Doe\\nSoftware Engineer\\n..."  
-    }  
-  \],  
-  "status": "uploaded" | "skipped"  
+**Response:**
+{
+  "uploads": \[
+    {
+      "id": "upload\_abc123",
+      "filename": "resume.pdf",
+      "storageUrl": "file:///artifacts/abc123.pdf",
+      "extractedText": ""  // DEPRECATED in M2: Text extraction moved to OpenRouter PDF processing
+    }
+  \],
+  "status": "uploaded" | "skipped"
 }
+
+**Note:** The `extractedText` field is deprecated as of M2. PDF text extraction now occurs in `InterviewOrchestrator` using OpenRouter + Gemini 2.0 Flash for superior multimodal processing (OCR support, layout preservation, table extraction). See `pdf_extraction_specification.md` for details.
 
 ### **4\. GetImageFromUser Tool**
 
