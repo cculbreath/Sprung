@@ -108,7 +108,7 @@ actor InterviewOrchestrator {
             return
         }
 
-        let config = ModelProvider.configuration(for: .orchestrator)
+        let config = ModelProvider.forTask(.orchestrator)
         var textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
 
         var parameters = ModelResponseParameter(
@@ -233,4 +233,3 @@ actor InterviewOrchestrator {
         }
     }
 }
-

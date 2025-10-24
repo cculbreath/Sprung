@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum ModelTaskType {
+enum TaskType {
     case orchestrator
     case validate
     case extract
@@ -16,28 +16,28 @@ enum ModelTaskType {
 }
 
 struct ModelProvider {
-    struct Configuration {
+    struct Config {
         let id: String
         let defaultVerbosity: String?
         let defaultReasoningEffort: String?
     }
 
-    static func configuration(for task: ModelTaskType) -> Configuration {
-        switch task {
+    static func forTask(_ type: TaskType) -> Config {
+        switch type {
         case .orchestrator, .knowledgeCard:
-            return Configuration(
+            return Config(
                 id: "gpt-5",
                 defaultVerbosity: "medium",
                 defaultReasoningEffort: nil
             )
         case .validate, .extract:
-            return Configuration(
+            return Config(
                 id: "gpt-5-mini",
                 defaultVerbosity: "low",
                 defaultReasoningEffort: "minimal"
             )
         case .summarize:
-            return Configuration(
+            return Config(
                 id: "gpt-5-nano",
                 defaultVerbosity: "low",
                 defaultReasoningEffort: "minimal"
@@ -45,12 +45,11 @@ struct ModelProvider {
         }
     }
 
-    static func escalate(from configuration: Configuration) -> Configuration {
-        Configuration(
+    static func escalate(_ prior: Config) -> Config {
+        Config(
             id: "o1",
-            defaultVerbosity: configuration.defaultVerbosity,
+            defaultVerbosity: prior.defaultVerbosity,
             defaultReasoningEffort: nil
         )
     }
 }
-
