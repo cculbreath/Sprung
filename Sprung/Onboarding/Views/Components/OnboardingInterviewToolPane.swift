@@ -149,11 +149,9 @@ struct OnboardingInterviewToolPane: View {
             if request.metadata.allowMultiple {
                 urls = panel.urls
             } else {
-                urls = panel.urls.prefix(1).map { $0 }
+                urls = Array(panel.urls.prefix(1))
             }
-            for url in urls {
-                Task { await actions.completeUploadRequest(id: request.id, fileURL: url) }
-            }
+            Task { await actions.completeUploadRequest(id: request.id, fileURLs: urls) }
         }
     }
 
