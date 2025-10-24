@@ -78,6 +78,7 @@ final class OnboardingInterviewService {
         toolRegistry.register(GetUserOptionTool(service: self))
         toolRegistry.register(SubmitForValidationTool(service: self))
         toolRegistry.register(PersistDataTool(dataStore: dataStore))
+        toolRegistry.register(GetMacOSContactCardTool())
     }
 
     // MARK: - Interview Lifecycle
