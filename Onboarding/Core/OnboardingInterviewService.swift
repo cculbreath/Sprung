@@ -51,6 +51,7 @@ final class OnboardingInterviewService {
     // MARK: - Internal state
 
     private let openAIService: OpenAIService?
+    private let applicantProfileStore: ApplicantProfileStore
     private let interviewState = InterviewState()
     private let checkpoints = Checkpoints()
     private let dataStore = InterviewDataStore()
@@ -64,12 +65,15 @@ final class OnboardingInterviewService {
     private var pendingValidationContinuationId: UUID?
     private var applicantProfileContinuationId: UUID?
     private var uploadContinuationIds: [UUID: UUID] = [:]
+    @ObservationIgnored private(set) var applicantProfileJSON: JSON?
+    @ObservationIgnored private(set) var skeletonTimelineJSON: JSON?
     private var systemPrompt: String
 
     // MARK: - Init
 
-    init(openAIService: OpenAIService?) {
+    init(openAIService: OpenAIService?, applicantProfileStore: ApplicantProfileStore) {
         self.openAIService = openAIService
+        self.applicantProfileStore = applicantProfileStore
         self.systemPrompt = Self.defaultSystemPrompt()
         registerTools()
     }
@@ -423,6 +427,16 @@ final class OnboardingInterviewService {
                 await MainActor.run {
                     self?.recordError(message)
                 }
+            },
+            storeApplicantProfile: { [weak self] json in
+                await MainActor.run {
+                    self?.storeApplicantProfile(json)
+                }
+            },
+            storeSkeletonTimeline: { [weak self] json in
+                await MainActor.run {
+                    self?.storeSkeletonTimeline(json)
+                }
             }
         )
 
@@ -434,6 +448,18 @@ final class OnboardingInterviewService {
             callbacks: callbacks,
             systemPrompt: systemPrompt
         )
+    }
+
+    private func storeApplicantProfile(_ json: JSON) {
+        applicantProfileJSON = json
+        let draft = ApplicantProfileDraft(json: json)
+        let profile = applicantProfileStore.currentProfile()
+        draft.apply(to: profile)
+        applicantProfileStore.save(profile)
+    }
+
+    private func storeSkeletonTimeline(_ json: JSON) {
+        skeletonTimelineJSON = json
     }
 
     private func removeUploadRequest(id: UUID) {

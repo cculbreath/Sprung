@@ -156,7 +156,10 @@ final class AppDependencies {
         )
         self.resumeReviseViewModel = resumeReviseViewModel
 
-        let onboardingInterviewService = OnboardingInterviewService(openAIService: onboardingOpenAIService)
+        let onboardingInterviewService = OnboardingInterviewService(
+            openAIService: onboardingOpenAIService,
+            applicantProfileStore: applicantProfileStore
+        )
         self.onboardingInterviewService = onboardingInterviewService
 
         self.appEnvironment = AppEnvironment(

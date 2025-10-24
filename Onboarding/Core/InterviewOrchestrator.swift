@@ -6,7 +6,6 @@
 //  mediating tool execution and state persistence.
 //
 
-import AppKit
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
@@ -17,6 +16,8 @@ actor InterviewOrchestrator {
         let emitAssistantMessage: @Sendable (String) async -> Void
         let handleWaitingState: @Sendable (InterviewSession.Waiting?) async -> Void
         let handleError: @Sendable (String) async -> Void
+        let storeApplicantProfile: @Sendable (JSON) async -> Void
+        let storeSkeletonTimeline: @Sendable (JSON) async -> Void
     }
 
     private let client: OpenAIService
@@ -174,7 +175,9 @@ actor InterviewOrchestrator {
         }
 
         let data = validation["data"]
-        return data != .null ? data : draft.toJSON()
+        let final = data != .null ? data : draft.toJSON()
+        await callbacks.storeApplicantProfile(final)
+        return final
     }
 
     private func collectSkeletonTimeline() async throws -> JSON {
@@ -206,7 +209,9 @@ actor InterviewOrchestrator {
         }
 
         let data = validation["data"]
-        return data != .null ? data : timeline
+        let final = data != .null ? data : timeline
+        await callbacks.storeSkeletonTimeline(final)
+        return final
     }
 
     private func buildApplicantProfileDraft(from contact: JSON) -> ApplicantProfileDraft {
