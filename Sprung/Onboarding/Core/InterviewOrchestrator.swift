@@ -265,7 +265,7 @@ actor InterviewOrchestrator {
 
     private func generateTimeline(from resumeText: String) async throws -> JSON {
         let config = ModelProvider.forTask(.extract)
-        var textConfig = TextConfiguration(format: .jsonObject, verbosity: config.defaultVerbosity)
+        let textConfig = TextConfiguration(format: .jsonObject, verbosity: config.defaultVerbosity)
 
         let prompt = buildTimelineExtractionPrompt(resumeText: resumeText)
         let message = InputMessage(role: "user", content: .text(prompt))
@@ -312,7 +312,7 @@ actor InterviewOrchestrator {
 
     private func requestResponse(
         withUserMessage userMessage: String? = nil,
-        functionOutputs: [InputType.FunctionToolCallOutput] = []
+        functionOutputs: [FunctionToolCallOutput] = []
     ) async throws {
         var inputItems: [InputItem] = []
 
@@ -332,7 +332,7 @@ actor InterviewOrchestrator {
         }
 
         let config = ModelProvider.forTask(.orchestrator)
-        var textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
+        let textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
 
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
@@ -345,7 +345,7 @@ actor InterviewOrchestrator {
             text: textConfig
         )
         parameters.parallelToolCalls = false
-        parameters.tools = toolExecutor.availableToolSchemas()
+        parameters.tools = await toolExecutor.availableToolSchemas()
         if let effort = config.defaultReasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
@@ -425,7 +425,7 @@ actor InterviewOrchestrator {
         }
 
         let callId = functionCall.callId
-        let identifier = functionCall.id ?? callId
+        let identifier = functionCall.id
         let call = ToolCall(id: identifier, name: functionCall.name, arguments: argumentsJSON, callId: callId)
         let result = try await toolExecutor.handleToolCall(call)
 
@@ -462,13 +462,16 @@ actor InterviewOrchestrator {
     }
 
     private func sendToolOutput(callId: String, output: JSON) async throws {
-        guard let outputString = output.rawString(.withoutEscapingSlashes) else {
+        guard
+            let data = try? output.rawData(options: []),
+            let outputString = String(data: data, encoding: .utf8)
+        else {
             throw NSError(domain: "InterviewOrchestrator", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "Failed to encode tool output as JSON string."
             ])
         }
 
-        let functionOutput = InputType.FunctionToolCallOutput(callId: callId, output: outputString)
+        let functionOutput = FunctionToolCallOutput(callId: callId, output: outputString)
         try await requestResponse(functionOutputs: [functionOutput])
     }
 

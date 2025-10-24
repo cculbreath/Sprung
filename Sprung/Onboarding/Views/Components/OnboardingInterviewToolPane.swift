@@ -166,12 +166,14 @@ struct OnboardingInterviewToolPane: View {
         }
         if candidates.isEmpty {
             switch request.kind {
-            case .resume:
+            case .resume, .coverletter:
                 candidates = ["pdf", "docx", "txt", "json"]
-            case .artifact, .generic:
+            case .artifact, .portfolio, .generic:
                 candidates = ["pdf", "pptx", "docx", "txt", "json"]
             case .writingSample:
                 candidates = ["pdf", "docx", "txt", "md"]
+            case .transcript, .certificate:
+                candidates = ["pdf", "png", "jpg"]
             case .linkedIn:
                 return nil
             }

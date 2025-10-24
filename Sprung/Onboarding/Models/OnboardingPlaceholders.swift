@@ -77,6 +77,23 @@ enum OnboardingWizardStepStatus: String, Codable {
     case completed
 }
 
+extension OnboardingWizardStep {
+    var title: String {
+        switch self {
+        case .introduction:
+            return "Introduction"
+        case .resumeIntake:
+            return "Résumé Intake"
+        case .artifactDiscovery:
+            return "Artifact Discovery"
+        case .writingCorpus:
+            return "Writing Corpus"
+        case .wrapUp:
+            return "Wrap Up"
+        }
+    }
+}
+
 struct OnboardingQuestion: Identifiable, Codable {
     let id: UUID
     let text: String
@@ -94,12 +111,16 @@ struct OnboardingUploadMetadata: Codable {
     var allowMultiple: Bool
 }
 
-enum OnboardingUploadKind: String, Codable {
+enum OnboardingUploadKind: String, CaseIterable, Codable {
     case resume
     case linkedIn
     case artifact
     case generic
     case writingSample
+    case coverletter
+    case portfolio
+    case transcript
+    case certificate
 }
 
 struct OnboardingUploadRequest: Identifiable, Codable {
@@ -129,6 +150,12 @@ struct OnboardingArtifacts {
 
 struct OnboardingContactsFetchRequest: Codable {
     var message: String
+    var requestedFields: [String]
+
+    init(message: String, requestedFields: [String] = []) {
+        self.message = message
+        self.requestedFields = requestedFields
+    }
 }
 
 struct OnboardingValidationPrompt: Identifiable {
@@ -157,17 +184,60 @@ struct OnboardingApplicantProfileRequest {
 
 struct OnboardingSectionToggleRequest {
     var id: UUID
+    var proposedSections: [String]
     var availableSections: [String]
+    var rationale: String?
+
+    init(
+        id: UUID = UUID(),
+        proposedSections: [String] = [],
+        availableSections: [String] = [],
+        rationale: String? = nil
+    ) {
+        self.id = id
+        self.proposedSections = proposedSections
+        self.availableSections = availableSections
+        self.rationale = rationale
+    }
 }
 
 struct OnboardingSectionEntryRequest: Identifiable {
     var id: UUID
-    var sectionId: String
-    var proposedEntries: [JSON]
+    var section: String
+    var entries: [JSON]
+    var context: String?
+
+    init(
+        id: UUID = UUID(),
+        section: String,
+        entries: [JSON] = [],
+        context: String? = nil
+    ) {
+        self.id = id
+        self.section = section
+        self.entries = entries
+        self.context = context
+    }
 }
 
 struct OnboardingPendingExtraction: Identifiable {
     var id: UUID
     var title: String
     var summary: String
+    var rawExtraction: JSON
+    var uncertainties: [String]
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        summary: String,
+        rawExtraction: JSON = JSON(),
+        uncertainties: [String] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.rawExtraction = rawExtraction
+        self.uncertainties = uncertainties
+    }
 }
