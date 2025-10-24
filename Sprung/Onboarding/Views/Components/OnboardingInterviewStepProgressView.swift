@@ -5,7 +5,7 @@ struct OnboardingInterviewStepProgressView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 28) {
-            ForEach(OnboardingWizardStep.allCases) { step in
+            ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
                 let status = service.wizardStepStatuses[step] ?? .pending
                 OnboardingStepProgressItem(title: step.title, status: status)
             }

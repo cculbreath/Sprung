@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftyJSON
 
 struct InterviewCheckpoint: Codable {
     let timestamp: Date
@@ -31,6 +32,10 @@ actor Checkpoints {
         }
         return directory.appendingPathComponent("Interview.checkpoints.json")
     }()
+
+    init() {
+        history = Self.loadHistory(from: url, limit: maxHistoryCount)
+    }
 
     func save(from session: InterviewSession, applicantProfile: JSON?, skeletonTimeline: JSON?) async {
         let profileString = applicantProfile?.rawString(options: .sortedKeys)
@@ -58,11 +63,8 @@ actor Checkpoints {
     }
 
     func restoreLatest() async -> (InterviewSession, JSON?, JSON?)? {
-        guard
-            let data = try? Data(contentsOf: url),
-            let checkpoints = try? JSONDecoder().decode([InterviewCheckpoint].self, from: data),
-            let latest = checkpoints.max(by: { $0.timestamp < $1.timestamp })
-        else {
+        history = Self.loadHistory(from: url, limit: maxHistoryCount)
+        guard let latest = history.max(by: { $0.timestamp < $1.timestamp }) else {
             return nil
         }
 
@@ -73,5 +75,20 @@ actor Checkpoints {
         let profileJSON = latest.applicantProfile.flatMap { JSON(parseJSON: $0) }
         let timelineJSON = latest.skeletonTimeline.flatMap { JSON(parseJSON: $0) }
         return (session, profileJSON, timelineJSON)
+    }
+
+    private static func loadHistory(from url: URL, limit: Int) -> [InterviewCheckpoint] {
+        guard
+            let data = try? Data(contentsOf: url),
+            let checkpoints = try? JSONDecoder().decode([InterviewCheckpoint].self, from: data)
+        else {
+            return []
+        }
+
+        if checkpoints.count > limit {
+            return Array(checkpoints.suffix(limit))
+        }
+
+        return checkpoints
     }
 }

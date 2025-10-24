@@ -37,12 +37,11 @@ final class ToolRegistry {
                 .function(
                     .init(
                         name: tool.name,
-                        description: tool.description,
-                        parameters: tool.parameters
+                        parameters: tool.parameters,
+                        description: tool.description
                     )
                 )
             }
         }
     }
 }
-

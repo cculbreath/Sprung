@@ -102,9 +102,14 @@ private struct UploadRequestPayload {
     let waitingMessage: String
 
     init(json: JSON) throws {
-        guard let typeString = json["uploadType"].string?.lowercased(),
-              let kind = OnboardingUploadKind(rawValue: typeString) else {
-            throw ToolError.invalidParameters("uploadType must be one of resume, coverletter, portfolio, transcript, certificate, other")
+        guard let rawType = json["uploadType"].string else {
+            throw ToolError.invalidParameters("uploadType must be provided for get_user_upload tool.")
+        }
+
+        let normalizedType = rawType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let kind = OnboardingUploadKind.allCases.first(where: { $0.rawValue.lowercased() == normalizedType }) else {
+            let options = OnboardingUploadKind.allCases.map { $0.rawValue }.joined(separator: ", ")
+            throw ToolError.invalidParameters("uploadType must be one of: \(options)")
         }
         self.kind = kind
 
@@ -126,6 +131,8 @@ private struct UploadRequestPayload {
         switch kind {
         case .resume:
             return "Upload Resume"
+        case .artifact:
+            return "Upload Artifact"
         case .coverletter:
             return "Upload Cover Letter"
         case .portfolio:
@@ -134,8 +141,12 @@ private struct UploadRequestPayload {
             return "Upload Transcript"
         case .certificate:
             return "Upload Certificate"
-        case .writingSample, .generic, .linkedIn:
+        case .writingSample:
+            return "Upload Writing Sample"
+        case .generic:
             return "Upload File"
+        case .linkedIn:
+            return "Upload LinkedIn Export"
         }
     }
 
@@ -143,6 +154,8 @@ private struct UploadRequestPayload {
         switch kind {
         case .resume:
             return "Please upload your most recent resume."
+        case .artifact:
+            return "Upload relevant supporting artifacts."
         case .coverletter:
             return "Upload a relevant cover letter (optional)."
         case .portfolio:
@@ -153,8 +166,10 @@ private struct UploadRequestPayload {
             return "Upload a professional certificate."
         case .writingSample:
             return "Upload a writing sample."
-        case .generic, .linkedIn:
+        case .generic:
             return "Provide the requested file."
+        case .linkedIn:
+            return "Upload your latest LinkedIn export or resume."
         }
     }
 }

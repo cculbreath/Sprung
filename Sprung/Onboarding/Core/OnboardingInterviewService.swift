@@ -55,8 +55,8 @@ final class OnboardingInterviewService {
     private let interviewState = InterviewState()
     private let checkpoints = Checkpoints()
     private let dataStore = InterviewDataStore()
-    private let toolRegistry = ToolRegistry()
-    private lazy var toolExecutor = ToolExecutor(registry: toolRegistry)
+    @ObservationIgnored private let toolRegistry = ToolRegistry()
+    @ObservationIgnored private let toolExecutor: ToolExecutor
 
     private var orchestrator: InterviewOrchestrator?
     private var preferredModelId: String?
@@ -75,6 +75,7 @@ final class OnboardingInterviewService {
     init(openAIService: OpenAIService?, applicantProfileStore: ApplicantProfileStore) {
         self.openAIService = openAIService
         self.applicantProfileStore = applicantProfileStore
+        self.toolExecutor = ToolExecutor(registry: toolRegistry)
         self.systemPrompt = Self.defaultSystemPrompt()
         registerTools()
     }
@@ -103,14 +104,21 @@ final class OnboardingInterviewService {
         }
 
         resetTransientState()
+        await interviewState.restore(from: InterviewSession())
+        let restoredFromCheckpoint = await restoreFromCheckpointIfAvailable()
 
         orchestrator = makeOrchestrator(service: openAIService)
         isActive = true
         isProcessing = true
-        wizardStep = .resumeIntake
-        wizardStepStatuses[wizardStep] = .current
+        if !restoredFromCheckpoint {
+            wizardStep = .resumeIntake
+            wizardStepStatuses[wizardStep] = .current
+        }
 
         appendSystemMessage("🚀 Starting onboarding interview using \(modelId).")
+        if restoredFromCheckpoint {
+            appendSystemMessage("♻️ Resuming your previous onboarding progress.")
+        }
         await orchestrator?.startInterview(modelId: modelId)
     }
 
@@ -126,25 +134,12 @@ final class OnboardingInterviewService {
     func resetInterview() {
         isActive = false
         isProcessing = false
-        pendingChoicePrompt = nil
-        pendingValidationPrompt = nil
-        pendingChoiceContinuationId = nil
-        pendingValidationContinuationId = nil
-        applicantProfileContinuationId = nil
-        pendingApplicantProfileRequest = nil
-        uploadContinuationIds.removeAll()
-        pendingUploadRequests.removeAll()
-        uploadedItems.removeAll()
-        applicantProfileJSON = nil
-        skeletonTimelineJSON = nil
-        artifacts.applicantProfile = nil
-        artifacts.skeletonTimeline = nil
+        resetTransientState()
         messages.removeAll()
         nextQuestions.removeAll()
         lastError = nil
-        wizardStep = .introduction
-        completedWizardSteps.removeAll()
-        wizardStepStatuses.removeAll()
+        let state = interviewState
+        Task { await state.restore(from: InterviewSession()) }
     }
 
     // MARK: - Phase Handling
@@ -266,6 +261,35 @@ final class OnboardingInterviewService {
     }
 
     // MARK: - Validation Prompt Handling
+
+    func resolveSectionToggle(enabled: [String]) async {
+        guard let continuationId = sectionToggleContinuationId else { return }
+
+        var payload = JSON()
+        payload["enabledSections"] = JSON(enabled)
+
+        pendingSectionToggleRequest = nil
+        sectionToggleContinuationId = nil
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
+
+    func rejectSectionToggle(reason: String) async {
+        guard let continuationId = sectionToggleContinuationId else { return }
+
+        var payload = JSON()
+        payload["cancelled"].boolValue = true
+        if !reason.isEmpty {
+            payload["userNotes"].string = reason
+        }
+
+        pendingSectionToggleRequest = nil
+        sectionToggleContinuationId = nil
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
 
     func presentValidationPrompt(prompt: OnboardingValidationPrompt, continuationId: UUID) {
         pendingValidationPrompt = prompt
@@ -413,39 +437,102 @@ final class OnboardingInterviewService {
         artifacts.skeletonTimeline = nil
         nextQuestions.removeAll()
         lastError = nil
+        wizardStep = .introduction
+        completedWizardSteps.removeAll()
+        wizardStepStatuses.removeAll()
+        updateWaitingState(nil)
+    }
+
+    private func restoreFromCheckpointIfAvailable() async -> Bool {
+        guard let snapshot = await checkpoints.restoreLatest() else {
+            return false
+        }
+
+        let (session, profileJSON, timelineJSON) = snapshot
+        await interviewState.restore(from: session)
+        applyWizardProgress(from: session)
+
+        if let profileJSON {
+            storeApplicantProfile(profileJSON)
+        }
+        if let timelineJSON {
+            storeSkeletonTimeline(timelineJSON)
+        }
+
+        isProcessing = false
+        return true
+    }
+
+    private func applyWizardProgress(from session: InterviewSession) {
+        completedWizardSteps.removeAll()
+        wizardStepStatuses.removeAll()
+
+        let objectives = session.objectivesDone
+        var currentStep: OnboardingWizardStep = .resumeIntake
+
+        if objectives.contains("applicant_profile") {
+            completedWizardSteps.insert(.resumeIntake)
+        }
+
+        if objectives.contains("skeleton_timeline") {
+            currentStep = .artifactDiscovery
+        }
+
+        switch session.phase {
+        case .phase1CoreFacts:
+            if !objectives.contains("skeleton_timeline") {
+                currentStep = .resumeIntake
+            }
+        case .phase2DeepDive:
+            completedWizardSteps.insert(.resumeIntake)
+            if objectives.contains("skeleton_timeline") {
+                completedWizardSteps.insert(.artifactDiscovery)
+            }
+            currentStep = .artifactDiscovery
+        case .phase3WritingCorpus:
+            completedWizardSteps.insert(.resumeIntake)
+            completedWizardSteps.insert(.artifactDiscovery)
+            currentStep = .writingCorpus
+        case .complete:
+            completedWizardSteps.insert(.resumeIntake)
+            completedWizardSteps.insert(.artifactDiscovery)
+            completedWizardSteps.insert(.writingCorpus)
+            currentStep = .wrapUp
+        }
+
+        for step in completedWizardSteps {
+            wizardStepStatuses[step] = .completed
+        }
+
+        wizardStep = currentStep
+        wizardStepStatuses[currentStep] = .current
     }
 
     private func makeOrchestrator(service: OpenAIService) -> InterviewOrchestrator {
         let callbacks = InterviewOrchestrator.Callbacks(
             updateProcessingState: { [weak self] processing in
-                await MainActor.run {
-                    self?.handleProcessingStateChange(processing)
-                }
+                guard let service = self else { return }
+                await service.handleProcessingStateChange(processing)
             },
             emitAssistantMessage: { [weak self] text in
-                await MainActor.run {
-                    self?.appendAssistantMessage(text)
-                }
+                guard let service = self else { return }
+                await service.appendAssistantMessage(text)
             },
             handleWaitingState: { [weak self] waiting in
-                await MainActor.run {
-                    self?.updateWaitingState(waiting)
-                }
+                guard let service = self else { return }
+                await service.updateWaitingState(waiting)
             },
             handleError: { [weak self] message in
-                await MainActor.run {
-                    self?.recordError(message)
-                }
+                guard let service = self else { return }
+                await service.recordError(message)
             },
             storeApplicantProfile: { [weak self] json in
-                await MainActor.run {
-                    self?.storeApplicantProfile(json)
-                }
+                guard let service = self else { return }
+                await service.storeApplicantProfile(json)
             },
             storeSkeletonTimeline: { [weak self] json in
-                await MainActor.run {
-                    self?.storeSkeletonTimeline(json)
-                }
+                guard let service = self else { return }
+                await service.storeSkeletonTimeline(json)
             }
         )
 

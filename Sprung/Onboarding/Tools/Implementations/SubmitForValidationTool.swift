@@ -133,6 +133,7 @@ private struct ValidationPayload {
             throw ToolError.invalidParameters("data must be an object containing the payload to review")
         }
 
+        let normalizedType = dataType.lowercased()
         self.dataType = dataType
         self.payload = data
         self.message = json["message"].string
