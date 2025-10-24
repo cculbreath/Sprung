@@ -65,6 +65,7 @@ final class OnboardingInterviewService {
     private var pendingValidationContinuationId: UUID?
     private var applicantProfileContinuationId: UUID?
     private var uploadContinuationIds: [UUID: UUID] = [:]
+    private var sectionToggleContinuationId: UUID?
     private(set) var applicantProfileJSON: JSON?
     private(set) var skeletonTimelineJSON: JSON?
     private var systemPrompt: String
