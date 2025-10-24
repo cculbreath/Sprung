@@ -74,11 +74,11 @@ struct OnboardingInterviewActionHandler {
     }
 
     func approveApplicantProfile(draft: ApplicantProfileDraft) async {
-        debugLog("Applicant profile approval is deferred to later milestones.")
+        await service.resolveApplicantProfile(with: draft)
     }
 
     func declineApplicantProfile(reason: String) async {
-        debugLog("Applicant profile declined: \(reason)")
+        await service.rejectApplicantProfile(reason: reason)
     }
 
     func completeSectionToggleSelection(enabled: [String]) async {
@@ -102,7 +102,7 @@ struct OnboardingInterviewActionHandler {
     }
 
     func completeUploadRequest(id: UUID, link: URL) async {
-        await service.completeUploadRequest(id: id, fileURLs: [])
+        await service.skipUploadRequest(id: id)
         debugLog("Link-based uploads are not supported yet. Ignored link \(link).")
     }
 

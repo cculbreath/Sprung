@@ -55,16 +55,27 @@ struct SubmitForValidationTool: InterviewTool {
         let payload = try ValidationPayload(json: params)
         let tokenId = UUID()
 
-        await service.presentValidationPrompt(
-            prompt: payload.toValidationPrompt(),
-            continuationId: tokenId
-        )
+        if payload.isApplicantProfile {
+            await service.presentApplicantProfileRequest(
+                payload.toApplicantProfileRequest(),
+                continuationId: tokenId
+            )
+        } else {
+            await service.presentValidationPrompt(
+                prompt: payload.toValidationPrompt(),
+                continuationId: tokenId
+            )
+        }
 
         let token = ContinuationToken(
             id: tokenId,
             toolName: name,
             resumeHandler: { input in
-                await service.clearValidationPrompt(continuationId: tokenId)
+                if payload.isApplicantProfile {
+                    await service.clearApplicantProfileRequest(continuationId: tokenId)
+                } else {
+                    await service.clearValidationPrompt(continuationId: tokenId)
+                }
 
                 if input["cancelled"].boolValue {
                     return .error(.userCancelled)
@@ -94,7 +105,7 @@ struct SubmitForValidationTool: InterviewTool {
             }
         )
 
-        return .waiting(message: "Awaiting user validation review", continuation: token)
+        return .waiting(message: payload.waitingMessage, continuation: token)
     }
 }
 
@@ -102,6 +113,16 @@ private struct ValidationPayload {
     let dataType: String
     let payload: JSON
     let message: String?
+    let sources: [String]
+    let waitingMessage: String
+
+    var normalizedType: String {
+        dataType.lowercased()
+    }
+
+    var isApplicantProfile: Bool {
+        normalizedType == "applicantprofile"
+    }
 
     init(json: JSON) throws {
         guard let dataType = json["dataType"].string, !dataType.isEmpty else {
@@ -115,10 +136,23 @@ private struct ValidationPayload {
         self.dataType = dataType
         self.payload = data
         self.message = json["message"].string
+        self.sources = (json["sources"].array ?? data["sources"].array ?? [])
+            .compactMap { $0.string }
+
+        if normalizedType == "applicantprofile" {
+            waitingMessage = "Waiting for applicant profile review"
+        } else if let message, !message.isEmpty {
+            waitingMessage = "Waiting for user review: \(message)"
+        } else {
+            waitingMessage = "Awaiting user validation review"
+        }
     }
 
     func toValidationPrompt() -> OnboardingValidationPrompt {
         OnboardingValidationPrompt(dataType: dataType, payload: payload, message: message)
     }
-}
 
+    func toApplicantProfileRequest() -> OnboardingApplicantProfileRequest {
+        OnboardingApplicantProfileRequest(proposedProfile: payload, sources: sources)
+    }
+}
