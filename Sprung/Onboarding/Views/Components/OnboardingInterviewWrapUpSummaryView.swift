@@ -24,58 +24,8 @@ struct WrapUpSummaryView: View {
                 ArtifactSection(title: "Applicant Profile", content: formattedJSON(profile))
             }
 
-            if let defaults = artifacts.defaultValues {
-                ArtifactSection(title: "Default Values", content: formattedJSON(defaults))
-            }
-
-            if !artifacts.knowledgeCards.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Knowledge Cards")
-                        .font(.headline)
-                    ForEach(Array(artifacts.knowledgeCards.enumerated()), id: \.offset) { index, card in
-                        KnowledgeCardView(index: index + 1, card: card)
-                            .padding(8)
-                            .background(Color(nsColor: .textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                }
-            }
-
-            if !artifacts.factLedger.isEmpty {
-                FactLedgerListView(entries: artifacts.factLedger)
-            }
-
-            if let skillMap = artifacts.skillMap {
-                ArtifactSection(title: "Skill Evidence Map", content: formattedJSON(skillMap))
-            }
-
-            if let styleProfile = artifacts.styleProfile {
-                StyleProfileView(profile: styleProfile)
-            }
-
-            if !artifacts.writingSamples.isEmpty {
-                WritingSamplesListView(samples: artifacts.writingSamples)
-            }
-
-            if let context = artifacts.profileContext, !context.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Profile Context")
-                        .font(.headline)
-                    Text(context)
-                        .font(.callout)
-                }
-            }
-
-            if !artifacts.needsVerification.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Needs Verification")
-                        .font(.headline)
-                    ForEach(artifacts.needsVerification, id: \.self) { item in
-                        Label(item, systemImage: "questionmark.diamond")
-                            .foregroundStyle(.orange)
-                            .font(.caption)
-                    }
-                }
+            if let timeline = artifacts.skeletonTimeline {
+                ArtifactSection(title: "Skeleton Timeline", content: formattedJSON(timeline))
             }
         }
     }

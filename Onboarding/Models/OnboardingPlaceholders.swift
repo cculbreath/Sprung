@@ -121,7 +121,9 @@ struct OnboardingUploadedItem: Identifiable, Codable {
     let uploadedAt: Date
 }
 
-struct OnboardingArtifacts: Codable {
+struct OnboardingArtifacts {
+    var applicantProfile: JSON?
+    var skeletonTimeline: JSON?
     var items: [String] = []
 }
 
