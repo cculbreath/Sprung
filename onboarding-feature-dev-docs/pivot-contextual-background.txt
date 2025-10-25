@@ -1,0 +1,197 @@
+The current plan buys reliability, but they sanded off a lot of the improvisational “LLM runs the show” energy that made your original concept feel alive. Below is a candid read of *what you had*, *what you gained*, and a concrete “middle path” that restores dynamic behavior without re‑introducing brittleness.
+
+---
+
+## 1) What your original vision got right (and is worth preserving)
+
+* **LLM‑led orchestration, not forms.** The opening premise explicitly framed the interview as a *dynamic, LLM‑led* process that replaces static forms with a coach‑style conversation. That north star is clear. 
+
+* **“Any artifact in, evidence out.”** You designed a tool/agent ecosystem that can ingest *documents, URLs, repos, transcripts* and turn them into structured records with citation anchors—*including* strict anti‑hallucination rules for Knowledge Cards (every claim must resolve to a citation). That rigor is rare and valuable.
+
+* **Data‑driven progress monitoring.** The old *Interview Progress Monitoring Agent* advanced phases based on *what data exists*, not number of turns—pushing the orchestrator forward only when objective criteria were satisfied. That’s a smart way to keep an LLM honest.
+
+* **Practical tools & routes.** The tool list embraced upload, contacts, URL fetch via MCP, GitHub analysis, and “deploy agent” to spin up specialized workers—exactly the menu that makes an “any file” experience feel magical (even though some items were to‑do’s). 
+
+* **LLM prompting for skeletal timeline + enablement.** You had concrete, minimal rules for building/confirming the timeline and setting `enabled_sections`, with examples, tests, and validation steps.
+
+**Bottom line:** the *vision* is strong: LLM as coach, tools as hands, and data‑verified stopping points.
+
+---
+
+## 2) What the current docs improved (and we should keep)
+
+* **Tight, minimal state and checkpointing.** A tiny `Session` with `phase`, `objectivesDone`, and one `waiting` flag, guarded by an actor. Fewer moving parts → fewer ways to break. 
+
+* **Canonical tool protocol and schemas.** A single tool interface, clear JSON schemas, and explicit error handling patterns (including “not configured” for auth‑dependent tools). That removes ambiguity and makes LLM tool‑use safer.
+
+* **Scope control on auth features.** URL fetch / GitHub analysis are explicitly out‑of‑scope for v1 and must return user‑visible “not configured” errors—preventing half‑wired breakage.
+
+* **Better PDF ingestion plan.** A concrete M2 pipeline for résumé PDFs using OpenRouter + Gemini 2.0 Flash (OCR, layout, tables) instead of naïve text scraping. 
+
+* **Resilience patterns.** Stream watchdogs, retries, escalation only when needed, and “make it work before making it fast.”
+
+**Bottom line:** the *platform* is sturdier and cheaper to reason about.
+
+---
+
+## 3) Why it now feels less dynamic
+
+Two things changed:
+
+1. **Macro‑flow moved from “data‑driven agent” to hardwired state transitions.** The old monitoring agent watched stores and told the orchestrator when to move on. The new state machine computes advancement locally. That reduces LLM autonomy (good for safety), but it also removed the *feeling* of an LLM steering the journey.
+
+2. **Capability discovery is implicit, not explicit.** The new orchestrator doesn’t *tell* the model what’s available and what’s gated. Without a capability manifest, the LLM can only follow the narrow lane you pre‑wired, so it can’t opportunistically choose “the right next thing.” 
+
+---
+
+## 4) The new direction: **LLM‑guided micro‑orchestration inside a guarded macro‑state**
+
+Keep the **minimal macro‑state** (phase + objectives + waiting) exactly as written, but let the LLM choose *micro‑steps* within each phase from a dynamically published capability set.
+
+### 4.1 Capability Manifest (runtime, deterministic)
+
+At the start of each phase (and after any settings change), pass the LLM a *generated* JSON “capabilities” object from your ToolRegistry:
+
+```json
+{
+  "capabilities_version": 1,
+  "upload": { "formats": ["pdf","docx","txt","md"], "maxMB": 10, "status": "ready" },
+  "contacts": { "meCard": true, "status": "ready" },
+  "pdf_extraction": { "model": "google/gemini-2.0-flash", "status": "m2_planned" },
+  "fetch_url": { "status": "not_configured" },
+  "github": { "status": "not_configured" },
+  "deploy_agent": { "agents": ["knowledge_card_generation","artifact_ingestion"], "status": "ready" }
+}
+```
+
+* The LLM proposes *what to do next* using this manifest; your actor still enforces `waiting`/objective semantics and rejects anything with `status != ready`.
+* This restores “LLM chooses” while keeping you fully in control of what’s actually executable. It aligns with your tool spec and “not configured” policy.
+
+### 4.2 “Plan → Execute → Verify” micro‑loop
+
+For each turn (within a phase):
+
+1. **Plan (structured).** Ask the LLM to emit a *single, small* JSON action (tool name + params + short “why”).
+2. **Execute (local).** Run the tool; return its JSON result or a `waiting` token (your current design already supports this). 
+3. **Verify (edge‑schema).** Validate the result against the tool schema or data schema (you’re already doing this). If valid and user‑approved, update stores and call `completeObjective(...)` if appropriate. 
+
+This is not chain‑of‑thought; it’s a one‑step “intent contract” that keeps the LLM accountable and auditable.
+
+### 4.3 “Ingest‑anything” router (keep it simple)
+
+Add a **single** `ingest_any` surface (LLM‑invocable) that:
+
+* Accepts *any* user file or link.
+* Runs a deterministic MIME/type check.
+* Chooses a known path:
+
+  * PDF/Doc → existing résumé/timeline pipeline (Gemini). 
+  * Image → store as artifact; no OCR in v1 (explicitly tell the model “no OCR”), optionally queue for later. (This mirrors the old spec’s “no OCR” constraint while you bridge to M2.) 
+  * Repo URL → “not configured” (auth‑gated) with a friendly explanation. 
+
+This preserves the *user feeling* that “I can drop anything,” with graceful fallbacks.
+
+### 4.4 Keep macro‑progress objective‑driven
+
+Your actor continues to be the **sole authority** on phase changes: when `applicant_profile`, `skeleton_timeline`, and `enabled_sections` are done, advance to Phase 2. The LLM may *propose* completion via `set_objective_status`, but only the actor decides.
+
+### 4.5 Re‑use your strongest “evidence” ideas
+
+When generating Knowledge Cards in Phase 2, keep the old deep‑reading + citation discipline (quotes with locators; “no evidence → no claim”)—that’s a signature strength and easy to preserve under the new agent shells.
+
+---
+
+## 5) Minimal diffs to current docs to enable the middle path
+
+> These are surgical changes—no rewrites, and they keep M0→M3 intact.
+
+1. **Tool Spec:**
+
+   * Add a read‑only `capabilities.describe()` tool that returns the manifest above (driven by ToolRegistry). 
+   * Clarify that *every* tool may return `.waiting` with a continuation token (already present—make it prominent in the spec overview). 
+
+2. **Orchestrator:**
+
+   * Before each micro‑turn in a phase, fetch `capabilities.describe()` and include it in the system context for the LLM. The LLM must choose a single next action from that menu. (No free‑form “try anything.”) 
+
+3. **State Machine:**
+
+   * Keep `Session` exactly as is. Add a tiny guard in the actor: if the LLM proposes an action for a not‑ready capability (e.g., `fetch_url`), the actor returns a canonical “not configured” error and stays in the same `waiting` state.
+
+4. **Phase 1 Timeline:**
+
+   * Adopt the new PDF extraction flow as your default *when available* (M2), but keep M1’s naive extractor as an explicit fallback path the LLM can select from the manifest. The LLM should *see* both options and their status. 
+
+5. **Knowledge Card Agent:**
+
+   * Wire the existing “DeployAgent” entry to a *real* Knowledge Card generator call in M2, with the old evidence requirements copied verbatim into its system prompt. (The deploy_agent contract already exists in your tool spec.)
+
+6. **Errors & Timeouts:**
+
+   * Keep StreamWatchdog and exponential backoff unchanged. If the LLM proposes the same failing action 2× in a row, the actor nudges the LLM to choose an *alternative ready capability* (visible in the manifest). 
+
+---
+
+## 6) What this buys you (experience and reliability)
+
+* **Restores improvisation safely.** The LLM *feels* in charge again: it can pick contacts import vs. manual vs. upload, ask for a resume, or jump to a dossier question—*as long as the capability is marked ready and the actor agrees*. 
+
+* **Keeps the “coach persona.”** Your Workflow Narrative’s tone and pacing remain intact; the LLM just gains a broader, truthful menu of actions at each step. 
+
+* **Avoids brittle global state.** Macro‑state stays deterministic; micro‑steps are opportunistic. That separation mirrors your current “simple actor + tools” architecture. 
+
+---
+
+Follow up modifications:
+1) LLM sees tools, not vendors (your concern)
+Added a vendor‑agnostic tool: extract_document. The LLM calls this for any PDF/DOCX; the ToolExecutor chooses OCR/layout/provider locally (Gemini, etc.), never exposing model IDs. See Tools Spec v2 §3 and Capabilities §1. 
+tool_specification
+Introduced capabilities.describe (a sanitized capability manifest). It lists what’s “ready” and basic functional flags (e.g., ocr: true)—no provider names. 
+tool_specification
+2) “Any PDF goes through extraction,” regardless of end use
+The PDF Extraction Spec (v2) routes every PDF through extract_document first. Résumé detection yields derived.applicant_profile and derived.skeleton_timeline when confident; all files get an artifact_record. (Quality flags included.) 
+pdf_extraction_specification
+The Workflow Narrative (v2) removes all provider/model mentions; the coach simply calls get_user_upload → extract_document → submit_for_validation. 
+workflow_narrative_user_experie…
+3) Clean, unified enums & missing types fixed
+Normalized dataType enums to snake_case across tools.
+Added missing candidate_dossier to persist_data. (This eliminates earlier schema mismatches.) 
+tool_specification
+4) GPT‑5 features wired in (without over-exposing them)
+In Final Implementation Guide patch, we document how to use Responses API with:
+text.verbosity to scale output length;
+reasoning.effort (use minimal on extraction micro-steps for speed, elevate for deep planning);
+allowed tools per phase, so the model can plan freely within a safe sandbox;
+previous_response_id to reuse reasoning between tool calls.
+These align with the Function Calling & Responses API guidance in OpenAI docs. 
+
+A) Tools (v2) — key surfaces
+capabilities.describe — tells the model which tools are ready (no vendor names).
+extract_document — the entrypoint for PDFs/DOCX. Returns:
+artifact_record (always), plus
+derived.applicant_profile & derived.skeleton_timeline when a résumé is detected, with quality flags.
+submit_for_validation — now takes dataType in snake_case and supports skeleton_timeline.
+persist_data — supports candidate_dossier, skeleton_timeline, applicant_profile, knowledge_card, artifact_record, writing_sample.
+(See Tool Spec v2.) 
+tool_specification
+B) PDF extraction (v2) — flow summary
+Any PDF upload → LLM calls extract_document(file_url).
+Tool picks the configured provider (OCR/layout) locally; returns normalized outputs + confidence.
+LLM optionally runs submit_for_validation then persist_data. (See PDF Spec v2.) 
+pdf_extraction_specification
+C) UX narrative (v2) — what the user experiences
+The coach presents Contacts / Upload / Manual.
+On upload, it always extracts first via extract_document, then asks the user to confirm profile/timeline. (No provider talk.) (See Workflow Narrative v2.) 
+workflow_narrative_user_experie…
+D) Small but important fixes carried in patches
+Clean Slate Plan: moved PDF parsing into the tool; removed channel‑mixing text. 
+clean_slate_implementation_plan
+Final Implementation Guide: documents “allowed tools per phase” + GPT‑5 tuning (verbosity, reasoning). 
+final_implementation_guide
+Executive Summary: notes the new tools. 
+executive_summary
+Milestone 1 stubs: adds ExtractDocumentTool.swift action items.
+LLM-led: The agent still chooses micro‑steps (e.g., “extract this file”), guided by a capability manifest and an allowed tools list—so it feels dynamic again, without leaking backend details. 
+tool_specification
+Modern GPT‑5 tuning: Use verbosity + minimal reasoning for low-latency steps; elevate for deep dives; and reuse reasoning with the Responses API for multi‑tool workflows. 
+

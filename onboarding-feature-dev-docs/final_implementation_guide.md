@@ -31,17 +31,19 @@ Based on reviewer feedback, split OnboardingInterviewService into focused servic
 
 ### **2\. Latest OpenAI Models (GPT-5 Series)**
 
-We will adopt the new ModelProvider policy as the single source of truth for model selection. We prioritize intelligence \> speed \> cost. We will use the **Responses API** with new parameters like text.verbosity and reasoning.effort.  
-**Model Selection Policy:**
+We will adopt the new ModelProvider policy as the single source of truth for model selection. We prioritize intelligence \> speed \> cost. We will use the **Responses API** with new parameters like text.verbosity and reasoning.effort.
 
-* Use **GPT-5 (large)** for orchestration, planning, or synthesis.  
+Allowed Tools per Phase (sanitized manifest + enforcement)**    
+The orchestrator computes an **allowed tools list** and passes only those to the model per turn.  **Model Selection Policy:**
+Use `capabilities.describe` to inform planning; hide all vendor specifics.  
+Phase 1 example: `["get_user_option","get_user_upload","extract_document","submit_for_validation","persist_data"]`.* Use **GPT-5 (large)** for orchestration, planning, or synthesis.  
 * Use **GPT-5-mini** for most structured tasks (extraction, validation) with reasoning.effort: "minimal".  
-* Use **GPT-5-nano** for tiny, deterministic chores (e.g., routing).  
-* Keep **o-series (o1)** available as an "escape hatch" for hard reasoning spikes.  
-* We will default to mini tiers and escalate only when needed. (See official pricing notes for cost details).
+Responses API tuning for GPT‑5**  * Use **GPT-5-nano** for tiny, deterministic chores (e.g., routing).  
+Phase prompts use `text.verbosity="medium"`; extraction micro‑steps use `text.verbosity="low", reasoning.effort="minimal"`.  * Keep **o-series (o1)** available as an "escape hatch" for hard reasoning spikes.  
+Reuse reasoning with `previous_response_id` when chaining tool calls.* We will default to mini tiers and escalate only when needed. (See official pricing notes for cost details).
 
-enum TaskType {  
-    case orchestrator       // planning, multi-step conversation  
+Universal PDF handling**  enum TaskType {  
+After any upload, call `extract_document` for PDFs/DOCX; do not parse inline in tools or prompts.    case orchestrator       // planning, multi-step conversation  
     case validate           // user-approval & schema checks  
     case extract            // resume/link parsing, light transforms  
     case summarize          // short summaries/classifications  
@@ -199,15 +201,16 @@ class InterviewUI: ObservableObject {
 ### **M1 – Phase 1 usable**
 
 * Applicant profile (manual \+ optional macOS "Me" card)
-* Skeleton timeline from resume upload (parsing can be naive - improved in M2 with OpenRouter PDF extraction, see `pdf_extraction_specification.md`)
+* Skeleton timeline from resume upload * 
+* **OpenRouter PDF extraction** - Replace naive text extraction with Gemini 2.0 Flash for OCR, layout preservation, and multimodal processing
+
 * User validation loop (approve/modify)
 
 ### **M2 – Deep dive basics**
 
 * One experience interview end-to-end
 * Generate a single Knowledge Card and validate it
-* Save artifacts (text only at first)
-* **OpenRouter PDF extraction** - Replace naive text extraction with Gemini 2.0 Flash for OCR, layout preservation, and multimodal processing
+* Save artifacts 
 
 ### **M3 – Personal-use polish**
 
