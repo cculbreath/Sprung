@@ -27,11 +27,54 @@ struct WrapUpSummaryView: View {
             if let timeline = artifacts.skeletonTimeline {
                 ArtifactSection(title: "Skeleton Timeline", content: formattedJSON(timeline))
             }
+
+            if !artifacts.artifactRecords.isEmpty {
+                let content = artifacts.artifactRecords.enumerated().map { index, artifact in
+                    artifactSummary(artifact, index: index + 1)
+                }.joined(separator: "\n\n")
+                ArtifactSection(title: "Uploaded Documents", content: content)
+            }
+
+            if !artifacts.enabledSections.isEmpty {
+                ArtifactSection(
+                    title: "Enabled Résumé Sections",
+                    content: artifacts.enabledSections.joined(separator: ", ")
+                )
+            }
         }
     }
 
     private func formattedJSON(_ json: JSON) -> String {
         json.rawString(options: .prettyPrinted) ?? json.rawString() ?? ""
+    }
+
+    private func artifactSummary(_ artifact: JSON, index: Int) -> String {
+        let name = artifact["filename"].string ?? "Document \(index)"
+        let sizeBytes = artifact["size_bytes"].int ?? 0
+        let sizeString: String
+        if sizeBytes > 0 {
+            sizeString = String(format: "%.1f KB", Double(sizeBytes) / 1024.0)
+        } else {
+            sizeString = "Size unknown"
+        }
+
+        var lines: [String] = []
+        lines.append("\(index). \(name) — \(sizeString)")
+        if let sha = artifact["sha256"].string, !sha.isEmpty {
+            lines.append("   SHA256: \(sha)")
+        }
+        if let metadata = artifact["metadata"].dictionary {
+            if let format = metadata["source_format"]?.string {
+                lines.append("   Format: \(format)")
+            }
+            if let purpose = metadata["purpose"]?.string {
+                lines.append("   Purpose: \(purpose)")
+            }
+            if let characters = metadata["character_count"]?.int {
+                lines.append("   Characters captured: \(characters)")
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 }
 

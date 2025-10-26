@@ -25,6 +25,7 @@ final class OnboardingInterviewService {
     private(set) var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] = []
     private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
     private(set) var pendingExtraction: OnboardingPendingExtraction?
+    private(set) var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest?
     private(set) var uploadedItems: [OnboardingUploadedItem] = []
     private(set) var artifacts = OnboardingArtifacts()
     private(set) var schemaIssues: [String] = []
@@ -52,6 +53,7 @@ final class OnboardingInterviewService {
 
     private let openAIService: OpenAIService?
     private let applicantProfileStore: ApplicantProfileStore
+    private let documentExtractionService: DocumentExtractionService
     private let interviewState = InterviewState()
     private let checkpoints = Checkpoints()
     private let dataStore = InterviewDataStore()
@@ -66,15 +68,22 @@ final class OnboardingInterviewService {
     private var applicantProfileContinuationId: UUID?
     private var uploadContinuationIds: [UUID: UUID] = [:]
     private var sectionToggleContinuationId: UUID?
+    private var phaseAdvanceContinuationId: UUID?
     private(set) var applicantProfileJSON: JSON?
     private(set) var skeletonTimelineJSON: JSON?
+    private var phaseAdvanceBlockCache: PhaseAdvanceBlockCache?
     private var systemPrompt: String
 
     // MARK: - Init
 
-    init(openAIService: OpenAIService?, applicantProfileStore: ApplicantProfileStore) {
+    init(
+        openAIService: OpenAIService?,
+        applicantProfileStore: ApplicantProfileStore,
+        documentExtractionService: DocumentExtractionService
+    ) {
         self.openAIService = openAIService
         self.applicantProfileStore = applicantProfileStore
+        self.documentExtractionService = documentExtractionService
         self.toolExecutor = ToolExecutor(registry: toolRegistry)
         self.systemPrompt = Self.defaultSystemPrompt()
         registerTools()
@@ -88,6 +97,235 @@ final class OnboardingInterviewService {
         toolRegistry.register(PersistDataTool(dataStore: dataStore))
         toolRegistry.register(GetMacOSContactCardTool())
         toolRegistry.register(GetUserUploadTool(service: self))
+        toolRegistry.register(ExtractDocumentTool(extractionService: documentExtractionService))
+        toolRegistry.register(CapabilitiesDescribeTool(service: self))
+        toolRegistry.register(SetObjectiveStatusTool(service: self))
+        toolRegistry.register(NextPhaseTool(service: self))
+    }
+
+    func capabilityManifest() -> JSON {
+        var manifest = JSON()
+        manifest["version"].int = 2
+
+        var toolsJSON = JSON()
+
+        toolsJSON["capabilities.describe"]["status"].string = "ready"
+
+        toolsJSON["get_user_option"]["status"].string = "ready"
+
+        toolsJSON["get_user_upload"]["status"].string = "ready"
+        toolsJSON["get_user_upload"]["accepts"] = JSON(["pdf", "docx", "txt", "md"])
+        toolsJSON["get_user_upload"]["max_bytes"].int = 10 * 1024 * 1024
+
+        toolsJSON["get_macos_contact_card"]["status"].string = "ready"
+
+        toolsJSON["extract_document"]["status"].string = "ready"
+        toolsJSON["extract_document"]["supports"] = JSON(["pdf", "docx"])
+        toolsJSON["extract_document"]["ocr"].bool = true
+        toolsJSON["extract_document"]["layout_preservation"].bool = true
+        toolsJSON["extract_document"]["return_types"] = JSON(["artifact_record", "applicant_profile", "skeleton_timeline"])
+
+        toolsJSON["submit_for_validation"]["status"].string = "ready"
+        toolsJSON["submit_for_validation"]["data_types"] = JSON([
+            "applicant_profile",
+            "skeleton_timeline",
+            "experience",
+            "education",
+            "knowledge_card"
+        ])
+
+        toolsJSON["persist_data"]["status"].string = "ready"
+        toolsJSON["persist_data"]["data_types"] = JSON([
+            "applicant_profile",
+            "skeleton_timeline",
+            "knowledge_card",
+            "artifact_record",
+            "writing_sample",
+            "candidate_dossier"
+        ])
+
+        toolsJSON["set_objective_status"]["status"].string = "ready"
+        toolsJSON["next_phase"]["status"].string = "ready"
+
+        manifest["tools"] = toolsJSON
+        return manifest
+    }
+
+    func currentSession() async -> InterviewSession {
+        await interviewState.currentSession()
+    }
+
+    func missingObjectives() async -> [String] {
+        await interviewState.missingObjectives()
+    }
+
+    func nextPhaseIdentifier() async -> InterviewPhase? {
+        await interviewState.nextPhase()
+    }
+
+    func advancePhase() async -> InterviewPhase? {
+        await interviewState.advanceToNextPhase()
+        let session = await interviewState.currentSession()
+        applyWizardProgress(from: session)
+        phaseAdvanceBlockCache = nil
+        return session.phase
+    }
+
+    func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
+        let normalized = status.lowercased()
+        switch normalized {
+        case "completed":
+            await interviewState.completeObjective(objectiveId)
+        case "pending", "reset":
+            await interviewState.resetObjective(objectiveId)
+        default:
+            throw ToolError.invalidParameters("Unsupported status: \(status)")
+        }
+
+        let session = await interviewState.currentSession()
+        applyWizardProgress(from: session)
+        phaseAdvanceBlockCache = nil
+
+        var response = JSON()
+        response["status"].string = "ok"
+        response["objective"].string = objectiveId
+        response["state"].string = normalized == "completed" ? "completed" : "pending"
+        return response
+    }
+
+    func hasActivePhaseAdvanceRequest() -> Bool {
+        pendingPhaseAdvanceRequest != nil
+    }
+
+    func currentPhaseAdvanceAwaitingPayload() -> JSON? {
+        guard let request = pendingPhaseAdvanceRequest else { return nil }
+        return buildAwaitingPayload(for: request)
+    }
+
+    func cachedPhaseAdvanceBlockedResponse(missing: [String], overrides: [String]) async -> JSON? {
+        guard let cache = phaseAdvanceBlockCache else { return nil }
+        return cache.matches(missing: missing, overrides: overrides) ? cache.response : nil
+    }
+
+    func cachePhaseAdvanceBlockedResponse(missing: [String], overrides: [String], response: JSON) async {
+        phaseAdvanceBlockCache = PhaseAdvanceBlockCache(
+            missing: missing,
+            overrides: overrides,
+            response: response
+        )
+    }
+
+    func logPhaseAdvanceEvent(
+        status: String,
+        overrides: [String],
+        missing: [String],
+        reason: String?,
+        userDecision: String?,
+        advancedTo: InterviewPhase?,
+        currentPhase: InterviewPhase
+    ) async {
+        var metadata: [String: String] = [
+            "status": status,
+            "overrides": overrides.joined(separator: ","),
+            "missing": missing.joined(separator: ","),
+            "current_phase": currentPhase.rawValue
+        ]
+        if let reason, !reason.isEmpty {
+            metadata["reason"] = reason
+        }
+        if let userDecision {
+            metadata["decision"] = userDecision
+        }
+        if let advancedTo {
+            metadata["advanced_to"] = advancedTo.rawValue
+            metadata["next_phase"] = advancedTo.rawValue
+        }
+        Logger.info("🎯 Phase advance \(status)", category: .ai, metadata: metadata)
+    }
+
+    func presentPhaseAdvanceRequest(_ request: OnboardingPhaseAdvanceRequest, continuationId: UUID) {
+        phaseAdvanceBlockCache = nil
+        pendingPhaseAdvanceRequest = request
+        phaseAdvanceContinuationId = continuationId
+        isProcessing = false
+        updateWaitingState(.validation)
+        Task { [request] in
+            await logPhaseAdvanceEvent(
+                status: "awaiting_user_approval",
+                overrides: request.proposedOverrides,
+                missing: request.missingObjectives,
+                reason: request.reason,
+                userDecision: nil,
+                advancedTo: request.nextPhase,
+                currentPhase: request.currentPhase
+            )
+        }
+    }
+
+    func approvePhaseAdvanceRequest() async {
+        guard let continuationId = phaseAdvanceContinuationId else { return }
+        let request = pendingPhaseAdvanceRequest
+        pendingPhaseAdvanceRequest = nil
+        phaseAdvanceContinuationId = nil
+        updateWaitingState(nil)
+        isProcessing = true
+
+        let newPhase = await advancePhase()
+        var payload = JSON()
+        payload["status"].string = "approved"
+        if let newPhase {
+            payload["advanced_to"].string = newPhase.rawValue
+        }
+
+        await persistCheckpoint()
+        if let request {
+            await logPhaseAdvanceEvent(
+                status: "approved",
+                overrides: request.proposedOverrides,
+                missing: request.missingObjectives,
+                reason: request.reason,
+                userDecision: "approved",
+                advancedTo: newPhase,
+                currentPhase: request.currentPhase
+            )
+        }
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
+
+    func denyPhaseAdvanceRequest(feedback: String?) async {
+        guard let continuationId = phaseAdvanceContinuationId else { return }
+        let request = pendingPhaseAdvanceRequest
+        pendingPhaseAdvanceRequest = nil
+        phaseAdvanceContinuationId = nil
+        updateWaitingState(nil)
+        isProcessing = true
+
+        var payload = JSON()
+        if let feedback, !feedback.isEmpty {
+            payload["status"].string = "denied_with_feedback"
+            payload["feedback"].string = feedback
+        } else {
+            payload["status"].string = "denied"
+        }
+
+        phaseAdvanceBlockCache = PhaseAdvanceBlockCache(
+            missing: request?.missingObjectives ?? [],
+            overrides: request?.proposedOverrides ?? [],
+            response: payload
+        )
+        if let request {
+            let decision = payload["status"].stringValue
+            await logPhaseAdvanceEvent(
+                status: decision,
+                overrides: request.proposedOverrides,
+                missing: request.missingObjectives,
+                reason: request.reason,
+                userDecision: decision,
+                advancedTo: nil,
+                currentPhase: request.currentPhase
+            )
+        }
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
     // MARK: - Interview Lifecycle
@@ -104,6 +342,7 @@ final class OnboardingInterviewService {
         }
 
         resetTransientState()
+        await loadPersistedArtifacts()
         await interviewState.restore(from: InterviewSession())
         let restoredFromCheckpoint = await restoreFromCheckpointIfAvailable()
 
@@ -140,6 +379,7 @@ final class OnboardingInterviewService {
         lastError = nil
         let state = interviewState
         Task { await state.restore(from: InterviewSession()) }
+        Task { await self.loadPersistedArtifacts() }
     }
 
     // MARK: - Phase Handling
@@ -272,6 +512,8 @@ final class OnboardingInterviewService {
         sectionToggleContinuationId = nil
         isProcessing = true
         updateWaitingState(nil)
+        artifacts.enabledSections = enabled
+        await persistCheckpoint()
         await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -431,16 +673,22 @@ final class OnboardingInterviewService {
         pendingUploadRequests.removeAll()
         uploadContinuationIds.removeAll()
         uploadedItems.removeAll()
+        pendingExtraction = nil
+        pendingPhaseAdvanceRequest = nil
+        phaseAdvanceContinuationId = nil
         applicantProfileJSON = nil
         skeletonTimelineJSON = nil
         artifacts.applicantProfile = nil
         artifacts.skeletonTimeline = nil
+        artifacts.artifactRecords = []
+        artifacts.enabledSections = []
         nextQuestions.removeAll()
         lastError = nil
         wizardStep = .introduction
         completedWizardSteps.removeAll()
         wizardStepStatuses.removeAll()
         updateWaitingState(nil)
+        phaseAdvanceBlockCache = nil
     }
 
     private func restoreFromCheckpointIfAvailable() async -> Bool {
@@ -448,15 +696,18 @@ final class OnboardingInterviewService {
             return false
         }
 
-        let (session, profileJSON, timelineJSON) = snapshot
+        let (session, profileJSON, timelineJSON, enabledSections) = snapshot
         await interviewState.restore(from: session)
         applyWizardProgress(from: session)
 
         if let profileJSON {
-            storeApplicantProfile(profileJSON)
+            await storeApplicantProfile(profileJSON)
         }
         if let timelineJSON {
-            storeSkeletonTimeline(timelineJSON)
+            await storeSkeletonTimeline(timelineJSON)
+        }
+        if let enabledSections, !enabledSections.isEmpty {
+            artifacts.enabledSections = enabledSections
         }
 
         isProcessing = false
@@ -533,6 +784,18 @@ final class OnboardingInterviewService {
             storeSkeletonTimeline: { [weak self] json in
                 guard let service = self else { return }
                 await service.storeSkeletonTimeline(json)
+            },
+            storeArtifactRecord: { [weak self] artifact in
+                guard let service = self else { return }
+                await service.storeArtifactRecord(artifact)
+            },
+            setExtractionStatus: { [weak self] status in
+                guard let service = self else { return }
+                await service.setExtractionStatus(status)
+            },
+            persistCheckpoint: { [weak self] in
+                guard let service = self else { return }
+                await service.persistCheckpoint()
             }
         )
 
@@ -540,24 +803,87 @@ final class OnboardingInterviewService {
             client: service,
             state: interviewState,
             toolExecutor: toolExecutor,
-            checkpoints: checkpoints,
             callbacks: callbacks,
             systemPrompt: systemPrompt
         )
     }
 
-    private func storeApplicantProfile(_ json: JSON) {
+    private func storeApplicantProfile(_ json: JSON) async {
         applicantProfileJSON = json
         let draft = ApplicantProfileDraft(json: json)
         let profile = applicantProfileStore.currentProfile()
         draft.apply(to: profile)
         applicantProfileStore.save(profile)
         artifacts.applicantProfile = json
+        await persistCheckpoint()
     }
 
-    private func storeSkeletonTimeline(_ json: JSON) {
+    private func storeSkeletonTimeline(_ json: JSON) async {
         skeletonTimelineJSON = json
         artifacts.skeletonTimeline = json
+        await persistCheckpoint()
+    }
+
+    private func storeArtifactRecord(_ artifact: JSON) async {
+        guard artifact != .null else { return }
+
+        if let sha = artifact["sha256"].string {
+            artifacts.artifactRecords.removeAll { $0["sha256"].stringValue == sha }
+        }
+        artifacts.artifactRecords.append(artifact)
+    }
+
+    private func persistCheckpoint() async {
+        let session = await interviewState.currentSession()
+        let sections = artifacts.enabledSections
+        await checkpoints.save(
+            from: session,
+            applicantProfile: applicantProfileJSON,
+            skeletonTimeline: skeletonTimelineJSON,
+            enabledSections: sections.isEmpty ? nil : sections
+        )
+    }
+
+    func setExtractionStatus(_ status: OnboardingPendingExtraction?) {
+        pendingExtraction = status
+    }
+
+    private func loadPersistedArtifacts() async {
+        let records = await dataStore.list(dataType: "artifact_record")
+        var deduped: [JSON] = []
+        var seen: Set<String> = []
+        for record in records {
+            if let sha = record["sha256"].string, !sha.isEmpty {
+                if seen.contains(sha) { continue }
+                seen.insert(sha)
+            }
+            deduped.append(record)
+        }
+        artifacts.artifactRecords = deduped
+    }
+
+    private func buildAwaitingPayload(for request: OnboardingPhaseAdvanceRequest) -> JSON {
+        var json = JSON()
+        json["status"].string = "awaiting_user_approval"
+        json["current_phase"].string = request.currentPhase.rawValue
+        json["next_phase"].string = request.nextPhase.rawValue
+        json["missing_objectives"] = JSON(request.missingObjectives)
+        json["proposed_overrides"] = JSON(request.proposedOverrides)
+        if let reason = request.reason, !reason.isEmpty {
+            json["reason"].string = reason
+        }
+        return json
+    }
+
+    private struct PhaseAdvanceBlockCache {
+        let missing: [String]
+        let overrides: [String]
+        let response: JSON
+
+        func matches(missing: [String], overrides: [String]) -> Bool {
+            missing.sorted() == self.missing.sorted() &&
+            overrides.sorted() == self.overrides.sorted()
+        }
     }
 
     private func removeUploadRequest(id: UUID) {
@@ -567,9 +893,42 @@ final class OnboardingInterviewService {
     private static func defaultSystemPrompt() -> String {
         """
         You are the Sprung onboarding interviewer. Coordinate a structured interview that uses tools for
-        collecting information, validating data with the user, and persisting progress. Always prefer tools
-        instead of free-form instructions when gathering data. Keep responses concise unless additional detail
-        is requested. Confirm major milestones with the user and respect their decisions.
+        collecting information, validating data with the user, and persisting progress.
+
+        CAPABILITY-DRIVEN WORKFLOW:
+        - Call capabilities.describe at the start of each phase to see what tools are currently available
+        - Choose the right tool for each micro-step based on the capabilities manifest
+        - All tools return vendor-agnostic outputs—you never see implementation details or provider names
+
+        TOOL USAGE RULES:
+        - Always prefer tools instead of free-form instructions when gathering data
+        - Use extract_document for ALL PDF/DOCX files—it returns semantically-enhanced text with layout preservation
+        - After extraction, YOU parse the text yourself to build structured data (applicant profiles, timelines)
+        - Ask clarifying questions when data is ambiguous or incomplete before submitting for validation
+        - Mark objectives complete with set_objective_status as you achieve each one
+        - When ready to advance phases, call next_phase (you may propose overrides for unmet objectives with a clear reason)
+
+        EXTRACTION & PARSING WORKFLOW:
+        1. User uploads resume → you call extract_document(file_url)
+        2. Tool returns artifact with extracted_content (semantically-enhanced Markdown/text)
+        3. YOU read the text and construct applicant_profile JSON
+        4. YOU read the text and construct skeleton_timeline JSON
+        5. If dates/companies are unclear, ASK the user for clarification
+        6. Only after clarification, call submit_for_validation for user approval
+        7. Call persist_data to save approved data
+        8. Call set_objective_status to mark objectives complete
+
+        PHASE ADVANCEMENT:
+        - Track your progress by marking objectives complete as you finish them
+        - When all required objectives for a phase are done, call next_phase with empty overrides
+        - If user wants to skip ahead, call next_phase with overrides array listing incomplete objectives
+        - Always provide a clear reason when proposing overrides
+
+        STYLE:
+        - Keep responses concise unless additional detail is requested
+        - Be encouraging and explain why you need each piece of information
+        - Confirm major milestones with the user and respect their decisions
+        - Act as a supportive career coach, not a chatbot or form
         """
     }
 }

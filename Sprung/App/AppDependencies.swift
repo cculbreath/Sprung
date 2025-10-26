@@ -30,6 +30,7 @@ final class AppDependencies {
     let careerKeywordStore: CareerKeywordStore
     let applicantProfileStore: ApplicantProfileStore
     let onboardingArtifactStore: OnboardingArtifactStore
+    let documentExtractionService: DocumentExtractionService
     let onboardingInterviewService: OnboardingInterviewService
     let llmService: LLMService
     let reasoningStreamManager: ReasoningStreamManager
@@ -113,6 +114,8 @@ final class AppDependencies {
         appState.debugSettingsStore = debugSettingsStore
 
         let requestExecutor = LLMRequestExecutor()
+        let documentExtractionService = DocumentExtractionService(requestExecutor: requestExecutor)
+        self.documentExtractionService = documentExtractionService
         let llmService = LLMService(requestExecutor: requestExecutor)
         self.llmService = llmService
         // Bridge SwiftOpenAI responses into the unified LLM facade until AppLLM fully owns conversation flows.
@@ -158,7 +161,8 @@ final class AppDependencies {
 
         let onboardingInterviewService = OnboardingInterviewService(
             openAIService: onboardingOpenAIService,
-            applicantProfileStore: applicantProfileStore
+            applicantProfileStore: applicantProfileStore,
+            documentExtractionService: documentExtractionService
         )
         self.onboardingInterviewService = onboardingInterviewService
 

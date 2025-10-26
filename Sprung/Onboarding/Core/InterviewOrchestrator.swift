@@ -18,14 +18,53 @@ actor InterviewOrchestrator {
         let handleError: @Sendable (String) async -> Void
         let storeApplicantProfile: @Sendable (JSON) async -> Void
         let storeSkeletonTimeline: @Sendable (JSON) async -> Void
+        let storeArtifactRecord: @Sendable (JSON) async -> Void
+        let setExtractionStatus: @Sendable (OnboardingPendingExtraction?) async -> Void
+        let persistCheckpoint: @Sendable () async -> Void
     }
 
     private let client: OpenAIService
     private let state: InterviewState
     private let toolExecutor: ToolExecutor
-    private let checkpoints: Checkpoints
     private let callbacks: Callbacks
     private let systemPrompt: String
+    private let allowedToolsMap: [InterviewPhase: [String]] = [
+        .phase1CoreFacts: [
+            "capabilities.describe",
+            "get_user_option",
+            "get_user_upload",
+            "get_macos_contact_card",
+            "extract_document",
+            "submit_for_validation",
+            "persist_data",
+            "set_objective_status",
+            "next_phase"
+        ],
+        .phase2DeepDive: [
+            "capabilities.describe",
+            "get_user_option",
+            "get_user_upload",
+            "extract_document",
+            "submit_for_validation",
+            "persist_data",
+            "set_objective_status",
+            "next_phase"
+        ],
+        .phase3WritingCorpus: [
+            "capabilities.describe",
+            "get_user_option",
+            "get_user_upload",
+            "extract_document",
+            "submit_for_validation",
+            "persist_data",
+            "set_objective_status",
+            "next_phase"
+        ],
+        .complete: [
+            "capabilities.describe",
+            "next_phase"
+        ]
+    ]
 
     private var conversationId: String?
     private var lastResponseId: String?
@@ -40,14 +79,12 @@ actor InterviewOrchestrator {
         client: OpenAIService,
         state: InterviewState,
         toolExecutor: ToolExecutor,
-        checkpoints: Checkpoints,
         callbacks: Callbacks,
         systemPrompt: String
     ) {
         self.client = client
         self.state = state
         self.toolExecutor = toolExecutor
-        self.checkpoints = checkpoints
         self.callbacks = callbacks
         self.systemPrompt = systemPrompt
     }
@@ -121,12 +158,7 @@ actor InterviewOrchestrator {
             applicantProfileData = profile
             await state.completeObjective("applicant_profile")
             await callbacks.emitAssistantMessage("✅ Applicant profile captured.")
-            let session = await state.currentSession()
-            await checkpoints.save(
-                from: session,
-                applicantProfile: applicantProfileData,
-                skeletonTimeline: skeletonTimelineData
-            )
+            await callbacks.persistCheckpoint()
         } catch ToolError.userCancelled {
             await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
         } catch {
@@ -138,12 +170,7 @@ actor InterviewOrchestrator {
             skeletonTimelineData = timeline
             await state.completeObjective("skeleton_timeline")
             await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.")
-            let session = await state.currentSession()
-            await checkpoints.save(
-                from: session,
-                applicantProfile: applicantProfileData,
-                skeletonTimeline: skeletonTimelineData
-            )
+            await callbacks.persistCheckpoint()
         } catch ToolError.userCancelled {
             await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.")
         } catch {
@@ -154,12 +181,7 @@ actor InterviewOrchestrator {
         if current.objectivesDone.contains("skeleton_timeline") && !current.objectivesDone.contains("enabled_sections") {
             await state.completeObjective("enabled_sections")
             await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.")
-            let updatedSession = await state.currentSession()
-            await checkpoints.save(
-                from: updatedSession,
-                applicantProfile: applicantProfileData,
-                skeletonTimeline: skeletonTimelineData
-            )
+            await callbacks.persistCheckpoint()
         }
     }
 
@@ -181,7 +203,7 @@ actor InterviewOrchestrator {
         }
 
         var args = JSON()
-        args["dataType"].string = "applicantProfile"
+        args["dataType"].string = "applicant_profile"
         args["data"] = draft.toJSON()
         args["message"].string = "Review and confirm your applicant profile information."
         if !sources.isEmpty {
@@ -197,6 +219,7 @@ actor InterviewOrchestrator {
         let data = validation["data"]
         let final = data != .null ? data : draft.toJSON()
         await callbacks.storeApplicantProfile(final)
+        await persistData(final, as: "applicant_profile")
         return final
     }
 
@@ -209,16 +232,46 @@ actor InterviewOrchestrator {
 
         let uploadResult = try await callTool(name: "get_user_upload", arguments: uploadArgs)
         guard uploadResult["status"].stringValue == "uploaded",
-              let firstUpload = uploadResult["uploads"].array?.first,
-              let extractedText = firstUpload["extractedText"].string,
-              !extractedText.isEmpty else {
+              let firstUpload = uploadResult["uploads"].array?.first else {
             throw ToolError.userCancelled
+        }
+
+        guard let fileURLString = firstUpload["file_url"].string ?? firstUpload["storageUrl"].string,
+              let fileURL = URL(string: fileURLString) else {
+            throw ToolError.executionFailed("Uploaded file URL missing or invalid.")
+        }
+
+        var extractionArgs = JSON()
+        extractionArgs["file_url"].string = fileURL.absoluteString
+        extractionArgs["purpose"].string = "resume_timeline"
+        extractionArgs["return_types"] = JSON(["artifact_record"])
+
+        await callbacks.setExtractionStatus(
+            OnboardingPendingExtraction(
+                title: "Extracting résumé",
+                summary: "Processing your uploaded résumé to draft a skeleton timeline."
+            )
+        )
+
+        defer {
+            Task { await callbacks.setExtractionStatus(nil) }
+        }
+
+        let extractionResult = try await callTool(name: "extract_document", arguments: extractionArgs)
+        let artifact = extractionResult["artifact_record"]
+        let extractedText = artifact["extracted_content"].stringValue
+        guard !extractedText.isEmpty else {
+            throw ToolError.executionFailed("Document extraction did not yield text content.")
+        }
+        if artifact != .null {
+            await callbacks.storeArtifactRecord(artifact)
+            await persistData(artifact, as: "artifact_record")
         }
 
         let timeline = try await generateTimeline(from: extractedText)
 
         var validationArgs = JSON()
-        validationArgs["dataType"].string = "experience"
+        validationArgs["dataType"].string = "skeleton_timeline"
         validationArgs["data"] = timeline
         validationArgs["message"].string = "Review the generated skeleton timeline."
 
@@ -231,7 +284,22 @@ actor InterviewOrchestrator {
         let data = validation["data"]
         let final = data != .null ? data : timeline
         await callbacks.storeSkeletonTimeline(final)
+        await persistData(final, as: "skeleton_timeline")
         return final
+    }
+
+    private func persistData(_ payload: JSON, as dataType: String) async {
+        guard payload != .null else { return }
+
+        var args = JSON()
+        args["dataType"].string = dataType
+        args["data"] = payload
+
+        do {
+            _ = try await callTool(name: "persist_data", arguments: args)
+        } catch {
+            debugLog("Persist data for \(dataType) failed: \(error)")
+        }
     }
 
     private func buildApplicantProfileDraft(from contact: JSON) -> ApplicantProfileDraft {
@@ -331,6 +399,9 @@ actor InterviewOrchestrator {
             return
         }
 
+        let session = await state.currentSession()
+        let allowedToolNames = allowedToolNames(for: session)
+
         let config = ModelProvider.forTask(.orchestrator)
         let textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
 
@@ -345,7 +416,9 @@ actor InterviewOrchestrator {
             text: textConfig
         )
         parameters.parallelToolCalls = false
-        parameters.tools = await toolExecutor.availableToolSchemas()
+
+        parameters.tools = await toolExecutor.availableToolSchemas(allowedNames: allowedToolNames)
+
         if let effort = config.defaultReasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
@@ -357,12 +430,7 @@ actor InterviewOrchestrator {
         }
 
         try await handleResponse(response)
-        let session = await state.currentSession()
-        await checkpoints.save(
-            from: session,
-            applicantProfile: applicantProfileData,
-            skeletonTimeline: skeletonTimelineData
-        )
+        await callbacks.persistCheckpoint()
     }
 
     private func callTool(name: String, arguments: JSON) async throws -> JSON {
@@ -446,6 +514,9 @@ actor InterviewOrchestrator {
             return json
         case .waiting(_, let token):
             if let callId {
+                if let initial = token.initialPayload {
+                    try await sendToolOutput(callId: callId, output: initial)
+                }
                 continuationCallIds[token.id] = callId
             }
             if let toolName {
@@ -502,8 +573,17 @@ actor InterviewOrchestrator {
             return .selection
         case "submit_for_validation":
             return .validation
+        case "next_phase":
+            return .validation
         default:
             return nil
         }
+    }
+
+    private func allowedToolNames(for session: InterviewSession) -> Set<String> {
+        if let tools = allowedToolsMap[session.phase] {
+            return Set(tools)
+        }
+        return Set(["capabilities.describe"])
     }
 }

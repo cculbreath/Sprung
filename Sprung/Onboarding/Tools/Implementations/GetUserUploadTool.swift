@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Presents a file upload request to the user and returns stored artifacts
-//  along with naive text extraction.
+//  plus basic metadata. Text extraction happens via the extract_document tool.
 //
 
 import Foundation
@@ -215,14 +215,19 @@ private struct ProcessedUpload {
     let id: String
     let filename: String
     let storageURL: URL
-    let extractedText: String
+    let sizeInBytes: Int
+    let contentType: String?
 
     func toJSON() -> JSON {
         var json = JSON()
         json["id"].string = id
         json["filename"].string = filename
+        json["file_url"].string = storageURL.absoluteString
         json["storageUrl"].string = storageURL.absoluteString
-        json["extractedText"].string = extractedText
+        json["size_bytes"].int = sizeInBytes
+        if let contentType {
+            json["content_type"].string = contentType
+        }
         return json
     }
 }
@@ -258,31 +263,25 @@ private struct UploadStorage {
             throw ToolError.executionFailed("Failed to store uploaded file: \(error.localizedDescription)")
         }
 
-        let extractedText = extractText(from: destinationURL) ?? ""
-
         return ProcessedUpload(
             id: identifier,
             filename: sourceURL.lastPathComponent,
             storageURL: destinationURL,
-            extractedText: extractedText
+            sizeInBytes: fileSize(at: destinationURL),
+            contentType: contentType(for: destinationURL)
         )
     }
 
-    private func extractText(from url: URL) -> String? {
-        let ext = url.pathExtension.lowercased()
-        guard !ext.isEmpty else {
-            return try? String(contentsOf: url, encoding: .utf8)
-        }
+    private func fileSize(at url: URL) -> Int {
+        let attributes = try? fileManager.attributesOfItem(atPath: url.path)
+        let size = attributes?[.size] as? NSNumber
+        return size?.intValue ?? 0
+    }
 
-        if let type = UTType(filenameExtension: ext), type.conforms(to: .plainText) || type.conforms(to: .text) {
-            return try? String(contentsOf: url, encoding: .utf8)
+    private func contentType(for url: URL) -> String? {
+        if #available(macOS 12.0, *) {
+            return UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
         }
-
-        // Fall back to naive UTF-8 decode for other formats; may fail silently.
-        if let data = try? Data(contentsOf: url), let string = String(data: data, encoding: .utf8) {
-            return string
-        }
-
         return nil
     }
 }
