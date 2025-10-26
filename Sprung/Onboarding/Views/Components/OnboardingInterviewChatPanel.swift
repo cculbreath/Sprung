@@ -41,18 +41,6 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.top, topPadding)
             .padding(.horizontal, horizontalPadding)
 
-            if shouldShowProcessingIndicator(for: service) {
-                HStack(spacing: 12) {
-                    LLMActivityView()
-                    Text("Assistant is thinking…")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, sectionSpacing)
-                .padding(.horizontal, horizontalPadding)
-                .transition(.opacity)
-            }
-
             if !service.nextQuestions.isEmpty {
                 Divider()
                     .padding(.top, sectionSpacing)
@@ -81,7 +69,17 @@ struct OnboardingInterviewChatPanel: View {
                 .padding(.top, sectionSpacing)
                 .padding(.horizontal, horizontalPadding)
 
+            let showSpinner = shouldShowProcessingIndicator(for: service)
+
             HStack(alignment: .center, spacing: 12) {
+                if showSpinner {
+                    LLMActivityView(diameter: 28, centerColor: Color.black.opacity(0.7))
+                        .transition(.scale.combined(with: .opacity))
+                    Text("Assistant is thinking…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 TextField(
                     "Type your response…",
                     text: Binding(
@@ -109,6 +107,7 @@ struct OnboardingInterviewChatPanel: View {
             }
             .padding(.top, sectionSpacing)
             .padding(.horizontal, horizontalPadding)
+            .animation(.easeInOut(duration: 0.2), value: showSpinner)
 
             HStack(spacing: 6) {
                 Text(modelStatusDescription)

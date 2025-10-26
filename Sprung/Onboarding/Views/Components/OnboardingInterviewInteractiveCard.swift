@@ -30,12 +30,17 @@ struct OnboardingInterviewInteractiveCard: View {
                 onOpenSettings: onOpenSettings
             )
         }
-        .padding(.vertical, 32)
-        .padding(.horizontal, 28)
+        .padding(.vertical, 36)
+        .padding(.horizontal, 36)
         .frame(minHeight: 540)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
+                .shadow(color: Color.black.opacity(0.16), radius: 24, y: 18)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.38), lineWidth: 0.9)
         )
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
