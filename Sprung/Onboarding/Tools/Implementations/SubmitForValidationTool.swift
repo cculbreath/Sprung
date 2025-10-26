@@ -111,17 +111,18 @@ struct SubmitForValidationTool: InterviewTool {
 
 private struct ValidationPayload {
     let dataType: String
+    let canonicalType: String
     let payload: JSON
     let message: String?
     let sources: [String]
     let waitingMessage: String
 
     var normalizedType: String {
-        dataType.lowercased()
+        canonicalType
     }
 
     var isApplicantProfile: Bool {
-        normalizedType == "applicantprofile"
+        normalizedType == "applicant_profile"
     }
 
     init(json: JSON) throws {
@@ -133,14 +134,15 @@ private struct ValidationPayload {
             throw ToolError.invalidParameters("data must be an object containing the payload to review")
         }
 
-        let normalizedType = dataType.lowercased()
+        let normalizedType = dataType.lowercased().replacingOccurrences(of: " ", with: "_")
         self.dataType = dataType
+        self.canonicalType = normalizedType.replacingOccurrences(of: "-", with: "_")
         self.payload = data
         self.message = json["message"].string
         self.sources = (json["sources"].array ?? data["sources"].array ?? [])
             .compactMap { $0.string }
 
-        if normalizedType == "applicantprofile" {
+        if self.canonicalType == "applicant_profile" {
             waitingMessage = "Waiting for applicant profile review"
         } else if let message, !message.isEmpty {
             waitingMessage = "Waiting for user review: \(message)"
@@ -150,7 +152,7 @@ private struct ValidationPayload {
     }
 
     func toValidationPrompt() -> OnboardingValidationPrompt {
-        OnboardingValidationPrompt(dataType: dataType, payload: payload, message: message)
+        OnboardingValidationPrompt(dataType: canonicalType, payload: payload, message: message)
     }
 
     func toApplicantProfileRequest() -> OnboardingApplicantProfileRequest {

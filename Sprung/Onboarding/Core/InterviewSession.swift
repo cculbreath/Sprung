@@ -34,10 +34,10 @@ actor InterviewState {
 
     func completeObjective(_ id: String) async {
         session.objectivesDone.insert(id)
-        if shouldAdvancePhase() {
-            advancePhase()
-            debugLog("Advanced to phase: \(session.phase)")
-        }
+    }
+
+    func resetObjective(_ id: String) async {
+        session.objectivesDone.remove(id)
     }
 
     func setWaiting(_ waiting: InterviewSession.Waiting?) async {
@@ -53,6 +53,39 @@ actor InterviewState {
         debugLog("State restored to phase: \(session.phase)")
     }
 
+    func missingObjectives() -> [String] {
+        let required: [String]
+        switch session.phase {
+        case .phase1CoreFacts:
+            required = ["applicant_profile", "skeleton_timeline", "enabled_sections"]
+        case .phase2DeepDive:
+            required = ["interviewed_one_experience", "one_card_generated"]
+        case .phase3WritingCorpus:
+            required = ["one_writing_sample", "dossier_complete"]
+        case .complete:
+            required = []
+        }
+        return required.filter { !session.objectivesDone.contains($0) }
+    }
+
+    func nextPhase() -> InterviewPhase? {
+        switch session.phase {
+        case .phase1CoreFacts:
+            return .phase2DeepDive
+        case .phase2DeepDive:
+            return .phase3WritingCorpus
+        case .phase3WritingCorpus:
+            return .complete
+        case .complete:
+            return nil
+        }
+    }
+
+    func advanceToNextPhase() {
+        advancePhase()
+        debugLog("Advanced to phase: \(session.phase)")
+    }
+
     private func shouldAdvancePhase() -> Bool {
         switch session.phase {
         case .phase1CoreFacts:
@@ -62,7 +95,7 @@ actor InterviewState {
             return ["interviewed_one_experience", "one_card_generated"]
                 .allSatisfy(session.objectivesDone.contains)
         case .phase3WritingCorpus:
-            return ["one_writing_sample"]
+            return ["one_writing_sample", "dossier_complete"]
                 .allSatisfy(session.objectivesDone.contains)
         case .complete:
             return false
@@ -82,4 +115,3 @@ actor InterviewState {
         }
     }
 }
-

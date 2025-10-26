@@ -49,6 +49,23 @@ struct OnboardingInterviewToolPane: View {
                         Task { await actions.cancelValidation(reason: "User cancelled validation review") }
                     }
                 )
+            } else if let phaseAdvanceRequest = service.pendingPhaseAdvanceRequest {
+                OnboardingPhaseAdvanceDialog(
+                    request: phaseAdvanceRequest,
+                    onSubmit: { decision, feedback in
+                        Task {
+                            switch decision {
+                            case .approved:
+                                await actions.approvePhaseAdvance()
+                            case .denied:
+                                await actions.denyPhaseAdvance(reason: nil)
+                            case .deniedWithFeedback:
+                                await actions.denyPhaseAdvance(reason: feedback)
+                            }
+                        }
+                    },
+                    onCancel: nil
+                )
             } else if let profileRequest = service.pendingApplicantProfileRequest {
                 ApplicantProfileReviewCard(
                     request: profileRequest,
@@ -94,6 +111,18 @@ struct OnboardingInterviewToolPane: View {
     @ViewBuilder
     private func supportingContent() -> some View {
         let requests = uploadRequests()
+        if let extraction = service.pendingExtraction {
+            VStack(alignment: .leading, spacing: 16) {
+                ExtractionStatusCard(extraction: extraction)
+                baseContent(for: requests)
+            }
+        } else {
+            baseContent(for: requests)
+        }
+    }
+
+    @ViewBuilder
+    private func baseContent(for requests: [OnboardingUploadRequest]) -> some View {
         if !requests.isEmpty {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -120,6 +149,9 @@ struct OnboardingInterviewToolPane: View {
             ApplicantProfileSummaryCard(profile: profile)
         } else if service.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
             SkeletonTimelineSummaryCard(timeline: timeline)
+        } else if service.wizardStep == .artifactDiscovery,
+                  !service.artifacts.enabledSections.isEmpty {
+            EnabledSectionsSummaryCard(sections: service.artifacts.enabledSections)
         } else {
             Spacer()
         }
@@ -327,5 +359,28 @@ private struct TimelineEntryRow: View {
     private func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return value
+    }
+}
+
+private struct EnabledSectionsSummaryCard: View {
+    let sections: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Enabled Résumé Sections")
+                .font(.headline)
+            if sections.isEmpty {
+                Text("No sections selected yet.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(sections.joined(separator: ", "))
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(16)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

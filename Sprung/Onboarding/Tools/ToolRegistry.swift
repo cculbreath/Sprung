@@ -31,10 +31,13 @@ final class ToolRegistry {
         }
     }
 
-    func toolSchemas() -> [Tool] {
+    func toolSchemas(filteredBy allowedNames: Set<String>? = nil) -> [Tool] {
         queue.sync {
-            tools.values.map { tool in
-                .function(
+            tools.values.compactMap { tool in
+                if let allowedNames, !allowedNames.contains(tool.name) {
+                    return nil
+                }
+                return .function(
                     .init(
                         name: tool.name,
                         parameters: tool.parameters,

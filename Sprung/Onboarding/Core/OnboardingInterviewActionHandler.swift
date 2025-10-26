@@ -81,6 +81,14 @@ struct OnboardingInterviewActionHandler {
         await service.rejectApplicantProfile(reason: reason)
     }
 
+    func approvePhaseAdvance() async {
+        await service.approvePhaseAdvanceRequest()
+    }
+
+    func denyPhaseAdvance(reason: String?) async {
+        await service.denyPhaseAdvanceRequest(feedback: reason)
+    }
+
     func completeSectionToggleSelection(enabled: [String]) async {
         await service.resolveSectionToggle(enabled: enabled)
     }

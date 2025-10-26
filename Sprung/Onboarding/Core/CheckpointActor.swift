@@ -14,6 +14,7 @@ struct InterviewCheckpoint: Codable {
     let objectivesDone: [String]
     let applicantProfile: String?
     let skeletonTimeline: String?
+    let enabledSections: [String]?
 }
 
 actor Checkpoints {
@@ -37,16 +38,23 @@ actor Checkpoints {
         history = Self.loadHistory(from: url, limit: maxHistoryCount)
     }
 
-    func save(from session: InterviewSession, applicantProfile: JSON?, skeletonTimeline: JSON?) async {
+    func save(
+        from session: InterviewSession,
+        applicantProfile: JSON?,
+        skeletonTimeline: JSON?,
+        enabledSections: [String]?
+    ) async {
         let profileString = applicantProfile?.rawString(options: .sortedKeys)
         let timelineString = skeletonTimeline?.rawString(options: .sortedKeys)
+        let sections = enabledSections?.isEmpty == false ? enabledSections : nil
         history.append(
             InterviewCheckpoint(
                 timestamp: Date(),
                 phase: session.phase,
                 objectivesDone: Array(session.objectivesDone),
                 applicantProfile: profileString,
-                skeletonTimeline: timelineString
+                skeletonTimeline: timelineString,
+                enabledSections: sections
             )
         )
 
@@ -62,7 +70,7 @@ actor Checkpoints {
         }
     }
 
-    func restoreLatest() async -> (InterviewSession, JSON?, JSON?)? {
+    func restoreLatest() async -> (InterviewSession, JSON?, JSON?, [String]?)? {
         history = Self.loadHistory(from: url, limit: maxHistoryCount)
         guard let latest = history.max(by: { $0.timestamp < $1.timestamp }) else {
             return nil
@@ -74,7 +82,7 @@ actor Checkpoints {
 
         let profileJSON = latest.applicantProfile.flatMap { JSON(parseJSON: $0) }
         let timelineJSON = latest.skeletonTimeline.flatMap { JSON(parseJSON: $0) }
-        return (session, profileJSON, timelineJSON)
+        return (session, profileJSON, timelineJSON, latest.enabledSections)
     }
 
     private static func loadHistory(from url: URL, limit: Int) -> [InterviewCheckpoint] {

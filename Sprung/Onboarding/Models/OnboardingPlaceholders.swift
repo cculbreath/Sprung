@@ -145,7 +145,33 @@ struct OnboardingUploadedItem: Identifiable, Codable {
 struct OnboardingArtifacts {
     var applicantProfile: JSON?
     var skeletonTimeline: JSON?
-    var items: [String] = []
+    var artifactRecords: [JSON] = []
+    var enabledSections: [String] = []
+}
+
+struct OnboardingPhaseAdvanceRequest: Identifiable {
+    var id: UUID
+    var currentPhase: InterviewPhase
+    var nextPhase: InterviewPhase
+    var missingObjectives: [String]
+    var reason: String?
+    var proposedOverrides: [String]
+
+    init(
+        id: UUID = UUID(),
+        currentPhase: InterviewPhase,
+        nextPhase: InterviewPhase,
+        missingObjectives: [String],
+        reason: String?,
+        proposedOverrides: [String]
+    ) {
+        self.id = id
+        self.currentPhase = currentPhase
+        self.nextPhase = nextPhase
+        self.missingObjectives = missingObjectives
+        self.reason = reason
+        self.proposedOverrides = proposedOverrides
+    }
 }
 
 struct OnboardingContactsFetchRequest: Codable {

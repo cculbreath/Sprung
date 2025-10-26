@@ -26,7 +26,20 @@ enum ToolResult {
 struct ContinuationToken {
     let id: UUID
     let toolName: String
+    let initialPayload: JSON?
     let resumeHandler: @Sendable (JSON) async -> ToolResult
+
+    init(
+        id: UUID,
+        toolName: String,
+        initialPayload: JSON? = nil,
+        resumeHandler: @Sendable @escaping (JSON) async -> ToolResult
+    ) {
+        self.id = id
+        self.toolName = toolName
+        self.initialPayload = initialPayload
+        self.resumeHandler = resumeHandler
+    }
 }
 
 enum ToolError: Error {
