@@ -158,7 +158,8 @@ private extension OnboardingInterviewView {
                 )
             }
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 56)
+        .padding(.vertical, 20)
     }
 
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {

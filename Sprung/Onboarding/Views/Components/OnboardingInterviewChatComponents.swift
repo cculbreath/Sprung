@@ -66,6 +66,9 @@ struct MessageBubble: View {
 }
 
 struct LLMActivityView: View {
+    var diameter: CGFloat = 48
+    var centerColor: Color = Color.black.opacity(0.75)
+
     private let gradientColors: [Color] = [
         Color(red: 1.0, green: 0.38, blue: 0.0),
         Color(red: 0.95, green: 0.15, blue: 0.55),
@@ -75,6 +78,8 @@ struct LLMActivityView: View {
 
     private let rotationDuration: Double = 1.2
 
+    private var strokeWidth: CGFloat { diameter * 0.45 }
+
     var body: some View {
         TimelineView(.animation) { timeline in
             let timestamp = timeline.date.timeIntervalSinceReferenceDate
@@ -82,7 +87,7 @@ struct LLMActivityView: View {
             spinner
                 .rotationEffect(.degrees(progress * 360))
         }
-        .frame(width: 48, height: 48)
+        .frame(width: diameter, height: diameter)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -95,30 +100,30 @@ struct LLMActivityView: View {
 
         return ZStack {
             Circle()
-                .stroke(gradient, lineWidth: 22)
+                .stroke(gradient, lineWidth: strokeWidth)
 
             Circle()
-                .stroke(gradient, lineWidth: 22)
+                .stroke(gradient, lineWidth: strokeWidth)
                 .blur(radius: 10)
                 .opacity(0.9)
 
             Circle()
-                .stroke(gradient, lineWidth: 22)
+                .stroke(gradient, lineWidth: strokeWidth)
                 .blur(radius: 26)
                 .opacity(0.7)
 
             Circle()
-                .stroke(gradient, lineWidth: 22)
+                .stroke(gradient, lineWidth: strokeWidth)
                 .blur(radius: 44)
                 .opacity(0.45)
 
             Circle()
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .padding(18)
+                .fill(centerColor)
+                .padding(strokeWidth * 0.8)
 
             Circle()
-                .stroke(Color.white.opacity(0.9), lineWidth: 4)
-                .padding(16)
+                .stroke(Color.white.opacity(0.9), lineWidth: max(2, strokeWidth * 0.18))
+                .padding(strokeWidth * 0.65)
         }
         .saturation(1.4)
         .brightness(0.05)

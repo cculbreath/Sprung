@@ -16,78 +16,71 @@ This document outlines the qualitative flow of the onboarding interview, mapping
 
 **Technical Goal:** Complete M1 objectives: applicant\_profile, skeleton\_timeline, and enabled\_sections. Transition state from phase1CoreFacts to phase2DeepDive.
 
-### **1\. The Greeting & Initial Scaffolding**
+### **1\. The Greeting & Automatic Profile Draft**
 
 The user starts the interview.  
-**Coach (LLM):** "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.  
-To get started, let's pull in your basic contact information. What's the easiest way for you to provide that?"
+**Coach (LLM):** "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later."
 
-* **Technical Link:** The InterviewOrchestrator calls the **get\_user\_option** tool with choices like:  
-  * \[ "id": "contacts", "label": "Import from my macOS Contacts" \]  
-  * \[ "id": "resume", "label": "Extract from my resume/LinkedIn PDF" \]  
-  * \[ "id": "manual", "label": "Enter it manually" \]  
-* The InterviewState actor's session.waiting property is set to .selection.
-
-### **2\. Path A: Import from Contacts**
-
-**User:** Clicks "Import from my macOS Contacts."  
-**Coach (LLM):** "Great. Your system will ask for permission to access your Contacts. I'll only look for your personal 'Me' card."  
-**Coach (LLM):** (After data is pulled) "Okay, I've imported the following. Please take a moment to confirm or correct any details."
+Before asking the user to pick a path, the app quietly looks for data it can pre-fill.
 
 * **Technical Link:**  
-  1. The UI selection triggers the **get\_macos\_contact\_card** tool.  
-  2. The tool fetches the data and returns it to the InterviewOrchestrator.  
-  3. The orchestrator calls the **submit\_for\_validation** tool with the applicantProfile data.  
-  4. The session.waiting property is set to .validation.
+  1. The InterviewOrchestrator immediately calls **get\_macos\_contact\_card**. If permission is available, the tool returns the "Me" contact; otherwise it fails gracefully.  
+  2. The returned values are merged into an applicant-profile draft.  
+  3. The orchestrator then calls **submit\_for\_validation** with the draft (even if it is mostly empty).  
+  4. The InterviewState actor sets `session.waiting = .validation`, prompting the profile review card.
 
-### **2\. Path B: Extract from Resume**
+The user can edit anything, add missing fields, or overwrite the draft entirely. When Contacts access is unavailable, the card simply starts from a blank template.
 
-**User:** Clicks "Extract from my resume/LinkedIn PDF."  
-**Coach (LLM):** "Perfect. Please upload your most recent resume or a PDF of your LinkedIn profile. I'll extract *both* your contact info and your career timeline from it."
+### **2\. Uploading a Résumé or LinkedIn Export**
+
+After contact details are confirmed, the coach explains the next step:  
+**Coach (LLM):** "Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later."
 
 * **Technical Link:**  
-  1. The InterviewOrchestrator calls the **get\_user\_upload** tool.  
-  2. The session.waiting property is set to .upload.  
-  3. The user uploads a file. The tool returns the file's local storageUrl to the orchestrator.  
-  4. The LLM immediately calls **extract_document** with the uploaded `file_url`. If a résumé is detected, the tool returns both `applicant_profile` and a `skeleton_timeline`.  
-  5. The LLM then calls **submit_for_validation** with the returned profile (and later the timeline).
-  6. The session.waiting property is set to .validation.
+  1. The orchestrator calls **get\_user\_upload** with `uploadType = resume`.  
+  2. The InterviewState waits in `.upload` until the user provides a file (or skips).  
+  3. When a file arrives, the orchestrator calls **extract_document** with the uploaded `file_url`.  
+  4. The extraction service returns an `artifact_record` containing semantically enhanced text. The orchestrator stores the artifact, then generates a naive skeleton timeline using **ModelProvider.forTask(.extract)**.  
+  5. The generated timeline is sent to **submit\_for\_validation** so the user can approve or modify it.  
+  6. The InterviewState sets `session.waiting = .validation` while the card is on screen.
 
-### **3\. The First Validation & Objective**
+If the user declines to upload a résumé, the coach can prompt again or guide them through manual entry—still via the same validation surface.
 
-**User:** Reviews the data from Path A or B and clicks "Approve."  
+### **3\. Completing the First Objective**
+
+Once the user approves the applicant profile, the coach acknowledges the milestone.  
 **Coach (LLM):** "Excellent. Contact information is set."
 
 * **Technical Link:**  
-  1. The validation UI returns the approved data.  
-  2. The InterviewOrchestrator calls the **persist\_data** tool to save the applicantProfile.  
-  3. The orchestrator then calls the **set\_objective\_status** tool with objectiveId: "applicant\_profile" and status: "completed".  
-  4. The session.waiting property is set to nil.
+  1. The validation card returns the approved JSON.  
+  2. The orchestrator calls **persist\_data** to save the profile.  
+  3. It then calls **set\_objective\_status** with `objectiveId = "applicant_profile"` and `status = "completed"`.  
+  4. `session.waiting` is cleared and the interview proceeds to the résumé upload prompt described above.
 
 ### **4\. Building the Skeleton Timeline**
 
-This step is the core of M1 and uses your new PDF extraction spec.  
-**Coach (LLM):** (If resume was just uploaded) "Thanks for that file. Now, I'll use it to build a high-level timeline of your career. This will be our map for the 'deep dive' part of our interview. This may take a moment."  
-**Coach (LLM):** (If no resume was uploaded yet) "Next, let's build that career map. Please upload a resume or LinkedIn PDF so I can extract your timeline." (This triggers the get\_user\_upload flow from Path B).
+This extraction pass is the core of M1.  
+**Coach (LLM):** "Thanks for that file—I'm mapping out the major milestones now. Give me just a moment."
+
+While the LLM waits for `extract_document`, the UI shows a compact spinner inside the message input area so the user understands the system is working.
 
 * **Technical Link:**  
-   1. This is a crucial step. The **LLM calls the `extract_document` tool** with the `file_url`.  
-   2. The app executes extraction gemini based llm extraction (model specified in SettingsView) and returns structured results without exposing vendor details.  
-   3. The LLM proceeds to validation and persistence.
+  1. The orchestrator calls **extract_document** with the uploaded `file_url`.  
+  2. The local extraction service (Gemini 2.0 Flash by default, or whatever the user selected in Settings) returns an `artifact_record` containing semantically enhanced Markdown. Vendor names never surface to the model.  
+  3. The orchestrator stores the artifact, then feeds the enriched text to **ModelProvider.forTask(.extract)** to produce a naive skeleton timeline JSON object.
 
 ### **5\. Validating the Timeline & Phase Transition**
 
 **Coach (LLM):** "Okay, I’ve extracted a high-level timeline. Please take a look—just confirm companies, titles, and dates for now. We’ll go deeper next."
 
 * **Technical Link:**  
-  1. The orchestrator parses the extracted PDF tex from extraction tool.  
-  2. It calls the **submit\_for\_validation** tool with the skeleton\_timeline data.  
-  3. The session.waiting is set to .validation.  
-  4. The user approves the timeline.  
-  5. The orchestrator calls **persist\_data** to save the skeleton\_timeline.  
-  6. The orchestrator calls **set\_objective\_status** with objectiveId: "skeleton\_timeline" and status: "completed".  
-  7. Finally, the orchestrator (or the model itself) determines the enabled\_sections based on the timeline (e.g., work: true, education: true, projects: false) and calls **set\_objective\_status** for objectiveId: "enabled\_sections".  
-  8. The **InterviewState** actor, seeing applicant\_profile, skeleton\_timeline, and enabled\_sections are all in session.objectivesDone, automatically advances the state: session.phase \= .phase2DeepDive.
+  1. The orchestrator calls **submit_for_validation** with the skeleton_timeline data created in step 4.  
+  2. The session.waiting is set to .validation.  
+  3. The user approves (or edits) the timeline.  
+  4. The orchestrator calls **persist_data** to save the skeleton_timeline.  
+  5. It then calls **set_objective_status** with objectiveId: "skeleton_timeline" and status: "completed".  
+  6. Finally, the orchestrator (or the model via reasoning) determines the enabled_sections based on the confirmed timeline (e.g., work: true, education: true, projects: false) and calls **set_objective_status** for objectiveId: "enabled_sections".  
+  7. The **InterviewState** actor, seeing applicant_profile, skeleton_timeline, and enabled_sections are all in session.objectivesDone, automatically advances the state: session.phase = .phase2DeepDive.
 
 ## **Phase 2: The Deep Dive (The "Coach" at Work)**
 

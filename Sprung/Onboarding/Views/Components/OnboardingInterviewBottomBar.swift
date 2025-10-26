@@ -44,5 +44,6 @@ struct OnboardingInterviewBottomBar: View {
             .disabled(isContinueDisabled)
         }
         .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
 }
