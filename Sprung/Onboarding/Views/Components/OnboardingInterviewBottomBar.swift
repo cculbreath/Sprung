@@ -43,7 +43,7 @@ struct OnboardingInterviewBottomBar: View {
             .buttonBorderShape(.capsule)
             .disabled(isContinueDisabled)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 32)  // Increased from 24 for better spacing from container edges
+        .padding(.vertical, 18)  // Slightly increased for better vertical rhythm
     }
 }

@@ -94,7 +94,10 @@ actor InterviewOrchestrator {
         conversationId = nil
         lastResponseId = nil
 
-        await callbacks.emitAssistantMessage("👋 Let's gather your applicant profile and resume to get started.")
+        // Provide the comprehensive greeting as per workflow spec
+        await callbacks.emitAssistantMessage("Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.")
+
+        // Start phase one which will immediately check for contacts
         await runPhaseOne()
     }
 
@@ -157,7 +160,7 @@ actor InterviewOrchestrator {
             let profile = try await collectApplicantProfile()
             applicantProfileData = profile
             await state.completeObjective("applicant_profile")
-            await callbacks.emitAssistantMessage("✅ Applicant profile captured.")
+            await callbacks.emitAssistantMessage("Excellent. Contact information is set.")
             await callbacks.persistCheckpoint()
         } catch ToolError.userCancelled {
             await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
@@ -186,8 +189,7 @@ actor InterviewOrchestrator {
     }
 
     private func collectApplicantProfile() async throws -> JSON {
-        await callbacks.emitAssistantMessage("🪪 Gathering applicant profile details…")
-
+        // Quietly try to fetch contact data first (no message to user yet)
         var draft = ApplicantProfileDraft()
         var sources: [String] = []
 
@@ -202,10 +204,11 @@ actor InterviewOrchestrator {
             debugLog("Contact card fetch unavailable: \(error)")
         }
 
+        // Immediately submit for validation (even if empty) as per spec
         var args = JSON()
         args["dataType"].string = "applicant_profile"
         args["data"] = draft.toJSON()
-        args["message"].string = "Review and confirm your applicant profile information."
+        args["message"].string = "Review the suggested details below. Edit anything that needs correction or add missing information before continuing."
         if !sources.isEmpty {
             args["sources"] = JSON(sources)
         }
@@ -224,7 +227,7 @@ actor InterviewOrchestrator {
     }
 
     private func collectSkeletonTimeline() async throws -> JSON {
-        await callbacks.emitAssistantMessage("📄 Please upload your resume so we can draft a timeline.")
+        await callbacks.emitAssistantMessage("Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later.")
 
         var uploadArgs = JSON()
         uploadArgs["uploadType"].string = "resume"

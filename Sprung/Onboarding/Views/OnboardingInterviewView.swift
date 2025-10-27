@@ -48,7 +48,7 @@ struct OnboardingInterviewView: View {
                     onContinue: { handleContinue(service: service, actions: actions) }
                 )
                 .padding(.horizontal, 32)
-                .padding(.bottom, 6)
+                .padding(.bottom, 16)  // Increased from 6 for better spacing from bottom edge
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -158,8 +158,8 @@ private extension OnboardingInterviewView {
                 )
             }
         }
-        .padding(.horizontal, 56)
-        .padding(.vertical, 20)
+        .padding(.horizontal, 48)  // Reduced horizontal padding for better proportion
+        .padding(.vertical, 24)  // Slightly increased vertical padding for breathing room
     }
 
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {

@@ -67,7 +67,7 @@ struct MessageBubble: View {
 
 struct LLMActivityView: View {
     var diameter: CGFloat = 48
-    var centerColor: Color = Color.black.opacity(0.75)
+    var centerColor: Color = Color.clear  // Changed from black/white to transparent
 
     private let gradientColors: [Color] = [
         Color(red: 1.0, green: 0.38, blue: 0.0),
@@ -122,7 +122,7 @@ struct LLMActivityView: View {
                 .padding(strokeWidth * 0.8)
 
             Circle()
-                .stroke(Color.white.opacity(0.9), lineWidth: max(2, strokeWidth * 0.18))
+                .stroke(Color.white.opacity(0.3), lineWidth: max(2, strokeWidth * 0.18))
                 .padding(strokeWidth * 0.65)
         }
         .saturation(1.4)

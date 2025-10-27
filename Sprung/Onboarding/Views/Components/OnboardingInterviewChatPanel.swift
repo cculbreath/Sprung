@@ -69,17 +69,7 @@ struct OnboardingInterviewChatPanel: View {
                 .padding(.top, sectionSpacing)
                 .padding(.horizontal, horizontalPadding)
 
-            let showSpinner = shouldShowProcessingIndicator(for: service)
-
             HStack(alignment: .center, spacing: 12) {
-                if showSpinner {
-                    LLMActivityView(diameter: 28, centerColor: Color.black.opacity(0.7))
-                        .transition(.scale.combined(with: .opacity))
-                    Text("Assistant is thinking…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
                 TextField(
                     "Type your response…",
                     text: Binding(
@@ -107,7 +97,6 @@ struct OnboardingInterviewChatPanel: View {
             }
             .padding(.top, sectionSpacing)
             .padding(.horizontal, horizontalPadding)
-            .animation(.easeInOut(duration: 0.2), value: showSpinner)
 
             HStack(spacing: 6) {
                 Text(modelStatusDescription)
@@ -131,14 +120,5 @@ struct OnboardingInterviewChatPanel: View {
         guard !trimmed.isEmpty else { return }
         state.userInput = ""
         Task { await actions.sendMessage(trimmed) }
-    }
-
-    private func shouldShowProcessingIndicator(for service: OnboardingInterviewService) -> Bool {
-        service.isProcessing &&
-            service.pendingChoicePrompt == nil &&
-            service.pendingApplicantProfileRequest == nil &&
-            service.pendingSectionToggleRequest == nil &&
-            service.pendingSectionEntryRequests.isEmpty &&
-            service.pendingContactsRequest == nil
     }
 }
