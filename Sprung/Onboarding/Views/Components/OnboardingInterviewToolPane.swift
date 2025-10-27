@@ -100,7 +100,28 @@ struct OnboardingInterviewToolPane: View {
                     }
                 )
             } else {
-                supportingContent()
+                // Show spinner when LLM is processing and no cards are displayed
+                if shouldShowLLMSpinner(for: service) {
+                    VStack(spacing: 16) {
+                        Spacer()
+
+                        VStack(spacing: 12) {
+                            LLMActivityView(diameter: 36, centerColor: Color.clear)
+                            Text("Assistant is thinking…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                        Spacer()
+                    }
+                    .transition(.opacity.combined(with: .scale))
+                } else {
+                    supportingContent()
+                }
             }
         }
         .padding(.vertical, 24)
@@ -261,6 +282,17 @@ struct OnboardingInterviewToolPane: View {
             return ""
         }
         return ""
+    }
+
+    private func shouldShowLLMSpinner(for service: OnboardingInterviewService) -> Bool {
+        service.isProcessing &&
+            service.pendingChoicePrompt == nil &&
+            service.pendingApplicantProfileRequest == nil &&
+            service.pendingSectionToggleRequest == nil &&
+            service.pendingSectionEntryRequests.isEmpty &&
+            service.pendingContactsRequest == nil &&
+            service.pendingValidationPrompt == nil &&
+            service.pendingPhaseAdvanceRequest == nil
     }
 }
 

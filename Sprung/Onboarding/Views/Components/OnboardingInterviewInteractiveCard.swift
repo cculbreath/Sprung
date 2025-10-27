@@ -10,7 +10,7 @@ struct OnboardingInterviewInteractiveCard: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        let cornerRadius: CGFloat = 32
+        let cornerRadius: CGFloat = 28  // Reduced for more natural appearance
 
         HStack(spacing: 0) {
             OnboardingInterviewToolPane(
@@ -30,8 +30,8 @@ struct OnboardingInterviewInteractiveCard: View {
                 onOpenSettings: onOpenSettings
             )
         }
-        .padding(.vertical, 36)
-        .padding(.horizontal, 36)
+        .padding(.vertical, 28)  // Reduced vertical padding
+        .padding(.horizontal, 32)  // Slightly reduced horizontal padding
         .frame(minHeight: 540)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
