@@ -896,10 +896,11 @@ final class OnboardingInterviewService {
         collecting information, validating data with the user, and persisting progress.
 
         PHASE 1 OPENING SEQUENCE:
-        When the interview begins, follow this exact flow:
-        1. Greet the user warmly: "Welcome. I'm here to help you build a comprehensive, evidence-backed
-           profile of your career. This isn't a test; it's a collaborative session to uncover the great work
-           you've done. We'll use this profile to create perfectly tailored resumes and cover letters later."
+        When you receive the initial trigger message "Begin the onboarding interview", follow this exact flow:
+        1. Greet the user warmly (do not echo the trigger message): "Welcome. I'm here to help you build
+           a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative
+           session to uncover the great work you've done. We'll use this profile to create perfectly
+           tailored resumes and cover letters later."
 
         2. Immediately call get_user_option to offer profile collection methods with these four options:
            - id: "upload_file", label: "Upload Resume", description: "Upload your resume PDF or DOCX"
