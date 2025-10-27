@@ -125,8 +125,8 @@ private struct SettingsSectionHeader: View {
 private extension SettingsView {
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if openAIModels.isEmpty {
-                Label("Enable OpenAI responses models in Options… before adjusting the interview model.", systemImage: "exclamationmark.triangle.fill")
+            if onboardingInterviewModels.isEmpty {
+                Label("Enable GPT-5 in Options… to use the onboarding interview.", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.callout)
             } else {
@@ -141,12 +141,18 @@ private extension SettingsView {
                         )
                     }
                 )) {
-                    ForEach(openAIModels, id: \.modelId) { model in
+                    ForEach(onboardingInterviewModels, id: \.modelId) { model in
                         Text(model.displayName.isEmpty ? model.modelId : model.displayName)
                             .tag(model.modelId)
                     }
                 }
                 .pickerStyle(.menu)
+                .disabled(onboardingInterviewModels.count == 1)
+
+                Text("Currently, only GPT-5 is supported for onboarding interviews.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
             }
         }
     }
@@ -172,6 +178,12 @@ private extension SettingsView {
                     .padding(.top, 4)
             }
         }
+    }
+
+    var onboardingInterviewModels: [EnabledLLM] {
+        // For now, only GPT-5 is supported for onboarding interviews
+        enabledLLMStore.enabledModels
+            .filter { $0.modelId == "openai/gpt-5" }
     }
 
     var openAIModels: [EnabledLLM] {
