@@ -154,6 +154,10 @@ actor InterviewOrchestrator {
         }
     }
 
+    // DEPRECATED: This imperative orchestration is replaced by LLM-driven flow via tool calls.
+    // The LLM now drives Phase 1 by calling get_user_option, get_macos_contact_card,
+    // submit_for_validation, and other tools as needed based on user choices.
+    // Kept for reference only.
     private func runPhaseOne() async {
         await callbacks.updateProcessingState(true)
         defer { Task { await self.callbacks.updateProcessingState(false) } }
