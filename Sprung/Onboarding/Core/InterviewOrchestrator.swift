@@ -94,11 +94,13 @@ actor InterviewOrchestrator {
         conversationId = nil
         lastResponseId = nil
 
-        // Provide the comprehensive greeting as per workflow spec
-        await callbacks.emitAssistantMessage("Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.")
-
-        // Start phase one which will immediately check for contacts
-        await runPhaseOne()
+        // Let the LLM drive the conversation via tool calls
+        // The system prompt instructs it to greet the user and offer profile collection options
+        do {
+            try await requestResponse(withUserMessage: nil)
+        } catch {
+            await callbacks.handleError("Failed to start interview: \(error.localizedDescription)")
+        }
     }
 
     func sendUserMessage(_ text: String) async {
@@ -517,9 +519,10 @@ actor InterviewOrchestrator {
             return json
         case .waiting(_, let token):
             if let callId {
-                if let initial = token.initialPayload {
-                    try await sendToolOutput(callId: callId, output: initial)
-                }
+                // Send status to LLM to prevent tool call timeout
+                // Use initialPayload if provided, otherwise send waiting status
+                let statusPayload = token.initialPayload ?? JSON(["status": "waiting for user input"])
+                try await sendToolOutput(callId: callId, output: statusPayload)
                 continuationCallIds[token.id] = callId
             }
             if let toolName {
