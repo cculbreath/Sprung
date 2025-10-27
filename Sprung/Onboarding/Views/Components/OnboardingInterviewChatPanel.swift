@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// ViewModifier to conditionally apply intelligence glow effect
+private struct ConditionalIntelligenceGlow<S: InsettableShape>: ViewModifier {
+    let isActive: Bool
+    let shape: S
+
+    func body(content: Content) -> some View {
+        if isActive {
+            content.intelligenceOverlay(in: shape)
+        } else {
+            content
+        }
+    }
+}
+
 struct OnboardingInterviewChatPanel: View {
     @Bindable var service: OnboardingInterviewService
     @Bindable var state: OnboardingInterviewViewModel
@@ -24,12 +38,19 @@ struct OnboardingInterviewChatPanel: View {
                     }
                     .padding(20)
                 }
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .intelligenceGlow(
-                    in: RoundedRectangle(cornerRadius: 24, style: .continuous),
-                    isActive: service.isProcessing
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.3))
+                        )
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .modifier(ConditionalIntelligenceGlow(
+                    isActive: service.isProcessing,
+                    shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
+                ))
                 .onChange(of: service.messages.count) { _, _ in
                     guard state.shouldAutoScroll, let lastId = service.messages.last?.id else { return }
                     withAnimation(.easeInOut(duration: 0.25)) {

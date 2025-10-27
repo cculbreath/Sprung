@@ -414,9 +414,12 @@ actor InterviewOrchestrator {
         let config = ModelProvider.forTask(.orchestrator)
         let textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
 
+        // Strip "openai/" prefix for direct OpenAI API calls
+        let apiModelId = currentModelId.replacingOccurrences(of: "openai/", with: "")
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
-            model: .custom(currentModelId),
+            model: .custom(apiModelId),
             conversation: conversationId.map { .id($0) },
             instructions: conversationId == nil ? systemPrompt : nil,
             previousResponseId: lastResponseId,
