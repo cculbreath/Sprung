@@ -26,7 +26,10 @@ struct OnboardingInterviewChatPanel: View {
                 }
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .shadow(color: Color.black.opacity(0.18), radius: 20, y: 16)
+                .intelligenceGlow(
+                    in: RoundedRectangle(cornerRadius: 24, style: .continuous),
+                    isActive: service.isProcessing
+                )
                 .onChange(of: service.messages.count) { _, _ in
                     guard state.shouldAutoScroll, let lastId = service.messages.last?.id else { return }
                     withAnimation(.easeInOut(duration: 0.25)) {

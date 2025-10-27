@@ -100,21 +100,13 @@ struct OnboardingInterviewToolPane: View {
                     }
                 )
             } else {
-                // Show spinner when LLM is processing and no cards are displayed
+                // Show animated thinking text when LLM is processing and no cards are displayed
                 if shouldShowLLMSpinner(for: service) {
                     VStack(spacing: 16) {
                         Spacer()
 
-                        VStack(spacing: 12) {
-                            LLMActivityView(diameter: 36, centerColor: Color.clear)
-                            Text("Assistant is thinking…")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-//                        .padding(.vertical, 20)
-//                        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-//                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        AnimatedThinkingText()
+                            .frame(maxWidth: .infinity)
 
                         Spacer()
                     }

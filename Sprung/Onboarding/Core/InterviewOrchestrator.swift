@@ -95,9 +95,9 @@ actor InterviewOrchestrator {
         lastResponseId = nil
 
         // Let the LLM drive the conversation via tool calls
-        // The system prompt instructs it to greet the user and offer profile collection options
+        // Send initial trigger message to activate the system prompt instructions
         do {
-            try await requestResponse(withUserMessage: nil)
+            try await requestResponse(withUserMessage: "Begin the onboarding interview.")
         } catch {
             await callbacks.handleError("Failed to start interview: \(error.localizedDescription)")
         }
