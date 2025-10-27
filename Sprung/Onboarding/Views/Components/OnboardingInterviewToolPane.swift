@@ -252,8 +252,8 @@ struct OnboardingInterviewToolPane: View {
         if service.pendingContactsRequest != nil {
             return "Allow access to macOS Contacts"
         }
-        if let choicePrompt = service.pendingChoicePrompt {
-            return "Action required: " + (choicePrompt.prompt.isEmpty ? "please choose an option" : choicePrompt.prompt)
+        if service.pendingChoicePrompt != nil {
+            return ""  // No badge needed - the card shows the prompt
         }
         if service.pendingApplicantProfileRequest != nil {
             return "Action required: review applicant profile"
