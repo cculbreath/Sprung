@@ -49,7 +49,8 @@ struct InterviewChoicePromptCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(nsColor: .underPageBackgroundColor))
+                .fill(.thinMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         )
         .onAppear {
             if isSingleSelection {

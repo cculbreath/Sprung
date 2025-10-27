@@ -41,7 +41,7 @@ struct OnboardingInterviewChatPanel: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                        .fill(.thinMaterial)
                         .background(
                             RoundedRectangle(cornerRadius: 24, style: .continuous)
                                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
