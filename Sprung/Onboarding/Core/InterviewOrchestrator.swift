@@ -38,7 +38,7 @@ actor InterviewOrchestrator {
     private let systemPrompt: String
     private let allowedToolsMap: [InterviewPhase: [String]] = [
         .phase1CoreFacts: [
-            "capabilities.describe",
+            "capabilities_describe",
             "get_user_option",
             "get_user_upload",
             "get_macos_contact_card",
@@ -49,7 +49,7 @@ actor InterviewOrchestrator {
             "next_phase"
         ],
         .phase2DeepDive: [
-            "capabilities.describe",
+            "capabilities_describe",
             "get_user_option",
             "get_user_upload",
             "extract_document",
@@ -59,7 +59,7 @@ actor InterviewOrchestrator {
             "next_phase"
         ],
         .phase3WritingCorpus: [
-            "capabilities.describe",
+            "capabilities_describe",
             "get_user_option",
             "get_user_upload",
             "extract_document",
@@ -69,7 +69,7 @@ actor InterviewOrchestrator {
             "next_phase"
         ],
         .complete: [
-            "capabilities.describe",
+            "capabilities_describe",
             "next_phase"
         ]
     ]
@@ -608,6 +608,6 @@ actor InterviewOrchestrator {
         if let tools = allowedToolsMap[session.phase] {
             return Set(tools)
         }
-        return Set(["capabilities.describe"])
+        return Set(["capabilities_describe"])
     }
 }

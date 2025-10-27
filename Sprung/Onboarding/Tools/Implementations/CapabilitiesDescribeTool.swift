@@ -17,7 +17,7 @@ struct CapabilitiesDescribeTool: InterviewTool {
         self.service = service
     }
 
-    var name: String { "capabilities.describe" }
+    var name: String { "capabilities_describe" }
     var description: String { "Describe currently available onboarding tools and their functional flags." }
     var parameters: JSONSchema { Self.schema }
 
