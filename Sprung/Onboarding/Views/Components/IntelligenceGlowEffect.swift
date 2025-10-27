@@ -23,8 +23,8 @@ extension View {
 extension InsettableShape {
     @MainActor
     func intelligenceStroke(
-        lineWidths: [CGFloat] = [1.0, 1.5, 2.0, 3.0],
-        blurs: [CGFloat] = [4, 8, 16, 24],
+        lineWidths: [CGFloat] = [2.0, 3.0, 4.0, 5.0],
+        blurs: [CGFloat] = [6, 12, 20, 30],
         updateInterval: TimeInterval = 0.6,
         animationDurations: [TimeInterval] = [0.8, 1.0, 1.2, 1.5],
         gradientGenerator: @MainActor @Sendable @escaping () -> [Gradient.Stop] = { .rainbowSpring }
@@ -86,18 +86,18 @@ private struct IntelligenceStrokeView<S: InsettableShape>: View {
 private extension Array where Element == Gradient.Stop {
     /// Rainbow spring gradient based on the SVG gradient:
     /// Uses colors from #0CF → #0059FF → #0014A8 → #764DFF → #B00068 → #CC008D → #F02C00 → #FF8A47 → #FFB700
-    /// With reduced opacity for subtlety and dispersed glow
+    /// With boosted opacity for visibility
     static var rainbowSpring: [Gradient.Stop] {
         let colors: [Color] = [
-            Color(red: 0, green: 0.8, blue: 1.0).opacity(0.35),          // #0CF (cyan)
-            Color(red: 0, green: 0.35, blue: 1.0).opacity(0.4),         // #0059FF (blue)
-            Color(red: 0, green: 0.08, blue: 0.66).opacity(0.4),        // #0014A8 (dark blue)
-            Color(red: 0.46, green: 0.30, blue: 1.0).opacity(0.4),      // #764DFF (purple)
-            Color(red: 0.69, green: 0, blue: 0.41).opacity(0.4),        // #B00068 (magenta)
-            Color(red: 0.8, green: 0, blue: 0.55).opacity(0.4),         // #CC008D (pink)
-            Color(red: 0.94, green: 0.17, blue: 0).opacity(0.4),        // #F02C00 (red-orange)
-            Color(red: 1.0, green: 0.54, blue: 0.28).opacity(0.35),      // #FF8A47 (orange)
-            Color(red: 1.0, green: 0.72, blue: 0).opacity(0.35)          // #FFB700 (golden)
+            Color(red: 0, green: 0.8, blue: 1.0).opacity(0.6),          // #0CF (cyan)
+            Color(red: 0, green: 0.35, blue: 1.0).opacity(0.65),         // #0059FF (blue)
+            Color(red: 0, green: 0.08, blue: 0.66).opacity(0.65),        // #0014A8 (dark blue)
+            Color(red: 0.46, green: 0.30, blue: 1.0).opacity(0.65),      // #764DFF (purple)
+            Color(red: 0.69, green: 0, blue: 0.41).opacity(0.65),        // #B00068 (magenta)
+            Color(red: 0.8, green: 0, blue: 0.55).opacity(0.65),         // #CC008D (pink)
+            Color(red: 0.94, green: 0.17, blue: 0).opacity(0.65),        // #F02C00 (red-orange)
+            Color(red: 1.0, green: 0.54, blue: 0.28).opacity(0.6),      // #FF8A47 (orange)
+            Color(red: 1.0, green: 0.72, blue: 0).opacity(0.6)          // #FFB700 (golden)
         ]
 
         return colors.map { Gradient.Stop(color: $0, location: Double.random(in: 0...1)) }
