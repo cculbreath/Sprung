@@ -37,12 +37,13 @@ struct OnboardingInterviewInteractiveCard: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
                 .shadow(color: Color.black.opacity(0.16), radius: 24, y: 18)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(Color.white.opacity(0.38), lineWidth: 0.9)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        )        .padding(.horizontal, 64)
+
+
+//        .overlay(
+//            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+//                .stroke(Color.white.opacity(0.38), lineWidth: 0.9)
+//        )
+//        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }

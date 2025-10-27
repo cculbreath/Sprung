@@ -112,9 +112,9 @@ struct OnboardingInterviewToolPane: View {
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+//                        .padding(.vertical, 20)
+//                        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+//                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                         Spacer()
                     }
