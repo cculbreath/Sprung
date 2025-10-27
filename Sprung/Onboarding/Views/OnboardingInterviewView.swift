@@ -28,14 +28,11 @@ struct OnboardingInterviewView: View {
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
 
         VStack(spacing: 0) {
-            // Progress bar anchored close to top - fade in when leaving introduction
+            // Progress bar anchored close to top
             OnboardingInterviewStepProgressView(service: service)
                 .padding(.top, 16)
                 .padding(.bottom, 24)
                 .padding(.horizontal, 32)
-                .opacity(service.wizardStep == .introduction ? 0 : 1)
-                .offset(y: service.wizardStep == .introduction ? -10 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15), value: service.wizardStep)
 
             // Main body centered within available space
             VStack(spacing: 8) {

@@ -352,6 +352,9 @@ final class OnboardingInterviewService {
         if !restoredFromCheckpoint {
             wizardStep = .resumeIntake
             wizardStepStatuses[wizardStep] = .current
+            debugLog("[WizardStep] Set to .resumeIntake (fresh start)")
+        } else {
+            debugLog("[WizardStep] After checkpoint restore: \(wizardStep)")
         }
 
         appendSystemMessage("🚀 Starting onboarding interview using \(modelId).")
