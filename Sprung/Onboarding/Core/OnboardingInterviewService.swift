@@ -109,7 +109,7 @@ final class OnboardingInterviewService {
 
         var toolsJSON = JSON()
 
-        toolsJSON["capabilities.describe"]["status"].string = "ready"
+        toolsJSON["capabilities_describe"]["status"].string = "ready"
 
         toolsJSON["get_user_option"]["status"].string = "ready"
 
@@ -918,7 +918,7 @@ final class OnboardingInterviewService {
         4. After the user completes their choice, proceed naturally based on their selection.
 
         CAPABILITY-DRIVEN WORKFLOW:
-        - Call capabilities.describe at the start of each phase to see what tools are currently available
+        - Call capabilities_describe at the start of each phase to see what tools are currently available
         - Choose the right tool for each micro-step based on the capabilities manifest
         - All tools return vendor-agnostic outputs—you never see implementation details or provider names
 

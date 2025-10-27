@@ -30,17 +30,20 @@ struct AnimatedThinkingText: View {
     }
 
     private var animatedSparklesIcon: some View {
-        Image("custom.sprung_raster")
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: 48, height: 48)
-            .scaleEffect(thinking ? 1.1 : 0.9)
-            .rotationEffect(.degrees(thinking ? 5 : -5))
-            .animation(
-                .easeInOut(duration: 0.8)
-                    .repeatForever(autoreverses: true),
-                value: thinking
-            )
+        TimelineView(.animation) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let bounce = sin(time * 3) * 0.05 + 1.0  // Gentle bounce
+            let wiggle = sin(time * 5) * 3  // Wiggle rotation
+            let breathe = sin(time * 2) * 0.1 + 1.0  // Breathing scale
+
+            Image("custom.sprung_raster")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 48, height: 48)
+                .scaleEffect(bounce * breathe)
+                .rotationEffect(.degrees(wiggle))
+                .offset(y: sin(time * 4) * 2)  // Subtle vertical float
+        }
     }
 
     private var animatedPhrase: some View {
@@ -50,13 +53,13 @@ struct AnimatedThinkingText: View {
                     .font(.title3.weight(.medium))
                     .foregroundStyle(Color(red: 0, green: 0.169, blue: 0.776))
                     .hueRotation(.degrees(thinking ? 220 : 0))
-                    .opacity(thinking ? 0 : 1)
-                    .scaleEffect(thinking ? 1.5 : 1, anchor: .bottom)
+                    .opacity(thinking ? 1 : 0)  // Inverted - visible when thinking
+                    .scaleEffect(x: thinking ? 0.85 : 1, y: thinking ? 1.15 : 1, anchor: .bottom)
                     .animation(
                         .easeInOut(duration: 0.5)
                             .delay(1)
-                            .repeatForever(autoreverses: false)
-                            .delay(Double(index) / 20),
+                            .repeatForever(autoreverses: true)  // Changed to autoreverses for pulsing effect
+                            .delay(Double(index) * 0.08),  // Staggered wave
                         value: thinking
                     )
             }
