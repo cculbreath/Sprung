@@ -11,6 +11,14 @@ import SwiftyJSON
 import SwiftOpenAI
 
 actor InterviewOrchestrator {
+    // MARK: - Error Handling
+
+    private func formatError(_ error: Error) -> String {
+        if let apiError = error as? APIError {
+            return apiError.displayDescription
+        }
+        return error.localizedDescription
+    }
     struct Callbacks {
         let updateProcessingState: @Sendable (Bool) async -> Void
         let emitAssistantMessage: @Sendable (String) async -> Void
@@ -99,7 +107,8 @@ actor InterviewOrchestrator {
         do {
             try await requestResponse(withUserMessage: "Begin the onboarding interview.")
         } catch {
-            await callbacks.handleError("Failed to start interview: \(error.localizedDescription)")
+            let errorDetails = formatError(error)
+            await callbacks.handleError("Failed to start interview: \(errorDetails)")
         }
     }
 
@@ -110,7 +119,8 @@ actor InterviewOrchestrator {
         do {
             try await requestResponse(withUserMessage: text)
         } catch {
-            await callbacks.handleError("Failed to send message: \(error.localizedDescription)")
+            let errorDetails = formatError(error)
+            await callbacks.handleError("Failed to send message: \(errorDetails)")
         }
     }
 
@@ -150,7 +160,8 @@ actor InterviewOrchestrator {
             if let continuation = pendingToolContinuations.removeValue(forKey: id) {
                 continuation.resume(throwing: error)
             }
-            await callbacks.handleError("Failed to resume tool: \(error.localizedDescription)")
+            let errorDetails = formatError(error)
+            await callbacks.handleError("Failed to resume tool: \(errorDetails)")
         }
     }
 
@@ -171,7 +182,8 @@ actor InterviewOrchestrator {
         } catch ToolError.userCancelled {
             await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
         } catch {
-            await callbacks.handleError("Failed to collect applicant profile: \(error.localizedDescription)")
+            let errorDetails = formatError(error)
+            await callbacks.handleError("Failed to collect applicant profile: \(errorDetails)")
         }
 
         do {
@@ -183,7 +195,8 @@ actor InterviewOrchestrator {
         } catch ToolError.userCancelled {
             await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.")
         } catch {
-            await callbacks.handleError("Failed to build skeleton timeline: \(error.localizedDescription)")
+            let errorDetails = formatError(error)
+            await callbacks.handleError("Failed to build skeleton timeline: \(errorDetails)")
         }
 
         let current = await state.currentSession()
