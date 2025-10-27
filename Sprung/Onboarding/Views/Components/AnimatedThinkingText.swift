@@ -27,25 +27,18 @@ struct AnimatedThinkingText: View {
     }
 
     private var animatedSparklesIcon: some View {
-        Image(systemName: "sparkles")
-            .font(.system(size: 48, weight: .regular))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0, green: 0.8, blue: 1.0),        // #0CF
-                        Color(red: 0.46, green: 0.30, blue: 1.0),    // #764DFF
-                        Color(red: 0.69, green: 0, blue: 0.41),      // #B00068
-                        Color(red: 0.94, green: 0.17, blue: 0)       // #F02C00
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+        Image("custom.sprung_outline")
+            .resizable()
+            .renderingMode(.template)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 48, height: 48)
+            .foregroundStyle(rainbowGradient)
+            .scaleEffect(thinking ? 1.05 : 0.95)
+            .animation(
+                .easeInOut(duration: 1.2)
+                    .repeatForever(autoreverses: true),
+                value: thinking
             )
-            .phaseAnimator([false, true]) { sparkleSymbol, animate in
-                sparkleSymbol
-                    .symbolEffect(.wiggle.byLayer, options: .repeat(2), value: animate)
-                    .symbolEffect(.breathe.byLayer, options: .repeat(2), value: animate)
-            }
     }
 
     private var animatedPhrase: some View {
@@ -53,8 +46,8 @@ struct AnimatedThinkingText: View {
             ForEach(Array(phrases[currentPhraseIndex].enumerated()), id: \.offset) { index, letter in
                 Text(String(letter))
                     .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .opacity(thinking ? 0.4 : 1)
+                    .foregroundStyle(rainbowGradient)
+                    .opacity(thinking ? 0.6 : 0.9)
                     .scaleEffect(thinking ? 0.95 : 1, anchor: .center)
                     .animation(
                         .easeInOut(duration: 0.6)
@@ -64,6 +57,19 @@ struct AnimatedThinkingText: View {
                     )
             }
         }
+    }
+
+    private var rainbowGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0, green: 0.8, blue: 1.0),        // #0CF
+                Color(red: 0.46, green: 0.30, blue: 1.0),    // #764DFF
+                Color(red: 0.69, green: 0, blue: 0.41),      // #B00068
+                Color(red: 0.94, green: 0.17, blue: 0)       // #F02C00
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 

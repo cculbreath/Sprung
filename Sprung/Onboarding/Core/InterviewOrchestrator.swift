@@ -350,7 +350,6 @@ actor InterviewOrchestrator {
         var parameters = ModelResponseParameter(
             input: .array([.message(message)]),
             model: .custom(config.id),
-            temperature: 0.0,
             text: textConfig
         )
 
@@ -424,7 +423,6 @@ actor InterviewOrchestrator {
             instructions: conversationId == nil ? systemPrompt : nil,
             previousResponseId: lastResponseId,
             store: true,
-            temperature: 0.7,
             text: textConfig
         )
         parameters.parallelToolCalls = false
