@@ -28,7 +28,7 @@ struct AnimatedThinkingText: View {
 
     private var animatedSparklesIcon: some View {
         Image(systemName: "sparkles")
-            .font(.title2)
+            .font(.system(size: 48, weight: .regular))
             .foregroundStyle(
                 LinearGradient(
                     colors: [
@@ -52,7 +52,7 @@ struct AnimatedThinkingText: View {
         HStack(spacing: 0) {
             ForEach(Array(phrases[currentPhraseIndex].enumerated()), id: \.offset) { index, letter in
                 Text(String(letter))
-                    .font(.subheadline)
+                    .font(.title3)
                     .foregroundStyle(.secondary)
                     .opacity(thinking ? 0.4 : 1)
                     .scaleEffect(thinking ? 0.95 : 1, anchor: .center)

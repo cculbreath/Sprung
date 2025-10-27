@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// ViewModifier to conditionally apply intelligence glow effect
+/// ViewModifier to conditionally apply intelligence glow effect when processing,
+/// or drop shadow when idle
 private struct ConditionalIntelligenceGlow<S: InsettableShape>: ViewModifier {
     let isActive: Bool
     let shape: S
@@ -9,7 +10,7 @@ private struct ConditionalIntelligenceGlow<S: InsettableShape>: ViewModifier {
         if isActive {
             content.intelligenceOverlay(in: shape)
         } else {
-            content
+            content.shadow(color: Color.black.opacity(0.18), radius: 20, y: 16)
         }
     }
 }
