@@ -14,6 +14,8 @@ struct OnboardingInterviewView: View {
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
 
+    @Namespace private var wizardTransition
+
     var body: some View {
         @Bindable var service = interviewService
         @Bindable var uiState = viewModel
@@ -26,17 +28,21 @@ struct OnboardingInterviewView: View {
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
 
         VStack(spacing: 0) {
-            // Progress bar anchored close to top
+            // Progress bar anchored close to top - fade in when leaving introduction
             OnboardingInterviewStepProgressView(service: service)
-                .padding(.top, 28)
-                .padding(.bottom, 36)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
                 .padding(.horizontal, 32)
+                .opacity(service.wizardStep == .introduction ? 0 : 1)
+                .offset(y: service.wizardStep == .introduction ? -10 : 0)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15), value: service.wizardStep)
 
             // Main body centered within available space
-            VStack(spacing: 24) {
+            VStack(spacing: 8) {
                 mainCard(service: service, state: uiState, actions: actions)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.82), value: service.wizardStep)
 
-                Spacer(minLength: 24) // centers body relative to bottom bar
+                Spacer(minLength: 16) // centers body relative to bottom bar
 
                 OnboardingInterviewBottomBar(
                     showBack: shouldShowBackButton(for: service.wizardStep),
@@ -47,10 +53,11 @@ struct OnboardingInterviewView: View {
                     onCancel: { handleCancel(actions: actions) },
                     onContinue: { handleContinue(service: service, actions: actions) }
                 )
-                .padding(.horizontal, 32)
-                .padding(.bottom, 6)
+                .padding(.horizontal, 16)
+                .animation(.easeInOut(duration: 0.25), value: service.wizardStep)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal,32)
         }
         .frame(minWidth: 1040)
         .padding(.horizontal, 32)
@@ -148,6 +155,11 @@ private extension OnboardingInterviewView {
         Group {
             if service.wizardStep == .introduction {
                 OnboardingInterviewIntroductionCard()
+                    .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.95).combined(with: .opacity),
+                        removal: .scale(scale: 1.05).combined(with: .opacity)
+                    ))
             } else {
                 OnboardingInterviewInteractiveCard(
                     service: service,
@@ -156,10 +168,16 @@ private extension OnboardingInterviewView {
                     modelStatusDescription: modelStatusDescription(service: service),
                     onOpenSettings: openSettings
                 )
+                .frame(width: 900)
+                .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                    removal: .scale(scale: 1.05).combined(with: .opacity)
+                ))
             }
         }
-        .padding(.horizontal, 56)
-        .padding(.vertical, 20)
+        .padding(.horizontal, 40)
+        .padding(.top, 30)
     }
 
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
