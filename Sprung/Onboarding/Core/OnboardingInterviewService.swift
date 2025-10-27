@@ -357,7 +357,6 @@ final class OnboardingInterviewService {
             debugLog("[WizardStep] After checkpoint restore: \(wizardStep)")
         }
 
-        appendSystemMessage("🚀 Starting onboarding interview using \(modelId).")
         if restoredFromCheckpoint {
             appendSystemMessage("♻️ Resuming your previous onboarding progress.")
         }
@@ -905,11 +904,16 @@ final class OnboardingInterviewService {
            session to uncover the great work you've done. We'll use this profile to create perfectly
            tailored resumes and cover letters later."
 
-        2. Immediately call get_user_option to offer profile collection methods with these four options:
+        2. Immediately call get_user_option to collect the user's contact information (ApplicantProfile).
+           Present the prompt: "How would you like to start building your profile?"
+           Offer these four options:
            - id: "upload_file", label: "Upload Resume", description: "Upload your resume PDF or DOCX"
            - id: "paste_url", label: "Paste Resume URL", description: "Provide a URL to your resume or LinkedIn"
-           - id: "use_contacts", label: "Import from Contacts", description: "Use macOS Contacts to pre-fill your profile"
+           - id: "use_contacts", label: "Use My Contact Card", description: "Import your contact info from macOS Contacts"
            - id: "manual_entry", label: "Enter Manually", description: "Fill out your profile information step by step"
+
+           Note: The first priority is collecting the user's basic contact information (name, email, phone, address)
+           to create the ApplicantProfile. This is NOT about collecting all their professional contacts.
 
         3. When any tool returns with status "waiting for user input", respond with a brief, contextual message:
            "Once you complete the form to the left we can continue."
