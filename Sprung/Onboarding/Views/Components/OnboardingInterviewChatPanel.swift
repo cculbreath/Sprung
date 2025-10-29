@@ -39,14 +39,7 @@ struct OnboardingInterviewChatPanel: View {
                     }
                     .padding(20)
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(.thinMaterial)
-                        .background(
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-                        )
-                )
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .modifier(ConditionalIntelligenceGlow(
                     isActive: service.isProcessing,
