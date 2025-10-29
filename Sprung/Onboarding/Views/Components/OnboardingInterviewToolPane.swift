@@ -174,8 +174,8 @@ struct OnboardingInterviewToolPane: View {
                     UploadRequestCard(
                         request: request,
                         onSelectFile: { openPanel(for: request) },
-                        onProvideLink: { url in
-                            Task { await actions.completeUploadRequest(id: request.id, link: url) }
+                        onDropFiles: { urls in
+                            Task { await actions.completeUploadRequest(id: request.id, fileURLs: urls) }
                         },
                         onDecline: {
                             Task { await actions.declineUploadRequest(id: request.id) }

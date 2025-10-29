@@ -1,13 +1,13 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct UploadRequestCard: View {
     let request: OnboardingUploadRequest
     let onSelectFile: () -> Void
-    let onProvideLink: (URL) -> Void
+    let onDropFiles: ([URL]) -> Void
     let onDecline: () -> Void
 
-    @State private var linkText: String = ""
-    @State private var linkError: String?
+    @State private var isDropTargetHighlighted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -33,6 +33,27 @@ struct UploadRequestCard: View {
                     .foregroundStyle(.secondary)
             }
 
+            filePickerArea
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var filePickerArea: some View {
+        let dashStyle = StrokeStyle(lineWidth: 1.2, dash: [6, 6])
+        return VStack(spacing: 12) {
+            VStack(spacing: 4) {
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(isDropTargetHighlighted ? Color.accentColor : Color.secondary)
+                Text("Drop your file here")
+                    .font(.headline)
+                Text(request.metadata.allowMultiple ? "You can drop multiple files." : "You can also choose a file from Finder.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack(spacing: 12) {
                 Button("Choose File…") {
                     onSelectFile()
@@ -42,43 +63,61 @@ struct UploadRequestCard: View {
                 }
                 .buttonStyle(.borderless)
             }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(
+            EdgeInsets(top: 18, leading: 20, bottom: 18, trailing: 20)
+        )
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isDropTargetHighlighted ? Color.accentColor.opacity(0.1) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(isDropTargetHighlighted ? Color.accentColor : Color.secondary.opacity(0.2), style: dashStyle)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onTapGesture { onSelectFile() }
+        .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargetHighlighted, perform: handleDrop(providers:))
+    }
 
-            if request.metadata.allowURL {
-                VStack(alignment: .leading, spacing: 6) {
-                    TextField("https://example.com/…", text: $linkText)
-                        .textFieldStyle(.roundedBorder)
-                    if let error = linkError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    HStack {
-                        Button("Submit Link") {
-                            submitLink()
-                        }
-                        .buttonStyle(.bordered)
-                        Button("Clear") {
-                            linkText = ""
-                            linkError = nil
-                        }
-                        .buttonStyle(.borderless)
-                    }
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        let supportingProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+        guard !supportingProviders.isEmpty else { return false }
+
+        Task {
+            var collected: [URL] = []
+            for provider in supportingProviders {
+                if let url = await loadURL(from: provider) {
+                    collected.append(url)
+                    if !request.metadata.allowMultiple { break }
+                }
+            }
+
+            if !collected.isEmpty {
+                let limited = request.metadata.allowMultiple ? collected : Array(collected.prefix(1))
+                await MainActor.run {
+                    onDropFiles(limited)
                 }
             }
         }
-        .padding(16)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+        return true
     }
 
-    private func submitLink() {
-        let trimmed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed), !trimmed.isEmpty else {
-            linkError = "Please provide a valid URL."
-            return
+    private func loadURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                if let url = item as? URL {
+                    continuation.resume(returning: url)
+                } else if let data = item as? Data,
+                          let string = String(data: data, encoding: .utf8),
+                          let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    continuation.resume(returning: url)
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
         }
-        linkError = nil
-        onProvideLink(url)
-        linkText = ""
     }
 }
