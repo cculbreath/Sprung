@@ -57,7 +57,7 @@ final class KnowledgeCardAgent {
         )
 
         if let effort = config.defaultReasoningEffort {
-            parameters.reasoning = Reasoning(effort: effort)
+            parameters.reasoning = Reasoning(effort: effort, summary: .auto)
         }
 
         let response = try await client.responseCreate(parameters)

@@ -789,10 +789,12 @@ final class OnboardingInterviewService {
         isProcessing = processing
     }
 
-    func appendAssistantMessage(_ text: String) {
+    @discardableResult
+    func appendAssistantMessage(_ text: String) -> UUID {
         let message = OnboardingMessage(role: .assistant, text: text)
         messages.append(message)
         Logger.debug("[Stream] Assistant message posted immediately (len: \(text.count))")
+        return message.id
     }
 
     func beginAssistantStream(initialText: String = "") -> UUID {
@@ -819,6 +821,14 @@ final class OnboardingInterviewService {
             elapsed = 0
         }
         Logger.debug("[Stream] Completed message \(id.uuidString) in \(String(format: "%.3f", elapsed))s (len: \(text.count))")
+    }
+
+    func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) {
+        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let value = isFinal ? summary.trimmingCharacters(in: .whitespacesAndNewlines) : summary
+        messages[index].reasoningSummary = value
+        let tag = isFinal ? "finalized" : "update"
+        Logger.debug("[Stream] Reasoning summary \(tag) for message \(messageId.uuidString) (len: \(value.count))")
     }
 
     func appendSystemMessage(_ text: String) {
@@ -969,8 +979,8 @@ final class OnboardingInterviewService {
                 await MainActor.run { service.handleProcessingStateChange(processing) }
             },
             emitAssistantMessage: { [weak self] text in
-                guard let service = self else { return }
-                await MainActor.run { service.appendAssistantMessage(text) }
+                guard let service = self else { return UUID() }
+                return await MainActor.run { service.appendAssistantMessage(text) }
             },
             beginStreamingAssistantMessage: { [weak self] initial in
                 guard let service = self else { return UUID() }
@@ -983,6 +993,10 @@ final class OnboardingInterviewService {
             finalizeStreamingAssistantMessage: { [weak self] id, text in
                 guard let service = self else { return }
                 await MainActor.run { service.finalizeAssistantStream(id: id, text: text) }
+            },
+            updateReasoningSummary: { [weak self] messageId, summary, isFinal in
+                guard let service = self else { return }
+                await MainActor.run { service.updateReasoningSummary(summary, for: messageId, isFinal: isFinal) }
             },
             handleWaitingState: { [weak self] waiting in
                 guard let service = self else { return }
@@ -1365,7 +1379,11 @@ final class OnboardingInterviewService {
            "Once you complete the form to the left we can continue."
            This keeps the conversation flowing while the user interacts with UI elements.
 
-        4. After the user completes their choice, proceed naturally based on their selection.
+        4. After the user completes their choice, proceed naturally based on their selection, but stay focused on a
+           SINGLE objective: collect and confirm the ApplicantProfile basics (name, email, phone, primary location,
+           personal URL, social profiles). Even if a resume provides richer details, defer skeleton timelines, skills,
+           publications, or project summaries until those objectives are intentionally opened later in the flow. Work
+           atomically—finish ApplicantProfile intake and validation before discussing any other artifacts.
 
         CAPABILITY-DRIVEN WORKFLOW:
         - Call capabilities_describe at the start of each phase to see what tools are currently available
@@ -1381,14 +1399,15 @@ final class OnboardingInterviewService {
         - When ready to advance phases, call next_phase (you may propose overrides for unmet objectives with a clear reason)
 
         EXTRACTION & PARSING WORKFLOW:
-        1. User uploads resume → you call extract_document(file_url)
+        1. When a resume is uploaded during ApplicantProfile intake, call extract_document(file_url)
         2. Tool returns artifact with extracted_content (semantically-enhanced Markdown/text)
-        3. YOU read the text and construct applicant_profile JSON
-        4. YOU read the text and construct skeleton_timeline JSON
-        5. If dates/companies are unclear, ASK the user for clarification
-        6. Only after clarification, call submit_for_validation for user approval
-        7. Call persist_data to save approved data
-        8. Call set_objective_status to mark objectives complete
+        3. YOU read the text and extract ONLY the ApplicantProfile basics listed above
+        4. Use chat to ask follow-up questions ONLY when a required field is missing, conflicting, or ambiguous. When the
+           data is clear, jump straight to submit_for_validation so the app’s validation card is the primary confirmation surface.
+        5. Call persist_data to save approved ApplicantProfile data and mark the objective complete
+        6. Defer skeleton timeline, skills, education, and artifact summaries until you explicitly shift to those
+           objectives (e.g. when you start the skeleton timeline loop in Phase 1 or Phase 2)
+        7. For every subsequent objective, repeat the extract → clarify → validate → persist pattern, one objective at a time
 
         PHASE ADVANCEMENT:
         - Track your progress by marking objectives complete as you finish them

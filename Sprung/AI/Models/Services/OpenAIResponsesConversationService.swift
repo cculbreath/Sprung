@@ -299,22 +299,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                             )
                         case .reasoningTextDelta(let delta):
                             accumulatedReasoning += delta.delta
-                            continuation.yield(
-                                LLMStreamChunkDTO(
-                                    content: nil,
-                                    reasoning: delta.delta,
-                                    isFinished: false
-                                )
-                            )
                         case .reasoningSummaryTextDelta(let delta):
                             accumulatedReasoning += delta.delta
-                            continuation.yield(
-                                LLMStreamChunkDTO(
-                                    content: nil,
-                                    reasoning: delta.delta,
-                                    isFinished: false
-                                )
-                            )
                         case .outputItemAdded(let added):
                             if case let .functionCall(functionCall) = added.item {
                                 let initialArguments = functionCall.arguments.trimmingCharacters(in: .whitespacesAndNewlines)

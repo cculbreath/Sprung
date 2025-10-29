@@ -21,10 +21,11 @@ actor InterviewOrchestrator {
     }
     struct Callbacks {
         let updateProcessingState: @Sendable (Bool) async -> Void
-        let emitAssistantMessage: @Sendable (String) async -> Void
+        let emitAssistantMessage: @Sendable (String) async -> UUID
         let beginStreamingAssistantMessage: @Sendable (String) async -> UUID
         let updateStreamingAssistantMessage: @Sendable (UUID, String) async -> Void
         let finalizeStreamingAssistantMessage: @Sendable (UUID, String) async -> Void
+        let updateReasoningSummary: @Sendable (UUID, String, Bool) async -> Void
         let handleWaitingState: @Sendable (InterviewSession.Waiting?) async -> Void
         let handleError: @Sendable (String) async -> Void
         let storeApplicantProfile: @Sendable (JSON) async -> Void
@@ -188,10 +189,10 @@ actor InterviewOrchestrator {
             let profile = try await collectApplicantProfile()
             applicantProfileData = profile
             await state.completeObjective("applicant_profile")
-            await callbacks.emitAssistantMessage("Excellent. Contact information is set.")
+            _ = await callbacks.emitAssistantMessage("Excellent. Contact information is set.")
             await callbacks.persistCheckpoint()
         } catch ToolError.userCancelled {
-            await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
+            _ = await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
         } catch {
             let errorDetails = formatError(error)
             await callbacks.handleError("Failed to collect applicant profile: \(errorDetails)")
@@ -201,10 +202,10 @@ actor InterviewOrchestrator {
             let timeline = try await collectSkeletonTimeline()
             skeletonTimelineData = timeline
             await state.completeObjective("skeleton_timeline")
-            await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.")
+            _ = await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.")
             await callbacks.persistCheckpoint()
         } catch ToolError.userCancelled {
-            await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.")
+            _ = await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.")
         } catch {
             let errorDetails = formatError(error)
             await callbacks.handleError("Failed to build skeleton timeline: \(errorDetails)")
@@ -213,7 +214,7 @@ actor InterviewOrchestrator {
         let current = await state.currentSession()
         if current.objectivesDone.contains("skeleton_timeline") && !current.objectivesDone.contains("enabled_sections") {
             await state.completeObjective("enabled_sections")
-            await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.")
+            _ = await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.")
             await callbacks.persistCheckpoint()
         }
     }
@@ -257,7 +258,7 @@ actor InterviewOrchestrator {
     }
 
     private func collectSkeletonTimeline() async throws -> JSON {
-        await callbacks.emitAssistantMessage("Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later.")
+        _ = await callbacks.emitAssistantMessage("Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later.")
 
         var uploadArgs = JSON()
         uploadArgs["uploadType"].string = "resume"
@@ -381,7 +382,7 @@ actor InterviewOrchestrator {
         )
 
         if let effort = config.defaultReasoningEffort {
-            parameters.reasoning = Reasoning(effort: effort)
+            parameters.reasoning = Reasoning(effort: effort, summary: .auto)
         }
 
         let response = try await client.responseCreate(parameters)
@@ -471,7 +472,7 @@ actor InterviewOrchestrator {
         parameters.tools = await toolExecutor.availableToolSchemas(allowedNames: allowedToolNames)
 
         if let effort = config.defaultReasoningEffort {
-            parameters.reasoning = Reasoning(effort: effort)
+            parameters.reasoning = Reasoning(effort: effort, summary: .auto)
         }
 
         parameters.stream = true
@@ -479,6 +480,20 @@ actor InterviewOrchestrator {
         var streamBuffers: [String: StreamBuffer] = [:]
         var finalizedMessageIds: Set<String> = []
         var finalResponse: ResponseModel?
+        var messageIdByOutputItem: [String: UUID] = [:]
+        var reasoningSummaryBuffers: [String: String] = [:]
+        var reasoningSummaryFinalized: Set<String> = []
+
+        func deliverSummary(for itemId: String, isFinalOverride: Bool?) async {
+            guard let summary = reasoningSummaryBuffers[itemId] else { return }
+            guard let messageId = messageIdByOutputItem[itemId] else { return }
+            let isFinal = isFinalOverride ?? reasoningSummaryFinalized.contains(itemId)
+            await callbacks.updateReasoningSummary(messageId, summary, isFinal)
+            if isFinal {
+                reasoningSummaryBuffers.removeValue(forKey: itemId)
+                reasoningSummaryFinalized.remove(itemId)
+            }
+        }
 
         do {
             let stream = try await client.responseCreateStream(parameters)
@@ -507,23 +522,46 @@ actor InterviewOrchestrator {
                     if buffer == nil {
                         let messageId = await callbacks.beginStreamingAssistantMessage("")
                         buffer = StreamBuffer(messageId: messageId, text: "")
+                        messageIdByOutputItem[delta.itemId] = messageId
+                    }
+                    if messageIdByOutputItem[delta.itemId] == nil {
+                        messageIdByOutputItem[delta.itemId] = buffer!.messageId
                     }
                     buffer!.text.append(contentsOf: fragment)
                     streamBuffers[delta.itemId] = buffer!
                     await callbacks.updateStreamingAssistantMessage(buffer!.messageId, buffer!.text)
+                    await deliverSummary(for: delta.itemId, isFinalOverride: false)
                 case .outputTextDone(let done):
                     let finalText = done.text
                     var buffer = streamBuffers[done.itemId]
                     if buffer == nil {
                         let messageId = await callbacks.beginStreamingAssistantMessage(finalText)
                         buffer = StreamBuffer(messageId: messageId, text: finalText)
+                        messageIdByOutputItem[done.itemId] = messageId
                     } else {
                         buffer!.text = finalText
+                    }
+                    if messageIdByOutputItem[done.itemId] == nil {
+                        messageIdByOutputItem[done.itemId] = buffer!.messageId
                     }
                     streamBuffers[done.itemId] = buffer!
                     await callbacks.finalizeStreamingAssistantMessage(buffer!.messageId, buffer!.text)
                     finalizedMessageIds.insert(done.itemId)
                     streamBuffers.removeValue(forKey: done.itemId)
+                    await deliverSummary(for: done.itemId, isFinalOverride: nil)
+                case .reasoningSummaryTextDelta(let delta):
+                    let fragment = delta.delta
+                    guard !fragment.isEmpty else { continue }
+                    reasoningSummaryBuffers[delta.itemId, default: ""] += fragment
+                    if messageIdByOutputItem[delta.itemId] != nil {
+                        await deliverSummary(for: delta.itemId, isFinalOverride: false)
+                    }
+                case .reasoningSummaryTextDone(let done):
+                    reasoningSummaryBuffers[done.itemId] = done.text
+                    reasoningSummaryFinalized.insert(done.itemId)
+                    if messageIdByOutputItem[done.itemId] != nil {
+                        await deliverSummary(for: done.itemId, isFinalOverride: true)
+                    }
                 default:
                     continue
                 }
@@ -538,7 +576,11 @@ actor InterviewOrchestrator {
             return
         }
 
-        try await handleResponse(response, finalizedMessageIds: finalizedMessageIds)
+        try await handleResponse(
+            response,
+            finalizedMessageIds: finalizedMessageIds,
+            messageIdByOutputItem: messageIdByOutputItem
+        )
         await callbacks.persistCheckpoint()
     }
 
@@ -580,17 +622,38 @@ actor InterviewOrchestrator {
 
     private func handleResponse(
         _ response: ResponseModel,
-        finalizedMessageIds: Set<String> = []
+        finalizedMessageIds: Set<String> = [],
+        messageIdByOutputItem: [String: UUID] = [:]
     ) async throws {
+        var messageIds = messageIdByOutputItem
+        var lastMessageUUID: UUID?
+
         for item in response.output {
             switch item {
             case .message(let message):
                 let text = extractAssistantText(from: message)
-                if finalizedMessageIds.contains(message.id) {
-                    continue
-                } else if !text.isEmpty {
-                    await callbacks.emitAssistantMessage(text)
+                if let existing = messageIds[message.id] {
+                    lastMessageUUID = existing
                 }
+                if finalizedMessageIds.contains(message.id) || text.isEmpty {
+                    continue
+                }
+                let messageUUID = await callbacks.emitAssistantMessage(text)
+                messageIds[message.id] = messageUUID
+                lastMessageUUID = messageUUID
+            case .reasoning(let reasoning):
+                let summaryText = reasoning.summary
+                    .map(\.text)
+                    .joined(separator: "\n\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !summaryText.isEmpty else { continue }
+
+                let targetId = lastMessageUUID ?? messageIds[reasoning.id]
+                guard let messageUUID = targetId else {
+                    Logger.debug("Reasoning summary received without matching message (reasoning id: \(reasoning.id)).")
+                    continue
+                }
+                await callbacks.updateReasoningSummary(messageUUID, summaryText, true)
             case .functionCall(let functionCall):
                 try await handleFunctionCall(functionCall)
             default:

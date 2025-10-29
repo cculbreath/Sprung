@@ -20,12 +20,20 @@ struct OnboardingMessage: Identifiable, Codable {
     let role: OnboardingMessageRole
     var text: String
     let timestamp: Date
+    var reasoningSummary: String?
 
-    init(id: UUID = UUID(), role: OnboardingMessageRole, text: String, timestamp: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        role: OnboardingMessageRole,
+        text: String,
+        timestamp: Date = Date(),
+        reasoningSummary: String? = nil
+    ) {
         self.id = id
         self.role = role
         self.text = text
         self.timestamp = timestamp
+        self.reasoningSummary = reasoningSummary
     }
 }
 

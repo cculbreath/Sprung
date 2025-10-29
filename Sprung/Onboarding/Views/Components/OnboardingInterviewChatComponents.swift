@@ -9,10 +9,8 @@ struct MessageBubble: View {
             if message.role == .user { Spacer() }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
-                Text(displayText)
-                    .padding(12)
+                bubbleContent
                     .background(backgroundColor)
-                    .foregroundStyle(.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                 Text(message.timestamp.formatted(date: .omitted, time: .shortened))
@@ -35,6 +33,29 @@ struct MessageBubble: View {
         case .system:
             return Color.gray.opacity(0.15)
         }
+    }
+
+    private var bubbleContent: some View {
+        let alignment: Alignment = message.role == .user ? .trailing : .leading
+        let multilineAlignment: TextAlignment = message.role == .user ? .trailing : .leading
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(displayText)
+                .multilineTextAlignment(multilineAlignment)
+            if let summary = message.reasoningSummary, !summary.isEmpty, message.role == .assistant {
+                Text(summary)
+                    .font(.footnote)
+                    .italic()
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+            }
+        }
+        .frame(
+            maxWidth: .infinity,
+            alignment: alignment
+        )
+        .padding(12)
+        .foregroundStyle(.primary)
     }
 
     private var displayText: String {
