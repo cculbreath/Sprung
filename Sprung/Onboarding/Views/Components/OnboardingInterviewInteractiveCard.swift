@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct OnboardingInterviewInteractiveCard: View {
     @Bindable var service: OnboardingInterviewService
+    @Bindable var coordinator: OnboardingInterviewCoordinator
+    @Bindable var router: OnboardingToolRouter
     @Bindable var state: OnboardingInterviewViewModel
     let actions: OnboardingInterviewActionHandler
     let modelStatusDescription: String
@@ -15,6 +17,8 @@ struct OnboardingInterviewInteractiveCard: View {
         HStack(spacing: 0) {
             OnboardingInterviewToolPane(
                 service: service,
+                coordinator: coordinator,
+                router: router,
                 actions: actions
             )
             .frame(minWidth: 340, maxWidth: 420)
@@ -24,6 +28,7 @@ struct OnboardingInterviewInteractiveCard: View {
 
             OnboardingInterviewChatPanel(
                 service: service,
+                coordinator: coordinator,
                 state: state,
                 actions: actions,
                 modelStatusDescription: modelStatusDescription,

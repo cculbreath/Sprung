@@ -3,6 +3,8 @@ import SwiftUI
 
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewService.self) private var interviewService
+    @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
+    @Environment(OnboardingToolRouter.self) private var toolRouter
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
 
@@ -12,6 +14,7 @@ struct OnboardingInterviewView: View {
 
     @State private var showResumeOptions = false
     @State private var pendingStartModelId: String?
+    @State private var loggedToolStatuses: [String: String] = [:]
 
     @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
@@ -21,8 +24,10 @@ struct OnboardingInterviewView: View {
 
     var body: some View {
         @Bindable var service = interviewService
+        @Bindable var coordinator = interviewCoordinator
+        @Bindable var router = toolRouter
         @Bindable var uiState = viewModel
-        let actions = OnboardingInterviewActionHandler(service: service)
+        let actions = OnboardingInterviewActionHandler(service: service, coordinator: coordinator)
 
         // --- Card visual constants ---
         let corner: CGFloat = 44
@@ -32,29 +37,35 @@ struct OnboardingInterviewView: View {
 
         VStack(spacing: 0) {
             // Progress bar anchored close to top
-            OnboardingInterviewStepProgressView(service: service)
+            OnboardingInterviewStepProgressView(coordinator: coordinator)
                 .padding(.top, 16)
                 .padding(.bottom, 24)
                 .padding(.horizontal, 32)
 
             // Main body centered within available space
             VStack(spacing: 8) {
-                mainCard(service: service, state: uiState, actions: actions)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.82), value: service.wizardStep)
+                mainCard(
+                    service: service,
+                    coordinator: coordinator,
+                    router: router,
+                    state: uiState,
+                    actions: actions
+                )
+                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardStep)
 
                 Spacer(minLength: 16) // centers body relative to bottom bar
 
                 OnboardingInterviewBottomBar(
-                    showBack: shouldShowBackButton(for: service.wizardStep),
-                    continueTitle: continueButtonTitle(for: service.wizardStep),
-                    isContinueDisabled: isContinueDisabled(service: service),
+                    showBack: shouldShowBackButton(for: coordinator.wizardStep),
+                    continueTitle: continueButtonTitle(for: coordinator.wizardStep),
+                    isContinueDisabled: isContinueDisabled(service: service, coordinator: coordinator),
                     onShowSettings: openSettings,
-                    onBack: { handleBack(service: service, actions: actions) },
+                    onBack: { handleBack(service: service, coordinator: coordinator, actions: actions) },
                     onCancel: { handleCancel(actions: actions) },
-                    onContinue: { handleContinue(service: service, actions: actions) }
+                    onContinue: { handleContinue(service: service, coordinator: coordinator, actions: actions) }
                 )
                 .padding(.horizontal, 16)
-                .animation(.easeInOut(duration: 0.25), value: service.wizardStep)
+                .animation(.easeInOut(duration: 0.25), value: coordinator.wizardStep)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal,32)
@@ -171,6 +182,16 @@ struct OnboardingInterviewView: View {
         } message: { message in
             Text(message)
         }
+        .onAppear {
+            let initialStatuses = router.statusSnapshot.rawValueMap
+            loggedToolStatuses = initialStatuses
+            Logger.info("📊 Tool status update", category: .ai, metadata: initialStatuses)
+        }
+        .onChange(of: router.statusSnapshot.rawValueMap) { _, newValue in
+            guard newValue != loggedToolStatuses else { return }
+            Logger.info("📊 Tool status update", category: .ai, metadata: newValue)
+            loggedToolStatuses = newValue
+        }
     }
 }
 
@@ -237,11 +258,13 @@ private struct ResumeInterviewPromptView: View {
 private extension OnboardingInterviewView {
     func mainCard(
         service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator,
+        router: OnboardingToolRouter,
         state: OnboardingInterviewViewModel,
         actions: OnboardingInterviewActionHandler
     ) -> some View {
         Group {
-            if service.wizardStep == .introduction {
+            if coordinator.wizardStep == .introduction {
                 OnboardingInterviewIntroductionCard()
                     .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
                     .transition(.asymmetric(
@@ -251,6 +274,8 @@ private extension OnboardingInterviewView {
             } else {
                 OnboardingInterviewInteractiveCard(
                     service: service,
+                    coordinator: coordinator,
+                    router: router,
                     state: state,
                     actions: actions,
                     modelStatusDescription: modelStatusDescription(service: service),
@@ -283,19 +308,21 @@ private extension OnboardingInterviewView {
         step != .introduction
     }
 
-    func isContinueDisabled(service: OnboardingInterviewService) -> Bool {
-        switch service.wizardStep {
+    func isContinueDisabled(
+        service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator
+    ) -> Bool {
+        switch coordinator.wizardStep {
             case .introduction:
                 return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
             case .resumeIntake:
                 return service.isProcessing ||
-                service.pendingChoicePrompt != nil ||
-                service.pendingApplicantProfileRequest != nil ||
-                service.pendingContactsRequest != nil
+                coordinator.pendingChoicePrompt != nil ||
+                coordinator.pendingApplicantProfileRequest != nil ||
+                coordinator.pendingApplicantProfileIntake != nil
             case .artifactDiscovery:
                 return service.isProcessing ||
-                service.pendingSectionToggleRequest != nil ||
-                !service.pendingSectionEntryRequests.isEmpty
+                coordinator.pendingSectionToggleRequest != nil
             default:
                 return service.isProcessing
         }
@@ -303,22 +330,23 @@ private extension OnboardingInterviewView {
 
     func handleContinue(
         service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator,
         actions: OnboardingInterviewActionHandler
     ) {
-        switch service.wizardStep {
+        switch coordinator.wizardStep {
             case .introduction:
                 beginInterview(service: service, actions: actions)
             case .resumeIntake:
                 if service.isActive,
-                   service.pendingChoicePrompt == nil,
-                   service.pendingApplicantProfileRequest == nil,
-                   service.pendingContactsRequest == nil {
-                    service.setPhase(.artifactDiscovery)
+                   coordinator.pendingChoicePrompt == nil,
+                   coordinator.pendingApplicantProfileRequest == nil,
+                   coordinator.pendingApplicantProfileIntake == nil {
+                    coordinator.setWizardStep(.artifactDiscovery)
                 }
             case .artifactDiscovery:
-                service.setPhase(.writingCorpus)
+                coordinator.setWizardStep(.writingCorpus)
             case .writingCorpus:
-                service.setPhase(.wrapUp)
+                coordinator.setWizardStep(.wrapUp)
             case .wrapUp:
                 handleCancel(actions: actions)
         }
@@ -326,18 +354,19 @@ private extension OnboardingInterviewView {
 
     func handleBack(
         service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator,
         actions: OnboardingInterviewActionHandler
     ) {
-        switch service.wizardStep {
+        switch coordinator.wizardStep {
             case .resumeIntake:
                 actions.resetInterview()
                 reinitializeUIState(service: service)
             case .artifactDiscovery:
-                service.setPhase(.resumeIntake)
+                coordinator.setWizardStep(.resumeIntake)
             case .writingCorpus:
-                service.setPhase(.artifactDiscovery)
+                coordinator.setWizardStep(.artifactDiscovery)
             case .wrapUp:
-                service.setPhase(.writingCorpus)
+                coordinator.setWizardStep(.writingCorpus)
             case .introduction:
                 break
         }

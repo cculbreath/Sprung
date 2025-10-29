@@ -12,9 +12,11 @@ import SwiftyJSON
 @MainActor
 struct OnboardingInterviewActionHandler {
     private let service: OnboardingInterviewService
+    private let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
+    init(service: OnboardingInterviewService, coordinator: OnboardingInterviewCoordinator? = nil) {
         self.service = service
+        self.coordinator = coordinator ?? service.coordinator
     }
 
     // MARK: - Core actions
@@ -38,11 +40,13 @@ struct OnboardingInterviewActionHandler {
     // MARK: - Tool-driven actions
 
     func resolveChoice(selectionIds: [String]) async {
-        await service.resolveChoice(selectionIds: selectionIds)
+        let result = coordinator.resolveChoice(selectionIds: selectionIds)
+        await service.resumeToolContinuation(from: result)
     }
 
     func cancelChoicePrompt(reason: String) async {
-        await service.cancelChoicePrompt(reason: reason)
+        let result = coordinator.cancelChoicePrompt(reason: reason)
+        await service.resumeToolContinuation(from: result)
     }
 
     func submitValidation(
@@ -51,62 +55,66 @@ struct OnboardingInterviewActionHandler {
         changes: JSON? = nil,
         notes: String? = nil
     ) async {
-        await service.submitValidationResponse(
+        let result = coordinator.submitValidationResponse(
             status: status,
             updatedData: updatedData,
             changes: changes,
             notes: notes
         )
+        await service.resumeToolContinuation(from: result)
     }
 
     func cancelValidation(reason: String) async {
-        await service.cancelValidation(reason: reason)
+        let result = coordinator.cancelValidation(reason: reason)
+        await service.resumeToolContinuation(from: result)
     }
 
     // MARK: - Applicant Profile Intake
 
     func fetchApplicantProfileFromContacts() async {
-        service.beginApplicantProfileContactsFetch()
-    }
-
-    func declineContactsFetch(reason: String) async {
-        Logger.debug("Contacts fetch declined: \(reason)")
+        coordinator.beginApplicantProfileContactsFetch()
     }
 
     func approveApplicantProfile(draft: ApplicantProfileDraft) async {
-        await service.resolveApplicantProfile(with: draft)
+        let result = coordinator.resolveApplicantProfile(with: draft)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func declineApplicantProfile(reason: String) async {
-        await service.rejectApplicantProfile(reason: reason)
+        let result = coordinator.rejectApplicantProfile(reason: reason)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func beginApplicantProfileManualEntry() {
-        service.beginApplicantProfileManualEntry()
+        coordinator.beginApplicantProfileManualEntry()
     }
 
     func beginApplicantProfileURLEntry() {
-        service.beginApplicantProfileURL()
+        coordinator.beginApplicantProfileURL()
     }
 
     func beginApplicantProfileUpload() async {
-        service.beginApplicantProfileUpload()
+        guard let result = coordinator.beginApplicantProfileUpload() else { return }
+        service.presentUploadRequest(result.request, continuationId: result.continuationId)
     }
 
     func resetApplicantProfileIntake() {
-        service.resetApplicantProfileIntakeToOptions()
+        coordinator.resetApplicantProfileIntakeToOptions()
     }
 
     func submitApplicantProfileURL(_ urlString: String) async {
-        await service.submitApplicantProfileURL(urlString)
+        let result = coordinator.submitApplicantProfileURL(urlString)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func completeApplicantProfileDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
-        await service.completeApplicantProfileDraft(draft, source: source)
+        let result = coordinator.completeApplicantProfileDraft(draft, source: source)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func cancelApplicantProfileIntake(reason: String) async {
-        await service.cancelApplicantProfileIntake(reason: reason)
+        let result = coordinator.cancelApplicantProfileIntake(reason: reason)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func approvePhaseAdvance() async {
@@ -118,31 +126,28 @@ struct OnboardingInterviewActionHandler {
     }
 
     func completeSectionToggleSelection(enabled: [String]) async {
-        await service.resolveSectionToggle(enabled: enabled)
+        let result = coordinator.resolveSectionToggle(enabled: enabled)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil), persistCheckpoint: true)
     }
 
     func cancelSectionToggleSelection(reason: String) async {
-        await service.rejectSectionToggle(reason: reason)
-    }
-
-    func completeSectionEntryRequest(id: UUID, approvedEntries: [JSON]) async {
-        Logger.debug("Section entry review is not implemented in milestone M0.")
-    }
-
-    func declineSectionEntryRequest(id: UUID, reason: String) async {
-        Logger.debug("Section entry request declined: \(reason)")
+        let result = coordinator.rejectSectionToggle(reason: reason)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func completeUploadRequest(id: UUID, fileURLs: [URL]) async {
-        await service.completeUploadRequest(id: id, fileURLs: fileURLs)
+        let result = await coordinator.completeUpload(id: id, fileURLs: fileURLs)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func completeUploadRequest(id: UUID, link: URL) async {
-        await service.completeUploadRequest(id: id, link: link)
+        let result = await coordinator.completeUpload(id: id, link: link)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func declineUploadRequest(id: UUID) async {
-        await service.skipUploadRequest(id: id)
+        let result = await coordinator.skipUpload(id: id)
+        await service.resumeToolContinuation(from: result, waitingState: .set(nil))
     }
 
     func confirmPendingExtraction(_ json: JSON, notes: String?) async {
@@ -150,6 +155,6 @@ struct OnboardingInterviewActionHandler {
     }
 
     func cancelPendingExtraction() {
-        Logger.debug("Pending extraction cancelled.")
+        service.setExtractionStatus(nil)
     }
 }
