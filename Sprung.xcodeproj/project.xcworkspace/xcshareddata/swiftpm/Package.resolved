@@ -222,8 +222,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/cculbreath/SwiftOpenAI.git",
       "state" : {
-        "branch" : "feature/streaming-tts-v4",
-        "revision" : "85c20b3d6a023cacd0b0836151e77e657a788ad8"
+        "branch" : "feature/sprung-logging-integration",
+        "revision" : "3be83cd4c4dc4ad8e6831e7b215a51158ca18782"
       }
     },
     {

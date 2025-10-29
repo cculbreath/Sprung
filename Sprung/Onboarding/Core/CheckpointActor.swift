@@ -29,7 +29,7 @@ actor Checkpoints {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
-            debugLog("Failed to create checkpoint directory: \(error)")
+            Logger.debug("Failed to create checkpoint directory: \(error)")
         }
         return directory.appendingPathComponent("Interview.checkpoints.json")
     }()
@@ -66,7 +66,7 @@ actor Checkpoints {
             let data = try JSONEncoder().encode(history)
             try data.write(to: url, options: .atomic)
         } catch {
-            debugLog("Checkpoint save failed: \(error)")
+            Logger.debug("Checkpoint save failed: \(error)")
         }
     }
 
@@ -83,6 +83,22 @@ actor Checkpoints {
         let profileJSON = latest.applicantProfile.flatMap { JSON(parseJSON: $0) }
         let timelineJSON = latest.skeletonTimeline.flatMap { JSON(parseJSON: $0) }
         return (session, profileJSON, timelineJSON, latest.enabledSections)
+    }
+
+    func hasCheckpoint() async -> Bool {
+        history = Self.loadHistory(from: url, limit: maxHistoryCount)
+        return history.last != nil
+    }
+
+    func clear() async {
+        history.removeAll()
+        do {
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            Logger.debug("Failed to clear checkpoints: \(error)")
+        }
     }
 
     private static func loadHistory(from url: URL, limit: Int) -> [InterviewCheckpoint] {

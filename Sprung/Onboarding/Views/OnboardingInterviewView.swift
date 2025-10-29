@@ -10,6 +10,9 @@ struct OnboardingInterviewView: View {
         fallbackModelId: "openai/gpt-5"
     )
 
+    @State private var showResumeOptions = false
+    @State private var pendingStartModelId: String?
+
     @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
@@ -73,6 +76,36 @@ struct OnboardingInterviewView: View {
         .padding(.leading, shadowR)
         .padding(.trailing, shadowR)
         .padding(.bottom, shadowR + abs(shadowY))
+        .overlay {
+            if showResumeOptions {
+                ZStack {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            pendingStartModelId = nil
+                            showResumeOptions = false
+                        }
+
+                    ResumeInterviewPromptView(
+                        onResume: {
+                            respondToResumeChoice(resume: true, actions: actions)
+                        },
+                        onStartOver: {
+                            respondToResumeChoice(resume: false, actions: actions)
+                        },
+                        onCancel: {
+                            pendingStartModelId = nil
+                            showResumeOptions = false
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .zIndex(5)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showResumeOptions)
 
         // --- Lifecycle bindings and tasks ---
         .task {
@@ -138,6 +171,64 @@ struct OnboardingInterviewView: View {
         } message: { message in
             Text(message)
         }
+    }
+}
+
+private struct ResumeInterviewPromptView: View {
+    let onResume: () -> Void
+    let onStartOver: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 16) {
+                Image("custom.onboardinginterview")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(.secondary)
+                    .scaledToFit()
+                    .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Resume previous interview?")
+                        .font(.headline)
+                    Text("We found an in-progress onboarding interview. Would you like to continue where you left off or start fresh?")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 14) {
+                Button("Start over", role: .destructive) {
+                    onStartOver()
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.large)
+
+                Spacer()
+
+                HStack(spacing: 12) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Resume") {
+                        onResume()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .padding(.vertical, 24)
+        .padding(.horizontal, 28)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+        )
+                .frame(width: 420)
     }
 }
 
@@ -216,7 +307,7 @@ private extension OnboardingInterviewView {
     ) {
         switch service.wizardStep {
             case .introduction:
-                beginInterview(actions: actions)
+                beginInterview(service: service, actions: actions)
             case .resumeIntake:
                 if service.isActive,
                    service.pendingChoicePrompt == nil,
@@ -283,13 +374,47 @@ private extension OnboardingInterviewView {
         return "Using \(display) with web search \(webText)."
     }
 
-    func beginInterview(actions: OnboardingInterviewActionHandler) {
+    func beginInterview(
+        service: OnboardingInterviewService,
+        actions: OnboardingInterviewActionHandler
+    ) {
         let modelId = viewModel.currentModelId
-        Task {
-            await actions.startInterview(modelId: modelId, backend: .openAI)
-            if viewModel.writingAnalysisAllowed {
-                actions.setWritingAnalysisConsent(true)
+        Task { @MainActor in
+            guard service.isActive == false else { return }
+            let hasCheckpoint = await service.hasRestorableCheckpoint()
+            if hasCheckpoint {
+                pendingStartModelId = modelId
+                showResumeOptions = true
+            } else {
+                await launchInterview(modelId: modelId, resume: false, actions: actions)
             }
+        }
+    }
+
+    @MainActor
+    func launchInterview(
+        modelId: String,
+        resume: Bool,
+        actions: OnboardingInterviewActionHandler
+    ) async {
+        await actions.startInterview(modelId: modelId, backend: .openAI, resumeExisting: resume)
+        if viewModel.writingAnalysisAllowed {
+            actions.setWritingAnalysisConsent(true)
+        }
+        pendingStartModelId = nil
+        showResumeOptions = false
+    }
+
+    func respondToResumeChoice(
+        resume: Bool,
+        actions: OnboardingInterviewActionHandler
+    ) {
+        guard let modelId = pendingStartModelId else { return }
+        pendingStartModelId = nil
+        showResumeOptions = false
+
+        Task { @MainActor in
+            await launchInterview(modelId: modelId, resume: resume, actions: actions)
         }
     }
 

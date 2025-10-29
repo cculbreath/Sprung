@@ -9,7 +9,6 @@
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
-import UniformTypeIdentifiers
 
 struct GetUserUploadTool: InterviewTool {
     private static let schema: JSONSchema = {
@@ -17,29 +16,40 @@ struct GetUserUploadTool: InterviewTool {
             type: .object,
             description: "Request one or more files from the user.",
             properties: [
-                "uploadType": JSONSchema(
+                "upload_type": JSONSchema(
                     type: .string,
-                    description: "Expected file category.",
-                    enum: ["resume", "coverletter", "portfolio", "transcript", "certificate", "other"]
+                    description: "Expected file category (resume, coverletter, portfolio, transcript, certificate, other)."
                 ),
-                "prompt": JSONSchema(
+                "prompt_to_user": JSONSchema(
                     type: .string,
-                    description: "Instructions to display alongside the file picker."
+                    description: "Instructions to display alongside the upload UI."
                 ),
-                "acceptedFormats": JSONSchema(
+                "allowed_types": JSONSchema(
                     type: .array,
                     description: "Allowed file extensions (without dot).",
                     items: JSONSchema(type: .string),
                     additionalProperties: false
+                ),
+                "allow_multiple": JSONSchema(
+                    type: .boolean,
+                    description: "Allow selecting multiple files in one submission."
+                ),
+                "allow_url": JSONSchema(
+                    type: .boolean,
+                    description: "Allow the user to provide a URL instead of uploading a file."
+                ),
+                "target_key": JSONSchema(
+                    type: .string,
+                    description: "Optional JSON Resume key path this upload should populate (e.g., basics.image)."
                 )
             ],
-            required: ["uploadType"],
+            required: ["prompt_to_user"],
             additionalProperties: false
         )
     }()
 
     private let service: OnboardingInterviewService
-    private let storage = UploadStorage()
+    private let storage = OnboardingUploadStorage()
 
     init(service: OnboardingInterviewService) {
         self.service = service
@@ -75,6 +85,9 @@ struct GetUserUploadTool: InterviewTool {
                         var response = JSON()
                         response["status"].string = "skipped"
                         response["uploads"] = JSON([])
+                        if let target = userResponse.targetKey {
+                            response["targetKey"].string = target
+                        }
                         return .immediate(response)
                     case .uploaded(let files):
                         let processed = try files.map { try storage.processFile(at: $0) }
@@ -82,7 +95,12 @@ struct GetUserUploadTool: InterviewTool {
                         var response = JSON()
                         response["status"].string = "uploaded"
                         response["uploads"] = JSON(uploadsJSON)
+                        if let target = userResponse.targetKey {
+                            response["targetKey"].string = target
+                        }
                         return .immediate(response)
+                    case .failed(let message):
+                        return .error(.executionFailed(message))
                     }
                 } catch {
                     return .error(.executionFailed("Upload failed: \(error.localizedDescription)"))
@@ -94,38 +112,58 @@ struct GetUserUploadTool: InterviewTool {
     }
 }
 
+
 // MARK: - Payload Parsing
 
 private struct UploadRequestPayload {
     let kind: OnboardingUploadKind
     let metadata: OnboardingUploadMetadata
     let waitingMessage: String
+    let targetKey: String?
 
     init(json: JSON) throws {
-        guard let rawType = json["uploadType"].string else {
-            throw ToolError.invalidParameters("uploadType must be provided for get_user_upload tool.")
+        if let rawType = json["upload_type"].string {
+            let normalizedType = rawType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard let parsedKind = OnboardingUploadKind.allCases.first(where: { $0.rawValue.lowercased() == normalizedType }) else {
+                let options = OnboardingUploadKind.allCases.map { $0.rawValue }.joined(separator: ", ")
+                throw ToolError.invalidParameters("upload_type must be one of: \(options)")
+            }
+            kind = parsedKind
+        } else {
+            kind = .generic
         }
 
-        let normalizedType = rawType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let kind = OnboardingUploadKind.allCases.first(where: { $0.rawValue.lowercased() == normalizedType }) else {
-            let options = OnboardingUploadKind.allCases.map { $0.rawValue }.joined(separator: ", ")
-            throw ToolError.invalidParameters("uploadType must be one of: \(options)")
+        guard let prompt = json["prompt_to_user"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else {
+            throw ToolError.invalidParameters("prompt_to_user must be provided and non-empty.")
         }
-        self.kind = kind
 
-        let prompt = json["prompt"].string ?? UploadRequestPayload.defaultPrompt(for: kind)
-        let formats = (json["acceptedFormats"].arrayObject as? [String]) ?? ["pdf", "docx", "txt", "md"]
+        let formats = (json["allowed_types"].arrayObject as? [String]) ?? ["pdf", "txt", "rtf", "doc", "docx", "jpg", "jpeg", "png", "gif", "md", "html", "htm"]
         let normalized = formats.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        let allowMultiple = json["allow_multiple"].bool ?? (kind != .resume)
+        let allowURL = json["allow_url"].bool ?? true
+
+        if let target = json["target_key"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !target.isEmpty {
+            guard UploadRequestPayload.allowedTargetKeys.contains(target) else {
+                throw ToolError.invalidParameters("Unsupported target_key: \(target)")
+            }
+            targetKey = target
+        } else {
+            targetKey = nil
+        }
 
         self.metadata = OnboardingUploadMetadata(
             title: UploadRequestPayload.title(for: kind),
             instructions: prompt,
             accepts: normalized,
-            allowMultiple: kind != .resume
+            allowMultiple: allowMultiple,
+            allowURL: allowURL,
+            targetKey: targetKey
         )
 
         self.waitingMessage = "Waiting for user to upload: \(prompt)"
     }
+
+    private static let allowedTargetKeys: Set<String> = ["basics.image"]
 
     private static func title(for kind: OnboardingUploadKind) -> String {
         switch kind {
@@ -178,9 +216,11 @@ private struct UploadUserResponse {
     enum Status {
         case skipped
         case uploaded([URL])
+        case failed(String)
     }
 
     let status: Status
+    let targetKey: String?
 
     init(json: JSON) throws {
         guard let status = json["status"].string else {
@@ -203,85 +243,21 @@ private struct UploadUserResponse {
                 throw ToolError.invalidParameters("Uploaded status requires at least one file.")
             }
             self.status = .uploaded(urls)
+        case "failed":
+            let message = json["error"].string ?? "Upload failed"
+            self.status = .failed(message)
         default:
             throw ToolError.invalidParameters("Unknown upload status: \(status)")
+        }
+
+        if let target = json["targetKey"].string, !target.isEmpty {
+            targetKey = target
+        } else {
+            targetKey = nil
         }
     }
 }
 
 // MARK: - Storage & Extraction
 
-private struct ProcessedUpload {
-    let id: String
-    let filename: String
-    let storageURL: URL
-    let sizeInBytes: Int
-    let contentType: String?
-
-    func toJSON() -> JSON {
-        var json = JSON()
-        json["id"].string = id
-        json["filename"].string = filename
-        json["file_url"].string = storageURL.absoluteString
-        json["storageUrl"].string = storageURL.absoluteString
-        json["size_bytes"].int = sizeInBytes
-        if let contentType {
-            json["content_type"].string = contentType
-        }
-        return json
-    }
-}
-
-private struct UploadStorage {
-    private let uploadsDirectory: URL
-    private let fileManager = FileManager.default
-
-    init() {
-        let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let directory = base.appendingPathComponent("Onboarding/Uploads", isDirectory: true)
-        if !fileManager.fileExists(atPath: directory.path) {
-            do {
-                try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            } catch {
-                debugLog("Failed to create uploads directory: \(error)")
-            }
-        }
-        uploadsDirectory = directory
-    }
-
-    func processFile(at sourceURL: URL) throws -> ProcessedUpload {
-        let identifier = UUID().uuidString
-        let destinationFilename = "\(identifier)_\(sourceURL.lastPathComponent)"
-        let destinationURL = uploadsDirectory.appendingPathComponent(destinationFilename)
-
-        do {
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            try fileManager.copyItem(at: sourceURL, to: destinationURL)
-        } catch {
-            throw ToolError.executionFailed("Failed to store uploaded file: \(error.localizedDescription)")
-        }
-
-        return ProcessedUpload(
-            id: identifier,
-            filename: sourceURL.lastPathComponent,
-            storageURL: destinationURL,
-            sizeInBytes: fileSize(at: destinationURL),
-            contentType: contentType(for: destinationURL)
-        )
-    }
-
-    private func fileSize(at url: URL) -> Int {
-        let attributes = try? fileManager.attributesOfItem(atPath: url.path)
-        let size = attributes?[.size] as? NSNumber
-        return size?.intValue ?? 0
-    }
-
-    private func contentType(for url: URL) -> String? {
-        if #available(macOS 12.0, *) {
-            return UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
-        }
-        return nil
-    }
-}
+// Upload storage helper moved to shared utility file.

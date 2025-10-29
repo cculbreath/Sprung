@@ -24,6 +24,7 @@ struct OnboardingInterviewIntroductionCard: View {
                 .frame(maxWidth: 520)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 25)
     }
 }
 

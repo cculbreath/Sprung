@@ -1,6 +1,7 @@
 // Sprung/App/Views/SettingsView.swift
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
@@ -12,6 +13,17 @@ struct SettingsView: View {
 
     @Environment(OnboardingInterviewService.self) private var onboardingInterviewService
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore
+    @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
+    @Environment(OnboardingArtifactStore.self) private var onboardingArtifactStore
+    @Environment(CareerKeywordStore.self) private var careerKeywordStore
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var showFactoryResetConfirmation = false
+    @State private var showFinalResetConfirmation = false
+    @State private var resetError: String?
+    @State private var isResetting = false
+    private let dataResetService = DataResetService()
 
     private let reasoningOptions: [(value: String, label: String, detail: String)] = [
         ("low", "Low", "Faster responses with basic reasoning"),
@@ -96,11 +108,95 @@ struct SettingsView: View {
             } header: {
                 SettingsSectionHeader(title: "Debugging", systemImage: "wrench.and.screwdriver")
             }
+
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Resetting will permanently delete all your data, including:")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("All resumes and cover letters", systemImage: "doc.fill")
+                            .font(.callout)
+                        Label("Job application records", systemImage: "briefcase.fill")
+                            .font(.callout)
+                        Label("Interview data and artifacts", systemImage: "wand.and.stars.inverse")
+                            .font(.callout)
+                        Label("User profile information", systemImage: "person.fill")
+                            .font(.callout)
+                        Label("All settings and preferences", systemImage: "gear")
+                            .font(.callout)
+                    }
+                    .foregroundStyle(.orange)
+
+                    Button(action: { showFactoryResetConfirmation = true }) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                            Text("Factory Reset")
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .disabled(isResetting)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                SettingsSectionHeader(title: "Danger Zone", systemImage: "exclamationmark.octagon.fill")
+            }
         }
         .formStyle(.grouped)
         .frame(minWidth: 520, idealWidth: 680, maxWidth: 780,
                minHeight: 480, idealHeight: 640, maxHeight: .infinity)
         .padding(.vertical, 12)
+        .alert("⚠️ Factory Reset", isPresented: $showFactoryResetConfirmation) {
+            Button("Cancel", role: .cancel) {
+                showFactoryResetConfirmation = false
+            }
+            Button("Continue to Confirmation", role: .destructive) {
+                showFinalResetConfirmation = true
+            }
+        } message: {
+            Text("This will permanently delete all resumes, cover letters, job applications, user profile data, and settings. This action cannot be undone.\n\nAre you sure?")
+        }
+        .alert("🔴 Confirm Factory Reset", isPresented: $showFinalResetConfirmation) {
+            Button("Cancel", role: .cancel) {
+                showFinalResetConfirmation = false
+            }
+            Button("Yes, Reset Everything", role: .destructive) {
+                Task {
+                    await performReset()
+                }
+            }
+        } message: {
+            Text("This is your final chance to cancel. Once confirmed, all data will be deleted and the app will restart.")
+        }
+    }
+
+    private func performReset() async {
+        isResetting = true
+        defer { isResetting = false }
+
+        do {
+            try await dataResetService.performFactoryReset(
+                modelContext: modelContext,
+                applicantProfileStore: applicantProfileStore,
+                experienceDefaultsStore: experienceDefaultsStore,
+                enabledLLMStore: enabledLLMStore,
+                onboardingArtifactStore: onboardingArtifactStore,
+                careerKeywordStore: careerKeywordStore
+            )
+
+            resetError = ""
+
+            // Brief delay before exiting to allow UI to update
+            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+
+            // Exit the app cleanly - user can relaunch
+            NSApplication.shared.terminate(nil)
+        } catch {
+            resetError = error.localizedDescription
+        }
     }
 }
 

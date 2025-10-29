@@ -35,6 +35,17 @@ struct WrapUpSummaryView: View {
                 ArtifactSection(title: "Uploaded Documents", content: content)
             }
 
+            if !artifacts.knowledgeCards.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Knowledge Cards")
+                        .font(.headline)
+                    ForEach(Array(artifacts.knowledgeCards.enumerated()), id: \.offset) { index, card in
+                        KnowledgeCardView(index: index + 1, card: card)
+                            .padding(.vertical, 4)
+                    }
+                }
+            }
+
             if !artifacts.enabledSections.isEmpty {
                 ArtifactSection(
                     title: "Enabled Résumé Sections",

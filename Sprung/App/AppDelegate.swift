@@ -130,7 +130,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let applicantProfileStore = self.applicantProfileStore,
                let llmService = self.llmService,
                let experienceDefaultsStore = self.experienceDefaultsStore,
-               let careerKeywordStore = self.careerKeywordStore {
+               let careerKeywordStore = self.careerKeywordStore,
+               let onboardingArtifactStore = self.onboardingArtifactStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
 
@@ -143,6 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(applicantProfileStore)
                     .environment(experienceDefaultsStore)
                     .environment(careerKeywordStore)
+                    .environment(onboardingArtifactStore)
                     .environment(appEnvironment.openRouterService)
                     .environment(llmService)
                     .environment(debugSettingsStore)

@@ -21,11 +21,11 @@ final class OSLoggerBackend: Logging {
     private let subsystem: String
     private var cachedLoggers: [Logger.Category: os.Logger] = [:]
     private let lock = NSLock()
-
+    
     init(subsystem: String = Bundle.main.bundleIdentifier ?? "Sprung") {
         self.subsystem = subsystem
     }
-
+    
     func log(
         level: Logger.Level,
         category: Logger.Category,
@@ -36,7 +36,7 @@ final class OSLoggerBackend: Logging {
         let combinedMessage = OSLoggerBackend.composeMessage(message, metadata: metadata)
         osLogger.log(level: level.osLogType, "\(combinedMessage, privacy: .public)")
     }
-
+    
     private func logger(for category: Logger.Category) -> os.Logger {
         lock.lock()
         defer { lock.unlock() }
@@ -47,7 +47,7 @@ final class OSLoggerBackend: Logging {
         cachedLoggers[category] = newlyCreated
         return newlyCreated
     }
-
+    
     private static func composeMessage(_ message: String, metadata: [String: String]) -> String {
         guard !metadata.isEmpty else {
             return message
@@ -63,7 +63,7 @@ final class OSLoggerBackend: Logging {
 /// Lightweight logging facade with configurable backends and debug settings.
 final class Logger {
     // MARK: - Nested Types
-
+    
     /// Defines available log levels in increasing order of severity.
     enum Level: Int, CaseIterable {
         case verbose = 0
@@ -71,30 +71,30 @@ final class Logger {
         case info = 2
         case warning = 3
         case error = 4
-
+        
         /// Returns a string representation of the log level.
         var label: String {
             switch self {
-            case .verbose:  return "VERBOSE"
-            case .debug:    return "DEBUG"
-            case .info:     return "INFO"
-            case .warning:  return "WARNING"
-            case .error:    return "ERROR"
+                case .verbose:  return "VERBOSE"
+                case .debug:    return "DEBUG"
+                case .info:     return "INFO"
+                case .warning:  return "WARNING"
+                case .error:    return "ERROR"
             }
         }
-
+        
         /// Emoji for quick visual scanning in debug logs.
         var emoji: String {
             switch self {
-            case .verbose:  return "📋"
-            case .debug:    return "🔍"
-            case .info:     return "ℹ️"
-            case .warning:  return "⚠️"
-            case .error:    return "🚨"
+                case .verbose:  return "📋"
+                case .debug:    return "🔍"
+                case .info:     return "ℹ️"
+                case .warning:  return "⚠️"
+                case .error:    return "🚨"
             }
         }
     }
-
+    
     /// High-level domains to keep log output organized.
     enum Category: String, CaseIterable {
         case general = "General"
@@ -108,56 +108,56 @@ final class Logger {
         case storage = "Storage"
         case ui = "UI"
     }
-
+    
     struct Configuration {
         var minimumLevel: Level
         var enableFileLogging: Bool
         var enableConsoleOutput: Bool
         var subsystem: String
     }
-
+    
     // MARK: - Static State
-
+    
     private static let configurationQueue = DispatchQueue(label: "Logger.configuration.queue", attributes: .concurrent)
     private static let backendLock = NSLock()
     private static var configuration: Configuration = Logger.makeDefaultConfiguration()
     private static var backend: Logging = OSLoggerBackend(subsystem: configuration.subsystem)
     private static let newlineStripper = CharacterSet.newlines
-
+    
     // MARK: - Public Configuration Accessors
-
+    
     static var minimumLevel: Level {
         configurationQueue.sync { configuration.minimumLevel }
     }
-
+    
     static var isVerboseEnabled: Bool {
         minimumLevel == .verbose
     }
-
+    
     static var shouldSaveDebugFiles: Bool {
-        #if DEBUG
+#if DEBUG
         return configurationQueue.sync { configuration.enableFileLogging }
-        #else
+#else
         return false
-        #endif
+#endif
     }
-
+    
     static func updateMinimumLevel(_ level: Level) {
         configurationQueue.async(flags: .barrier) {
             configuration.minimumLevel = level
         }
     }
-
+    
     static func updateFileLogging(isEnabled: Bool) {
-        #if DEBUG
+#if DEBUG
         configurationQueue.async(flags: .barrier) {
             configuration.enableFileLogging = isEnabled
         }
-        #endif
+#endif
     }
-
+    
     // MARK: - Logging Methods
-
+    
     static func log(
         _ level: Level,
         _ message: String,
@@ -170,29 +170,35 @@ final class Logger {
         guard level.rawValue >= minimumLevel.rawValue else {
             return
         }
-
+        
         let sanitizedMessage = sanitize(message)
         let fileName = (file as NSString).lastPathComponent
-        let formattedMessage = "\(level.emoji) [\(level.label)] [\(category.rawValue)] [\(fileName):\(line)] \(function): \(sanitizedMessage)"
-
+        let timeFormatter = DateFormatter()
+        timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+        timeFormatter.timeZone = .current
+        timeFormatter.dateFormat = "HH:mm:ss.SSS"
+        let timestamp = timeFormatter.string(from: Date())
+        let formattedMessage = "[\(timestamp)] \(level.emoji) [\(level.label)] [\(category.rawValue)] [\(fileName):\(line)] \(function): \(sanitizedMessage)"
+        
+        
         let shouldPrint = configurationQueue.sync { configuration.enableConsoleOutput }
         if shouldPrint {
             print(formattedMessage)
         }
-
+        
         let backend = currentBackend()
         backend.log(
             level: level,
             category: category,
-            message: sanitizedMessage,
+            message: formattedMessage,
             metadata: metadata
         )
-
+        
         if shouldSaveDebugFiles && (level == .error || level == .warning) {
             saveLogToFile(message: formattedMessage)
         }
     }
-
+    
     static func verbose(
         _ message: String,
         category: Category = .general,
@@ -203,7 +209,7 @@ final class Logger {
     ) {
         log(.verbose, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-
+    
     static func debug(
         _ message: String,
         category: Category = .general,
@@ -214,7 +220,7 @@ final class Logger {
     ) {
         log(.debug, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-
+    
     static func info(
         _ message: String,
         category: Category = .general,
@@ -225,7 +231,7 @@ final class Logger {
     ) {
         log(.info, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-
+    
     static func warning(
         _ message: String,
         category: Category = .general,
@@ -236,7 +242,7 @@ final class Logger {
     ) {
         log(.warning, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-
+    
     static func error(
         _ message: String,
         category: Category = .general,
@@ -247,32 +253,32 @@ final class Logger {
     ) {
         log(.error, message, category: category, metadata: metadata, file: file, function: function, line: line)
     }
-
+    
     // MARK: - Helpers
-
+    
     private static func currentBackend() -> Logging {
         backendLock.lock()
         defer { backendLock.unlock() }
         return backend
     }
-
+    
     private static func sanitize(_ message: String) -> String {
         guard message.rangeOfCharacter(from: newlineStripper) != nil else {
             return message
         }
         return message.components(separatedBy: newlineStripper).filter { !$0.isEmpty }.joined(separator: " ⏎ ")
     }
-
+    
     private static func makeDefaultConfiguration() -> Configuration {
-        #if DEBUG
+#if DEBUG
         let defaults = UserDefaults.standard
         let storedLevel = defaults.integer(forKey: DefaultsKeys.debugLogLevel)
         let minimumLevel = mapStoredLevel(storedLevel)
         let fileLogging = defaults.bool(forKey: DefaultsKeys.saveDebugPrompts)
-        #else
+#else
         let minimumLevel: Level = .info
         let fileLogging = false
-        #endif
+#endif
         let subsystem = Bundle.main.bundleIdentifier ?? "Sprung"
         return Configuration(
             minimumLevel: minimumLevel,
@@ -281,32 +287,32 @@ final class Logger {
             subsystem: subsystem
         )
     }
-
+    
     private static func mapStoredLevel(_ rawValue: Int) -> Level {
         switch rawValue {
-        case 0: return .error
-        case 2: return .verbose
-        default: return .info
+            case 0: return .error
+            case 2: return .verbose
+            default: return .info
         }
     }
-
+    
     /// Saves important logs to file in Downloads (debug builds only).
     private static func saveLogToFile(message: String) {
-        #if DEBUG
+#if DEBUG
         let fileManager = FileManager.default
         let downloadsURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
-
+        
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         let dateString = dateFormatter.string(from: Date())
-
+        
         let logFileName = "Sprung_\(dateString)_log.txt"
         let fileURL = downloadsURL.appendingPathComponent(logFileName)
-
+        
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
         let timestamp = dateFormatter.string(from: Date())
         let entry = "[\(timestamp)] \(message)\n"
-
+        
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
                 let handle = try FileHandle(forWritingTo: fileURL)
@@ -321,9 +327,9 @@ final class Logger {
         } catch {
             print("Logger: Failed to write log to file: \(error)")
         }
-        #endif
+#endif
     }
-
+    
     private enum DefaultsKeys {
         static let debugLogLevel = "debugLogLevel"
         static let saveDebugPrompts = "saveDebugPrompts"
@@ -333,14 +339,14 @@ final class Logger {
 private extension Logger.Level {
     var osLogType: OSLogType {
         switch self {
-        case .verbose, .debug:
-            return .debug
-        case .info:
-            return .info
-        case .warning:
-            return .error
-        case .error:
-            return .fault
+            case .verbose, .debug:
+                return .debug
+            case .info:
+                return .info
+            case .warning:
+                return .error
+            case .error:
+                return .fault
         }
     }
 }

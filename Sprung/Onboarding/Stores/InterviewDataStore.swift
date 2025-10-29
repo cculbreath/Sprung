@@ -20,7 +20,7 @@ actor InterviewDataStore {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
-            debugLog("Failed to create onboarding data directory: \(error)")
+            Logger.debug("Failed to create onboarding data directory: \(error)")
         }
         baseURL = directory
     }
@@ -65,5 +65,19 @@ actor InterviewDataStore {
                 }
                 return jsonObject
             }
+    }
+
+    func reset() async {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: nil) else {
+            return
+        }
+
+        for url in files {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                Logger.debug("Failed to remove data file at \(url): \(error)")
+            }
+        }
     }
 }

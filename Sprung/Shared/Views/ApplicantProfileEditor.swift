@@ -6,6 +6,8 @@ struct ApplicantProfileEditor: View {
     @Binding var draft: ApplicantProfileDraft
     var showPhotoSection: Bool = true
     var showsSummary: Bool = true
+    var showsProfessionalLabel: Bool = true
+    var emailSuggestions: [String] = []
     var onPhotoPicked: (() -> Void)?
 
     @State private var selectedProfileID: UUID?
@@ -18,16 +20,17 @@ struct ApplicantProfileEditor: View {
                     TextField("Name", text: $draft.name)
                         .textFieldStyle(.roundedBorder)
 
-                    TextField("Professional Label", text: $draft.label)
-                        .textFieldStyle(.roundedBorder)
+                    if showsProfessionalLabel {
+                        TextField("Professional Label", text: $draft.label)
+                            .textFieldStyle(.roundedBorder)
+                    }
 
-                    TextField("Email", text: $draft.email)
-                        .textFieldStyle(.roundedBorder)
+                    emailEntry
 
                     TextField("Phone", text: $draft.phone)
                         .textFieldStyle(.roundedBorder)
 
-                    TextField("Websites", text: $draft.websites)
+                    TextField("Website", text: $draft.website)
                         .textFieldStyle(.roundedBorder)
                 }
             } label: {
@@ -246,6 +249,29 @@ struct ApplicantProfileEditor: View {
             guard response == .OK, let url = panel.url else { return }
             guard let data = try? Data(contentsOf: url) else { return }
             draft.updatePicture(data: data, mimeType: url.mimeTypeHint())
+        }
+    }
+
+    private var emailEntry: some View {
+        HStack(spacing: 8) {
+            TextField("Email", text: $draft.email)
+                .textFieldStyle(.roundedBorder)
+
+            if !emailSuggestions.isEmpty {
+                Menu {
+                    ForEach(emailSuggestions, id: \.self) { email in
+                        Button(email) {
+                            draft.email = email
+                        }
+                    }
+                } label: {
+                    Label("Choose Email", systemImage: "chevron.down.circle")
+                        .labelStyle(.iconOnly)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Choose from suggested email addresses")
+                }
+            }
         }
     }
 }

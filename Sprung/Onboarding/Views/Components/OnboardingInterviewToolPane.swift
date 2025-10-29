@@ -12,15 +12,20 @@ struct OnboardingInterviewToolPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let badge = statusBadgeText() {
-                badge
-            }
+            let uploads = uploadRequests()
 
-            if let contactsRequest = service.pendingContactsRequest {
+            if !uploads.isEmpty {
+                uploadRequestsView(uploads)
+            } else if let contactsRequest = service.pendingContactsRequest {
                 ContactsPermissionCard(
                     request: contactsRequest,
                     onAllow: { Task { await actions.fetchApplicantProfileFromContacts() } },
                     onDecline: { Task { await actions.declineContactsFetch(reason: "User declined contacts access") } }
+                )
+            } else if let intake = service.pendingApplicantProfileIntake {
+                ApplicantProfileIntakeCard(
+                    state: intake,
+                    actions: actions
                 )
             } else if let prompt = service.pendingChoicePrompt {
                 InterviewChoicePromptCard(
@@ -33,22 +38,30 @@ struct OnboardingInterviewToolPane: View {
                     }
                 )
             } else if let validation = service.pendingValidationPrompt {
-                OnboardingValidationReviewCard(
-                    prompt: validation,
-                    onSubmit: { decision, updated, notes in
-                        Task {
-                            await actions.submitValidation(
-                                status: decision.rawValue,
-                                updatedData: updated,
-                                changes: nil,
-                                notes: notes
-                            )
+                if validation.dataType == "knowledge_card" {
+                    KnowledgeCardValidationHost(
+                        prompt: validation,
+                        artifactsJSON: service.artifacts.artifactRecords,
+                        actions: actions
+                    )
+                } else {
+                    OnboardingValidationReviewCard(
+                        prompt: validation,
+                        onSubmit: { decision, updated, notes in
+                            Task {
+                                await actions.submitValidation(
+                                    status: decision.rawValue,
+                                    updatedData: updated,
+                                    changes: nil,
+                                    notes: notes
+                                )
+                            }
+                        },
+                        onCancel: {
+                            Task { await actions.cancelValidation(reason: "User cancelled validation review") }
                         }
-                    },
-                    onCancel: {
-                        Task { await actions.cancelValidation(reason: "User cancelled validation review") }
-                    }
-                )
+                    )
+                }
             } else if let phaseAdvanceRequest = service.pendingPhaseAdvanceRequest {
                 OnboardingPhaseAdvanceDialog(
                     request: phaseAdvanceRequest,
@@ -100,60 +113,43 @@ struct OnboardingInterviewToolPane: View {
                     }
                 )
             } else {
-                // Show animated thinking text when LLM is processing and no cards are displayed
-                if shouldShowLLMSpinner(for: service) {
-                    VStack(spacing: 16) {
-                        Spacer()
-
-                        AnimatedThinkingText()
-                            .frame(maxWidth: .infinity)
-
-                        Spacer()
-                    }
-                    .transition(.opacity.combined(with: .scale))
-                } else {
-                    supportingContent()
-                }
+                supportingContent()
             }
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .center) {
+            if shouldShowLLMSpinner(for: service) {
+                VStack {
+                    Spacer()
+                    AnimatedThinkingText()
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+                .transition(.opacity.combined(with: .scale))
+                .zIndex(1)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: shouldShowLLMSpinner(for: service))
     }
 
     @ViewBuilder
     private func supportingContent() -> some View {
-        let requests = uploadRequests()
         if let extraction = service.pendingExtraction {
             VStack(alignment: .leading, spacing: 16) {
                 ExtractionStatusCard(extraction: extraction)
-                baseContent(for: requests)
+                summaryContent()
             }
         } else {
-            baseContent(for: requests)
+            summaryContent()
         }
     }
 
     @ViewBuilder
-    private func baseContent(for requests: [OnboardingUploadRequest]) -> some View {
-        if !requests.isEmpty {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(requests) { request in
-                        UploadRequestCard(
-                            request: request,
-                            onSelectFile: { openPanel(for: request) },
-                            onProvideLink: { url in
-                                Task { await actions.completeUploadRequest(id: request.id, link: url) }
-                            },
-                            onDecline: {
-                                Task { await actions.declineUploadRequest(id: request.id) }
-                            }
-                        )
-                    }
-                }
-            }
-        } else if service.wizardStep == .wrapUp {
+    private func summaryContent() -> some View {
+        if service.wizardStep == .wrapUp {
             WrapUpSummaryView(
                 artifacts: service.artifacts,
                 schemaIssues: service.schemaIssues
@@ -170,7 +166,27 @@ struct OnboardingInterviewToolPane: View {
         }
     }
 
-    private func uploadRequests() -> [OnboardingUploadRequest] {
+    @ViewBuilder
+    private func uploadRequestsView(_ requests: [OnboardingUploadRequest]) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(requests) { request in
+                    UploadRequestCard(
+                        request: request,
+                        onSelectFile: { openPanel(for: request) },
+                        onProvideLink: { url in
+                            Task { await actions.completeUploadRequest(id: request.id, link: url) }
+                        },
+                        onDecline: {
+                            Task { await actions.declineUploadRequest(id: request.id) }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+private func uploadRequests() -> [OnboardingUploadRequest] {
         switch service.wizardStep {
         case .resumeIntake:
             return service.pendingUploadRequests.filter { [.resume, .linkedIn].contains($0.kind) }
@@ -228,63 +244,71 @@ struct OnboardingInterviewToolPane: View {
         return mapped.isEmpty ? nil : mapped
     }
 
-    private func statusBadgeText() -> Text? {
-        switch service.wizardStep {
-        case .resumeIntake:
-            let text = badgeText(introCompleted: service.completedWizardSteps.contains(.resumeIntake))
-            return text.isEmpty ? nil : Text(text)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        case .artifactDiscovery:
-            let text = badgeText(introCompleted: true)
-            return text.isEmpty ? nil : Text(text)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        case .writingCorpus, .wrapUp, .introduction:
-            return nil
-        }
-    }
-
-    private func badgeText(introCompleted: Bool) -> String {
-        if !service.pendingUploadRequests.isEmpty {
-            return "Upload the requested files"
-        }
-        if service.pendingContactsRequest != nil {
-            return "Allow access to macOS Contacts"
-        }
-        if service.pendingChoicePrompt != nil {
-            return ""  // No badge needed - the card shows the prompt
-        }
-        if service.pendingApplicantProfileRequest != nil {
-            return "Action required: review applicant profile"
-        }
-        if service.pendingSectionToggleRequest != nil {
-            return "Confirm applicable résumé sections"
-        }
-        if service.pendingSectionEntryRequests.first != nil {
-            return "Review section entries"
-        }
-        if service.applicantProfileJSON != nil, service.wizardStep == .resumeIntake {
-            return "Applicant profile captured"
-        }
-        if service.skeletonTimelineJSON != nil, service.wizardStep == .artifactDiscovery {
-            return "Skeleton timeline ready"
-        }
-        if service.pendingUploadRequests.isEmpty && introCompleted == false {
-            return ""
-        }
-        return ""
-    }
-
     private func shouldShowLLMSpinner(for service: OnboardingInterviewService) -> Bool {
         service.isProcessing &&
             service.pendingChoicePrompt == nil &&
             service.pendingApplicantProfileRequest == nil &&
+            service.pendingApplicantProfileIntake == nil &&
             service.pendingSectionToggleRequest == nil &&
             service.pendingSectionEntryRequests.isEmpty &&
             service.pendingContactsRequest == nil &&
             service.pendingValidationPrompt == nil &&
             service.pendingPhaseAdvanceRequest == nil
+    }
+}
+
+private struct KnowledgeCardValidationHost: View {
+    let prompt: OnboardingValidationPrompt
+    let actions: OnboardingInterviewActionHandler
+
+    @State private var draft: KnowledgeCardDraft
+    private let artifactRecords: [ArtifactRecord]
+
+    init(
+        prompt: OnboardingValidationPrompt,
+        artifactsJSON: [JSON],
+        actions: OnboardingInterviewActionHandler
+    ) {
+        self.prompt = prompt
+        self.actions = actions
+        _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
+        artifactRecords = artifactsJSON.map { ArtifactRecord(json: $0) }
+    }
+
+    var body: some View {
+        KnowledgeCardReviewCard(
+            card: $draft,
+            artifacts: artifactRecords,
+            onApprove: { approved in
+                Task {
+                    await actions.submitValidation(
+                        status: "approved",
+                        updatedData: approved.toJSON(),
+                        changes: nil,
+                        notes: nil
+                    )
+                }
+            },
+            onReject: { rejectedIds, reason in
+                Task {
+                    var changePayload: JSON?
+                    if !rejectedIds.isEmpty {
+                        var details = JSON()
+                        details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
+                        changePayload = details
+                    }
+                    await actions.submitValidation(
+                        status: "rejected",
+                        updatedData: nil,
+                        changes: changePayload,
+                        notes: reason.isEmpty ? nil : reason
+                    )
+                }
+            }
+        )
+        .onChange(of: prompt.id) { _, _ in
+            draft = KnowledgeCardDraft(json: prompt.payload)
+        }
     }
 }
 
@@ -309,6 +333,10 @@ private struct ApplicantProfileSummaryCard: View {
             }
             if let phone = nonEmpty(profile["phone"].string) {
                 Label(phone, systemImage: "phone")
+                    .font(.footnote)
+            }
+            if let url = nonEmpty(profile["url"].string ?? profile["website"].string) {
+                Label(url, systemImage: "globe")
                     .font(.footnote)
             }
         }

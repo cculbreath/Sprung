@@ -50,7 +50,7 @@ actor InterviewState {
 
     func restore(from snapshot: InterviewSession) {
         session = snapshot
-        debugLog("State restored to phase: \(session.phase)")
+        Logger.debug("State restored to phase: \(session.phase)")
     }
 
     func missingObjectives() -> [String] {
@@ -83,7 +83,7 @@ actor InterviewState {
 
     func advanceToNextPhase() {
         advancePhase()
-        debugLog("Advanced to phase: \(session.phase)")
+        Logger.debug("Advanced to phase: \(session.phase)")
     }
 
     private func shouldAdvancePhase() -> Bool {

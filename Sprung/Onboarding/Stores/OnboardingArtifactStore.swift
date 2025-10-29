@@ -1,7 +1,9 @@
 import Foundation
 import SwiftData
+import Observation
 
 @MainActor
+@Observable
 final class OnboardingArtifactStore {
     private let modelContext: ModelContext
     private var cachedArtifacts = OnboardingArtifacts()

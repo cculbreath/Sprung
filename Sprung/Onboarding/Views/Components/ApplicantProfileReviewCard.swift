@@ -45,7 +45,13 @@ struct ApplicantProfileReviewCard: View {
                 .foregroundStyle(.secondary)
 
             ScrollView {
-                ApplicantProfileEditor(draft: $draft, showPhotoSection: true, showsSummary: true)
+                ApplicantProfileEditor(
+                    draft: $draft,
+                    showPhotoSection: false,
+                    showsSummary: false,
+                    showsProfessionalLabel: false,
+                    emailSuggestions: draft.suggestedEmails
+                )
             }
             .frame(minHeight: 320)
 
