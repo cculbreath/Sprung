@@ -22,11 +22,15 @@ actor InterviewOrchestrator {
     struct Callbacks {
         let updateProcessingState: @Sendable (Bool) async -> Void
         let emitAssistantMessage: @Sendable (String) async -> Void
+        let beginStreamingAssistantMessage: @Sendable (String) async -> UUID
+        let updateStreamingAssistantMessage: @Sendable (UUID, String) async -> Void
+        let finalizeStreamingAssistantMessage: @Sendable (UUID, String) async -> Void
         let handleWaitingState: @Sendable (InterviewSession.Waiting?) async -> Void
         let handleError: @Sendable (String) async -> Void
         let storeApplicantProfile: @Sendable (JSON) async -> Void
         let storeSkeletonTimeline: @Sendable (JSON) async -> Void
         let storeArtifactRecord: @Sendable (JSON) async -> Void
+        let storeKnowledgeCard: @Sendable (JSON) async -> Void
         let setExtractionStatus: @Sendable (OnboardingPendingExtraction?) async -> Void
         let persistCheckpoint: @Sendable () async -> Void
     }
@@ -40,6 +44,7 @@ actor InterviewOrchestrator {
         .phase1CoreFacts: [
             "capabilities_describe",
             "get_user_option",
+            "get_applicant_profile",
             "get_user_upload",
             "get_macos_contact_card",
             "extract_document",
@@ -56,7 +61,8 @@ actor InterviewOrchestrator {
             "submit_for_validation",
             "persist_data",
             "set_objective_status",
-            "next_phase"
+            "next_phase",
+            "generate_knowledge_card"
         ],
         .phase3WritingCorpus: [
             "capabilities_describe",
@@ -73,6 +79,11 @@ actor InterviewOrchestrator {
             "next_phase"
         ]
     ]
+
+    private struct StreamBuffer {
+        var messageId: UUID
+        var text: String
+    }
 
     private var conversationId: String?
     private var lastResponseId: String?
@@ -220,7 +231,7 @@ actor InterviewOrchestrator {
                 sources.append("macOS Contacts")
             }
         } catch {
-            debugLog("Contact card fetch unavailable: \(error)")
+            Logger.debug("Contact card fetch unavailable: \(error)")
         }
 
         // Immediately submit for validation (even if empty) as per spec
@@ -319,8 +330,11 @@ actor InterviewOrchestrator {
 
         do {
             _ = try await callTool(name: "persist_data", arguments: args)
+            if dataType == "knowledge_card" {
+                await callbacks.storeKnowledgeCard(payload)
+            }
         } catch {
-            debugLog("Persist data for \(dataType) failed: \(error)")
+            Logger.debug("Persist data for \(dataType) failed: \(error)")
         }
     }
 
@@ -416,7 +430,7 @@ actor InterviewOrchestrator {
         }
 
         guard !inputItems.isEmpty else {
-            debugLog("No input items provided for response request.")
+            Logger.debug("No input items provided for response request.")
             return
         }
 
@@ -426,7 +440,6 @@ actor InterviewOrchestrator {
         let config = ModelProvider.forTask(.orchestrator)
         let textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
 
-        // Strip "openai/" prefix for direct OpenAI API calls
         let apiModelId = currentModelId.replacingOccurrences(of: "openai/", with: "")
 
         var parameters = ModelResponseParameter(
@@ -439,20 +452,77 @@ actor InterviewOrchestrator {
             text: textConfig
         )
         parameters.parallelToolCalls = false
-
         parameters.tools = await toolExecutor.availableToolSchemas(allowedNames: allowedToolNames)
 
         if let effort = config.defaultReasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
 
-        let response = try await client.responseCreate(parameters)
-        lastResponseId = response.id
-        if let conversation = response.conversation {
-            conversationId = extractConversationId(from: conversation)
+        parameters.stream = true
+
+        var streamBuffers: [String: StreamBuffer] = [:]
+        var finalizedMessageIds: Set<String> = []
+        var finalResponse: ResponseModel?
+
+        do {
+            let stream = try await client.responseCreateStream(parameters)
+            for try await event in stream {
+                try Task.checkCancellation()
+                switch event {
+                case .responseCreated(let created):
+                    updateConversationState(from: created.response)
+                case .responseInProgress(let inProgress):
+                    updateConversationState(from: inProgress.response)
+                case .responseCompleted(let completed):
+                    updateConversationState(from: completed.response)
+                    finalResponse = completed.response
+                case .responseFailed(let failed):
+                    updateConversationState(from: failed.response)
+                    let message = failed.response.error?.message ?? "Model response failed."
+                    throw ToolError.executionFailed(message)
+                case .responseIncomplete(let incomplete):
+                    updateConversationState(from: incomplete.response)
+                    let reason = incomplete.response.incompleteDetails?.reason ?? "unknown"
+                    throw ToolError.executionFailed("Model response incomplete: \(reason)")
+                case .outputTextDelta(let delta):
+                    let fragment = delta.delta
+                    guard !fragment.isEmpty else { continue }
+                    var buffer = streamBuffers[delta.itemId]
+                    if buffer == nil {
+                        let messageId = await callbacks.beginStreamingAssistantMessage("")
+                        buffer = StreamBuffer(messageId: messageId, text: "")
+                    }
+                    buffer!.text.append(contentsOf: fragment)
+                    streamBuffers[delta.itemId] = buffer!
+                    await callbacks.updateStreamingAssistantMessage(buffer!.messageId, buffer!.text)
+                case .outputTextDone(let done):
+                    let finalText = done.text
+                    var buffer = streamBuffers[done.itemId]
+                    if buffer == nil {
+                        let messageId = await callbacks.beginStreamingAssistantMessage(finalText)
+                        buffer = StreamBuffer(messageId: messageId, text: finalText)
+                    } else {
+                        buffer!.text = finalText
+                    }
+                    streamBuffers[done.itemId] = buffer!
+                    await callbacks.finalizeStreamingAssistantMessage(buffer!.messageId, buffer!.text)
+                    finalizedMessageIds.insert(done.itemId)
+                    streamBuffers.removeValue(forKey: done.itemId)
+                default:
+                    continue
+                }
+            }
+        } catch {
+            throw error
         }
 
-        try await handleResponse(response)
+        guard let response = finalResponse else {
+            Logger.debug("Streaming response completed without final response payload.")
+            await callbacks.persistCheckpoint()
+            return
+        }
+
+        try await handleResponse(response, finalizedMessageIds: finalizedMessageIds)
         await callbacks.persistCheckpoint()
     }
 
@@ -492,12 +562,17 @@ actor InterviewOrchestrator {
         }
     }
 
-    private func handleResponse(_ response: ResponseModel) async throws {
+    private func handleResponse(
+        _ response: ResponseModel,
+        finalizedMessageIds: Set<String> = []
+    ) async throws {
         for item in response.output {
             switch item {
             case .message(let message):
                 let text = extractAssistantText(from: message)
-                if !text.isEmpty {
+                if finalizedMessageIds.contains(message.id) {
+                    continue
+                } else if !text.isEmpty {
                     await callbacks.emitAssistantMessage(text)
                 }
             case .functionCall(let functionCall):
@@ -568,6 +643,13 @@ actor InterviewOrchestrator {
 
         let functionOutput = FunctionToolCallOutput(callId: callId, output: outputString)
         try await requestResponse(functionOutputs: [functionOutput])
+    }
+
+    private func updateConversationState(from response: ResponseModel) {
+        lastResponseId = response.id
+        if let conversation = response.conversation {
+            conversationId = extractConversationId(from: conversation)
+        }
     }
 
     private func extractAssistantText(from message: OutputItem.Message) -> String {

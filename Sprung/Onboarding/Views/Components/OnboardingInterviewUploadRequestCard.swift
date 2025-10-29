@@ -33,9 +33,19 @@ struct UploadRequestCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            if request.kind == .linkedIn {
+            HStack(spacing: 12) {
+                Button("Choose File…") {
+                    onSelectFile()
+                }
+                Button("Skip") {
+                    onDecline()
+                }
+                .buttonStyle(.borderless)
+            }
+
+            if request.metadata.allowURL {
                 VStack(alignment: .leading, spacing: 6) {
-                    TextField("https://www.linkedin.com/in/…", text: $linkText)
+                    TextField("https://example.com/…", text: $linkText)
                         .textFieldStyle(.roundedBorder)
                     if let error = linkError {
                         Text(error)
@@ -46,21 +56,13 @@ struct UploadRequestCard: View {
                         Button("Submit Link") {
                             submitLink()
                         }
-                        Button("Skip") {
-                            onDecline()
+                        .buttonStyle(.bordered)
+                        Button("Clear") {
+                            linkText = ""
+                            linkError = nil
                         }
                         .buttonStyle(.borderless)
                     }
-                }
-            } else {
-                HStack(spacing: 12) {
-                    Button("Choose File…") {
-                        onSelectFile()
-                    }
-                    Button("Skip") {
-                        onDecline()
-                    }
-                    .buttonStyle(.borderless)
                 }
             }
         }
@@ -72,7 +74,7 @@ struct UploadRequestCard: View {
     private func submitLink() {
         let trimmed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed), !trimmed.isEmpty else {
-            linkError = "Please provide a valid LinkedIn URL."
+            linkError = "Please provide a valid URL."
             return
         }
         linkError = nil

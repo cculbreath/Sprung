@@ -6,10 +6,13 @@
 //  tool execution layer, and SwiftUI-facing state.
 //
 
+import AppKit
+import Contacts
 import Foundation
 import Observation
 import SwiftyJSON
 import SwiftOpenAI
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -20,6 +23,7 @@ final class OnboardingInterviewService {
     private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
     private(set) var pendingValidationPrompt: OnboardingValidationPrompt?
     private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
+    private(set) var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState?
     private(set) var pendingContactsRequest: OnboardingContactsFetchRequest?
     private(set) var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
     private(set) var pendingSectionEntryRequests: [OnboardingSectionEntryRequest] = []
@@ -59,6 +63,7 @@ final class OnboardingInterviewService {
     private let dataStore = InterviewDataStore()
     @ObservationIgnored private let toolRegistry = ToolRegistry()
     @ObservationIgnored private let toolExecutor: ToolExecutor
+    @ObservationIgnored private let knowledgeCardAgent: KnowledgeCardAgent?
 
     private var orchestrator: InterviewOrchestrator?
     private var preferredModelId: String?
@@ -66,6 +71,7 @@ final class OnboardingInterviewService {
     private var pendingChoiceContinuationId: UUID?
     private var pendingValidationContinuationId: UUID?
     private var applicantProfileContinuationId: UUID?
+    private var applicantIntakeContinuationId: UUID?
     private var uploadContinuationIds: [UUID: UUID] = [:]
     private var sectionToggleContinuationId: UUID?
     private var phaseAdvanceContinuationId: UUID?
@@ -73,6 +79,7 @@ final class OnboardingInterviewService {
     private(set) var skeletonTimelineJSON: JSON?
     private var phaseAdvanceBlockCache: PhaseAdvanceBlockCache?
     private var systemPrompt: String
+    private var streamingMessageStart: [UUID: Date] = [:]
 
     // MARK: - Init
 
@@ -86,6 +93,7 @@ final class OnboardingInterviewService {
         self.documentExtractionService = documentExtractionService
         self.toolExecutor = ToolExecutor(registry: toolRegistry)
         self.systemPrompt = Self.defaultSystemPrompt()
+        self.knowledgeCardAgent = openAIService.map { KnowledgeCardAgent(client: $0) }
         registerTools()
     }
 
@@ -96,11 +104,17 @@ final class OnboardingInterviewService {
         toolRegistry.register(SubmitForValidationTool(service: self))
         toolRegistry.register(PersistDataTool(dataStore: dataStore))
         toolRegistry.register(GetMacOSContactCardTool())
+        toolRegistry.register(GetApplicantProfileTool(service: self))
         toolRegistry.register(GetUserUploadTool(service: self))
         toolRegistry.register(ExtractDocumentTool(extractionService: documentExtractionService))
         toolRegistry.register(CapabilitiesDescribeTool(service: self))
         toolRegistry.register(SetObjectiveStatusTool(service: self))
         toolRegistry.register(NextPhaseTool(service: self))
+        toolRegistry.register(
+            GenerateKnowledgeCardTool(agentProvider: { [weak self] in
+                self?.knowledgeCardAgent
+            })
+        )
     }
 
     func capabilityManifest() -> JSON {
@@ -118,6 +132,9 @@ final class OnboardingInterviewService {
         toolsJSON["get_user_upload"]["max_bytes"].int = 10 * 1024 * 1024
 
         toolsJSON["get_macos_contact_card"]["status"].string = "ready"
+
+        toolsJSON["get_applicant_profile"]["status"].string = "ready"
+        toolsJSON["get_applicant_profile"]["paths"] = JSON(["upload", "url", "contacts", "manual"])
 
         toolsJSON["extract_document"]["status"].string = "ready"
         toolsJSON["extract_document"]["supports"] = JSON(["pdf", "docx"])
@@ -147,12 +164,19 @@ final class OnboardingInterviewService {
         toolsJSON["set_objective_status"]["status"].string = "ready"
         toolsJSON["next_phase"]["status"].string = "ready"
 
+        let knowledgeCardStatus = knowledgeCardAgent == nil ? "locked" : "ready"
+        toolsJSON["generate_knowledge_card"]["status"].string = knowledgeCardStatus
+
         manifest["tools"] = toolsJSON
         return manifest
     }
 
     func currentSession() async -> InterviewSession {
         await interviewState.currentSession()
+    }
+
+    func hasRestorableCheckpoint() async -> Bool {
+        await checkpoints.hasCheckpoint()
     }
 
     func missingObjectives() async -> [String] {
@@ -330,7 +354,7 @@ final class OnboardingInterviewService {
 
     // MARK: - Interview Lifecycle
 
-    func startInterview(modelId: String, backend: LLMFacade.Backend) async {
+    func startInterview(modelId: String, backend: LLMFacade.Backend, resumeExisting: Bool) async {
         guard backend == .openAI else {
             lastError = "Only the OpenAI backend is supported for onboarding interviews."
             return
@@ -341,10 +365,32 @@ final class OnboardingInterviewService {
             return
         }
 
+        guard isActive == false else {
+            Logger.debug("startInterview called while interview is already active; ignoring request.")
+            return
+        }
+
         resetTransientState()
-        await loadPersistedArtifacts()
-        await interviewState.restore(from: InterviewSession())
-        let restoredFromCheckpoint = await restoreFromCheckpointIfAvailable()
+        messages.removeAll()
+        nextQuestions.removeAll()
+
+        let restoredFromCheckpoint: Bool
+
+        if resumeExisting {
+            await loadPersistedArtifacts()
+            await interviewState.restore(from: InterviewSession())
+            let restored = await restoreFromCheckpointIfAvailable()
+            if !restored {
+                await checkpoints.clear()
+                await dataStore.reset()
+            }
+            restoredFromCheckpoint = restored
+        } else {
+            await checkpoints.clear()
+            await dataStore.reset()
+            await interviewState.restore(from: InterviewSession())
+            restoredFromCheckpoint = false
+        }
 
         orchestrator = makeOrchestrator(service: openAIService)
         isActive = true
@@ -352,13 +398,9 @@ final class OnboardingInterviewService {
         if !restoredFromCheckpoint {
             wizardStep = .resumeIntake
             wizardStepStatuses[wizardStep] = .current
-            debugLog("[WizardStep] Set to .resumeIntake (fresh start)")
+            Logger.debug("[WizardStep] Set to .resumeIntake (fresh start)")
         } else {
-            debugLog("[WizardStep] After checkpoint restore: \(wizardStep)")
-        }
-
-        if restoredFromCheckpoint {
-            appendSystemMessage("♻️ Resuming your previous onboarding progress.")
+            Logger.debug("[WizardStep] After checkpoint restore: \(wizardStep)")
         }
         await orchestrator?.startInterview(modelId: modelId)
     }
@@ -445,7 +487,7 @@ final class OnboardingInterviewService {
     func cancelChoicePrompt(reason: String) async {
         guard let continuationId = pendingChoiceContinuationId else { return }
 
-        debugLog("User cancelled choice prompt: \(reason)")
+        Logger.debug("User cancelled choice prompt: \(reason)")
         var payload = JSON()
         payload["cancelled"].boolValue = true
 
@@ -466,6 +508,138 @@ final class OnboardingInterviewService {
         guard applicantProfileContinuationId == continuationId else { return }
         pendingApplicantProfileRequest = nil
         applicantProfileContinuationId = nil
+    }
+
+    // MARK: - Applicant Profile Intake
+
+    func presentApplicantProfileIntake(continuationId: UUID) {
+        pendingApplicantProfileIntake = .options()
+        applicantIntakeContinuationId = continuationId
+        isProcessing = false
+        updateWaitingState(.selection)
+    }
+
+    func resetApplicantProfileIntakeToOptions() {
+        guard applicantIntakeContinuationId != nil else { return }
+        pendingApplicantProfileIntake = .options()
+    }
+
+    func beginApplicantProfileManualEntry() {
+        guard applicantIntakeContinuationId != nil else { return }
+        pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+            mode: .manual(source: .manual),
+            draft: ApplicantProfileDraft(),
+            urlString: "",
+            errorMessage: nil
+        )
+    }
+
+    func beginApplicantProfileURL() {
+        guard applicantIntakeContinuationId != nil else { return }
+        pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+            mode: .urlEntry,
+            draft: ApplicantProfileDraft(),
+            urlString: "",
+            errorMessage: nil
+        )
+    }
+
+    func beginApplicantProfileUpload() {
+        guard let continuationId = applicantIntakeContinuationId else { return }
+
+        let metadata = OnboardingUploadMetadata(
+            title: "Upload Résumé",
+            instructions: "Select your latest resume (PDF, DOCX, or text).",
+            accepts: ["pdf", "doc", "docx", "txt", "md"],
+            allowMultiple: false
+        )
+
+        let request = OnboardingUploadRequest(kind: .resume, metadata: metadata)
+        presentUploadRequest(request, continuationId: continuationId)
+    }
+
+    func beginApplicantProfileContactsFetch() {
+        guard applicantIntakeContinuationId != nil else { return }
+        pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+            mode: .loading("Fetching your contact card…"),
+            draft: ApplicantProfileDraft(),
+            urlString: "",
+            errorMessage: nil
+        )
+
+        Task { @MainActor in
+            do {
+                let draft = try await Self.fetchMeCardAsDraft()
+                pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+                    mode: .manual(source: .contacts),
+                    draft: draft,
+                    urlString: "",
+                    errorMessage: nil
+                )
+            } catch let error as ContactFetchError {
+                pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+                    mode: .options,
+                    draft: ApplicantProfileDraft(),
+                    urlString: "",
+                    errorMessage: error.message
+                )
+            } catch {
+                pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+                    mode: .options,
+                    draft: ApplicantProfileDraft(),
+                    urlString: "",
+                    errorMessage: "Failed to access macOS contacts."
+                )
+            }
+        }
+    }
+
+    func submitApplicantProfileURL(_ urlString: String) async {
+        guard let continuationId = applicantIntakeContinuationId else { return }
+
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), url.scheme != nil else {
+            pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+                mode: .urlEntry,
+                draft: ApplicantProfileDraft(),
+                urlString: urlString,
+                errorMessage: "Please enter a valid URL including the scheme (https://)."
+            )
+            return
+        }
+
+        var payload = JSON()
+        payload["mode"].string = "url"
+        payload["status"].string = "provided"
+        payload["url"].string = url.absoluteString
+        await completeApplicantProfileIntake(continuationId: continuationId, payload: payload)
+    }
+
+    func completeApplicantProfileDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
+        guard let continuationId = applicantIntakeContinuationId else { return }
+
+        var payload = JSON()
+        payload["mode"].string = source == .contacts ? "contacts" : "manual"
+        payload["status"].string = "completed"
+        payload["data"] = draft.toJSON()
+        await completeApplicantProfileIntake(continuationId: continuationId, payload: payload)
+    }
+
+    func cancelApplicantProfileIntake(reason: String) async {
+        guard let continuationId = applicantIntakeContinuationId else { return }
+
+        Logger.debug("Applicant profile intake cancelled: \(reason)")
+        var payload = JSON()
+        payload["cancelled"].boolValue = true
+        await completeApplicantProfileIntake(continuationId: continuationId, payload: payload)
+    }
+
+    private func completeApplicantProfileIntake(continuationId: UUID, payload: JSON) async {
+        pendingApplicantProfileIntake = nil
+        applicantIntakeContinuationId = nil
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
     func resolveApplicantProfile(with draft: ApplicantProfileDraft) async {
@@ -583,7 +757,7 @@ final class OnboardingInterviewService {
 
     func cancelValidation(reason: String) async {
         guard let continuationId = pendingValidationContinuationId else { return }
-        debugLog("User cancelled validation request: \(reason)")
+        Logger.debug("User cancelled validation request: \(reason)")
 
         var payload = JSON()
         payload["cancelled"].boolValue = true
@@ -592,39 +766,17 @@ final class OnboardingInterviewService {
     }
 
     func completeUploadRequest(id: UUID, fileURLs: [URL]) async {
-        guard let continuationId = uploadContinuationIds[id] else { return }
-        removeUploadRequest(id: id)
-        uploadContinuationIds.removeValue(forKey: id)
+        await handleUploadCompletion(id: id, fileURLs: fileURLs, originalURL: nil)
+    }
 
-        if !fileURLs.isEmpty {
-            let newItems = fileURLs.map {
-                OnboardingUploadedItem(
-                    id: UUID(),
-                    filename: $0.lastPathComponent,
-                    url: $0,
-                    uploadedAt: Date()
-                )
-            }
-            uploadedItems.append(contentsOf: newItems)
+    func completeUploadRequest(id: UUID, link: URL) async {
+        do {
+            let temporaryURL = try await downloadRemoteFile(from: link)
+            await handleUploadCompletion(id: id, fileURLs: [temporaryURL], originalURL: link)
+            try? FileManager.default.removeItem(at: temporaryURL)
+        } catch {
+            await resumeUpload(id: id, withError: error.localizedDescription)
         }
-
-        var payload = JSON()
-        if fileURLs.isEmpty {
-            payload["status"].string = "skipped"
-        } else {
-            payload["status"].string = "uploaded"
-            let filesJSON = fileURLs.map { url -> JSON in
-                var json = JSON()
-                json["url"].string = url.absoluteString
-                json["filename"].string = url.lastPathComponent
-                return json
-            }
-            payload["files"] = JSON(filesJSON)
-        }
-
-        isProcessing = true
-        updateWaitingState(nil)
-        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
     func skipUploadRequest(id: UUID) async {
@@ -638,7 +790,35 @@ final class OnboardingInterviewService {
     }
 
     func appendAssistantMessage(_ text: String) {
-        messages.append(OnboardingMessage(role: .assistant, text: text))
+        let message = OnboardingMessage(role: .assistant, text: text)
+        messages.append(message)
+        Logger.debug("[Stream] Assistant message posted immediately (len: \(text.count))")
+    }
+
+    func beginAssistantStream(initialText: String = "") -> UUID {
+        let message = OnboardingMessage(role: .assistant, text: initialText)
+        messages.append(message)
+        streamingMessageStart[message.id] = Date()
+        Logger.debug("[Stream] Started assistant stream \(message.id.uuidString) (len: \(initialText.count))")
+        return message.id
+    }
+
+    func updateAssistantStream(id: UUID, text: String) {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        messages[index].text = text
+        Logger.debug("[Stream] Update for message \(id.uuidString) (len: \(text.count))")
+    }
+
+    func finalizeAssistantStream(id: UUID, text: String) {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        messages[index].text = text
+        let elapsed: TimeInterval
+        if let start = streamingMessageStart.removeValue(forKey: id) {
+            elapsed = Date().timeIntervalSince(start)
+        } else {
+            elapsed = 0
+        }
+        Logger.debug("[Stream] Completed message \(id.uuidString) in \(String(format: "%.3f", elapsed))s (len: \(text.count))")
     }
 
     func appendSystemMessage(_ text: String) {
@@ -672,6 +852,8 @@ final class OnboardingInterviewService {
         pendingValidationContinuationId = nil
         pendingApplicantProfileRequest = nil
         applicantProfileContinuationId = nil
+        pendingApplicantProfileIntake = nil
+        applicantIntakeContinuationId = nil
         pendingUploadRequests.removeAll()
         uploadContinuationIds.removeAll()
         uploadedItems.removeAll()
@@ -684,6 +866,7 @@ final class OnboardingInterviewService {
         artifacts.skeletonTimeline = nil
         artifacts.artifactRecords = []
         artifacts.enabledSections = []
+        artifacts.knowledgeCards = []
         nextQuestions.removeAll()
         lastError = nil
         wizardStep = .introduction
@@ -691,6 +874,24 @@ final class OnboardingInterviewService {
         wizardStepStatuses.removeAll()
         updateWaitingState(nil)
         phaseAdvanceBlockCache = nil
+        streamingMessageStart.removeAll()
+    }
+
+    func storeApplicantProfileImage(data: Data, mimeType: String?) {
+        let profile = applicantProfileStore.currentProfile()
+        profile.pictureData = data
+        profile.pictureMimeType = mimeType
+        applicantProfileStore.save(profile)
+
+        var json = applicantProfileJSON ?? JSON()
+        json["image"].string = data.base64EncodedString()
+        if let mimeType {
+            json["image_mime_type"].string = mimeType
+        }
+        applicantProfileJSON = json
+        artifacts.applicantProfile = json
+        Task { await persistCheckpoint() }
+        Logger.debug("Applicant profile image updated (\(data.count) bytes, mime: \(mimeType ?? "unknown"))")
     }
 
     private func restoreFromCheckpointIfAvailable() async -> Bool {
@@ -765,19 +966,31 @@ final class OnboardingInterviewService {
         let callbacks = InterviewOrchestrator.Callbacks(
             updateProcessingState: { [weak self] processing in
                 guard let service = self else { return }
-                await service.handleProcessingStateChange(processing)
+                await MainActor.run { service.handleProcessingStateChange(processing) }
             },
             emitAssistantMessage: { [weak self] text in
                 guard let service = self else { return }
-                await service.appendAssistantMessage(text)
+                await MainActor.run { service.appendAssistantMessage(text) }
+            },
+            beginStreamingAssistantMessage: { [weak self] initial in
+                guard let service = self else { return UUID() }
+                return await MainActor.run { service.beginAssistantStream(initialText: initial) }
+            },
+            updateStreamingAssistantMessage: { [weak self] id, text in
+                guard let service = self else { return }
+                await MainActor.run { service.updateAssistantStream(id: id, text: text) }
+            },
+            finalizeStreamingAssistantMessage: { [weak self] id, text in
+                guard let service = self else { return }
+                await MainActor.run { service.finalizeAssistantStream(id: id, text: text) }
             },
             handleWaitingState: { [weak self] waiting in
                 guard let service = self else { return }
-                await service.updateWaitingState(waiting)
+                await MainActor.run { service.updateWaitingState(waiting) }
             },
             handleError: { [weak self] message in
                 guard let service = self else { return }
-                await service.recordError(message)
+                await MainActor.run { service.recordError(message) }
             },
             storeApplicantProfile: { [weak self] json in
                 guard let service = self else { return }
@@ -790,6 +1003,10 @@ final class OnboardingInterviewService {
             storeArtifactRecord: { [weak self] artifact in
                 guard let service = self else { return }
                 await service.storeArtifactRecord(artifact)
+            },
+            storeKnowledgeCard: { [weak self] card in
+                guard let service = self else { return }
+                await service.storeKnowledgeCard(card)
             },
             setExtractionStatus: { [weak self] status in
                 guard let service = self else { return }
@@ -814,7 +1031,7 @@ final class OnboardingInterviewService {
         applicantProfileJSON = json
         let draft = ApplicantProfileDraft(json: json)
         let profile = applicantProfileStore.currentProfile()
-        draft.apply(to: profile)
+        draft.apply(to: profile, replaceMissing: false)
         applicantProfileStore.save(profile)
         artifacts.applicantProfile = json
         await persistCheckpoint()
@@ -835,6 +1052,16 @@ final class OnboardingInterviewService {
         artifacts.artifactRecords.append(artifact)
     }
 
+    private func storeKnowledgeCard(_ card: JSON) async {
+        guard card != .null else { return }
+
+        if let identifier = card["id"].string, !identifier.isEmpty {
+            artifacts.knowledgeCards.removeAll { $0["id"].stringValue == identifier }
+        }
+        artifacts.knowledgeCards.append(card)
+        await persistCheckpoint()
+    }
+
     private func persistCheckpoint() async {
         let session = await interviewState.currentSession()
         let sections = artifacts.enabledSections
@@ -844,6 +1071,128 @@ final class OnboardingInterviewService {
             skeletonTimeline: skeletonTimelineJSON,
             enabledSections: sections.isEmpty ? nil : sections
         )
+    }
+
+    private func handleUploadCompletion(id: UUID, fileURLs: [URL], originalURL: URL?) async {
+        guard let continuationId = uploadContinuationIds[id] else { return }
+        guard let requestIndex = pendingUploadRequests.firstIndex(where: { $0.id == id }) else { return }
+        let request = pendingUploadRequests[requestIndex]
+        pendingUploadRequests.remove(at: requestIndex)
+        uploadContinuationIds.removeValue(forKey: id)
+
+        if !fileURLs.isEmpty {
+            let newItems = fileURLs.map {
+                OnboardingUploadedItem(
+                    id: UUID(),
+                    filename: $0.lastPathComponent,
+                    url: $0,
+                    uploadedAt: Date()
+                )
+            }
+            uploadedItems.append(contentsOf: newItems)
+        }
+
+        let storage = OnboardingUploadStorage()
+        var processed: [OnboardingProcessedUpload] = []
+        var payload = JSON()
+        if let target = request.metadata.targetKey {
+            payload["targetKey"].string = target
+        }
+
+        do {
+            if fileURLs.isEmpty {
+                payload["status"].string = "skipped"
+            } else {
+                processed = try fileURLs.map { try storage.processFile(at: $0) }
+                var filesJSON: [JSON] = []
+                for item in processed {
+                    var json = item.toJSON()
+                    if let originalURL {
+                        json["source"].string = "url"
+                        json["original_url"].string = originalURL.absoluteString
+                    }
+                    filesJSON.append(json)
+                }
+                payload["status"].string = "uploaded"
+                payload["files"] = JSON(filesJSON)
+
+                if let target = request.metadata.targetKey {
+                    try await handleTargetedUpload(target: target, processed: processed)
+                    payload["updates"] = JSON([target])
+                }
+            }
+        } catch {
+            payload["status"].string = "failed"
+            payload["error"].string = error.localizedDescription
+            for item in processed {
+                storage.removeFile(at: item.storageURL)
+            }
+        }
+
+        if let intakeContinuation = applicantIntakeContinuationId, intakeContinuation == continuationId {
+            payload["mode"].string = "upload"
+            await completeApplicantProfileIntake(continuationId: intakeContinuation, payload: payload)
+            return
+        }
+
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
+
+    private func resumeUpload(id: UUID, withError message: String) async {
+        guard let continuationId = uploadContinuationIds[id] else { return }
+        removeUploadRequest(id: id)
+        uploadContinuationIds.removeValue(forKey: id)
+
+        var payload = JSON()
+        payload["status"].string = "failed"
+        payload["error"].string = message
+        isProcessing = true
+        updateWaitingState(nil)
+        await orchestrator?.resumeToolContinuation(id: continuationId, payload: payload)
+    }
+
+    private func handleTargetedUpload(target: String, processed: [OnboardingProcessedUpload]) async throws {
+        switch target {
+        case "basics.image":
+            guard let first = processed.first else {
+                throw ToolError.executionFailed("No file received for basics.image")
+            }
+            let data = try Data(contentsOf: first.storageURL)
+            try validateImageData(data: data, fileExtension: first.storageURL.pathExtension)
+            storeApplicantProfileImage(data: data, mimeType: first.contentType)
+        default:
+            throw ToolError.invalidParameters("Unsupported target_key: \(target)")
+        }
+    }
+
+    private func validateImageData(data: Data, fileExtension: String) throws {
+        if data.isEmpty {
+            throw ToolError.executionFailed("Image upload is empty")
+        }
+        if #available(macOS 12.0, *) {
+            if let type = UTType(filenameExtension: fileExtension.lowercased()), type.conforms(to: .image) {
+                return
+            }
+        }
+        if NSImage(data: data) == nil {
+            throw ToolError.executionFailed("Uploaded file is not a valid image")
+        }
+    }
+
+    private func downloadRemoteFile(from url: URL) async throws -> URL {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
+            throw ToolError.executionFailed("Failed to download file from URL")
+        }
+        if data.isEmpty {
+            throw ToolError.executionFailed("Downloaded file is empty")
+        }
+        let filename = url.lastPathComponent.isEmpty ? UUID().uuidString : url.lastPathComponent
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString)_\(filename)")
+        try data.write(to: temporary)
+        return temporary
     }
 
     func setExtractionStatus(_ status: OnboardingPendingExtraction?) {
@@ -862,6 +1211,9 @@ final class OnboardingInterviewService {
             deduped.append(record)
         }
         artifacts.artifactRecords = deduped
+
+        let storedKnowledgeCards = await dataStore.list(dataType: "knowledge_card")
+        artifacts.knowledgeCards = storedKnowledgeCards
     }
 
     private func buildAwaitingPayload(for request: OnboardingPhaseAdvanceRequest) -> JSON {
@@ -892,6 +1244,102 @@ final class OnboardingInterviewService {
         pendingUploadRequests.removeAll { $0.id == id }
     }
 
+    private enum ContactFetchError: Error {
+        case permissionDenied
+        case notFound
+        case system(String)
+
+        var message: String {
+            switch self {
+            case .permissionDenied:
+                return "Sprung does not have permission to access your contacts."
+            case .notFound:
+                return "We couldn't find a 'Me' contact on this Mac."
+            case .system(let description):
+                return "Unable to access contacts: \(description)"
+            }
+        }
+    }
+
+    private static func fetchMeCardAsDraft() async throws -> ApplicantProfileDraft {
+        try await requestContactsAccess()
+
+        let store = CNContactStore()
+        let keys: [CNKeyDescriptor] = [
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactOrganizationNameKey as CNKeyDescriptor,
+            CNContactJobTitleKey as CNKeyDescriptor
+        ]
+
+        let contact: CNContact
+        do {
+            contact = try store.unifiedMeContactWithKeys(toFetch: keys)
+        } catch {
+            if let cnError = error as? CNError, cnError.code == .recordDoesNotExist {
+                throw ContactFetchError.notFound
+            }
+            throw ContactFetchError.system(error.localizedDescription)
+        }
+
+        return draft(from: contact)
+    }
+
+    private static func requestContactsAccess() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            CNContactStore().requestAccess(for: .contacts) { granted, error in
+                if let error {
+                    continuation.resume(throwing: ContactFetchError.system(error.localizedDescription))
+                } else if granted {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: ContactFetchError.permissionDenied)
+                }
+            }
+        }
+    }
+
+    private static func draft(from contact: CNContact) -> ApplicantProfileDraft {
+        var draft = ApplicantProfileDraft()
+
+        let fullName = [contact.givenName, contact.familyName]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        if !fullName.isEmpty {
+            draft.name = fullName
+        }
+
+        if !contact.jobTitle.isEmpty {
+            draft.label = contact.jobTitle
+        }
+
+        if !contact.organizationName.isEmpty {
+            draft.summary = "Current role at \(contact.organizationName)."
+        }
+
+        let emailValues = contact.emailAddresses
+            .compactMap { ($0.value as String).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !emailValues.isEmpty {
+            draft.suggestedEmails = emailValues.reduce(into: [String]()) { result, email in
+                if !result.contains(email) {
+                    result.append(email)
+                }
+            }
+            if draft.email.isEmpty {
+                draft.email = draft.suggestedEmails.first ?? ""
+            }
+        }
+
+        if let phone = contact.phoneNumbers.first?.value.stringValue {
+            draft.phone = phone
+        }
+
+        return draft
+    }
+
     private static func defaultSystemPrompt() -> String {
         """
         You are the Sprung onboarding interviewer. Coordinate a structured interview that uses tools for
@@ -904,16 +1352,14 @@ final class OnboardingInterviewService {
            session to uncover the great work you've done. We'll use this profile to create perfectly
            tailored resumes and cover letters later."
 
-        2. Immediately call get_user_option to collect the user's contact information (ApplicantProfile).
-           Present the prompt: "How would you like to start building your profile?"
-           Offer these four options:
-           - id: "upload_file", label: "Upload Resume", description: "Upload your resume PDF or DOCX"
-           - id: "paste_url", label: "Paste Resume URL", description: "Provide a URL to your resume or LinkedIn"
-           - id: "use_contacts", label: "Use My Contact Card", description: "Import your contact info from macOS Contacts"
-           - id: "manual_entry", label: "Enter Manually", description: "Fill out your profile information step by step"
+        2. Immediately call get_applicant_profile to collect the user's contact information (ApplicantProfile).
+           This tool presents the user with four deterministic paths:
+           - Upload a resume file
+           - Paste a resume/profile URL
+           - Import details from their macOS contact card / vCard
+           - Enter information manually
 
-           Note: The first priority is collecting the user's basic contact information (name, email, phone, address)
-           to create the ApplicantProfile. This is NOT about collecting all their professional contacts.
+           The app handles UI for each option and returns the user's choice along with any collected data.
 
         3. When any tool returns with status "waiting for user input", respond with a brief, contextual message:
            "Once you complete the form to the left we can continue."

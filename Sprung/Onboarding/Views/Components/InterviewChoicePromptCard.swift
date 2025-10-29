@@ -18,15 +18,9 @@ struct InterviewChoicePromptCard: View {
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(prompt.options) { option in
                     choiceRow(for: option)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(nsColor: .controlBackgroundColor))
-                        )
                 }
             }
 
@@ -50,8 +44,12 @@ struct InterviewChoicePromptCard: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.thinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.black.opacity(0.05))
+        )
+        .shadow(color: .black.opacity(0.12), radius: 16, y: 10)
         .onAppear {
             if isSingleSelection {
                 singleSelection = prompt.options.first?.id
@@ -61,47 +59,67 @@ struct InterviewChoicePromptCard: View {
 
     @ViewBuilder
     private func choiceRow(for option: OnboardingChoiceOption) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                selectionControl(for: option)
-                Text(option.title)
-                    .font(.headline)
+        let isSelected = selectionState(for: option.id)
+        Button {
+            toggleSelection(for: option.id)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    Image(systemName: iconName(isSelected: isSelected))
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                        .imageScale(.large)
+                    Text(option.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+                if let detail = option.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 32)
+                }
             }
-            if let detail = option.detail, !detail.isEmpty {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 26)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+        }
+        .buttonStyle(.plain)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private func selectionState(for optionId: String) -> Bool {
+        switch prompt.selectionStyle {
+        case .single:
+            return singleSelection == optionId
+        case .multiple:
+            return multiSelection.contains(optionId)
+        }
+    }
+
+    private func toggleSelection(for optionId: String) {
+        switch prompt.selectionStyle {
+        case .single:
+            singleSelection = optionId
+        case .multiple:
+            if multiSelection.contains(optionId) {
+                multiSelection.remove(optionId)
+            } else {
+                multiSelection.insert(optionId)
             }
         }
     }
 
-    @ViewBuilder
-    private func selectionControl(for option: OnboardingChoiceOption) -> some View {
+    private func iconName(isSelected: Bool) -> String {
         switch prompt.selectionStyle {
         case .single:
-            Button {
-                singleSelection = option.id
-            } label: {
-                Image(systemName: singleSelection == option.id ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(singleSelection == option.id ? Color.accentColor : Color.secondary)
-            }
-            .buttonStyle(.plain)
+            return isSelected ? "largecircle.fill.circle" : "circle"
         case .multiple:
-            Toggle(isOn: Binding(
-                get: { multiSelection.contains(option.id) },
-                set: { newValue in
-                    if newValue {
-                        multiSelection.insert(option.id)
-                    } else {
-                        multiSelection.remove(option.id)
-                    }
-                }
-            )) {
-                EmptyView()
-            }
-            .toggleStyle(.checkbox)
-            .labelsHidden()
+            return isSelected ? "checkmark.square.fill" : "square"
         }
     }
 }

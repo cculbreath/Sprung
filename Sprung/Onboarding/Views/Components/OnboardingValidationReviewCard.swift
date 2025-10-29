@@ -166,8 +166,14 @@ struct OnboardingValidationReviewCard: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
-                ApplicantProfileEditor(draft: $applicantDraft, showPhotoSection: false)
-                    .disabled(decision != .modified)
+                ApplicantProfileEditor(
+                    draft: $applicantDraft,
+                    showPhotoSection: false,
+                    showsSummary: false,
+                    showsProfessionalLabel: false,
+                    emailSuggestions: applicantDraft.suggestedEmails
+                )
+                .disabled(decision != .modified)
 
                 HStack {
                     Button("Reset to Proposed") {

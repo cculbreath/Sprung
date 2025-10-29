@@ -18,7 +18,7 @@ enum OnboardingMessageRole: String, Codable {
 struct OnboardingMessage: Identifiable, Codable {
     let id: UUID
     let role: OnboardingMessageRole
-    let text: String
+    var text: String
     let timestamp: Date
 
     init(id: UUID = UUID(), role: OnboardingMessageRole, text: String, timestamp: Date = Date()) {
@@ -109,6 +109,8 @@ struct OnboardingUploadMetadata: Codable {
     var instructions: String
     var accepts: [String]
     var allowMultiple: Bool
+    var allowURL: Bool = true
+    var targetKey: String?
 }
 
 enum OnboardingUploadKind: String, CaseIterable, Codable {
@@ -147,6 +149,35 @@ struct OnboardingArtifacts {
     var skeletonTimeline: JSON?
     var artifactRecords: [JSON] = []
     var enabledSections: [String] = []
+    var knowledgeCards: [JSON] = []
+}
+
+struct OnboardingApplicantProfileIntakeState: Equatable {
+    enum Mode: Equatable {
+        case options
+        case loading(String)
+        case manual(source: Source)
+        case urlEntry
+    }
+
+    enum Source: Equatable {
+        case manual
+        case contacts
+    }
+
+    var mode: Mode
+    var draft: ApplicantProfileDraft
+    var urlString: String
+    var errorMessage: String?
+
+    static func options() -> OnboardingApplicantProfileIntakeState {
+        OnboardingApplicantProfileIntakeState(
+            mode: .options,
+            draft: ApplicantProfileDraft(),
+            urlString: "",
+            errorMessage: nil
+        )
+    }
 }
 
 struct OnboardingPhaseAdvanceRequest: Identifiable {

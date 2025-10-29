@@ -52,11 +52,14 @@ struct OnboardingInterviewChatPanel: View {
                     isActive: service.isProcessing,
                     shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
                 ))
-                .onChange(of: service.messages.count) { _, _ in
+                .onChange(of: service.messages.count) { oldValue, newValue in
+                    guard state.shouldAutoScroll, newValue > oldValue,
+                          let lastId = service.messages.last?.id else { return }
+                    proxy.scrollTo(lastId, anchor: .bottom)
+                }
+                .onChange(of: service.messages.last?.text ?? "") { _, _ in
                     guard state.shouldAutoScroll, let lastId = service.messages.last?.id else { return }
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo(lastId, anchor: .bottom)
-                    }
+                    proxy.scrollTo(lastId, anchor: .bottom)
                 }
                 .onAppear {
                     guard state.shouldAutoScroll, let lastId = service.messages.last?.id else { return }

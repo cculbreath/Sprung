@@ -448,7 +448,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/cculbreath/SwiftOpenAI.git";
 			requirement = {
-				branch = "feature/streaming-tts-v4";
+				branch = "feature/sprung-logging-integration";
 				kind = branch;
 			};
 		};

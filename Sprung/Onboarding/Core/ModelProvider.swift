@@ -24,7 +24,13 @@ struct ModelProvider {
 
     static func forTask(_ type: TaskType) -> Config {
         switch type {
-        case .orchestrator, .knowledgeCard:
+        case .orchestrator:
+            return Config(
+                id: "gpt-5",
+                defaultVerbosity: "medium",
+                defaultReasoningEffort: "minimal"
+            )
+        case .knowledgeCard:
             return Config(
                 id: "gpt-5",
                 defaultVerbosity: "medium",

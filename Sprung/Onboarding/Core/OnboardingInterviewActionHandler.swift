@@ -19,8 +19,8 @@ struct OnboardingInterviewActionHandler {
 
     // MARK: - Core actions
 
-    func startInterview(modelId: String, backend: LLMFacade.Backend) async {
-        await service.startInterview(modelId: modelId, backend: backend)
+    func startInterview(modelId: String, backend: LLMFacade.Backend, resumeExisting: Bool) async {
+        await service.startInterview(modelId: modelId, backend: backend, resumeExisting: resumeExisting)
     }
 
     func sendMessage(_ text: String) async {
@@ -63,14 +63,14 @@ struct OnboardingInterviewActionHandler {
         await service.cancelValidation(reason: reason)
     }
 
-    // MARK: - Stubs for future milestones
+    // MARK: - Applicant Profile Intake
 
     func fetchApplicantProfileFromContacts() async {
-        debugLog("Contacts fetch is not implemented in milestone M0.")
+        service.beginApplicantProfileContactsFetch()
     }
 
     func declineContactsFetch(reason: String) async {
-        debugLog("Contacts fetch declined: \(reason)")
+        Logger.debug("Contacts fetch declined: \(reason)")
     }
 
     func approveApplicantProfile(draft: ApplicantProfileDraft) async {
@@ -79,6 +79,34 @@ struct OnboardingInterviewActionHandler {
 
     func declineApplicantProfile(reason: String) async {
         await service.rejectApplicantProfile(reason: reason)
+    }
+
+    func beginApplicantProfileManualEntry() {
+        service.beginApplicantProfileManualEntry()
+    }
+
+    func beginApplicantProfileURLEntry() {
+        service.beginApplicantProfileURL()
+    }
+
+    func beginApplicantProfileUpload() async {
+        service.beginApplicantProfileUpload()
+    }
+
+    func resetApplicantProfileIntake() {
+        service.resetApplicantProfileIntakeToOptions()
+    }
+
+    func submitApplicantProfileURL(_ urlString: String) async {
+        await service.submitApplicantProfileURL(urlString)
+    }
+
+    func completeApplicantProfileDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
+        await service.completeApplicantProfileDraft(draft, source: source)
+    }
+
+    func cancelApplicantProfileIntake(reason: String) async {
+        await service.cancelApplicantProfileIntake(reason: reason)
     }
 
     func approvePhaseAdvance() async {
@@ -98,11 +126,11 @@ struct OnboardingInterviewActionHandler {
     }
 
     func completeSectionEntryRequest(id: UUID, approvedEntries: [JSON]) async {
-        debugLog("Section entry review is not implemented in milestone M0.")
+        Logger.debug("Section entry review is not implemented in milestone M0.")
     }
 
     func declineSectionEntryRequest(id: UUID, reason: String) async {
-        debugLog("Section entry request declined: \(reason)")
+        Logger.debug("Section entry request declined: \(reason)")
     }
 
     func completeUploadRequest(id: UUID, fileURLs: [URL]) async {
@@ -110,8 +138,7 @@ struct OnboardingInterviewActionHandler {
     }
 
     func completeUploadRequest(id: UUID, link: URL) async {
-        await service.skipUploadRequest(id: id)
-        debugLog("Link-based uploads are not supported yet. Ignored link \(link).")
+        await service.completeUploadRequest(id: id, link: link)
     }
 
     func declineUploadRequest(id: UUID) async {
@@ -119,10 +146,10 @@ struct OnboardingInterviewActionHandler {
     }
 
     func confirmPendingExtraction(_ json: JSON, notes: String?) async {
-        debugLog("Extraction confirmation is not implemented in milestone M0.")
+        Logger.debug("Extraction confirmation is not implemented in milestone M0.")
     }
 
     func cancelPendingExtraction() {
-        debugLog("Pending extraction cancelled.")
+        Logger.debug("Pending extraction cancelled.")
     }
 }
