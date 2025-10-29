@@ -8,26 +8,24 @@ struct OnboardingInterviewToolPane: View {
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
 
     @Bindable var service: OnboardingInterviewService
+    @Bindable var coordinator: OnboardingInterviewCoordinator
+    @Bindable var router: OnboardingToolRouter
     let actions: OnboardingInterviewActionHandler
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            ToolStatusSummaryView(snapshot: router.statusSnapshot)
+
             let uploads = uploadRequests()
 
             if !uploads.isEmpty {
                 uploadRequestsView(uploads)
-            } else if let contactsRequest = service.pendingContactsRequest {
-                ContactsPermissionCard(
-                    request: contactsRequest,
-                    onAllow: { Task { await actions.fetchApplicantProfileFromContacts() } },
-                    onDecline: { Task { await actions.declineContactsFetch(reason: "User declined contacts access") } }
-                )
-            } else if let intake = service.pendingApplicantProfileIntake {
+            } else if let intake = coordinator.pendingApplicantProfileIntake {
                 ApplicantProfileIntakeCard(
                     state: intake,
                     actions: actions
                 )
-            } else if let prompt = service.pendingChoicePrompt {
+            } else if let prompt = coordinator.pendingChoicePrompt {
                 InterviewChoicePromptCard(
                     prompt: prompt,
                     onSubmit: { selection in
@@ -37,7 +35,7 @@ struct OnboardingInterviewToolPane: View {
                         Task { await actions.cancelChoicePrompt(reason: "User dismissed choice prompt") }
                     }
                 )
-            } else if let validation = service.pendingValidationPrompt {
+            } else if let validation = coordinator.pendingValidationPrompt {
                 if validation.dataType == "knowledge_card" {
                     KnowledgeCardValidationHost(
                         prompt: validation,
@@ -79,7 +77,7 @@ struct OnboardingInterviewToolPane: View {
                     },
                     onCancel: nil
                 )
-            } else if let profileRequest = service.pendingApplicantProfileRequest {
+            } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
                 ApplicantProfileReviewCard(
                     request: profileRequest,
                     fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
@@ -90,7 +88,7 @@ struct OnboardingInterviewToolPane: View {
                         Task { await actions.declineApplicantProfile(reason: "User cancelled applicant profile validation") }
                     }
                 )
-            } else if let sectionToggle = service.pendingSectionToggleRequest {
+            } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
                 ResumeSectionsToggleCard(
                     request: sectionToggle,
                     existingDraft: experienceDefaultsStore.loadDraft(),
@@ -101,17 +99,6 @@ struct OnboardingInterviewToolPane: View {
                         Task { await actions.cancelSectionToggleSelection(reason: "User cancelled section toggle") }
                     }
                 )
-            } else if let entryRequest = service.pendingSectionEntryRequests.first {
-                ResumeSectionEntriesCard(
-                    request: entryRequest,
-                    existingDraft: experienceDefaultsStore.loadDraft(),
-                    onConfirm: { approved in
-                        Task { await actions.completeSectionEntryRequest(id: entryRequest.id, approvedEntries: approved) }
-                    },
-                    onCancel: {
-                        Task { await actions.declineSectionEntryRequest(id: entryRequest.id, reason: "User cancelled section validation") }
-                    }
-                )
             } else {
                 supportingContent()
             }
@@ -120,7 +107,7 @@ struct OnboardingInterviewToolPane: View {
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .center) {
-            if shouldShowLLMSpinner(for: service) {
+            if shouldShowLLMSpinner(service: service, router: router) {
                 VStack {
                     Spacer()
                     AnimatedThinkingText()
@@ -132,7 +119,10 @@ struct OnboardingInterviewToolPane: View {
                 .zIndex(1)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: shouldShowLLMSpinner(for: service))
+        .animation(
+            .easeInOut(duration: 0.2),
+            value: shouldShowLLMSpinner(service: service, router: router)
+        )
     }
 
     @ViewBuilder
@@ -149,16 +139,16 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func summaryContent() -> some View {
-        if service.wizardStep == .wrapUp {
+        if coordinator.wizardStep == .wrapUp {
             WrapUpSummaryView(
                 artifacts: service.artifacts,
                 schemaIssues: service.schemaIssues
             )
-        } else if service.wizardStep == .resumeIntake, let profile = service.applicantProfileJSON {
+        } else if coordinator.wizardStep == .resumeIntake, let profile = service.applicantProfileJSON {
             ApplicantProfileSummaryCard(profile: profile)
-        } else if service.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
+        } else if coordinator.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
             SkeletonTimelineSummaryCard(timeline: timeline)
-        } else if service.wizardStep == .artifactDiscovery,
+        } else if coordinator.wizardStep == .artifactDiscovery,
                   !service.artifacts.enabledSections.isEmpty {
             EnabledSectionsSummaryCard(sections: service.artifacts.enabledSections)
         } else {
@@ -186,16 +176,16 @@ struct OnboardingInterviewToolPane: View {
         }
     }
 
-private func uploadRequests() -> [OnboardingUploadRequest] {
-        switch service.wizardStep {
+    private func uploadRequests() -> [OnboardingUploadRequest] {
+        switch coordinator.wizardStep {
         case .resumeIntake:
-            return service.pendingUploadRequests.filter { [.resume, .linkedIn].contains($0.kind) }
+            return router.pendingUploadRequests.filter { [.resume, .linkedIn].contains($0.kind) }
         case .artifactDiscovery:
-            return service.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
+            return router.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
         case .writingCorpus:
-            return service.pendingUploadRequests.filter { $0.kind == .writingSample }
+            return router.pendingUploadRequests.filter { $0.kind == .writingSample }
         case .wrapUp:
-            return service.pendingUploadRequests
+            return router.pendingUploadRequests
         case .introduction:
             return []
         }
@@ -244,16 +234,113 @@ private func uploadRequests() -> [OnboardingUploadRequest] {
         return mapped.isEmpty ? nil : mapped
     }
 
-    private func shouldShowLLMSpinner(for service: OnboardingInterviewService) -> Bool {
+    private func shouldShowLLMSpinner(
+        service: OnboardingInterviewService,
+        router: OnboardingToolRouter
+    ) -> Bool {
         service.isProcessing &&
-            service.pendingChoicePrompt == nil &&
-            service.pendingApplicantProfileRequest == nil &&
-            service.pendingApplicantProfileIntake == nil &&
-            service.pendingSectionToggleRequest == nil &&
-            service.pendingSectionEntryRequests.isEmpty &&
-            service.pendingContactsRequest == nil &&
-            service.pendingValidationPrompt == nil &&
+            router.pendingChoicePrompt == nil &&
+            router.pendingApplicantProfileRequest == nil &&
+            router.pendingApplicantProfileIntake == nil &&
+            router.pendingSectionToggleRequest == nil &&
+            router.pendingValidationPrompt == nil &&
+            router.pendingUploadRequests.isEmpty &&
             service.pendingPhaseAdvanceRequest == nil
+    }
+}
+
+private struct ToolStatusSummaryView: View {
+    let snapshot: OnboardingToolStatusSnapshot
+
+    private struct Entry: Identifiable {
+        let identifier: OnboardingToolIdentifier
+        let displayName: String
+        let status: OnboardingToolStatus
+
+        var id: OnboardingToolIdentifier { identifier }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Assistant tools")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                ForEach(entries) { entry in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(indicatorColor(for: entry.status))
+                            .frame(width: 8, height: 8)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.displayName)
+                                .font(.caption.weight(.semibold))
+                            Text(statusLabel(for: entry.status))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(nsColor: .textBackgroundColor))
+                    )
+                }
+            }
+        }
+    }
+
+    private var entries: [Entry] {
+        OnboardingToolIdentifier.allCases.map { identifier in
+            Entry(
+                identifier: identifier,
+                displayName: displayName(for: identifier),
+                status: snapshot.status(for: identifier)
+            )
+        }
+    }
+
+    private func displayName(for identifier: OnboardingToolIdentifier) -> String {
+        switch identifier {
+        case .getUserOption:
+            return "Choices"
+        case .getUserUpload:
+            return "Uploads"
+        case .getMacOSContactCard:
+            return "Contacts"
+        case .getApplicantProfile:
+            return "Applicant Profile"
+        case .submitForValidation:
+            return "Validation"
+        }
+    }
+
+    private func statusLabel(for status: OnboardingToolStatus) -> String {
+        switch status {
+        case .ready:
+            return "Ready"
+        case .waitingForUser:
+            return "Waiting for you"
+        case .processing:
+            return "Processing"
+        case .locked:
+            return "Locked"
+        }
+    }
+
+    private func indicatorColor(for status: OnboardingToolStatus) -> Color {
+        switch status {
+        case .ready:
+            return .green
+        case .waitingForUser:
+            return .yellow
+        case .processing:
+            return .blue
+        case .locked:
+            return .gray
+        }
     }
 }
 

@@ -330,6 +330,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.applicantProfileStore)
                     .environment(appEnvironment.experienceDefaultsStore)
                     .environment(onboardingService)
+                    .environment(onboardingService.coordinator)
+                    .environment(onboardingService.coordinator.toolRouter)
 
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {

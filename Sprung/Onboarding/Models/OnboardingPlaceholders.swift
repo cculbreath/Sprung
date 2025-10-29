@@ -213,16 +213,6 @@ struct OnboardingPhaseAdvanceRequest: Identifiable {
     }
 }
 
-struct OnboardingContactsFetchRequest: Codable {
-    var message: String
-    var requestedFields: [String]
-
-    init(message: String, requestedFields: [String] = []) {
-        self.message = message
-        self.requestedFields = requestedFields
-    }
-}
-
 struct OnboardingValidationPrompt: Identifiable {
     var id: UUID
     var dataType: String
@@ -263,25 +253,6 @@ struct OnboardingSectionToggleRequest {
         self.proposedSections = proposedSections
         self.availableSections = availableSections
         self.rationale = rationale
-    }
-}
-
-struct OnboardingSectionEntryRequest: Identifiable {
-    var id: UUID
-    var section: String
-    var entries: [JSON]
-    var context: String?
-
-    init(
-        id: UUID = UUID(),
-        section: String,
-        entries: [JSON] = [],
-        context: String? = nil
-    ) {
-        self.id = id
-        self.section = section
-        self.entries = entries
-        self.context = context
     }
 }
 

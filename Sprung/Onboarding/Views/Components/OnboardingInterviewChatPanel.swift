@@ -17,6 +17,7 @@ private struct ConditionalIntelligenceGlow<S: InsettableShape>: ViewModifier {
 
 struct OnboardingInterviewChatPanel: View {
     @Bindable var service: OnboardingInterviewService
+    @Bindable var coordinator: OnboardingInterviewCoordinator
     @Bindable var state: OnboardingInterviewViewModel
     let actions: OnboardingInterviewActionHandler
     let modelStatusDescription: String
@@ -32,7 +33,7 @@ struct OnboardingInterviewChatPanel: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(service.messages) { message in
+                        ForEach(coordinator.messages) { message in
                             MessageBubble(message: message)
                                 .id(message.id)
                         }
@@ -45,17 +46,17 @@ struct OnboardingInterviewChatPanel: View {
                     isActive: service.isProcessing,
                     shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
                 ))
-                .onChange(of: service.messages.count) { oldValue, newValue in
+                .onChange(of: coordinator.messages.count) { oldValue, newValue in
                     guard state.shouldAutoScroll, newValue > oldValue,
-                          let lastId = service.messages.last?.id else { return }
+                          let lastId = coordinator.messages.last?.id else { return }
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
-                .onChange(of: service.messages.last?.text ?? "") { _, _ in
-                    guard state.shouldAutoScroll, let lastId = service.messages.last?.id else { return }
+                .onChange(of: coordinator.messages.last?.text ?? "") { _, _ in
+                    guard state.shouldAutoScroll, let lastId = coordinator.messages.last?.id else { return }
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
                 .onAppear {
-                    guard state.shouldAutoScroll, let lastId = service.messages.last?.id else { return }
+                    guard state.shouldAutoScroll, let lastId = coordinator.messages.last?.id else { return }
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
             }

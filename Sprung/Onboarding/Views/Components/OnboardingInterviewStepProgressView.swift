@@ -1,16 +1,16 @@
 import SwiftUI
 
 struct OnboardingInterviewStepProgressView: View {
-    @Bindable var service: OnboardingInterviewService
+    @Bindable var coordinator: OnboardingInterviewCoordinator
 
     var body: some View {
         HStack(alignment: .center, spacing: 28) {
             ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
-                let status = service.wizardStepStatuses[step] ?? .pending
+                let status = coordinator.wizardStepStatuses[step] ?? .pending
                 OnboardingStepProgressItem(title: step.title, status: status)
             }
         }
-        .animation(.bouncy(duration: 0.55, extraBounce: 0.12), value: service.wizardStepStatuses)
+        .animation(.bouncy(duration: 0.55, extraBounce: 0.12), value: coordinator.wizardStepStatuses)
     }
 }
 
