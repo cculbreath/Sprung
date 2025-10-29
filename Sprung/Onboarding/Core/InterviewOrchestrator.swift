@@ -393,6 +393,22 @@ actor InterviewOrchestrator {
             throw ToolError.executionFailed("Timeline extraction output was not valid UTF-8.")
         }
 
+        if let usage = response.usage {
+            var parts: [String] = []
+            if let input = usage.inputTokens ?? usage.promptTokens {
+                parts.append("input: \(input)")
+            }
+            if let output = usage.outputTokens ?? usage.completionTokens {
+                parts.append("output: \(output)")
+            }
+            if let reasoning = usage.outputTokensDetails?.reasoningTokens {
+                parts.append("reasoning: \(reasoning)")
+            }
+            if !parts.isEmpty {
+                Logger.debug("🧠 extract_document usage — " + parts.joined(separator: ", "), category: .ai)
+            }
+        }
+
         return try JSON(data: data)
     }
 
