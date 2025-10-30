@@ -410,6 +410,21 @@ struct ApplicantProfileDraft: Equatable {
         return JSON(payload)
     }
 
+    func toSafeJSON() -> JSON {
+        ApplicantProfileDraft.removeHiddenEmailOptions(from: toJSON())
+    }
+
+    static func removeHiddenEmailOptions(from json: JSON) -> JSON {
+        var sanitized = json
+        if var dictionary = sanitized.dictionaryObject {
+            dictionary.removeValue(forKey: "__contact_email_options")
+            sanitized = JSON(dictionary)
+        } else if sanitized["__contact_email_options"] != .null {
+            sanitized["__contact_email_options"] = .null
+        }
+        return sanitized
+    }
+
     private func shouldUse(_ field: Field, isEmpty: Bool) -> Bool {
         providedFields.contains(field) || !isEmpty
     }

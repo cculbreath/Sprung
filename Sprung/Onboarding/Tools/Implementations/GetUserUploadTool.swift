@@ -73,9 +73,19 @@ struct GetUserUploadTool: InterviewTool {
             continuationId: continuationId
         )
 
+        var waitingPayload = JSON()
+        waitingPayload["status"].string = "waiting"
+        waitingPayload["tool"].string = name
+        waitingPayload["message"].string = requestPayload.waitingMessage
+        waitingPayload["upload_kind"].string = requestPayload.kind.rawValue
+        if let targetKey = requestPayload.targetKey {
+            waitingPayload["target_key"].string = targetKey
+        }
+
         let token = ContinuationToken(
             id: continuationId,
             toolName: name,
+            initialPayload: waitingPayload,
             resumeHandler: { input in
                 do {
                     let userResponse = try UploadUserResponse(json: input)

@@ -452,7 +452,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/cculbreath/SwiftOpenAI.git";
 			requirement = {
-				branch = "feature/sprung-logging-integration";
+				branch = "feature/allowed-tools-envelope";
 				kind = branch;
 			};
 		};

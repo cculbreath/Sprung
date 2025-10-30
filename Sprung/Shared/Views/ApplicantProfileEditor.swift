@@ -37,7 +37,31 @@ struct ApplicantProfileEditor: View {
                 Text("Personal Information")
                     .font(.headline)
             }
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    TextField("Street Address", text: $draft.address)
+                        .textFieldStyle(.roundedBorder)
 
+                    HStack {
+                        TextField("City", text: $draft.city)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("State / Region", text: $draft.state)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    HStack {
+                        TextField("Postal Code", text: $draft.zip)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 120)
+                        TextField("Country Code", text: $draft.countryCode)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 120)
+                    }
+                }
+            } label: {
+                Text("Location")
+                    .font(.headline)
+            }
             if showsSummary {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 12) {
@@ -175,31 +199,7 @@ struct ApplicantProfileEditor: View {
                     .font(.headline)
             }
 
-            GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    TextField("Street Address", text: $draft.address)
-                        .textFieldStyle(.roundedBorder)
 
-                    HStack {
-                        TextField("City", text: $draft.city)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("State / Region", text: $draft.state)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    HStack {
-                        TextField("Postal Code", text: $draft.zip)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 120)
-                        TextField("Country Code", text: $draft.countryCode)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 120)
-                    }
-                }
-            } label: {
-                Text("Location")
-                    .font(.headline)
-            }
         }
     }
 

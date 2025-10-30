@@ -41,6 +41,7 @@ final class ToolRegistry {
                     .init(
                         name: tool.name,
                         parameters: tool.parameters,
+                        strict: tool.isStrict,
                         description: tool.description
                     )
                 )
