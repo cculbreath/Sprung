@@ -589,9 +589,10 @@ final class OnboardingInterviewService {
     }
 
     func storeApplicantProfileImage(data: Data, mimeType: String?) {
+        let mimeString = mimeType ?? "unknown"
         coordinator.dataStoreManager.storeApplicantProfileImage(data: data, mimeType: mimeType)
         Task { await coordinator.persistCheckpoint() }
-        Logger.debug("Applicant profile image updated (\(data.count) bytes, mime: \(mimeType ?? \"unknown\"))")
+        Logger.debug("Applicant profile image updated (\(data.count) bytes, mime: \(mimeString)")
         recordObjective(
             "contact_photo_collected",
             status: .completed,
