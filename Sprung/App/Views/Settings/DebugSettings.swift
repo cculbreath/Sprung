@@ -49,10 +49,3 @@ struct DebugSettingsView: View {
         }
     }
 }
-
-#Preview {
-    DebugSettingsView()
-        .environment(DebugSettingsStore())
-        .padding()
-        .frame(width: 500)
-}

@@ -95,17 +95,3 @@ struct ModelSelectionSheet: View {
         }
     }
 }
-
-// MARK: - Preview
-
-#Preview {
-    ModelSelectionSheet(
-        title: "Choose Model for Resume Customization",
-        requiredCapability: .structuredOutput,
-        operationKey: "resume_customize",
-        isPresented: .constant(true),
-        onModelSelected: { modelId in
-            Logger.debug("🤖 Selected model: \(modelId)")
-        }
-    )
-}

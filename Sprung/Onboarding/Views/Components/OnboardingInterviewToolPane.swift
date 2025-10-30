@@ -33,16 +33,10 @@ struct OnboardingInterviewToolPane: View {
                     InterviewChoicePromptCard(
                         prompt: prompt,
                         onSubmit: { selection in
-                            Task {
-                                let result = coordinator.resolveChoice(selectionIds: selection)
-                                await service.resumeToolContinuation(from: result)
-                            }
+                            handleToolResult { coordinator.resolveChoice(selectionIds: selection) }
                         },
                         onCancel: {
-                            Task {
-                                let result = coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt")
-                                await service.resumeToolContinuation(from: result)
-                            }
+                            handleToolResult { coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt") }
                         }
                     )
                 } else if let validation = coordinator.pendingValidationPrompt {
@@ -57,21 +51,17 @@ struct OnboardingInterviewToolPane: View {
                         OnboardingValidationReviewCard(
                             prompt: validation,
                             onSubmit: { decision, updated, notes in
-                                Task {
-                                    let result = coordinator.submitValidationResponse(
+                                handleToolResult {
+                                    coordinator.submitValidationResponse(
                                         status: decision.rawValue,
                                         updatedData: updated,
                                         changes: nil,
                                         notes: notes
                                     )
-                                    await service.resumeToolContinuation(from: result)
                                 }
                             },
                             onCancel: {
-                                Task {
-                                    let result = coordinator.cancelValidation(reason: "User cancelled validation review")
-                                    await service.resumeToolContinuation(from: result)
-                                }
+                                handleToolResult { coordinator.cancelValidation(reason: "User cancelled validation review") }
                             }
                         )
                     }
@@ -114,10 +104,7 @@ struct OnboardingInterviewToolPane: View {
                             }
                         },
                         onCancel: {
-                            Task {
-                                let result = coordinator.rejectSectionToggle(reason: "User cancelled section toggle")
-                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
-                            }
+                            handleToolResult { coordinator.rejectSectionToggle(reason: "User cancelled section toggle") }
                         }
                     )
                 } else {
@@ -191,16 +178,10 @@ struct OnboardingInterviewToolPane: View {
                         request: request,
                         onSelectFile: { openPanel(for: request) },
                         onDropFiles: { urls in
-                            Task {
-                                let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
-                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
-                            }
+                            handleToolResult { await coordinator.completeUpload(id: request.id, fileURLs: urls) }
                         },
                         onDecline: {
-                            Task {
-                                let result = await coordinator.skipUpload(id: request.id)
-                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
-                            }
+                            handleToolResult { await coordinator.skipUpload(id: request.id) }
                         }
                     )
                 }
@@ -209,18 +190,35 @@ struct OnboardingInterviewToolPane: View {
     }
 
     private func uploadRequests() -> [OnboardingUploadRequest] {
+        var filtered: [OnboardingUploadRequest]
         switch service.wizardStep {
         case .resumeIntake:
-            return service.pendingUploadRequests.filter { [.resume, .linkedIn].contains($0.kind) }
+            filtered = service.pendingUploadRequests.filter {
+                [.resume, .linkedIn].contains($0.kind) ||
+                ($0.kind == .generic && $0.metadata.targetKey == "basics.image")
+            }
         case .artifactDiscovery:
-            return service.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
+            filtered = service.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
         case .writingCorpus:
-            return service.pendingUploadRequests.filter { $0.kind == .writingSample }
+            filtered = service.pendingUploadRequests.filter { $0.kind == .writingSample }
         case .wrapUp:
-            return service.pendingUploadRequests
+            filtered = service.pendingUploadRequests
         case .introduction:
-            return []
+            filtered = service.pendingUploadRequests.filter {
+                $0.kind == .generic && $0.metadata.targetKey == "basics.image"
+            }
         }
+        if filtered.count != service.pendingUploadRequests.count {
+            let headshotRequests = service.pendingUploadRequests.filter { $0.metadata.targetKey == "basics.image" }
+            for request in headshotRequests where filtered.contains(where: { $0.id == request.id }) == false {
+                filtered.append(request)
+            }
+        }
+        if !filtered.isEmpty {
+            let kinds = filtered.map(\.kind.rawValue).joined(separator: ",")
+            Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(service.wizardStep.rawValue), kinds: \(kinds))", category: .ai)
+        }
+        return filtered
     }
 
     private func openPanel(for request: OnboardingUploadRequest) {
@@ -309,6 +307,14 @@ struct OnboardingInterviewToolPane: View {
             return false
         }
     }
+
+    /// Helper to wrap coordinator method calls with tool continuation resume
+    private func handleToolResult(_ action: @escaping () async -> ToolResult) {
+        Task {
+            let result = await action()
+            await service.resumeToolContinuation(from: result)
+        }
+    }
 }
 
 private struct KnowledgeCardValidationHost: View {
@@ -378,6 +384,18 @@ private struct ApplicantProfileSummaryCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Applicant Profile")
                 .font(.headline)
+            if let avatar = avatarImage {
+                avatar
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 64, height: 64)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                    )
+                    .shadow(radius: 2, y: 1)
+            }
             if let name = nonEmpty(profile["name"].string) {
                 Label(name, systemImage: "person.fill")
             }
@@ -412,6 +430,15 @@ private struct ApplicantProfileSummaryCard: View {
     private func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return value
+    }
+
+    private var avatarImage: Image? {
+        guard let base64 = profile["image"].string,
+              let data = Data(base64Encoded: base64),
+              let nsImage = NSImage(data: data) else {
+            return nil
+        }
+        return Image(nsImage: nsImage)
     }
 
     private func formattedLocation(_ json: JSON) -> String? {

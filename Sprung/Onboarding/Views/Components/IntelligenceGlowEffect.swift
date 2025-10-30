@@ -104,25 +104,3 @@ private extension Array where Element == Gradient.Stop {
             .sorted { $0.location < $1.location }
     }
 }
-
-// MARK: - Preview
-
-#Preview {
-    VStack(spacing: 30) {
-        Text("Rainbow Spring Glow")
-            .font(.title)
-            .padding(22)
-            .intelligenceBackground(in: .capsule)
-
-        VStack(spacing: 12) {
-            Text("Chat Transcript Example")
-                .font(.headline)
-            Text("This demonstrates the glow effect")
-                .font(.body)
-        }
-        .padding(24)
-        .intelligenceOverlay(in: .rect(cornerRadius: 24))
-    }
-    .padding()
-    .preferredColorScheme(.dark)
-}

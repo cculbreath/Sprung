@@ -81,14 +81,3 @@ struct BestJobModelSelectionSheet: View {
         }
     }
 }
-
-// MARK: - Preview
-
-#Preview {
-    BestJobModelSelectionSheet(
-        isPresented: .constant(true),
-        onModelSelected: { modelId, includeResumeBackground, includeCoverLetterBackground in
-            Logger.debug("🤖 Selected model: \(modelId), resume bg: \(includeResumeBackground), cover letter bg: \(includeCoverLetterBackground)")
-        }
-    )
-}
