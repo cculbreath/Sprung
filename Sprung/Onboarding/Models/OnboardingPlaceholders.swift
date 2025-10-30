@@ -103,6 +103,12 @@ struct OnboardingUploadRequest: Identifiable, Codable {
     let id: UUID
     let kind: OnboardingUploadKind
     let metadata: OnboardingUploadMetadata
+
+    init(id: UUID = UUID(), kind: OnboardingUploadKind, metadata: OnboardingUploadMetadata) {
+        self.id = id
+        self.kind = kind
+        self.metadata = metadata
+    }
 }
 
 struct OnboardingUploadedItem: Identifiable, Codable {

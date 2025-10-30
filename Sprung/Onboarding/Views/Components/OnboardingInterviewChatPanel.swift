@@ -22,6 +22,23 @@ struct OnboardingInterviewChatPanel: View {
     let modelStatusDescription: String
     let onOpenSettings: () -> Void
 
+    private var chatMessagesStack: some View {
+        LazyVStack(alignment: .leading, spacing: 16) {
+            ForEach(coordinator.messages) { message in
+                MessageBubble(message: message)
+                    .id(message.id)
+            }
+        }
+        .padding(20)
+    }
+
+    private var userInputBinding: Binding<String> {
+        Binding(
+            get: { state.userInput },
+            set: { state.userInput = $0 }
+        )
+    }
+
     var body: some View {
         let horizontalPadding: CGFloat = 32
         let topPadding: CGFloat = 28
@@ -30,15 +47,7 @@ struct OnboardingInterviewChatPanel: View {
 
         return VStack(spacing: 0) {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(coordinator.messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
-                        }
-                    }
-                    .padding(20)
-                }
+                ScrollView { chatMessagesStack }
                 .textSelection(.enabled)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -88,18 +97,11 @@ struct OnboardingInterviewChatPanel: View {
             }
 
             Divider()
-                .padding(.top, sectionSpacing)
-                .padding(.horizontal, horizontalPadding)
+            .padding(.top, sectionSpacing)
+            .padding(.horizontal, horizontalPadding)
 
             HStack(alignment: .center, spacing: 12) {
-                TextField(
-                    "Type your response…",
-                    text: Binding(
-                        get: { state.userInput },
-                        set: { state.userInput = $0 }
-                    ),
-                    axis: .vertical
-                )
+                TextField("Type your response…", text: userInputBinding, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...5)
                 .disabled(!service.isActive || service.isProcessing)
