@@ -17,11 +17,18 @@ final class ProfileInteractionHandler {
 
     private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
     private(set) var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState?
+    private(set) var lastSubmittedDraft: JSON?
 
     // MARK: - Private State
 
     private var applicantProfileContinuationId: UUID?
     private var applicantIntakeContinuationId: UUID?
+
+    private let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     // MARK: - Dependencies
 
@@ -58,12 +65,14 @@ final class ProfileInteractionHandler {
 
         let resolvedJSON = draft.toJSON()
         let status: String = resolvedJSON == request.proposedProfile ? "approved" : "modified"
+        let enriched = attachingValidationMetadata(to: resolvedJSON, via: "validation_card")
 
         var payload = JSON()
         payload["status"].string = status
-        payload["data"] = resolvedJSON
+        payload["data"] = enriched
 
         clearProfileRequest()
+        lastSubmittedDraft = enriched
         Logger.info("✅ Profile resolved (status: \(status))", category: .ai)
         return (continuationId, payload)
     }
@@ -130,6 +139,13 @@ final class ProfileInteractionHandler {
     /// Begins upload mode (returns an upload request for the router to present).
     func beginUpload() -> (request: OnboardingUploadRequest, continuationId: UUID)? {
         guard let continuationId = applicantIntakeContinuationId else { return nil }
+
+        pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
+            mode: .loading("Processing uploaded résumé…"),
+            draft: ApplicantProfileDraft(),
+            urlString: "",
+            errorMessage: nil
+        )
 
         let metadata = OnboardingUploadMetadata(
             title: "Upload Résumé",
@@ -220,7 +236,15 @@ final class ProfileInteractionHandler {
         var payload = JSON()
         payload["mode"].string = source == .contacts ? "contacts" : "manual"
         payload["status"].string = "completed"
-        payload["data"] = draft.toJSON()
+        let dataJSON = attachingValidationMetadata(
+            to: draft.toJSON(),
+            via: source == .contacts ? "contacts" : "manual"
+        )
+        payload["data"] = dataJSON
+
+        if dataJSON != .null {
+            lastSubmittedDraft = dataJSON
+        }
 
         Logger.info("✅ Draft completed (source: \(payload["mode"].stringValue))", category: .ai)
         return completeIntake(continuationId: continuationId, payload: payload)
@@ -258,5 +282,16 @@ final class ProfileInteractionHandler {
         pendingApplicantProfileIntake = nil
         applicantProfileContinuationId = nil
         applicantIntakeContinuationId = nil
+        lastSubmittedDraft = nil
+    }
+
+    // MARK: - Metadata Helpers
+
+    private func attachingValidationMetadata(to json: JSON, via channel: String) -> JSON {
+        var enriched = json
+        enriched["meta"]["validation_state"].string = "user_validated"
+        enriched["meta"]["validated_via"].string = channel
+        enriched["meta"]["validated_at"].string = isoFormatter.string(from: Date())
+        return enriched
     }
 }

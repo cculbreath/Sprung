@@ -25,7 +25,8 @@ final class ContactsImportService {
             CNContactEmailAddressesKey as CNKeyDescriptor,
             CNContactPhoneNumbersKey as CNKeyDescriptor,
             CNContactOrganizationNameKey as CNKeyDescriptor,
-            CNContactJobTitleKey as CNKeyDescriptor
+            CNContactJobTitleKey as CNKeyDescriptor,
+            CNContactPostalAddressesKey as CNKeyDescriptor
         ]
 
         let contact: CNContact
@@ -98,6 +99,34 @@ final class ContactsImportService {
         // Phone
         if let phone = contact.phoneNumbers.first?.value.stringValue {
             draft.phone = phone
+        }
+
+        // Address
+        if let postalAddress = contact.postalAddresses.first?.value {
+            let street = postalAddress.street.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !street.isEmpty {
+                draft.address = street
+            }
+
+            let city = postalAddress.city.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !city.isEmpty {
+                draft.city = city
+            }
+
+            let state = postalAddress.state.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !state.isEmpty {
+                draft.state = state
+            }
+
+            let postalCode = postalAddress.postalCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !postalCode.isEmpty {
+                draft.zip = postalCode
+            }
+
+            let countryCode = postalAddress.isoCountryCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !countryCode.isEmpty {
+                draft.countryCode = countryCode.uppercased()
+            }
         }
 
         return draft

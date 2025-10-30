@@ -98,6 +98,53 @@ The onboarding runtime now runs entirely through the coordinator. The high-level
 
 ---
 
+### Objective Ledger & Validation Workflow
+
+The coordinator maintains a lightweight *objective ledger* that tracks the status of each phase objective together with provenance metadata:
+
+- `status`: `pending`, `in_progress`, or `completed`
+- `source`: `user_manual`, `user_contacts`, `llm_proposed`, etc.
+- `updatedAt`: ISO8601 timestamp
+
+Deterministic UI flows (manual or contact-card intake, section toggles, etc.) update the ledger immediately. Subjective goals (e.g., “experience interview complete”) still rely on `set_objective_status` proposals from the LLM, but the coordinator remains the final authority—every proposal is audited before the ledger flips to `completed`.
+
+Ledger updates are surfaced to the LLM by:
+
+1. Embedding short system messages ahead of each `responseCreate` call that summarize the latest objective deltas.
+2. Returning structured JSON in tool responses (e.g., `{"status":"approved","objective_state":"completed","objective_id":"contact_validation"}`) so the model can react without waiting for another round trip.
+
+### Validation Metadata & Auto-Approval
+
+Applicant profile drafts originating from deterministic user flows are tagged with validation metadata before storage:
+
+```json
+"meta": {
+  "validation_state": "user_validated",
+  "validated_via": "manual" | "contacts",
+  "validated_at": "2024-07-19T22:15:04Z"
+}
+```
+
+When `submit_for_validation` receives a payload marked `user_validated`, the tool short-circuits with an immediate response:
+
+```json
+{
+  "status": "approved",
+  "message": "Validated data automatically approved.",
+  "metadata": {
+    "reason": "already_validated",
+    "validated_via": "...",
+    "validated_at": "..."
+  }
+}
+```
+
+If the LLM submits data without a payload (`data` missing), the tool asks it to retry. After two empty attempts the coordinator falls back to the cached draft to keep the workflow moving, while logging the anomaly for diagnostics.
+
+Resume/URL driven drafts **do not** receive the `user_validated` tag automatically; the validation card still appears so the user can confirm extracted data. Upon approval the ledger records `source = llm_proposed` and the metadata is attached for future submissions.
+
+---
+
 ## Message & Streaming Management
 
 ### **ChatTranscriptStore**
@@ -329,7 +376,8 @@ typealias CheckpointSnapshot = (
     session: InterviewSession,
     applicantProfile: JSON?,
     skeletonTimeline: JSON?,
-    enabledSections: [String]?
+    enabledSections: [String]?,
+    ledger: [ObjectiveEntry]
 )
 ```
 

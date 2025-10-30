@@ -61,6 +61,7 @@ final class OnboardingInterviewService {
     @ObservationIgnored private let dataStore = InterviewDataStore()
     @ObservationIgnored private let knowledgeCardAgent: KnowledgeCardAgent?
     @ObservationIgnored let coordinator: OnboardingInterviewCoordinator // All onboarding state lives here; service only exposes a façade
+    private var validationRetryCounts: [String: Int] = [:]
     var applicantProfileJSON: JSON? { coordinator.dataStoreManager.applicantProfileJSON }
     var skeletonTimelineJSON: JSON? { coordinator.dataStoreManager.skeletonTimelineJSON }
 
@@ -256,6 +257,15 @@ final class OnboardingInterviewService {
         coordinator.setWritingAnalysisConsent(allowed)
     }
 
+    func recordObjective(
+        _ id: String,
+        status: ObjectiveStatus,
+        source: String,
+        details: [String: String]? = nil
+    ) {
+        coordinator.updateObjectiveStatus(id, status: status, source: source, details: details)
+    }
+
     // MARK: - Tool continuation helpers
 
     func resumeToolContinuation(
@@ -329,25 +339,35 @@ final class OnboardingInterviewService {
 
     func beginApplicantProfileManualEntry() {
         coordinator.beginApplicantProfileManualEntry()
+        recordObjective("contact_source_selected", status: .completed, source: "user_manual")
     }
 
     func beginApplicantProfileURL() {
         coordinator.beginApplicantProfileURL()
+        recordObjective("contact_source_selected", status: .completed, source: "user_url")
     }
 
     func beginApplicantProfileUpload() {
         guard let result = coordinator.beginApplicantProfileUpload() else { return }
         presentUploadRequest(result.request, continuationId: result.continuationId)
+        recordObjective("contact_source_selected", status: .completed, source: "resume_upload")
     }
 
     func beginApplicantProfileContactsFetch() {
         coordinator.beginApplicantProfileContactsFetch()
+        recordObjective("contact_source_selected", status: .completed, source: "contacts")
     }
 
     func submitApplicantProfileURL(_ urlString: String) async {
         guard let result = coordinator.submitApplicantProfileURL(urlString) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        recordObjective(
+            "contact_data_collected",
+            status: .completed,
+            source: "user_url",
+            details: ["url": urlString]
+        )
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -355,6 +375,19 @@ final class OnboardingInterviewService {
         guard let result = coordinator.completeApplicantProfileDraft(draft, source: source) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        let sourceTag: String = (source == .contacts) ? "contacts" : "manual"
+        recordObjective(
+            "contact_data_collected",
+            status: .completed,
+            source: sourceTag
+        )
+        if source == .contacts || source == .manual {
+            recordObjective(
+                "contact_data_validated",
+                status: .completed,
+                source: source == .contacts ? "contacts_auto" : "manual_auto"
+            )
+        }
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -363,6 +396,12 @@ final class OnboardingInterviewService {
         let (continuationId, payload) = result
         Logger.debug("Applicant profile intake cancelled: \(reason)")
         coordinator.updateWaitingState(nil)
+        recordObjective(
+            "contact_data_collected",
+            status: .pending,
+            source: "user_cancelled",
+            details: reason.isEmpty ? nil : ["reason": reason]
+        )
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -370,6 +409,16 @@ final class OnboardingInterviewService {
         guard let result = coordinator.resolveApplicantProfile(with: draft) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        recordObjective(
+            "contact_data_collected",
+            status: .completed,
+            source: "llm_validation"
+        )
+        recordObjective(
+            "contact_data_validated",
+            status: .completed,
+            source: "user_validation"
+        )
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -377,6 +426,12 @@ final class OnboardingInterviewService {
         guard let result = coordinator.rejectApplicantProfile(reason: reason) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        recordObjective(
+            "contact_data_validated",
+            status: .pending,
+            source: "user_rejected",
+            details: reason.isEmpty ? nil : ["reason": reason]
+        )
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -387,6 +442,12 @@ final class OnboardingInterviewService {
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
         await coordinator.persistCheckpoint()
+        recordObjective(
+            "enabled_sections",
+            status: .completed,
+            source: "user_selection",
+            details: ["count": "\(enabled.count)"]
+        )
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -394,6 +455,12 @@ final class OnboardingInterviewService {
         guard let result = coordinator.rejectSectionToggle(reason: reason) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        recordObjective(
+            "enabled_sections",
+            status: .pending,
+            source: "user_rejected",
+            details: reason.isEmpty ? nil : ["reason": reason]
+        )
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -433,6 +500,12 @@ final class OnboardingInterviewService {
         guard let result = coordinator.cancelValidation(reason: reason) else { return }
         let (continuationId, payload) = result
         Logger.debug("User cancelled validation request: \(reason)")
+        recordObjective(
+            "contact_data_validated",
+            status: .pending,
+            source: "user_cancelled",
+            details: reason.isEmpty ? nil : ["reason": reason]
+        )
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -518,6 +591,37 @@ final class OnboardingInterviewService {
     func storeApplicantProfileImage(data: Data, mimeType: String?) {
         coordinator.dataStoreManager.storeApplicantProfileImage(data: data, mimeType: mimeType)
         Task { await coordinator.persistCheckpoint() }
-        Logger.debug("Applicant profile image updated (\(data.count) bytes, mime: \(mimeType ?? "unknown"))")
+        Logger.debug("Applicant profile image updated (\(data.count) bytes, mime: \(mimeType ?? \"unknown\"))")
+        recordObjective(
+            "contact_photo_collected",
+            status: .completed,
+            source: "photo_upload",
+            details: ["bytes": "\(data.count)"]
+        )
+    }
+
+    // MARK: - Validation Retry Tracking
+
+    /// Records a missing validation payload occurrence and returns the updated attempt count.
+    func registerMissingValidationPayload(for canonicalType: String) -> Int {
+        let key = canonicalType
+        let next = (validationRetryCounts[key] ?? 0) + 1
+        validationRetryCounts[key] = next
+        Logger.warning("⚠️ Missing validation payload for \(canonicalType) (attempt \(next))", category: .ai)
+        return next
+    }
+
+    /// Resets the retry counter for a validation data type after a successful submission.
+    func resetValidationRetry(for canonicalType: String) {
+        validationRetryCounts[canonicalType] = 0
+    }
+
+    /// Provides a cached payload for validation fallback when the LLM omits data repeatedly.
+    func fallbackValidationPayload(for canonicalType: String) -> JSON? {
+        guard canonicalType == "applicant_profile" else { return nil }
+        if let draft = coordinator.toolRouter.profileHandler.lastSubmittedDraft, draft != .null {
+            return draft
+        }
+        return applicantProfileJSON
     }
 }

@@ -22,6 +22,11 @@ struct PhaseOneScript: PhaseScript {
 
         **Objective**: Collect the user's basic contact information (ApplicantProfile) and career skeleton timeline.
 
+        ### Objective Ledger Guidance
+        - You will periodically receive system messages that begin with "Objective update:". Treat these as authoritative coordinator updates about user-driven progress.
+        - Use the ledger updates to decide the next best action. Do not repeat work that the coordinator has already marked as completed.
+        - Continue calling `set_objective_status` when you assess that an objective (or sub-objective) is finished, but expect the coordinator to arbitrate the final state.
+
         ### Primary Objectives:
         1. **applicant_profile**: Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles
         2. **skeleton_timeline**: Build a high-level timeline of positions/roles with dates and organizations

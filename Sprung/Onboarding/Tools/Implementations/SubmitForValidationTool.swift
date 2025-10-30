@@ -52,7 +52,76 @@ struct SubmitForValidationTool: InterviewTool {
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let payload = try ValidationPayload(json: params)
+        var normalizedParams = params
+
+        let rawType = normalizedParams["dataType"].stringValue
+        let canonicalType = rawType
+            .lowercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+
+        if normalizedParams["data"] == .null {
+            let attempts = await service.registerMissingValidationPayload(for: canonicalType)
+            if attempts <= 2 {
+                throw ToolError.invalidParameters("missing data payload for \(canonicalType)")
+            }
+
+            if let fallback = await service.fallbackValidationPayload(for: canonicalType) {
+                normalizedParams["data"] = fallback
+                if canonicalType == "applicant_profile" {
+                    let existingMessage = normalizedParams["message"].string
+                    let fallbackNotice = "Auto-filled from cached applicant profile after repeated missing payloads."
+                    normalizedParams["message"].string = [existingMessage, fallbackNotice]
+                        .compactMap { $0 }
+                        .filter { !$0.isEmpty }
+                        .joined(separator: "\n\n")
+                }
+                await service.resetValidationRetry(for: canonicalType)
+                Logger.warning("⚠️ submit_for_validation falling back to cached \(canonicalType) data after \(attempts) attempts.", category: .ai)
+            } else {
+                throw ToolError.executionFailed("No cached payload available for \(canonicalType).")
+            }
+        } else {
+            await service.resetValidationRetry(for: canonicalType)
+        }
+
+        let payload = try ValidationPayload(json: normalizedParams)
+
+        if payload.isApplicantProfile,
+           payload.payload["meta"]["validation_state"].stringValue.lowercased() != "user_validated" {
+            await service.recordObjective(
+                "contact_data_collected",
+                status: .inProgress,
+                source: "llm_proposed"
+            )
+        }
+
+        if payload.isApplicantProfile,
+           payload.payload["meta"]["validation_state"].stringValue.lowercased() == "user_validated" {
+            await service.resetValidationRetry(for: canonicalType)
+
+            var response = JSON()
+            response["status"].string = "approved"
+            response["message"].string = "Validated data automatically approved."
+            response["data"] = payload.payload
+
+            var meta = JSON()
+            meta["reason"].string = "already_validated"
+            meta["validated_via"] = payload.payload["meta"]["validated_via"]
+            meta["validated_at"] = payload.payload["meta"]["validated_at"]
+            response["metadata"] = meta
+
+            await service.recordObjective(
+                "contact_data_validated",
+                status: .completed,
+                source: "auto_validator",
+                details: ["reason": "already_validated"]
+            )
+
+            Logger.info("✅ Auto-approved applicant profile validation (already validated).", category: .ai)
+            return .immediate(response)
+        }
+
         let tokenId = UUID()
 
         if payload.isApplicantProfile {

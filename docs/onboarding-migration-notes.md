@@ -10,6 +10,7 @@ These notes summarize the public API changes introduced by the coordinator/route
 - All interactive state (choice prompts, uploads, applicant profile intake, etc.) flows through `OnboardingToolRouter` and its handlers.
 - Wizard progress and system prompt construction are delegated to new collaborators so views and tools no longer poke at legacy service fields.
 - Contacts import is handled entirely by the applicant profile intake state machine; there is no separate contacts permission request API.
+- Objective ledger tracks fine-grained milestones (contact source selection, validation, etc.) so the coordinator can push canonical status updates back to the LLM.
 
 ---
 
@@ -60,4 +61,3 @@ These notes summarize the public API changes introduced by the coordinator/route
 
 - `Sprung/Onboarding/ARCHITECTURE.md` – detailed architecture diagrams and component responsibilities.
 - `docs/onboarding-capability-manifest.md` – canonical description of capability manifest statuses.
-

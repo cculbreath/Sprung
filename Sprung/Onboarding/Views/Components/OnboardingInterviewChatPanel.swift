@@ -40,6 +40,7 @@ struct OnboardingInterviewChatPanel: View {
                     }
                     .padding(20)
                 }
+                .textSelection(.enabled)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .modifier(ConditionalIntelligenceGlow(
