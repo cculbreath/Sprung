@@ -26,17 +26,71 @@ actor ToolExecutor {
             throw ToolError.invalidParameters("Unknown tool: \(call.name)")
         }
 
-        let result = try await tool.execute(call.arguments)
-        if case let .waiting(_, token) = result {
-            continuations[token.id] = token
+        do {
+            let result = try await tool.execute(call.arguments)
+            return normalize(result, toolName: call.name)
+        } catch {
+            return errorResult(for: call.name, error: error)
         }
-        return result
     }
 
     func resumeContinuation(id: UUID, with input: JSON) async throws -> ToolResult {
         guard let token = continuations.removeValue(forKey: id) else {
             throw ToolError.invalidParameters("Unknown continuation: \(id)")
         }
-        return await token.resumeHandler(input)
+        let result = await token.resumeHandler(input)
+        return normalize(result, toolName: token.toolName)
+    }
+
+    // MARK: - Helpers
+
+    private func normalize(_ result: ToolResult, toolName: String) -> ToolResult {
+        switch result {
+        case .immediate:
+            return result
+        case .waiting(_, let token):
+            continuations[token.id] = token
+            return result
+        case .error(let error):
+            return errorResult(for: toolName, error: error)
+        }
+    }
+
+    private func errorResult(for toolName: String, error: Error) -> ToolResult {
+        let reason: String
+        let message: String
+
+        switch error {
+        case let toolError as ToolError:
+            switch toolError {
+            case .invalidParameters(let text):
+                reason = "invalid_parameters"
+                message = text
+            case .executionFailed(let text):
+                reason = "execution_failed"
+                message = text
+            case .timeout(let interval):
+                reason = "timeout"
+                message = "Tool timed out after \(String(format: "%.2f", interval)) seconds."
+            case .userCancelled:
+                reason = "user_cancelled"
+                message = "User cancelled the operation."
+            case .permissionDenied(let text):
+                reason = "permission_denied"
+                message = text
+            }
+        default:
+            reason = "unknown_error"
+            message = error.localizedDescription
+        }
+
+        var payload = JSON()
+        payload["status"].string = "error"
+        payload["reason"].string = reason
+        payload["message"].string = message
+        payload["tool"].string = toolName
+
+        Logger.warning("⚠️ Tool \(toolName) failed: \(message)", category: .ai)
+        return .immediate(payload)
     }
 }
