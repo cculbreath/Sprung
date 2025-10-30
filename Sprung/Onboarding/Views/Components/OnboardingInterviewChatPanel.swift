@@ -19,7 +19,6 @@ struct OnboardingInterviewChatPanel: View {
     @Bindable var service: OnboardingInterviewService
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Bindable var state: OnboardingInterviewViewModel
-    let actions: OnboardingInterviewActionHandler
     let modelStatusDescription: String
     let onOpenSettings: () -> Void
 
@@ -142,6 +141,6 @@ struct OnboardingInterviewChatPanel: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         state.userInput = ""
-        Task { await actions.sendMessage(trimmed) }
+        Task { await service.sendMessage(trimmed) }
     }
 }
