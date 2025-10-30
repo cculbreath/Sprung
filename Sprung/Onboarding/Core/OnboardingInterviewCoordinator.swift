@@ -6,16 +6,32 @@ import SwiftOpenAI
 @MainActor
 @Observable
 final class OnboardingInterviewCoordinator {
+    struct ObjectiveStatusUpdate {
+        let id: String
+        let status: ObjectiveStatus
+        let source: String
+        let details: [String: String]?
+    }
     private let chatTranscriptStore: ChatTranscriptStore
     let toolRouter: OnboardingToolRouter // Central router that owns handler state surfaced to SwiftUI
-    let dataStoreManager: OnboardingDataStoreManager
-    let checkpointManager: OnboardingCheckpointManager
     let wizardTracker: WizardProgressTracker
     let phaseRegistry: PhaseScriptRegistry
     private let interviewState: InterviewState
     let toolRegistry: ToolRegistry
     private let toolExecutor: ToolExecutor
     private let openAIService: OpenAIService?
+
+    // MARK: - Data Store Dependencies (merged from OnboardingDataStoreManager)
+
+    private let applicantProfileStore: ApplicantProfileStore
+    private let dataStore: InterviewDataStore
+    private(set) var artifacts = OnboardingArtifacts()
+    private(set) var applicantProfileJSON: JSON?
+    private(set) var skeletonTimelineJSON: JSON?
+
+    // MARK: - Checkpoint Dependencies (merged from OnboardingCheckpointManager)
+
+    private let checkpoints: Checkpoints
 
     private(set) var preferences: OnboardingPreferences
     private(set) var isProcessing = false
@@ -26,15 +42,26 @@ final class OnboardingInterviewCoordinator {
     private var orchestrator: InterviewOrchestrator?
     private var phaseAdvanceContinuationId: UUID?
     private var phaseAdvanceBlockCache: PhaseAdvanceBlockCache?
-    private var lastLedgerSignature: String?
+    private var toolQueueEntries: [UUID: ToolQueueEntry] = [:]
+    private var developerMessages: [String] = []
     private let ledgerDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter
     }()
+    private var objectiveStatusObservers: [(ObjectiveStatusUpdate) -> Void] = []
 
-    // MARK: - Objective Ledger
+    private struct ToolQueueEntry {
+        let tokenId: UUID
+        let callId: String
+        let toolName: String
+        let status: String
+        let requestedInput: String
+        let enqueuedAt: Date
+    }
+
+    // MARK: - Objective Ledger and Developer Messages
 
     private func phasesThrough(_ phase: InterviewPhase) -> [InterviewPhase] {
         switch phase {
@@ -54,10 +81,9 @@ final class OnboardingInterviewCoordinator {
         for phase in phasesThrough(session.phase) {
             await interviewState.registerObjectives(ObjectiveCatalog.objectives(for: phase))
         }
-        lastLedgerSignature = nil
     }
 
-    func updateObjectiveStatus(
+    func recordObjectiveStatus(
         _ id: String,
         status: ObjectiveStatus,
         source: String,
@@ -70,29 +96,165 @@ final class OnboardingInterviewCoordinator {
                 source: source,
                 details: details
             )
+            switch status {
+            case .completed:
+                await interviewState.completeObjective(id)
+            case .pending:
+                await interviewState.resetObjective(id)
+            case .inProgress:
+                break
+            }
         }
-        lastLedgerSignature = nil
+        enqueueDeveloperMessage(objectiveStatusMessage(id: id, status: status, source: source, details: details))
+        notifyObjectiveObservers(id: id, status: status, source: source, details: details)
     }
 
-    func ledgerStatusMessage() async -> String? {
-        let snapshot = await interviewState.ledgerSnapshot()
-        guard snapshot.signature != lastLedgerSignature else {
-            return nil
+    private func objectiveStatusMessage(
+        id: String,
+        status: ObjectiveStatus,
+        source: String,
+        details: [String: String]?
+    ) -> String {
+        let label = objectiveLabel(for: id)
+        let timestamp = ledgerDateFormatter.string(from: Date())
+        var components: [String] = ["Objective update", label, "status=\(status.rawValue)", "source=\(source)", "at=\(timestamp)"]
+        if let details, !details.isEmpty {
+            let detailString = details.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: "; ")
+            components.append("details={\(detailString)}")
         }
-        let summary = snapshot.formattedSummary(dateFormatter: ledgerDateFormatter)
-        guard !summary.isEmpty else {
-            lastLedgerSignature = snapshot.signature
-            return nil
+        return components.joined(separator: " | ")
+    }
+
+    private func objectiveLabel(for id: String) -> String {
+        for phase in [InterviewPhase.phase1CoreFacts, .phase2DeepDive, .phase3WritingCorpus] {
+            if let descriptor = ObjectiveCatalog.objectives(for: phase).first(where: { $0.id == id }) {
+                return descriptor.label
+            }
         }
-        lastLedgerSignature = snapshot.signature
-        return "Objective update: \(summary)"
+        return id
+    }
+
+    func addDeveloperStatus(_ message: String) {
+        enqueueDeveloperMessage(message)
+    }
+
+    func registerToolWait(tokenId: UUID, toolName: String, callId: String, message: String?) {
+        let entry = ToolQueueEntry(
+            tokenId: tokenId,
+            callId: callId,
+            toolName: toolName,
+            status: "waiting_for_user",
+            requestedInput: requestedInputDescription(for: toolName, override: message),
+            enqueuedAt: Date()
+        )
+        toolQueueEntries[tokenId] = entry
+        let message = "Developer status: Tool \(toolName) is waiting\n\nDetails:\n• status: \(entry.status)\n• call_id: \(callId)\n• requested_input: \(entry.requestedInput)\n• enqueued_at: \(ledgerDateFormatter.string(from: entry.enqueuedAt))\n\nInstruction: Pause until the coordinator sends another status update."
+        enqueueDeveloperMessage(message)
+        enqueueDeveloperMessage(toolQueueSummary())
+    }
+
+    func clearToolWait(tokenId: UUID, outcome: String) {
+        guard let entry = toolQueueEntries.removeValue(forKey: tokenId) else { return }
+        enqueueDeveloperMessage("Developer status: Tool \(entry.toolName) finished\n\nDetails:\n• call_id: \(entry.callId)\n• outcome: \(outcome)")
+        enqueueDeveloperMessage(toolQueueSummary())
+    }
+
+    func drainDeveloperMessages() -> [String] {
+        if developerMessages.isEmpty { return [] }
+        let messages = developerMessages
+        developerMessages.removeAll()
+        messages.forEach { Logger.info("📤 Developer message to LLM: \($0)", category: .ai) }
+        return messages
+    }
+
+    private func enqueueDeveloperMessage(_ message: String) {
+        guard !message.isEmpty else { return }
+        developerMessages.append(message)
+    }
+
+    func addObjectiveStatusObserver(_ observer: @escaping (ObjectiveStatusUpdate) -> Void) {
+        objectiveStatusObservers.append(observer)
+    }
+
+    private func notifyObjectiveObservers(
+        id: String,
+        status: ObjectiveStatus,
+        source: String,
+        details: [String: String]?
+    ) {
+        guard !objectiveStatusObservers.isEmpty else { return }
+        let update = ObjectiveStatusUpdate(
+            id: id,
+            status: status,
+            source: source,
+            details: details
+        )
+        objectiveStatusObservers.forEach { $0(update) }
+    }
+
+    private func toolQueueSummary() -> String {
+        guard !toolQueueEntries.isEmpty else {
+            return "Developer status: Tool queue empty"
+        }
+        let entries = toolQueueEntries.values.sorted { $0.enqueuedAt < $1.enqueuedAt }
+        let detail = entries.enumerated().map { index, entry in
+            "\(index + 1). \(entry.toolName) (status: \(entry.status), call_id: \(entry.callId)) → \(entry.requestedInput)"
+        }.joined(separator: "\n")
+        return "Developer status: Tool queue snapshot\n\n\(detail)"
+    }
+
+    private func requestedInputDescription(for toolName: String, override: String?) -> String {
+        if let override, !override.isEmpty {
+            return override
+        }
+        switch toolName {
+        case "get_user_option":
+            return "Awaiting user choice selection"
+        case "get_user_upload":
+            if let request = toolRouter.pendingUploadRequests.first {
+                return "Upload requested: \(request.metadata.title)"
+            }
+            return "Awaiting file upload"
+        case "get_macos_contact_card":
+            return "Awaiting macOS Contacts permission"
+        case "get_applicant_profile":
+            if let intake = toolRouter.pendingApplicantProfileIntake {
+                switch intake.mode {
+                case .manual(let source):
+                    return source == .contacts ? "Review imported contact details" : "Manual profile entry"
+                case .urlEntry:
+                    return "Awaiting profile URL submission"
+                case .loading:
+                    return "Fetching contact information"
+                case .options:
+                    return "Awaiting intake option selection"
+                }
+            }
+            if toolRouter.pendingApplicantProfileRequest != nil {
+                return "Applicant profile validation review"
+            }
+            return "Applicant profile intake"
+        case "submit_for_validation":
+            if toolRouter.pendingApplicantProfileRequest != nil {
+                return "Confirm applicant profile data"
+            }
+            if let validation = toolRouter.pendingValidationPrompt {
+                return "Review \(validation.dataType) data"
+            }
+            return "Validation review"
+        case "extract_document":
+            return "Processing uploaded document"
+        default:
+            return "Awaiting user action"
+        }
     }
 
     init(
         chatTranscriptStore: ChatTranscriptStore,
         toolRouter: OnboardingToolRouter,
-        dataStoreManager: OnboardingDataStoreManager,
-        checkpointManager: OnboardingCheckpointManager,
+        applicantProfileStore: ApplicantProfileStore,
+        dataStore: InterviewDataStore,
+        checkpoints: Checkpoints,
         wizardTracker: WizardProgressTracker,
         phaseRegistry: PhaseScriptRegistry,
         interviewState: InterviewState,
@@ -101,8 +263,9 @@ final class OnboardingInterviewCoordinator {
     ) {
         self.chatTranscriptStore = chatTranscriptStore
         self.toolRouter = toolRouter
-        self.dataStoreManager = dataStoreManager
-        self.checkpointManager = checkpointManager
+        self.applicantProfileStore = applicantProfileStore
+        self.dataStore = dataStore
+        self.checkpoints = checkpoints
         self.wizardTracker = wizardTracker
         self.phaseRegistry = phaseRegistry
         self.interviewState = interviewState
@@ -153,17 +316,22 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Chat helpers
 
     func appendUserMessage(_ text: String) {
+        Logger.info("💬 User message: \(text)", category: .ai)
         chatTranscriptStore.appendUserMessage(text)
     }
 
     @discardableResult
     func appendAssistantMessage(_ text: String) -> UUID {
-        chatTranscriptStore.appendAssistantMessage(text)
+        Logger.info("🤖 Assistant message: \(text)", category: .ai)
+        return chatTranscriptStore.appendAssistantMessage(text)
     }
 
     @discardableResult
     func beginAssistantStream(initialText: String = "") -> UUID {
-        chatTranscriptStore.beginAssistantStream(initialText: initialText)
+        if !initialText.isEmpty {
+            Logger.info("🤖 Assistant stream started: \(initialText)", category: .ai)
+        }
+        return chatTranscriptStore.beginAssistantStream(initialText: initialText)
     }
 
     func updateAssistantStream(id: UUID, text: String) {
@@ -171,7 +339,8 @@ final class OnboardingInterviewCoordinator {
     }
 
     func finalizeAssistantStream(id: UUID, text: String) -> TimeInterval {
-        chatTranscriptStore.finalizeAssistantStream(id: id, text: text)
+        Logger.info("🤖 Assistant stream finalized: \(text)", category: .ai)
+        return chatTranscriptStore.finalizeAssistantStream(id: id, text: text)
     }
 
     func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) {
@@ -179,6 +348,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     func appendSystemMessage(_ text: String) {
+        Logger.info("📢 System message: \(text)", category: .ai)
         chatTranscriptStore.appendSystemMessage(text)
     }
 
@@ -258,7 +428,7 @@ final class OnboardingInterviewCoordinator {
             throw ToolError.invalidParameters("Unsupported status: \(status)")
         }
 
-        updateObjectiveStatus(
+        recordObjectiveStatus(
             objectiveId,
             status: ledgerStatus,
             source: "llm_proposed",
@@ -276,14 +446,14 @@ final class OnboardingInterviewCoordinator {
         return response
     }
 
-    // MARK: - Checkpoints
+    // MARK: - Checkpoints (merged from OnboardingCheckpointManager)
 
     func hasRestorableCheckpoint() async -> Bool {
-        await checkpointManager.hasRestorableCheckpoint()
+        await checkpoints.hasCheckpoint()
     }
 
     func restoreCheckpoint() async -> CheckpointSnapshot? {
-        await checkpointManager.restoreLatest()
+        await checkpoints.restoreLatest()
     }
 
     func saveCheckpoint(
@@ -291,15 +461,131 @@ final class OnboardingInterviewCoordinator {
         skeletonTimeline: JSON?,
         enabledSections: [String]?
     ) async {
-        await checkpointManager.save(
+        let session = await interviewState.currentSession()
+        await checkpoints.save(
+            from: session,
             applicantProfile: applicantProfile,
             skeletonTimeline: skeletonTimeline,
-            enabledSections: enabledSections
+            enabledSections: enabledSections.flatMap { $0.isEmpty ? nil : $0 }
         )
+        Logger.debug("💾 Checkpoint saved (phase: \(session.phase.rawValue))", category: .ai)
     }
 
     func clearCheckpoints() async {
-        await checkpointManager.clear()
+        await checkpoints.clear()
+        Logger.debug("🗑️ Checkpoints cleared", category: .ai)
+    }
+
+    // MARK: - Data Store (merged from OnboardingDataStoreManager)
+
+    /// Stores the applicant profile JSON and syncs it to SwiftData.
+    func storeApplicantProfile(_ json: JSON) {
+        if let existing = applicantProfileJSON, existing == json { return }
+        applicantProfileJSON = json
+        let draft = ApplicantProfileDraft(json: json)
+        let profile = applicantProfileStore.currentProfile()
+        draft.apply(to: profile, replaceMissing: false)
+        applicantProfileStore.save(profile)
+        artifacts.applicantProfile = json
+
+        Logger.debug("📝 ApplicantProfile stored: \(json.dictionaryValue.keys.joined(separator: ", "))", category: .ai)
+    }
+
+    /// Updates the applicant profile image and syncs to SwiftData.
+    func storeApplicantProfileImage(data: Data, mimeType: String?) {
+        let profile = applicantProfileStore.currentProfile()
+        profile.pictureData = data
+        profile.pictureMimeType = mimeType
+        applicantProfileStore.save(profile)
+
+        var json = applicantProfileJSON ?? JSON()
+        json["image"].string = data.base64EncodedString()
+        if let mimeType {
+            json["image_mime_type"].string = mimeType
+        }
+        applicantProfileJSON = json
+        artifacts.applicantProfile = json
+
+        Logger.debug("📸 Applicant profile image updated (\(data.count) bytes, mime: \(mimeType ?? "unknown"))", category: .ai)
+    }
+
+    /// Stores the skeleton timeline JSON.
+    func storeSkeletonTimeline(_ json: JSON) {
+        skeletonTimelineJSON = json
+        artifacts.skeletonTimeline = json
+
+        Logger.debug("📅 Skeleton timeline stored", category: .ai)
+    }
+
+    /// Stores an artifact record, deduplicating by SHA256 if present.
+    func storeArtifactRecord(_ artifact: JSON) {
+        guard artifact != .null else { return }
+
+        if let sha = artifact["sha256"].string {
+            artifacts.artifactRecords.removeAll { $0["sha256"].stringValue == sha }
+        }
+        artifacts.artifactRecords.append(artifact)
+
+        Logger.debug("📦 Artifact record stored (sha256: \(artifact["sha256"].stringValue))", category: .ai)
+    }
+
+    /// Stores a knowledge card, deduplicating by ID if present.
+    func storeKnowledgeCard(_ card: JSON) {
+        guard card != .null else { return }
+
+        if let identifier = card["id"].string, !identifier.isEmpty {
+            artifacts.knowledgeCards.removeAll { $0["id"].stringValue == identifier }
+        }
+        artifacts.knowledgeCards.append(card)
+
+        Logger.debug("🃏 Knowledge card stored (id: \(card["id"].stringValue))", category: .ai)
+    }
+
+    /// Updates the enabled sections list.
+    func updateEnabledSections(_ sections: [String]) {
+        artifacts.enabledSections = sections
+        Logger.debug("🧩 Enabled sections updated: \(sections.joined(separator: ", "))", category: .ai)
+    }
+
+    /// Loads persisted artifacts from the data store.
+    func loadPersistedArtifacts() async {
+        // Load artifact records
+        let records = await dataStore.list(dataType: "artifact_record")
+        var deduped: [JSON] = []
+        var seen: Set<String> = []
+        for record in records {
+            if let sha = record["sha256"].string, !sha.isEmpty {
+                if seen.contains(sha) { continue }
+                seen.insert(sha)
+            }
+            deduped.append(record)
+        }
+        artifacts.artifactRecords = deduped
+
+        // Load knowledge cards
+        let storedKnowledgeCards = await dataStore.list(dataType: "knowledge_card")
+        artifacts.knowledgeCards = storedKnowledgeCards
+
+        Logger.debug("📂 Loaded \(deduped.count) artifact records, \(storedKnowledgeCards.count) knowledge cards", category: .ai)
+    }
+
+    /// Clears all artifact state (for interview reset).
+    func clearArtifacts() {
+        applicantProfileJSON = nil
+        skeletonTimelineJSON = nil
+        artifacts.applicantProfile = nil
+        artifacts.skeletonTimeline = nil
+        artifacts.artifactRecords = []
+        artifacts.enabledSections = []
+        artifacts.knowledgeCards = []
+
+        Logger.debug("🗑️ All artifacts cleared", category: .ai)
+    }
+
+    /// Removes all persisted onboarding data from disk.
+    func resetStore() async {
+        await dataStore.reset()
+        Logger.debug("🧹 Interview data store cleared", category: .ai)
     }
 
     // MARK: - Choice Prompts
@@ -430,7 +716,7 @@ final class OnboardingInterviewCoordinator {
 
     func resolveSectionToggle(enabled: [String]) -> (UUID, JSON)? {
         if let result = toolRouter.resolveSectionToggle(enabled: enabled) {
-            dataStoreManager.updateEnabledSections(enabled)
+            updateEnabledSections(enabled)
             return result
         }
         return nil
@@ -449,76 +735,6 @@ final class OnboardingInterviewCoordinator {
 
     func setProcessingState(_ processing: Bool) {
         isProcessing = processing
-    }
-
-    // MARK: - Capabilities
-
-    func capabilityManifest(
-        pendingExtraction: OnboardingPendingExtraction?,
-        knowledgeCardAvailable: Bool
-    ) -> JSON {
-        let toolStatuses = toolRouter.statusSnapshot
-
-        var manifest = JSON()
-        manifest["version"].int = 2
-
-        var toolsJSON = JSON()
-        toolsJSON["capabilities_describe"]["status"].string = OnboardingToolStatus.ready.rawValue
-
-        toolsJSON[OnboardingToolIdentifier.getUserOption.rawValue]["status"].string =
-            toolStatuses.status(for: .getUserOption).rawValue
-
-        var uploadJSON = JSON()
-        uploadJSON["status"].string = toolStatuses.status(for: .getUserUpload).rawValue
-        uploadJSON["accepts"] = JSON(["pdf", "docx", "txt", "md"])
-        uploadJSON["max_bytes"].int = 10 * 1024 * 1024
-        toolsJSON[OnboardingToolIdentifier.getUserUpload.rawValue] = uploadJSON
-
-        var contactsJSON = JSON()
-        contactsJSON["status"].string = toolStatuses.status(for: .getMacOSContactCard).rawValue
-        toolsJSON[OnboardingToolIdentifier.getMacOSContactCard.rawValue] = contactsJSON
-
-        var profileJSON = JSON()
-        profileJSON["status"].string = toolStatuses.status(for: .getApplicantProfile).rawValue
-        profileJSON["paths"] = JSON(["upload", "url", "contacts", "manual"])
-        toolsJSON[OnboardingToolIdentifier.getApplicantProfile.rawValue] = profileJSON
-
-        var extractionJSON = JSON()
-        extractionJSON["status"].string = pendingExtraction == nil ? OnboardingToolStatus.ready.rawValue : OnboardingToolStatus.processing.rawValue
-        extractionJSON["supports"] = JSON(["pdf", "docx"])
-        extractionJSON["ocr"].bool = true
-        extractionJSON["layout_preservation"].bool = true
-        extractionJSON["return_types"] = JSON(["artifact_record", "applicant_profile", "skeleton_timeline"])
-        toolsJSON["extract_document"] = extractionJSON
-
-        toolsJSON[OnboardingToolIdentifier.submitForValidation.rawValue]["status"].string =
-            toolStatuses.status(for: .submitForValidation).rawValue
-        toolsJSON[OnboardingToolIdentifier.submitForValidation.rawValue]["data_types"] = JSON([
-            "applicant_profile",
-            "skeleton_timeline",
-            "experience",
-            "education",
-            "knowledge_card"
-        ])
-
-        toolsJSON["persist_data"]["status"].string = OnboardingToolStatus.ready.rawValue
-        toolsJSON["persist_data"]["data_types"] = JSON([
-            "applicant_profile",
-            "skeleton_timeline",
-            "knowledge_card",
-            "artifact_record",
-            "writing_sample",
-            "candidate_dossier"
-        ])
-
-        toolsJSON["set_objective_status"]["status"].string = OnboardingToolStatus.ready.rawValue
-        toolsJSON["next_phase"]["status"].string = OnboardingToolStatus.ready.rawValue
-
-        let knowledgeCardStatus = knowledgeCardAvailable ? OnboardingToolStatus.ready.rawValue : OnboardingToolStatus.locked.rawValue
-        toolsJSON["generate_knowledge_card"]["status"].string = knowledgeCardStatus
-
-        manifest["tools"] = toolsJSON
-        return manifest
     }
 
     // MARK: - Phase Advance Handling
@@ -730,28 +946,26 @@ final class OnboardingInterviewCoordinator {
         appendSystemMessage("⚠️ \(message)")
     }
 
-    func loadPersistedArtifacts() async {
-        await dataStoreManager.loadPersistedArtifacts()
-    }
+    // Note: loadPersistedArtifacts() is already defined above in the Data Store section
 
     // MARK: - Internal Helpers
 
     private func prepareStateForStart(resumeExisting: Bool) async -> Bool {
         let restored: Bool
         if resumeExisting {
-            await dataStoreManager.loadPersistedArtifacts()
+            await loadPersistedArtifacts()
             await interviewState.restore(from: InterviewSession())
             let didRestore = await restoreFromCheckpointIfAvailable()
             if !didRestore {
                 await clearCheckpoints()
-                dataStoreManager.clearArtifacts()
-                await dataStoreManager.resetStore()
+                clearArtifacts()
+                await resetStore()
             }
             restored = didRestore
         } else {
             await clearCheckpoints()
-            dataStoreManager.clearArtifacts()
-            await dataStoreManager.resetStore()
+            clearArtifacts()
+            await resetStore()
             await interviewState.restore(from: InterviewSession())
             restored = false
         }
@@ -766,16 +980,15 @@ final class OnboardingInterviewCoordinator {
         let (session, profileJSON, timelineJSON, enabledSections, _) = snapshot
         await interviewState.restore(from: session)
         applyWizardProgress(from: session)
-        lastLedgerSignature = nil
 
         if let profileJSON {
-            await storeApplicantProfile(profileJSON)
+            storeApplicantProfile(profileJSON)
         }
         if let timelineJSON {
-            await storeSkeletonTimeline(timelineJSON)
+            storeSkeletonTimeline(timelineJSON)
         }
         if let enabledSections, !enabledSections.isEmpty {
-            dataStoreManager.updateEnabledSections(enabledSections)
+            updateEnabledSections(enabledSections)
         }
 
         isProcessing = false
@@ -844,9 +1057,21 @@ final class OnboardingInterviewCoordinator {
                 guard let self else { return }
                 await self.persistCheckpoint()
             },
-            ledgerStatusMessage: { [weak self] in
-                guard let self else { return nil }
-                return await self.ledgerStatusMessage()
+            registerToolWait: { [weak self] tokenId, toolName, callId, message in
+                guard let self else { return }
+                await MainActor.run {
+                    self.registerToolWait(tokenId: tokenId, toolName: toolName, callId: callId, message: message)
+                }
+            },
+            clearToolWait: { [weak self] tokenId, outcome in
+                guard let self else { return }
+                await MainActor.run {
+                    self.clearToolWait(tokenId: tokenId, outcome: outcome)
+                }
+            },
+            dequeueDeveloperMessages: { [weak self] in
+                guard let self else { return [] }
+                return await MainActor.run { self.drainDeveloperMessages() }
             }
         )
 
@@ -862,7 +1087,7 @@ final class OnboardingInterviewCoordinator {
     private func storeApplicantProfile(_ json: JSON) async {
         dataStoreManager.storeApplicantProfile(json)
         await persistCheckpoint()
-        updateObjectiveStatus(
+        recordObjectiveStatus(
             "applicant_profile",
             status: .completed,
             source: "system_persist",
@@ -873,7 +1098,7 @@ final class OnboardingInterviewCoordinator {
     private func storeSkeletonTimeline(_ json: JSON) async {
         dataStoreManager.storeSkeletonTimeline(json)
         await persistCheckpoint()
-        updateObjectiveStatus(
+        recordObjectiveStatus(
             "skeleton_timeline",
             status: .completed,
             source: "system_persist",
@@ -883,20 +1108,20 @@ final class OnboardingInterviewCoordinator {
 
     private func storeArtifactRecord(_ artifact: JSON) async {
         guard artifact != .null else { return }
-        dataStoreManager.storeArtifactRecord(artifact)
+        storeArtifactRecord(artifact)
     }
 
     private func storeKnowledgeCard(_ card: JSON) async {
         guard card != .null else { return }
-        dataStoreManager.storeKnowledgeCard(card)
+        storeKnowledgeCard(card)
         await persistCheckpoint()
     }
 
     func persistCheckpoint() async {
-        let sections = dataStoreManager.artifacts.enabledSections
+        let sections = artifacts.enabledSections
         await saveCheckpoint(
-            applicantProfile: dataStoreManager.applicantProfileJSON,
-            skeletonTimeline: dataStoreManager.skeletonTimelineJSON,
+            applicantProfile: applicantProfileJSON,
+            skeletonTimeline: skeletonTimelineJSON,
             enabledSections: sections.isEmpty ? nil : sections
         )
     }
@@ -905,7 +1130,7 @@ final class OnboardingInterviewCoordinator {
         resetTranscript()
         toolRouter.reset()
         wizardTracker.reset()
-        dataStoreManager.clearArtifacts()
+        clearArtifacts()
         pendingExtraction = nil
         pendingPhaseAdvanceRequest = nil
         phaseAdvanceContinuationId = nil
@@ -913,7 +1138,6 @@ final class OnboardingInterviewCoordinator {
         isProcessing = false
         isActive = false
         updateWaitingState(nil)
-        lastLedgerSignature = nil
         Task { await self.interviewState.resetLedger() }
     }
 
