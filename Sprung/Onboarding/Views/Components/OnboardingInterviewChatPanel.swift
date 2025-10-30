@@ -47,17 +47,18 @@ struct OnboardingInterviewChatPanel: View {
                     shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
                 ))
                 .onChange(of: coordinator.messages.count) { oldValue, newValue in
-                    guard state.shouldAutoScroll, newValue > oldValue,
-                          let lastId = coordinator.messages.last?.id else { return }
-                    proxy.scrollTo(lastId, anchor: .bottom)
+                    guard newValue > oldValue else { return }
+                    scrollToLatestMessage(proxy)
                 }
                 .onChange(of: coordinator.messages.last?.text ?? "") { _, _ in
-                    guard state.shouldAutoScroll, let lastId = coordinator.messages.last?.id else { return }
-                    proxy.scrollTo(lastId, anchor: .bottom)
+                    scrollToLatestMessage(proxy)
+                }
+                .onChange(of: service.isProcessing) { _, isProcessing in
+                    guard isProcessing == false else { return }
+                    scrollToLatestMessage(proxy)
                 }
                 .onAppear {
-                    guard state.shouldAutoScroll, let lastId = coordinator.messages.last?.id else { return }
-                    proxy.scrollTo(lastId, anchor: .bottom)
+                    scrollToLatestMessage(proxy)
                 }
             }
             .padding(.top, topPadding)
@@ -142,5 +143,11 @@ struct OnboardingInterviewChatPanel: View {
         guard !trimmed.isEmpty else { return }
         state.userInput = ""
         Task { await service.sendMessage(trimmed) }
+    }
+
+    private func scrollToLatestMessage(_ proxy: ScrollViewProxy) {
+        guard state.shouldAutoScroll,
+              let lastId = coordinator.messages.last?.id else { return }
+        proxy.scrollTo(lastId, anchor: .bottom)
     }
 }
