@@ -7,6 +7,42 @@
 //
 
 import Foundation
+import SwiftyJSON
+
+/// Context passed to workflow closures when objectives change state.
+struct ObjectiveWorkflowContext {
+    let session: InterviewSession
+    let status: ObjectiveStatus
+    let details: [String: String]
+}
+
+/// Actions a workflow may request when an objective transitions.
+enum ObjectiveWorkflowOutput {
+    case developerMessage(title: String, details: [String: String], payload: JSON?)
+    case triggerPhotoFollowUp(extraDetails: [String: String])
+}
+
+/// Declarative workflow metadata for a specific objective.
+struct ObjectiveWorkflow {
+    let id: String
+    let dependsOn: [String]
+    private let onCompleteHandler: ((ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput])?
+
+    init(
+        id: String,
+        dependsOn: [String] = [],
+        onComplete: ((ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput])? = nil
+    ) {
+        self.id = id
+        self.dependsOn = dependsOn
+        self.onCompleteHandler = onComplete
+    }
+
+    func outputs(for status: ObjectiveStatus, context: ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput] {
+        guard status == .completed else { return [] }
+        return onCompleteHandler?(context) ?? []
+    }
+}
 
 /// Defines the behavior and configuration for a specific interview phase.
 protocol PhaseScript {
@@ -19,6 +55,12 @@ protocol PhaseScript {
     /// Required objectives that must be completed before advancing.
     var requiredObjectives: [String] { get }
 
+    /// Declarative workflows for objectives in this phase.
+    var objectiveWorkflows: [String: ObjectiveWorkflow] { get }
+
+    /// Convenience lookup for a single workflow.
+    func workflow(for objectiveId: String) -> ObjectiveWorkflow?
+
     /// Validates whether this phase can advance based on completed objectives.
     func canAdvance(session: InterviewSession) -> Bool
 
@@ -29,6 +71,12 @@ protocol PhaseScript {
 // MARK: - Default Implementations
 
 extension PhaseScript {
+    var objectiveWorkflows: [String: ObjectiveWorkflow] { [:] }
+
+    func workflow(for objectiveId: String) -> ObjectiveWorkflow? {
+        objectiveWorkflows[objectiveId]
+    }
+
     func canAdvance(session: InterviewSession) -> Bool {
         requiredObjectives.allSatisfy { session.objectivesDone.contains($0) }
     }

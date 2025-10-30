@@ -18,7 +18,7 @@ struct SubmitForValidationTool: InterviewTool {
             ),
             "data": JSONSchema(
                 type: .object,
-                description: "The data object to display to the user for validation.",
+                description: "Structured payload shown in the validation UI. Populate this with the fields the user should confirm. For applicant profiles, include basics/location/profiles and omit hidden helper fields (e.g. contact suggestions).",
                 additionalProperties: true
             ),
             "message": JSONSchema(
@@ -44,7 +44,9 @@ struct SubmitForValidationTool: InterviewTool {
     }()
 
     var name: String { "submit_for_validation" }
-    var description: String { "Display collected data to the user for review, capturing approval or requested changes." }
+    var description: String {
+        "Present a structured payload to the user for confirmation. Call this after you have finished populating the `data` object for the specified `dataType`. The tool opens the validation UI, collects either an approval or requested edits, and returns a structured result. When the user still needs to act, the tool responds with a waiting status so you can resume later. Applicant profile payloads that already include `meta.validation_state == \"user_validated\"` are auto-approved and returned immediately."
+    }
     var parameters: JSONSchema { Self.schema }
 
     init(service: OnboardingInterviewService) {
@@ -99,11 +101,13 @@ struct SubmitForValidationTool: InterviewTool {
         if payload.isApplicantProfile,
            payload.payload["meta"]["validation_state"].stringValue.lowercased() == "user_validated" {
             await service.resetValidationRetry(for: canonicalType)
+            let sanitizedData = ApplicantProfileDraft.removeHiddenEmailOptions(from: payload.payload)
+            await service.persistApplicantProfile(sanitizedData)
 
             var response = JSON()
             response["status"].string = "approved"
             response["message"].string = "Validated data automatically approved."
-            response["data"] = payload.payload
+            response["data"] = sanitizedData
 
             var meta = JSON()
             meta["reason"].string = "already_validated"
@@ -136,9 +140,17 @@ struct SubmitForValidationTool: InterviewTool {
             )
         }
 
+        var waitingPayload = JSON()
+        waitingPayload["status"].string = "waiting"
+        waitingPayload["tool"].string = name
+        waitingPayload["data_type"].string = payload.canonicalType
+        waitingPayload["message"].string = payload.waitingMessage
+        waitingPayload["validation_state"].string = payload.payload["meta"]["validation_state"].string
+
         let token = ContinuationToken(
             id: tokenId,
             toolName: name,
+            initialPayload: waitingPayload,
             resumeHandler: { input in
                 if payload.isApplicantProfile {
                     await service.clearApplicantProfileRequest(continuationId: tokenId)
@@ -158,7 +170,7 @@ struct SubmitForValidationTool: InterviewTool {
                 response["status"].string = status
 
                 if input["data"] != .null {
-                    response["data"] = input["data"]
+                    response["data"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: input["data"])
                 }
 
                 if input["changes"] != .null {

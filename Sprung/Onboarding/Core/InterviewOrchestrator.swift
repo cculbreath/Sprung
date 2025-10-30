@@ -34,7 +34,9 @@ actor InterviewOrchestrator {
         let storeKnowledgeCard: @Sendable (JSON) async -> Void
         let setExtractionStatus: @Sendable (OnboardingPendingExtraction?) async -> Void
         let persistCheckpoint: @Sendable () async -> Void
-        let ledgerStatusMessage: @Sendable () async -> String?
+        let registerToolWait: @Sendable (UUID, String, String, String?) async -> Void
+        let clearToolWait: @Sendable (UUID, String) async -> Void
+        let dequeueDeveloperMessages: @Sendable () async -> [String]
     }
 
     private let client: OpenAIService
@@ -44,9 +46,9 @@ actor InterviewOrchestrator {
     private let systemPrompt: String
     private let allowedToolsMap: [InterviewPhase: [String]] = [
         .phase1CoreFacts: [
-            "capabilities_describe",
             "get_user_option",
             "get_applicant_profile",
+            "validate_applicant_profile",
             "get_user_upload",
             "get_macos_contact_card",
             "extract_document",
@@ -56,7 +58,6 @@ actor InterviewOrchestrator {
             "next_phase"
         ],
         .phase2DeepDive: [
-            "capabilities_describe",
             "get_user_option",
             "get_user_upload",
             "extract_document",
@@ -67,7 +68,6 @@ actor InterviewOrchestrator {
             "generate_knowledge_card"
         ],
         .phase3WritingCorpus: [
-            "capabilities_describe",
             "get_user_option",
             "get_user_upload",
             "extract_document",
@@ -77,7 +77,6 @@ actor InterviewOrchestrator {
             "next_phase"
         ],
         .complete: [
-            "capabilities_describe",
             "next_phase"
         ]
     ]
@@ -145,6 +144,18 @@ actor InterviewOrchestrator {
         var toolName: String?
         do {
             let result = try await toolExecutor.resumeContinuation(id: id, with: payload)
+            let outcomeDescription: String
+            switch result {
+            case .immediate(let json):
+                let statusValue = json["status"].string ?? json["status"].stringValue
+                outcomeDescription = statusValue.isEmpty ? "completed" : "completed(status: \(statusValue))"
+            case .waiting:
+                outcomeDescription = "continued"
+            case .error:
+                outcomeDescription = "completed"
+            }
+            await callbacks.clearToolWait(id, outcomeDescription)
+
             callId = continuationCallIds.removeValue(forKey: id)
             toolName = continuationToolNames.removeValue(forKey: id)
 
@@ -176,6 +187,7 @@ actor InterviewOrchestrator {
                await handleToolExecutionError(error, callId: callId, toolName: toolName) {
                 return
             }
+            await callbacks.clearToolWait(id, "error")
             if let continuation = pendingToolContinuations.removeValue(forKey: id) {
                 continuation.resume(throwing: error)
             }
@@ -443,10 +455,11 @@ actor InterviewOrchestrator {
     ) async throws {
         var inputItems: [InputItem] = []
 
-        if let ledgerMessage = await callbacks.ledgerStatusMessage(), !ledgerMessage.isEmpty {
-            let contentItem = ContentItem.text(TextContent(text: ledgerMessage))
-            let message = InputMessage(role: "system", content: .array([contentItem]))
-            inputItems.append(.message(message))
+        let managementMessages = await callbacks.dequeueDeveloperMessages()
+        for message in managementMessages where !message.isEmpty {
+            let contentItem = ContentItem.text(TextContent(text: message))
+            let developerMessage = InputMessage(role: "developer", content: .array([contentItem]))
+            inputItems.append(.message(developerMessage))
         }
 
         if let userMessage {
@@ -483,6 +496,11 @@ actor InterviewOrchestrator {
         )
         parameters.parallelToolCalls = false
         parameters.tools = await toolExecutor.availableToolSchemas(allowedNames: allowedToolNames)
+        if !allowedToolNames.isEmpty {
+            let sortedNames = allowedToolNames.sorted()
+            let allowedToolEntries = sortedNames.map { AllowedToolsChoice.AllowedTool(name: $0) }
+            parameters.toolChoice = .allowedTools(AllowedToolsChoice(mode: .auto, tools: allowedToolEntries))
+        }
 
         if let effort = config.defaultReasoningEffort {
             parameters.reasoning = Reasoning(effort: effort, summary: .auto)
@@ -704,23 +722,34 @@ actor InterviewOrchestrator {
     ) async throws -> JSON? {
         switch result {
         case .immediate(let json):
+            let sanitized = sanitizeToolOutput(for: toolName, payload: json)
             if let callId {
-                try await sendToolOutput(callId: callId, output: json)
+                Logger.info("📦 Tool immediate result for \(toolName ?? "unknown"): \(sanitized)", category: .ai)
+                try await sendToolOutput(callId: callId, output: sanitized)
             }
-            return json
-        case .waiting(_, let token):
+            return sanitized
+        case .waiting(let message, let token):
+            let statusPayload = sanitizeToolOutput(for: toolName, payload: token.initialPayload ?? JSON(["status": "waiting_for_user"]))
             if let callId {
                 // Send status to LLM to prevent tool call timeout
-                // Use initialPayload if provided, otherwise send waiting status
-                let statusPayload = token.initialPayload ?? JSON(["status": "waiting for user input"])
                 try await sendToolOutput(callId: callId, output: statusPayload)
                 continuationCallIds[token.id] = callId
             }
+            let queueMessage = queueDescription(
+                for: toolName ?? token.toolName,
+                statusPayload: statusPayload,
+                explicitMessage: message
+            )
             if let toolName {
                 continuationToolNames[token.id] = toolName
                 let waitingState = waitingState(for: toolName)
                 await state.setWaiting(waitingState)
                 await callbacks.handleWaitingState(waitingState)
+                let resolvedCallId = callId ?? continuationCallIds[token.id] ?? "call_\(token.id.uuidString)"
+                await callbacks.registerToolWait(token.id, toolName, resolvedCallId, queueMessage)
+            } else {
+                let resolvedCallId = callId ?? continuationCallIds[token.id] ?? "call_\(token.id.uuidString)"
+                await callbacks.registerToolWait(token.id, token.toolName, resolvedCallId, queueMessage)
             }
             waitingHandler?(token)
             return nil
@@ -740,7 +769,68 @@ actor InterviewOrchestrator {
         }
 
         let functionOutput = FunctionToolCallOutput(callId: callId, output: outputString)
+        Logger.info("📨 Sending function_call_output for call_id=\(callId): \(outputString)", category: .ai)
         try await requestResponse(functionOutputs: [functionOutput])
+    }
+
+    private func sanitizeToolOutput(for toolName: String?, payload: JSON) -> JSON {
+        guard let toolName else { return payload }
+        switch toolName {
+        case "get_applicant_profile":
+            var sanitized = payload
+            if sanitized["data"] != .null {
+                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
+                let channel = sanitized["mode"].string ?? "intake"
+                data = attachValidationMetaIfNeeded(to: data, defaultChannel: channel)
+                sanitized["data"] = data
+            }
+            return sanitized
+        case "validate_applicant_profile":
+            var sanitized = payload
+            if sanitized["data"] != .null {
+                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
+                data = attachValidationMetaIfNeeded(to: data, defaultChannel: "validation_card")
+                sanitized["data"] = data
+            }
+            if sanitized["changes"] != .null {
+                sanitized["changes"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["changes"])
+            }
+            return sanitized
+        case "submit_for_validation":
+            var sanitized = payload
+            if sanitized["data"] != .null {
+                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
+                let channel = sanitized["data_type"].string ?? "validation"
+                data = attachValidationMetaIfNeeded(to: data, defaultChannel: channel)
+                sanitized["data"] = data
+            }
+            if sanitized["changes"] != .null {
+                sanitized["changes"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["changes"])
+            }
+            return sanitized
+        default:
+            return payload
+        }
+    }
+
+    private func attachValidationMetaIfNeeded(to json: JSON, defaultChannel: String) -> JSON {
+        var enriched = json
+        let currentState = enriched["meta"]["validation_state"].stringValue.lowercased()
+        guard currentState.isEmpty || currentState == "user_validated" else {
+            return enriched
+        }
+        if enriched["meta"] == .null {
+            enriched["meta"] = JSON()
+        }
+        enriched["meta"]["validation_state"].string = "user_validated"
+        if enriched["meta"]["validated_via"].stringValue.isEmpty {
+            enriched["meta"]["validated_via"].string = defaultChannel
+        }
+        if enriched["meta"]["validated_at"].stringValue.isEmpty {
+            let formatter = ISO8601DateFormatter()
+            enriched["meta"]["validated_at"].string = formatter.string(from: Date())
+        }
+        return enriched
     }
 
     private func updateConversationState(from response: ResponseModel) {
@@ -829,10 +919,56 @@ actor InterviewOrchestrator {
         return true
     }
 
+    private func queueDescription(
+        for toolName: String,
+        statusPayload: JSON?,
+        explicitMessage: String?
+    ) -> String? {
+        func friendly(_ text: String) -> String {
+            let spaced = text.replacingOccurrences(of: "_", with: " ")
+            guard !spaced.isEmpty else { return spaced }
+            return spaced.prefix(1).uppercased() + spaced.dropFirst()
+        }
+
+        if let explicit = explicitMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !explicit.isEmpty {
+            return explicit
+        }
+
+        guard let payload = statusPayload, payload != .null else {
+            return nil
+        }
+
+        if let message = payload["message"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+            return message
+        }
+
+        if let detail = payload["detail"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !detail.isEmpty {
+            if let status = payload["status"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !status.isEmpty {
+                return "\(friendly(status)): \(detail)"
+            }
+            return detail
+        }
+
+        if let status = payload["status"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !status.isEmpty {
+            return friendly(status)
+        }
+
+        if let state = payload["state"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !state.isEmpty {
+            return friendly(state)
+        }
+
+        if let step = payload["step"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !step.isEmpty {
+            return step
+        }
+
+        Logger.debug("No queue description extracted for tool \(toolName)", category: .ai)
+        return nil
+    }
+
     private func allowedToolNames(for session: InterviewSession) -> Set<String> {
         if let tools = allowedToolsMap[session.phase] {
             return Set(tools)
         }
-        return Set(["capabilities_describe"])
+        return Set(allowedToolsMap.values.flatMap { $0 })
     }
 }

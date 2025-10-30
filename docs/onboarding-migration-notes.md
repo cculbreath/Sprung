@@ -11,6 +11,7 @@ These notes summarize the public API changes introduced by the coordinator/route
 - Wizard progress and system prompt construction are delegated to new collaborators so views and tools no longer poke at legacy service fields.
 - Contacts import is handled entirely by the applicant profile intake state machine; there is no separate contacts permission request API.
 - Objective ledger tracks fine-grained milestones (contact source selection, validation, etc.) so the coordinator can push canonical status updates back to the LLM.
+- Phase scripts now declare per-objective workflows (starting with Phase 1) that emit follow-up developer messages and tool instructions, replacing scattered hard-coded strings in the service layer.
 
 ---
 
@@ -53,11 +54,11 @@ These notes summarize the public API changes introduced by the coordinator/route
 2. Route UI actions through `OnboardingInterviewActionHandler`; the service now handles resuming tool continuations internally.
 3. Use `coordinator.wizardTracker` (through the service façade) for all wizard UI bindings—do not replicate step logic in views.
 4. When persisting new artifacts, go through `OnboardingDataStoreManager` so checkpoint snapshots stay consistent.
-5. Document new tool status fields or modal flows in `docs/` alongside this file to keep collaborators aligned.
+5. Add or update objective workflows inside the appropriate `PhaseScript` implementation when introducing new milestones so follow-up prompts stay centralized.
+6. Document new tool status fields or modal flows in `docs/` alongside this file to keep collaborators aligned.
 
 ---
 
 ## Resources
 
 - `Sprung/Onboarding/ARCHITECTURE.md` – detailed architecture diagrams and component responsibilities.
-- `docs/onboarding-capability-manifest.md` – canonical description of capability manifest statuses.

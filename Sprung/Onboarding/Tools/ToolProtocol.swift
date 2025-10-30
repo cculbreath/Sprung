@@ -13,8 +13,13 @@ protocol InterviewTool {
     var name: String { get }
     var description: String { get }
     var parameters: JSONSchema { get }
+    var isStrict: Bool { get }
 
     func execute(_ params: JSON) async throws -> ToolResult
+}
+
+extension InterviewTool {
+    var isStrict: Bool { false }
 }
 
 enum ToolResult {

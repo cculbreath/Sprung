@@ -72,9 +72,17 @@ struct GetUserOptionTool: InterviewTool {
             continuationId: tokenId
         )
 
+        var waitingPayload = JSON()
+        waitingPayload["status"].string = "waiting"
+        waitingPayload["tool"].string = name
+        waitingPayload["message"].string = "Waiting for user selection"
+        waitingPayload["prompt"].string = payload.prompt
+        waitingPayload["action_required"].string = payload.allowMultiple ? "multi_select" : "single_select"
+
         let token = ContinuationToken(
             id: tokenId,
             toolName: name,
+            initialPayload: waitingPayload,
             resumeHandler: { input in
                 await service.clearChoicePrompt(continuationId: tokenId)
 
@@ -151,4 +159,3 @@ private struct OptionPromptPayload {
         )
     }
 }
-

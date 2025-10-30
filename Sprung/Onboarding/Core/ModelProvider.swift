@@ -28,7 +28,7 @@ struct ModelProvider {
             return Config(
                 id: "gpt-5",
                 defaultVerbosity: "medium",
-                defaultReasoningEffort: "minimal"
+                defaultReasoningEffort: userReasoningEffort(defaultValue: "medium")
             )
         case .knowledgeCard:
             return Config(
@@ -57,5 +57,15 @@ struct ModelProvider {
             defaultVerbosity: prior.defaultVerbosity,
             defaultReasoningEffort: nil
         )
+    }
+
+    private static let supportedReasoningEfforts: Set<String> = ["minimal", "low", "medium", "high"]
+
+    private static func userReasoningEffort(defaultValue: String?) -> String? {
+        let stored = UserDefaults.standard.string(forKey: "reasoningEffort")?.lowercased()
+        if let stored, supportedReasoningEfforts.contains(stored) {
+            return stored
+        }
+        return defaultValue
     }
 }

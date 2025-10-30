@@ -237,7 +237,7 @@ final class ProfileInteractionHandler {
         payload["mode"].string = source == .contacts ? "contacts" : "manual"
         payload["status"].string = "completed"
         let dataJSON = attachingValidationMetadata(
-            to: draft.toJSON(),
+            to: draft.toSafeJSON(),
             via: source == .contacts ? "contacts" : "manual"
         )
         payload["data"] = dataJSON

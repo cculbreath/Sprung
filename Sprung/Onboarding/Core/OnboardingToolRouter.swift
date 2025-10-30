@@ -54,6 +54,7 @@ final class OnboardingToolRouter {
     let uploadHandler: UploadInteractionHandler
     let profileHandler: ProfileInteractionHandler
     let sectionHandler: SectionToggleHandler
+    private var statusResolvers: [OnboardingToolIdentifier: () -> OnboardingToolStatus] = [:]
 
     // MARK: - Init
 
@@ -67,6 +68,7 @@ final class OnboardingToolRouter {
         self.uploadHandler = uploadHandler
         self.profileHandler = profileHandler
         self.sectionHandler = sectionHandler
+        configureStatusResolvers()
     }
 
     // MARK: - Status Snapshot
@@ -74,34 +76,8 @@ final class OnboardingToolRouter {
     /// Returns the current status of each tool managed by the router. Used for
     /// capability manifests and analytics.
     var statusSnapshot: OnboardingToolStatusSnapshot {
-        let choiceStatus: OnboardingToolStatus = promptHandler.pendingChoicePrompt == nil ? .ready : .waitingForUser
-
-        let uploadStatus: OnboardingToolStatus = uploadHandler.pendingUploadRequests.isEmpty ? .ready : .waitingForUser
-
-        let validationStatus: OnboardingToolStatus = promptHandler.pendingValidationPrompt == nil ? .ready : .waitingForUser
-
-        let applicantProfileStatus: OnboardingToolStatus = {
-            if profileHandler.pendingApplicantProfileRequest != nil || profileHandler.pendingApplicantProfileIntake != nil {
-                return .waitingForUser
-            }
-            return .ready
-        }()
-
-        let contactStatus: OnboardingToolStatus = {
-            guard let intake = profileHandler.pendingApplicantProfileIntake else { return .ready }
-            if case .loading = intake.mode {
-                return .processing
-            }
-            return .ready
-        }()
-
-        return OnboardingToolStatusSnapshot(statuses: [
-            .getUserOption: choiceStatus,
-            .getUserUpload: uploadStatus,
-            .getMacOSContactCard: contactStatus,
-            .getApplicantProfile: applicantProfileStatus,
-            .submitForValidation: validationStatus
-        ])
+        let statuses = statusResolvers.mapValues { $0() }
+        return OnboardingToolStatusSnapshot(statuses: statuses)
     }
 
     // MARK: - Observable State Facades
@@ -275,5 +251,30 @@ final class OnboardingToolRouter {
         uploadHandler.reset()
         profileHandler.reset()
         sectionHandler.reset()
+    }
+
+    private func configureStatusResolvers() {
+        statusResolvers = [
+            .getUserOption: { [unowned self] in
+                promptHandler.pendingChoicePrompt == nil ? .ready : .waitingForUser
+            },
+            .getUserUpload: { [unowned self] in
+                uploadHandler.pendingUploadRequests.isEmpty ? .ready : .waitingForUser
+            },
+            .getMacOSContactCard: { [unowned self] in
+                guard let intake = profileHandler.pendingApplicantProfileIntake else { return .ready }
+                if case .loading = intake.mode { return .processing }
+                return .ready
+            },
+            .getApplicantProfile: { [unowned self] in
+                if profileHandler.pendingApplicantProfileRequest != nil || profileHandler.pendingApplicantProfileIntake != nil {
+                    return .waitingForUser
+                }
+                return .ready
+            },
+            .submitForValidation: { [unowned self] in
+                promptHandler.pendingValidationPrompt == nil ? .ready : .waitingForUser
+            }
+        ]
     }
 }

@@ -25,9 +25,16 @@ struct GetApplicantProfileTool: InterviewTool {
         let tokenId = UUID()
         await service.presentApplicantProfileIntake(continuationId: tokenId)
 
+        var waitingPayload = JSON()
+        waitingPayload["status"].string = "waiting"
+        waitingPayload["tool"].string = name
+        waitingPayload["message"].string = "Waiting for applicant profile intake"
+        waitingPayload["action_required"].string = "applicant_profile_intake"
+
         let token = ContinuationToken(
             id: tokenId,
             toolName: name,
+            initialPayload: waitingPayload,
             resumeHandler: { input in
                 if input["cancelled"].boolValue {
                     return .error(.userCancelled)

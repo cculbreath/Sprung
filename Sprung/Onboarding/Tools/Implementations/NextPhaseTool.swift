@@ -128,6 +128,9 @@ struct NextPhaseTool: InterviewTool {
 
         var awaitingPayload = JSON()
         awaitingPayload["status"].string = "awaiting_user_approval"
+        awaitingPayload["tool"].string = name
+        awaitingPayload["message"].string = "Awaiting user approval to advance to the next phase."
+        awaitingPayload["action_required"].string = "phase_advance_decision"
         awaitingPayload["missing_objectives"] = JSON(missing)
         awaitingPayload["proposed_overrides"] = JSON(overrides)
         if !reason.isEmpty {
