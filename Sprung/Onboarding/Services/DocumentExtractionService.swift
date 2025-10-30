@@ -107,7 +107,9 @@ actor DocumentExtractionService {
         var metadata: [String: Any] = [
             "character_count": enrichedContent.count,
             "source_format": contentType,
-            "purpose": request.purpose
+            "purpose": request.purpose,
+            "source_file_url": fileURL.absoluteString,
+            "source_filename": filename
         ]
         if initialIssues.contains("truncated_input") {
             metadata["truncated_input"] = true

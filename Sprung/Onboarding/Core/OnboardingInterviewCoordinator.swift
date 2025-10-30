@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import SwiftyJSON
 import SwiftOpenAI
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -527,6 +528,47 @@ final class OnboardingInterviewCoordinator {
         artifacts.artifactRecords.append(artifact)
 
         Logger.debug("📦 Artifact record stored (sha256: \(artifact["sha256"].stringValue))", category: .ai)
+    }
+
+    func artifactRecord(sha256: String) -> JSON? {
+        artifacts.artifactRecords.first { $0["sha256"].stringValue == sha256 }
+    }
+
+    func rawArtifactFile(for sha256: String) -> (data: Data, mimeType: String, filename: String)? {
+        guard let record = artifactRecord(sha256: sha256) else {
+            return nil
+        }
+
+        let metadata = record["metadata"]
+        let urlString = metadata["source_file_url"].string ?? metadata["source_path"].string
+        guard
+            let urlString,
+            let url = URL(string: urlString)
+        else {
+            Logger.warning("⚠️ Artifact \(sha256) missing source_file_url metadata.", category: .ai)
+            return nil
+        }
+
+        guard let data = try? Data(contentsOf: url) else {
+            Logger.warning("⚠️ Failed to load artifact file at \(url).", category: .ai)
+            return nil
+        }
+
+        let mimeType: String = {
+            if let explicit = record["content_type"].string, !explicit.isEmpty {
+                return explicit
+            }
+            if #available(macOS 12.0, *) {
+                return UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+            }
+            return "application/octet-stream"
+        }()
+
+        let filename = metadata["source_filename"].string ??
+            record["filename"].string ??
+            url.lastPathComponent
+
+        return (data, mimeType, filename)
     }
 
     /// Stores a knowledge card, deduplicating by ID if present.

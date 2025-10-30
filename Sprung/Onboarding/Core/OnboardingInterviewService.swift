@@ -132,6 +132,7 @@ final class OnboardingInterviewService {
         registry.register(ExtractDocumentTool(extractionService: documentExtractionService))
         registry.register(SetObjectiveStatusTool(service: self))
         registry.register(NextPhaseTool(service: self))
+        registry.register(RequestRawArtifactFileTool(service: self))
         registry.register(
             GenerateKnowledgeCardTool(agentProvider: { [weak self] in
                 self?.knowledgeCardAgent
@@ -774,6 +775,13 @@ final class OnboardingInterviewService {
             details: ["bytes": "\(data.count)"]
         )
         hasContactPhoto = true
+    }
+
+    func fetchRawArtifactFile(sha256: String) -> (sha: String, data: Data, mimeType: String, filename: String)? {
+        guard let payload = coordinator.rawArtifactFile(for: sha256) else {
+            return nil
+        }
+        return (sha: sha256, data: payload.data, mimeType: payload.mimeType, filename: payload.filename)
     }
 
     private func handleObjectiveStatusUpdate(_ update: OnboardingInterviewCoordinator.ObjectiveStatusUpdate) {
