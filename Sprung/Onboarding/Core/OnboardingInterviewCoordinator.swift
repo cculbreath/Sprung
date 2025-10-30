@@ -27,7 +27,7 @@ final class OnboardingInterviewCoordinator {
     private var phaseAdvanceContinuationId: UUID?
     private var phaseAdvanceBlockCache: PhaseAdvanceBlockCache?
     private var lastLedgerSignature: String?
-    private lazy var ledgerDateFormatter: DateFormatter = {
+    private let ledgerDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
