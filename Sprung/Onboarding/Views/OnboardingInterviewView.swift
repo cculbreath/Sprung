@@ -27,7 +27,6 @@ struct OnboardingInterviewView: View {
         @Bindable var coordinator = interviewCoordinator
         @Bindable var router = toolRouter
         @Bindable var uiState = viewModel
-        let actions = OnboardingInterviewActionHandler(service: service, coordinator: coordinator)
 
         // --- Card visual constants ---
         let corner: CGFloat = 44
@@ -48,8 +47,7 @@ struct OnboardingInterviewView: View {
                     service: service,
                     coordinator: coordinator,
                     router: router,
-                    state: uiState,
-                    actions: actions
+                    state: uiState
                 )
                 .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardStep)
 
@@ -60,9 +58,9 @@ struct OnboardingInterviewView: View {
                     continueTitle: continueButtonTitle(for: coordinator.wizardStep),
                     isContinueDisabled: isContinueDisabled(service: service, coordinator: coordinator),
                     onShowSettings: openSettings,
-                    onBack: { handleBack(service: service, coordinator: coordinator, actions: actions) },
-                    onCancel: { handleCancel(actions: actions) },
-                    onContinue: { handleContinue(service: service, coordinator: coordinator, actions: actions) }
+                    onBack: { handleBack(service: service, coordinator: coordinator) },
+                    onCancel: { handleCancel() },
+                    onContinue: { handleContinue(service: service, coordinator: coordinator) }
                 )
                 .padding(.horizontal, 16)
                 .animation(.easeInOut(duration: 0.25), value: coordinator.wizardStep)
@@ -100,10 +98,10 @@ struct OnboardingInterviewView: View {
 
                     ResumeInterviewPromptView(
                         onResume: {
-                            respondToResumeChoice(resume: true, actions: actions)
+                            respondToResumeChoice(resume: true)
                         },
                         onStartOver: {
-                            respondToResumeChoice(resume: false, actions: actions)
+                            respondToResumeChoice(resume: false)
                         },
                         onCancel: {
                             pendingStartModelId = nil
@@ -161,7 +159,7 @@ struct OnboardingInterviewView: View {
             get: { service.pendingExtraction != nil },
             set: { newValue in
                 if !newValue {
-                    actions.cancelPendingExtraction()
+                    service.setExtractionStatus(nil)
                 }
             }
         )) {
@@ -169,10 +167,11 @@ struct OnboardingInterviewView: View {
                 ExtractionReviewSheet(
                     extraction: pending,
                     onConfirm: { updated, notes in
-                        Task { await actions.confirmPendingExtraction(updated, notes: notes) }
+                        // TODO: Implement extraction confirmation post-M0
+                        Logger.debug("Extraction confirmation is not implemented in milestone M0.")
                     },
                     onCancel: {
-                        actions.cancelPendingExtraction()
+                        service.setExtractionStatus(nil)
                     }
                 )
             }
@@ -260,8 +259,7 @@ private extension OnboardingInterviewView {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator,
         router: OnboardingToolRouter,
-        state: OnboardingInterviewViewModel,
-        actions: OnboardingInterviewActionHandler
+        state: OnboardingInterviewViewModel
     ) -> some View {
         Group {
             if coordinator.wizardStep == .introduction {
@@ -277,7 +275,6 @@ private extension OnboardingInterviewView {
                     coordinator: coordinator,
                     router: router,
                     state: state,
-                    actions: actions,
                     modelStatusDescription: modelStatusDescription(service: service),
                     onOpenSettings: openSettings
                 )
@@ -330,12 +327,11 @@ private extension OnboardingInterviewView {
 
     func handleContinue(
         service: OnboardingInterviewService,
-        coordinator: OnboardingInterviewCoordinator,
-        actions: OnboardingInterviewActionHandler
+        coordinator: OnboardingInterviewCoordinator
     ) {
         switch coordinator.wizardStep {
             case .introduction:
-                beginInterview(service: service, actions: actions)
+                beginInterview(service: service)
             case .resumeIntake:
                 if service.isActive,
                    coordinator.pendingChoicePrompt == nil,
@@ -348,18 +344,17 @@ private extension OnboardingInterviewView {
             case .writingCorpus:
                 coordinator.setWizardStep(.wrapUp)
             case .wrapUp:
-                handleCancel(actions: actions)
+                handleCancel()
         }
     }
 
     func handleBack(
         service: OnboardingInterviewService,
-        coordinator: OnboardingInterviewCoordinator,
-        actions: OnboardingInterviewActionHandler
+        coordinator: OnboardingInterviewCoordinator
     ) {
         switch coordinator.wizardStep {
             case .resumeIntake:
-                actions.resetInterview()
+                service.resetInterview()
                 reinitializeUIState(service: service)
             case .artifactDiscovery:
                 coordinator.setWizardStep(.resumeIntake)
@@ -372,8 +367,8 @@ private extension OnboardingInterviewView {
         }
     }
 
-    func handleCancel(actions: OnboardingInterviewActionHandler) {
-        actions.resetInterview()
+    func handleCancel() {
+        interviewService.resetInterview()
         reinitializeUIState(service: interviewService)
         if let window = NSApp.windows.first(where: { $0 is BorderlessOverlayWindow }) {
             window.orderOut(nil)
@@ -403,10 +398,7 @@ private extension OnboardingInterviewView {
         return "Using \(display) with web search \(webText)."
     }
 
-    func beginInterview(
-        service: OnboardingInterviewService,
-        actions: OnboardingInterviewActionHandler
-    ) {
+    func beginInterview(service: OnboardingInterviewService) {
         let modelId = viewModel.currentModelId
         Task { @MainActor in
             guard service.isActive == false else { return }
@@ -415,35 +407,28 @@ private extension OnboardingInterviewView {
                 pendingStartModelId = modelId
                 showResumeOptions = true
             } else {
-                await launchInterview(modelId: modelId, resume: false, actions: actions)
+                await launchInterview(modelId: modelId, resume: false)
             }
         }
     }
 
     @MainActor
-    func launchInterview(
-        modelId: String,
-        resume: Bool,
-        actions: OnboardingInterviewActionHandler
-    ) async {
-        await actions.startInterview(modelId: modelId, backend: .openAI, resumeExisting: resume)
+    func launchInterview(modelId: String, resume: Bool) async {
+        await interviewService.startInterview(modelId: modelId, backend: .openAI, resumeExisting: resume)
         if viewModel.writingAnalysisAllowed {
-            actions.setWritingAnalysisConsent(true)
+            interviewService.setWritingAnalysisConsent(true)
         }
         pendingStartModelId = nil
         showResumeOptions = false
     }
 
-    func respondToResumeChoice(
-        resume: Bool,
-        actions: OnboardingInterviewActionHandler
-    ) {
+    func respondToResumeChoice(resume: Bool) {
         guard let modelId = pendingStartModelId else { return }
         pendingStartModelId = nil
         showResumeOptions = false
 
         Task { @MainActor in
-            await launchInterview(modelId: modelId, resume: resume, actions: actions)
+            await launchInterview(modelId: modelId, resume: resume)
         }
     }
 
