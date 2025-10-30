@@ -7,9 +7,9 @@ struct OnboardingInterviewInteractiveCard: View {
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Bindable var router: OnboardingToolRouter
     @Bindable var state: OnboardingInterviewViewModel
-    let actions: OnboardingInterviewActionHandler
     let modelStatusDescription: String
     let onOpenSettings: () -> Void
+    @State private var isToolPaneOccupied = false
 
     var body: some View {
         let cornerRadius: CGFloat = 28  // Reduced for more natural appearance
@@ -24,7 +24,7 @@ struct OnboardingInterviewInteractiveCard: View {
                 OnboardingInterviewToolPane(
                     service: service,
                     coordinator: coordinator,
-                    actions: actions
+                    isOccupied: $isToolPaneOccupied
                 )
                 .frame(minWidth: 340, maxWidth: 420)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
@@ -35,7 +35,6 @@ struct OnboardingInterviewInteractiveCard: View {
                     service: service,
                     coordinator: coordinator,
                     state: state,
-                    actions: actions,
                     modelStatusDescription: modelStatusDescription,
                     onOpenSettings: onOpenSettings
                 )
