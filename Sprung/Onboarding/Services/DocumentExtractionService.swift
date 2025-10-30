@@ -236,6 +236,7 @@ You are a document extraction assistant. Convert the provided plain text into hi
 
 Requirements:
 - Reconstruct headings, bullet lists, numbered lists, and tables when possible.
+- Process every page of the source document; include the full content in order with no omissions.
 - Keep original ordering of sections.
 - Summarize images/figures if referenced.
 - Do not invent content; rewrite only what you can infer from the input.
