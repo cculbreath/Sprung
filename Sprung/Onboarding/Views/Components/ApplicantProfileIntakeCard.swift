@@ -2,14 +2,20 @@ import SwiftUI
 
 struct ApplicantProfileIntakeCard: View {
     let state: OnboardingApplicantProfileIntakeState
-    let actions: OnboardingInterviewActionHandler
+    let service: OnboardingInterviewService
+    let coordinator: OnboardingInterviewCoordinator
 
     @State private var draft: ApplicantProfileDraft
     @State private var urlString: String
 
-    init(state: OnboardingApplicantProfileIntakeState, actions: OnboardingInterviewActionHandler) {
+    init(
+        state: OnboardingApplicantProfileIntakeState,
+        service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator
+    ) {
         self.state = state
-        self.actions = actions
+        self.service = service
+        self.coordinator = coordinator
         _draft = State(initialValue: state.draft)
         _urlString = State(initialValue: state.urlString)
     }
@@ -67,7 +73,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Upload your resume PDF, DOCX, or text file",
                     icon: "arrow.up.doc"
                 ) {
-                    Task { await actions.beginApplicantProfileUpload() }
+                    service.beginApplicantProfileUpload()
                 }
 
                 optionButton(
@@ -75,7 +81,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Provide a link to your resume or LinkedIn profile",
                     icon: "link"
                 ) {
-                    actions.beginApplicantProfileURLEntry()
+                    service.beginApplicantProfileURL()
                 }
 
                 optionButton(
@@ -83,7 +89,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Import details from your macOS Contacts or vCard",
                     icon: "person.crop.circle"
                 ) {
-                    Task { await actions.fetchApplicantProfileFromContacts() }
+                    service.beginApplicantProfileContactsFetch()
                 }
 
                 optionButton(
@@ -91,7 +97,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Fill in your contact details step by step",
                     icon: "square.and.pencil"
                 ) {
-                    actions.beginApplicantProfileManualEntry()
+                    service.beginApplicantProfileManualEntry()
                 }
             }
 
@@ -153,14 +159,14 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    actions.resetApplicantProfileIntake()
+                    service.resetApplicantProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("Save & Continue") {
-                    Task { await actions.completeApplicantProfileDraft(draft, source: source) }
+                    Task { await service.completeApplicantProfileDraft(draft, source: source) }
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -183,14 +189,14 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    actions.resetApplicantProfileIntake()
+                    service.resetApplicantProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("Submit URL") {
-                    Task { await actions.submitApplicantProfileURL(urlString) }
+                    Task { await service.submitApplicantProfileURL(urlString) }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
