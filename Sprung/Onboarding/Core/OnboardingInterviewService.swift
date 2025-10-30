@@ -26,9 +26,12 @@ final class OnboardingInterviewService {
     var pendingExtraction: OnboardingPendingExtraction? { coordinator.pendingExtraction }
     var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? { coordinator.pendingPhaseAdvanceRequest }
    var uploadedItems: [OnboardingUploadedItem] { coordinator.uploadedItems }
-   var artifacts: OnboardingArtifacts { coordinator.dataStoreManager.artifacts }
+   var artifacts: OnboardingArtifacts { coordinator.artifacts }
    private(set) var schemaIssues: [String] = []
    private(set) var nextQuestions: [OnboardingQuestion] = []
+
+   private var photoPromptIssued = false
+   private var hasContactPhoto = false
 
     var wizardStep: OnboardingWizardStep { coordinator.wizardStep }
     var completedWizardSteps: Set<OnboardingWizardStep> { coordinator.completedWizardSteps }
@@ -62,8 +65,8 @@ final class OnboardingInterviewService {
     @ObservationIgnored private let knowledgeCardAgent: KnowledgeCardAgent?
     @ObservationIgnored let coordinator: OnboardingInterviewCoordinator // All onboarding state lives here; service only exposes a façade
     private var validationRetryCounts: [String: Int] = [:]
-    var applicantProfileJSON: JSON? { coordinator.dataStoreManager.applicantProfileJSON }
-    var skeletonTimelineJSON: JSON? { coordinator.dataStoreManager.skeletonTimelineJSON }
+    var applicantProfileJSON: JSON? { coordinator.applicantProfileJSON }
+    var skeletonTimelineJSON: JSON? { coordinator.skeletonTimelineJSON }
 
     // MARK: - Init
 
@@ -79,19 +82,12 @@ final class OnboardingInterviewService {
 
         let interviewState = InterviewState()
         let checkpoints = Checkpoints()
-        let dataStoreManager = OnboardingDataStoreManager(
-            applicantProfileStore: applicantProfileStore,
-            dataStore: dataStore
-        )
-        let checkpointManager = OnboardingCheckpointManager(
-            checkpoints: checkpoints,
-            interviewState: interviewState
-        )
         let promptHandler = PromptInteractionHandler()
         let uploadHandler = UploadInteractionHandler(
             uploadFileService: UploadFileService(),
             uploadStorage: OnboardingUploadStorage(),
-            dataStoreManager: dataStoreManager
+            applicantProfileStore: applicantProfileStore,
+            dataStore: dataStore
         )
         let profileHandler = ProfileInteractionHandler(contactsImportService: ContactsImportService())
         let sectionHandler = SectionToggleHandler()
@@ -107,13 +103,18 @@ final class OnboardingInterviewService {
         self.coordinator = OnboardingInterviewCoordinator(
             chatTranscriptStore: ChatTranscriptStore(),
             toolRouter: toolRouter,
-            dataStoreManager: dataStoreManager,
-            checkpointManager: checkpointManager,
+            applicantProfileStore: applicantProfileStore,
+            dataStore: dataStore,
+            checkpoints: checkpoints,
             wizardTracker: wizardTracker,
             phaseRegistry: phaseRegistry,
             interviewState: interviewState,
             openAIService: openAIService
         )
+        coordinator.addObjectiveStatusObserver { [weak self] update in
+            guard let self else { return }
+            self.handleObjectiveStatusUpdate(update)
+        }
         registerTools()
     }
 
@@ -123,25 +124,18 @@ final class OnboardingInterviewService {
         let registry = coordinator.toolRegistry
         registry.register(GetUserOptionTool(service: self))
         registry.register(SubmitForValidationTool(service: self))
+        registry.register(ValidateApplicantProfileTool(service: self))
         registry.register(PersistDataTool(dataStore: dataStore))
         registry.register(GetMacOSContactCardTool())
         registry.register(GetApplicantProfileTool(service: self))
         registry.register(GetUserUploadTool(service: self))
         registry.register(ExtractDocumentTool(extractionService: documentExtractionService))
-        registry.register(CapabilitiesDescribeTool(service: self))
         registry.register(SetObjectiveStatusTool(service: self))
         registry.register(NextPhaseTool(service: self))
         registry.register(
             GenerateKnowledgeCardTool(agentProvider: { [weak self] in
                 self?.knowledgeCardAgent
             })
-        )
-    }
-
-    func capabilityManifest() -> JSON {
-        coordinator.capabilityManifest(
-            pendingExtraction: pendingExtraction,
-            knowledgeCardAvailable: knowledgeCardAgent != nil
         )
     }
 
@@ -263,7 +257,8 @@ final class OnboardingInterviewService {
         source: String,
         details: [String: String]? = nil
     ) {
-        coordinator.updateObjectiveStatus(id, status: status, source: source, details: details)
+        Logger.info("🧾 Recording objective id=\(id) status=\(status.rawValue) source=\(source)", category: .ai, metadata: details ?? [:])
+        coordinator.recordObjectiveStatus(id, status: status, source: source, details: details)
     }
 
     // MARK: - Tool continuation helpers
@@ -362,6 +357,8 @@ final class OnboardingInterviewService {
         guard let result = coordinator.submitApplicantProfileURL(urlString) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        let trimmedURL = payload["url"].stringValue
+        sendApplicantProfileURLStatus(url: trimmedURL, payload: payload)
         recordObjective(
             "contact_data_collected",
             status: .completed,
@@ -376,6 +373,21 @@ final class OnboardingInterviewService {
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
         let sourceTag: String = (source == .contacts) ? "contacts" : "manual"
+        let dataJSON = payload["data"]
+        if dataJSON != .null {
+            let note: String
+            if source == .contacts {
+                note = "Data imported from macOS Contacts. User confirmed details in the intake card; treat as authoritative."
+            } else {
+                note = "User manually entered and confirmed data in the intake form."
+            }
+            sendApplicantProfileIntakeStatus(
+                source: sourceTag,
+                note: note,
+                payload: dataJSON
+            )
+            await persistApplicantProfile(dataJSON)
+        }
         recordObjective(
             "contact_data_collected",
             status: .completed,
@@ -409,6 +421,21 @@ final class OnboardingInterviewService {
         guard let result = coordinator.resolveApplicantProfile(with: draft) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        let dataJSON = payload["data"]
+        if dataJSON != .null {
+            sendApplicantProfileValidationStatus(
+                status: payload["status"].stringValue,
+                details: ["source": "user_validation"],
+                payload: dataJSON
+            )
+            await persistApplicantProfile(dataJSON)
+        } else {
+            sendApplicantProfileValidationStatus(
+                status: payload["status"].stringValue,
+                details: ["source": "user_validation"],
+                payload: nil
+            )
+        }
         recordObjective(
             "contact_data_collected",
             status: .completed,
@@ -426,6 +453,15 @@ final class OnboardingInterviewService {
         guard let result = coordinator.rejectApplicantProfile(reason: reason) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        var details: [String: String] = ["source": "user_validation"]
+        if !reason.isEmpty {
+            details["user_notes"] = reason
+        }
+        sendApplicantProfileValidationStatus(
+            status: payload["status"].stringValue,
+            details: details,
+            payload: nil
+        )
         recordObjective(
             "contact_data_validated",
             status: .pending,
@@ -513,6 +549,7 @@ final class OnboardingInterviewService {
         guard let result = await coordinator.completeUpload(id: id, fileURLs: fileURLs) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        sendUploadStatus(payload)
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -520,6 +557,7 @@ final class OnboardingInterviewService {
         guard let result = await coordinator.completeUpload(id: id, link: link) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        sendUploadStatus(payload)
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -527,6 +565,7 @@ final class OnboardingInterviewService {
         guard let result = await coordinator.skipUpload(id: id) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
+        sendUploadStatus(payload)
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
@@ -586,11 +625,146 @@ final class OnboardingInterviewService {
     private func resetLocalTransientState() {
         schemaIssues.removeAll()
         nextQuestions.removeAll()
+        photoPromptIssued = false
+        if let imageValue = coordinator.applicantProfileJSON?["image"],
+           imageValue != .null,
+           !(imageValue.stringValue.isEmpty) {
+            hasContactPhoto = true
+        } else {
+            hasContactPhoto = false
+        }
+    }
+
+    private func sendDeveloperStatus(
+        title: String,
+        details: [String: String] = [:],
+        payload: JSON? = nil
+    ) {
+        let readableDetails = details
+            .filter { !$0.value.isEmpty }
+            .sorted { $0.key < $1.key }
+            .map { "• \($0.key): \($0.value)" }
+            .joined(separator: "\n")
+
+        var payloadText: String?
+        if let payload, payload != .null {
+            payloadText = payload.rawString(options: [.sortedKeys]) ?? payload.description
+        }
+
+        var logMetadata = details
+        if let payloadText {
+            logMetadata["payload"] = payloadText
+        }
+
+        Logger.log(.info, "📤 Developer status queued: \(title)", category: .ai, metadata: logMetadata)
+
+        var message = "Developer status: \(title)"
+        if !readableDetails.isEmpty {
+            message += "\n\nDetails:\n\(readableDetails)"
+        }
+        if let payloadText {
+            message += "\n\nPayload:\n\(payloadText)"
+        }
+
+        coordinator.addDeveloperStatus(message)
+    }
+
+    private func sendApplicantProfileIntakeStatus(
+        source: String,
+        note: String,
+        payload: JSON
+    ) {
+        let message = DeveloperMessageTemplates.contactIntakeCompleted(
+            source: source,
+            note: note,
+            payload: payload
+        )
+        sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
+    }
+
+    private func sendApplicantProfileURLStatus(url: String, payload: JSON) {
+        let message = DeveloperMessageTemplates.contactURLSubmitted(
+            mode: payload["mode"].stringValue,
+            status: payload["status"].stringValue,
+            url: url,
+            payload: payload
+        )
+        sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
+    }
+
+    private func sendApplicantProfileValidationStatus(
+        status: String,
+        details extraDetails: [String: String] = [:],
+        payload: JSON?
+    ) {
+        let message = DeveloperMessageTemplates.contactValidation(
+            status: status,
+            extraDetails: extraDetails,
+            payload: payload
+        )
+        sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
+    }
+
+    private func sendUploadStatus(_ payload: JSON) {
+        let message = DeveloperMessageTemplates.uploadStatus(
+            status: payload["status"].stringValue,
+            kind: payload["kind"].string,
+            targetKey: payload["targetKey"].string,
+            payload: payload
+        )
+        sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
+    }
+
+    func persistApplicantProfile(_ json: JSON) async {
+        if let existing = coordinator.applicantProfileJSON, existing == json {
+            Logger.info("ℹ️ Applicant profile unchanged; skipping persistence.", category: .ai)
+            let message = DeveloperMessageTemplates.profileUnchanged(payload: json)
+            sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
+            return
+        }
+
+        coordinator.storeApplicantProfile(json)
+        await coordinator.persistCheckpoint()
+        let message = DeveloperMessageTemplates.profilePersisted(payload: json)
+        sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
+    }
+
+    private func enqueuePhotoFollowUp(extraDetails: [String: String]) {
+        guard photoPromptIssued == false else { return }
+        guard hasContactPhoto == false else { return }
+
+        photoPromptIssued = true
+
+        var details = extraDetails
+        if let photoStatus = coordinator.applicantProfileJSON?["meta"]["photo_status"].string,
+           !photoStatus.isEmpty {
+            details["photo_status"] = photoStatus
+        }
+
+        let uploadPayload = """
+        {
+          \"upload_type\": \"generic\",
+          \"prompt_to_user\": \"Upload a profile headshot. You can drag in a JPG, PNG, HEIC, or WEBP image, or paste an image URL.\",
+          \"allowed_types\": [\"jpg\", \"jpeg\", \"png\", \"heic\", \"webp\"],
+          \"allow_multiple\": false,
+          \"allow_url\": true,
+          \"target_key\": \"basics.image\"
+        }
+        """
+
+        let instructions = "Contact details validated. Immediately call get_user_upload using the payload below so the user sees the upload card right away. After the tool call, send a brief chat message asking whether they’d like to add a photo (let them know they can skip). If they decline in chat, acknowledge and move on without re-calling the tool.\n\nget_user_upload payload:\n\(uploadPayload)"
+
+        Logger.info("🎯 Triggering photo follow-up after validation", category: .ai, metadata: details)
+        sendDeveloperStatus(title: instructions, details: details)
+    }
+
+    func requestPhotoFollowUp(reason: String) {
+        enqueuePhotoFollowUp(extraDetails: ["reason": reason])
     }
 
     func storeApplicantProfileImage(data: Data, mimeType: String?) {
         let mimeString = mimeType ?? "unknown"
-        coordinator.dataStoreManager.storeApplicantProfileImage(data: data, mimeType: mimeType)
+        coordinator.storeApplicantProfileImage(data: data, mimeType: mimeType)
         Task { await coordinator.persistCheckpoint() }
         Logger.debug("Applicant profile image updated (\(data.count) bytes, mime: \(mimeString)")
         recordObjective(
@@ -599,6 +773,44 @@ final class OnboardingInterviewService {
             source: "photo_upload",
             details: ["bytes": "\(data.count)"]
         )
+        hasContactPhoto = true
+    }
+
+    private func handleObjectiveStatusUpdate(_ update: OnboardingInterviewCoordinator.ObjectiveStatusUpdate) {
+        switch update.id {
+        case "contact_photo_collected":
+            hasContactPhoto = update.status == .completed
+        default:
+            break
+        }
+
+        Task { @MainActor in
+            let session = await coordinator.currentSession()
+            guard let script = coordinator.phaseRegistry.currentScript(for: session),
+                  let workflow = script.workflow(for: update.id) else { return }
+
+            let context = ObjectiveWorkflowContext(
+                session: session,
+                status: update.status,
+                details: update.details ?? ["source": update.source]
+            )
+
+            let outputs = workflow.outputs(for: update.status, context: context)
+            applyWorkflowOutputs(outputs)
+        }
+    }
+
+    private func applyWorkflowOutputs(_ outputs: [ObjectiveWorkflowOutput]) {
+        guard !outputs.isEmpty else { return }
+
+        for output in outputs {
+            switch output {
+            case let .developerMessage(title, details, payload):
+                sendDeveloperStatus(title: title, details: details, payload: payload)
+            case let .triggerPhotoFollowUp(extraDetails):
+                enqueuePhotoFollowUp(extraDetails: extraDetails)
+            }
+        }
     }
 
     // MARK: - Validation Retry Tracking
