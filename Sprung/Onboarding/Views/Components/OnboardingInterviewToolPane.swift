@@ -23,13 +23,13 @@ struct OnboardingInterviewToolPane: View {
 
                 if !uploads.isEmpty {
                     uploadRequestsView(uploads)
-                } else if let intake = coordinator.pendingApplicantProfileIntake {
+                } else if let intake = coordinator.toolRouter.pendingApplicantProfileIntake {
                     ApplicantProfileIntakeCard(
                         state: intake,
                         service: service,
                         coordinator: coordinator
                     )
-                } else if let prompt = coordinator.pendingChoicePrompt {
+                } else if let prompt = coordinator.toolRouter.pendingChoicePrompt {
                     InterviewChoicePromptCard(
                         prompt: prompt,
                         onSubmit: { selection in
@@ -39,7 +39,7 @@ struct OnboardingInterviewToolPane: View {
                             handleToolResult { coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt") }
                         }
                     )
-                } else if let validation = coordinator.pendingValidationPrompt {
+                } else if let validation = coordinator.toolRouter.pendingValidationPrompt {
                     if validation.dataType == "knowledge_card" {
                         KnowledgeCardValidationHost(
                             prompt: validation,
@@ -82,7 +82,7 @@ struct OnboardingInterviewToolPane: View {
                         },
                         onCancel: nil
                     )
-                } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
+                } else if let profileRequest = coordinator.toolRouter.pendingApplicantProfileRequest {
                     ApplicantProfileReviewCard(
                         request: profileRequest,
                         fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
@@ -93,7 +93,7 @@ struct OnboardingInterviewToolPane: View {
                             Task { await service.rejectApplicantProfile(reason: "User cancelled applicant profile validation") }
                         }
                     )
-                } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
+                } else if let sectionToggle = coordinator.toolRouter.pendingSectionToggleRequest {
                     ResumeSectionsToggleCard(
                         request: sectionToggle,
                         existingDraft: experienceDefaultsStore.loadDraft(),
@@ -152,16 +152,16 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func summaryContent() -> some View {
-        if coordinator.wizardStep == .wrapUp {
+        if coordinator.wizardTracker.currentStep == .wrapUp {
             WrapUpSummaryView(
                 artifacts: service.artifacts,
                 schemaIssues: service.schemaIssues
             )
-        } else if coordinator.wizardStep == .resumeIntake, let profile = service.applicantProfileJSON {
+        } else if coordinator.wizardTracker.currentStep == .resumeIntake, let profile = service.applicantProfileJSON {
             ApplicantProfileSummaryCard(profile: profile)
-        } else if coordinator.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
+        } else if coordinator.wizardTracker.currentStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
             SkeletonTimelineSummaryCard(timeline: timeline)
-        } else if coordinator.wizardStep == .artifactDiscovery,
+        } else if coordinator.wizardTracker.currentStep == .artifactDiscovery,
                   !service.artifacts.enabledSections.isEmpty {
             EnabledSectionsSummaryCard(sections: service.artifacts.enabledSections)
         } else {
@@ -191,7 +191,7 @@ struct OnboardingInterviewToolPane: View {
 
     private func uploadRequests() -> [OnboardingUploadRequest] {
         var filtered: [OnboardingUploadRequest]
-        switch service.wizardStep {
+        switch coordinator.wizardTracker.currentStep {
         case .resumeIntake:
             filtered = service.pendingUploadRequests.filter {
                 [.resume, .linkedIn].contains($0.kind) ||
@@ -216,7 +216,7 @@ struct OnboardingInterviewToolPane: View {
         }
         if !filtered.isEmpty {
             let kinds = filtered.map(\.kind.rawValue).joined(separator: ",")
-            Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(service.wizardStep.rawValue), kinds: \(kinds))", category: .ai)
+            Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(coordinator.wizardTracker.currentStep.rawValue), kinds: \(kinds))", category: .ai)
         }
         return filtered
     }
@@ -281,11 +281,11 @@ struct OnboardingInterviewToolPane: View {
     ) -> Bool {
         if service.pendingExtraction != nil { return true }
         if !uploadRequests().isEmpty { return true }
-        if coordinator.pendingApplicantProfileIntake != nil { return true }
-        if coordinator.pendingChoicePrompt != nil { return true }
-        if service.pendingValidationPrompt != nil { return true }
-        if coordinator.pendingApplicantProfileRequest != nil { return true }
-        if coordinator.pendingSectionToggleRequest != nil { return true }
+        if coordinator.toolRouter.pendingApplicantProfileIntake != nil { return true }
+        if coordinator.toolRouter.pendingChoicePrompt != nil { return true }
+        if coordinator.toolRouter.pendingValidationPrompt != nil { return true }
+        if coordinator.toolRouter.pendingApplicantProfileRequest != nil { return true }
+        if coordinator.toolRouter.pendingSectionToggleRequest != nil { return true }
         if service.pendingPhaseAdvanceRequest != nil { return true }
         return false
     }
@@ -294,7 +294,7 @@ struct OnboardingInterviewToolPane: View {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        switch coordinator.wizardStep {
+        switch coordinator.wizardTracker.currentStep {
         case .wrapUp:
             return true
         case .resumeIntake:
@@ -309,7 +309,7 @@ struct OnboardingInterviewToolPane: View {
     }
 
     /// Helper to wrap coordinator method calls with tool continuation resume
-    private func handleToolResult(_ action: @escaping () async -> ToolResult) {
+    private func handleToolResult(_ action: @escaping () async -> (UUID, JSON)?) {
         Task {
             let result = await action()
             await service.resumeToolContinuation(from: result)

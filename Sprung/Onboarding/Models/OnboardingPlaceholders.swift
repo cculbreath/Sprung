@@ -55,28 +55,16 @@ struct OnboardingChoicePrompt: Identifiable, Codable {
     let options: [OnboardingChoiceOption]
     let selectionStyle: OnboardingSelectionStyle
     let required: Bool
-
-    init(
-        id: UUID = UUID(),
-        prompt: String,
-        options: [OnboardingChoiceOption],
-        selectionStyle: OnboardingSelectionStyle,
-        required: Bool
-    ) {
-        self.id = id
-        self.prompt = prompt
-        self.options = options
-        self.selectionStyle = selectionStyle
-        self.required = required
-    }
 }
 
 enum OnboardingWizardStep: String, CaseIterable, Hashable, Codable {
-    case introduction
-    case resumeIntake
-    case artifactDiscovery
-    case writingCorpus
-    case wrapUp
+    case introduction = "Introduction"
+    case resumeIntake = "Résumé Intake"
+    case artifactDiscovery = "Artifact Discovery"
+    case writingCorpus = "Writing Corpus"
+    case wrapUp = "Wrap Up"
+
+    var title: String { rawValue }
 }
 
 enum OnboardingWizardStepStatus: String, Codable {
@@ -85,31 +73,9 @@ enum OnboardingWizardStepStatus: String, Codable {
     case completed
 }
 
-extension OnboardingWizardStep {
-    var title: String {
-        switch self {
-        case .introduction:
-            return "Introduction"
-        case .resumeIntake:
-            return "Résumé Intake"
-        case .artifactDiscovery:
-            return "Artifact Discovery"
-        case .writingCorpus:
-            return "Writing Corpus"
-        case .wrapUp:
-            return "Wrap Up"
-        }
-    }
-}
-
 struct OnboardingQuestion: Identifiable, Codable {
     let id: UUID
     let text: String
-
-    init(id: UUID = UUID(), text: String) {
-        self.id = id
-        self.text = text
-    }
 }
 
 struct OnboardingUploadMetadata: Codable {
@@ -137,12 +103,6 @@ struct OnboardingUploadRequest: Identifiable, Codable {
     let id: UUID
     let kind: OnboardingUploadKind
     let metadata: OnboardingUploadMetadata
-
-    init(id: UUID = UUID(), kind: OnboardingUploadKind, metadata: OnboardingUploadMetadata) {
-        self.id = id
-        self.kind = kind
-        self.metadata = metadata
-    }
 }
 
 struct OnboardingUploadedItem: Identifiable, Codable {
@@ -195,22 +155,6 @@ struct OnboardingPhaseAdvanceRequest: Identifiable {
     var missingObjectives: [String]
     var reason: String?
     var proposedOverrides: [String]
-
-    init(
-        id: UUID = UUID(),
-        currentPhase: InterviewPhase,
-        nextPhase: InterviewPhase,
-        missingObjectives: [String],
-        reason: String?,
-        proposedOverrides: [String]
-    ) {
-        self.id = id
-        self.currentPhase = currentPhase
-        self.nextPhase = nextPhase
-        self.missingObjectives = missingObjectives
-        self.reason = reason
-        self.proposedOverrides = proposedOverrides
-    }
 }
 
 struct OnboardingValidationPrompt: Identifiable {
@@ -218,13 +162,6 @@ struct OnboardingValidationPrompt: Identifiable {
     var dataType: String
     var payload: JSON
     var message: String?
-
-    init(id: UUID = UUID(), dataType: String, payload: JSON, message: String?) {
-        self.id = id
-        self.dataType = dataType
-        self.payload = payload
-        self.message = message
-    }
 }
 
 struct OnboardingApplicantProfileRequest {

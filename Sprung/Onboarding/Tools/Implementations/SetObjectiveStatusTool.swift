@@ -41,13 +41,7 @@ struct SetObjectiveStatusTool: InterviewTool {
             throw ToolError.invalidParameters("status must be provided")
         }
 
-        do {
-            let result = try await service.updateObjectiveStatus(objectiveId: objectiveId, status: status)
-            return .immediate(result)
-        } catch let error as ToolError {
-            throw error
-        } catch {
-            throw ToolError.executionFailed(error.localizedDescription)
-        }
+        let result = try await service.updateObjectiveStatus(objectiveId: objectiveId, status: status)
+        return .immediate(result)
     }
 }
