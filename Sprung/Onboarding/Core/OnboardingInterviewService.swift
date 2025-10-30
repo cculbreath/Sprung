@@ -16,27 +16,26 @@ import SwiftOpenAI
 final class OnboardingInterviewService {
     // MARK: - Publicly observed state
 
-    var messages: [OnboardingMessage] { coordinator.chatTranscriptStore.messages }
-    var pendingChoicePrompt: OnboardingChoicePrompt? { coordinator.toolRouter.pendingChoicePrompt }
-    var pendingValidationPrompt: OnboardingValidationPrompt? { coordinator.toolRouter.pendingValidationPrompt }
-    var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest? { coordinator.toolRouter.pendingApplicantProfileRequest }
-    var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState? { coordinator.toolRouter.pendingApplicantProfileIntake }
-    var pendingSectionToggleRequest: OnboardingSectionToggleRequest? { coordinator.toolRouter.pendingSectionToggleRequest }
-    var pendingUploadRequests: [OnboardingUploadRequest] { coordinator.toolRouter.pendingUploadRequests }
+    var messages: [OnboardingMessage] { coordinator.messages }
+    var pendingChoicePrompt: OnboardingChoicePrompt? { coordinator.pendingChoicePrompt }
+    var pendingValidationPrompt: OnboardingValidationPrompt? { coordinator.pendingValidationPrompt }
+    var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest? { coordinator.pendingApplicantProfileRequest }
+   var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState? { coordinator.pendingApplicantProfileIntake }
+   var pendingSectionToggleRequest: OnboardingSectionToggleRequest? { coordinator.pendingSectionToggleRequest }
+   var pendingUploadRequests: [OnboardingUploadRequest] { coordinator.pendingUploadRequests }
     var pendingExtraction: OnboardingPendingExtraction? { coordinator.pendingExtraction }
     var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? { coordinator.pendingPhaseAdvanceRequest }
-    var uploadedItems: [OnboardingUploadedItem] { coordinator.toolRouter.uploadedItems }
+   var uploadedItems: [OnboardingUploadedItem] { coordinator.uploadedItems }
    var artifacts: OnboardingArtifacts { coordinator.artifacts }
    private(set) var schemaIssues: [String] = []
    private(set) var nextQuestions: [OnboardingQuestion] = []
 
    private var photoPromptIssued = false
    private var hasContactPhoto = false
-   private var photoUploadGateActive = false
 
-    var wizardStep: OnboardingWizardStep { coordinator.wizardTracker.currentStep }
-    var completedWizardSteps: Set<OnboardingWizardStep> { coordinator.wizardTracker.completedSteps }
-    var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] { coordinator.wizardTracker.stepStatuses }
+    var wizardStep: OnboardingWizardStep { coordinator.wizardStep }
+    var completedWizardSteps: Set<OnboardingWizardStep> { coordinator.completedWizardSteps }
+    var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] { coordinator.wizardStepStatuses }
 
     var isProcessing: Bool { coordinator.isProcessing }
     var isActive: Bool { coordinator.isActive }
@@ -627,7 +626,6 @@ final class OnboardingInterviewService {
         schemaIssues.removeAll()
         nextQuestions.removeAll()
         photoPromptIssued = false
-        photoUploadGateActive = false
         if let imageValue = coordinator.applicantProfileJSON?["image"],
            imageValue != .null,
            !(imageValue.stringValue.isEmpty) {
@@ -708,20 +706,13 @@ final class OnboardingInterviewService {
     }
 
     private func sendUploadStatus(_ payload: JSON) {
-        let status = payload["status"].stringValue
-        let targetKey = payload["targetKey"].string
         let message = DeveloperMessageTemplates.uploadStatus(
-            status: status,
+            status: payload["status"].stringValue,
             kind: payload["kind"].string,
-            targetKey: targetKey,
+            targetKey: payload["targetKey"].string,
             payload: payload
         )
         sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
-
-        if photoUploadGateActive, targetKey == "basics.image", ["uploaded", "skipped"].contains(status) {
-            photoUploadGateActive = false
-            Task { await coordinator.setAllowedToolsOverride(nil) }
-        }
     }
 
     func persistApplicantProfile(_ json: JSON) async {
@@ -732,7 +723,8 @@ final class OnboardingInterviewService {
             return
         }
 
-        await coordinator.storeApplicantProfile(json)
+        coordinator.storeApplicantProfile(json)
+        await coordinator.persistCheckpoint()
         let message = DeveloperMessageTemplates.profilePersisted(payload: json)
         sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
     }
@@ -764,8 +756,6 @@ final class OnboardingInterviewService {
 
         Logger.info("🎯 Triggering photo follow-up after validation", category: .ai, metadata: details)
         sendDeveloperStatus(title: instructions, details: details)
-        photoUploadGateActive = true
-        Task { await coordinator.setAllowedToolsOverride(["get_user_upload"]) }
     }
 
     func requestPhotoFollowUp(reason: String) {

@@ -138,11 +138,13 @@ final class KnowledgeCardAgent {
         }
 
         for achievement in draft.achievements {
-            guard let claim = achievement.claim.trimmedNonEmpty else {
+            let claim = achievement.claim.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !claim.isEmpty else {
                 throw KnowledgeCardAgentError.emptyClaim
             }
 
-            guard let quote = achievement.evidence.quote.trimmedNonEmpty else {
+            let quote = achievement.evidence.quote.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !quote.isEmpty else {
                 throw KnowledgeCardAgentError.missingEvidence(claim: claim)
             }
 

@@ -14,7 +14,7 @@ After implementation we want to edit one place—per phase—to update the flow 
 - [x] (2025-10-30 04:45Z) Draft plan describing objectives → prompts/tool sequencing consolidation.
 - [x] (2025-10-30 04:55Z) Added initial Phase 1 workflow entry for contact validation → photo follow-up and wired outputs into service.
 - [x] (2025-10-30 05:05Z) Expanded Phase 1 workflow definitions (source selection, data collection, applicant profile completion, timeline/sections hand-offs) and updated migration notes.
-- [x] (2025-10-30 05:35Z) Consolidated developer message helpers into reusable templates so Phase scripts emit consistent instructions.
+- [ ] Consolidate developer message helpers into reusable templates so Phase scripts emit consistent instructions.
 - [ ] Migrate service/coordinator to consult workflow registry for developer messages and tool payloads.
 - [ ] Extend structure to later phases and remove obsolete hard-coded prompts.
 - [ ] Document registry usage and validate end-to-end flow.
@@ -91,6 +91,4 @@ The aim is to consolidate this into structured objective definitions per phase w
 - Updated `PhaseScript` protocol (`objectiveWorkflows` plus helper functions).
 - `OnboardingInterviewService`/`Coordinator` use workflow entries when recording objective status.
 - Existing components (ToolExecutor, Router, handlers) remain untouched aside from receiving cleaner instructions.
-
-Revision 2025-10-30 05:35Z: Marked developer message helper consolidation complete after integrating reusable templates.
 ```

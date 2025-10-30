@@ -49,13 +49,13 @@ struct OnboardingInterviewView: View {
                     router: router,
                     state: uiState
                 )
-                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardTracker.currentStep)
+                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardStep)
 
                 Spacer(minLength: 16) // centers body relative to bottom bar
 
                 OnboardingInterviewBottomBar(
-                    showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
-                    continueTitle: continueButtonTitle(for: coordinator.wizardTracker.currentStep),
+                    showBack: shouldShowBackButton(for: coordinator.wizardStep),
+                    continueTitle: continueButtonTitle(for: coordinator.wizardStep),
                     isContinueDisabled: isContinueDisabled(service: service, coordinator: coordinator),
                     onShowSettings: openSettings,
                     onBack: { handleBack(service: service, coordinator: coordinator) },
@@ -63,7 +63,7 @@ struct OnboardingInterviewView: View {
                     onContinue: { handleContinue(service: service, coordinator: coordinator) }
                 )
                 .padding(.horizontal, 16)
-                .animation(.easeInOut(duration: 0.25), value: coordinator.wizardTracker.currentStep)
+                .animation(.easeInOut(duration: 0.25), value: coordinator.wizardStep)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal,32)
@@ -262,7 +262,7 @@ private extension OnboardingInterviewView {
         state: OnboardingInterviewViewModel
     ) -> some View {
         Group {
-            if coordinator.wizardTracker.currentStep == .introduction {
+            if coordinator.wizardStep == .introduction {
                 OnboardingInterviewIntroductionCard()
                     .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
                     .transition(.asymmetric(
@@ -309,17 +309,17 @@ private extension OnboardingInterviewView {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        switch coordinator.wizardTracker.currentStep {
+        switch coordinator.wizardStep {
             case .introduction:
                 return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
             case .resumeIntake:
                 return service.isProcessing ||
-                coordinator.toolRouter.pendingChoicePrompt != nil ||
-                coordinator.toolRouter.pendingApplicantProfileRequest != nil ||
-                coordinator.toolRouter.pendingApplicantProfileIntake != nil
+                coordinator.pendingChoicePrompt != nil ||
+                coordinator.pendingApplicantProfileRequest != nil ||
+                coordinator.pendingApplicantProfileIntake != nil
             case .artifactDiscovery:
                 return service.isProcessing ||
-                coordinator.toolRouter.pendingSectionToggleRequest != nil
+                coordinator.pendingSectionToggleRequest != nil
             default:
                 return service.isProcessing
         }
@@ -329,14 +329,14 @@ private extension OnboardingInterviewView {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) {
-        switch coordinator.wizardTracker.currentStep {
+        switch coordinator.wizardStep {
             case .introduction:
                 beginInterview(service: service)
             case .resumeIntake:
                 if service.isActive,
-                   coordinator.toolRouter.pendingChoicePrompt == nil,
-                   coordinator.toolRouter.pendingApplicantProfileRequest == nil,
-                   coordinator.toolRouter.pendingApplicantProfileIntake == nil {
+                   coordinator.pendingChoicePrompt == nil,
+                   coordinator.pendingApplicantProfileRequest == nil,
+                   coordinator.pendingApplicantProfileIntake == nil {
                     coordinator.setWizardStep(.artifactDiscovery)
                 }
             case .artifactDiscovery:
@@ -352,7 +352,7 @@ private extension OnboardingInterviewView {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) {
-        switch coordinator.wizardTracker.currentStep {
+        switch coordinator.wizardStep {
             case .resumeIntake:
                 service.resetInterview()
                 reinitializeUIState(service: service)
