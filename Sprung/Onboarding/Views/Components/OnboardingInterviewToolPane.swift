@@ -171,7 +171,10 @@ struct OnboardingInterviewToolPane: View {
                 schemaIssues: service.schemaIssues
             )
         } else if coordinator.wizardStep == .resumeIntake, let profile = service.applicantProfileJSON {
-            ApplicantProfileSummaryCard(profile: profile)
+            ApplicantProfileSummaryCard(
+                profile: profile,
+                imageData: applicantProfileStore.currentProfile().pictureData
+            )
         } else if coordinator.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
             SkeletonTimelineSummaryCard(timeline: timeline)
         } else if coordinator.wizardStep == .artifactDiscovery,
@@ -393,6 +396,7 @@ private struct KnowledgeCardValidationHost: View {
 
 private struct ApplicantProfileSummaryCard: View {
     let profile: JSON
+    let imageData: Data?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -447,12 +451,18 @@ private struct ApplicantProfileSummaryCard: View {
     }
 
     private var avatarImage: Image? {
-        guard let base64 = profile["image"].string,
-              let data = Data(base64Encoded: base64),
-              let nsImage = NSImage(data: data) else {
-            return nil
+        if let base64 = profile["image"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
+           let nsImage = NSImage(data: data) {
+            return Image(nsImage: nsImage)
         }
-        return Image(nsImage: nsImage)
+
+        if let imageData,
+           let nsImage = NSImage(data: imageData) {
+            return Image(nsImage: nsImage)
+        }
+
+        return nil
     }
 
     private func formattedLocation(_ json: JSON) -> String? {
