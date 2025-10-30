@@ -791,20 +791,27 @@ actor InterviewOrchestrator {
     ) async -> Bool {
         guard toolName == "submit_for_validation" else { return false }
 
-        let (reason, message): (String, String)?
+        var reason: String?
+        var message: String?
+
         switch error {
         case let ToolError.invalidParameters(text):
-            message = text
             reason = text.contains("missing data payload") ? "missing_data" : "invalid_parameters"
+            message = text
         case let ToolError.executionFailed(text):
             reason = "execution_failed"
             message = text
+        case let ToolError.permissionDenied(text):
+            reason = "permission_denied"
+            message = text
+        case ToolError.timeout(let interval):
+            reason = "timeout"
+            message = "Tool timed out after \(String(format: "%.2f", interval)) seconds."
         default:
-            reason = nil
-            message = ""
+            break
         }
 
-        guard let reason, !message.isEmpty else { return false }
+        guard let reason, let message, !message.isEmpty else { return false }
 
         if let callId {
             var output = JSON()
