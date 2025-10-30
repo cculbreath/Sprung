@@ -33,10 +33,16 @@ struct OnboardingInterviewToolPane: View {
                     InterviewChoicePromptCard(
                         prompt: prompt,
                         onSubmit: { selection in
-                            handleToolResult { coordinator.resolveChoice(selectionIds: selection) }
+                            Task {
+                                let result = coordinator.resolveChoice(selectionIds: selection)
+                                await service.resumeToolContinuation(from: result)
+                            }
                         },
                         onCancel: {
-                            handleToolResult { coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt") }
+                            Task {
+                                let result = coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt")
+                                await service.resumeToolContinuation(from: result)
+                            }
                         }
                     )
                 } else if let validation = coordinator.pendingValidationPrompt {
@@ -51,17 +57,21 @@ struct OnboardingInterviewToolPane: View {
                         OnboardingValidationReviewCard(
                             prompt: validation,
                             onSubmit: { decision, updated, notes in
-                                handleToolResult {
-                                    coordinator.submitValidationResponse(
+                                Task {
+                                    let result = coordinator.submitValidationResponse(
                                         status: decision.rawValue,
                                         updatedData: updated,
                                         changes: nil,
                                         notes: notes
                                     )
+                                    await service.resumeToolContinuation(from: result)
                                 }
                             },
                             onCancel: {
-                                handleToolResult { coordinator.cancelValidation(reason: "User cancelled validation review") }
+                                Task {
+                                    let result = coordinator.cancelValidation(reason: "User cancelled validation review")
+                                    await service.resumeToolContinuation(from: result)
+                                }
                             }
                         )
                     }
@@ -104,7 +114,10 @@ struct OnboardingInterviewToolPane: View {
                             }
                         },
                         onCancel: {
-                            handleToolResult { coordinator.rejectSectionToggle(reason: "User cancelled section toggle") }
+                            Task {
+                                let result = coordinator.rejectSectionToggle(reason: "User cancelled section toggle")
+                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                            }
                         }
                     )
                 } else {
@@ -178,10 +191,16 @@ struct OnboardingInterviewToolPane: View {
                         request: request,
                         onSelectFile: { openPanel(for: request) },
                         onDropFiles: { urls in
-                            handleToolResult { await coordinator.completeUpload(id: request.id, fileURLs: urls) }
+                            Task {
+                                let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
+                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                            }
                         },
                         onDecline: {
-                            handleToolResult { await coordinator.skipUpload(id: request.id) }
+                            Task {
+                                let result = await coordinator.skipUpload(id: request.id)
+                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                            }
                         }
                     )
                 }
@@ -195,7 +214,7 @@ struct OnboardingInterviewToolPane: View {
         case .resumeIntake:
             filtered = service.pendingUploadRequests.filter {
                 [.resume, .linkedIn].contains($0.kind) ||
-                ($0.kind == .generic && $0.metadata.targetKey == "basics.image")
+                    ($0.kind == .generic && $0.metadata.targetKey == "basics.image")
             }
         case .artifactDiscovery:
             filtered = service.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
@@ -208,16 +227,19 @@ struct OnboardingInterviewToolPane: View {
                 $0.kind == .generic && $0.metadata.targetKey == "basics.image"
             }
         }
+
         if filtered.count != service.pendingUploadRequests.count {
             let headshotRequests = service.pendingUploadRequests.filter { $0.metadata.targetKey == "basics.image" }
             for request in headshotRequests where filtered.contains(where: { $0.id == request.id }) == false {
                 filtered.append(request)
             }
         }
+
         if !filtered.isEmpty {
-            let kinds = filtered.map(\.kind.rawValue).joined(separator: ",")
+            let kinds = filtered.map { $0.kind.rawValue }.joined(separator: ",")
             Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(service.wizardStep.rawValue), kinds: \(kinds))", category: .ai)
         }
+
         return filtered
     }
 
@@ -305,14 +327,6 @@ struct OnboardingInterviewToolPane: View {
             return false
         case .writingCorpus, .introduction:
             return false
-        }
-    }
-
-    /// Helper to wrap coordinator method calls with tool continuation resume
-    private func handleToolResult(_ action: @escaping () async -> ToolResult) {
-        Task {
-            let result = await action()
-            await service.resumeToolContinuation(from: result)
         }
     }
 }
