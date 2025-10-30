@@ -789,18 +789,28 @@ actor InterviewOrchestrator {
         callId: String?,
         toolName: String
     ) async -> Bool {
-        guard case let ToolError.invalidParameters(message) = error,
-              toolName == "submit_for_validation",
-              message.contains("missing data payload")
-        else {
-            return false
+        guard toolName == "submit_for_validation" else { return false }
+
+        let (reason, message): (String, String)?
+        switch error {
+        case let ToolError.invalidParameters(text):
+            message = text
+            reason = text.contains("missing data payload") ? "missing_data" : "invalid_parameters"
+        case let ToolError.executionFailed(text):
+            reason = "execution_failed"
+            message = text
+        default:
+            reason = nil
+            message = ""
         }
+
+        guard let reason, !message.isEmpty else { return false }
 
         if let callId {
             var output = JSON()
             output["status"].string = "error"
-            output["reason"].string = "missing_data"
-            output["message"].string = "submit_for_validation requires a populated data payload."
+            output["reason"].string = reason
+            output["message"].string = message
             do {
                 try await sendToolOutput(callId: callId, output: output)
             } catch {
@@ -808,7 +818,7 @@ actor InterviewOrchestrator {
             }
         }
 
-        Logger.warning("⚠️ submit_for_validation missing data payload; requesting LLM retry.", category: .ai)
+        Logger.warning("⚠️ submit_for_validation error (reason: \(reason)): \(message)", category: .ai)
         return true
     }
 
