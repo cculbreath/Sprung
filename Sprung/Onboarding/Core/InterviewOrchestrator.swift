@@ -34,6 +34,7 @@ actor InterviewOrchestrator {
         let storeKnowledgeCard: @Sendable (JSON) async -> Void
         let setExtractionStatus: @Sendable (OnboardingPendingExtraction?) async -> Void
         let persistCheckpoint: @Sendable () async -> Void
+        let ledgerStatusMessage: @Sendable () async -> String?
     }
 
     private let client: OpenAIService
@@ -140,10 +141,12 @@ actor InterviewOrchestrator {
         await callbacks.updateProcessingState(true)
         defer { Task { await self.callbacks.updateProcessingState(false) } }
 
+        var callId: String?
+        var toolName: String?
         do {
             let result = try await toolExecutor.resumeContinuation(id: id, with: payload)
-            let callId = continuationCallIds.removeValue(forKey: id)
-            let toolName = continuationToolNames.removeValue(forKey: id)
+            callId = continuationCallIds.removeValue(forKey: id)
+            toolName = continuationToolNames.removeValue(forKey: id)
 
             await state.setWaiting(nil)
             await callbacks.handleWaitingState(nil)
@@ -169,6 +172,10 @@ actor InterviewOrchestrator {
                 }
             }
         } catch {
+            if let toolName,
+               await handleToolExecutionError(error, callId: callId, toolName: toolName) {
+                return
+            }
             if let continuation = pendingToolContinuations.removeValue(forKey: id) {
                 continuation.resume(throwing: error)
             }
@@ -436,6 +443,12 @@ actor InterviewOrchestrator {
     ) async throws {
         var inputItems: [InputItem] = []
 
+        if let ledgerMessage = await callbacks.ledgerStatusMessage(), !ledgerMessage.isEmpty {
+            let contentItem = ContentItem.text(TextContent(text: ledgerMessage))
+            let message = InputMessage(role: "system", content: .array([contentItem]))
+            inputItems.append(.message(message))
+        }
+
         if let userMessage {
             let contentItem = ContentItem.text(TextContent(text: userMessage))
             let inputMessage = InputMessage(role: "user", content: .array([contentItem]))
@@ -672,9 +685,15 @@ actor InterviewOrchestrator {
         let callId = functionCall.callId
         let identifier = functionCall.id
         let call = ToolCall(id: identifier, name: functionCall.name, arguments: argumentsJSON, callId: callId)
-        let result = try await toolExecutor.handleToolCall(call)
-
-        _ = try await handleToolResult(result, callId: callId, toolName: functionCall.name)
+        do {
+            let result = try await toolExecutor.handleToolCall(call)
+            _ = try await handleToolResult(result, callId: callId, toolName: functionCall.name)
+        } catch {
+            if await handleToolExecutionError(error, callId: callId, toolName: functionCall.name) {
+                return
+            }
+            throw error
+        }
     }
 
     private func handleToolResult(
@@ -763,6 +782,34 @@ actor InterviewOrchestrator {
         default:
             return nil
         }
+    }
+
+    private func handleToolExecutionError(
+        _ error: Error,
+        callId: String?,
+        toolName: String
+    ) async -> Bool {
+        guard case let ToolError.invalidParameters(message) = error,
+              toolName == "submit_for_validation",
+              message.contains("missing data payload")
+        else {
+            return false
+        }
+
+        if let callId {
+            var output = JSON()
+            output["status"].string = "error"
+            output["reason"].string = "missing_data"
+            output["message"].string = "submit_for_validation requires a populated data payload."
+            do {
+                try await sendToolOutput(callId: callId, output: output)
+            } catch {
+                Logger.error("❌ Unable to deliver tool error response: \(error)", category: .ai)
+            }
+        }
+
+        Logger.warning("⚠️ submit_for_validation missing data payload; requesting LLM retry.", category: .ai)
+        return true
     }
 
     private func allowedToolNames(for session: InterviewSession) -> Set<String> {

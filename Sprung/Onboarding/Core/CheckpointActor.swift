@@ -15,6 +15,57 @@ struct InterviewCheckpoint: Codable {
     let applicantProfile: String?
     let skeletonTimeline: String?
     let enabledSections: [String]?
+    let objectiveLedger: [ObjectiveEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp
+        case phase
+        case objectivesDone
+        case applicantProfile
+        case skeletonTimeline
+        case enabledSections
+        case objectiveLedger
+    }
+
+    init(
+        timestamp: Date,
+        phase: InterviewPhase,
+        objectivesDone: [String],
+        applicantProfile: String?,
+        skeletonTimeline: String?,
+        enabledSections: [String]?,
+        objectiveLedger: [ObjectiveEntry] = []
+    ) {
+        self.timestamp = timestamp
+        self.phase = phase
+        self.objectivesDone = objectivesDone
+        self.applicantProfile = applicantProfile
+        self.skeletonTimeline = skeletonTimeline
+        self.enabledSections = enabledSections
+        self.objectiveLedger = objectiveLedger
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        phase = try container.decode(InterviewPhase.self, forKey: .phase)
+        objectivesDone = try container.decode([String].self, forKey: .objectivesDone)
+        applicantProfile = try container.decodeIfPresent(String.self, forKey: .applicantProfile)
+        skeletonTimeline = try container.decodeIfPresent(String.self, forKey: .skeletonTimeline)
+        enabledSections = try container.decodeIfPresent([String].self, forKey: .enabledSections)
+        objectiveLedger = try container.decodeIfPresent([ObjectiveEntry].self, forKey: .objectiveLedger) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(phase, forKey: .phase)
+        try container.encode(objectivesDone, forKey: .objectivesDone)
+        try container.encodeIfPresent(applicantProfile, forKey: .applicantProfile)
+        try container.encodeIfPresent(skeletonTimeline, forKey: .skeletonTimeline)
+        try container.encodeIfPresent(enabledSections, forKey: .enabledSections)
+        try container.encode(objectiveLedger, forKey: .objectiveLedger)
+    }
 }
 
 actor Checkpoints {
@@ -54,7 +105,8 @@ actor Checkpoints {
                 objectivesDone: Array(session.objectivesDone),
                 applicantProfile: profileString,
                 skeletonTimeline: timelineString,
-                enabledSections: sections
+                enabledSections: sections,
+                objectiveLedger: session.objectiveLedger
             )
         )
 
@@ -70,7 +122,7 @@ actor Checkpoints {
         }
     }
 
-    func restoreLatest() async -> (InterviewSession, JSON?, JSON?, [String]?)? {
+    func restoreLatest() async -> (InterviewSession, JSON?, JSON?, [String]?, [ObjectiveEntry])? {
         history = Self.loadHistory(from: url, limit: maxHistoryCount)
         guard let latest = history.max(by: { $0.timestamp < $1.timestamp }) else {
             return nil
@@ -79,10 +131,11 @@ actor Checkpoints {
         var session = InterviewSession()
         session.phase = latest.phase
         session.objectivesDone = Set(latest.objectivesDone)
+        session.objectiveLedger = latest.objectiveLedger
 
         let profileJSON = latest.applicantProfile.flatMap { JSON(parseJSON: $0) }
         let timelineJSON = latest.skeletonTimeline.flatMap { JSON(parseJSON: $0) }
-        return (session, profileJSON, timelineJSON, latest.enabledSections)
+        return (session, profileJSON, timelineJSON, latest.enabledSections, latest.objectiveLedger)
     }
 
     func hasCheckpoint() async -> Bool {

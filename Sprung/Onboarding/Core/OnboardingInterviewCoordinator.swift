@@ -26,6 +26,67 @@ final class OnboardingInterviewCoordinator {
     private var orchestrator: InterviewOrchestrator?
     private var phaseAdvanceContinuationId: UUID?
     private var phaseAdvanceBlockCache: PhaseAdvanceBlockCache?
+    private var lastLedgerSignature: String?
+    private lazy var ledgerDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    // MARK: - Objective Ledger
+
+    private func phasesThrough(_ phase: InterviewPhase) -> [InterviewPhase] {
+        switch phase {
+        case .phase1CoreFacts:
+            return [.phase1CoreFacts]
+        case .phase2DeepDive:
+            return [.phase1CoreFacts, .phase2DeepDive]
+        case .phase3WritingCorpus:
+            return [.phase1CoreFacts, .phase2DeepDive, .phase3WritingCorpus]
+        case .complete:
+            return [.phase1CoreFacts, .phase2DeepDive, .phase3WritingCorpus]
+        }
+    }
+
+    func registerObjectivesForCurrentPhase() async {
+        let session = await interviewState.currentSession()
+        for phase in phasesThrough(session.phase) {
+            await interviewState.registerObjectives(ObjectiveCatalog.objectives(for: phase))
+        }
+        lastLedgerSignature = nil
+    }
+
+    func updateObjectiveStatus(
+        _ id: String,
+        status: ObjectiveStatus,
+        source: String,
+        details: [String: String]? = nil
+    ) {
+        Task {
+            await interviewState.updateObjective(
+                id: id,
+                status: status,
+                source: source,
+                details: details
+            )
+        }
+        lastLedgerSignature = nil
+    }
+
+    func ledgerStatusMessage() async -> String? {
+        let snapshot = await interviewState.ledgerSnapshot()
+        guard snapshot.signature != lastLedgerSignature else {
+            return nil
+        }
+        let summary = snapshot.formattedSummary(dateFormatter: ledgerDateFormatter)
+        guard !summary.isEmpty else {
+            lastLedgerSignature = snapshot.signature
+            return nil
+        }
+        lastLedgerSignature = snapshot.signature
+        return "Objective update: \(summary)"
+    }
 
     init(
         chatTranscriptStore: ChatTranscriptStore,
@@ -179,19 +240,30 @@ final class OnboardingInterviewCoordinator {
         let session = await interviewState.currentSession()
         applyWizardProgress(from: session)
         phaseAdvanceBlockCache = nil
+        await registerObjectivesForCurrentPhase()
         return session.phase
     }
 
     func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
         let normalized = status.lowercased()
+        let ledgerStatus: ObjectiveStatus
         switch normalized {
         case "completed":
             await interviewState.completeObjective(objectiveId)
+            ledgerStatus = .completed
         case "pending", "reset":
             await interviewState.resetObjective(objectiveId)
+            ledgerStatus = .pending
         default:
             throw ToolError.invalidParameters("Unsupported status: \(status)")
         }
+
+        updateObjectiveStatus(
+            objectiveId,
+            status: ledgerStatus,
+            source: "llm_proposed",
+            details: ["requested_status": normalized]
+        )
 
         let session = await interviewState.currentSession()
         applyWizardProgress(from: session)
@@ -608,6 +680,7 @@ final class OnboardingInterviewCoordinator {
         resetTransientState()
 
         let restoredFromCheckpoint = await prepareStateForStart(resumeExisting: resumeExisting)
+        await registerObjectivesForCurrentPhase()
 
         let currentSession = await interviewState.currentSession()
         let prompt = buildSystemPrompt(for: currentSession)
@@ -664,23 +737,25 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Internal Helpers
 
     private func prepareStateForStart(resumeExisting: Bool) async -> Bool {
+        let restored: Bool
         if resumeExisting {
             await dataStoreManager.loadPersistedArtifacts()
             await interviewState.restore(from: InterviewSession())
-            let restored = await restoreFromCheckpointIfAvailable()
-            if !restored {
+            let didRestore = await restoreFromCheckpointIfAvailable()
+            if !didRestore {
                 await clearCheckpoints()
                 dataStoreManager.clearArtifacts()
                 await dataStoreManager.resetStore()
             }
-            return restored
+            restored = didRestore
         } else {
             await clearCheckpoints()
             dataStoreManager.clearArtifacts()
             await dataStoreManager.resetStore()
             await interviewState.restore(from: InterviewSession())
-            return false
+            restored = false
         }
+        return restored
     }
 
     private func restoreFromCheckpointIfAvailable() async -> Bool {
@@ -688,9 +763,10 @@ final class OnboardingInterviewCoordinator {
             return false
         }
 
-        let (session, profileJSON, timelineJSON, enabledSections) = snapshot
+        let (session, profileJSON, timelineJSON, enabledSections, _) = snapshot
         await interviewState.restore(from: session)
         applyWizardProgress(from: session)
+        lastLedgerSignature = nil
 
         if let profileJSON {
             await storeApplicantProfile(profileJSON)
@@ -767,6 +843,10 @@ final class OnboardingInterviewCoordinator {
             persistCheckpoint: { [weak self] in
                 guard let self else { return }
                 await self.persistCheckpoint()
+            },
+            ledgerStatusMessage: { [weak self] in
+                guard let self else { return nil }
+                return await self.ledgerStatusMessage()
             }
         )
 
@@ -782,11 +862,23 @@ final class OnboardingInterviewCoordinator {
     private func storeApplicantProfile(_ json: JSON) async {
         dataStoreManager.storeApplicantProfile(json)
         await persistCheckpoint()
+        updateObjectiveStatus(
+            "applicant_profile",
+            status: .completed,
+            source: "system_persist",
+            details: ["reason": "persisted"]
+        )
     }
 
     private func storeSkeletonTimeline(_ json: JSON) async {
         dataStoreManager.storeSkeletonTimeline(json)
         await persistCheckpoint()
+        updateObjectiveStatus(
+            "skeleton_timeline",
+            status: .completed,
+            source: "system_persist",
+            details: ["reason": "persisted"]
+        )
     }
 
     private func storeArtifactRecord(_ artifact: JSON) async {
@@ -821,6 +913,8 @@ final class OnboardingInterviewCoordinator {
         isProcessing = false
         isActive = false
         updateWaitingState(nil)
+        lastLedgerSignature = nil
+        Task { await self.interviewState.resetLedger() }
     }
 
     private func buildAwaitingPayload(for request: OnboardingPhaseAdvanceRequest) -> JSON {

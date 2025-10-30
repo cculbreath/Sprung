@@ -9,105 +9,106 @@ struct OnboardingInterviewToolPane: View {
 
     @Bindable var service: OnboardingInterviewService
     @Bindable var coordinator: OnboardingInterviewCoordinator
-    @Bindable var router: OnboardingToolRouter
     let actions: OnboardingInterviewActionHandler
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ToolStatusSummaryView(snapshot: router.statusSnapshot)
+            if service.pendingExtraction != nil {
+                Spacer(minLength: 0)
+            } else {
+                let uploads = uploadRequests()
 
-            let uploads = uploadRequests()
-
-            if !uploads.isEmpty {
-                uploadRequestsView(uploads)
-            } else if let intake = coordinator.pendingApplicantProfileIntake {
-                ApplicantProfileIntakeCard(
-                    state: intake,
-                    actions: actions
-                )
-            } else if let prompt = coordinator.pendingChoicePrompt {
-                InterviewChoicePromptCard(
-                    prompt: prompt,
-                    onSubmit: { selection in
-                        Task { await actions.resolveChoice(selectionIds: selection) }
-                    },
-                    onCancel: {
-                        Task { await actions.cancelChoicePrompt(reason: "User dismissed choice prompt") }
-                    }
-                )
-            } else if let validation = coordinator.pendingValidationPrompt {
-                if validation.dataType == "knowledge_card" {
-                    KnowledgeCardValidationHost(
-                        prompt: validation,
-                        artifactsJSON: service.artifacts.artifactRecords,
+                if !uploads.isEmpty {
+                    uploadRequestsView(uploads)
+                } else if let intake = coordinator.pendingApplicantProfileIntake {
+                    ApplicantProfileIntakeCard(
+                        state: intake,
                         actions: actions
                     )
-                } else {
-                    OnboardingValidationReviewCard(
-                        prompt: validation,
-                        onSubmit: { decision, updated, notes in
-                            Task {
-                                await actions.submitValidation(
-                                    status: decision.rawValue,
-                                    updatedData: updated,
-                                    changes: nil,
-                                    notes: notes
-                                )
-                            }
+                } else if let prompt = coordinator.pendingChoicePrompt {
+                    InterviewChoicePromptCard(
+                        prompt: prompt,
+                        onSubmit: { selection in
+                            Task { await actions.resolveChoice(selectionIds: selection) }
                         },
                         onCancel: {
-                            Task { await actions.cancelValidation(reason: "User cancelled validation review") }
+                            Task { await actions.cancelChoicePrompt(reason: "User dismissed choice prompt") }
                         }
                     )
-                }
-            } else if let phaseAdvanceRequest = service.pendingPhaseAdvanceRequest {
-                OnboardingPhaseAdvanceDialog(
-                    request: phaseAdvanceRequest,
-                    onSubmit: { decision, feedback in
-                        Task {
-                            switch decision {
-                            case .approved:
-                                await actions.approvePhaseAdvance()
-                            case .denied:
-                                await actions.denyPhaseAdvance(reason: nil)
-                            case .deniedWithFeedback:
-                                await actions.denyPhaseAdvance(reason: feedback)
+                } else if let validation = coordinator.pendingValidationPrompt {
+                    if validation.dataType == "knowledge_card" {
+                        KnowledgeCardValidationHost(
+                            prompt: validation,
+                            artifactsJSON: service.artifacts.artifactRecords,
+                            actions: actions
+                        )
+                    } else {
+                        OnboardingValidationReviewCard(
+                            prompt: validation,
+                            onSubmit: { decision, updated, notes in
+                                Task {
+                                    await actions.submitValidation(
+                                        status: decision.rawValue,
+                                        updatedData: updated,
+                                        changes: nil,
+                                        notes: notes
+                                    )
+                                }
+                            },
+                            onCancel: {
+                                Task { await actions.cancelValidation(reason: "User cancelled validation review") }
                             }
+                        )
+                    }
+                } else if let phaseAdvanceRequest = service.pendingPhaseAdvanceRequest {
+                    OnboardingPhaseAdvanceDialog(
+                        request: phaseAdvanceRequest,
+                        onSubmit: { decision, feedback in
+                            Task {
+                                switch decision {
+                                case .approved:
+                                    await actions.approvePhaseAdvance()
+                                case .denied:
+                                    await actions.denyPhaseAdvance(reason: nil)
+                                case .deniedWithFeedback:
+                                    await actions.denyPhaseAdvance(reason: feedback)
+                                }
+                            }
+                        },
+                        onCancel: nil
+                    )
+                } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
+                    ApplicantProfileReviewCard(
+                        request: profileRequest,
+                        fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
+                        onConfirm: { draft in
+                            Task { await actions.approveApplicantProfile(draft: draft) }
+                        },
+                        onCancel: {
+                            Task { await actions.declineApplicantProfile(reason: "User cancelled applicant profile validation") }
                         }
-                    },
-                    onCancel: nil
-                )
-            } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
-                ApplicantProfileReviewCard(
-                    request: profileRequest,
-                    fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
-                    onConfirm: { draft in
-                        Task { await actions.approveApplicantProfile(draft: draft) }
-                    },
-                    onCancel: {
-                        Task { await actions.declineApplicantProfile(reason: "User cancelled applicant profile validation") }
-                    }
-                )
-            } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
-                ResumeSectionsToggleCard(
-                    request: sectionToggle,
-                    existingDraft: experienceDefaultsStore.loadDraft(),
-                    onConfirm: { enabled in
-                        Task { await actions.completeSectionToggleSelection(enabled: enabled) }
-                    },
-                    onCancel: {
-                        Task { await actions.cancelSectionToggleSelection(reason: "User cancelled section toggle") }
-                    }
-                )
-            } else {
-                supportingContent()
+                    )
+                } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
+                    ResumeSectionsToggleCard(
+                        request: sectionToggle,
+                        existingDraft: experienceDefaultsStore.loadDraft(),
+                        onConfirm: { enabled in
+                            Task { await actions.completeSectionToggleSelection(enabled: enabled) }
+                        },
+                        onCancel: {
+                            Task { await actions.cancelSectionToggleSelection(reason: "User cancelled section toggle") }
+                        }
+                    )
+                } else {
+                    supportingContent()
+                }
             }
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .center) {
-            if shouldShowLLMSpinner(service: service, router: router) {
+            if shouldShowLLMSpinner(service: service) {
                 VStack {
                     Spacer()
                     AnimatedThinkingText()
@@ -121,7 +122,7 @@ struct OnboardingInterviewToolPane: View {
         }
         .animation(
             .easeInOut(duration: 0.2),
-            value: shouldShowLLMSpinner(service: service, router: router)
+            value: shouldShowLLMSpinner(service: service)
         )
     }
 
@@ -177,15 +178,15 @@ struct OnboardingInterviewToolPane: View {
     }
 
     private func uploadRequests() -> [OnboardingUploadRequest] {
-        switch coordinator.wizardStep {
+        switch service.wizardStep {
         case .resumeIntake:
-            return router.pendingUploadRequests.filter { [.resume, .linkedIn].contains($0.kind) }
+            return service.pendingUploadRequests.filter { [.resume, .linkedIn].contains($0.kind) }
         case .artifactDiscovery:
-            return router.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
+            return service.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
         case .writingCorpus:
-            return router.pendingUploadRequests.filter { $0.kind == .writingSample }
+            return service.pendingUploadRequests.filter { $0.kind == .writingSample }
         case .wrapUp:
-            return router.pendingUploadRequests
+            return service.pendingUploadRequests
         case .introduction:
             return []
         }
@@ -235,112 +236,16 @@ struct OnboardingInterviewToolPane: View {
     }
 
     private func shouldShowLLMSpinner(
-        service: OnboardingInterviewService,
-        router: OnboardingToolRouter
+        service: OnboardingInterviewService
     ) -> Bool {
         service.isProcessing &&
-            router.pendingChoicePrompt == nil &&
-            router.pendingApplicantProfileRequest == nil &&
-            router.pendingApplicantProfileIntake == nil &&
-            router.pendingSectionToggleRequest == nil &&
-            router.pendingValidationPrompt == nil &&
-            router.pendingUploadRequests.isEmpty &&
+            service.pendingChoicePrompt == nil &&
+            service.pendingApplicantProfileRequest == nil &&
+            service.pendingApplicantProfileIntake == nil &&
+            service.pendingSectionToggleRequest == nil &&
+            service.pendingValidationPrompt == nil &&
+            service.pendingUploadRequests.isEmpty &&
             service.pendingPhaseAdvanceRequest == nil
-    }
-}
-
-private struct ToolStatusSummaryView: View {
-    let snapshot: OnboardingToolStatusSnapshot
-
-    private struct Entry: Identifiable {
-        let identifier: OnboardingToolIdentifier
-        let displayName: String
-        let status: OnboardingToolStatus
-
-        var id: OnboardingToolIdentifier { identifier }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Assistant tools")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
-                ForEach(entries) { entry in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(indicatorColor(for: entry.status))
-                            .frame(width: 8, height: 8)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.displayName)
-                                .font(.caption.weight(.semibold))
-                            Text(statusLabel(for: entry.status))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(nsColor: .textBackgroundColor))
-                    )
-                }
-            }
-        }
-    }
-
-    private var entries: [Entry] {
-        OnboardingToolIdentifier.allCases.map { identifier in
-            Entry(
-                identifier: identifier,
-                displayName: displayName(for: identifier),
-                status: snapshot.status(for: identifier)
-            )
-        }
-    }
-
-    private func displayName(for identifier: OnboardingToolIdentifier) -> String {
-        switch identifier {
-        case .getUserOption:
-            return "Choices"
-        case .getUserUpload:
-            return "Uploads"
-        case .getMacOSContactCard:
-            return "Contacts"
-        case .getApplicantProfile:
-            return "Applicant Profile"
-        case .submitForValidation:
-            return "Validation"
-        }
-    }
-
-    private func statusLabel(for status: OnboardingToolStatus) -> String {
-        switch status {
-        case .ready:
-            return "Ready"
-        case .waitingForUser:
-            return "Waiting for you"
-        case .processing:
-            return "Processing"
-        case .locked:
-            return "Locked"
-        }
-    }
-
-    private func indicatorColor(for status: OnboardingToolStatus) -> Color {
-        switch status {
-        case .ready:
-            return .green
-        case .waitingForUser:
-            return .yellow
-        case .processing:
-            return .blue
-        case .locked:
-            return .gray
-        }
     }
 }
 

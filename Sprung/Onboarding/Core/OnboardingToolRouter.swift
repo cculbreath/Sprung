@@ -9,6 +9,7 @@ enum OnboardingToolIdentifier: String, CaseIterable {
     case getMacOSContactCard = "get_macos_contact_card"
     case getApplicantProfile = "get_applicant_profile"
     case submitForValidation = "submit_for_validation"
+    case extractDocument = "extract_document"
 }
 
 /// Canonical status values surfaced to the LLM runtime.

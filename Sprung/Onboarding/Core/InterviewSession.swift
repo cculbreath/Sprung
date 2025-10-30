@@ -20,6 +20,7 @@ struct InterviewSession: Codable {
     var phase: InterviewPhase = .phase1CoreFacts
     var objectivesDone: Set<String> = []
     var waiting: Waiting? = nil
+    var objectiveLedger: [ObjectiveEntry] = []
 
     enum Waiting: String, Codable {
         case selection
@@ -31,6 +32,7 @@ struct InterviewSession: Codable {
 /// Actor-isolated wrapper around the interview session for safe concurrent mutation.
 actor InterviewState {
     private(set) var session = InterviewSession()
+    private var objectiveLedger: [String: ObjectiveEntry] = [:]
 
     func completeObjective(_ id: String) async {
         session.objectivesDone.insert(id)
@@ -45,11 +47,16 @@ actor InterviewState {
     }
 
     func currentSession() -> InterviewSession {
-        session
+        var snapshot = session
+        snapshot.objectiveLedger = Array(objectiveLedger.values)
+        return snapshot
     }
 
     func restore(from snapshot: InterviewSession) {
         session = snapshot
+        objectiveLedger = snapshot.objectiveLedger.reduce(into: [:]) { dict, entry in
+            dict[entry.id] = entry
+        }
         Logger.debug("State restored to phase: \(session.phase)")
     }
 
@@ -113,5 +120,56 @@ actor InterviewState {
         case .complete:
             break
         }
+    }
+
+    func registerObjectives(_ descriptors: [ObjectiveDescriptor]) {
+        let now = Date()
+        for descriptor in descriptors {
+            if objectiveLedger[descriptor.id] == nil {
+                objectiveLedger[descriptor.id] = descriptor.makeEntry(date: now)
+            } else {
+                // Update label if descriptor adds more detail
+                objectiveLedger[descriptor.id]?.label = descriptor.label
+            }
+        }
+        session.objectiveLedger = Array(objectiveLedger.values)
+    }
+
+    func updateObjective(
+        id: String,
+        status: ObjectiveStatus,
+        source: String,
+        details: [String: String]? = nil
+    ) {
+        let now = Date()
+        if var entry = objectiveLedger[id] {
+            entry.status = status
+            entry.source = source
+            entry.details = details ?? entry.details
+            entry.updatedAt = now
+            objectiveLedger[id] = entry
+        } else {
+            var entry = ObjectiveDescriptor(
+                id: id,
+                label: id,
+                phase: session.phase,
+                initialStatus: status,
+                initialSource: source,
+                details: details
+            ).makeEntry(date: now)
+            entry.updatedAt = now
+            objectiveLedger[id] = entry
+        }
+        session.objectiveLedger = Array(objectiveLedger.values)
+    }
+
+    func ledgerSnapshot() -> ObjectiveLedgerSnapshot {
+        let entries = objectiveLedger.values.sorted { $0.updatedAt > $1.updatedAt }
+        return ObjectiveLedgerSnapshot(entries: entries)
+    }
+
+    func resetLedger() {
+        objectiveLedger.removeAll()
+        session.objectiveLedger = []
     }
 }

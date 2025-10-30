@@ -13,7 +13,8 @@ typealias CheckpointSnapshot = (
     session: InterviewSession,
     applicantProfile: JSON?,
     skeletonTimeline: JSON?,
-    enabledSections: [String]?
+    enabledSections: [String]?,
+    ledger: [ObjectiveEntry]
 )
 
 @MainActor
