@@ -9,10 +9,13 @@ struct OnboardingInterviewToolPane: View {
 
     @Bindable var service: OnboardingInterviewService
     @Bindable var coordinator: OnboardingInterviewCoordinator
-    let actions: OnboardingInterviewActionHandler
+    @Binding var isOccupied: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let paneOccupied = isPaneOccupied(service: service, coordinator: coordinator)
+        let showSpinner = service.isProcessing && !paneOccupied
+
+        return VStack(alignment: .leading, spacing: 16) {
             if service.pendingExtraction != nil {
                 Spacer(minLength: 0)
             } else {
@@ -23,16 +26,23 @@ struct OnboardingInterviewToolPane: View {
                 } else if let intake = coordinator.pendingApplicantProfileIntake {
                     ApplicantProfileIntakeCard(
                         state: intake,
-                        actions: actions
+                        service: service,
+                        coordinator: coordinator
                     )
                 } else if let prompt = coordinator.pendingChoicePrompt {
                     InterviewChoicePromptCard(
                         prompt: prompt,
                         onSubmit: { selection in
-                            Task { await actions.resolveChoice(selectionIds: selection) }
+                            Task {
+                                let result = coordinator.resolveChoice(selectionIds: selection)
+                                await service.resumeToolContinuation(from: result)
+                            }
                         },
                         onCancel: {
-                            Task { await actions.cancelChoicePrompt(reason: "User dismissed choice prompt") }
+                            Task {
+                                let result = coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt")
+                                await service.resumeToolContinuation(from: result)
+                            }
                         }
                     )
                 } else if let validation = coordinator.pendingValidationPrompt {
@@ -40,23 +50,28 @@ struct OnboardingInterviewToolPane: View {
                         KnowledgeCardValidationHost(
                             prompt: validation,
                             artifactsJSON: service.artifacts.artifactRecords,
-                            actions: actions
+                            service: service,
+                            coordinator: coordinator
                         )
                     } else {
                         OnboardingValidationReviewCard(
                             prompt: validation,
                             onSubmit: { decision, updated, notes in
                                 Task {
-                                    await actions.submitValidation(
+                                    let result = coordinator.submitValidationResponse(
                                         status: decision.rawValue,
                                         updatedData: updated,
                                         changes: nil,
                                         notes: notes
                                     )
+                                    await service.resumeToolContinuation(from: result)
                                 }
                             },
                             onCancel: {
-                                Task { await actions.cancelValidation(reason: "User cancelled validation review") }
+                                Task {
+                                    let result = coordinator.cancelValidation(reason: "User cancelled validation review")
+                                    await service.resumeToolContinuation(from: result)
+                                }
                             }
                         )
                     }
@@ -67,11 +82,11 @@ struct OnboardingInterviewToolPane: View {
                             Task {
                                 switch decision {
                                 case .approved:
-                                    await actions.approvePhaseAdvance()
+                                    await service.approvePhaseAdvanceRequest()
                                 case .denied:
-                                    await actions.denyPhaseAdvance(reason: nil)
+                                    await service.denyPhaseAdvanceRequest(feedback: nil)
                                 case .deniedWithFeedback:
-                                    await actions.denyPhaseAdvance(reason: feedback)
+                                    await service.denyPhaseAdvanceRequest(feedback: feedback)
                                 }
                             }
                         },
@@ -82,10 +97,10 @@ struct OnboardingInterviewToolPane: View {
                         request: profileRequest,
                         fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
                         onConfirm: { draft in
-                            Task { await actions.approveApplicantProfile(draft: draft) }
+                            Task { await service.resolveApplicantProfile(with: draft) }
                         },
                         onCancel: {
-                            Task { await actions.declineApplicantProfile(reason: "User cancelled applicant profile validation") }
+                            Task { await service.rejectApplicantProfile(reason: "User cancelled applicant profile validation") }
                         }
                     )
                 } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
@@ -93,10 +108,16 @@ struct OnboardingInterviewToolPane: View {
                         request: sectionToggle,
                         existingDraft: experienceDefaultsStore.loadDraft(),
                         onConfirm: { enabled in
-                            Task { await actions.completeSectionToggleSelection(enabled: enabled) }
+                            Task {
+                                let result = coordinator.resolveSectionToggle(enabled: enabled)
+                                await service.resumeToolContinuation(from: result, waitingState: .set(nil), persistCheckpoint: true)
+                            }
                         },
                         onCancel: {
-                            Task { await actions.cancelSectionToggleSelection(reason: "User cancelled section toggle") }
+                            Task {
+                                let result = coordinator.rejectSectionToggle(reason: "User cancelled section toggle")
+                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                            }
                         }
                     )
                 } else {
@@ -108,7 +129,7 @@ struct OnboardingInterviewToolPane: View {
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .center) {
-            if shouldShowLLMSpinner(service: service) {
+            if showSpinner {
                 VStack {
                     Spacer()
                     AnimatedThinkingText()
@@ -122,8 +143,12 @@ struct OnboardingInterviewToolPane: View {
         }
         .animation(
             .easeInOut(duration: 0.2),
-            value: shouldShowLLMSpinner(service: service)
+            value: showSpinner
         )
+        .onAppear { isOccupied = paneOccupied }
+        .onChange(of: paneOccupied) { newValue in
+            isOccupied = newValue
+        }
     }
 
     @ViewBuilder
@@ -166,10 +191,16 @@ struct OnboardingInterviewToolPane: View {
                         request: request,
                         onSelectFile: { openPanel(for: request) },
                         onDropFiles: { urls in
-                            Task { await actions.completeUploadRequest(id: request.id, fileURLs: urls) }
+                            Task {
+                                let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
+                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                            }
                         },
                         onDecline: {
-                            Task { await actions.declineUploadRequest(id: request.id) }
+                            Task {
+                                let result = await coordinator.skipUpload(id: request.id)
+                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                            }
                         }
                     )
                 }
@@ -208,7 +239,10 @@ struct OnboardingInterviewToolPane: View {
             } else {
                 urls = Array(panel.urls.prefix(1))
             }
-            Task { await actions.completeUploadRequest(id: request.id, fileURLs: urls) }
+            Task {
+                let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
+                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+            }
         }
     }
 
@@ -235,23 +269,52 @@ struct OnboardingInterviewToolPane: View {
         return mapped.isEmpty ? nil : mapped
     }
 
-    private func shouldShowLLMSpinner(
-        service: OnboardingInterviewService
+    private func isPaneOccupied(
+        service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        service.isProcessing &&
-            service.pendingChoicePrompt == nil &&
-            service.pendingApplicantProfileRequest == nil &&
-            service.pendingApplicantProfileIntake == nil &&
-            service.pendingSectionToggleRequest == nil &&
-            service.pendingValidationPrompt == nil &&
-            service.pendingUploadRequests.isEmpty &&
-            service.pendingPhaseAdvanceRequest == nil
+        hasInteractiveCard(service: service, coordinator: coordinator) ||
+            hasSummaryCard(service: service, coordinator: coordinator)
+    }
+
+    private func hasInteractiveCard(
+        service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator
+    ) -> Bool {
+        if service.pendingExtraction != nil { return true }
+        if !uploadRequests().isEmpty { return true }
+        if coordinator.pendingApplicantProfileIntake != nil { return true }
+        if coordinator.pendingChoicePrompt != nil { return true }
+        if service.pendingValidationPrompt != nil { return true }
+        if coordinator.pendingApplicantProfileRequest != nil { return true }
+        if coordinator.pendingSectionToggleRequest != nil { return true }
+        if service.pendingPhaseAdvanceRequest != nil { return true }
+        return false
+    }
+
+    private func hasSummaryCard(
+        service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator
+    ) -> Bool {
+        switch coordinator.wizardStep {
+        case .wrapUp:
+            return true
+        case .resumeIntake:
+            return service.applicantProfileJSON != nil
+        case .artifactDiscovery:
+            if service.skeletonTimelineJSON != nil { return true }
+            if !service.artifacts.enabledSections.isEmpty { return true }
+            return false
+        case .writingCorpus, .introduction:
+            return false
+        }
     }
 }
 
 private struct KnowledgeCardValidationHost: View {
     let prompt: OnboardingValidationPrompt
-    let actions: OnboardingInterviewActionHandler
+    let service: OnboardingInterviewService
+    let coordinator: OnboardingInterviewCoordinator
 
     @State private var draft: KnowledgeCardDraft
     private let artifactRecords: [ArtifactRecord]
@@ -259,10 +322,12 @@ private struct KnowledgeCardValidationHost: View {
     init(
         prompt: OnboardingValidationPrompt,
         artifactsJSON: [JSON],
-        actions: OnboardingInterviewActionHandler
+        service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator
     ) {
         self.prompt = prompt
-        self.actions = actions
+        self.service = service
+        self.coordinator = coordinator
         _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
         artifactRecords = artifactsJSON.map { ArtifactRecord(json: $0) }
     }
@@ -273,12 +338,13 @@ private struct KnowledgeCardValidationHost: View {
             artifacts: artifactRecords,
             onApprove: { approved in
                 Task {
-                    await actions.submitValidation(
+                    let result = coordinator.submitValidationResponse(
                         status: "approved",
                         updatedData: approved.toJSON(),
                         changes: nil,
                         notes: nil
                     )
+                    await service.resumeToolContinuation(from: result)
                 }
             },
             onReject: { rejectedIds, reason in
@@ -289,12 +355,13 @@ private struct KnowledgeCardValidationHost: View {
                         details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
                         changePayload = details
                     }
-                    await actions.submitValidation(
+                    let result = coordinator.submitValidationResponse(
                         status: "rejected",
                         updatedData: nil,
                         changes: changePayload,
                         notes: reason.isEmpty ? nil : reason
                     )
+                    await service.resumeToolContinuation(from: result)
                 }
             }
         )
@@ -327,6 +394,10 @@ private struct ApplicantProfileSummaryCard: View {
                 Label(phone, systemImage: "phone")
                     .font(.footnote)
             }
+            if let location = formattedLocation(profile["location"]) {
+                Label(location, systemImage: "mappin.and.ellipse")
+                    .font(.footnote)
+            }
             if let url = nonEmpty(profile["url"].string ?? profile["website"].string) {
                 Label(url, systemImage: "globe")
                     .font(.footnote)
@@ -341,6 +412,31 @@ private struct ApplicantProfileSummaryCard: View {
     private func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return value
+    }
+
+    private func formattedLocation(_ json: JSON) -> String? {
+        guard json != .null else { return nil }
+        var components: [String] = []
+        if let address = nonEmpty(json["address"].string) {
+            components.append(address)
+        }
+        let cityComponents = [json["city"].string, json["region"].string]
+            .compactMap(nonEmpty)
+            .joined(separator: ", ")
+        if !cityComponents.isEmpty {
+            components.append(cityComponents)
+        }
+        if let postal = nonEmpty(json["postalCode"].string) {
+            if components.isEmpty {
+                components.append(postal)
+            } else {
+                components[components.count - 1] += " \(postal)"
+            }
+        }
+        if let country = nonEmpty(json["countryCode"].string) {
+            components.append(country)
+        }
+        return components.isEmpty ? nil : components.joined(separator: ", ")
     }
 }
 
