@@ -23,9 +23,3 @@ struct AnimatedThinkingText: View {
         }
     }
 }
-
-#Preview {
-    AnimatedThinkingText()
-        .preferredColorScheme(.dark)
-        .padding()
-}

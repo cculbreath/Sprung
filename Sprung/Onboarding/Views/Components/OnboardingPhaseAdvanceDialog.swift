@@ -294,37 +294,3 @@ struct OnboardingPhaseAdvanceDialog: View {
         onSubmit(decision, feedbackText)
     }
 }
-
-// MARK: - Preview
-
-#Preview("With Missing Objectives") {
-    OnboardingPhaseAdvanceDialog(
-        request: OnboardingPhaseAdvanceRequest(
-            currentPhase: .phase1CoreFacts,
-            nextPhase: .phase2DeepDive,
-            missingObjectives: ["skeleton_timeline", "enabled_sections"],
-            reason: "User verbally confirmed they completed their timeline and are ready to proceed with the deep dive interview.",
-            proposedOverrides: ["skeleton_timeline", "enabled_sections"]
-        ),
-        onSubmit: { decision, feedback in
-            print("Decision: \(decision), Feedback: \(feedback ?? "none")")
-        },
-        onCancel: nil
-    )
-}
-
-#Preview("No Missing Objectives") {
-    OnboardingPhaseAdvanceDialog(
-        request: OnboardingPhaseAdvanceRequest(
-            currentPhase: .phase2DeepDive,
-            nextPhase: .phase3WritingCorpus,
-            missingObjectives: [],
-            reason: nil,
-            proposedOverrides: []
-        ),
-        onSubmit: { decision, feedback in
-            print("Decision: \(decision), Feedback: \(feedback ?? "none")")
-        },
-        onCancel: nil
-    )
-}
