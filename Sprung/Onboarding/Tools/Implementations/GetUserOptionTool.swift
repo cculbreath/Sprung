@@ -152,7 +152,6 @@ private struct OptionPromptPayload {
     func toChoicePrompt() -> OnboardingChoicePrompt {
         let style: OnboardingSelectionStyle = allowMultiple ? .multiple : .single
         return OnboardingChoicePrompt(
-            id: UUID(),
             prompt: prompt,
             options: options.map { $0.toChoiceOption() },
             selectionStyle: style,

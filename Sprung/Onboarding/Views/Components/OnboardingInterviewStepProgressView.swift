@@ -6,11 +6,11 @@ struct OnboardingInterviewStepProgressView: View {
     var body: some View {
         HStack(alignment: .center, spacing: 28) {
             ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
-                let status = coordinator.wizardTracker.stepStatuses[step] ?? .pending
+                let status = coordinator.wizardStepStatuses[step] ?? .pending
                 OnboardingStepProgressItem(title: step.title, status: status)
             }
         }
-        .animation(.bouncy(duration: 0.55, extraBounce: 0.12), value: coordinator.wizardTracker.stepStatuses)
+        .animation(.bouncy(duration: 0.55, extraBounce: 0.12), value: coordinator.wizardStepStatuses)
     }
 }
 

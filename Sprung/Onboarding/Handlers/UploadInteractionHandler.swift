@@ -83,7 +83,10 @@ final class UploadInteractionHandler {
         fileURLs: [URL],
         originalURL: URL?
     ) async -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = uploadContinuationIds[id].guardContinuation(operation: "continuation for upload \(id.uuidString)") else { return nil }
+        guard let continuationId = uploadContinuationIds[id] else {
+            Logger.warning("⚠️ No continuation ID for upload \(id.uuidString)", category: .ai)
+            return nil
+        }
         guard let requestIndex = pendingUploadRequests.firstIndex(where: { $0.id == id }) else {
             Logger.warning("⚠️ No pending request for upload \(id.uuidString)", category: .ai)
             return nil
@@ -172,7 +175,7 @@ final class UploadInteractionHandler {
     }
 
     private func resumeUpload(id: UUID, withError message: String) async -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = uploadContinuationIds[id].guardContinuation(operation: "continuation for failed upload") else { return nil }
+        guard let continuationId = uploadContinuationIds[id] else { return nil }
 
         removeUploadRequest(id: id)
         uploadContinuationIds.removeValue(forKey: id)

@@ -12,7 +12,7 @@ final class OnboardingInterviewCoordinator {
         let source: String
         let details: [String: String]?
     }
-    let chatTranscriptStore: ChatTranscriptStore
+    private let chatTranscriptStore: ChatTranscriptStore
     let toolRouter: OnboardingToolRouter // Central router that owns handler state surfaced to SwiftUI
     let wizardTracker: WizardProgressTracker
     let phaseRegistry: PhaseScriptRegistry
@@ -275,6 +275,44 @@ final class OnboardingInterviewCoordinator {
         self.preferences = preferences
     }
 
+    var messages: [OnboardingMessage] {
+        chatTranscriptStore.messages
+    }
+
+    var pendingChoicePrompt: OnboardingChoicePrompt? {
+        toolRouter.pendingChoicePrompt
+    }
+
+    var pendingValidationPrompt: OnboardingValidationPrompt? {
+        toolRouter.pendingValidationPrompt
+    }
+
+    var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest? {
+        toolRouter.pendingApplicantProfileRequest
+    }
+
+    var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState? {
+        toolRouter.pendingApplicantProfileIntake
+    }
+
+    var pendingUploadRequests: [OnboardingUploadRequest] {
+        toolRouter.pendingUploadRequests
+    }
+
+    var uploadedItems: [OnboardingUploadedItem] {
+        toolRouter.uploadedItems
+    }
+
+    var pendingSectionToggleRequest: OnboardingSectionToggleRequest? {
+        toolRouter.pendingSectionToggleRequest
+    }
+
+    var wizardStep: OnboardingWizardStep { wizardTracker.currentStep }
+
+    var completedWizardSteps: Set<OnboardingWizardStep> { wizardTracker.completedSteps }
+
+    var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] { wizardTracker.stepStatuses }
+
     // MARK: - Chat helpers
 
     func appendUserMessage(_ text: String) {
@@ -418,12 +456,40 @@ final class OnboardingInterviewCoordinator {
         await checkpoints.restoreLatest()
     }
 
+    func saveCheckpoint(
+        applicantProfile: JSON?,
+        skeletonTimeline: JSON?,
+        enabledSections: [String]?
+    ) async {
+        let session = await interviewState.currentSession()
+        await checkpoints.save(
+            from: session,
+            applicantProfile: applicantProfile,
+            skeletonTimeline: skeletonTimeline,
+            enabledSections: enabledSections.flatMap { $0.isEmpty ? nil : $0 }
+        )
+        Logger.debug("💾 Checkpoint saved (phase: \(session.phase.rawValue))", category: .ai)
+    }
+
     func clearCheckpoints() async {
         await checkpoints.clear()
         Logger.debug("🗑️ Checkpoints cleared", category: .ai)
     }
 
     // MARK: - Data Store (merged from OnboardingDataStoreManager)
+
+    /// Stores the applicant profile JSON and syncs it to SwiftData.
+    func storeApplicantProfile(_ json: JSON) {
+        if let existing = applicantProfileJSON, existing == json { return }
+        applicantProfileJSON = json
+        let draft = ApplicantProfileDraft(json: json)
+        let profile = applicantProfileStore.currentProfile()
+        draft.apply(to: profile, replaceMissing: false)
+        applicantProfileStore.save(profile)
+        artifacts.applicantProfile = json
+
+        Logger.debug("📝 ApplicantProfile stored: \(json.dictionaryValue.keys.joined(separator: ", "))", category: .ai)
+    }
 
     /// Updates the applicant profile image and syncs to SwiftData.
     func storeApplicantProfileImage(data: Data, mimeType: String?) {
@@ -441,6 +507,38 @@ final class OnboardingInterviewCoordinator {
         artifacts.applicantProfile = json
 
         Logger.debug("📸 Applicant profile image updated (\(data.count) bytes, mime: \(mimeType ?? "unknown"))", category: .ai)
+    }
+
+    /// Stores the skeleton timeline JSON.
+    func storeSkeletonTimeline(_ json: JSON) {
+        skeletonTimelineJSON = json
+        artifacts.skeletonTimeline = json
+
+        Logger.debug("📅 Skeleton timeline stored", category: .ai)
+    }
+
+    /// Stores an artifact record, deduplicating by SHA256 if present.
+    func storeArtifactRecord(_ artifact: JSON) {
+        guard artifact != .null else { return }
+
+        if let sha = artifact["sha256"].string {
+            artifacts.artifactRecords.removeAll { $0["sha256"].stringValue == sha }
+        }
+        artifacts.artifactRecords.append(artifact)
+
+        Logger.debug("📦 Artifact record stored (sha256: \(artifact["sha256"].stringValue))", category: .ai)
+    }
+
+    /// Stores a knowledge card, deduplicating by ID if present.
+    func storeKnowledgeCard(_ card: JSON) {
+        guard card != .null else { return }
+
+        if let identifier = card["id"].string, !identifier.isEmpty {
+            artifacts.knowledgeCards.removeAll { $0["id"].stringValue == identifier }
+        }
+        artifacts.knowledgeCards.append(card)
+
+        Logger.debug("🃏 Knowledge card stored (id: \(card["id"].stringValue))", category: .ai)
     }
 
     /// Updates the enabled sections list.
@@ -810,7 +908,7 @@ final class OnboardingInterviewCoordinator {
             wizardTracker.setStep(.resumeIntake)
             Logger.debug("[WizardStep] Set to .resumeIntake (fresh start)")
         } else {
-            Logger.debug("[WizardStep] After checkpoint restore: \(wizardTracker.currentStep.rawValue)")
+            Logger.debug("[WizardStep] After checkpoint restore: \(wizardStep)")
         }
 
         await orchestrator?.startInterview(modelId: modelId)
@@ -995,8 +1093,8 @@ final class OnboardingInterviewCoordinator {
         )
     }
 
-    /// Stores the applicant profile JSON and syncs it to SwiftData.
-    func storeApplicantProfile(_ json: JSON) async {
+    private func storeApplicantProfile(_ json: JSON) async {
+        // Store the applicant profile (call public synchronous version)
         if let existing = applicantProfileJSON, existing == json { return }
         applicantProfileJSON = json
         let draft = ApplicantProfileDraft(json: json)
@@ -1015,8 +1113,8 @@ final class OnboardingInterviewCoordinator {
         )
     }
 
-    /// Stores the skeleton timeline JSON.
-    func storeSkeletonTimeline(_ json: JSON) async {
+    private func storeSkeletonTimeline(_ json: JSON) async {
+        // Store the skeleton timeline (call public synchronous version logic)
         skeletonTimelineJSON = json
         artifacts.skeletonTimeline = json
         Logger.debug("📅 Skeleton timeline stored", category: .ai)
@@ -1030,10 +1128,10 @@ final class OnboardingInterviewCoordinator {
         )
     }
 
-    /// Stores an artifact record, deduplicating by SHA256 if present.
-    func storeArtifactRecord(_ artifact: JSON) async {
+    private func storeArtifactRecord(_ artifact: JSON) async {
         guard artifact != .null else { return }
 
+        // Inline public synchronous version logic to avoid overload ambiguity
         if let sha = artifact["sha256"].string {
             artifacts.artifactRecords.removeAll { $0["sha256"].stringValue == sha }
         }
@@ -1041,10 +1139,10 @@ final class OnboardingInterviewCoordinator {
         Logger.debug("📦 Artifact record stored (sha256: \(artifact["sha256"].stringValue))", category: .ai)
     }
 
-    /// Stores a knowledge card, deduplicating by ID if present.
-    func storeKnowledgeCard(_ card: JSON) async {
+    private func storeKnowledgeCard(_ card: JSON) async {
         guard card != .null else { return }
 
+        // Inline public synchronous version logic to avoid overload ambiguity
         if let identifier = card["id"].string, !identifier.isEmpty {
             artifacts.knowledgeCards.removeAll { $0["id"].stringValue == identifier }
         }
@@ -1056,14 +1154,11 @@ final class OnboardingInterviewCoordinator {
 
     func persistCheckpoint() async {
         let sections = artifacts.enabledSections
-        let session = await interviewState.currentSession()
-        await checkpoints.save(
-            from: session,
+        await saveCheckpoint(
             applicantProfile: applicantProfileJSON,
             skeletonTimeline: skeletonTimelineJSON,
             enabledSections: sections.isEmpty ? nil : sections
         )
-        Logger.debug("💾 Checkpoint saved (phase: \(session.phase.rawValue))", category: .ai)
     }
 
     private func resetTransientState() {
@@ -1103,11 +1198,5 @@ final class OnboardingInterviewCoordinator {
             missing.sorted() == self.missing.sorted() &&
             overrides.sorted() == self.overrides.sorted()
         }
-    }
-}
-
-extension OnboardingInterviewCoordinator {
-    func setAllowedToolsOverride(_ tools: Set<String>?) async {
-        await orchestrator?.setAllowedToolsOverride(tools)
     }
 }

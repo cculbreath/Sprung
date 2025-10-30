@@ -81,9 +81,16 @@ final class ContactsImportService {
         }
 
         // Emails
-        let emailValues = contact.emailAddresses.compactMap { ($0.value as String).trimmedNonEmpty }
+        let emailValues = contact.emailAddresses
+            .compactMap { ($0.value as String).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
         if !emailValues.isEmpty {
-            draft.suggestedEmails = Array(Set(emailValues))
+            draft.suggestedEmails = emailValues.reduce(into: [String]()) { result, email in
+                if !result.contains(email) {
+                    result.append(email)
+                }
+            }
             if draft.email.isEmpty {
                 draft.email = draft.suggestedEmails.first ?? ""
             }
@@ -96,19 +103,28 @@ final class ContactsImportService {
 
         // Address
         if let postalAddress = contact.postalAddresses.first?.value {
-            if let street = postalAddress.street.trimmedNonEmpty {
+            let street = postalAddress.street.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !street.isEmpty {
                 draft.address = street
             }
-            if let city = postalAddress.city.trimmedNonEmpty {
+
+            let city = postalAddress.city.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !city.isEmpty {
                 draft.city = city
             }
-            if let state = postalAddress.state.trimmedNonEmpty {
+
+            let state = postalAddress.state.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !state.isEmpty {
                 draft.state = state
             }
-            if let postalCode = postalAddress.postalCode.trimmedNonEmpty {
+
+            let postalCode = postalAddress.postalCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !postalCode.isEmpty {
                 draft.zip = postalCode
             }
-            if let countryCode = postalAddress.isoCountryCode.trimmedNonEmpty {
+
+            let countryCode = postalAddress.isoCountryCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !countryCode.isEmpty {
                 draft.countryCode = countryCode.uppercased()
             }
         }
