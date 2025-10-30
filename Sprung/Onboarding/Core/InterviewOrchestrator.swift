@@ -44,42 +44,41 @@ actor InterviewOrchestrator {
     private let toolExecutor: ToolExecutor
     private let callbacks: Callbacks
     private let systemPrompt: String
-    private let allowedToolsMap: [InterviewPhase: [String]] = [
+    // Base tools available in all phases
+    private let baseTools: [String] = [
+        "get_user_option",
+        "submit_for_validation",
+        "persist_data",
+        "set_objective_status",
+        "next_phase"
+    ]
+
+    // Phase-specific tool additions
+    private let phaseSpecificTools: [InterviewPhase: [String]] = [
         .phase1CoreFacts: [
-            "get_user_option",
             "get_applicant_profile",
             "validate_applicant_profile",
             "get_user_upload",
             "get_macos_contact_card",
-            "extract_document",
-            "submit_for_validation",
-            "persist_data",
-            "set_objective_status",
-            "next_phase"
+            "extract_document"
         ],
         .phase2DeepDive: [
-            "get_user_option",
             "get_user_upload",
             "extract_document",
-            "submit_for_validation",
-            "persist_data",
-            "set_objective_status",
-            "next_phase",
             "generate_knowledge_card"
         ],
         .phase3WritingCorpus: [
-            "get_user_option",
             "get_user_upload",
-            "extract_document",
-            "submit_for_validation",
-            "persist_data",
-            "set_objective_status",
-            "next_phase"
+            "extract_document"
         ],
-        .complete: [
-            "next_phase"
-        ]
+        .complete: []
     ]
+
+    private var allowedToolsMap: [InterviewPhase: [String]] {
+        Dictionary(uniqueKeysWithValues: phaseSpecificTools.map { phase, specific in
+            (phase, baseTools + specific)
+        })
+    }
 
     private struct StreamBuffer {
         var messageId: UUID
@@ -94,6 +93,7 @@ actor InterviewOrchestrator {
     private var pendingToolContinuations: [UUID: CheckedContinuation<JSON, Error>] = [:]
     private var applicantProfileData: JSON?
     private var skeletonTimelineData: JSON?
+    private var allowedToolsOverride: Set<String>?
 
     init(
         client: OpenAIService,
@@ -107,6 +107,10 @@ actor InterviewOrchestrator {
         self.toolExecutor = toolExecutor
         self.callbacks = callbacks
         self.systemPrompt = systemPrompt
+    }
+
+    func setAllowedToolsOverride(_ tools: Set<String>?) {
+        allowedToolsOverride = tools
     }
 
     func startInterview(modelId: String) async {
@@ -194,151 +198,6 @@ actor InterviewOrchestrator {
             let errorDetails = formatError(error)
             await callbacks.handleError("Failed to resume tool: \(errorDetails)")
         }
-    }
-
-    // DEPRECATED: This imperative orchestration is replaced by LLM-driven flow via tool calls.
-    // The LLM now drives Phase 1 by calling get_user_option, get_macos_contact_card,
-    // submit_for_validation, and other tools as needed based on user choices.
-    // Kept for reference only.
-    private func runPhaseOne() async {
-        await callbacks.updateProcessingState(true)
-        defer { Task { await self.callbacks.updateProcessingState(false) } }
-
-        do {
-            let profile = try await collectApplicantProfile()
-            applicantProfileData = profile
-            await state.completeObjective("applicant_profile")
-            _ = await callbacks.emitAssistantMessage("Excellent. Contact information is set.")
-            await callbacks.persistCheckpoint()
-        } catch ToolError.userCancelled {
-            _ = await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
-        } catch {
-            let errorDetails = formatError(error)
-            await callbacks.handleError("Failed to collect applicant profile: \(errorDetails)")
-        }
-
-        do {
-            let timeline = try await collectSkeletonTimeline()
-            skeletonTimelineData = timeline
-            await state.completeObjective("skeleton_timeline")
-            _ = await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.")
-            await callbacks.persistCheckpoint()
-        } catch ToolError.userCancelled {
-            _ = await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.")
-        } catch {
-            let errorDetails = formatError(error)
-            await callbacks.handleError("Failed to build skeleton timeline: \(errorDetails)")
-        }
-
-        let current = await state.currentSession()
-        if current.objectivesDone.contains("skeleton_timeline") && !current.objectivesDone.contains("enabled_sections") {
-            await state.completeObjective("enabled_sections")
-            _ = await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.")
-            await callbacks.persistCheckpoint()
-        }
-    }
-
-    private func collectApplicantProfile() async throws -> JSON {
-        // Quietly try to fetch contact data first (no message to user yet)
-        var draft = ApplicantProfileDraft()
-        var sources: [String] = []
-
-        do {
-            let contactResponse = try await callTool(name: "get_macos_contact_card", arguments: JSON())
-            if contactResponse["status"].stringValue == "fetched" {
-                let contactDraft = buildApplicantProfileDraft(from: contactResponse["contact"])
-                draft = draft.merging(contactDraft)
-                sources.append("macOS Contacts")
-            }
-        } catch {
-            Logger.debug("Contact card fetch unavailable: \(error)")
-        }
-
-        // Immediately submit for validation (even if empty) as per spec
-        var args = JSON()
-        args["dataType"].string = "applicant_profile"
-        args["data"] = draft.toJSON()
-        args["message"].string = "Review the suggested details below. Edit anything that needs correction or add missing information before continuing."
-        if !sources.isEmpty {
-            args["sources"] = JSON(sources)
-        }
-
-        let validation = try await callTool(name: "submit_for_validation", arguments: args)
-        let status = validation["status"].stringValue
-        guard status != "rejected" else {
-            throw ToolError.executionFailed("Applicant profile rejected.")
-        }
-
-        let data = validation["data"]
-        let final = data != .null ? data : draft.toJSON()
-        await callbacks.storeApplicantProfile(final)
-        await persistData(final, as: "applicant_profile")
-        return final
-    }
-
-    private func collectSkeletonTimeline() async throws -> JSON {
-        _ = await callbacks.emitAssistantMessage("Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later.")
-
-        var uploadArgs = JSON()
-        uploadArgs["uploadType"].string = "resume"
-        uploadArgs["prompt"].string = "Upload your latest resume to extract a skeleton timeline."
-
-        let uploadResult = try await callTool(name: "get_user_upload", arguments: uploadArgs)
-        guard uploadResult["status"].stringValue == "uploaded",
-              let firstUpload = uploadResult["uploads"].array?.first else {
-            throw ToolError.userCancelled
-        }
-
-        guard let fileURLString = firstUpload["file_url"].string ?? firstUpload["storageUrl"].string,
-              let fileURL = URL(string: fileURLString) else {
-            throw ToolError.executionFailed("Uploaded file URL missing or invalid.")
-        }
-
-        var extractionArgs = JSON()
-        extractionArgs["file_url"].string = fileURL.absoluteString
-        extractionArgs["purpose"].string = "resume_timeline"
-        extractionArgs["return_types"] = JSON(["artifact_record"])
-
-        await callbacks.setExtractionStatus(
-            OnboardingPendingExtraction(
-                title: "Extracting résumé",
-                summary: "Processing your uploaded résumé to draft a skeleton timeline."
-            )
-        )
-
-        defer {
-            Task { await callbacks.setExtractionStatus(nil) }
-        }
-
-        let extractionResult = try await callTool(name: "extract_document", arguments: extractionArgs)
-        let artifact = extractionResult["artifact_record"]
-        let extractedText = artifact["extracted_content"].stringValue
-        guard !extractedText.isEmpty else {
-            throw ToolError.executionFailed("Document extraction did not yield text content.")
-        }
-        if artifact != .null {
-            await callbacks.storeArtifactRecord(artifact)
-            await persistData(artifact, as: "artifact_record")
-        }
-
-        let timeline = try await generateTimeline(from: extractedText)
-
-        var validationArgs = JSON()
-        validationArgs["dataType"].string = "skeleton_timeline"
-        validationArgs["data"] = timeline
-        validationArgs["message"].string = "Review the generated skeleton timeline."
-
-        let validation = try await callTool(name: "submit_for_validation", arguments: validationArgs)
-        let status = validation["status"].stringValue
-        guard status != "rejected" else {
-            throw ToolError.executionFailed("Skeleton timeline rejected.")
-        }
-
-        let data = validation["data"]
-        let final = data != .null ? data : timeline
-        await callbacks.storeSkeletonTimeline(final)
-        await persistData(final, as: "skeleton_timeline")
-        return final
     }
 
     private func persistData(_ payload: JSON, as dataType: String) async {
@@ -775,42 +634,35 @@ actor InterviewOrchestrator {
 
     private func sanitizeToolOutput(for toolName: String?, payload: JSON) -> JSON {
         guard let toolName else { return payload }
+
+        var sanitized = payload
+
+        // Extract channel based on tool type
+        let channel: String?
         switch toolName {
         case "get_applicant_profile":
-            var sanitized = payload
-            if sanitized["data"] != .null {
-                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
-                let channel = sanitized["mode"].string ?? "intake"
-                data = attachValidationMetaIfNeeded(to: data, defaultChannel: channel)
-                sanitized["data"] = data
-            }
-            return sanitized
+            channel = sanitized["mode"].string ?? "intake"
         case "validate_applicant_profile":
-            var sanitized = payload
-            if sanitized["data"] != .null {
-                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
-                data = attachValidationMetaIfNeeded(to: data, defaultChannel: "validation_card")
-                sanitized["data"] = data
-            }
-            if sanitized["changes"] != .null {
-                sanitized["changes"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["changes"])
-            }
-            return sanitized
+            channel = "validation_card"
         case "submit_for_validation":
-            var sanitized = payload
-            if sanitized["data"] != .null {
-                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
-                let channel = sanitized["data_type"].string ?? "validation"
-                data = attachValidationMetaIfNeeded(to: data, defaultChannel: channel)
-                sanitized["data"] = data
-            }
-            if sanitized["changes"] != .null {
-                sanitized["changes"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["changes"])
-            }
-            return sanitized
+            channel = sanitized["data_type"].string ?? "validation"
         default:
             return payload
         }
+
+        // Apply common sanitization to data and changes
+        if sanitized["data"] != .null {
+            var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
+            if let channel {
+                data = attachValidationMetaIfNeeded(to: data, defaultChannel: channel)
+            }
+            sanitized["data"] = data
+        }
+        if sanitized["changes"] != .null {
+            sanitized["changes"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["changes"])
+        }
+
+        return sanitized
     }
 
     private func attachValidationMetaIfNeeded(to json: JSON, defaultChannel: String) -> JSON {
@@ -966,6 +818,9 @@ actor InterviewOrchestrator {
     }
 
     private func allowedToolNames(for session: InterviewSession) -> Set<String> {
+        if let override = allowedToolsOverride {
+            return override
+        }
         if let tools = allowedToolsMap[session.phase] {
             return Set(tools)
         }

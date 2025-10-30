@@ -15,6 +15,7 @@ Give the onboarding interviewer LLM a reliable view of available tools and their
 - [ ] Capture findings in Outcomes & Retrospective.
 ## Surprises & Discoveries
 - (2025-10-29 05:40Z) Model spec confirms status traffic should use the `developer` message role instead of `user`; plan updated accordingly.
+- (2025-10-30 05:00Z) `validate_applicant_profile` returns “No output” even though data exists; indicates our orchestration fails to send immediate `function_call_output` for the call—must audit waiting/continuation handling.
 
 ## Decision Log
 - Decision: Retired `capabilities_describe` tool and `capabilityManifest`; future tool visibility will rely on static tool definitions plus queue/ledger updates.
@@ -83,3 +84,4 @@ Changes affect coordinator/orchestrator; re-running the plan re-applies queue sn
 - `OnboardingInterviewCoordinator` must expose functions to add/remove tool queue entries and compute allowed tool names.
 - `ToolExecutor` must notify coordinator when tool enters/exits waiting state and return immediate error payloads.
 Revision history: initial draft 2025-10-29 by Codex agent.
+Revision 2025-10-30 05:00Z: Logged missing validate_applicant_profile output issue to direct follow-up debugging.

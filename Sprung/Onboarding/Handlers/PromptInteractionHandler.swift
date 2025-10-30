@@ -31,10 +31,11 @@ final class PromptInteractionHandler {
     }
 
     func resolveChoice(selectionIds: [String]) -> (UUID, JSON)? {
-        guard let continuationId = choiceContinuationId, !selectionIds.isEmpty else {
+        guard !selectionIds.isEmpty else {
             Logger.warning("⚠️ Attempted to resolve choice prompt without selections", category: .ai)
             return nil
         }
+        guard let continuationId = choiceContinuationId.guardContinuation(operation: "choice prompt to resolve") else { return nil }
 
         var payload = JSON()
         payload["selectedIds"] = JSON(selectionIds)

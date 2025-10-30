@@ -34,10 +34,7 @@ final class SectionToggleHandler {
 
     /// Resolves a section toggle with the user's enabled sections.
     func resolveToggle(enabled: [String]) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = sectionToggleContinuationId else {
-            Logger.warning("⚠️ No pending section toggle to resolve", category: .ai)
-            return nil
-        }
+        guard let continuationId = sectionToggleContinuationId.guardContinuation(operation: "section toggle to resolve") else { return nil }
 
         var payload = JSON()
         payload["enabledSections"] = JSON(enabled)
@@ -49,10 +46,7 @@ final class SectionToggleHandler {
 
     /// Rejects a section toggle request.
     func rejectToggle(reason: String) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = sectionToggleContinuationId else {
-            Logger.warning("⚠️ No pending section toggle to reject", category: .ai)
-            return nil
-        }
+        guard let continuationId = sectionToggleContinuationId.guardContinuation(operation: "section toggle to reject") else { return nil }
 
         var payload = JSON()
         payload["cancelled"].boolValue = true

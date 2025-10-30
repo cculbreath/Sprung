@@ -44,6 +44,10 @@ final class ProfileInteractionHandler {
 
     /// Presents a validation request for an applicant profile.
     func presentProfileRequest(_ request: OnboardingApplicantProfileRequest, continuationId: UUID) {
+        if pendingApplicantProfileIntake != nil {
+            pendingApplicantProfileIntake = nil
+            Logger.debug("🔄 Clearing intake state before presenting validation request", category: .ai)
+        }
         pendingApplicantProfileRequest = request
         applicantProfileContinuationId = continuationId
         Logger.info("📋 Profile validation request presented", category: .ai)
@@ -57,7 +61,7 @@ final class ProfileInteractionHandler {
 
     /// Resolves an applicant profile validation with user-approved or modified draft.
     func resolveProfile(with draft: ApplicantProfileDraft) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = applicantProfileContinuationId,
+        guard let continuationId = applicantProfileContinuationId.guardContinuation(operation: "profile request to resolve"),
               let request = pendingApplicantProfileRequest else {
             Logger.warning("⚠️ No pending profile request to resolve", category: .ai)
             return nil
@@ -79,10 +83,7 @@ final class ProfileInteractionHandler {
 
     /// Rejects an applicant profile validation.
     func rejectProfile(reason: String) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = applicantProfileContinuationId else {
-            Logger.warning("⚠️ No pending profile request to reject", category: .ai)
-            return nil
-        }
+        guard let continuationId = applicantProfileContinuationId.guardContinuation(operation: "profile request to reject") else { return nil }
 
         var payload = JSON()
         payload["status"].string = "rejected"

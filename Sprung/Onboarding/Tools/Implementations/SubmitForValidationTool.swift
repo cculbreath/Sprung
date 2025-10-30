@@ -233,7 +233,7 @@ private struct ValidationPayload {
     }
 
     func toValidationPrompt() -> OnboardingValidationPrompt {
-        OnboardingValidationPrompt(dataType: canonicalType, payload: payload, message: message)
+        OnboardingValidationPrompt(id: UUID(), dataType: canonicalType, payload: payload, message: message)
     }
 
     func toApplicantProfileRequest() -> OnboardingApplicantProfileRequest {
