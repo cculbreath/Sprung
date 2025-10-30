@@ -452,7 +452,7 @@ final class OnboardingInterviewCoordinator {
         await checkpoints.hasCheckpoint()
     }
 
-    func restoreCheckpoint() async -> CheckpointSnapshot? {
+    func restoreCheckpoint() async -> (InterviewSession, JSON?, JSON?, [String]?, [ObjectiveEntry])? {
         await checkpoints.restoreLatest()
     }
 
@@ -981,11 +981,20 @@ final class OnboardingInterviewCoordinator {
         await interviewState.restore(from: session)
         applyWizardProgress(from: session)
 
+        // Restore data synchronously without triggering checkpoint saves
         if let profileJSON {
-            storeApplicantProfile(profileJSON)
+            applicantProfileJSON = profileJSON
+            let draft = ApplicantProfileDraft(json: profileJSON)
+            let profile = applicantProfileStore.currentProfile()
+            draft.apply(to: profile, replaceMissing: false)
+            applicantProfileStore.save(profile)
+            artifacts.applicantProfile = profileJSON
+            Logger.debug("📝 ApplicantProfile restored from checkpoint", category: .ai)
         }
         if let timelineJSON {
-            storeSkeletonTimeline(timelineJSON)
+            skeletonTimelineJSON = timelineJSON
+            artifacts.skeletonTimeline = timelineJSON
+            Logger.debug("📅 Skeleton timeline restored from checkpoint", category: .ai)
         }
         if let enabledSections, !enabledSections.isEmpty {
             updateEnabledSections(enabledSections)
@@ -1085,7 +1094,16 @@ final class OnboardingInterviewCoordinator {
     }
 
     private func storeApplicantProfile(_ json: JSON) async {
-        dataStoreManager.storeApplicantProfile(json)
+        // Store the applicant profile (call public synchronous version)
+        if let existing = applicantProfileJSON, existing == json { return }
+        applicantProfileJSON = json
+        let draft = ApplicantProfileDraft(json: json)
+        let profile = applicantProfileStore.currentProfile()
+        draft.apply(to: profile, replaceMissing: false)
+        applicantProfileStore.save(profile)
+        artifacts.applicantProfile = json
+        Logger.debug("📝 ApplicantProfile stored: \(json.dictionaryValue.keys.joined(separator: ", "))", category: .ai)
+
         await persistCheckpoint()
         recordObjectiveStatus(
             "applicant_profile",
@@ -1096,7 +1114,11 @@ final class OnboardingInterviewCoordinator {
     }
 
     private func storeSkeletonTimeline(_ json: JSON) async {
-        dataStoreManager.storeSkeletonTimeline(json)
+        // Store the skeleton timeline (call public synchronous version logic)
+        skeletonTimelineJSON = json
+        artifacts.skeletonTimeline = json
+        Logger.debug("📅 Skeleton timeline stored", category: .ai)
+
         await persistCheckpoint()
         recordObjectiveStatus(
             "skeleton_timeline",
@@ -1108,12 +1130,25 @@ final class OnboardingInterviewCoordinator {
 
     private func storeArtifactRecord(_ artifact: JSON) async {
         guard artifact != .null else { return }
-        storeArtifactRecord(artifact)
+
+        // Inline public synchronous version logic to avoid overload ambiguity
+        if let sha = artifact["sha256"].string {
+            artifacts.artifactRecords.removeAll { $0["sha256"].stringValue == sha }
+        }
+        artifacts.artifactRecords.append(artifact)
+        Logger.debug("📦 Artifact record stored (sha256: \(artifact["sha256"].stringValue))", category: .ai)
     }
 
     private func storeKnowledgeCard(_ card: JSON) async {
         guard card != .null else { return }
-        storeKnowledgeCard(card)
+
+        // Inline public synchronous version logic to avoid overload ambiguity
+        if let identifier = card["id"].string, !identifier.isEmpty {
+            artifacts.knowledgeCards.removeAll { $0["id"].stringValue == identifier }
+        }
+        artifacts.knowledgeCards.append(card)
+        Logger.debug("🃏 Knowledge card stored (id: \(card["id"].stringValue))", category: .ai)
+
         await persistCheckpoint()
     }
 
