@@ -26,18 +26,21 @@ final class UploadInteractionHandler {
 
     private let uploadFileService: UploadFileService
     private let uploadStorage: OnboardingUploadStorage
-    private weak var dataStoreManager: OnboardingDataStoreManager?
+    private let applicantProfileStore: ApplicantProfileStore
+    private let dataStore: InterviewDataStore
 
     // MARK: - Init
 
     init(
         uploadFileService: UploadFileService,
         uploadStorage: OnboardingUploadStorage,
-        dataStoreManager: OnboardingDataStoreManager?
+        applicantProfileStore: ApplicantProfileStore,
+        dataStore: InterviewDataStore
     ) {
         self.uploadFileService = uploadFileService
         self.uploadStorage = uploadStorage
-        self.dataStoreManager = dataStoreManager
+        self.applicantProfileStore = applicantProfileStore
+        self.dataStore = dataStore
     }
 
     // MARK: - Presentation
@@ -108,10 +111,17 @@ final class UploadInteractionHandler {
 
         var processed: [OnboardingProcessedUpload] = []
         var payload = JSON()
+        payload["kind"].string = request.kind.rawValue
 
         if let target = request.metadata.targetKey {
             payload["targetKey"].string = target
         }
+
+        var metadata = JSON()
+        metadata["title"].string = request.metadata.title
+        metadata["allow_multiple"].bool = request.metadata.allowMultiple
+        metadata["allow_url"].bool = request.metadata.allowURL
+        payload["metadata"] = metadata
 
         do {
             if fileURLs.isEmpty {
@@ -186,7 +196,14 @@ final class UploadInteractionHandler {
             }
             let data = try Data(contentsOf: first.storageURL)
             try uploadFileService.validateImageData(data: data, fileExtension: first.storageURL.pathExtension)
-            dataStoreManager?.storeApplicantProfileImage(data: data, mimeType: first.contentType)
+
+            // Store image in applicant profile
+            let profile = applicantProfileStore.currentProfile()
+            profile.pictureData = data
+            profile.pictureMimeType = first.contentType
+            applicantProfileStore.save(profile)
+
+            Logger.debug("📸 Applicant profile image updated (\(data.count) bytes, mime: \(first.contentType ?? "unknown"))", category: .ai)
 
         default:
             throw ToolError.invalidParameters("Unsupported target_key: \(target)")
