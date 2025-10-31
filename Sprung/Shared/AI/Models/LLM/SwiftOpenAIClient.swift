@@ -12,13 +12,24 @@ import SwiftOpenAI
 
 /// Implements OpenAILoggerProtocol to route SwiftOpenAI logs through Sprung's centralized Logger
 private class SprungOpenAILogger: OpenAILoggerProtocol {
-  func debug(_ message: String) {
-    Logger.debug(message, category: .ai)
-  }
+    func debug(_ message: String) {
+        guard SwiftOpenAIClient.shouldEmitDebug(message) else { return }
 
-  func error(_ message: String) {
-    Logger.error(message, category: .ai)
-  }
+        switch SwiftOpenAIClient.currentLogLevel {
+        case .debug:
+            Logger.debug(message, category: .ai)
+        case .verbose:
+            Logger.debug(message, category: .ai)
+        case .info:
+            Logger.info(message, category: .ai)
+        case .quiet:
+            break
+        }
+    }
+
+    func error(_ message: String) {
+        Logger.error(message, category: .ai)
+    }
 }
 
 final class SwiftOpenAIClient: LLMClient {
@@ -29,6 +40,65 @@ final class SwiftOpenAIClient: LLMClient {
     // Class-level flag to ensure logger is only injected once
     private static var loggerInjected = false
     private static let loggerInjectionLock = NSLock()
+    private static let logLevelLock = NSLock()
+    private static var _logLevel: LogLevel = .info
+
+    enum LogLevel: Int, CaseIterable {
+        case quiet
+        case info
+        case verbose
+        case debug
+    }
+
+    /// Change the verbosity of SwiftOpenAI diagnostic logging at runtime.
+    static func setLogLevel(_ level: LogLevel) {
+        logLevelLock.lock()
+        let previous = _logLevel
+        _logLevel = level
+        logLevelLock.unlock()
+        guard previous != level else { return }
+        Logger.info("SwiftOpenAI log level set to \(level)", category: .diagnostics)
+    }
+
+    static var currentLogLevel: LogLevel {
+        logLevelLock.lock()
+        let level = _logLevel
+        logLevelLock.unlock()
+        return level
+    }
+
+    fileprivate static func shouldEmitDebug(_ message: String) -> Bool {
+        let level = currentLogLevel
+        switch level {
+        case .quiet:
+            return false
+        case .info:
+            return isHighValue(message)
+        case .verbose:
+            return !isPerTokenDelta(message)
+        case .debug:
+            return true
+        }
+    }
+
+    private static func isPerTokenDelta(_ message: String) -> Bool {
+        let lowered = message.lowercased()
+        return lowered.contains("delta") || lowered.contains("stream line")
+    }
+
+    private static func isHighValue(_ message: String) -> Bool {
+        let lowered = message.lowercased()
+        if lowered.contains("error") || lowered.contains("failed") {
+            return true
+        }
+        if lowered.contains("http status code") || lowered.contains("request") && lowered.contains("curl") {
+            return true
+        }
+        if lowered.contains("response completed") || lowered.contains("usage") {
+            return true
+        }
+        return false
+    }
 
     init(executor: LLMRequestExecutor = LLMRequestExecutor()) {
         self.executor = executor
