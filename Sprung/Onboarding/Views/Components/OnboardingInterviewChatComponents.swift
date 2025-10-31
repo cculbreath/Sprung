@@ -48,6 +48,8 @@ struct MessageBubble: View {
                     .italic()
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
+            } else if message.showReasoningPlaceholder && message.role == .assistant {
+                ReasoningSummaryPlaceholderView()
             }
         }
         .frame(
@@ -150,5 +152,56 @@ struct LLMActivityView: View {
         .brightness(0.05)
         .shadow(color: gradientColors.first?.opacity(0.4) ?? .clear, radius: 26, y: 14)
         .shadow(color: gradientColors.last?.opacity(0.3) ?? .clear, radius: 20, y: -8)
+    }
+}
+
+private struct ReasoningSummaryPlaceholderView: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+                .scaleEffect(0.8)
+
+            Text("Thinking…")
+                .font(.footnote)
+                .italic()
+                .foregroundStyle(.secondary)
+                .modifier(ShimmerModifier())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 1)
+    }
+}
+
+private struct ShimmerModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { proxy in
+                    TimelineView(.animation) { timeline in
+                        let duration: Double = 1.4
+                        let progress = timeline.date.timeIntervalSinceReferenceDate
+                            .truncatingRemainder(dividingBy: duration) / duration
+                        let travel = proxy.size.width * 1.6
+                        let offset = (progress * travel) - (travel / 2)
+
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.0),
+                                Color.white.opacity(0.45),
+                                Color.white.opacity(0.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(width: proxy.size.width * 1.6, height: proxy.size.height * 2.5)
+                        .rotationEffect(.degrees(20))
+                        .offset(x: offset, y: 0)
+                        .blendMode(.plusLighter)
+                    }
+                    .mask(content)
+                }
+            )
     }
 }

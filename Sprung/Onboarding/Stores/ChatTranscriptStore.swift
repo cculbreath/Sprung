@@ -13,15 +13,27 @@ final class ChatTranscriptStore {
     }
 
     @discardableResult
-    func appendAssistantMessage(_ text: String) -> UUID {
-        let message = OnboardingMessage(role: .assistant, text: text)
+    func appendAssistantMessage(_ text: String, reasoningExpected: Bool = false) -> UUID {
+        let message = OnboardingMessage(
+            role: .assistant,
+            text: text,
+            reasoningSummary: nil,
+            isAwaitingReasoningSummary: reasoningExpected,
+            showReasoningPlaceholder: false
+        )
         messages.append(message)
         return message.id
     }
 
     @discardableResult
-    func beginAssistantStream(initialText: String = "") -> UUID {
-        let message = OnboardingMessage(role: .assistant, text: initialText)
+    func beginAssistantStream(initialText: String = "", reasoningExpected: Bool = false) -> UUID {
+        let message = OnboardingMessage(
+            role: .assistant,
+            text: initialText,
+            reasoningSummary: nil,
+            isAwaitingReasoningSummary: reasoningExpected,
+            showReasoningPlaceholder: false
+        )
         messages.append(message)
         streamingMessageStart[message.id] = Date()
         return message.id
@@ -41,6 +53,7 @@ final class ChatTranscriptStore {
         } else {
             elapsed = 0
         }
+
         return elapsed
     }
 
@@ -48,6 +61,11 @@ final class ChatTranscriptStore {
         let value = isFinal ? summary.trimmingCharacters(in: .whitespacesAndNewlines) : summary
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
         messages[index].reasoningSummary = value
+        messages[index].showReasoningPlaceholder = false
+        messages[index].isAwaitingReasoningSummary = !isFinal
+        if isFinal {
+            Logger.info("🧠 Reasoning summary attached (len: \(value.count)) for message \(messageId.uuidString)", category: .ai)
+        }
     }
 
     func appendSystemMessage(_ text: String) {
@@ -57,5 +75,17 @@ final class ChatTranscriptStore {
     func reset() {
         messages.removeAll()
         streamingMessageStart.removeAll()
+    }
+
+    func finalizeReasoningSummariesIfNeeded(for messageIds: [UUID]) {
+        guard !messageIds.isEmpty else { return }
+        for id in messageIds {
+            guard let index = messages.firstIndex(where: { $0.id == id }) else { continue }
+            if messages[index].isAwaitingReasoningSummary {
+                messages[index].isAwaitingReasoningSummary = false
+                messages[index].showReasoningPlaceholder = true
+                Logger.info("ℹ️ Reasoning summary unavailable for message \(id.uuidString)", category: .ai)
+            }
+        }
     }
 }

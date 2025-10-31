@@ -354,17 +354,17 @@ final class OnboardingInterviewCoordinator {
     }
 
     @discardableResult
-    func appendAssistantMessage(_ text: String) -> UUID {
+    func appendAssistantMessage(_ text: String, reasoningExpected: Bool = false) -> UUID {
         Logger.info("🤖 Assistant message: \(text)", category: .ai)
-        return chatTranscriptStore.appendAssistantMessage(text)
+        return chatTranscriptStore.appendAssistantMessage(text, reasoningExpected: reasoningExpected)
     }
 
     @discardableResult
-    func beginAssistantStream(initialText: String = "") -> UUID {
+    func beginAssistantStream(initialText: String = "", reasoningExpected: Bool = false) -> UUID {
         if !initialText.isEmpty {
             Logger.info("🤖 Assistant stream started: \(initialText)", category: .ai)
         }
-        return chatTranscriptStore.beginAssistantStream(initialText: initialText)
+        return chatTranscriptStore.beginAssistantStream(initialText: initialText, reasoningExpected: reasoningExpected)
     }
 
     func updateAssistantStream(id: UUID, text: String) {
@@ -378,6 +378,10 @@ final class OnboardingInterviewCoordinator {
 
     func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) {
         chatTranscriptStore.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
+    }
+
+    func finalizeReasoningSummaries(for messageIds: [UUID]) {
+        chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: messageIds)
     }
 
     func appendSystemMessage(_ text: String) {
@@ -1119,13 +1123,13 @@ final class OnboardingInterviewCoordinator {
                 guard let self else { return }
                 await MainActor.run { self.isProcessing = processing }
             },
-            emitAssistantMessage: { [weak self] text in
+            emitAssistantMessage: { [weak self] text, reasoningExpected in
                 guard let self else { return UUID() }
-                return await MainActor.run { self.appendAssistantMessage(text) }
+                return await MainActor.run { self.appendAssistantMessage(text, reasoningExpected: reasoningExpected) }
             },
-            beginStreamingAssistantMessage: { [weak self] initial in
+            beginStreamingAssistantMessage: { [weak self] initial, reasoningExpected in
                 guard let self else { return UUID() }
-                return await MainActor.run { self.beginAssistantStream(initialText: initial) }
+                return await MainActor.run { self.beginAssistantStream(initialText: initial, reasoningExpected: reasoningExpected) }
             },
             updateStreamingAssistantMessage: { [weak self] id, text in
                 guard let self else { return }
@@ -1138,6 +1142,10 @@ final class OnboardingInterviewCoordinator {
             updateReasoningSummary: { [weak self] messageId, summary, isFinal in
                 guard let self else { return }
                 await MainActor.run { self.updateReasoningSummary(summary, for: messageId, isFinal: isFinal) }
+            },
+            finalizeReasoningSummaries: { [weak self] messageIds in
+                guard let self else { return }
+                await MainActor.run { self.finalizeReasoningSummaries(for: messageIds) }
             },
             handleWaitingState: { [weak self] waiting in
                 guard let self else { return }

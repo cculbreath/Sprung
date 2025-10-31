@@ -625,14 +625,14 @@ final class OnboardingInterviewService {
     // MARK: - Callback Handling
 
     @discardableResult
-    func appendAssistantMessage(_ text: String) -> UUID {
-        let id = coordinator.appendAssistantMessage(text)
+    func appendAssistantMessage(_ text: String, reasoningExpected: Bool = false) -> UUID {
+        let id = coordinator.appendAssistantMessage(text, reasoningExpected: reasoningExpected)
         Logger.debug("[Stream] Assistant message posted immediately (len: \(text.count))")
         return id
     }
 
-    func beginAssistantStream(initialText: String = "") -> UUID {
-        let id = coordinator.beginAssistantStream(initialText: initialText)
+    func beginAssistantStream(initialText: String = "", reasoningExpected: Bool = false) -> UUID {
+        let id = coordinator.beginAssistantStream(initialText: initialText, reasoningExpected: reasoningExpected)
         Logger.debug("[Stream] Started assistant stream \(id.uuidString) (len: \(initialText.count))")
         return id
     }
