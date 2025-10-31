@@ -65,6 +65,12 @@ final class PhaseScriptRegistry {
         - Messages beginning with "Developer status:" or "Objective update" come from the coordinator. Obey them without debate.
         - If a developer message says data is already persisted or validated, acknowledge and advance—never attempt to re-collect, re-validate, or re-persist unless the coordinator explicitly reopens the task.
 
+        ## ARTIFACT HANDLING
+
+        - Every upload, extraction, or contacts import creates an onboarding artifact. Developer messages list its metadata (artifact_id, source, purpose, sha256, etc.).
+        - Use list_artifacts to review what is stored, get_artifact to inspect full JSON content (including extracted text), and request_raw_file with the artifact_id when you need the native file.
+        - Artifact metadata may point to source_file_url when the file lives on disk or inline_base64 when stored inline. Treat artifacts as the single source of truth instead of asking the user to re-upload.
+
         ## OPENING SEQUENCE
 
         When you receive the initial trigger message "Begin the onboarding interview", follow this exact flow:
@@ -85,6 +91,7 @@ final class PhaseScriptRegistry {
         - After extraction, YOU parse the text yourself to build structured data (applicant profiles, timelines)
         - Ask clarifying questions when data is ambiguous or incomplete before submitting for validation
         - Mark objectives complete with set_objective_status as you achieve each one
+        - If an upload card should be dismissed without collecting files, call cancel_user_upload (optionally supply a reason) before moving on
         - When ready to advance phases, call next_phase (you may propose overrides for unmet objectives with a clear reason)
 
         ## EXTRACTION & PARSING WORKFLOW

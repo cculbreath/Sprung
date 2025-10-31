@@ -230,6 +230,14 @@ final class OnboardingToolRouter {
         await uploadHandler.skipUpload(id: id)
     }
 
+    func cancelUpload(id: UUID, reason: String?) async -> (UUID, JSON)? {
+        await uploadHandler.cancelUpload(id: id, reason: reason)
+    }
+
+    func cancelPendingUpload(reason: String?) async -> (UUID, JSON)? {
+        await uploadHandler.cancelPendingUpload(reason: reason)
+    }
+
     // MARK: - Section Toggle Handling
 
     func presentSectionToggle(_ request: OnboardingSectionToggleRequest, continuationId: UUID) {

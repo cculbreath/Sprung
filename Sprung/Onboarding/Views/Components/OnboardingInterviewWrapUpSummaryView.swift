@@ -71,6 +71,9 @@ struct WrapUpSummaryView: View {
 
         var lines: [String] = []
         lines.append("\(index). \(name) — \(sizeString)")
+        if let artifactId = artifact["id"].string, !artifactId.isEmpty {
+            lines.append("   artifact_id: \(artifactId)")
+        }
         if let sha = artifact["sha256"].string, !sha.isEmpty {
             lines.append("   SHA256: \(sha)")
         }
