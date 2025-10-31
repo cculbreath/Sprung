@@ -113,6 +113,7 @@ final class UploadInteractionHandler {
         let request = pendingUploadRequests[requestIndex]
         pendingUploadRequests.remove(at: requestIndex)
         uploadContinuationIds.removeValue(forKey: id)
+        let uploadStart = Date()
         Logger.info(
             "📤 Upload handling started",
             category: .diagnostics,
