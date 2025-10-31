@@ -21,11 +21,12 @@ actor InterviewOrchestrator {
     }
     struct Callbacks {
         let updateProcessingState: @Sendable (Bool) async -> Void
-        let emitAssistantMessage: @Sendable (String) async -> UUID
-        let beginStreamingAssistantMessage: @Sendable (String) async -> UUID
+        let emitAssistantMessage: @Sendable (String, Bool) async -> UUID
+        let beginStreamingAssistantMessage: @Sendable (String, Bool) async -> UUID
         let updateStreamingAssistantMessage: @Sendable (UUID, String) async -> Void
         let finalizeStreamingAssistantMessage: @Sendable (UUID, String) async -> Void
         let updateReasoningSummary: @Sendable (UUID, String, Bool) async -> Void
+        let finalizeReasoningSummaries: @Sendable ([UUID]) async -> Void
         let handleWaitingState: @Sendable (InterviewSession.Waiting?) async -> Void
         let handleError: @Sendable (String) async -> Void
         let storeApplicantProfile: @Sendable (JSON) async -> Void
@@ -43,7 +44,7 @@ actor InterviewOrchestrator {
     private let state: InterviewState
     private let toolExecutor: ToolExecutor
     private let callbacks: Callbacks
-private let systemPrompt: String
+    private let systemPrompt: String
     private let allowedToolsMap: [InterviewPhase: [String]] = [
         .phase1CoreFacts: [
             "get_user_option",
@@ -220,10 +221,10 @@ private let systemPrompt: String
             let profile = try await collectApplicantProfile()
             applicantProfileData = profile
             await state.completeObjective("applicant_profile")
-            _ = await callbacks.emitAssistantMessage("Excellent. Contact information is set.")
+            _ = await callbacks.emitAssistantMessage("Excellent. Contact information is set.", false)
             await callbacks.persistCheckpoint()
         } catch ToolError.userCancelled {
-            _ = await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.")
+            _ = await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.", false)
         } catch {
             let errorDetails = formatError(error)
             await callbacks.handleError("Failed to collect applicant profile: \(errorDetails)")
@@ -233,10 +234,10 @@ private let systemPrompt: String
             let timeline = try await collectSkeletonTimeline()
             skeletonTimelineData = timeline
             await state.completeObjective("skeleton_timeline")
-            _ = await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.")
+            _ = await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.", false)
             await callbacks.persistCheckpoint()
         } catch ToolError.userCancelled {
-            _ = await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.")
+            _ = await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.", false)
         } catch {
             let errorDetails = formatError(error)
             await callbacks.handleError("Failed to build skeleton timeline: \(errorDetails)")
@@ -245,7 +246,7 @@ private let systemPrompt: String
         let current = await state.currentSession()
         if current.objectivesDone.contains("skeleton_timeline") && !current.objectivesDone.contains("enabled_sections") {
             await state.completeObjective("enabled_sections")
-            _ = await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.")
+            _ = await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.", false)
             await callbacks.persistCheckpoint()
         }
     }
@@ -294,7 +295,7 @@ private let systemPrompt: String
     }
 
     private func collectSkeletonTimeline() async throws -> JSON {
-        _ = await callbacks.emitAssistantMessage("Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later.")
+        _ = await callbacks.emitAssistantMessage("Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later.", false)
 
         var uploadArgs = JSON()
         uploadArgs["uploadType"].string = "resume"
@@ -502,6 +503,7 @@ private let systemPrompt: String
 
         let apiModelId = currentModelId.replacingOccurrences(of: "openai/", with: "")
 
+        let reasoningRequested = config.defaultReasoningEffort != nil
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(apiModelId),
@@ -576,7 +578,7 @@ private let systemPrompt: String
                     guard !fragment.isEmpty else { continue }
                     var buffer = streamBuffers[delta.itemId]
                     if buffer == nil {
-                        let messageId = await callbacks.beginStreamingAssistantMessage("")
+                        let messageId = await callbacks.beginStreamingAssistantMessage("", reasoningRequested)
                         buffer = StreamBuffer(messageId: messageId, text: "")
                         messageIdByOutputItem[delta.itemId] = messageId
                     }
@@ -591,7 +593,7 @@ private let systemPrompt: String
                     let finalText = done.text
                     var buffer = streamBuffers[done.itemId]
                     if buffer == nil {
-                        let messageId = await callbacks.beginStreamingAssistantMessage(finalText)
+                        let messageId = await callbacks.beginStreamingAssistantMessage(finalText, reasoningRequested)
                         buffer = StreamBuffer(messageId: messageId, text: finalText)
                         messageIdByOutputItem[done.itemId] = messageId
                     } else {
@@ -632,11 +634,17 @@ private let systemPrompt: String
             return
         }
 
-        try await handleResponse(
+        let appendedMessages = try await handleResponse(
             response,
             finalizedMessageIds: finalizedMessageIds,
-            messageIdByOutputItem: messageIdByOutputItem
+            messageIdByOutputItem: messageIdByOutputItem,
+            reasoningRequested: reasoningRequested
         )
+        let completedMessages = finalizedMessageIds.compactMap { messageIdByOutputItem[$0] }
+        let allMessagesNeedingFinalization = Array(Set(completedMessages + appendedMessages))
+        if !allMessagesNeedingFinalization.isEmpty {
+            await callbacks.finalizeReasoningSummaries(allMessagesNeedingFinalization)
+        }
         await callbacks.persistCheckpoint()
     }
 
@@ -679,10 +687,12 @@ private let systemPrompt: String
     private func handleResponse(
         _ response: ResponseModel,
         finalizedMessageIds: Set<String> = [],
-        messageIdByOutputItem: [String: UUID] = [:]
-    ) async throws {
+        messageIdByOutputItem: [String: UUID] = [:],
+        reasoningRequested: Bool
+    ) async throws -> [UUID] {
         var messageIds = messageIdByOutputItem
         var lastMessageUUID: UUID?
+        var appendedMessageUUIDs: [UUID] = []
 
         for item in response.output {
             switch item {
@@ -694,9 +704,10 @@ private let systemPrompt: String
                 if finalizedMessageIds.contains(message.id) || text.isEmpty {
                     continue
                 }
-                let messageUUID = await callbacks.emitAssistantMessage(text)
+                let messageUUID = await callbacks.emitAssistantMessage(text, reasoningRequested)
                 messageIds[message.id] = messageUUID
                 lastMessageUUID = messageUUID
+                appendedMessageUUIDs.append(messageUUID)
             case .reasoning(let reasoning):
                 let summaryText = reasoning.summary
                     .map(\.text)
@@ -716,6 +727,7 @@ private let systemPrompt: String
                 continue
             }
         }
+        return appendedMessageUUIDs
     }
 
     private func handleFunctionCall(_ functionCall: OutputItem.FunctionToolCall) async throws {
