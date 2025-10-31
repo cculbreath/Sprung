@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// ViewModifier to conditionally apply intelligence glow effect when processing,
 /// or drop shadow when idle
@@ -21,6 +23,8 @@ struct OnboardingInterviewChatPanel: View {
     @Bindable var state: OnboardingInterviewViewModel
     let modelStatusDescription: String
     let onOpenSettings: () -> Void
+    @State private var showScrollToLatest = false
+    @State private var exportErrorMessage: String?
 
     var body: some View {
         let horizontalPadding: CGFloat = 32
@@ -46,6 +50,45 @@ struct OnboardingInterviewChatPanel: View {
                     isActive: service.isProcessing,
                     shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
                 ))
+                .overlay(alignment: .bottomTrailing) {
+                    if showScrollToLatest {
+                        Button {
+                            state.shouldAutoScroll = true
+                            scrollToLatestMessage(proxy)
+                        } label: {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.accent)
+                                .padding(8)
+                                .background(.thinMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 24)
+                        .padding(.bottom, 24)
+                        .shadow(radius: 3, y: 2)
+                    }
+                }
+                .overlay(
+                    ScrollViewOffsetObserver { offset, maxOffset in
+                        let nearBottom = max(maxOffset - offset, 0) < 32
+                        if state.shouldAutoScroll != nearBottom {
+                            state.shouldAutoScroll = nearBottom
+                        }
+                        let shouldShow = !nearBottom
+                        if showScrollToLatest != shouldShow {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                showScrollToLatest = shouldShow
+                            }
+                        }
+                    }
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+                )
+                .contextMenu {
+                    Button("Export Transcript…") {
+                        exportTranscript()
+                    }
+                }
                 .onChange(of: coordinator.messages.count) { oldValue, newValue in
                     guard newValue > oldValue else { return }
                     scrollToLatestMessage(proxy)
@@ -92,19 +135,26 @@ struct OnboardingInterviewChatPanel: View {
                 .padding(.top, sectionSpacing)
                 .padding(.horizontal, horizontalPadding)
 
-            HStack(alignment: .center, spacing: 12) {
-                TextField(
-                    "Type your response…",
+            HStack(alignment: .bottom, spacing: 12) {
+                ChatComposerTextView(
                     text: Binding(
                         get: { state.userInput },
                         set: { state.userInput = $0 }
                     ),
-                    axis: .vertical
+                    isEditable: service.isActive
+                ) { text in
+                    send(text)
+                }
+                .frame(minHeight: 44, maxHeight: 140)
+                .padding(2)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color(nsColor: .textBackgroundColor))
+                        )
                 )
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...5)
-                .disabled(!service.isActive || service.isProcessing)
-                .onSubmit { send(state.userInput) }
 
                 Button {
                     send(state.userInput)
@@ -136,11 +186,21 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.bottom, bottomPadding)
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
+        .alert("Export Failed", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { _ in exportErrorMessage = nil }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(exportErrorMessage ?? "")
+        }
     }
 
     private func send(_ text: String) {
+        guard service.isProcessing == false else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        state.shouldAutoScroll = true
         state.userInput = ""
         Task { await service.sendMessage(trimmed) }
     }
@@ -149,5 +209,104 @@ struct OnboardingInterviewChatPanel: View {
         guard state.shouldAutoScroll,
               let lastId = coordinator.messages.last?.id else { return }
         proxy.scrollTo(lastId, anchor: .bottom)
+    }
+
+    private func exportTranscript() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = defaultTranscriptFilename()
+        panel.allowedContentTypes = [UTType.plainText]
+        panel.canCreateDirectories = true
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let transcript = service.transcriptExportText()
+            do {
+                try transcript.write(to: url, atomically: true, encoding: .utf8)
+                Logger.info("📝 Transcript exported to \(url.path)", category: .ai)
+            } catch {
+                Logger.error("Transcript export failed: \(error.localizedDescription)", category: .ai)
+                DispatchQueue.main.async {
+                    exportErrorMessage = "Could not save transcript. \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private func defaultTranscriptFilename() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH.mm"
+        let stamp = formatter.string(from: Date())
+        return "Sprung Transcript \(stamp).txt"
+    }
+}
+
+private struct ScrollViewOffsetObserver: NSViewRepresentable {
+    typealias NSViewType = NSView
+
+    var onScroll: (CGFloat, CGFloat) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onScroll: onScroll)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            context.coordinator.attachIfNeeded(from: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            context.coordinator.attachIfNeeded(from: nsView)
+        }
+        context.coordinator.onScroll = onScroll
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.invalidate()
+    }
+
+    final class Coordinator: NSObject {
+        var onScroll: (CGFloat, CGFloat) -> Void
+        private var observation: NSKeyValueObservation?
+        private weak var scrollView: NSScrollView?
+
+        init(onScroll: @escaping (CGFloat, CGFloat) -> Void) {
+            self.onScroll = onScroll
+        }
+
+        func attachIfNeeded(from view: NSView) {
+            guard let scrollView = view.enclosingScrollView else { return }
+            if scrollView === self.scrollView { return }
+            attach(to: scrollView)
+        }
+
+        private func attach(to scrollView: NSScrollView) {
+            observation?.invalidate()
+            self.scrollView = scrollView
+            observation = scrollView.contentView.observe(\.bounds, options: [.new]) { [weak self] _, _ in
+                self?.notify()
+            }
+            notify()
+        }
+
+        private func notify() {
+            guard let scrollView else { return }
+            let offset = scrollView.contentView.bounds.origin.y
+            let documentHeight = scrollView.documentView?.frame.height ?? 0
+            let visibleHeight = scrollView.contentView.bounds.height
+            let maxOffset = max(documentHeight - visibleHeight, 0)
+            DispatchQueue.main.async {
+                self.onScroll(offset, maxOffset)
+            }
+        }
+
+        func invalidate() {
+            observation?.invalidate()
+            observation = nil
+            scrollView = nil
+        }
     }
 }
