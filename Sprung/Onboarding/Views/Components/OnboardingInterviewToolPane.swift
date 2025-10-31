@@ -13,7 +13,7 @@ struct OnboardingInterviewToolPane: View {
 
     var body: some View {
         let paneOccupied = isPaneOccupied(service: service, coordinator: coordinator)
-        let showSpinner = service.isProcessing && !paneOccupied
+        let showSpinner = service.isProcessing && (service.pendingExtraction != nil || !paneOccupied)
 
         return VStack(alignment: .leading, spacing: 16) {
             if service.pendingExtraction != nil {
@@ -130,11 +130,27 @@ struct OnboardingInterviewToolPane: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .center) {
             if showSpinner {
-                VStack {
-                    Spacer()
+                VStack(spacing: 18) {
                     AnimatedThinkingText()
-                    Spacer()
+                    if let extraction = service.pendingExtraction, !extraction.progressItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Processing résumé…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            ExtractionProgressChecklistView(items: extraction.progressItems)
+                        }
+                        .padding(18)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else if let status = coordinator.pendingStreamingStatus, !status.isEmpty {
+                        Text(status)
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
                 }
+                .padding(.vertical, 24)
+                .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
                 .transition(.opacity.combined(with: .scale))

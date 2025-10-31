@@ -269,18 +269,59 @@ struct OnboardingPendingExtraction: Identifiable {
     var summary: String
     var rawExtraction: JSON
     var uncertainties: [String]
+    var progressItems: [ExtractionProgressItem]
 
     init(
         id: UUID = UUID(),
         title: String,
         summary: String,
         rawExtraction: JSON = JSON(),
-        uncertainties: [String] = []
+        uncertainties: [String] = [],
+        progressItems: [ExtractionProgressItem] = ExtractionProgressStage.defaultItems()
     ) {
         self.id = id
         self.title = title
         self.summary = summary
         self.rawExtraction = rawExtraction
         self.uncertainties = uncertainties
+        self.progressItems = progressItems.isEmpty ? ExtractionProgressStage.defaultItems() : progressItems
+    }
+
+    mutating func ensureProgressItems() {
+        if progressItems.isEmpty {
+            progressItems = ExtractionProgressStage.defaultItems()
+        }
+    }
+
+    mutating func applyProgressUpdate(_ update: ExtractionProgressUpdate) {
+        ensureProgressItems()
+        guard let index = progressItems.firstIndex(where: { $0.stage == update.stage }) else { return }
+
+        if update.state == .active {
+            for idx in progressItems.indices where idx != index && progressItems[idx].state == .active {
+                progressItems[idx].state = .completed
+            }
+        }
+
+        if update.state == .completed {
+            let targetOrder = update.stage.order
+            for idx in progressItems.indices where progressItems[idx].stage.order < targetOrder {
+                if progressItems[idx].state == .pending {
+                    progressItems[idx].state = .completed
+                }
+            }
+        }
+
+        progressItems[index].state = update.state
+
+        if let detail = update.detail?.trimmingCharacters(in: .whitespacesAndNewlines), !detail.isEmpty {
+            progressItems[index].detail = detail
+        } else if update.state == .pending {
+            progressItems[index].detail = nil
+        }
+    }
+
+    mutating func applyProgressUpdates(_ updates: [ExtractionProgressUpdate]) {
+        updates.forEach { applyProgressUpdate($0) }
     }
 }

@@ -87,7 +87,8 @@ final class OnboardingInterviewService {
             uploadFileService: UploadFileService(),
             uploadStorage: OnboardingUploadStorage(),
             applicantProfileStore: applicantProfileStore,
-            dataStore: dataStore
+            dataStore: dataStore,
+            extractionProgressHandler: nil
         )
         let profileHandler = ProfileInteractionHandler(contactsImportService: ContactsImportService())
         let sectionHandler = SectionToggleHandler()
@@ -111,16 +112,24 @@ final class OnboardingInterviewService {
             interviewState: interviewState,
             openAIService: openAIService
         )
+
+        let progressHandler: ExtractionProgressHandler = { [weak coordinator] update in
+            guard let coordinator else { return }
+            await MainActor.run {
+                coordinator.updateExtractionProgress(with: update)
+            }
+        }
+        uploadHandler.updateExtractionProgressHandler(progressHandler)
         coordinator.addObjectiveStatusObserver { [weak self] update in
             guard let self else { return }
             self.handleObjectiveStatusUpdate(update)
         }
-        registerTools()
+        registerTools(progressHandler: progressHandler)
     }
 
     // MARK: - Tool Registration
 
-    private func registerTools() {
+    private func registerTools(progressHandler: ExtractionProgressHandler?) {
         let registry = coordinator.toolRegistry
         registry.register(GetUserOptionTool(service: self))
         registry.register(SubmitForValidationTool(service: self))
@@ -129,7 +138,12 @@ final class OnboardingInterviewService {
         registry.register(GetMacOSContactCardTool())
         registry.register(GetApplicantProfileTool(service: self))
         registry.register(GetUserUploadTool(service: self))
-        registry.register(ExtractDocumentTool(extractionService: documentExtractionService))
+        registry.register(
+            ExtractDocumentTool(
+                extractionService: documentExtractionService,
+                progressHandler: progressHandler
+            )
+        )
         registry.register(SetObjectiveStatusTool(service: self))
         registry.register(NextPhaseTool(service: self))
         registry.register(ListArtifactsTool(service: self))
@@ -141,6 +155,10 @@ final class OnboardingInterviewService {
                 self?.knowledgeCardAgent
             })
         )
+        registry.register(CreateTimelineCardTool(service: self))
+        registry.register(UpdateTimelineCardTool(service: self))
+        registry.register(ReorderTimelineCardsTool(service: self))
+        registry.register(DeleteTimelineCardTool(service: self))
     }
 
     func currentSession() async -> InterviewSession {
@@ -669,6 +687,10 @@ final class OnboardingInterviewService {
         coordinator.setExtractionStatus(status)
     }
 
+    func updateExtractionProgress(_ update: ExtractionProgressUpdate) {
+        coordinator.updateExtractionProgress(with: update)
+    }
+
     // MARK: - Private Helpers
 
     private func appendUserMessage(_ text: String) {
@@ -769,16 +791,18 @@ final class OnboardingInterviewService {
     }
 
     func persistApplicantProfile(_ json: JSON) async {
+        let displayName = applicantDisplayName(from: json)
+
         if let existing = coordinator.applicantProfileJSON, existing == json {
             Logger.info("ℹ️ Applicant profile unchanged; skipping persistence.", category: .ai)
-            let message = DeveloperMessageTemplates.profileUnchanged(payload: json)
+            let message = DeveloperMessageTemplates.profileUnchanged(displayName: displayName, payload: json)
             sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
             return
         }
 
         coordinator.storeApplicantProfile(json)
         await coordinator.persistCheckpoint()
-        let message = DeveloperMessageTemplates.profilePersisted(payload: json)
+        let message = DeveloperMessageTemplates.profilePersisted(displayName: displayName, payload: json)
         sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
     }
 
@@ -840,6 +864,121 @@ final class OnboardingInterviewService {
             filename: payload.filename,
             sha256: payload.sha256
         )
+    }
+
+    // MARK: - Timeline Card Management
+
+    func createTimelineCard(fields: JSON) async -> JSON {
+        var state = currentTimelineState()
+        var newCard = TimelineCard(id: UUID().uuidString, fields: fields)
+        while state.cards.contains(where: { $0.id == newCard.id }) {
+            newCard.id = UUID().uuidString
+        }
+        state.cards.append(newCard)
+        let updated = await persistTimeline(cards: state.cards, meta: state.meta)
+        Logger.info("🆕 Timeline card created (id: \(newCard.id))", category: .ai)
+
+        var response = JSON()
+        response["card"] = newCard.json
+        response["timeline"] = updated
+        return response
+    }
+
+    func updateTimelineCard(id: String, fields: JSON) async throws -> JSON {
+        var state = currentTimelineState()
+        guard let index = state.cards.firstIndex(where: { $0.id == id }) else {
+            throw TimelineCardError.cardNotFound(id)
+        }
+
+        let updatedCard = state.cards[index].applying(fields: fields)
+        state.cards[index] = updatedCard
+        let updatedTimeline = await persistTimeline(cards: state.cards, meta: state.meta)
+        Logger.info("✏️ Timeline card updated (id: \(id))", category: .ai)
+
+        var response = JSON()
+        response["card"] = updatedCard.json
+        response["timeline"] = updatedTimeline
+        return response
+    }
+
+    func reorderTimelineCards(with orderedIds: [String]) async throws -> JSON {
+        var state = currentTimelineState()
+        let existingIds = state.cards.map { $0.id }
+        guard Set(existingIds) == Set(orderedIds), orderedIds.count == existingIds.count else {
+            throw TimelineCardError.invalidOrder(orderedIds)
+        }
+
+        var reordered: [TimelineCard] = []
+        reordered.reserveCapacity(orderedIds.count)
+        for identifier in orderedIds {
+            if let card = state.cards.first(where: { $0.id == identifier }) {
+                reordered.append(card)
+            }
+        }
+        state.cards = reordered
+        let updatedTimeline = await persistTimeline(cards: state.cards, meta: state.meta)
+        Logger.info("🔀 Timeline cards reordered", category: .ai)
+
+        return updatedTimeline
+    }
+
+    func deleteTimelineCard(id: String) async throws -> JSON {
+        var state = currentTimelineState()
+        guard let index = state.cards.firstIndex(where: { $0.id == id }) else {
+            throw TimelineCardError.cardNotFound(id)
+        }
+
+        state.cards.remove(at: index)
+        let updatedTimeline = await persistTimeline(cards: state.cards, meta: state.meta)
+        Logger.info("🗑️ Timeline card deleted (id: \(id))", category: .ai)
+
+        return updatedTimeline
+    }
+
+    private func currentTimelineState() -> (cards: [TimelineCard], meta: JSON?) {
+        if let timeline = coordinator.skeletonTimelineJSON {
+            let normalized = TimelineCardAdapter.normalizedTimeline(timeline)
+            if normalized != timeline {
+                coordinator.storeSkeletonTimeline(normalized)
+            }
+            return TimelineCardAdapter.cards(from: normalized)
+        }
+        return ([], nil)
+    }
+
+    private func persistTimeline(cards: [TimelineCard], meta: JSON?) async -> JSON {
+        let updatedTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
+        coordinator.storeSkeletonTimeline(updatedTimeline)
+        await coordinator.persistCheckpoint()
+        return updatedTimeline
+    }
+
+    private func applicantDisplayName(from json: JSON) -> String? {
+        func cleaned(_ value: String?) -> String? {
+            guard let value else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        if let direct = cleaned(json["name"].string) {
+            return direct
+        }
+        if let basicsName = cleaned(json["basics"]["name"].string) {
+            return basicsName
+        }
+        if let full = cleaned(json["full_name"].string) {
+            return full
+        }
+        if let basicsFull = cleaned(json["basics"]["full_name"].string) {
+            return basicsFull
+        }
+
+        let given = cleaned(json["basics"]["given"].string ?? json["first_name"].string)
+        let family = cleaned(json["basics"]["family"].string ?? json["last_name"].string)
+        if let given, let family {
+            return "\(given) \(family)"
+        }
+        return given ?? family
     }
 
     private func handleObjectiveStatusUpdate(_ update: OnboardingInterviewCoordinator.ObjectiveStatusUpdate) {

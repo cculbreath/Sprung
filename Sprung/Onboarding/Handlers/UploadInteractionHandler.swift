@@ -28,6 +28,7 @@ final class UploadInteractionHandler {
     private let uploadStorage: OnboardingUploadStorage
     private let applicantProfileStore: ApplicantProfileStore
     private let dataStore: InterviewDataStore
+    private var extractionProgressHandler: ExtractionProgressHandler?
 
     // MARK: - Init
 
@@ -35,12 +36,18 @@ final class UploadInteractionHandler {
         uploadFileService: UploadFileService,
         uploadStorage: OnboardingUploadStorage,
         applicantProfileStore: ApplicantProfileStore,
-        dataStore: InterviewDataStore
+        dataStore: InterviewDataStore,
+        extractionProgressHandler: ExtractionProgressHandler?
     ) {
         self.uploadFileService = uploadFileService
         self.uploadStorage = uploadStorage
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
+        self.extractionProgressHandler = extractionProgressHandler
+    }
+
+    func updateExtractionProgressHandler(_ handler: ExtractionProgressHandler?) {
+        extractionProgressHandler = handler
     }
 
     // MARK: - Presentation
@@ -106,6 +113,26 @@ final class UploadInteractionHandler {
         let request = pendingUploadRequests[requestIndex]
         pendingUploadRequests.remove(at: requestIndex)
         uploadContinuationIds.removeValue(forKey: id)
+        let uploadStart = Date()
+        Logger.info(
+            "📤 Upload handling started",
+            category: .diagnostics,
+            metadata: [
+                "request_id": id.uuidString,
+                "kind": request.kind.rawValue,
+                "file_count": "\(fileURLs.count)",
+                "title": request.metadata.title
+            ]
+        )
+
+        let shouldReportProgress = request.kind == .resume
+        if shouldReportProgress && !fileURLs.isEmpty {
+            await extractionProgressHandler?(ExtractionProgressUpdate(
+                stage: .fileAnalysis,
+                state: .active,
+                detail: request.metadata.title
+            ))
+        }
 
         // Track uploaded items
         if !fileURLs.isEmpty {
@@ -171,9 +198,25 @@ final class UploadInteractionHandler {
                     payload["updates"] = JSON([target])
                 }
             }
+
+            if shouldReportProgress && !fileURLs.isEmpty {
+                await extractionProgressHandler?(ExtractionProgressUpdate(
+                    stage: .fileAnalysis,
+                    state: .completed,
+                    detail: request.metadata.title
+                ))
+            }
         } catch {
             payload["status"].string = "failed"
             payload["error"].string = error.localizedDescription
+
+            if shouldReportProgress && !fileURLs.isEmpty {
+                await extractionProgressHandler?(ExtractionProgressUpdate(
+                    stage: .fileAnalysis,
+                    state: .failed,
+                    detail: error.localizedDescription
+                ))
+            }
 
             // Cleanup processed files on error
             for item in processed {
@@ -197,6 +240,16 @@ final class UploadInteractionHandler {
         default:
             Logger.warning("⚠️ Upload completion returned status: \(status)", category: .ai)
         }
+        let totalMs = Int(Date().timeIntervalSince(uploadStart) * 1000)
+        Logger.info(
+            "📤 Upload handling finished",
+            category: .diagnostics,
+            metadata: [
+                "request_id": id.uuidString,
+                "status": status,
+                "duration_ms": "\(totalMs)"
+            ]
+        )
         return (continuationId, payload)
     }
 

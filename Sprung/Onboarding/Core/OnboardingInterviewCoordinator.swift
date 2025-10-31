@@ -45,6 +45,8 @@ final class OnboardingInterviewCoordinator {
     private var phaseAdvanceBlockCache: PhaseAdvanceBlockCache?
     private var toolQueueEntries: [UUID: ToolQueueEntry] = [:]
     private var developerMessages: [String] = []
+    private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
+    private(set) var pendingStreamingStatus: String?
     private let ledgerDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -384,6 +386,10 @@ final class OnboardingInterviewCoordinator {
         chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: messageIds)
     }
 
+    func setStreamingStatus(_ status: String?) {
+        pendingStreamingStatus = status
+    }
+
     func appendSystemMessage(_ text: String) {
         Logger.info("📢 System message: \(text)", category: .ai)
         chatTranscriptStore.appendSystemMessage(text)
@@ -392,6 +398,7 @@ final class OnboardingInterviewCoordinator {
     func resetTranscript() {
         chatTranscriptStore.reset()
         toolRouter.reset()
+        pendingStreamingStatus = nil
     }
 
     // MARK: - Preferences
@@ -548,8 +555,9 @@ final class OnboardingInterviewCoordinator {
 
     /// Stores the skeleton timeline JSON.
     func storeSkeletonTimeline(_ json: JSON) {
-        skeletonTimelineJSON = json
-        artifacts.skeletonTimeline = json
+        let normalized = TimelineCardAdapter.normalizedTimeline(json)
+        skeletonTimelineJSON = normalized
+        artifacts.skeletonTimeline = normalized
 
         Logger.debug("📅 Skeleton timeline stored", category: .ai)
     }
@@ -681,6 +689,7 @@ final class OnboardingInterviewCoordinator {
         artifacts.knowledgeCards = []
 
         Logger.debug("🗑️ All artifacts cleared", category: .ai)
+        pendingStreamingStatus = nil
     }
 
     /// Removes all persisted onboarding data from disk.
@@ -1043,7 +1052,27 @@ final class OnboardingInterviewCoordinator {
     }
 
     func setExtractionStatus(_ status: OnboardingPendingExtraction?) {
+        guard var status else {
+            pendingExtraction = nil
+            pendingExtractionProgressBuffer.removeAll()
+            return
+        }
+
+        status.ensureProgressItems()
+        if !pendingExtractionProgressBuffer.isEmpty {
+            status.applyProgressUpdates(pendingExtractionProgressBuffer)
+            pendingExtractionProgressBuffer.removeAll()
+        }
         pendingExtraction = status
+    }
+
+    func updateExtractionProgress(with update: ExtractionProgressUpdate) {
+        if var extraction = pendingExtraction {
+            extraction.applyProgressUpdate(update)
+            pendingExtraction = extraction
+        } else {
+            pendingExtractionProgressBuffer.append(update)
+        }
     }
 
     func updateLastError(_ message: String?) {
@@ -1147,6 +1176,10 @@ final class OnboardingInterviewCoordinator {
                 guard let self else { return }
                 await MainActor.run { self.finalizeReasoningSummaries(for: messageIds) }
             },
+            updateStreamingStatus: { [weak self] status in
+                guard let self else { return }
+                await MainActor.run { self.setStreamingStatus(status) }
+            },
             handleWaitingState: { [weak self] waiting in
                 guard let self else { return }
                 await MainActor.run { self.updateWaitingState(waiting) }
@@ -1174,6 +1207,10 @@ final class OnboardingInterviewCoordinator {
             setExtractionStatus: { [weak self] status in
                 guard let self else { return }
                 await MainActor.run { self.setExtractionStatus(status) }
+            },
+            updateExtractionProgress: { [weak self] update in
+                guard let self else { return }
+                await MainActor.run { self.updateExtractionProgress(with: update) }
             },
             persistCheckpoint: { [weak self] in
                 guard let self else { return }
@@ -1227,9 +1264,9 @@ final class OnboardingInterviewCoordinator {
     }
 
     private func storeSkeletonTimeline(_ json: JSON) async {
-        // Store the skeleton timeline (call public synchronous version logic)
-        skeletonTimelineJSON = json
-        artifacts.skeletonTimeline = json
+        let normalized = TimelineCardAdapter.normalizedTimeline(json)
+        skeletonTimelineJSON = normalized
+        artifacts.skeletonTimeline = normalized
         Logger.debug("📅 Skeleton timeline stored", category: .ai)
 
         await persistCheckpoint()

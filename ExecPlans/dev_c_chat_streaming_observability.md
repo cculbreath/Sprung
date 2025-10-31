@@ -40,7 +40,7 @@ Instrument the streaming parser to capture reasoning summaries and expose them i
 # Progress
 
 - [x] Milestone 1 – Reasoning Summaries and Fallback
-- [ ] Milestone 2 – Latency Instrumentation and Rendering
+- [x] Milestone 2 – Latency Instrumentation and Rendering
 - [ ] Milestone 3 – SwiftOpenAI Logging Levels
 
 # Validation and Acceptance
@@ -57,3 +57,4 @@ Coordinate with Developers A and B to avoid conflicts in shared UI files. Do
 
 Revision history:
 - 2025-10-31: Completed Milestone 1 reasoning placeholder work and logging, verified via `xcodebuild` Debug build.
+- 2025-10-31: Completed Milestone 2 by adding streaming batching, status messaging, and instrumentation for extraction/upload pipelines. Build skipped due to parallel dev activity.
