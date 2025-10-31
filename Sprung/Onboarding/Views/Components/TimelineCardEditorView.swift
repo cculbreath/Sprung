@@ -117,7 +117,9 @@ struct TimelineCardEditorView: View {
 
     private func remove(at index: Int) {
         guard cards.indices.contains(index) else { return }
-        withAnimation { cards.remove(at: index) }
+        withAnimation {
+            cards.remove(at: index)
+        }
     }
 
     private func moveCard(at index: Int, offset: Int) {

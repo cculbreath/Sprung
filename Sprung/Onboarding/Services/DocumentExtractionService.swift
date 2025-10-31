@@ -267,7 +267,7 @@ actor DocumentExtractionService {
             }
         }
 
-        if let text = try? String(contentsOf: url) {
+        if let text = try? String(contentsOf: url, encoding: .utf8) {
             return (text, issues)
         }
 

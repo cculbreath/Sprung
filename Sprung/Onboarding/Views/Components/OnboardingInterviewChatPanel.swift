@@ -150,13 +150,13 @@ struct OnboardingInterviewChatPanel: View {
         }
         .overlay(scrollOffsetOverlay())
         .contextMenu { exportTranscriptContextMenu() }
-        .onChange(of: coordinator.messages.count) { newValue in
+        .onChange(of: coordinator.messages.count, initial: true) { _, newValue in
             handleMessageCountChange(newValue: newValue, proxy: proxy)
         }
-        .onChange(of: coordinator.messages.last?.text ?? "") { _ in
+        .onChange(of: coordinator.messages.last?.text ?? "", initial: false) { _, _ in
             scrollToLatestMessage(proxy)
         }
-        .onChange(of: service.isProcessing) { isProcessing in
+        .onChange(of: service.isProcessing, initial: false) { _, isProcessing in
             guard isProcessing == false else { return }
             scrollToLatestMessage(proxy)
         }
