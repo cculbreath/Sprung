@@ -11,7 +11,6 @@ struct TimelineCardEditorView: View {
     @State private var hasChanges = false
     @State private var isSaving = false
     @State private var errorMessage: String?
-    @State private var editMode: EditMode = .inactive
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -42,38 +41,41 @@ struct TimelineCardEditorView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Timeline Cards")
                     .font(.title3.weight(.semibold))
-                Text("Drag to reorder, edit in place, or add new experiences. Changes are shared with the assistant when you save.")
+                Text("Edit experiences directly, reorder them with the arrow controls, and save to share updates with the assistant.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            HStack(spacing: 8) {
-                Button {
-                    withAnimation { cards.append(TimelineCard()) }
-                } label: {
-                    Label("Add Card", systemImage: "plus")
-                }
-
-                ToggleEditModeButton(editMode: $editMode)
-                    .disabled(cards.count < 2)
+            Button {
+                withAnimation { cards.append(TimelineCard()) }
+            } label: {
+                Label("Add Card", systemImage: "plus")
             }
         }
     }
 
     private var cardList: some View {
-        List {
-            ForEach($cards) { $card in
-                TimelineCardForm(card: $card, onRemove: { remove(cardID: card.id) })
-                    .listRowSeparator(.hidden)
-                    .padding(.vertical, 6)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                    TimelineCardForm(
+                        card: Binding(
+                            get: { cards[index] },
+                            set: { cards[index] = $0 }
+                        ),
+                        index: index,
+                        totalCount: cards.count,
+                        onMoveUp: { moveCard(at: index, offset: -1) },
+                        onMoveDown: { moveCard(at: index, offset: 1) },
+                        onRemove: { remove(at: index) }
+                    )
+                    .id(card.id)
+                }
             }
-            .onMove(perform: move)
+            .padding(.vertical, 4)
         }
-        .environment(\.editMode, $editMode)
-        .listStyle(.inset)
-        .scrollContentBackground(.hidden)
         .frame(minHeight: 260)
     }
 
@@ -111,19 +113,20 @@ struct TimelineCardEditorView: View {
         meta = state.meta
         hasChanges = false
         errorMessage = nil
-        editMode = .inactive
     }
 
-    private func remove(cardID: String) {
-        if let index = cards.firstIndex(where: { $0.id == cardID }) {
-            withAnimation {
-                cards.remove(at: index)
-            }
+    private func remove(at index: Int) {
+        guard cards.indices.contains(index) else { return }
+        withAnimation { cards.remove(at: index) }
+    }
+
+    private func moveCard(at index: Int, offset: Int) {
+        let newIndex = max(0, min(cards.count - 1, index + offset))
+        guard cards.indices.contains(index), index != newIndex else { return }
+        withAnimation {
+            let card = cards.remove(at: index)
+            cards.insert(card, at: newIndex)
         }
-    }
-
-    private func move(from source: IndexSet, to destination: Int) {
-        cards.move(fromOffsets: source, toOffset: destination)
     }
 
     private func discardChanges() {
@@ -158,11 +161,17 @@ struct TimelineCardEditorView: View {
 
 private struct TimelineCardForm: View {
     @Binding var card: TimelineCard
+    let index: Int
+    let totalCount: Int
+    var onMoveUp: () -> Void
+    var onMoveDown: () -> Void
     var onRemove: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
+                reorderControls
+
                 VStack(alignment: .leading, spacing: 6) {
                     TextField("Title", text: $card.title, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
@@ -206,16 +215,16 @@ private struct TimelineCardForm: View {
                 Text("Highlights")
                     .font(.subheadline.weight(.semibold))
 
-                ForEach(Array(card.highlights.enumerated()), id: \.offset) { index, _ in
+                ForEach(Array(card.highlights.enumerated()), id: \.offset) { highlightIndex, _ in
                     HStack(alignment: .top, spacing: 8) {
                         TextField("Highlight", text: Binding(
-                            get: { card.highlights[index] },
-                            set: { card.highlights[index] = $0 }
+                            get: { card.highlights[highlightIndex] },
+                            set: { card.highlights[highlightIndex] = $0 }
                         ), axis: .vertical)
                         .textFieldStyle(.roundedBorder)
 
                         Button(role: .destructive) {
-                            card.highlights.remove(at: index)
+                            card.highlights.remove(at: highlightIndex)
                         } label: {
                             Image(systemName: "minus.circle")
                         }
@@ -237,19 +246,21 @@ private struct TimelineCardForm: View {
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
     }
-}
 
-private struct ToggleEditModeButton: View {
-    @Binding var editMode: EditMode
+    private var reorderControls: some View {
+        VStack(spacing: 6) {
+            Button(action: onMoveUp) {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.plain)
+            .disabled(index == 0)
 
-    var body: some View {
-        Button {
-            editMode = editMode == .active ? .inactive : .active
-        } label: {
-            Label(
-                editMode == .active ? "Stop Reordering" : "Reorder",
-                systemImage: editMode == .active ? "arrow.up.arrow.down.circle.fill" : "arrow.up.arrow.down.circle"
-            )
+            Button(action: onMoveDown) {
+                Image(systemName: "chevron.down")
+            }
+            .buttonStyle(.plain)
+            .disabled(index >= totalCount - 1)
         }
+        .padding(.top, 4)
     }
 }
