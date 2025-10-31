@@ -507,12 +507,6 @@ private struct ApplicantProfileSummaryCard: View {
     }
 }
 
-    private func nonEmpty(_ value: String?) -> String? {
-        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return value
-    }
-}
-
 private struct EnabledSectionsSummaryCard: View {
     let sections: [String]
 
