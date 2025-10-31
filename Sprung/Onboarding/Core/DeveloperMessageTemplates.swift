@@ -79,18 +79,42 @@ struct DeveloperMessageTemplates {
         return Message(title: title, details: details, payload: payload)
     }
 
-    static func profilePersisted(payload: JSON) -> Message {
-        Message(
-            title: "Applicant profile persisted to local store.",
-            details: ["status": "saved"],
+    static func profilePersisted(displayName: String?, payload: JSON) -> Message {
+        var details: [String: String] = ["status": "saved"]
+        if let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            details["applicant_name"] = name
+        }
+
+        let title: String
+        if let name = details["applicant_name"], !name.isEmpty {
+            title = "Applicant profile persisted for \(name). Let them know their details are stored for reuse and that edits stay welcome."
+        } else {
+            title = "Applicant profile persisted to local store. Confirm the data is reusable for resumes and invite future tweaks."
+        }
+
+        return Message(
+            title: title,
+            details: details,
             payload: payload
         )
     }
 
-    static func profileUnchanged(payload: JSON) -> Message {
-        Message(
-            title: "Applicant profile already persisted. Coordinator retains the existing record.",
-            details: ["status": "unchanged"],
+    static func profileUnchanged(displayName: String?, payload: JSON) -> Message {
+        var details: [String: String] = ["status": "unchanged"]
+        if let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            details["applicant_name"] = name
+        }
+
+        let title: String
+        if let name = details["applicant_name"], !name.isEmpty {
+            title = "Applicant profile for \(name) already persisted. Acknowledge the stored details and offer adjustments anytime."
+        } else {
+            title = "Applicant profile already persisted. Coordinator retains the existing record—invite updates if anything changes."
+        }
+
+        return Message(
+            title: title,
+            details: details,
             payload: payload
         )
     }

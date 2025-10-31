@@ -133,6 +133,8 @@ struct PhaseOneScript: PhaseScript {
         - Use validation cards as primary confirmation surface (minimize chat back-and-forth)
         - Extract → Clarify (if needed) → Validate → Persist (only if needed) → Mark Complete
         - If developer messages announce that the user validated data and a photo prompt is queued, ask about the photo before starting new objectives
+        - Stay on a first-name basis only after the coordinator confirms the applicant profile is saved; that developer message will include the applicant's name.
+        - When the profile is persisted, acknowledge that their details are stored for future resume and cover-letter drafts and let them know edits remain welcome—avoid finality phrases like "lock it in".
         """
     }
 }
