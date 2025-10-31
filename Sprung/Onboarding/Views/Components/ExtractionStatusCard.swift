@@ -15,6 +15,11 @@ struct ExtractionStatusCard: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
+                if !extraction.progressItems.isEmpty {
+                    ExtractionProgressChecklistView(items: extraction.progressItems)
+                        .padding(.top, 4)
+                }
+
                 if !extraction.uncertainties.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Things to double-check:")

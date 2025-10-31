@@ -344,20 +344,39 @@ actor InterviewOrchestrator {
             throw ToolError.executionFailed("Document extraction did not yield text content.")
         }
         if artifact != .null {
-            await callbacks.updateExtractionProgress(
-                ExtractionProgressUpdate(
-                    stage: .artifactSave,
-                    state: .active,
-                    detail: artifact["filename"].string
+            do {
+                await callbacks.updateExtractionProgress(
+                    ExtractionProgressUpdate(
+                        stage: .artifactSave,
+                        state: .active,
+                        detail: artifact["filename"].string
+                    )
                 )
-            )
-            await callbacks.storeArtifactRecord(artifact)
-            await persistData(artifact, as: "artifact_record")
+                await callbacks.storeArtifactRecord(artifact)
+                await persistData(artifact, as: "artifact_record")
+                await callbacks.updateExtractionProgress(
+                    ExtractionProgressUpdate(
+                        stage: .artifactSave,
+                        state: .completed,
+                        detail: artifact["filename"].string
+                    )
+                )
+            } catch {
+                await callbacks.updateExtractionProgress(
+                    ExtractionProgressUpdate(
+                        stage: .artifactSave,
+                        state: .failed,
+                        detail: error.localizedDescription
+                    )
+                )
+                throw error
+            }
+        } else {
             await callbacks.updateExtractionProgress(
                 ExtractionProgressUpdate(
                     stage: .artifactSave,
                     state: .completed,
-                    detail: artifact["filename"].string
+                    detail: "No new artifact generated"
                 )
             )
         }
@@ -369,31 +388,43 @@ actor InterviewOrchestrator {
                 detail: "Generating timeline"
             )
         )
-        let timeline = try await generateTimeline(from: extractedText)
 
-        var validationArgs = JSON()
-        validationArgs["dataType"].string = "skeleton_timeline"
-        validationArgs["data"] = timeline
-        validationArgs["message"].string = "Review the generated skeleton timeline."
+        do {
+            let timeline = try await generateTimeline(from: extractedText)
 
-        let validation = try await callTool(name: "submit_for_validation", arguments: validationArgs)
-        let status = validation["status"].stringValue
-        guard status != "rejected" else {
-            throw ToolError.executionFailed("Skeleton timeline rejected.")
-        }
+            var validationArgs = JSON()
+            validationArgs["dataType"].string = "skeleton_timeline"
+            validationArgs["data"] = timeline
+            validationArgs["message"].string = "Review the generated skeleton timeline."
 
-        let data = validation["data"]
-        let final = data != .null ? data : timeline
-        await callbacks.storeSkeletonTimeline(final)
-        await persistData(final, as: "skeleton_timeline")
-        await callbacks.updateExtractionProgress(
-            ExtractionProgressUpdate(
-                stage: .assistantHandoff,
-                state: .completed,
-                detail: "Timeline ready"
+            let validation = try await callTool(name: "submit_for_validation", arguments: validationArgs)
+            let status = validation["status"].stringValue
+            guard status != "rejected" else {
+                throw ToolError.executionFailed("Skeleton timeline rejected.")
+            }
+
+            let data = validation["data"]
+            let final = data != .null ? data : timeline
+            await callbacks.storeSkeletonTimeline(final)
+            await persistData(final, as: "skeleton_timeline")
+            await callbacks.updateExtractionProgress(
+                ExtractionProgressUpdate(
+                    stage: .assistantHandoff,
+                    state: .completed,
+                    detail: "Timeline ready"
+                )
             )
-        )
-        return final
+            return final
+        } catch {
+            await callbacks.updateExtractionProgress(
+                ExtractionProgressUpdate(
+                    stage: .assistantHandoff,
+                    state: .failed,
+                    detail: error.localizedDescription
+                )
+            )
+            throw error
+        }
     }
 
     private func persistData(_ payload: JSON, as dataType: String) async {

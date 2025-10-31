@@ -27,6 +27,15 @@ struct ResumeSectionsToggleCard: View {
         _draft = State(initialValue: initial)
     }
 
+    private var suggestedSections: [ExperienceSectionKey] {
+        let identifiers = request.availableSections
+        return identifiers.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0) }
+    }
+
+    private var recommendedSections: Set<ExperienceSectionKey> {
+        Set(request.proposedSections.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0) })
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Select Résumé Sections")
@@ -41,8 +50,18 @@ struct ResumeSectionsToggleCard: View {
             Text("Choose the sections that apply to your résumé. You can adjust these later if needed.")
                 .font(.callout)
 
-            ExperienceSectionBrowserView(draft: $draft)
-                .frame(minHeight: 280)
+            if !suggestedSections.isEmpty {
+                Text("Suggested sections: \(suggestedSections.map { $0.metadata.title }.joined(separator: ", "))")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView {
+                ResumeSectionToggleGrid(draft: $draft, recommended: recommendedSections)
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 4)
+            }
+            .frame(maxHeight: 280)
 
             HStack {
                 Button("Cancel", action: onCancel)
@@ -59,5 +78,35 @@ struct ResumeSectionsToggleCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(nsColor: .underPageBackgroundColor))
         )
+    }
+}
+
+private struct ResumeSectionToggleGrid: View {
+    @Binding var draft: ExperienceDefaultsDraft
+    let recommended: Set<ExperienceSectionKey>
+
+    private let columns = [
+        GridItem(.flexible(minimum: 160), spacing: 16),
+        GridItem(.flexible(minimum: 160), spacing: 16)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+            ForEach(ExperienceSectionKey.allCases) { key in
+                Toggle(isOn: key.metadata.toggleBinding(in: $draft)) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(key.metadata.title)
+                            .font(.subheadline)
+                            .fontWeight(recommended.contains(key) ? .semibold : .regular)
+                        if let subtitle = key.metadata.subtitle {
+                            Text(subtitle)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
+        }
     }
 }

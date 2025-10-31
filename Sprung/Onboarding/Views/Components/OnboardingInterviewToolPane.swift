@@ -192,7 +192,7 @@ struct OnboardingInterviewToolPane: View {
                 imageData: applicantProfileStore.currentProfile().pictureData
             )
         } else if coordinator.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
-            SkeletonTimelineSummaryCard(timeline: timeline)
+            TimelineCardEditorView(service: service, timeline: timeline)
         } else if coordinator.wizardStep == .artifactDiscovery,
                   !service.artifacts.enabledSections.isEmpty {
             EnabledSectionsSummaryCard(sections: service.artifacts.enabledSections)
@@ -507,57 +507,6 @@ private struct ApplicantProfileSummaryCard: View {
     }
 }
 
-private struct SkeletonTimelineSummaryCard: View {
-    let timeline: JSON
-
-    var body: some View {
-        let experiences = timeline["experiences"].arrayValue
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Skeleton Timeline")
-                .font(.headline)
-            if experiences.isEmpty {
-                Text("No experiences extracted yet.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(experiences.prefix(3).indices, id: \.self) { index in
-                    let entry = experiences[index]
-                    TimelineEntryRow(entry: entry)
-                }
-                if experiences.count > 3 {
-                    Text("…and \(experiences.count - 3) more entries")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-private struct TimelineEntryRow: View {
-    let entry: JSON
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(entry["title"].stringValue.isEmpty ? "Untitled Role" : entry["title"].stringValue)
-                .font(.subheadline.weight(.semibold))
-            if let org = nonEmpty(entry["organization"].string) {
-                Text(org)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            let start = entry["start"].stringValue
-            let end = entry["end"].stringValue
-            if !start.isEmpty || !end.isEmpty {
-                Text("\(start.isEmpty ? "????" : start) – \(end.isEmpty ? "present" : end)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
         .padding(8)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -581,7 +530,7 @@ private struct EnabledSectionsSummaryCard: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                Text(sections.joined(separator: ", "))
+                Text(formattedSections().joined(separator: ", "))
                     .font(.body)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -589,5 +538,11 @@ private struct EnabledSectionsSummaryCard: View {
         .padding(16)
         .background(Color(nsColor: .textBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func formattedSections() -> [String] {
+        sections.compactMap { identifier in
+            ExperienceSectionKey.fromOnboardingIdentifier(identifier)?.metadata.title
+        }
     }
 }

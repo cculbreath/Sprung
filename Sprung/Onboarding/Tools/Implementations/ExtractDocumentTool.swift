@@ -40,9 +40,11 @@ struct ExtractDocumentTool: InterviewTool {
     }()
 
     private let extractionService: DocumentExtractionService
+    private let progressHandler: ExtractionProgressHandler?
 
-    init(extractionService: DocumentExtractionService) {
+    init(extractionService: DocumentExtractionService, progressHandler: ExtractionProgressHandler?) {
         self.extractionService = extractionService
+        self.progressHandler = progressHandler
     }
 
     var name: String { "extract_document" }
@@ -69,7 +71,7 @@ struct ExtractDocumentTool: InterviewTool {
         )
 
         do {
-            let result = try await extractionService.extract(using: request)
+            let result = try await extractionService.extract(using: request, progress: progressHandler)
             return .immediate(buildResponse(from: result, returnTypes: returnTypes))
         } catch let error as DocumentExtractionService.ExtractionError {
             return .error(.executionFailed(error.userFacingMessage))
