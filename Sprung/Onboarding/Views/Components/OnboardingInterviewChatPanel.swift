@@ -25,6 +25,7 @@ struct OnboardingInterviewChatPanel: View {
     let onOpenSettings: () -> Void
     @State private var showScrollToLatest = false
     @State private var exportErrorMessage: String?
+    @State private var lastMessageCount: Int = 0
 
     var body: some View {
         let horizontalPadding: CGFloat = 32
@@ -149,17 +150,18 @@ struct OnboardingInterviewChatPanel: View {
         }
         .overlay(scrollOffsetOverlay())
         .contextMenu { exportTranscriptContextMenu() }
-        .onChange(of: coordinator.messages.count, perform: { oldValue, newValue in
-            handleMessageCountChange(oldValue: oldValue, newValue: newValue, proxy: proxy)
-        })
-        .onChange(of: coordinator.messages.last?.text ?? "", perform: { _ , _ in
+        .onChange(of: coordinator.messages.count) { newValue in
+            handleMessageCountChange(newValue: newValue, proxy: proxy)
+        }
+        .onChange(of: coordinator.messages.last?.text ?? "") { _ in
             scrollToLatestMessage(proxy)
-        })
-        .onChange(of: service.isProcessing, perform: { _, isProcessing in
+        }
+        .onChange(of: service.isProcessing) { isProcessing in
             guard isProcessing == false else { return }
             scrollToLatestMessage(proxy)
-        })
+        }
         .onAppear {
+            lastMessageCount = coordinator.messages.count
             scrollToLatestMessage(proxy)
         }
     }
@@ -173,7 +175,7 @@ struct OnboardingInterviewChatPanel: View {
                 } label: {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(Color.accentColor)
                         .padding(8)
                         .background(.thinMaterial, in: Circle())
                 }
@@ -197,8 +199,9 @@ struct OnboardingInterviewChatPanel: View {
         .allowsHitTesting(false)
     }
 
-    private func handleMessageCountChange(oldValue: Int, newValue: Int, proxy: ScrollViewProxy) {
-        guard newValue > oldValue else { return }
+    private func handleMessageCountChange(newValue: Int, proxy: ScrollViewProxy) {
+        defer { lastMessageCount = newValue }
+        guard newValue > lastMessageCount else { return }
         scrollToLatestMessage(proxy)
     }
 
