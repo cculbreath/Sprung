@@ -27,6 +27,7 @@ actor InterviewOrchestrator {
         let finalizeStreamingAssistantMessage: @Sendable (UUID, String) async -> Void
         let updateReasoningSummary: @Sendable (UUID, String, Bool) async -> Void
         let finalizeReasoningSummaries: @Sendable ([UUID]) async -> Void
+        let updateStreamingStatus: @Sendable (String?) async -> Void
         let handleWaitingState: @Sendable (InterviewSession.Waiting?) async -> Void
         let handleError: @Sendable (String) async -> Void
         let storeApplicantProfile: @Sendable (JSON) async -> Void
@@ -34,6 +35,7 @@ actor InterviewOrchestrator {
         let storeArtifactRecord: @Sendable (JSON) async -> Void
         let storeKnowledgeCard: @Sendable (JSON) async -> Void
         let setExtractionStatus: @Sendable (OnboardingPendingExtraction?) async -> Void
+        let updateExtractionProgress: ExtractionProgressHandler
         let persistCheckpoint: @Sendable () async -> Void
         let registerToolWait: @Sendable (UUID, String, String, String?) async -> Void
         let clearToolWait: @Sendable (UUID, String) async -> Void
@@ -57,6 +59,10 @@ actor InterviewOrchestrator {
             "get_artifact",
             "cancel_user_upload",
             "request_raw_file",
+            "create_timeline_card",
+            "update_timeline_card",
+            "reorder_timeline_cards",
+            "delete_timeline_card",
             "submit_for_validation",
             "persist_data",
             "set_objective_status",
@@ -97,6 +103,9 @@ actor InterviewOrchestrator {
     private struct StreamBuffer {
         var messageId: UUID
         var text: String
+        var pendingFragment: String
+        var startedAt: Date
+        var firstDeltaLogged: Bool
     }
 
     private var conversationId: String?
@@ -335,10 +344,31 @@ actor InterviewOrchestrator {
             throw ToolError.executionFailed("Document extraction did not yield text content.")
         }
         if artifact != .null {
+            await callbacks.updateExtractionProgress(
+                ExtractionProgressUpdate(
+                    stage: .artifactSave,
+                    state: .active,
+                    detail: artifact["filename"].string
+                )
+            )
             await callbacks.storeArtifactRecord(artifact)
             await persistData(artifact, as: "artifact_record")
+            await callbacks.updateExtractionProgress(
+                ExtractionProgressUpdate(
+                    stage: .artifactSave,
+                    state: .completed,
+                    detail: artifact["filename"].string
+                )
+            )
         }
 
+        await callbacks.updateExtractionProgress(
+            ExtractionProgressUpdate(
+                stage: .assistantHandoff,
+                state: .active,
+                detail: "Generating timeline"
+            )
+        )
         let timeline = try await generateTimeline(from: extractedText)
 
         var validationArgs = JSON()
@@ -356,6 +386,13 @@ actor InterviewOrchestrator {
         let final = data != .null ? data : timeline
         await callbacks.storeSkeletonTimeline(final)
         await persistData(final, as: "skeleton_timeline")
+        await callbacks.updateExtractionProgress(
+            ExtractionProgressUpdate(
+                stage: .assistantHandoff,
+                state: .completed,
+                detail: "Timeline ready"
+            )
+        )
         return final
     }
 
@@ -541,6 +578,31 @@ actor InterviewOrchestrator {
         var messageIdByOutputItem: [String: UUID] = [:]
         var reasoningSummaryBuffers: [String: String] = [:]
         var reasoningSummaryFinalized: Set<String> = []
+        let flushCharacters: Set<Character> = [" ", "\n", "\t", ".", ",", "?", "!", ";", ":"]
+        let streamingStart = Date()
+        var silenceTask: Task<Void, Never>?
+
+        await callbacks.updateStreamingStatus(nil)
+
+        func scheduleSilenceStatus() {
+            silenceTask?.cancel()
+            silenceTask = Task { [callbacks] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                await callbacks.updateStreamingStatus("Polishing response…")
+            }
+        }
+
+        func clearSilenceStatus() async {
+            silenceTask?.cancel()
+            silenceTask = nil
+            await callbacks.updateStreamingStatus(nil)
+        }
+
+        scheduleSilenceStatus()
+        defer {
+            silenceTask?.cancel()
+            Task { await callbacks.updateStreamingStatus(nil) }
+        }
 
         func deliverSummary(for itemId: String, isFinalOverride: Bool?) async {
             guard let summary = reasoningSummaryBuffers[itemId] else { return }
@@ -568,33 +630,61 @@ actor InterviewOrchestrator {
                 case .responseFailed(let failed):
                     updateConversationState(from: failed.response)
                     let message = failed.response.error?.message ?? "Model response failed."
+                    await clearSilenceStatus()
                     throw ToolError.executionFailed(message)
                 case .responseIncomplete(let incomplete):
                     updateConversationState(from: incomplete.response)
                     let reason = incomplete.response.incompleteDetails?.reason ?? "unknown"
+                    await clearSilenceStatus()
                     throw ToolError.executionFailed("Model response incomplete: \(reason)")
                 case .outputTextDelta(let delta):
                     let fragment = delta.delta
                     guard !fragment.isEmpty else { continue }
+                    await clearSilenceStatus()
                     var buffer = streamBuffers[delta.itemId]
                     if buffer == nil {
                         let messageId = await callbacks.beginStreamingAssistantMessage("", reasoningRequested)
-                        buffer = StreamBuffer(messageId: messageId, text: "")
+                        buffer = StreamBuffer(
+                            messageId: messageId,
+                            text: "",
+                            pendingFragment: "",
+                            startedAt: Date(),
+                            firstDeltaLogged: false
+                        )
                         messageIdByOutputItem[delta.itemId] = messageId
                     }
                     if messageIdByOutputItem[delta.itemId] == nil {
                         messageIdByOutputItem[delta.itemId] = buffer!.messageId
                     }
+                    if buffer!.firstDeltaLogged == false {
+                        let latencyMs = Int(Date().timeIntervalSince(streamingStart) * 1000)
+                        Logger.info("🕑 First token streaming latency \(latencyMs)ms", category: .diagnostics, metadata: ["item_id": delta.itemId])
+                        buffer!.firstDeltaLogged = true
+                    }
                     buffer!.text.append(contentsOf: fragment)
-                    streamBuffers[delta.itemId] = buffer!
-                    await callbacks.updateStreamingAssistantMessage(buffer!.messageId, buffer!.text)
+                    buffer!.pendingFragment.append(contentsOf: fragment)
+                    let shouldFlush = buffer!.pendingFragment.contains(where: { flushCharacters.contains($0) }) || buffer!.pendingFragment.count >= 12
+                    if shouldFlush {
+                        buffer!.pendingFragment.removeAll(keepingCapacity: true)
+                        streamBuffers[delta.itemId] = buffer!
+                        await callbacks.updateStreamingAssistantMessage(buffer!.messageId, buffer!.text)
+                    } else {
+                        streamBuffers[delta.itemId] = buffer!
+                    }
+                    scheduleSilenceStatus()
                     await deliverSummary(for: delta.itemId, isFinalOverride: false)
                 case .outputTextDone(let done):
                     let finalText = done.text
                     var buffer = streamBuffers[done.itemId]
                     if buffer == nil {
                         let messageId = await callbacks.beginStreamingAssistantMessage(finalText, reasoningRequested)
-                        buffer = StreamBuffer(messageId: messageId, text: finalText)
+                        buffer = StreamBuffer(
+                            messageId: messageId,
+                            text: finalText,
+                            pendingFragment: "",
+                            startedAt: Date(),
+                            firstDeltaLogged: true
+                        )
                         messageIdByOutputItem[done.itemId] = messageId
                     } else {
                         buffer!.text = finalText
@@ -602,19 +692,27 @@ actor InterviewOrchestrator {
                     if messageIdByOutputItem[done.itemId] == nil {
                         messageIdByOutputItem[done.itemId] = buffer!.messageId
                     }
+                    buffer!.pendingFragment.removeAll(keepingCapacity: false)
                     streamBuffers[done.itemId] = buffer!
+                    await callbacks.updateStreamingAssistantMessage(buffer!.messageId, buffer!.text)
                     await callbacks.finalizeStreamingAssistantMessage(buffer!.messageId, buffer!.text)
                     finalizedMessageIds.insert(done.itemId)
                     streamBuffers.removeValue(forKey: done.itemId)
+                    let totalMs = Int(Date().timeIntervalSince(buffer!.startedAt) * 1000)
+                    Logger.info("✅ Streaming completed in \(totalMs)ms", category: .diagnostics, metadata: ["item_id": done.itemId, "length": "\(buffer!.text.count)"])
+                    await clearSilenceStatus()
                     await deliverSummary(for: done.itemId, isFinalOverride: nil)
                 case .reasoningSummaryTextDelta(let delta):
                     let fragment = delta.delta
                     guard !fragment.isEmpty else { continue }
+                    await clearSilenceStatus()
                     reasoningSummaryBuffers[delta.itemId, default: ""] += fragment
                     if messageIdByOutputItem[delta.itemId] != nil {
                         await deliverSummary(for: delta.itemId, isFinalOverride: false)
                     }
+                    scheduleSilenceStatus()
                 case .reasoningSummaryTextDone(let done):
+                    await clearSilenceStatus()
                     reasoningSummaryBuffers[done.itemId] = done.text
                     reasoningSummaryFinalized.insert(done.itemId)
                     if messageIdByOutputItem[done.itemId] != nil {

@@ -79,26 +79,67 @@ actor DocumentExtractionService {
 
     // MARK: - Public API
 
-    func extract(using request: ExtractionRequest) async throws -> ExtractionResult {
+    func extract(using request: ExtractionRequest, progress: ExtractionProgressHandler? = nil) async throws -> ExtractionResult {
         try await ensureExecutorConfigured()
 
         let fileURL = request.fileURL
         let filename = fileURL.lastPathComponent
         let sizeInBytes = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? NSNumber)?.intValue ?? 0
         let contentType = contentTypeForFile(at: fileURL) ?? "application/octet-stream"
+        let extractionStart = Date()
+        Logger.info(
+            "📄 Extraction started",
+            category: .diagnostics,
+            metadata: [
+                "filename": filename,
+                "size_bytes": "\(sizeInBytes)",
+                "purpose": request.purpose
+            ]
+        )
+
+        func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
+            guard let progress else { return }
+            await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
+        }
+
+        await notifyProgress(.fileAnalysis, .active, detail: filename)
 
         guard let fileData = try? Data(contentsOf: fileURL) else {
+            await notifyProgress(.fileAnalysis, .failed, detail: "Unreadable file data")
             throw ExtractionError.unreadableData
         }
 
         let sha256 = sha256Hex(for: fileData)
         let (rawText, initialIssues) = extractPlainText(from: fileURL)
         guard let rawText, !rawText.isEmpty else {
+            await notifyProgress(.fileAnalysis, .failed, detail: "No extractable text")
             throw ExtractionError.noTextExtracted
         }
+        await notifyProgress(.fileAnalysis, .completed)
 
+        let llmStart = Date()
+        await notifyProgress(.aiExtraction, .active, detail: request.purpose)
         let (markdown, markdownIssues) = await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
+        let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
+        Logger.info(
+            "📄 Extraction LLM phase completed",
+            category: .diagnostics,
+            metadata: [
+                "filename": filename,
+                "duration_ms": "\(llmDurationMs)"
+            ]
+        )
         let enrichedContent = markdown ?? rawText
+        let aiDetail: String? = {
+            if let failure = markdownIssues.first(where: { $0.hasPrefix("llm_failure") }) {
+                return failure.replacingOccurrences(of: "llm_failure_", with: "")
+            }
+            if markdown == nil {
+                return "Using original text"
+            }
+            return nil
+        }()
+        await notifyProgress(.aiExtraction, .completed, detail: aiDetail)
 
         var issues = initialIssues
         issues.append(contentsOf: markdownIssues)
@@ -140,7 +181,7 @@ actor DocumentExtractionService {
         }
 
         let quality = Quality(confidence: confidence, issues: issues)
-        return ExtractionResult(
+        let result = ExtractionResult(
             status: status,
             artifact: artifact,
             quality: quality,
@@ -148,6 +189,17 @@ actor DocumentExtractionService {
             derivedSkeletonTimeline: nil,
             persisted: false
         )
+        let totalMs = Int(Date().timeIntervalSince(extractionStart) * 1000)
+        Logger.info(
+            "📄 Extraction finished",
+            category: .diagnostics,
+            metadata: [
+                "filename": filename,
+                "duration_ms": "\(totalMs)",
+                "issues": issues.isEmpty ? "none" : issues.joined(separator: ",")
+            ]
+        )
+        return result
     }
 
     // MARK: - Helpers
