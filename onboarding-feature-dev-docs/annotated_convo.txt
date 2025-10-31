@@ -1,0 +1,230 @@
+Additions/revisions/comments in {curly brackets}
+Events and context of interview added in [square brackets]
+
+{Increase size of bouncing spring spinner in left pane by 2x}
+
+4:51am
+Assistant
+Welcome {to Sprung!}. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.
+
+4:52am
+Assistant
+Once you complete the form to the left we can continue.
+
+[radio button form surfaced, user chooses “import contact card” option]
+[contact info dropped in to validation form, edited by user and submitted]
+[contact info appears in card in left pane ] {Might be nice to animate some row by row green checkboxes inferring acceptance and validation of contact info}
+
+4:52am
+Assistant
+If you’d like, you can add a profile photo now—the upload card is open. You can drop in a JPG, PNG, HEIC, or WEBP image, or paste an image URL. If you prefer to skip, just say “skip” and we’ll move on.
+
+[upload form surfaced]
+Once you complete the upload to the left we can continue.
+
+{I think that greeting the user by name in this prompt and acknowledging that the data will be saved for us in resume generation and cover letters wold be a nice update from the LLM, it doesn’t acknowledge submitted info at all, as it is}
+
+[user drags image to upload panel, image is appended to card in left pane]
+
+4:53am
+Assistant
+Great—your photo is added.
+
+Next, please upload your most recent resume (PDF or DOCX) or paste a shareable URL. I’ll extract your roles and dates to build your career timeline.
+
+Once you complete the upload to the left we can continue.
+[user drags pdf resume to upload panel, rainbow thinking border appears around chat box]
+{I’d like to see a spinner here, when we surface the upload panel for the resume, the Applicant Profile tool area card should be dismissed and stay dismissed, which should allow the spinner to surface (I believe its visibility is gated by whether the LLM is think and whether any cards are visible in the left pane}
+
+{this process takes a long time with no feedback to the user that something is happening, but we are performing a deterministic sequence locally for much of this time. We should add some sort of tool messages below the spinner on the left side, perhaps a sequence like   ✅ File type identified: PDF 3 pages
+✅ Performing AI text extraction
+✅ Extraction Successful
+✅ Saving artifact to Library
+✅ Transmitting artifact to Sprung assistant
+…
+[ AI spinner while we wait for GPT-5 ]
+
+These are just stylistic suggestions for the tool status updates we could having during this wait, and of course,  the messages should be dynamic and reflect what’s happening the best that we can from our local app. If Extraction is unsuccessful and we try again, we can say so. We can list file type and if a pdf or doc, number of pages, perhaps lines or KB for a text upload. These status updates provide a nice opportunity for sophisticated animations and giving the wait a sense of movement and progress. One aspect of the  animation I would like to suggest is that the status appears with an empty check box before it, after a pause, the box is animated to reveal a check mark and the next task appears as the prior now complete text moves up and fades away. The pacing of these messages should roughly correspond to the actual progress sequences in the tool use execution.
+} 
+
+4:54am
+Assistant
+Here’s the career timeline I extracted from your resume. Please confirm or share any edits (title, org, city, or dates), and I’ll lock it in:
+
+- Senior Lecturer, Physics — California Polytechnic State University, San Luis Obispo — Sep 2016 to Jun 2024
+- Materials Science and Automation Engineer — NRD LLC (formerly Nuance Designs), San Luis Obispo — Apr 2019 to Dec 2021
+- Materials Science and Automation Consultant — Elastium Technologies, Emeryville — Mar 2017 to Sep 2018
+- Lecturer, Physics — California State University, Chico — Jan 2015 to Jun 2016
+- Owner/Photographer — Iconic Photography, Kent, OH — Mar 2011 to Jan 2015
+- Senior Technician — MacSuperstore, San Luis Obispo — Aug 2005 to Jun 2008
+
+Are these correct as listed? If anything needs tweaking, tell me what to change.
+
+{We need work on the prompting here, lock it in is too rigid and final sounding — the point of this phase is to anchor the timeline with milestones.} {What do you think of this? send developer prompt after resume text upload with Tool Choice mode set to required  (see https://platform.openai.com/docs/api-reference/chat/create#chat_create-tool_choice-tool_choice_mode) and require the agent to provide proposed skeleton outline elements as cards, using a create_job_card tool. Cards would use a UI and format based on Experience Editor, sharing the style, formatting, (even edibility) and drag and drop ordering functionality from the Experience Editor.. GPT-5 will then adding elements and construct the skeleton timeline in real-time, applying edits and changes based on continuing interview. I believe we have this view already made in the form of the experience validator. This cooperative building experience with the LLM  is similar to the canvas feature in gemini and anthropic Claude LLMs apps.  — functionality that we will need to add are LLM tools for manipulating card editor, a app to LLM notification structure if user clicks an edit button and changes elements of the card skeleton directly—those edits need to be shared with GPT-5, and shouldn’t be overwritten without permission (prompt steering on this point only, don’t formally lock user edits in code)} 
+4:57am User
+That's basically a correct outline, but my actual consulting work was sort of blurred and blend them and I'm not totally clear on how best to list them. Would you like to hear the story?
+
+{okay, this is a bit of a leading message from an informed user. GPT-5 should be saying something like “it looks like you’ve listed NRD and Elastium during the same time period as you were working at Cal Poly. Let’s take a step back, can you give me the narrative sequence of your various employers, in words since 2015?” We want to prompt the llm to express curiosity and get a full sense of the time line and how things fit together when making this timeline… the user’s leading message in this case gets us there, although the LLM doesn’t inquire about what the user has done since Jun 2024…}  4:57am
+Assistant
+Yes—please share the story. A quick narrative will help me structure it cleanly.
+
+To make sure I capture it right, could you cover:
+- Who engaged you (Elastium, NRD, anyone else) and how the work overlapped
+- Approximate start/end dates for each stream, even if concurrent
+- Whether you were an independent contractor vs. on payroll at any point
+- Where the work was based (city/remote)
+- The core responsibilities and standout outcomes
+- Any titles you used (or would like to use) on invoices/agreements
+
+And preference-wise, do you want:
+- A single “Independent Consultant — Materials Science & Automation (2017–2021)” entry with client bullets, or
+- Separate entries for Elastium and NRD, noting overlap, or
+- A primary employer (e.g., NRD) with Elastium as a major project under it?
+
+Tell me the story and your preference, and I’ll draft the timeline accordingly.
+
+5:06am
+User
+So, it starts with an unlisted company TiNi Alloy company in San Leandro, owned by my late great-uncle who hired me just after I started at Chico State to help with a SMA single crystal furnace development project. I did regular consulting work during academic breaks, assisting with the project and wrote two SBIR grant applications (rejected) to combine the development with my nascent research effort at Chico State (and later Cal Poly). TiNi Alloy ended up securing an investor in that project who consolidated the effort under a new LLC, Elastium Technologies. In 2018 the investor paused funding and stepped away from the project. Shortly thereafter, I was hired as a consultant at Nuance Technologies working on characterizing, modeling and manufacturing development for a novel refrigerant two-phase coexistence constant pressure auto injector. Nuance ran to the end of their grant/investment period and shut down, with the local group I had been working with reforming as NRD LLC. I then reached out to the my uncle and the Elastium investor and wrote and secured a R&D contract for NRD LLC to continue development on Elastium's continuous casting furnace -- which ran until my uncle died (he was 92) and Elastium withdrew further funding. 
+{
+some ui notes:
+* Chat box seems to be scrolling to top of the chat history when the assistant message ends and the glow border turns off. This is undesirable behavior.
+* Chat box scrolls down to the bottom of the chat box with every word. This is not the desired behavior and makes it impossible to read earlier messages or potions of messages during output. Bottom scrolling should only happen at the end of a full message/turn , not with every delta.
+* I have yet to see any reasoning summaries surfaced ever. Check ./consolelog.txt is the API providing any? Are we just ignoring them or missing them somehow (it is possible that the LLM has not produced any reasoning summaries in the this context, but investigation is required to know one way or the other)
+* Streaming latency agonizingly slow. I would like to instrument the pace of arrival as close to the network layer as practical and some how instrument the rendering pace on the screen. We may be limited by the offsite inference time. If that’s the case, I think that our naive direct streaming of deltas as they arrive does us no psychological favors in terms of perceived speed of the rendering. There has to be tricks for minimizing the perception of slowest — Claude does this well in their Claude Code cli with a nice animated text shimmer and cutsey, often funny, but not-unrelated status messages during a long wait. The ChatGPT desktop app occupies users when waiting by streaming the reasoning summary tokens. I think the batch size easing/animating of the text appearance also can be dialed Ito reign in the excruciatingly slow pace of receiving messages in the current implementation. We probably should starting thinking about an entertainment mechanism for long inference times, if it turns out that we aren’t inadvertently introducing a massive delay with a poorly place animation or something.
+* shift+enter and option+enter should both insert newline in the chat box input. As far as I can option+enter works but shift+enter does not
+* Input in the user chat message box is disabled when the LLM is thinking. I often want to be able to type instructions, corrections and comments based on the LLMs realtime output so that I  don’t forget to mention it when replying after the assistant has finished their whole response. I’m not looking for interruption or queue functionality—I don’t need to be able to press submit while GPT-5 is still talking, but I do want to compose my message so that it’s ready to send when GPT- 5 is done.
+} 
+5:07am Assistant
+Thank you—that context is super helpful. We can represent this cleanly while showing the continuity of the work. Here are two solid formatting options; tell me which you prefer, and I’ll finalize:
+
+Option A: One consulting umbrella
+- Independent Consultant — Materials Science & Automation (2015–2021, CA; part‑time alongside teaching)
+  - TiNi Alloy Company (San Leandro): SMA single‑crystal furnace development; drafted two SBIRs
+  - Elastium Technologies (Emeryville): automation/control, furnace components, characterization
+  - Nuance Designs → NRD LLC (San Luis Obispo): two‑phase injector R&D; later secured/ran R&D contract to continue Elastium furnace work
+
+Option B: Split into distinct entries with continuity notes
+- Independent Consultant — TiNi Alloy Company (San Leandro) — 2015–2017 (part‑time, academic breaks)
+- Materials Science & Automation Consultant — Elastium Technologies (Emeryville) — 2017–2018
+- Materials Science & Automation Consultant — Nuance Designs (San Luis Obispo) — 2018–2019
+  - Note: Organization restructured locally into NRD LLC
+- Materials Science & Automation Engineer — NRD LLC (San Luis Obispo) — 2019–2021
+  - Secured and executed R&D contract with Elastium to continue continuous casting furnace
+
+Quick confirmations so I get the details right:
+- TiNi Alloy consulting: does 2015–2017 (part‑time/seasonal) work for dates?
+- Elastium: OK to keep Mar 2017–Sep 2018 as in your resume?
+- “Nuance” company name: would you like it as Nuance Designs (matches your resume) rather than “Nuance Technologies”?
+- Nuance dates: does Sep 2018–Mar 2019 sound right before NRD (Apr 2019–Dec 2021)?
+- Titles: Do you prefer “Independent Consultant” for TiNi/Elastium/Nuance and “Engineer” for NRD, or “Consultant” across all?
+- Locations: TiNi (San Leandro), Elastium (Emeryville), Nuance/NRD (San Luis Obispo). Any corrections?
+
+Pick Option A or B (or suggest tweaks), confirm the above, and I’ll lock the timeline.
+
+{Chat selection is limited to a single message (perhaps include a context click item for export transcript or copy transcript (to clipboard) that would make development a lot easier, I had to reassemble the present transcript manually, one message at a time.}
+
+5:07am
+User
+Which do you think is stronger A or B?
+
+5:10am
+Assistant
+Option A is stronger for most uses.
+
+Why:
+- Clarity: It avoids fragmenting overlapping, part‑time consulting into multiple short entries.
+- Narrative: Shows a continuous, mission-driven thread across clients and your role in securing/continuing the work.
+- Scan-ability: Recruiters see one coherent consulting arc with notable clients and outcomes.
+- ATS: Fewer near-duplicate titles/dates reduces noise.
+
+When to use Option B:
+- A detailed CV, or roles where specific company names/tenures matter.
+- If you were clearly on payroll at NRD and want that distinguished from consulting.
+
+Recommendation: Go with Option A as your default, and separate NRD as an employee entry if you were on payroll there. Want me to draft it that way now?
+
+5:14am
+User
+Ok. Let's go with A. To answer your quick questions: a) yes b) Not sure, since I ended relationship with Elastium in 2022 via NRD, but Elastium was directly writing my checks through 2018 c) Nuance Designs, yes, my mistake d) Nuance dates are right, NRD should go to 2023. e) Which ever you think is strongest f) Locations are acceptable. TiNi was in San Leandro, Berkeley and Emeryville, sort of transient. Elastium didn't have a real location -- it's location was wherever I was woking
+
+5:15am
+Assistant
+Great—thanks for the details. Here’s a clean Option A draft that reflects the overlap and the 2023 endpoint:
+
+- Independent Consultant — Materials Science & Automation (2015–2023, CA/remote; part-time alongside teaching)
+  - TiNi Alloy Company (San Leandro/Berkeley/Emeryville) — 2015–2017, seasonal
+    - SMA single‑crystal furnace development; drafted two SBIR proposals (not funded)
+  - Elastium Technologies (location flexible) — 2017–2018 direct; 2019–2022 via NRD R&D contract
+    - Automation/control design, furnace components, materials characterization; continued continuous‑casting furnace development under NRD contract
+  - Nuance Designs (San Luis Obispo) — Sep 2018–Mar 2019
+    - Two‑phase refrigerant injector: characterization, modeling, and manufacturing development
+
+- Senior Lecturer, Physics — California Polytechnic State University, San Luis Obispo — Sep 2016–Jun 2024
+- Lecturer, Physics — California State University, Chico — Jan 2015–Jun 2016
+- Owner/Photographer — Iconic Photography, Kent, OH — Mar 2011–Jan 2015
+- Senior Technician — MacSuperstore, San Luis Obispo — Aug 2005–Jun 2008
+
+Quick final choice:
+- Keep NRD entirely inside the consulting umbrella (as drafted), or
+- Split out “NRD LLC — Materials Science & Automation Engineer, San Luis Obispo — Apr 2019–2023” as a separate entry, and keep Elastium (2019–2022) as a client under that NRD role?
+
+If you don’t have a strong preference, I recommend splitting NRD as a separate entry (it reads as a substantial, multi‑year role), with Elastium’s continued furnace work noted under NRD. Want me to finalize it that way?
+
+5:19am
+User
+Yes. I'll take your recommendation. Just call the TiNi location Emeryville. To answer an earlier question, I was on the payroll at both Nuance and NRD
+
+5:19
+Assistant
+Excellent—here’s the revised timeline with NRD split out, Nuance/NRD marked as payroll roles, and TiNi set to Emeryville. Please review and confirm or tweak any titles/dates.
+
+Primary roles
+- NRD LLC — Materials Science & Automation Engineer — San Luis Obispo — Apr 2019–Dec 2023
+  - Continued Elastium Technologies’ continuous-casting furnace under an NRD R&D contract (2019–2022)
+
+- Nuance Designs — Materials Science & Automation Engineer — San Luis Obispo — Sep 2018–Mar 2019
+  - Two‑phase refrigerant injector: characterization, modeling, manufacturing development
+
+Consulting umbrella
+- Independent Consultant — Materials Science & Automation — 2015–2018, CA/remote (part-time alongside teaching)
+  - TiNi Alloy Company (Emeryville) — 2015–2017, seasonal: SMA single‑crystal furnace development; drafted two SBIR proposals (not funded)
+  - Elastium Technologies (location flexible) — 2017–2018: automation/control, furnace components, materials characterization
+
+Academia and earlier work
+- Senior Lecturer, Physics — California Polytechnic State University, San Luis Obispo — Sep 2016–Jun 2024
+- Lecturer, Physics — California State University, Chico — Jan 2015–Jun 2016
+- Owner/Photographer — Iconic Photography, Kent, OH — Mar 2011–Jan 2015
+- Senior Technician — MacSuperstore, San Luis Obispo — Aug 2005–Jun 2008
+
+Would you like any title wording adjusted (e.g., “Consultant” vs. “Engineer” at Nuance), or any date/location tweaks? If this looks good, I’ll lock it in.
+
+{LLM is using this “locked in” language again, and it’s too firm. 
+These last three fully reproduced skeleton time line messages would be far more efficient as atomic edits to the card interface. We need to build a tool set that gives GPT-5 control of the card editor and allows GPT-5 to interpret the current state of the editor to make prudent edits to reflect intent. 
+}
+
+5:25am
+User
+You can lock it in -- we might want to make adjustments later on when you get more of my background. I should also mention that I was employed as a graduate researcher at the Liquid Crystal Insititute at Kent State University during my PhD work Aug 2008—Jan 2015. Pretty sure the LCI has changed their name since I left.
+
+{
+once again knowledgable user is steering here, which may not be necessary now, and should absolutely not be necessary once we get the prompts to the LLM dialed in (without over fitting)
+}
+
+
+5:25am
+Assistant
+I’ve drafted and locked in your career timeline, including the consulting umbrella and the graduate researcher role at Kent State’s Liquid Crystal Institute (noting the name may have changed—easy to adjust later).
+
+Next, choose which résumé sections you want to include. Once you make your selections to the left, we’ll proceed.
+
+[Section enable view is made visible in left tool card area]
+
+{Section selector is too larger and is clipped by overlay boundary, either tighten up the vertical padding, go to two columns, place it as a normal tool-area sized card that scrolls or place it on top of the overlay so that it extends top and bottom without clipping. See (/Users/cculbreath/Desktop/sectionselector.png) I’m pretty sure that “teaching portfolio” isn’t part of tthe json_resume schema — . Remember that this project strives to maintain store data compatibility with json_resume schema to facilitate compatibility with 3rd party templates
+}
+
+Tangentially related 
+ We need to add more granularity to logs. Specifically I want debug messages from app, but don’t want SwiftOpenAI to emit every delta (would still like important network messages from lib if possible) Library can be updated in ../SwiftOpenAI-ttsfork/ if needed. Be sure to checkout new branch for any changes, and push to  when done. I can update the dependency once you pushed it (and tell me the new branch name)
+Annotated chat transcript
+
+Interview is still ongoing, but I wanted to cache these notes and start getting to work on biggest targets identified in notes for improved user experience. Please extract my actionable suggestions from this document into a dev plan so we can get to work on the proposed trainers

@@ -52,4 +52,7 @@ final class ApplicantProfileStore: SwiftDataStore, ApplicantProfileProviding {
         saveContext()
     }
 
+    func clearCache() {
+        cachedProfile = nil
+    }
 }

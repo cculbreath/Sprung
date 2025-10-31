@@ -53,4 +53,8 @@ final class ExperienceDefaultsStore: SwiftDataStore, ExperienceDefaultsProviding
         cachedDefaults = defaults
         saveContext()
     }
+
+    func clearCache() {
+        cachedDefaults = nil
+    }
 }
