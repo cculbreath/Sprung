@@ -83,7 +83,7 @@ final class ChatTranscriptStore {
             guard let index = messages.firstIndex(where: { $0.id == id }) else { continue }
             if messages[index].isAwaitingReasoningSummary {
                 messages[index].isAwaitingReasoningSummary = false
-                messages[index].showReasoningPlaceholder = true
+                messages[index].showReasoningPlaceholder = false
                 Logger.info("ℹ️ Reasoning summary unavailable for message \(id.uuidString)", category: .ai)
             }
         }
