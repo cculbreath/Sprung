@@ -107,4 +107,25 @@ final class CareerKeywordStore {
             Logger.warning("CareerKeywordStore: Failed to persist keywords: \(error)")
         }
     }
+
+    func resetAfterDataClear() {
+        if fileManager.fileExists(atPath: keywordsFileURL.path) {
+            try? fileManager.removeItem(at: keywordsFileURL)
+        }
+
+        do {
+            try fileManager.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
+        } catch {
+            Logger.warning("CareerKeywordStore: Failed to recreate Application Support directory: \(error)")
+        }
+
+        if let bundledURL = Bundle.main.url(forResource: "DefaultCareerKeywords", withExtension: "json") {
+            try? fileManager.copyItem(at: bundledURL, to: keywordsFileURL)
+        } else {
+            try? Data("[]".utf8).write(to: keywordsFileURL)
+        }
+
+        loadKeywords()
+        Logger.debug("✅ CareerKeywordStore: Keywords reset after data clear")
+    }
 }

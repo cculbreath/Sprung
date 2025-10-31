@@ -175,7 +175,7 @@ class EnabledLLMStore: SwiftDataStore {
             Logger.error("❌ Failed to refresh enabled models: \\(error)")
         }
     }
-    
+
     /// Get all enabled model IDs
     var enabledModelIds: [String] {
         return enabledModels.map(\.modelId)
@@ -187,6 +187,10 @@ class EnabledLLMStore: SwiftDataStore {
             return true
         }
         return model.isEnabled
+    }
+
+    func clearCache() {
+        enabledModels.removeAll()
     }
 
     private func seedDefaultModelsIfNeeded() {

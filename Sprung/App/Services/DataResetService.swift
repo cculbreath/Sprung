@@ -35,7 +35,7 @@ final class DataResetService {
             try resetSwiftDataModels(modelContext: modelContext)
             try resetUserDefaults()
             try resetFileBasedStorage()
-            try await resetStoreCaches(
+            try resetStoreCaches(
                 applicantProfileStore: applicantProfileStore,
                 experienceDefaultsStore: experienceDefaultsStore,
                 enabledLLMStore: enabledLLMStore,
@@ -203,82 +203,25 @@ final class DataResetService {
         enabledLLMStore: EnabledLLMStore,
         onboardingArtifactStore: OnboardingArtifactStore,
         careerKeywordStore: CareerKeywordStore
-    ) async throws {
+    ) throws {
         // Clear in-memory caches in each store
         // These stores maintain cached references to avoid frequent queries
 
-        // ApplicantProfileStore caches the current profile
+        // ApplicantProfileStore caches the current profile; drop references so new instances are created after reset
         applicantProfileStore.clearCache()
 
-        // ExperienceDefaultsStore caches defaults
+        // ExperienceDefaultsStore caches defaults; release stale model references before rebuilding
         experienceDefaultsStore.clearCache()
 
-        // EnabledLLMStore maintains an in-memory array of enabled models
+        // EnabledLLMStore maintains in-memory models; clear the array to avoid dangling SwiftData objects
         enabledLLMStore.clearCache()
 
-        // OnboardingArtifactStore clears its cache
-        onboardingArtifactStore.clearCache()
+        // OnboardingArtifactStore manages artifacts in-memory; reset to empty state
+        onboardingArtifactStore.reset()
 
-        // CareerKeywordStore resets to default keywords
-        await careerKeywordStore.resetAfterDataClear()
+        // CareerKeywordStore rebuilds its keyword list from bundled defaults
+        careerKeywordStore.resetAfterDataClear()
 
         Logger.debug("✅ Store caches reset", category: .appLifecycle)
-    }
-}
-
-// MARK: - Store Extensions for Cache Clearing
-
-extension ApplicantProfileStore {
-    fileprivate func clearCache() {
-        // The cache is cleared by forcing a fresh fetch on next call to currentProfile()
-        // This is achieved by clearing the persistent data in the modelContext
-    }
-}
-
-extension ExperienceDefaultsStore {
-    fileprivate func clearCache() {
-        // The cache is cleared by clearing the persistent data in the modelContext
-    }
-}
-
-extension EnabledLLMStore {
-    fileprivate func clearCache() {
-        // Clear the enabled models array
-        enabledModels.removeAll()
-    }
-}
-
-extension OnboardingArtifactStore {
-    fileprivate func clearCache() {
-        // Use the built-in reset method
-        reset()
-    }
-}
-
-extension CareerKeywordStore {
-    fileprivate func resetAfterDataClear() async {
-        // Recreate the default career keywords file after data reset
-        let fileManager = FileManager.default
-        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let appDirectory = appSupportURL.appendingPathComponent("Sprung", isDirectory: true)
-        let keywordsFileURL = appDirectory.appendingPathComponent("career_keywords.json", isDirectory: false)
-
-        // Remove old file if it exists
-        if fileManager.fileExists(atPath: keywordsFileURL.path) {
-            try? fileManager.removeItem(at: keywordsFileURL)
-        }
-
-        // Create directory if needed
-        try? fileManager.createDirectory(at: appDirectory, withIntermediateDirectories: true)
-
-        // Copy default keywords from bundle
-        if let bundledURL = Bundle.main.url(forResource: "DefaultCareerKeywords", withExtension: "json") {
-            try? fileManager.copyItem(at: bundledURL, to: keywordsFileURL)
-        } else {
-            // Create empty keywords file if defaults unavailable
-            try? Data("[]".utf8).write(to: keywordsFileURL)
-        }
-
-        Logger.debug("✅ Career keywords file reset", category: .appLifecycle)
     }
 }

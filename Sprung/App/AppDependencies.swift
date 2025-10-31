@@ -134,7 +134,20 @@ final class AppDependencies {
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
             let debugEnabled = Logger.isVerboseEnabled
-            let openAIService = OpenAIServiceFactory.service(apiKey: openAIKey, debugEnabled: debugEnabled)
+
+            let responsesConfiguration = URLSessionConfiguration.default
+            // Give slow or lossy networks more time to connect and stream response events from OpenAI.
+            responsesConfiguration.timeoutIntervalForRequest = 180
+            responsesConfiguration.timeoutIntervalForResource = 600
+            responsesConfiguration.waitsForConnectivity = true
+
+            let responsesSession = URLSession(configuration: responsesConfiguration)
+            let responsesHTTPClient = URLSessionHTTPClientAdapter(urlSession: responsesSession)
+            let openAIService = OpenAIServiceFactory.service(
+                apiKey: openAIKey,
+                httpClient: responsesHTTPClient,
+                debugEnabled: debugEnabled
+            )
             let openAIClient = OpenAIResponsesClient(service: openAIService)
             llmFacade.registerClient(openAIClient, for: .openAI)
             let conversationService = OpenAIResponsesConversationService(service: openAIService)
