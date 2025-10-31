@@ -146,4 +146,55 @@ struct DeveloperMessageTemplates {
         let title = "Artifact captured. Use list_artifacts to review stored items, get_artifact for full metadata, and request_raw_file with the recorded artifact_id when you need the native file."
         return Message(title: title, details: details, payload: artifact)
     }
+
+    static func timelineUserEdited(diff: TimelineDiff, payload: JSON) -> Message {
+        var details: [String: String] = [
+            "added_count": "\(diff.added.count)",
+            "removed_count": "\(diff.removed.count)",
+            "updated_count": "\(diff.updated.count)",
+            "reordered": diff.reordered ? "true" : "false"
+        ]
+
+        if diff.added.isEmpty == false {
+            details["added_cards"] = diff.added.map(timelineCardLabel).joined(separator: " | ")
+        }
+        if diff.removed.isEmpty == false {
+            details["removed_cards"] = diff.removed.map(timelineCardLabel).joined(separator: " | ")
+        }
+        if diff.updated.isEmpty == false {
+            let summary = diff.updated.map { change in
+                var tokens: [String] = []
+                if change.fieldChanges.isEmpty == false {
+                    let fieldNames = change.fieldChanges.map { $0.field }
+                    tokens.append(fieldNames.joined(separator: ", "))
+                }
+                if let highlight = change.highlightChange, highlight.isEmpty == false {
+                    tokens.append("highlights")
+                }
+                let descriptor = tokens.isEmpty ? "changed" : tokens.joined(separator: ", ")
+                return "\(change.title) (\(descriptor))"
+            }
+            details["updated_cards"] = summary.joined(separator: " | ")
+        }
+
+        let title = "Timeline cards updated by the user. Honor these edits when proposing future changes."
+
+        return Message(
+            title: title,
+            details: details,
+            payload: payload
+        )
+    }
+}
+
+private extension DeveloperMessageTemplates {
+    static func timelineCardLabel(_ card: TimelineCard) -> String {
+        let trimmedTitle = card.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTitle.isEmpty { return trimmedTitle }
+
+        let trimmedOrg = card.organization.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedOrg.isEmpty { return trimmedOrg }
+
+        return "Card \(card.id)"
+    }
 }
