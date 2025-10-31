@@ -512,10 +512,18 @@ private let systemPrompt: String
             text: textConfig
         )
         parameters.parallelToolCalls = false
-        parameters.tools = await toolExecutor.availableToolSchemas(allowedNames: allowedToolNames)
-        if !allowedToolNames.isEmpty {
-            let sortedNames = allowedToolNames.sorted()
-            let allowedToolEntries = sortedNames.map { AllowedToolsChoice.AllowedTool(name: $0) }
+        let toolSchemas = await toolExecutor.availableToolSchemas(allowedNames: allowedToolNames)
+        parameters.tools = toolSchemas
+        let availableToolNames: [String] = toolSchemas.compactMap { schema in
+            switch schema {
+            case let .function(function):
+                return function.name
+            default:
+                return nil
+            }
+        }
+        if !availableToolNames.isEmpty {
+            let allowedToolEntries = availableToolNames.sorted().map { AllowedToolsChoice.AllowedTool(name: $0) }
             parameters.toolChoice = .allowedTools(AllowedToolsChoice(mode: .auto, tools: allowedToolEntries))
         }
 
