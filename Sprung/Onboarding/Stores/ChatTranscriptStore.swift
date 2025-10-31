@@ -88,4 +88,8 @@ final class ChatTranscriptStore {
             }
         }
     }
+
+    func formattedTranscript() -> String {
+        ChatTranscriptFormatter.format(messages: messages)
+    }
 }
