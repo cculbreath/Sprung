@@ -128,7 +128,6 @@ final class AppDependencies {
             modelValidationService: appState.modelValidationService
         )
 
-        var openAIConversationService: OpenAIResponsesConversationService?
         var onboardingOpenAIService: OpenAIService?
 
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -152,7 +151,6 @@ final class AppDependencies {
             llmFacade.registerClient(openAIClient, for: .openAI)
             let conversationService = OpenAIResponsesConversationService(service: openAIService)
             llmFacade.registerConversationService(conversationService, for: .openAI)
-            openAIConversationService = conversationService
             onboardingOpenAIService = openAIService
             Logger.info("✅ OpenAI backend registered for onboarding conversations", category: .appLifecycle)
         }
