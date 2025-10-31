@@ -34,75 +34,7 @@ struct OnboardingInterviewChatPanel: View {
 
         return VStack(spacing: 0) {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(coordinator.messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
-                        }
-                    }
-                    .padding(20)
-                }
-                .textSelection(.enabled)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .modifier(ConditionalIntelligenceGlow(
-                    isActive: service.isProcessing,
-                    shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
-                ))
-                .overlay(alignment: .bottomTrailing) {
-                    if showScrollToLatest {
-                        Button {
-                            state.shouldAutoScroll = true
-                            scrollToLatestMessage(proxy)
-                        } label: {
-                            Image(systemName: "arrow.down.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.accent)
-                                .padding(8)
-                                .background(.thinMaterial, in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 24)
-                        .padding(.bottom, 24)
-                        .shadow(radius: 3, y: 2)
-                    }
-                }
-                .overlay(
-                    ScrollViewOffsetObserver { offset, maxOffset in
-                        let nearBottom = max(maxOffset - offset, 0) < 32
-                        if state.shouldAutoScroll != nearBottom {
-                            state.shouldAutoScroll = nearBottom
-                        }
-                        let shouldShow = !nearBottom
-                        if showScrollToLatest != shouldShow {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showScrollToLatest = shouldShow
-                            }
-                        }
-                    }
-                    .frame(width: 0, height: 0)
-                    .allowsHitTesting(false)
-                )
-                .contextMenu {
-                    Button("Export Transcript…") {
-                        exportTranscript()
-                    }
-                }
-                .onChange(of: coordinator.messages.count) { oldValue, newValue in
-                    guard newValue > oldValue else { return }
-                    scrollToLatestMessage(proxy)
-                }
-                .onChange(of: coordinator.messages.last?.text ?? "") { _, _ in
-                    scrollToLatestMessage(proxy)
-                }
-                .onChange(of: service.isProcessing) { _, isProcessing in
-                    guard isProcessing == false else { return }
-                    scrollToLatestMessage(proxy)
-                }
-                .onAppear {
-                    scrollToLatestMessage(proxy)
-                }
+                messageScrollView(proxy: proxy)
             }
             .padding(.top, topPadding)
             .padding(.horizontal, horizontalPadding)
@@ -193,6 +125,79 @@ struct OnboardingInterviewChatPanel: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(exportErrorMessage ?? "")
+        }
+    }
+
+    @ViewBuilder
+    private func messageScrollView(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                ForEach(coordinator.messages) { message in
+                    MessageBubble(message: message)
+                        .id(message.id)
+                }
+            }
+            .padding(20)
+        }
+        .textSelection(.enabled)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .modifier(ConditionalIntelligenceGlow(
+            isActive: service.isProcessing,
+            shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
+        ))
+        .overlay(alignment: .bottomTrailing) {
+            if showScrollToLatest {
+                Button {
+                    state.shouldAutoScroll = true
+                    scrollToLatestMessage(proxy)
+                } label: {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.accent)
+                        .padding(8)
+                        .background(.thinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 24)
+                .padding(.bottom, 24)
+                .shadow(radius: 3, y: 2)
+            }
+        }
+        .overlay(
+            ScrollViewOffsetObserver { offset, maxOffset in
+                let nearBottom = max(maxOffset - offset, 0) < 32
+                if state.shouldAutoScroll != nearBottom {
+                    state.shouldAutoScroll = nearBottom
+                }
+                let shouldShow = !nearBottom
+                if showScrollToLatest != shouldShow {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showScrollToLatest = shouldShow
+                    }
+                }
+            }
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+        )
+        .contextMenu {
+            Button("Export Transcript…") {
+                exportTranscript()
+            }
+        }
+        .onChange(of: coordinator.messages.count) { oldValue, newValue in
+            guard newValue > oldValue else { return }
+            scrollToLatestMessage(proxy)
+        }
+        .onChange(of: coordinator.messages.last?.text ?? "") { _, _ in
+            scrollToLatestMessage(proxy)
+        }
+        .onChange(of: service.isProcessing) { _, isProcessing in
+            guard isProcessing == false else { return }
+            scrollToLatestMessage(proxy)
+        }
+        .onAppear {
+            scrollToLatestMessage(proxy)
         }
     }
 
