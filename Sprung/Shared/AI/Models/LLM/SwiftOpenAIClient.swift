@@ -41,13 +41,42 @@ final class SwiftOpenAIClient: LLMClient {
     private static var loggerInjected = false
     private static let loggerInjectionLock = NSLock()
     private static let logLevelLock = NSLock()
+    private static let defaultsKey = "swiftOpenAILogLevel"
     private static var _logLevel: LogLevel = .info
 
-    enum LogLevel: Int, CaseIterable {
+    enum LogLevel: Int, CaseIterable, CustomStringConvertible {
         case quiet
         case info
         case verbose
         case debug
+
+        var description: String {
+            switch self {
+            case .quiet: return "Quiet"
+            case .info: return "Info"
+            case .verbose: return "Verbose"
+            case .debug: return "Debug"
+            }
+        }
+
+        var storageValue: String {
+            switch self {
+            case .quiet: return "quiet"
+            case .info: return "info"
+            case .verbose: return "verbose"
+            case .debug: return "debug"
+            }
+        }
+
+        init?(storageValue: String) {
+            switch storageValue.lowercased() {
+            case "quiet": self = .quiet
+            case "info": self = .info
+            case "verbose": self = .verbose
+            case "debug": self = .debug
+            default: return nil
+            }
+        }
     }
 
     /// Change the verbosity of SwiftOpenAI diagnostic logging at runtime.
@@ -56,6 +85,7 @@ final class SwiftOpenAIClient: LLMClient {
         let previous = _logLevel
         _logLevel = level
         logLevelLock.unlock()
+        UserDefaults.standard.set(level.storageValue, forKey: defaultsKey)
         guard previous != level else { return }
         Logger.info("SwiftOpenAI log level set to \(level)", category: .diagnostics)
     }
@@ -98,6 +128,15 @@ final class SwiftOpenAIClient: LLMClient {
             return true
         }
         return false
+    }
+
+    static func logLevel(from storageValue: String) -> LogLevel {
+        LogLevel(storageValue: storageValue) ?? .info
+    }
+
+    static func applyStoredLogLevel() {
+        let stored = UserDefaults.standard.string(forKey: defaultsKey) ?? LogLevel.info.storageValue
+        setLogLevel(logLevel(from: stored))
     }
 
     init(executor: LLMRequestExecutor = LLMRequestExecutor()) {
