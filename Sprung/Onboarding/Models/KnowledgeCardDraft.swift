@@ -157,9 +157,16 @@ struct ArtifactRecord: Identifiable, Equatable {
     }
 
     init(json: JSON) {
+        let identifier = json["id"].string
         let sha = json["sha256"].string
         sha256 = sha
-        id = sha ?? UUID().uuidString
+        if let identifier, !identifier.isEmpty {
+            id = identifier
+        } else if let sha, !sha.isEmpty {
+            id = sha
+        } else {
+            id = UUID().uuidString
+        }
         filename = json["filename"].stringValue
         contentType = json["content_type"].string
         sizeInBytes = json["size_bytes"].intValue
@@ -169,6 +176,7 @@ struct ArtifactRecord: Identifiable, Equatable {
 
     func toJSON() -> JSON {
         var json = JSON()
+        json["id"].string = id
         json["filename"].string = filename
         if let contentType {
             json["content_type"].string = contentType

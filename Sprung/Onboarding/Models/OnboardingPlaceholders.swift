@@ -119,6 +119,7 @@ struct OnboardingUploadMetadata: Codable {
     var allowMultiple: Bool
     var allowURL: Bool = true
     var targetKey: String?
+    var cancelMessage: String? = nil
 }
 
 enum OnboardingUploadKind: String, CaseIterable, Codable {

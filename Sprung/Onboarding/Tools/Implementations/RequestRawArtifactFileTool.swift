@@ -8,12 +8,12 @@ struct RequestRawArtifactFileTool: InterviewTool {
             type: .object,
             description: "Retrieve the original uploaded file for a stored artifact record.",
             properties: [
-                "sha256": JSONSchema(
+                "artifact_id": JSONSchema(
                     type: .string,
-                    description: "SHA256 hash of the artifact record to retrieve."
+                    description: "Identifier of the artifact record to retrieve."
                 )
             ],
-            required: ["sha256"],
+            required: ["artifact_id"],
             additionalProperties: false
         )
     }()
@@ -28,18 +28,29 @@ struct RequestRawArtifactFileTool: InterviewTool {
     var description: String { "Returns the original file associated with an artifact as base64 data." }
     var parameters: JSONSchema { Self.schema }
 
+    func isAvailable() async -> Bool {
+        await MainActor.run { self.service.hasArtifacts() }
+    }
+
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let sha = params["sha256"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !sha.isEmpty else {
-            throw ToolError.invalidParameters("sha256 must be a non-empty string.")
+        guard let artifactId = params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !artifactId.isEmpty else {
+            throw ToolError.invalidParameters("artifact_id must be a non-empty string.")
         }
 
-        guard let payload = service.fetchRawArtifactFile(sha256: sha) else {
-            throw ToolError.executionFailed("Artifact not found or raw file unavailable for sha256=\(sha).")
+        let payload = await MainActor.run {
+            service.fetchRawArtifactFile(artifactId: artifactId)
+        }
+
+        guard let payload else {
+            throw ToolError.executionFailed("Artifact not found or raw file unavailable for id=\(artifactId).")
         }
 
         var response = JSON()
-        response["sha256"].string = payload.sha
+        response["artifact_id"].string = payload.id
+        if let sha = payload.sha256 {
+            response["sha256"].string = sha
+        }
         response["filename"].string = payload.filename
         response["content_type"].string = payload.mimeType
         response["size_bytes"].int = payload.data.count

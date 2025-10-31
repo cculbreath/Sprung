@@ -41,6 +41,10 @@ struct GetUserUploadTool: InterviewTool {
                 "target_key": JSONSchema(
                     type: .string,
                     description: "Optional JSON Resume key path this upload should populate (e.g., basics.image)."
+                ),
+                "cancel_message": JSONSchema(
+                    type: .string,
+                    description: "Optional message the assistant should send if the upload is dismissed without files."
                 )
             ],
             required: ["prompt_to_user"],
@@ -78,8 +82,12 @@ struct GetUserUploadTool: InterviewTool {
         waitingPayload["tool"].string = name
         waitingPayload["message"].string = requestPayload.waitingMessage
         waitingPayload["upload_kind"].string = requestPayload.kind.rawValue
+        waitingPayload["cancel_tool"].string = "cancel_user_upload"
         if let targetKey = requestPayload.targetKey {
             waitingPayload["target_key"].string = targetKey
+        }
+        if let cancelMessage = requestPayload.metadata.cancelMessage {
+            waitingPayload["cancel_message"].string = cancelMessage
         }
 
         let token = ContinuationToken(
@@ -130,6 +138,7 @@ private struct UploadRequestPayload {
     let metadata: OnboardingUploadMetadata
     let waitingMessage: String
     let targetKey: String?
+    let cancelMessage: String?
 
     init(json: JSON) throws {
         if let rawType = json["upload_type"].string {
@@ -151,6 +160,12 @@ private struct UploadRequestPayload {
         let normalized = formats.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
         let allowMultiple = json["allow_multiple"].bool ?? (kind != .resume)
         let allowURL = json["allow_url"].bool ?? true
+        if let cancel = json["cancel_message"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !cancel.isEmpty {
+            cancelMessage = cancel
+        } else {
+            cancelMessage = nil
+        }
 
         if let target = json["target_key"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !target.isEmpty {
             guard UploadRequestPayload.allowedTargetKeys.contains(target) else {
@@ -167,7 +182,8 @@ private struct UploadRequestPayload {
             accepts: normalized,
             allowMultiple: allowMultiple,
             allowURL: allowURL,
-            targetKey: targetKey
+            targetKey: targetKey,
+            cancelMessage: cancelMessage
         )
 
         self.waitingMessage = "Waiting for user to upload: \(prompt)"

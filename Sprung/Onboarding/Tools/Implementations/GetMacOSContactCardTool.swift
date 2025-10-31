@@ -6,6 +6,7 @@
 //
 
 import Contacts
+import CryptoKit
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
@@ -40,7 +41,7 @@ struct GetMacOSContactCardTool: InterviewTool {
 
         do {
             let contact = try await fetchMeCard()
-            let response = makeResponse(from: contact)
+            let response = try makeResponse(from: contact)
             return .immediate(response)
         } catch ContactError.denied {
             var response = JSON()
@@ -119,7 +120,7 @@ private func fetchMeCard() async throws -> CNContact {
     }
 }
 
-private func makeResponse(from contact: CNContact) -> JSON {
+private func makeResponse(from contact: CNContact) throws -> JSON {
     var response = JSON()
     var contactJSON = JSON()
 
@@ -151,5 +152,51 @@ private func makeResponse(from contact: CNContact) -> JSON {
 
     response["contact"] = contactJSON
     response["status"].string = "fetched"
+    response["artifact_record"] = try makeArtifactRecord(from: contact, contactJSON: contactJSON)
     return response
+}
+
+private func makeArtifactRecord(from contact: CNContact, contactJSON: JSON) throws -> JSON {
+    let data = try CNContactVCardSerialization.data(with: [contact])
+    let filename: String
+    if contact.givenName.isEmpty && contact.familyName.isEmpty {
+        filename = "macos-contact.vcf"
+    } else {
+        let sanitized = [contact.givenName, contact.familyName]
+            .filter { !$0.isEmpty }
+            .joined(separator: "-")
+            .lowercased()
+            .replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+        filename = sanitized.isEmpty ? "macos-contact.vcf" : "\(sanitized).vcf"
+    }
+
+    let sha256 = sha256Hex(for: data)
+    let vcardText = String(data: data, encoding: .utf8) ?? ""
+
+    var extractedPayload = JSON()
+    extractedPayload["source"].string = "macos_contacts"
+    extractedPayload["contact"] = contactJSON
+    if !vcardText.isEmpty {
+        extractedPayload["vcard"].string = vcardText
+    }
+
+    var artifact = JSON()
+    artifact["id"].string = UUID().uuidString
+    artifact["filename"].string = filename
+    artifact["content_type"].string = "text/vcard"
+    artifact["size_bytes"].int = data.count
+    artifact["sha256"].string = sha256
+    artifact["extracted_content"].string = extractedPayload.rawString(options: [.sortedKeys]) ?? "{}"
+
+    artifact["metadata"]["purpose"].string = "applicant_profile_contact_card"
+    artifact["metadata"]["source"].string = "macos_contacts"
+    artifact["metadata"]["source_filename"].string = filename
+    artifact["metadata"]["character_count"].int = vcardText.count
+    artifact["metadata"]["inline_base64"].string = data.base64EncodedString()
+
+    return artifact
+}
+
+private func sha256Hex(for data: Data) -> String {
+    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }

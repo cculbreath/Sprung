@@ -65,10 +65,15 @@ struct DeveloperMessageTemplates {
             title = "Upload completed. Await downstream processing before validation."
         case "skipped":
             title = "Upload skipped by user."
+        case "cancelled":
+            title = "Upload cancelled by coordinator."
         case "failed":
             title = "Upload failed."
         default:
             title = "Upload update."
+        }
+        if let cancelReason = payload?["cancel_reason"].string, !cancelReason.isEmpty {
+            details["cancel_reason"] = cancelReason
         }
 
         return Message(title: title, details: details, payload: payload)
@@ -88,5 +93,33 @@ struct DeveloperMessageTemplates {
             details: ["status": "unchanged"],
             payload: payload
         )
+    }
+
+    static func artifactStored(artifact: JSON) -> Message {
+        var details: [String: String] = [:]
+        let metadata = artifact["metadata"]
+
+        func assign(_ key: String, value: String) {
+            guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            details[key] = value
+        }
+
+        assign("artifact_id", value: artifact["id"].stringValue)
+        assign("sha256", value: artifact["sha256"].stringValue)
+        assign("filename", value: artifact["filename"].stringValue)
+        assign("content_type", value: artifact["content_type"].stringValue)
+        if let size = artifact["size_bytes"].int {
+            details["size_bytes"] = "\(size)"
+        }
+        assign("purpose", value: metadata["purpose"].stringValue)
+        assign("source", value: metadata["source"].stringValue)
+        assign("source_file_url", value: metadata["source_file_url"].stringValue)
+        assign("source_filename", value: metadata["source_filename"].stringValue)
+        if metadata["inline_base64"].string != nil {
+            details["inline_payload"] = "base64"
+        }
+
+        let title = "Artifact captured. Use list_artifacts to review stored items, get_artifact for full metadata, and request_raw_file with the recorded artifact_id when you need the native file."
+        return Message(title: title, details: details, payload: artifact)
     }
 }

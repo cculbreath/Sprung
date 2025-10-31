@@ -31,13 +31,21 @@ final class ToolRegistry {
         }
     }
 
-    func toolSchemas(filteredBy allowedNames: Set<String>? = nil) -> [Tool] {
-        queue.sync {
-            tools.values.compactMap { tool in
-                if let allowedNames, !allowedNames.contains(tool.name) {
-                    return nil
-                }
-                return .function(
+    func toolSchemas(filteredBy allowedNames: Set<String>? = nil) async -> [Tool] {
+        let currentTools: [InterviewTool] = queue.sync {
+            Array(tools.values)
+        }
+
+        var schemas: [Tool] = []
+        for tool in currentTools {
+            if let allowedNames, !allowedNames.contains(tool.name) {
+                continue
+            }
+            if await tool.isAvailable() == false {
+                continue
+            }
+            schemas.append(
+                .function(
                     .init(
                         name: tool.name,
                         parameters: tool.parameters,
@@ -45,7 +53,8 @@ final class ToolRegistry {
                         description: tool.description
                     )
                 )
-            }
+            )
         }
+        return schemas
     }
 }

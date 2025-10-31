@@ -57,7 +57,7 @@ final class UploadInteractionHandler {
 
     /// Completes an upload with local file URLs.
     func completeUpload(id: UUID, fileURLs: [URL]) async -> (continuationId: UUID, payload: JSON)? {
-        await handleUploadCompletion(id: id, fileURLs: fileURLs, originalURL: nil)
+        await handleUploadCompletion(id: id, fileURLs: fileURLs, originalURL: nil, cancelReason: nil)
     }
 
     /// Completes an upload by downloading from a remote URL.
@@ -65,7 +65,7 @@ final class UploadInteractionHandler {
         do {
             let temporaryURL = try await uploadFileService.downloadRemoteFile(from: link)
             defer { uploadFileService.cleanupTemporaryFile(at: temporaryURL) }
-            return await handleUploadCompletion(id: id, fileURLs: [temporaryURL], originalURL: link)
+            return await handleUploadCompletion(id: id, fileURLs: [temporaryURL], originalURL: link, cancelReason: nil)
         } catch {
             return await resumeUpload(id: id, withError: error.localizedDescription)
         }
@@ -73,7 +73,17 @@ final class UploadInteractionHandler {
 
     /// Skips an upload request (user chose not to upload).
     func skipUpload(id: UUID) async -> (continuationId: UUID, payload: JSON)? {
-        await completeUpload(id: id, fileURLs: [])
+        await handleUploadCompletion(id: id, fileURLs: [], originalURL: nil, cancelReason: nil)
+    }
+
+    /// Cancels an upload request (assistant dismissed the card).
+    func cancelUpload(id: UUID, reason: String?) async -> (continuationId: UUID, payload: JSON)? {
+        await handleUploadCompletion(id: id, fileURLs: [], originalURL: nil, cancelReason: reason)
+    }
+
+    func cancelPendingUpload(reason: String?) async -> (continuationId: UUID, payload: JSON)? {
+        guard let request = pendingUploadRequests.first else { return nil }
+        return await cancelUpload(id: request.id, reason: reason)
     }
 
     // MARK: - Private Helpers
@@ -81,7 +91,8 @@ final class UploadInteractionHandler {
     private func handleUploadCompletion(
         id: UUID,
         fileURLs: [URL],
-        originalURL: URL?
+        originalURL: URL?,
+        cancelReason: String?
     ) async -> (continuationId: UUID, payload: JSON)? {
         guard let continuationId = uploadContinuationIds[id] else {
             Logger.warning("⚠️ No continuation ID for upload \(id.uuidString)", category: .ai)
@@ -121,11 +132,22 @@ final class UploadInteractionHandler {
         metadata["title"].string = request.metadata.title
         metadata["allow_multiple"].bool = request.metadata.allowMultiple
         metadata["allow_url"].bool = request.metadata.allowURL
+        if let cancelMessage = request.metadata.cancelMessage {
+            metadata["cancel_message"].string = cancelMessage
+        }
         payload["metadata"] = metadata
 
         do {
             if fileURLs.isEmpty {
-                payload["status"].string = "skipped"
+                if let cancelReason = cancelReason {
+                    payload["status"].string = "cancelled"
+                    let trimmed = cancelReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        payload["cancel_reason"].string = trimmed
+                    }
+                } else {
+                    payload["status"].string = "skipped"
+                }
             } else {
                 // Process files through storage
                 processed = try fileURLs.map { try uploadStorage.processFile(at: $0) }
@@ -165,6 +187,10 @@ final class UploadInteractionHandler {
             Logger.info("✅ Upload completed successfully", category: .ai)
         case "skipped":
             Logger.info("⚠️ Upload skipped by user", category: .ai)
+        case "cancelled":
+            Logger.info("⚠️ Upload cancelled by assistant", category: .ai, metadata: [
+                "reason": payload["cancel_reason"].stringValue
+            ])
         case "failed":
             let errorDescription = payload["error"].stringValue
             Logger.error("❌ Upload failed during processing: \(errorDescription)", category: .ai)

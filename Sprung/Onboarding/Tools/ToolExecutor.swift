@@ -17,8 +17,8 @@ actor ToolExecutor {
         self.registry = registry
     }
 
-    func availableToolSchemas(allowedNames: Set<String>? = nil) -> [Tool] {
-        registry.toolSchemas(filteredBy: allowedNames)
+    func availableToolSchemas(allowedNames: Set<String>? = nil) async -> [Tool] {
+        await registry.toolSchemas(filteredBy: allowedNames)
     }
 
     func handleToolCall(_ call: ToolCall) async throws -> ToolResult {

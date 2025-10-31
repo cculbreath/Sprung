@@ -14,12 +14,14 @@ protocol InterviewTool {
     var description: String { get }
     var parameters: JSONSchema { get }
     var isStrict: Bool { get }
+    func isAvailable() async -> Bool
 
     func execute(_ params: JSON) async throws -> ToolResult
 }
 
 extension InterviewTool {
     var isStrict: Bool { false }
+    func isAvailable() async -> Bool { true }
 }
 
 enum ToolResult {

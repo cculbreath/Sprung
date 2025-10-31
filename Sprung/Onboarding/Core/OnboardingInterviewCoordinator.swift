@@ -173,6 +173,38 @@ final class OnboardingInterviewCoordinator {
         developerMessages.append(message)
     }
 
+    private func enqueueDeveloperStatus(from template: DeveloperMessageTemplates.Message) {
+        let trimmedDetails = template.details.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let payload = template.payload
+
+        var payloadText: String?
+        if let payload, payload != .null {
+            payloadText = payload.rawString(options: [.sortedKeys]) ?? payload.description
+        }
+
+        let readableDetails = trimmedDetails
+            .sorted { $0.key < $1.key }
+            .map { "• \($0.key): \($0.value)" }
+            .joined(separator: "\n")
+
+        var metadata = trimmedDetails
+        if let payloadText {
+            metadata["payload"] = payloadText
+        }
+
+        Logger.log(.info, "📤 Developer status queued: \(template.title)", category: .ai, metadata: metadata)
+
+        var message = "Developer status: \(template.title)"
+        if !readableDetails.isEmpty {
+            message += "\n\nDetails:\n\(readableDetails)"
+        }
+        if let payloadText {
+            message += "\n\nPayload:\n\(payloadText)"
+        }
+
+        enqueueDeveloperMessage(message)
+    }
+
     func addObjectiveStatusObserver(_ observer: @escaping (ObjectiveStatusUpdate) -> Void) {
         objectiveStatusObservers.append(observer)
     }
@@ -518,39 +550,59 @@ final class OnboardingInterviewCoordinator {
         Logger.debug("📅 Skeleton timeline stored", category: .ai)
     }
 
-    /// Stores an artifact record, deduplicating by SHA256 if present.
+    /// Stores an artifact record keyed by its identifier.
     func storeArtifactRecord(_ artifact: JSON) {
         guard artifact != .null else { return }
 
-        if let sha = artifact["sha256"].string {
-            artifacts.artifactRecords.removeAll { $0["sha256"].stringValue == sha }
+        guard let artifactId = artifact["id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !artifactId.isEmpty else {
+            Logger.warning("⚠️ Artifact record missing id; entry skipped.", category: .ai)
+            return
         }
+
+        artifacts.artifactRecords.removeAll { $0["id"].stringValue == artifactId }
         artifacts.artifactRecords.append(artifact)
 
-        Logger.debug("📦 Artifact record stored (sha256: \(artifact["sha256"].stringValue))", category: .ai)
+        let sha = artifact["sha256"].stringValue
+        Logger.debug("📦 Artifact record stored (id: \(artifactId), sha256: \(sha))", category: .ai)
+        let message = DeveloperMessageTemplates.artifactStored(artifact: artifact)
+        enqueueDeveloperStatus(from: message)
     }
 
-    func artifactRecord(sha256: String) -> JSON? {
-        artifacts.artifactRecords.first { $0["sha256"].stringValue == sha256 }
+    func artifactRecord(id: String) -> JSON? {
+        artifacts.artifactRecords.first { $0["id"].stringValue == id }
     }
 
-    func rawArtifactFile(for sha256: String) -> (data: Data, mimeType: String, filename: String)? {
-        guard let record = artifactRecord(sha256: sha256) else {
+    func rawArtifactFile(for artifactId: String) -> (data: Data, mimeType: String, filename: String, sha256: String?)? {
+        guard let record = artifactRecord(id: artifactId) else {
             return nil
         }
 
         let metadata = record["metadata"]
+        if let inlineBase64 = metadata["inline_base64"].string,
+           let data = Data(base64Encoded: inlineBase64) {
+            let mimeType = record["content_type"].stringValue.isEmpty
+                ? "application/octet-stream"
+                : record["content_type"].stringValue
+            let filename = metadata["source_filename"].string ??
+                record["filename"].string ??
+                "artifact.\(record["content_type"].stringValue.split(separator: "/").last ?? "dat")"
+            return (data, mimeType, filename, record["sha256"].string)
+        } else if metadata["inline_base64"].string != nil {
+            Logger.warning("⚠️ Inline base64 payload for artifact \(artifactId) could not be decoded.", category: .ai)
+        }
+
         let urlString = metadata["source_file_url"].string ?? metadata["source_path"].string
         guard
             let urlString,
             let url = URL(string: urlString)
         else {
-            Logger.warning("⚠️ Artifact \(sha256) missing source_file_url metadata.", category: .ai)
+            Logger.warning("⚠️ Artifact \(artifactId) missing source_file_url metadata.", category: .ai)
             return nil
         }
 
         guard let data = try? Data(contentsOf: url) else {
-            Logger.warning("⚠️ Failed to load artifact file at \(url).", category: .ai)
+            Logger.warning("⚠️ Failed to load artifact \(artifactId) at \(url).", category: .ai)
             return nil
         }
 
@@ -568,7 +620,7 @@ final class OnboardingInterviewCoordinator {
             record["filename"].string ??
             url.lastPathComponent
 
-        return (data, mimeType, filename)
+        return (data, mimeType, filename, record["sha256"].string)
     }
 
     /// Stores a knowledge card, deduplicating by ID if present.
@@ -596,10 +648,13 @@ final class OnboardingInterviewCoordinator {
         var deduped: [JSON] = []
         var seen: Set<String> = []
         for record in records {
-            if let sha = record["sha256"].string, !sha.isEmpty {
-                if seen.contains(sha) { continue }
-                seen.insert(sha)
+            let artifactId = record["id"].stringValue
+            guard !artifactId.isEmpty else {
+                Logger.warning("⚠️ Skipping persisted artifact without id.", category: .ai)
+                continue
             }
+            guard !seen.contains(artifactId) else { continue }
+            seen.insert(artifactId)
             deduped.append(record)
         }
         artifacts.artifactRecords = deduped
@@ -748,6 +803,14 @@ final class OnboardingInterviewCoordinator {
 
     func skipUpload(id: UUID) async -> (UUID, JSON)? {
         await toolRouter.skipUpload(id: id)
+    }
+
+    func cancelUpload(id: UUID, reason: String?) async -> (UUID, JSON)? {
+        await toolRouter.cancelUpload(id: id, reason: reason)
+    }
+
+    func cancelPendingUpload(reason: String?) async -> (UUID, JSON)? {
+        await toolRouter.cancelPendingUpload(reason: reason)
     }
 
     // MARK: - Section Toggle Handling
@@ -1173,12 +1236,18 @@ final class OnboardingInterviewCoordinator {
     private func storeArtifactRecord(_ artifact: JSON) async {
         guard artifact != .null else { return }
 
-        // Inline public synchronous version logic to avoid overload ambiguity
-        if let sha = artifact["sha256"].string {
-            artifacts.artifactRecords.removeAll { $0["sha256"].stringValue == sha }
+        guard let artifactId = artifact["id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !artifactId.isEmpty else {
+            Logger.warning("⚠️ Artifact record missing id; entry skipped.", category: .ai)
+            return
         }
+
+        artifacts.artifactRecords.removeAll { $0["id"].stringValue == artifactId }
         artifacts.artifactRecords.append(artifact)
-        Logger.debug("📦 Artifact record stored (sha256: \(artifact["sha256"].stringValue))", category: .ai)
+        let sha = artifact["sha256"].stringValue
+        Logger.debug("📦 Artifact record stored (id: \(artifactId), sha256: \(sha))", category: .ai)
+        let message = DeveloperMessageTemplates.artifactStored(artifact: artifact)
+        enqueueDeveloperStatus(from: message)
     }
 
     private func storeKnowledgeCard(_ card: JSON) async {

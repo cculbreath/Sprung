@@ -43,7 +43,7 @@ actor InterviewOrchestrator {
     private let state: InterviewState
     private let toolExecutor: ToolExecutor
     private let callbacks: Callbacks
-    private let systemPrompt: String
+private let systemPrompt: String
     private let allowedToolsMap: [InterviewPhase: [String]] = [
         .phase1CoreFacts: [
             "get_user_option",
@@ -52,6 +52,10 @@ actor InterviewOrchestrator {
             "get_user_upload",
             "get_macos_contact_card",
             "extract_document",
+            "list_artifacts",
+            "get_artifact",
+            "cancel_user_upload",
+            "request_raw_file",
             "submit_for_validation",
             "persist_data",
             "set_objective_status",
@@ -61,6 +65,10 @@ actor InterviewOrchestrator {
             "get_user_option",
             "get_user_upload",
             "extract_document",
+            "list_artifacts",
+            "get_artifact",
+            "cancel_user_upload",
+            "request_raw_file",
             "submit_for_validation",
             "persist_data",
             "set_objective_status",
@@ -71,6 +79,10 @@ actor InterviewOrchestrator {
             "get_user_option",
             "get_user_upload",
             "extract_document",
+            "list_artifacts",
+            "get_artifact",
+            "cancel_user_upload",
+            "request_raw_file",
             "submit_for_validation",
             "persist_data",
             "set_objective_status",
@@ -249,6 +261,11 @@ actor InterviewOrchestrator {
                 let contactDraft = buildApplicantProfileDraft(from: contactResponse["contact"])
                 draft = draft.merging(contactDraft)
                 sources.append("macOS Contacts")
+                let artifact = contactResponse["artifact_record"]
+                if artifact != .null {
+                    await callbacks.storeArtifactRecord(artifact)
+                    await persistData(artifact, as: "artifact_record")
+                }
             }
         } catch {
             Logger.debug("Contact card fetch unavailable: \(error)")
@@ -966,9 +983,13 @@ actor InterviewOrchestrator {
     }
 
     private func allowedToolNames(for session: InterviewSession) -> Set<String> {
-        if let tools = allowedToolsMap[session.phase] {
-            return Set(tools)
+        let tools: [String]
+        if let phaseTools = allowedToolsMap[session.phase] {
+            tools = phaseTools
+        } else {
+            tools = allowedToolsMap.values.flatMap { $0 }
         }
-        return Set(allowedToolsMap.values.flatMap { $0 })
+
+        return Set(tools)
     }
 }

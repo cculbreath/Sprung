@@ -18,6 +18,7 @@ actor DocumentExtractionService {
     }
 
     struct ArtifactRecord {
+        let id: String
         let filename: String
         let contentType: String
         let sizeInBytes: Int
@@ -116,6 +117,7 @@ actor DocumentExtractionService {
         }
 
         let artifact = ArtifactRecord(
+            id: UUID().uuidString,
             filename: filename,
             contentType: contentType,
             sizeInBytes: sizeInBytes,

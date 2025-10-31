@@ -132,6 +132,9 @@ final class OnboardingInterviewService {
         registry.register(ExtractDocumentTool(extractionService: documentExtractionService))
         registry.register(SetObjectiveStatusTool(service: self))
         registry.register(NextPhaseTool(service: self))
+        registry.register(ListArtifactsTool(service: self))
+        registry.register(GetArtifactRecordTool(service: self))
+        registry.register(CancelUserUploadTool(service: self))
         registry.register(RequestRawArtifactFileTool(service: self))
         registry.register(
             GenerateKnowledgeCardTool(agentProvider: { [weak self] in
@@ -146,6 +149,45 @@ final class OnboardingInterviewService {
 
     func hasRestorableCheckpoint() async -> Bool {
         await coordinator.hasRestorableCheckpoint()
+    }
+
+    func artifactSummaries() -> [JSON] {
+        coordinator.artifacts.artifactRecords.map { record in
+            var summary = JSON()
+            summary["id"].string = record["id"].stringValue
+            summary["filename"].string = record["filename"].stringValue
+            summary["content_type"].string = record["content_type"].stringValue
+            if let size = record["size_bytes"].int {
+                summary["size_bytes"].int = size
+            }
+            if let sha = record["sha256"].string, !sha.isEmpty {
+                summary["sha256"].string = sha
+            }
+
+            let metadata = record["metadata"]
+            if metadata != .null {
+                var sanitized = metadata
+                if sanitized["inline_base64"] != .null {
+                    sanitized["inline_base64"] = .null
+                    summary["has_inline_payload"].bool = true
+                }
+                summary["metadata"] = sanitized
+            }
+
+            return summary
+        }
+    }
+
+    func artifactRecordDetail(id: String) -> JSON? {
+        coordinator.artifactRecord(id: id)
+    }
+
+    func hasArtifacts() -> Bool {
+        !coordinator.artifacts.artifactRecords.isEmpty
+    }
+
+    func hasPendingUploadRequests() -> Bool {
+        !coordinator.pendingUploadRequests.isEmpty
     }
 
     func missingObjectives() async -> [String] {
@@ -570,6 +612,16 @@ final class OnboardingInterviewService {
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
+    func cancelPendingUploadRequest(reason: String?) async -> JSON? {
+        guard let request = coordinator.pendingUploadRequests.first else { return nil }
+        guard let result = await coordinator.cancelUpload(id: request.id, reason: reason) else { return nil }
+        let (continuationId, payload) = result
+        coordinator.updateWaitingState(nil)
+        sendUploadStatus(payload)
+        await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
+        return payload
+    }
+
     // MARK: - Callback Handling
 
     @discardableResult
@@ -777,11 +829,17 @@ final class OnboardingInterviewService {
         hasContactPhoto = true
     }
 
-    func fetchRawArtifactFile(sha256: String) -> (sha: String, data: Data, mimeType: String, filename: String)? {
-        guard let payload = coordinator.rawArtifactFile(for: sha256) else {
+    func fetchRawArtifactFile(artifactId: String) -> (id: String, data: Data, mimeType: String, filename: String, sha256: String?)? {
+        guard let payload = coordinator.rawArtifactFile(for: artifactId) else {
             return nil
         }
-        return (sha: sha256, data: payload.data, mimeType: payload.mimeType, filename: payload.filename)
+        return (
+            id: artifactId,
+            data: payload.data,
+            mimeType: payload.mimeType,
+            filename: payload.filename,
+            sha256: payload.sha256
+        )
     }
 
     private func handleObjectiveStatusUpdate(_ update: OnboardingInterviewCoordinator.ObjectiveStatusUpdate) {
