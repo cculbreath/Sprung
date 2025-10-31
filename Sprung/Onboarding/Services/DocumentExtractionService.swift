@@ -139,7 +139,8 @@ actor DocumentExtractionService {
             }
             return nil
         }()
-        await notifyProgress(.aiExtraction, .completed, detail: aiDetail)
+        let aiState: ExtractionProgressStageState = markdownIssues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
+        await notifyProgress(.aiExtraction, aiState, detail: aiDetail)
 
         var issues = initialIssues
         issues.append(contentsOf: markdownIssues)

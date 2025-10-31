@@ -16,7 +16,7 @@ struct AnimatedThinkingText: View {
             Image("custom.sprung_raster")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 48, height: 48)
+                .frame(width: 96, height: 96)
                 .scaleEffect(bounce * breathe)
                 .rotationEffect(.degrees(wiggle))
                 .offset(y: sin(time * 4) * 2)  // Subtle vertical float

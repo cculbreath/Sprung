@@ -401,6 +401,10 @@ final class OnboardingInterviewCoordinator {
         pendingStreamingStatus = nil
     }
 
+    func transcriptExportString() -> String {
+        chatTranscriptStore.formattedTranscript()
+    }
+
     // MARK: - Preferences
 
     func setPreferredDefaults(modelId: String, backend: LLMFacade.Backend, webSearchAllowed: Bool) {
@@ -649,8 +653,11 @@ final class OnboardingInterviewCoordinator {
 
     /// Updates the enabled sections list.
     func updateEnabledSections(_ sections: [String]) {
-        artifacts.enabledSections = sections
-        Logger.debug("🧩 Enabled sections updated: \(sections.joined(separator: ", "))", category: .ai)
+        let normalizedKeys = sections.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0)?.rawValue }
+        var seen: Set<String> = []
+        let deduped = normalizedKeys.filter { seen.insert($0).inserted }
+        artifacts.enabledSections = deduped
+        Logger.debug("🧩 Enabled sections updated: \(artifacts.enabledSections.joined(separator: ", "))", category: .ai)
     }
 
     /// Loads persisted artifacts from the data store.

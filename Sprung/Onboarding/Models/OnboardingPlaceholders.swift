@@ -257,9 +257,16 @@ struct OnboardingSectionToggleRequest {
         rationale: String? = nil
     ) {
         self.id = id
-        self.proposedSections = proposedSections
-        self.availableSections = availableSections
+        self.proposedSections = Self.normalizedIdentifiers(from: proposedSections)
+        self.availableSections = Self.normalizedIdentifiers(from: availableSections)
         self.rationale = rationale
+    }
+
+    private static func normalizedIdentifiers(from identifiers: [String]) -> [String] {
+        var seen: Set<String> = []
+        return identifiers.compactMap { identifier in
+            ExperienceSectionKey.fromOnboardingIdentifier(identifier)?.rawValue
+        }.filter { seen.insert($0).inserted }
     }
 }
 

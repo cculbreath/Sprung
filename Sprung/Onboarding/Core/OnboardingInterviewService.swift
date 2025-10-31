@@ -113,10 +113,10 @@ final class OnboardingInterviewService {
             openAIService: openAIService
         )
 
-        let progressHandler: ExtractionProgressHandler = { [weak coordinator] update in
-            guard let coordinator else { return }
+        let progressHandler: ExtractionProgressHandler = { [weak self] update in
+            guard let self else { return }
             await MainActor.run {
-                coordinator.updateExtractionProgress(with: update)
+                self.coordinator.updateExtractionProgress(with: update)
             }
         }
         uploadHandler.updateExtractionProgressHandler(progressHandler)
@@ -866,6 +866,10 @@ final class OnboardingInterviewService {
         )
     }
 
+    func transcriptExportText() -> String {
+        coordinator.transcriptExportString()
+    }
+
     // MARK: - Timeline Card Management
 
     func createTimelineCard(fields: JSON) async -> JSON {
@@ -935,6 +939,12 @@ final class OnboardingInterviewService {
         return updatedTimeline
     }
 
+    func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async -> JSON {
+        let updatedTimeline = await persistTimeline(cards: cards, meta: meta)
+        sendTimelineUserEdit(diff: diff, payload: updatedTimeline)
+        return updatedTimeline
+    }
+
     private func currentTimelineState() -> (cards: [TimelineCard], meta: JSON?) {
         if let timeline = coordinator.skeletonTimelineJSON {
             let normalized = TimelineCardAdapter.normalizedTimeline(timeline)
@@ -951,6 +961,11 @@ final class OnboardingInterviewService {
         coordinator.storeSkeletonTimeline(updatedTimeline)
         await coordinator.persistCheckpoint()
         return updatedTimeline
+    }
+
+    private func sendTimelineUserEdit(diff: TimelineDiff, payload: JSON) {
+        let message = DeveloperMessageTemplates.timelineUserEdited(diff: diff, payload: payload)
+        sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
     }
 
     private func applicantDisplayName(from json: JSON) -> String? {
