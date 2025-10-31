@@ -128,9 +128,10 @@ struct OnboardingInterviewChatPanel: View {
         }
     }
 
-    @ViewBuilder
     private func messageScrollView(proxy: ScrollViewProxy) -> some View {
-        ScrollView {
+        let bubbleShape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+
+        return ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 ForEach(coordinator.messages) { message in
                     MessageBubble(message: message)
@@ -140,13 +141,31 @@ struct OnboardingInterviewChatPanel: View {
             .padding(20)
         }
         .textSelection(.enabled)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .modifier(ConditionalIntelligenceGlow(
-            isActive: service.isProcessing,
-            shape: RoundedRectangle(cornerRadius: 24, style: .continuous)
-        ))
+        .background(bubbleShape.fill(.thinMaterial))
+        .clipShape(bubbleShape)
+        .modifier(ConditionalIntelligenceGlow(isActive: service.isProcessing, shape: bubbleShape))
         .overlay(alignment: .bottomTrailing) {
+            scrollToLatestButton(proxy: proxy)
+        }
+        .overlay(scrollOffsetOverlay())
+        .contextMenu { exportTranscriptContextMenu() }
+        .onChange(of: coordinator.messages.count, perform: { oldValue, newValue in
+            handleMessageCountChange(oldValue: oldValue, newValue: newValue, proxy: proxy)
+        })
+        .onChange(of: coordinator.messages.last?.text ?? "", perform: { _ , _ in
+            scrollToLatestMessage(proxy)
+        })
+        .onChange(of: service.isProcessing, perform: { _, isProcessing in
+            guard isProcessing == false else { return }
+            scrollToLatestMessage(proxy)
+        })
+        .onAppear {
+            scrollToLatestMessage(proxy)
+        }
+    }
+
+    private func scrollToLatestButton(proxy: ScrollViewProxy) -> some View {
+        Group {
             if showScrollToLatest {
                 Button {
                     state.shouldAutoScroll = true
@@ -164,40 +183,36 @@ struct OnboardingInterviewChatPanel: View {
                 .shadow(radius: 3, y: 2)
             }
         }
-        .overlay(
-            ScrollViewOffsetObserver { offset, maxOffset in
-                let nearBottom = max(maxOffset - offset, 0) < 32
-                if state.shouldAutoScroll != nearBottom {
-                    state.shouldAutoScroll = nearBottom
-                }
-                let shouldShow = !nearBottom
-                if showScrollToLatest != shouldShow {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showScrollToLatest = shouldShow
-                    }
-                }
+    }
+
+    private func scrollOffsetOverlay() -> some View {
+        ScrollViewOffsetObserver { offset, maxOffset in
+            let nearBottom = max(maxOffset - offset, 0) < 32
+            if state.shouldAutoScroll != nearBottom {
+                state.shouldAutoScroll = nearBottom
             }
-            .frame(width: 0, height: 0)
-            .allowsHitTesting(false)
-        )
-        .contextMenu {
-            Button("Export Transcript…") {
-                exportTranscript()
-            }
+            updateScrollToLatestVisibility(isNearBottom: nearBottom)
         }
-        .onChange(of: coordinator.messages.count) { oldValue, newValue in
-            guard newValue > oldValue else { return }
-            scrollToLatestMessage(proxy)
+        .frame(width: 0, height: 0)
+        .allowsHitTesting(false)
+    }
+
+    private func handleMessageCountChange(oldValue: Int, newValue: Int, proxy: ScrollViewProxy) {
+        guard newValue > oldValue else { return }
+        scrollToLatestMessage(proxy)
+    }
+
+    private func exportTranscriptContextMenu() -> some View {
+        Button("Export Transcript…") {
+            exportTranscript()
         }
-        .onChange(of: coordinator.messages.last?.text ?? "") { _, _ in
-            scrollToLatestMessage(proxy)
-        }
-        .onChange(of: service.isProcessing) { _, isProcessing in
-            guard isProcessing == false else { return }
-            scrollToLatestMessage(proxy)
-        }
-        .onAppear {
-            scrollToLatestMessage(proxy)
+    }
+
+    private func updateScrollToLatestVisibility(isNearBottom: Bool) {
+        let shouldShow = !isNearBottom
+        guard showScrollToLatest != shouldShow else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            showScrollToLatest = shouldShow
         }
     }
 
