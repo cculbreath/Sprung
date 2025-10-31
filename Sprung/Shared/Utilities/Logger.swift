@@ -131,7 +131,7 @@ final class Logger {
     }
     
     static var isVerboseEnabled: Bool {
-        minimumLevel == .verbose
+        minimumLevel.rawValue <= Level.debug.rawValue
     }
     
     static var shouldSaveDebugFiles: Bool {
