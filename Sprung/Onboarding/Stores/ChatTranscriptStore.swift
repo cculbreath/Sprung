@@ -19,7 +19,7 @@ final class ChatTranscriptStore {
             text: text,
             reasoningSummary: nil,
             isAwaitingReasoningSummary: reasoningExpected,
-            showReasoningPlaceholder: false
+            showReasoningPlaceholder: reasoningExpected
         )
         messages.append(message)
         return message.id
@@ -32,7 +32,7 @@ final class ChatTranscriptStore {
             text: initialText,
             reasoningSummary: nil,
             isAwaitingReasoningSummary: reasoningExpected,
-            showReasoningPlaceholder: false
+            showReasoningPlaceholder: reasoningExpected
         )
         messages.append(message)
         streamingMessageStart[message.id] = Date()
