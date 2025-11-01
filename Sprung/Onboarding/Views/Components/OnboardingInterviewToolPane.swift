@@ -130,23 +130,22 @@ struct OnboardingInterviewToolPane: View {
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .center) {
-            if showSpinner {
-                VStack(spacing: 18) {
+            if let extraction = service.pendingExtraction {
+                ExtractionProgressOverlay(
+                    items: extraction.progressItems,
+                    statusText: coordinator.pendingStreamingStatus
+                )
+                .transition(.opacity.combined(with: .scale))
+                .zIndex(1)
+            } else if showSpinner {
+                VStack(spacing: 12) {
                     AnimatedThinkingText()
-                    if let extraction = service.pendingExtraction, !extraction.progressItems.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Processing résumé…")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            ExtractionProgressChecklistView(items: extraction.progressItems)
-                        }
-                        .padding(18)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    } else if let status = coordinator.pendingStreamingStatus, !status.isEmpty {
+                    if let status = coordinator.pendingStreamingStatus?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !status.isEmpty {
                         Text(status)
-                            .font(.headline)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                             .transition(.opacity)
                     }
                 }
@@ -348,6 +347,56 @@ struct OnboardingInterviewToolPane: View {
         case .writingCorpus, .introduction:
             return false
         }
+    }
+}
+
+private struct ExtractionProgressOverlay: View {
+    let items: [ExtractionProgressItem]
+    let statusText: String?
+
+    private var trimmedStatus: String? {
+        guard let statusText else { return nil }
+        let trimmed = statusText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var body: some View {
+        VStack(spacing: 28) {
+            AnimatedThinkingText()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Processing résumé…")
+                    .font(.headline)
+
+                ExtractionProgressChecklistView(items: items)
+
+                if let trimmedStatus {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    Text(trimmedStatus)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(.vertical, 26)
+            .padding(.horizontal, 26)
+            .frame(maxWidth: 420, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(.regularMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(Color.white.opacity(0.4), lineWidth: 0.5)
+                    .blendMode(.plusLighter)
+            )
+            .shadow(color: Color.black.opacity(0.18), radius: 28, y: 22)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
     }
 }
 
