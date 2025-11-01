@@ -102,7 +102,8 @@ actor DocumentExtractionService {
             await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
         }
 
-        await notifyProgress(.fileAnalysis, .active, detail: filename)
+        let fileAnalysisDetail = filename.isEmpty ? "Analyzing document" : "Analyzing \(filename)"
+        await notifyProgress(.fileAnalysis, .active, detail: fileAnalysisDetail)
 
         guard let fileData = try? Data(contentsOf: fileURL) else {
             await notifyProgress(.fileAnalysis, .failed, detail: "Unreadable file data")
@@ -118,7 +119,10 @@ actor DocumentExtractionService {
         await notifyProgress(.fileAnalysis, .completed)
 
         let llmStart = Date()
-        await notifyProgress(.aiExtraction, .active, detail: request.purpose)
+        let aiStageDetail = request.purpose == "resume_timeline"
+            ? "Extracting resume details"
+            : "Extracting document text"
+        await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
         let (markdown, markdownIssues) = await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         Logger.info(

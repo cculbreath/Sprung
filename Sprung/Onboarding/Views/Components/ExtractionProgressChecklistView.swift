@@ -88,7 +88,7 @@ private struct ExtractionProgressRowView: View {
                     .tint(.accentColor)
             case .completed:
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.accentColor)
+                    .foregroundStyle(Color.accentColor)
                     .scaleEffect(showCheckmark ? 1.0 : 0.45)
                     .rotationEffect(.degrees(showCheckmark ? 0 : -35))
                     .opacity(showCheckmark ? 1 : 0)

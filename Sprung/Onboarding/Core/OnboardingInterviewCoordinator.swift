@@ -580,7 +580,6 @@ final class OnboardingInterviewCoordinator {
         let purpose = metadata["purpose"].string?.lowercased()
         let extractedContent = artifact["extracted_content"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let shouldEnforceTimelineTools = (purpose == "resume_timeline") && !extractedContent.isEmpty
-
         artifacts.artifactRecords.removeAll { $0["id"].stringValue == artifactId }
         artifacts.artifactRecords.append(artifact)
 
@@ -1080,6 +1079,7 @@ final class OnboardingInterviewCoordinator {
         guard var status else {
             pendingExtraction = nil
             pendingExtractionProgressBuffer.removeAll()
+            setStreamingStatus(nil)
             return
         }
 
@@ -1098,6 +1098,7 @@ final class OnboardingInterviewCoordinator {
         } else {
             pendingExtractionProgressBuffer.append(update)
         }
+        updateStreamingStatusFromExtraction(update)
     }
 
     func updateLastError(_ message: String?) {
@@ -1107,6 +1108,52 @@ final class OnboardingInterviewCoordinator {
     func recordError(_ message: String) {
         lastError = message
         appendSystemMessage("⚠️ \(message)")
+    }
+
+    private func updateStreamingStatusFromExtraction(_ update: ExtractionProgressUpdate) {
+        switch update.state {
+        case .active:
+            guard let message = streamingStatusMessage(for: update.stage, detail: update.detail) else { return }
+            setStreamingStatus(message)
+        case .completed:
+            if update.stage == .assistantHandoff {
+                setStreamingStatus(nil)
+            }
+        case .failed:
+            setStreamingStatus(nil)
+        case .pending:
+            break
+        }
+    }
+
+    private func streamingStatusMessage(for stage: ExtractionProgressStage, detail: String?) -> String? {
+        let trimmed = detail?.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch stage {
+        case .fileAnalysis:
+            if let trimmed, !trimmed.isEmpty {
+                return ellipsizedStatusText(trimmed)
+            }
+            return "Analyzing document…"
+        case .aiExtraction:
+            if let trimmed, !trimmed.isEmpty {
+                return ellipsizedStatusText(trimmed)
+            }
+            return "Extracting document text…"
+        case .artifactSave:
+            if let trimmed, !trimmed.isEmpty {
+                return ellipsizedStatusText("Saving \(trimmed)")
+            }
+            return "Saving artifact…"
+        case .assistantHandoff:
+            return "Sending to assistant…"
+        }
+    }
+
+    private func ellipsizedStatusText(_ text: String) -> String {
+        if text.hasSuffix("…") || text.hasSuffix("...") {
+            return text
+        }
+        return "\(text)…"
     }
 
     // Note: loadPersistedArtifacts() is already defined above in the Data Store section
@@ -1316,7 +1363,6 @@ final class OnboardingInterviewCoordinator {
         let purpose = metadata["purpose"].string?.lowercased()
         let extractedContent = artifact["extracted_content"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let shouldEnforceTimelineTools = (purpose == "resume_timeline") && !extractedContent.isEmpty
-
         artifacts.artifactRecords.removeAll { $0["id"].stringValue == artifactId }
         artifacts.artifactRecords.append(artifact)
         let sha = artifact["sha256"].stringValue
