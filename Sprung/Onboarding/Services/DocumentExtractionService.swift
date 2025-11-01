@@ -260,7 +260,7 @@ actor DocumentExtractionService {
                 return (text, issues)
             } else {
                 issues.append("text_extraction_warning")
-                if let plain = try? String(contentsOf: url) {
+                if let plain = try? String(contentsOf: url, encoding: .utf8) {
                     return (plain, issues)
                 }
                 return (nil, issues)

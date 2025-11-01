@@ -701,12 +701,16 @@ final class OnboardingInterviewService {
         schemaIssues.removeAll()
         nextQuestions.removeAll()
         photoPromptIssued = false
-        if let imageValue = coordinator.applicantProfileJSON?["image"],
-           imageValue != .null,
-           !(imageValue.stringValue.isEmpty) {
-            hasContactPhoto = true
-        } else {
-            hasContactPhoto = false
+
+        // Check both JSON and actual stored profile for existing photo
+        let hasImageInJSON = coordinator.applicantProfileJSON?["image"] != .null
+            && !(coordinator.applicantProfileJSON?["image"].stringValue.isEmpty ?? true)
+        let hasImageInStore = applicantProfileStore.currentProfile().pictureData != nil
+
+        hasContactPhoto = hasImageInJSON || hasImageInStore
+
+        if hasContactPhoto {
+            Logger.debug("📸 Existing profile photo detected, skipping photo prompt", category: .ai)
         }
     }
 
@@ -821,7 +825,8 @@ final class OnboardingInterviewService {
         let uploadPayload = """
         {
           \"upload_type\": \"generic\",
-          \"prompt_to_user\": \"Upload a profile headshot. You can drag in a JPG, PNG, HEIC, or WEBP image, or paste an image URL.\",
+          \"title\": \"Upload Photo\",
+          \"prompt_to_user\": \"Upload your profile photo (optional). Drag in a JPG, PNG, HEIC, or WEBP image, or paste an image URL.\",
           \"allowed_types\": [\"jpg\", \"jpeg\", \"png\", \"heic\", \"webp\"],
           \"allow_multiple\": false,
           \"allow_url\": true,
@@ -968,6 +973,7 @@ final class OnboardingInterviewService {
         sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
     }
 
+    @MainActor
     private func applicantDisplayName(from json: JSON) -> String? {
         func cleaned(_ value: String?) -> String? {
             guard let value else { return nil }

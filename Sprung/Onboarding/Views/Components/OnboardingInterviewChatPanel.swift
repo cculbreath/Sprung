@@ -26,6 +26,7 @@ struct OnboardingInterviewChatPanel: View {
     @State private var showScrollToLatest = false
     @State private var exportErrorMessage: String?
     @State private var lastMessageCount: Int = 0
+    @State private var composerHeight: CGFloat = ChatComposerTextView.minimumHeight
 
     var body: some View {
         let horizontalPadding: CGFloat = 32
@@ -74,11 +75,13 @@ struct OnboardingInterviewChatPanel: View {
                         get: { state.userInput },
                         set: { state.userInput = $0 }
                     ),
-                    isEditable: service.isActive
-                ) { text in
-                    send(text)
-                }
-                .frame(minHeight: 44, maxHeight: 140)
+                    isEditable: service.isActive,
+                    onSubmit: { text in
+                        send(text)
+                    },
+                    measuredHeight: $composerHeight
+                )
+                .frame(height: min(max(composerHeight, 44), 140))
                 .padding(2)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)

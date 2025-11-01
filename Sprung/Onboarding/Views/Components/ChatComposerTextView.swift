@@ -2,9 +2,13 @@ import AppKit
 import SwiftUI
 
 struct ChatComposerTextView: NSViewRepresentable {
+    static let minimumHeight: CGFloat = 36
+
     @Binding var text: String
     var isEditable: Bool
     var onSubmit: (String) -> Void
+    @Binding var measuredHeight: CGFloat
+    var maxLines: Int = 4
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -25,8 +29,12 @@ struct ChatComposerTextView: NSViewRepresentable {
         textView.usesFindPanel = true
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.heightTracksTextView = false
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        if let container = textView.textContainer {
+            container.widthTracksTextView = true
+            container.heightTracksTextView = false
+            container.size = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        }
         textView.textContainerInset = NSSize(width: 6, height: 6)
         textView.font = NSFont.preferredFont(forTextStyle: .body)
         textView.backgroundColor = NSColor.controlBackgroundColor
@@ -46,6 +54,7 @@ struct ChatComposerTextView: NSViewRepresentable {
         scrollView.documentView = textView
         coordinator.parent = self
         context.coordinator.textView = textView
+        coordinator.updateHeight(for: textView)
         return scrollView
     }
 
@@ -60,6 +69,7 @@ struct ChatComposerTextView: NSViewRepresentable {
         textView.isEditable = isEditable
         textView.isSelectable = isEditable
         context.coordinator.parent = self
+        context.coordinator.updateHeight(for: textView)
     }
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
@@ -77,6 +87,7 @@ struct ChatComposerTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             parent.text = textView.string
+            updateHeight(for: textView)
         }
 
         func submit() {
@@ -86,6 +97,29 @@ struct ChatComposerTextView: NSViewRepresentable {
         func invalidate() {
             textView?.delegate = nil
             textView?.onReturn = nil
+        }
+
+        func updateHeight(for textView: NSTextView) {
+            guard let container = textView.textContainer, let layoutManager = textView.layoutManager else {
+                DispatchQueue.main.async {
+                    self.parent.measuredHeight = ChatComposerTextView.minimumHeight
+                }
+                return
+            }
+
+            layoutManager.ensureLayout(for: container)
+            let usedRect = layoutManager.usedRect(for: container)
+            let insets = textView.textContainerInset
+            let font = textView.font ?? NSFont.preferredFont(forTextStyle: .body)
+            let lineHeight = layoutManager.defaultLineHeight(for: font)
+            let minHeight = max(ChatComposerTextView.minimumHeight, (lineHeight + (insets.height * 2)) * 0.8)
+            let maxHeight = minHeight * CGFloat(parent.maxLines)
+            let contentHeight = usedRect.height + (insets.height * 2)
+            let clampedHeight = min(max(contentHeight, minHeight), maxHeight)
+
+            DispatchQueue.main.async {
+                self.parent.measuredHeight = clampedHeight
+            }
         }
     }
 }

@@ -726,6 +726,12 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Validation Prompts
 
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt, continuationId: UUID) {
+        // Store skeleton timeline data when it's submitted for validation
+        if prompt.dataType == "skeleton_timeline" {
+            storeSkeletonTimeline(prompt.payload)
+            Logger.info("📝 Stored skeleton timeline from validation submission", category: .ai)
+        }
+
         toolRouter.presentValidationPrompt(prompt, continuationId: continuationId)
     }
 

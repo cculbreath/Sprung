@@ -20,6 +20,10 @@ struct GetUserUploadTool: InterviewTool {
                     type: .string,
                     description: "Expected file category (resume, coverletter, portfolio, transcript, certificate, other)."
                 ),
+                "title": JSONSchema(
+                    type: .string,
+                    description: "Optional custom title for the upload card (e.g., 'Upload Photo'). If not provided, a title will be auto-generated from upload_type."
+                ),
                 "prompt_to_user": JSONSchema(
                     type: .string,
                     description: "Instructions to display alongside the upload UI."
@@ -176,8 +180,17 @@ private struct UploadRequestPayload {
             targetKey = nil
         }
 
+        // Use custom title if provided, otherwise generate from kind
+        let cardTitle: String
+        if let customTitle = json["title"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !customTitle.isEmpty {
+            cardTitle = customTitle
+        } else {
+            cardTitle = UploadRequestPayload.title(for: kind)
+        }
+
         self.metadata = OnboardingUploadMetadata(
-            title: UploadRequestPayload.title(for: kind),
+            title: cardTitle,
             instructions: prompt,
             accepts: normalized,
             allowMultiple: allowMultiple,

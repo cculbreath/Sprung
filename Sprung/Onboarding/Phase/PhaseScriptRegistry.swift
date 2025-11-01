@@ -85,6 +85,11 @@ final class PhaseScriptRegistry {
 
         ## TOOL USAGE RULES
 
+        - **CRITICAL**: UI elements (forms, cards, upload panels) ONLY appear when you call the corresponding tool. Mentioning them in text does NOT make them visible.
+        - **INCORRECT**: Saying "I'll show you the upload form now" or "surfacing the resume upload"
+        - **CORRECT**: Actually calling get_user_upload tool immediately
+        - **Rule**: If you need a UI element, call the tool BEFORE or INSTEAD OF describing it in text
+
         - Always prefer tools instead of free-form instructions when gathering data
         - Use extract_document for ALL PDF/DOCX files—it returns semantically-enhanced text with layout preservation
         - After extraction, YOU parse the text yourself to build structured data (applicant profiles, timelines)
