@@ -64,6 +64,11 @@ final class OnboardingInterviewService {
     @ObservationIgnored private let dataStore = InterviewDataStore()
     @ObservationIgnored private let knowledgeCardAgent: KnowledgeCardAgent?
     @ObservationIgnored let coordinator: OnboardingInterviewCoordinator // All onboarding state lives here; service only exposes a façade
+    private let iso8601Formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
     private var validationRetryCounts: [String: Int] = [:]
     var applicantProfileJSON: JSON? { coordinator.applicantProfileJSON }
     var skeletonTimelineJSON: JSON? { coordinator.skeletonTimelineJSON }
@@ -133,7 +138,6 @@ final class OnboardingInterviewService {
         let registry = coordinator.toolRegistry
         registry.register(GetUserOptionTool(service: self))
         registry.register(SubmitForValidationTool(service: self))
-        registry.register(ValidateApplicantProfileTool(service: self))
         registry.register(PersistDataTool(dataStore: dataStore))
         registry.register(GetMacOSContactCardTool())
         registry.register(GetApplicantProfileTool(service: self))
@@ -431,11 +435,14 @@ final class OnboardingInterviewService {
 
     func completeApplicantProfileDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         guard let result = coordinator.completeApplicantProfileDraft(draft, source: source) else { return }
-        let (continuationId, payload) = result
+        let (continuationId, rawPayload) = result
+        var payload = rawPayload
         coordinator.updateWaitingState(nil)
         let sourceTag: String = (source == .contacts) ? "contacts" : "manual"
         let dataJSON = payload["data"]
         if dataJSON != .null {
+            let enrichedDataJSON = applyUserValidationMetadataToPayload(dataJSON, via: sourceTag)
+            payload["data"] = enrichedDataJSON
             let note: String
             if source == .contacts {
                 note = "Data imported from macOS Contacts. User confirmed details in the intake card; treat as authoritative."
@@ -445,9 +452,9 @@ final class OnboardingInterviewService {
             sendApplicantProfileIntakeStatus(
                 source: sourceTag,
                 note: note,
-                payload: dataJSON
+                payload: enrichedDataJSON
             )
-            await persistApplicantProfile(dataJSON)
+            await persistApplicantProfile(enrichedDataJSON)
         }
         recordObjective(
             "contact_data_collected",
@@ -794,6 +801,14 @@ final class OnboardingInterviewService {
         sendDeveloperStatus(title: message.title, details: message.details, payload: message.payload)
     }
 
+    private func applyUserValidationMetadataToPayload(_ json: JSON, via channel: String) -> JSON {
+        var enriched = json
+        enriched["meta"]["validation_state"].string = "user_validated"
+        enriched["meta"]["validated_via"].string = channel
+        enriched["meta"]["validated_at"].string = iso8601Formatter.string(from: Date())
+        return enriched
+    }
+
     func persistApplicantProfile(_ json: JSON) async {
         let displayName = applicantDisplayName(from: json)
 
@@ -945,7 +960,27 @@ final class OnboardingInterviewService {
     }
 
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async -> JSON {
-        let updatedTimeline = await persistTimeline(cards: cards, meta: meta)
+        let baseMeta: JSON = {
+            if let meta, meta != .null {
+                return meta
+            }
+            return JSON()
+        }()
+        var enrichedMeta = baseMeta
+        enrichedMeta["validation_state"].string = "user_validated"
+        enrichedMeta["validated_via"].string = "timeline_editor"
+        enrichedMeta["validated_at"].string = iso8601Formatter.string(from: Date())
+
+        let updatedTimeline = await persistTimeline(cards: cards, meta: enrichedMeta)
+        recordObjective(
+            "skeleton_timeline",
+            status: .completed,
+            source: "timeline_editor",
+            details: [
+                "validated_via": "timeline_editor",
+                "validated_at": enrichedMeta["validated_at"].stringValue
+            ]
+        )
         sendTimelineUserEdit(diff: diff, payload: updatedTimeline)
         return updatedTimeline
     }

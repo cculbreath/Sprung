@@ -10,6 +10,15 @@ import Foundation
 import SwiftyJSON
 import SwiftOpenAI
 
+private struct ToolChoiceOverride {
+    enum Mode {
+        case require(tools: [String])
+        case auto
+    }
+
+    let mode: Mode
+}
+
 actor InterviewOrchestrator {
     // MARK: - Error Handling
 
@@ -51,7 +60,6 @@ actor InterviewOrchestrator {
         .phase1CoreFacts: [
             "get_user_option",
             "get_applicant_profile",
-            "validate_applicant_profile",
             "get_user_upload",
             "get_macos_contact_card",
             "extract_document",
@@ -116,6 +124,13 @@ actor InterviewOrchestrator {
     private var pendingToolContinuations: [UUID: CheckedContinuation<JSON, Error>] = [:]
     private var applicantProfileData: JSON?
     private var skeletonTimelineData: JSON?
+    private var nextToolChoiceOverride: ToolChoiceOverride?
+    private let timelineToolNames: Set<String> = [
+        "create_timeline_card",
+        "update_timeline_card",
+        "reorder_timeline_cards",
+        "delete_timeline_card"
+    ]
 
     init(
         client: OpenAIService,
@@ -553,7 +568,29 @@ actor InterviewOrchestrator {
         }
 
         let session = await state.currentSession()
-        let allowedToolNames = allowedToolNames(for: session)
+        let baseAllowedToolNames = allowedToolNames(for: session)
+        let pendingOverride = nextToolChoiceOverride
+        nextToolChoiceOverride = nil
+
+        var effectiveAllowedToolNames = baseAllowedToolNames
+        var overrideMode: AllowedToolsChoice.Mode = .auto
+
+        if let pendingOverride {
+            switch pendingOverride.mode {
+            case .auto:
+                break
+            case .require(let tools):
+                let overrideSet = Set(tools)
+                let intersection = baseAllowedToolNames.intersection(overrideSet)
+                if intersection.isEmpty {
+                    Logger.warning("⚠️ Tool override could not locate any allowed timeline tools; falling back to phase defaults.", category: .ai)
+                } else {
+                    effectiveAllowedToolNames = intersection
+                    overrideMode = .required
+                    Logger.debug("🧭 Applying one-shot tool override for timeline creation: \(intersection.sorted().joined(separator: \", \"))", category: .ai)
+                }
+            }
+        }
 
         let config = ModelProvider.forTask(.orchestrator)
         let textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
@@ -571,7 +608,7 @@ actor InterviewOrchestrator {
             text: textConfig
         )
         parameters.parallelToolCalls = false
-        let toolSchemas = await toolExecutor.availableToolSchemas(allowedNames: allowedToolNames)
+        let toolSchemas = await toolExecutor.availableToolSchemas(allowedNames: effectiveAllowedToolNames)
         parameters.tools = toolSchemas
         let availableToolNames: [String] = toolSchemas.compactMap { schema in
             switch schema {
@@ -583,7 +620,7 @@ actor InterviewOrchestrator {
         }
         if !availableToolNames.isEmpty {
             let allowedToolEntries = availableToolNames.sorted().map { AllowedToolsChoice.AllowedTool(name: $0) }
-            parameters.toolChoice = .allowedTools(AllowedToolsChoice(mode: .auto, tools: allowedToolEntries))
+            parameters.toolChoice = .allowedTools(AllowedToolsChoice(mode: overrideMode, tools: allowedToolEntries))
         }
 
         if let effort = config.defaultReasoningEffort {
@@ -976,9 +1013,7 @@ actor InterviewOrchestrator {
         case "submit_for_validation":
             var sanitized = payload
             if sanitized["data"] != .null {
-                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
-                let channel = sanitized["data_type"].string ?? "validation"
-                data = attachValidationMetaIfNeeded(to: data, defaultChannel: channel)
+                let data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
                 sanitized["data"] = data
             }
             if sanitized["changes"] != .null {
@@ -1151,5 +1186,10 @@ actor InterviewOrchestrator {
         }
 
         return Set(tools)
+    }
+
+    func scheduleTimelineToolEnforcement() {
+        nextToolChoiceOverride = ToolChoiceOverride(mode: .require(tools: Array(timelineToolNames)))
+        Logger.debug("🧭 Scheduled timeline tool enforcement for next LLM call.", category: .ai)
     }
 }
