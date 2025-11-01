@@ -587,7 +587,8 @@ actor InterviewOrchestrator {
                 } else {
                     effectiveAllowedToolNames = intersection
                     overrideMode = .required
-                    Logger.debug("🧭 Applying one-shot tool override for timeline creation: \(intersection.sorted().joined(separator: \", \"))", category: .ai)
+                    let forcedList = intersection.sorted().joined(separator: ", ")
+                    Logger.debug("🧭 Applying one-shot tool override for timeline creation: \(forcedList)", category: .ai)
                 }
             }
         }

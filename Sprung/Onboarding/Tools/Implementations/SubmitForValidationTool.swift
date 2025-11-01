@@ -167,6 +167,55 @@ struct SubmitForValidationTool: InterviewTool {
     }
 }
 
+private extension SubmitForValidationTool {
+    func autoApproveIfNeeded(for payload: ValidationPayload, validationState: String) async -> ToolResult? {
+        guard validationState == "user_validated" else { return nil }
+
+        switch payload.canonicalType {
+        case "applicant_profile":
+            await service.resetValidationRetry(for: payload.canonicalType)
+            let sanitizedData = ApplicantProfileDraft.removeHiddenEmailOptions(from: payload.payload)
+            await service.persistApplicantProfile(sanitizedData)
+            let response = makeAutoApprovalResponse(data: sanitizedData, sourcePayload: payload.payload)
+
+            await service.recordObjective(
+                "contact_data_validated",
+                status: .completed,
+                source: "auto_validator",
+                details: ["reason": "already_validated"]
+            )
+
+            Logger.info("✅ Auto-approved applicant profile validation (already validated).", category: .ai)
+            return .immediate(response)
+
+        case "skeleton_timeline", "experience", "education":
+            await service.resetValidationRetry(for: payload.canonicalType)
+            let response = makeAutoApprovalResponse(data: payload.payload, sourcePayload: payload.payload)
+            Logger.info("✅ Auto-approved \(payload.canonicalType) validation (already validated).", category: .ai)
+            return .immediate(response)
+
+        default:
+            return nil
+        }
+    }
+
+    func makeAutoApprovalResponse(data: JSON, sourcePayload: JSON) -> JSON {
+        var response = JSON()
+        response["status"].string = "approved"
+        response["message"].string = "Validated data automatically approved."
+        response["approvedAt"].string = dateFormatter.string(from: Date())
+        response["data"] = data
+
+        var meta = JSON()
+        meta["reason"].string = "already_validated"
+        meta["validated_via"] = sourcePayload["meta"]["validated_via"]
+        meta["validated_at"] = sourcePayload["meta"]["validated_at"]
+        response["metadata"] = meta
+
+        return response
+    }
+}
+
 private struct ValidationPayload {
     let dataType: String
     let canonicalType: String
