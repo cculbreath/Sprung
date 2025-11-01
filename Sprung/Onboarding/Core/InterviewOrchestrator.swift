@@ -344,33 +344,22 @@ actor InterviewOrchestrator {
             throw ToolError.executionFailed("Document extraction did not yield text content.")
         }
         if artifact != .null {
-            do {
-                await callbacks.updateExtractionProgress(
-                    ExtractionProgressUpdate(
-                        stage: .artifactSave,
-                        state: .active,
-                        detail: artifact["filename"].string
-                    )
+            await callbacks.updateExtractionProgress(
+                ExtractionProgressUpdate(
+                    stage: .artifactSave,
+                    state: .active,
+                    detail: artifact["filename"].string
                 )
-                await callbacks.storeArtifactRecord(artifact)
-                await persistData(artifact, as: "artifact_record")
-                await callbacks.updateExtractionProgress(
-                    ExtractionProgressUpdate(
-                        stage: .artifactSave,
-                        state: .completed,
-                        detail: artifact["filename"].string
-                    )
+            )
+            await callbacks.storeArtifactRecord(artifact)
+            await persistData(artifact, as: "artifact_record")
+            await callbacks.updateExtractionProgress(
+                ExtractionProgressUpdate(
+                    stage: .artifactSave,
+                    state: .completed,
+                    detail: artifact["filename"].string
                 )
-            } catch {
-                await callbacks.updateExtractionProgress(
-                    ExtractionProgressUpdate(
-                        stage: .artifactSave,
-                        state: .failed,
-                        detail: error.localizedDescription
-                    )
-                )
-                throw error
-            }
+            )
         } else {
             await callbacks.updateExtractionProgress(
                 ExtractionProgressUpdate(
@@ -609,6 +598,7 @@ actor InterviewOrchestrator {
         var messageIdByOutputItem: [String: UUID] = [:]
         var reasoningSummaryBuffers: [String: String] = [:]
         var reasoningSummaryFinalized: Set<String> = []
+        var pendingSummaryByItem: [String: String] = [:]
         let flushCharacters: Set<Character> = [" ", "\n", "\t", ".", ",", "?", "!", ";", ":"]
         let streamingStart = Date()
         var silenceTask: Task<Void, Never>?
@@ -637,12 +627,16 @@ actor InterviewOrchestrator {
 
         func deliverSummary(for itemId: String, isFinalOverride: Bool?) async {
             guard let summary = reasoningSummaryBuffers[itemId] else { return }
-            guard let messageId = messageIdByOutputItem[itemId] else { return }
+            guard let messageId = messageIdByOutputItem[itemId] else {
+                pendingSummaryByItem[itemId] = summary
+                return
+            }
             let isFinal = isFinalOverride ?? reasoningSummaryFinalized.contains(itemId)
             await callbacks.updateReasoningSummary(messageId, summary, isFinal)
             if isFinal {
                 reasoningSummaryBuffers.removeValue(forKey: itemId)
                 reasoningSummaryFinalized.remove(itemId)
+                pendingSummaryByItem.removeValue(forKey: itemId)
             }
         }
 
@@ -686,6 +680,9 @@ actor InterviewOrchestrator {
                     }
                     if messageIdByOutputItem[delta.itemId] == nil {
                         messageIdByOutputItem[delta.itemId] = buffer!.messageId
+                        if pendingSummaryByItem[delta.itemId] != nil {
+                            await deliverSummary(for: delta.itemId, isFinalOverride: nil)
+                        }
                     }
                     if buffer!.firstDeltaLogged == false {
                         let latencyMs = Int(Date().timeIntervalSince(streamingStart) * 1000)
@@ -722,6 +719,9 @@ actor InterviewOrchestrator {
                     }
                     if messageIdByOutputItem[done.itemId] == nil {
                         messageIdByOutputItem[done.itemId] = buffer!.messageId
+                        if pendingSummaryByItem[done.itemId] != nil {
+                            await deliverSummary(for: done.itemId, isFinalOverride: nil)
+                        }
                     }
                     buffer!.pendingFragment.removeAll(keepingCapacity: false)
                     streamBuffers[done.itemId] = buffer!
@@ -822,6 +822,7 @@ actor InterviewOrchestrator {
         var messageIds = messageIdByOutputItem
         var lastMessageUUID: UUID?
         var appendedMessageUUIDs: [UUID] = []
+        var pendingSummaryFragments: [String] = []
 
         for item in response.output {
             switch item {
@@ -837,6 +838,11 @@ actor InterviewOrchestrator {
                 messageIds[message.id] = messageUUID
                 lastMessageUUID = messageUUID
                 appendedMessageUUIDs.append(messageUUID)
+                if !pendingSummaryFragments.isEmpty {
+                    let combined = pendingSummaryFragments.joined(separator: "\n\n")
+                    await callbacks.updateReasoningSummary(messageUUID, combined, true)
+                    pendingSummaryFragments.removeAll(keepingCapacity: true)
+                }
             case .reasoning(let reasoning):
                 let summaryText = reasoning.summary
                     .map(\.text)
@@ -844,17 +850,22 @@ actor InterviewOrchestrator {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !summaryText.isEmpty else { continue }
 
-                let targetId = lastMessageUUID ?? messageIds[reasoning.id]
-                guard let messageUUID = targetId else {
-                    Logger.debug("Reasoning summary received without matching message (reasoning id: \(reasoning.id)).")
-                    continue
+                if let currentMessage = lastMessageUUID {
+                    await callbacks.updateReasoningSummary(currentMessage, summaryText, true)
+                } else if let mappedMessage = messageIds[reasoning.id] {
+                    await callbacks.updateReasoningSummary(mappedMessage, summaryText, true)
+                } else {
+                    pendingSummaryFragments.append(summaryText)
                 }
-                await callbacks.updateReasoningSummary(messageUUID, summaryText, true)
             case .functionCall(let functionCall):
                 try await handleFunctionCall(functionCall)
             default:
                 continue
             }
+        }
+
+        if !pendingSummaryFragments.isEmpty {
+            Logger.debug("Reasoning summaries received without any assistant message in response (count: \(pendingSummaryFragments.count)).")
         }
         return appendedMessageUUIDs
     }
