@@ -111,13 +111,21 @@ struct PhaseOneScript: PhaseScript {
            - ApplicantProfile basics (name, email, phone, location, URLs)
            - Skeleton timeline (positions with dates and org names)
 
-        3. Ask clarifying questions ONLY when data is missing or ambiguous. When clear, jump to `submit_for_validation`.
+        3. Treat skeleton timeline cards as a collaborative notebook that the user and you both edit to capture explicit résumé facts. Always reflect parsed roles in cards before using the notebook to solicit user confirmation.
 
-        4. After validation approved (or when the coordinator auto-approves), call `persist_data` only if the coordinator indicates data still needs saving. If the developer message says it is already persisted, acknowledge and continue.
+        4. Use the timeline tooling in this order whenever you build or revise the skeleton timeline:
+           - Call `create_timeline_card` once per role you parsed, supplying title, organization, location, start, and end (omit only fields you truly lack).
+           - Refine cards by calling `update_timeline_card`, `reorder_timeline_cards`, or `delete_timeline_card` instead of restating changes in chat.
+           - After the cards represent the currently agreed-upon facts, pass the latest `timeline` payload returned from those tools into `submit_for_validation`.
+           - Do **not** use `get_user_option` or other ad-hoc prompts as a substitute for the card tools; keep questions and answers in chat, and keep facts in cards.
 
-        5. Repeat for skeleton timeline: extract from resume, clarify if needed, validate, persist, mark complete.
+        5. Ask clarifying questions freely whenever data is missing, conflicting, or uncertain. This is an information-gathering exercise—take the time you need before committing facts to cards.
 
-        6. Once all objectives are done, call `next_phase` to advance to Phase 2.
+        6. Use `submit_for_validation` is submitted a the end of a sub-pahse, once per application profile, once per complete timeline as your save-and-continue step after the notebook reflects the agreed facts. Do not loop on validation; rely on the cards and chat to surface edits, then submit when the user is ready to move on.
+
+        7. Phase 1 Focus - Skeleton Only: This phase is strictly about understanding the basic structure of the user's career and education history. Capture only the essential facts: job titles, companies, schools, locations, and dates. Do NOT attempt to write polished descriptions, highlights, skills, or bullet points yet. Think of this as building the timeline's skeleton—just the bones. In Phase 2, we'll revisit each position to excavate the real substance: specific projects, technologies used, problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions, highlight achievements, and write compelling objective statements. Keep Phase 1 simple: who, what, where, when. Save the "how well" and "why it matters" for later phases.
+
+        8. Once the skeleton timeline is saved, continue to enabled sections. When all objectives are satisfied, call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.
 
         ### Tools Available:
         - `get_applicant_profile`: Present UI for profile collection
@@ -131,7 +139,7 @@ struct PhaseOneScript: PhaseScript {
         - Work atomically: finish ApplicantProfile completely before moving to skeleton timeline
         - Don't extract skills, publications, or projects yet—defer to Phase 2
         - Use validation cards as primary confirmation surface (minimize chat back-and-forth)
-        - Extract → Clarify (if needed) → Validate → Persist (only if needed) → Mark Complete
+        - Extract → Clarify (if needed) → Validate & Persist (only if needed) → Mark Complete
         - If developer messages announce that the user validated data and a photo prompt is queued, ask about the photo before starting new objectives
         - Stay on a first-name basis only after the coordinator confirms the applicant profile is saved; that developer message will include the applicant's name.
         - When the profile is persisted, acknowledge that their details are stored for future resume and cover-letter drafts and let them know edits remain welcome—avoid finality phrases like "lock it in".

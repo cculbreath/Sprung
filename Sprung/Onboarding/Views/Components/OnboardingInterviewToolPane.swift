@@ -13,7 +13,8 @@ struct OnboardingInterviewToolPane: View {
 
     var body: some View {
         let paneOccupied = isPaneOccupied(service: service, coordinator: coordinator)
-        let showSpinner = service.isProcessing && (service.pendingExtraction != nil || !paneOccupied)
+        let isLLMActive = service.isProcessing || coordinator.pendingStreamingStatus != nil
+        let showSpinner = service.pendingExtraction != nil || (!paneOccupied && isLLMActive)
 
         return VStack(alignment: .leading, spacing: 16) {
             if service.pendingExtraction != nil {

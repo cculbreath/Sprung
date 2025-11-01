@@ -56,12 +56,12 @@ struct ResumeSectionsToggleCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 ResumeSectionToggleGrid(draft: $draft, recommended: recommendedSections)
-                    .padding(.horizontal, 2)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
             }
-            .frame(maxHeight: 280)
+            .frame(maxHeight: 240)
 
             HStack {
                 Button("Cancel", action: onCancel)
@@ -76,7 +76,7 @@ struct ResumeSectionsToggleCard: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(nsColor: .underPageBackgroundColor))
+                .fill(Color(nsColor: .controlBackgroundColor))
         )
     }
 }
@@ -86,8 +86,8 @@ private struct ResumeSectionToggleGrid: View {
     let recommended: Set<ExperienceSectionKey>
 
     private let columns = [
-        GridItem(.flexible(minimum: 160), spacing: 16),
-        GridItem(.flexible(minimum: 160), spacing: 16)
+        GridItem(.flexible(minimum: 140), spacing: 12),
+        GridItem(.flexible(minimum: 140), spacing: 12)
     ]
 
     var body: some View {

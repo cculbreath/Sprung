@@ -1,0 +1,47 @@
+Here's an annotated log of the latest run through the onboarding work flow. [user actions in square brackets]
+{my commentary and instructions in curly braces}
+
+{Starting onboarding interview by clicking button on welcome page of wizard surfaces a do you want to resume or start over dialog in every situation -- even following a full reset of the datastore}
+
+[10/31/25, 2:50 PM] Assistant:
+Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.
+
+Once you complete the form to the left we can continue.
+
+[User chooses import contact card]
+
+
+[10/31/25, 2:51 PM] Assistant:
+Christopher, your contact details are saved and ready to reuse for future resumes and cover letters. You can update anything at any time—nothing is locked in.
+
+Would you like to add a profile photo now? It’s optional and you can skip if you prefer. Once you complete the upload to the left we can continue.
+
+{App should check for existing ApplicantProfile image before proceeding with photo workflow. If one already exists, GPT-5 should be made aware of it and instructed to ask user if they want to replace it or continue using what they've got. Photo upload form is titled "upload form" -- can we update prompting (if straightfoward) to surface upload form with "Upload Photo" title instead?}
+
+[User provides photo]
+
+[10/31/25, 2:52 PM] Assistant:
+Thanks—photo received and added.
+
+Next, let’s build your career timeline. If you have a resume, upload it and I’ll extract your roles and dates automatically. You can also paste a URL if that’s easier. Once you complete the upload to the left we can continue.
+
+{Auto scroll to bottom at message end isn't working
+The thinking spinner is never shown. Is that becuase server is not providing thinking summaries or are we mishandling them see ./contextlog.txt }
+
+{No resume upload form was provided, this a critical regression from the behavior reflected in pre-refactor conversation see /Users/cculbreath/devlocal/codebase/Sprung/onboarding-feature-dev-docs/annotated_convo.txt}
+
+[10/31/25, 2:52 PM] User:
+No resume upload form is shown
+
+[10/31/25, 2:53 PM] Assistant:
+Thanks for the heads up—surfacing the resume upload now.
+
+Once you complete the form to the left we can continue. If you’d prefer to skip uploads and enter your timeline manually, just say “manual.”
+
+[User provides resume PDF after some time app surfaces section selector]
+
+Assistant: I’ve drafted your high-level career timeline from the resume. Please review the card to the left and confirm or edit any titles, organizations, or dates. Once you complete the form to the left we can continue.
+
+{NO EXPERIENCE EDITOR CARDS DISPLAYED - this is a critical regressionn relative to /Users/cculbreath/devlocal/codebase/Sprung/onboarding-feature-dev-docs/annotated_convo.txt See /Users/cculbreath/devlocal/codebase/Sprung/ExecPlans/dev_b_chat_conversation_cards.md
+
+The sections enable view is awful, background is too dark, it's too tall,, and if bigger than containing overlay view it should just extend beyond the overlay edges not be cropped by the surrounding box as it currently is -- make it smaller and scrollable, and much better looking screenshot here: /Users/cculbreath/Desktop/sections-enable.png}
