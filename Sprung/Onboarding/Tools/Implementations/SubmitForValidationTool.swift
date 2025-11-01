@@ -14,7 +14,7 @@ struct SubmitForValidationTool: InterviewTool {
         let properties: [String: JSONSchema] = [
             "dataType": JSONSchema(
                 type: .string,
-                description: "Type of data being validated. e.g. applicantProfile, experience, education, knowledgeCard."
+                description: "Type of data being validated. Supported values: \"applicant_profile\", \"skeleton_timeline\", \"experience\", or \"education\"."
             ),
             "data": JSONSchema(
                 type: .object,
@@ -45,7 +45,7 @@ struct SubmitForValidationTool: InterviewTool {
 
     var name: String { "submit_for_validation" }
     var description: String {
-        "Present a structured payload to the user for confirmation. Call this after you have finished populating the `data` object for the specified `dataType`. The tool opens the validation UI, collects either an approval or requested edits, and returns a structured result. When the user still needs to act, the tool responds with a waiting status so you can resume later. Applicant profile payloads that already include `meta.validation_state == \"user_validated\"` are auto-approved and returned immediately."
+        "Present a structured payload to the user for confirmation. Call this after you have finished populating the `data` object for the specified `dataType`. The tool opens the validation UI, collects either an approval or requested edits, and returns a structured result. When the user still needs to act, the tool responds with a waiting status so you can resume later. Applicant profile payloads that already include `meta.validation_state == \"user_validated\"` are auto-approved and returned immediately; skeleton timeline (including `skeleton_timeline`, `experience`, or `education`) payloads open the modal unless the attached payload already reports `meta.validation_state == \"user_validated\"` from a user editor save."
     }
     var parameters: JSONSchema { Self.schema }
 
@@ -88,9 +88,10 @@ struct SubmitForValidationTool: InterviewTool {
         }
 
         let payload = try ValidationPayload(json: normalizedParams)
+        let validationState = payload.payload["meta"]["validation_state"].stringValue.lowercased()
 
         if payload.isApplicantProfile,
-           payload.payload["meta"]["validation_state"].stringValue.lowercased() != "user_validated" {
+           validationState != "user_validated" {
             await service.recordObjective(
                 "contact_data_collected",
                 status: .inProgress,
@@ -98,32 +99,8 @@ struct SubmitForValidationTool: InterviewTool {
             )
         }
 
-        if payload.isApplicantProfile,
-           payload.payload["meta"]["validation_state"].stringValue.lowercased() == "user_validated" {
-            await service.resetValidationRetry(for: canonicalType)
-            let sanitizedData = ApplicantProfileDraft.removeHiddenEmailOptions(from: payload.payload)
-            await service.persistApplicantProfile(sanitizedData)
-
-            var response = JSON()
-            response["status"].string = "approved"
-            response["message"].string = "Validated data automatically approved."
-            response["data"] = sanitizedData
-
-            var meta = JSON()
-            meta["reason"].string = "already_validated"
-            meta["validated_via"] = payload.payload["meta"]["validated_via"]
-            meta["validated_at"] = payload.payload["meta"]["validated_at"]
-            response["metadata"] = meta
-
-            await service.recordObjective(
-                "contact_data_validated",
-                status: .completed,
-                source: "auto_validator",
-                details: ["reason": "already_validated"]
-            )
-
-            Logger.info("✅ Auto-approved applicant profile validation (already validated).", category: .ai)
-            return .immediate(response)
+        if let autoApproval = await autoApproveIfNeeded(for: payload, validationState: validationState) {
+            return autoApproval
         }
 
         let tokenId = UUID()

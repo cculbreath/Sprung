@@ -9,7 +9,9 @@ struct DeveloperMessageTemplates {
     }
 
     static func contactIntakeCompleted(source: String, note: String, payload: JSON) -> Message {
-        let title = "Applicant profile intake complete. \(note) Coordinator has already persisted these details; skip submit_for_validation/persist_data and avoid re-asking unless new info arrives. Move to the next objective."
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notePrefix = trimmedNote.isEmpty ? "" : "\(trimmedNote) "
+        let title = "Applicant profile intake complete. \(notePrefix)Coordinator has already persisted the applicant profile. If you present profile validation it will auto-approve. Do not re-persist the profile. Proceed to skeleton timeline."
         let details: [String: String] = [
             "source": source,
             "validation_state": payload["meta"]["validation_state"].stringValue,
@@ -177,13 +179,16 @@ struct DeveloperMessageTemplates {
             details["updated_cards"] = summary.joined(separator: " | ")
         }
 
-        let title = "Timeline cards updated by the user. Honor these edits when proposing future changes."
+        let title = "Timeline cards updated by the user. Treat the attached payload as user_validated; proceed to enabled_sections. Do not call submit_for_validation unless introducing new, unreviewed facts."
 
-        return Message(
-            title: title,
-            details: details,
-            payload: payload
-        )
+        if let validationState = payload["meta"]["validation_state"].string, !validationState.isEmpty {
+            details["validation_state"] = validationState
+        }
+        if let validatedVia = payload["meta"]["validated_via"].string, !validatedVia.isEmpty {
+            details["validated_via"] = validatedVia
+        }
+
+        return Message(title: title, details: details, payload: payload)
     }
 }
 
