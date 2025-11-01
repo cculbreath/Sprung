@@ -576,6 +576,11 @@ final class OnboardingInterviewCoordinator {
             return
         }
 
+        let metadata = artifact["metadata"]
+        let purpose = metadata["purpose"].string?.lowercased()
+        let extractedContent = artifact["extracted_content"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldEnforceTimelineTools = (purpose == "resume_timeline") && !extractedContent.isEmpty
+
         artifacts.artifactRecords.removeAll { $0["id"].stringValue == artifactId }
         artifacts.artifactRecords.append(artifact)
 
@@ -583,6 +588,13 @@ final class OnboardingInterviewCoordinator {
         Logger.debug("📦 Artifact record stored (id: \(artifactId), sha256: \(sha))", category: .ai)
         let message = DeveloperMessageTemplates.artifactStored(artifact: artifact)
         enqueueDeveloperStatus(from: message)
+
+        if shouldEnforceTimelineTools {
+            Task { [weak self] in
+                guard let self else { return }
+                await self.orchestrator?.scheduleTimelineToolEnforcement()
+            }
+        }
     }
 
     func artifactRecord(id: String) -> JSON? {
@@ -1300,12 +1312,21 @@ final class OnboardingInterviewCoordinator {
             return
         }
 
+        let metadata = artifact["metadata"]
+        let purpose = metadata["purpose"].string?.lowercased()
+        let extractedContent = artifact["extracted_content"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldEnforceTimelineTools = (purpose == "resume_timeline") && !extractedContent.isEmpty
+
         artifacts.artifactRecords.removeAll { $0["id"].stringValue == artifactId }
         artifacts.artifactRecords.append(artifact)
         let sha = artifact["sha256"].stringValue
         Logger.debug("📦 Artifact record stored (id: \(artifactId), sha256: \(sha))", category: .ai)
         let message = DeveloperMessageTemplates.artifactStored(artifact: artifact)
         enqueueDeveloperStatus(from: message)
+
+        if shouldEnforceTimelineTools {
+            await orchestrator?.scheduleTimelineToolEnforcement()
+        }
     }
 
     private func storeKnowledgeCard(_ card: JSON) async {
