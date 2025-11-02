@@ -69,6 +69,13 @@ struct OnboardingInterviewChatPanel: View {
                 .padding(.top, sectionSpacing)
                 .padding(.horizontal, horizontalPadding)
 
+            if let text = coordinator.latestReasoningSummary, !text.isEmpty {
+                ReasoningStatusBar(text: text)
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.top, 12)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
             HStack(alignment: .bottom, spacing: 12) {
                 ChatComposerTextView(
                     text: Binding(
@@ -122,6 +129,7 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.bottom, bottomPadding)
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
         .alert("Export Failed", isPresented: Binding(
             get: { exportErrorMessage != nil },
             set: { _ in exportErrorMessage = nil }
@@ -235,10 +243,10 @@ struct OnboardingInterviewChatPanel: View {
         proxy.scrollTo(lastId, anchor: .bottom)
     }
 
-    private func exportTranscript() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = defaultTranscriptFilename()
-        panel.allowedContentTypes = [UTType.plainText]
+private func exportTranscript() {
+    let panel = NSSavePanel()
+    panel.nameFieldStringValue = defaultTranscriptFilename()
+    panel.allowedContentTypes = [UTType.plainText]
         panel.canCreateDirectories = true
 
         panel.begin { response in
@@ -261,6 +269,24 @@ struct OnboardingInterviewChatPanel: View {
         formatter.dateFormat = "yyyy-MM-dd HH.mm"
         let stamp = formatter.string(from: Date())
         return "Sprung Transcript \(stamp).txt"
+    }
+}
+
+private struct ReasoningStatusBar: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(text)
+                .font(.footnote)
+                .italic()
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
