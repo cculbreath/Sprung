@@ -4,6 +4,7 @@ enum ObjectiveStatus: String, Codable {
     case pending
     case inProgress = "in_progress"
     case completed
+    case skipped
 }
 
 struct ObjectiveDescriptor {
@@ -37,7 +38,8 @@ struct ObjectiveDescriptor {
             status: initialStatus,
             source: initialSource,
             updatedAt: date,
-            details: details
+            details: details,
+            notes: nil
         )
     }
 }
@@ -49,6 +51,7 @@ struct ObjectiveEntry: Codable, Equatable {
     var source: String
     var updatedAt: Date
     var details: [String: String]?
+    var notes: String?
 }
 
 struct ObjectiveLedgerSnapshot {
@@ -62,7 +65,8 @@ struct ObjectiveLedgerSnapshot {
                     .sorted { $0.key < $1.key }
                     .map { "\($0.key)=\($0.value)" }
                     .joined(separator: "|")
-                return "\($0.id)#\($0.status.rawValue)#\($0.updatedAt.timeIntervalSince1970)#\($0.source)#\(detailString)"
+                let notePart = $0.notes ?? ""
+                return "\($0.id)#\($0.status.rawValue)#\($0.updatedAt.timeIntervalSince1970)#\($0.source)#\(detailString)#\(notePart)"
             }
             .joined(separator: "||")
     }

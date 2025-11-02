@@ -33,14 +33,7 @@ struct InterviewSession: Codable {
 actor InterviewState {
     private(set) var session = InterviewSession()
     private var objectiveLedger: [String: ObjectiveEntry] = [:]
-
-    func completeObjective(_ id: String) async {
-        session.objectivesDone.insert(id)
-    }
-
-    func resetObjective(_ id: String) async {
-        session.objectivesDone.remove(id)
-    }
+    private let defaultSource = "system"
 
     func setWaiting(_ waiting: InterviewSession.Waiting?) async {
         session.waiting = waiting
@@ -70,9 +63,9 @@ actor InterviewState {
         case .phase3WritingCorpus:
             required = ["one_writing_sample", "dossier_complete"]
         case .complete:
-            required = []
+            return []
         }
-        return required.filter { !session.objectivesDone.contains($0) }
+        return required.filter { !isObjective($0, inState: .completed) }
     }
 
     func nextPhase() -> InterviewPhase? {
@@ -132,35 +125,85 @@ actor InterviewState {
                 objectiveLedger[descriptor.id]?.label = descriptor.label
             }
         }
-        session.objectiveLedger = Array(objectiveLedger.values)
+        persistLedger()
     }
 
     func updateObjective(
         id: String,
         status: ObjectiveStatus,
         source: String,
-        details: [String: String]? = nil
+        details: [String: String]? = nil,
+        notes: String? = nil
     ) {
         let now = Date()
-        if var entry = objectiveLedger[id] {
-            entry.status = status
-            entry.source = source
-            entry.details = details ?? entry.details
-            entry.updatedAt = now
-            objectiveLedger[id] = entry
-        } else {
-            var entry = ObjectiveDescriptor(
-                id: id,
-                label: id,
-                phase: session.phase,
-                initialStatus: status,
-                initialSource: source,
-                details: details
-            ).makeEntry(date: now)
-            entry.updatedAt = now
-            objectiveLedger[id] = entry
+        var entry = objectiveLedger[id] ?? ObjectiveDescriptor(
+            id: id,
+            label: id,
+            phase: session.phase,
+            initialStatus: status,
+            initialSource: source,
+            details: details
+        ).makeEntry(date: now)
+
+        entry.status = status
+        entry.source = source
+        if let details {
+            entry.details = details
         }
-        session.objectiveLedger = Array(objectiveLedger.values)
+        if let notes {
+            entry.notes = notes
+        }
+        entry.updatedAt = now
+        objectiveLedger[id] = entry
+        persistLedger()
+    }
+
+    func beginObjective(_ id: String, source: String? = nil, notes: String? = nil) {
+        applyStatusChange(
+            id: id,
+            status: .inProgress,
+            source: source,
+            details: nil,
+            notes: notes
+        )
+    }
+
+    func completeObjective(_ id: String, source: String? = nil, notes: String? = nil) {
+        applyStatusChange(
+            id: id,
+            status: .completed,
+            source: source,
+            details: nil,
+            notes: notes
+        )
+    }
+
+    func skipObjective(_ id: String, reason: String? = nil) {
+        applyStatusChange(
+            id: id,
+            status: .skipped,
+            source: "user_skipped",
+            details: reason.map { ["reason": $0] },
+            notes: reason
+        )
+    }
+
+    func resetObjective(_ id: String) {
+        applyStatusChange(
+            id: id,
+            status: .pending,
+            source: nil,
+            details: nil,
+            notes: nil
+        )
+    }
+
+    func isObjective(_ id: String, inState state: ObjectiveStatus) -> Bool {
+        objectiveLedger[id]?.status == state
+    }
+
+    func objectiveStatus(for id: String) -> ObjectiveStatus? {
+        objectiveLedger[id]?.status
     }
 
     func ledgerSnapshot() -> ObjectiveLedgerSnapshot {
@@ -171,5 +214,34 @@ actor InterviewState {
     func resetLedger() {
         objectiveLedger.removeAll()
         session.objectiveLedger = []
+        session.objectivesDone.removeAll()
+    }
+
+    // MARK: - Helpers
+
+    private func applyStatusChange(
+        id: String,
+        status: ObjectiveStatus,
+        source: String?,
+        details: [String: String]?,
+        notes: String?
+    ) {
+        let resolvedSource = source ?? objectiveLedger[id]?.source ?? defaultSource
+        updateObjective(
+            id: id,
+            status: status,
+            source: resolvedSource,
+            details: details,
+            notes: notes
+        )
+    }
+
+    private func persistLedger() {
+        session.objectiveLedger = Array(objectiveLedger.values)
+        session.objectivesDone = Set(
+            objectiveLedger.values
+                .filter { $0.status == .completed }
+                .map(\.id)
+        )
     }
 }

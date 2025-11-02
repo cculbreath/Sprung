@@ -58,7 +58,7 @@ struct UploadRequestCard: View {
                 Button("Choose File…") {
                     onSelectFile()
                 }
-                Button("Skip") {
+                Button(skipButtonTitle) {
                     onDecline()
                 }
                 .buttonStyle(.borderless)
@@ -79,6 +79,13 @@ struct UploadRequestCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture { onSelectFile() }
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargetHighlighted, perform: handleDrop(providers:))
+    }
+
+    private var skipButtonTitle: String {
+        if request.metadata.targetKey == "basics.image" {
+            return "Skip photo for now"
+        }
+        return "Skip"
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {

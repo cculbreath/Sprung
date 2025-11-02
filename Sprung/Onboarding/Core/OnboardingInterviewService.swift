@@ -387,6 +387,9 @@ final class OnboardingInterviewService {
     ) {
         Logger.info("🧾 Recording objective id=\(id) status=\(status.rawValue) source=\(source)", category: .ai, metadata: details ?? [:])
         coordinator.recordObjectiveStatus(id, status: status, source: source, details: details)
+        if id == "contact_photo_collected" || id == "contact_data_validated" || id == "contact_data_collected" {
+            Task { await coordinator.evaluateApplicantProfileObjective(trigger: "objective_\(id)") }
+        }
     }
 
     // MARK: - Tool continuation helpers
@@ -693,11 +696,15 @@ final class OnboardingInterviewService {
     }
 
     func skipUploadRequest(id: UUID) async {
+        let isPhotoRequest = coordinator.pendingUploadRequests.first(where: { $0.id == id })?.metadata.targetKey == "basics.image"
         guard let result = await coordinator.skipUpload(id: id) else { return }
         let (continuationId, payload) = result
         coordinator.updateWaitingState(nil)
         sendUploadStatus(payload)
         await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
+        if isPhotoRequest {
+            skipApplicantPhoto(reason: "user_skipped")
+        }
     }
 
     func cancelPendingUploadRequest(reason: String?) async -> JSON? {
@@ -935,6 +942,18 @@ final class OnboardingInterviewService {
             details: ["bytes": "\(data.count)"]
         )
         hasContactPhoto = true
+        Task { await coordinator.evaluateApplicantProfileObjective(trigger: "photo_uploaded") }
+    }
+
+    func skipApplicantPhoto(reason: String = "user_skipped") {
+        hasContactPhoto = true
+        recordObjective(
+            "contact_photo_collected",
+            status: .skipped,
+            source: "user_choice",
+            details: ["reason": reason]
+        )
+        Task { await coordinator.evaluateApplicantProfileObjective(trigger: "photo_skipped") }
     }
 
     func fetchRawArtifactFile(artifactId: String) -> (id: String, data: Data, mimeType: String, filename: String, sha256: String?)? {
@@ -1104,7 +1123,7 @@ final class OnboardingInterviewService {
     private func handleObjectiveStatusUpdate(_ update: OnboardingInterviewCoordinator.ObjectiveStatusUpdate) {
         switch update.id {
         case "contact_photo_collected":
-            hasContactPhoto = update.status == .completed
+            hasContactPhoto = update.status == .completed || update.status == .skipped
         default:
             break
         }
