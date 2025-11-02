@@ -50,6 +50,7 @@ final class OnboardingInterviewCoordinator {
     private(set) var pendingStreamingStatus: String?
     private var reasoningSummaryClearTask: Task<Void, Never>?
     var onModelAvailabilityIssue: ((String) -> Void)?
+    private(set) var objectiveStatuses: [String: ObjectiveStatus] = [:]
     private let ledgerDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -87,6 +88,7 @@ final class OnboardingInterviewCoordinator {
         for phase in phasesThrough(session.phase) {
             await interviewState.registerObjectives(ObjectiveCatalog.objectives(for: phase))
         }
+        await refreshObjectiveStatuses()
     }
 
     func recordObjectiveStatus(
@@ -102,17 +104,14 @@ final class OnboardingInterviewCoordinator {
                 source: source,
                 details: details
             )
-            switch status {
-            case .completed:
-                await interviewState.completeObjective(id)
-            case .pending:
-                await interviewState.resetObjective(id)
-            case .inProgress:
-                break
-            }
+            await refreshObjectiveStatuses()
         }
+        objectiveStatuses[id] = status
         enqueueDeveloperMessage(objectiveStatusMessage(id: id, status: status, source: source, details: details))
         notifyObjectiveObservers(id: id, status: status, source: source, details: details)
+        if id == "contact_photo_collected" || id == "contact_data_validated" || id == "contact_data_collected" {
+            Task { await self.evaluateApplicantProfileObjective(trigger: "objective_\(id)") }
+        }
     }
 
     private func objectiveStatusMessage(
@@ -428,6 +427,54 @@ final class OnboardingInterviewCoordinator {
         onModelAvailabilityIssue?(id)
     }
 
+    func evaluateApplicantProfileObjective(trigger: String = "evaluation") async {
+        let currentStatus = await interviewState.objectiveStatus(for: "applicant_profile")
+
+        guard applicantProfileJSON != nil else {
+            if currentStatus != .pending {
+                recordObjectiveStatus(
+                    "applicant_profile",
+                    status: .pending,
+                    source: "system_evaluated",
+                    details: ["reason": "missing_profile", "trigger": trigger]
+                )
+            }
+            return
+        }
+
+        let photoStatus = await interviewState.objectiveStatus(for: "contact_photo_collected")
+        let photoSatisfied = (photoStatus == .completed) || (photoStatus == .skipped)
+
+        let validationStatus = await interviewState.objectiveStatus(for: "contact_data_validated")
+        let validationSatisfied = (validationStatus == nil) || (validationStatus == .completed)
+
+        if photoSatisfied && validationSatisfied {
+            if currentStatus != .completed {
+                recordObjectiveStatus(
+                    "applicant_profile",
+                    status: .completed,
+                    source: "system_evaluated",
+                    details: [
+                        "reason": "profile_ready",
+                        "trigger": trigger
+                    ]
+                )
+            }
+        } else {
+            if currentStatus != .inProgress {
+                var detail: [String: String] = ["trigger": trigger]
+                detail["photo_status"] = photoStatus?.rawValue ?? "missing"
+                detail["validation_status"] = validationStatus?.rawValue ?? "missing"
+                recordObjectiveStatus(
+                    "applicant_profile",
+                    status: .inProgress,
+                    source: "system_evaluated",
+                    details: detail
+                )
+            }
+        }
+    }
+
     func setStreamingStatus(_ status: String?) {
         pendingStreamingStatus = status
     }
@@ -508,13 +555,20 @@ final class OnboardingInterviewCoordinator {
     func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
         let normalized = status.lowercased()
         let ledgerStatus: ObjectiveStatus
+
         switch normalized {
         case "completed":
-            await interviewState.completeObjective(objectiveId)
+            await interviewState.completeObjective(objectiveId, source: "llm_proposed", notes: nil)
             ledgerStatus = .completed
         case "pending", "reset":
             await interviewState.resetObjective(objectiveId)
             ledgerStatus = .pending
+        case "in_progress":
+            await interviewState.beginObjective(objectiveId, source: "llm_proposed", notes: nil)
+            ledgerStatus = .inProgress
+        case "skipped":
+            await interviewState.skipObjective(objectiveId, reason: "llm_proposed")
+            ledgerStatus = .skipped
         default:
             throw ToolError.invalidParameters("Unsupported status: \(status)")
         }
@@ -533,7 +587,7 @@ final class OnboardingInterviewCoordinator {
         var response = JSON()
         response["status"].string = "ok"
         response["objective"].string = objectiveId
-        response["state"].string = normalized == "completed" ? "completed" : "pending"
+        response["state"].string = ledgerStatus.rawValue
         return response
     }
 
@@ -1222,6 +1276,7 @@ final class OnboardingInterviewCoordinator {
             await interviewState.restore(from: InterviewSession())
             restored = false
         }
+        await refreshObjectiveStatuses()
         return restored
     }
 
@@ -1254,6 +1309,7 @@ final class OnboardingInterviewCoordinator {
         }
 
         isProcessing = false
+        await refreshObjectiveStatuses()
         return true
     }
 
@@ -1385,10 +1441,11 @@ final class OnboardingInterviewCoordinator {
         await persistCheckpoint()
         recordObjectiveStatus(
             "applicant_profile",
-            status: .completed,
+            status: .inProgress,
             source: "system_persist",
             details: ["reason": "persisted"]
         )
+        await evaluateApplicantProfileObjective(trigger: "profile_persisted")
     }
 
     private func storeSkeletonTimeline(_ json: JSON) async {
@@ -1466,6 +1523,7 @@ final class OnboardingInterviewCoordinator {
         isActive = false
         updateWaitingState(nil)
         clearLatestReasoningSummary()
+        objectiveStatuses.removeAll()
         Task { await self.interviewState.resetLedger() }
     }
 
@@ -1490,6 +1548,13 @@ final class OnboardingInterviewCoordinator {
         func matches(missing: [String], overrides: [String]) -> Bool {
             missing.sorted() == self.missing.sorted() &&
             overrides.sorted() == self.overrides.sorted()
+        }
+    }
+
+    private func refreshObjectiveStatuses() async {
+        let session = await interviewState.currentSession()
+        objectiveStatuses = session.objectiveLedger.reduce(into: [:]) { dict, entry in
+            dict[entry.id] = entry.status
         }
     }
 }

@@ -162,7 +162,7 @@ struct OnboardingInterviewToolPane: View {
             value: showSpinner
         )
         .onAppear { isOccupied = paneOccupied }
-        .onChange(of: paneOccupied) { newValue in
+        .onChange(of: paneOccupied) { _, newValue in
             isOccupied = newValue
         }
     }
@@ -181,12 +181,17 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func summaryContent() -> some View {
+        let applicantProfileStatus = coordinator.objectiveStatuses["applicant_profile"]
+        let applicantProfileReady = applicantProfileStatus == .completed || applicantProfileStatus == .skipped
+
         if coordinator.wizardStep == .wrapUp {
             WrapUpSummaryView(
                 artifacts: service.artifacts,
                 schemaIssues: service.schemaIssues
             )
-        } else if coordinator.wizardStep == .resumeIntake, let profile = service.applicantProfileJSON {
+        } else if coordinator.wizardStep == .resumeIntake,
+                  let profile = service.applicantProfileJSON,
+                  applicantProfileReady {
             ApplicantProfileSummaryCard(
                 profile: profile,
                 imageData: applicantProfileStore.currentProfile().pictureData

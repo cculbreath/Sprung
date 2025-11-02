@@ -6,7 +6,7 @@ struct SetObjectiveStatusTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: "Mark an onboarding objective as completed or pending.",
+            description: "Mark an onboarding objective as pending, in progress, completed, or skipped.",
             properties: [
                 "objective_id": JSONSchema(
                     type: .string,
@@ -14,8 +14,8 @@ struct SetObjectiveStatusTool: InterviewTool {
                 ),
                 "status": JSONSchema(
                     type: .string,
-                    description: "Desired status (completed or pending).",
-                    enum: ["completed", "pending", "reset"]
+                    description: "Desired status (pending, in_progress, completed, skipped).",
+                    enum: ["pending", "in_progress", "completed", "skipped", "reset"]
                 )
             ],
             required: ["objective_id", "status"],

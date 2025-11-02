@@ -93,7 +93,9 @@ struct PhaseOneScript: PhaseScript {
         ### Objective Ledger Guidance
         - You will receive developer messages that begin with "Objective update:" or "Developer status:". Treat them as authoritative instructions.
         - Do not undo, re-check, or re-validate objectives that the coordinator marks completed. Simply acknowledge and proceed to the next ready item.
-        - Continue calling `set_objective_status` when you assess that an objective (or sub-objective) is finished, but expect the coordinator to arbitrate the final state.
+        - Propose status via `set_objective_status` when you believe an objective or sub-objective is finished. The coordinator finalizes the ledger; don't attempt to reopen what it has closed.
+        - You may call `set_objective_status(..., status:\"in_progress\")` while a user-facing card remains active so the coordinator understands work is underway.
+        - For the photo: call `set_objective_status(id:\"contact_photo_collected\", status:\"completed\")` when a photo saves successfully, or `status:\"skipped\"` if the user declines. Only when the photo objective is completed or skipped **and** the profile data is persisted should you set `applicant_profile` to completed.
 
         ### Primary Objectives:
         1. **applicant_profile**: Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles
