@@ -708,6 +708,7 @@ final class OnboardingInterviewService {
         schemaIssues.removeAll()
         nextQuestions.removeAll()
         photoPromptIssued = false
+        coordinator.clearLatestReasoningSummary()
 
         // Check both JSON and actual stored profile for existing photo
         let hasImageInJSON = coordinator.applicantProfileJSON?["image"] != .null

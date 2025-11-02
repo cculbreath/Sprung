@@ -35,6 +35,7 @@ final class OnboardingInterviewCoordinator {
     private let checkpoints: Checkpoints
 
     private(set) var preferences: OnboardingPreferences
+    var latestReasoningSummary: String?
     private(set) var isProcessing = false
     private(set) var isActive = false
     private(set) var pendingExtraction: OnboardingPendingExtraction?
@@ -47,6 +48,7 @@ final class OnboardingInterviewCoordinator {
     private var developerMessages: [String] = []
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     private(set) var pendingStreamingStatus: String?
+    private var reasoningSummaryClearTask: Task<Void, Never>?
     private let ledgerDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -375,7 +377,11 @@ final class OnboardingInterviewCoordinator {
 
     func finalizeAssistantStream(id: UUID, text: String) -> TimeInterval {
         Logger.info("🤖 Assistant stream finalized: \(text)", category: .ai)
-        return chatTranscriptStore.finalizeAssistantStream(id: id, text: text)
+        let elapsed = chatTranscriptStore.finalizeAssistantStream(id: id, text: text)
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            clearLatestReasoningSummary()
+        }
+        return elapsed
     }
 
     func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) {
@@ -384,6 +390,36 @@ final class OnboardingInterviewCoordinator {
 
     func finalizeReasoningSummaries(for messageIds: [UUID]) {
         chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: messageIds)
+    }
+
+    func updateLatestReasoningSummary(_ summary: String?, isFinal: Bool) {
+        reasoningSummaryClearTask?.cancel()
+        reasoningSummaryClearTask = nil
+
+        guard let trimmed = summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            latestReasoningSummary = nil
+            return
+        }
+
+        latestReasoningSummary = trimmed
+
+        guard isFinal else { return }
+
+        reasoningSummaryClearTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(6 * 1_000_000_000))
+            await MainActor.run {
+                guard let self else { return }
+                self.latestReasoningSummary = nil
+                self.reasoningSummaryClearTask = nil
+            }
+        }
+    }
+
+    func clearLatestReasoningSummary() {
+        reasoningSummaryClearTask?.cancel()
+        reasoningSummaryClearTask = nil
+        latestReasoningSummary = nil
     }
 
     func setStreamingStatus(_ status: String?) {
@@ -399,6 +435,7 @@ final class OnboardingInterviewCoordinator {
         chatTranscriptStore.reset()
         toolRouter.reset()
         pendingStreamingStatus = nil
+        clearLatestReasoningSummary()
     }
 
     func transcriptExportString() -> String {
@@ -1226,7 +1263,13 @@ final class OnboardingInterviewCoordinator {
             },
             emitAssistantMessage: { [weak self] text, reasoningExpected in
                 guard let self else { return UUID() }
-                return await MainActor.run { self.appendAssistantMessage(text, reasoningExpected: reasoningExpected) }
+                return await MainActor.run {
+                    let messageId = self.appendAssistantMessage(text, reasoningExpected: reasoningExpected)
+                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                        self.clearLatestReasoningSummary()
+                    }
+                    return messageId
+                }
             },
             beginStreamingAssistantMessage: { [weak self] initial, reasoningExpected in
                 guard let self else { return UUID() }
@@ -1234,19 +1277,22 @@ final class OnboardingInterviewCoordinator {
             },
             updateStreamingAssistantMessage: { [weak self] id, text in
                 guard let self else { return }
-                await MainActor.run { self.updateAssistantStream(id: id, text: text) }
+                _ = await MainActor.run { self.updateAssistantStream(id: id, text: text) }
             },
             finalizeStreamingAssistantMessage: { [weak self] id, text in
                 guard let self else { return }
-                await MainActor.run { self.finalizeAssistantStream(id: id, text: text) }
+                _ = await MainActor.run { self.finalizeAssistantStream(id: id, text: text) }
             },
             updateReasoningSummary: { [weak self] messageId, summary, isFinal in
                 guard let self else { return }
-                await MainActor.run { self.updateReasoningSummary(summary, for: messageId, isFinal: isFinal) }
+                _ = await MainActor.run {
+                    self.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
+                    self.updateLatestReasoningSummary(summary, isFinal: isFinal)
+                }
             },
             finalizeReasoningSummaries: { [weak self] messageIds in
                 guard let self else { return }
-                await MainActor.run { self.finalizeReasoningSummaries(for: messageIds) }
+                _ = await MainActor.run { self.finalizeReasoningSummaries(for: messageIds) }
             },
             updateStreamingStatus: { [weak self] status in
                 guard let self else { return }
@@ -1409,6 +1455,7 @@ final class OnboardingInterviewCoordinator {
         isProcessing = false
         isActive = false
         updateWaitingState(nil)
+        clearLatestReasoningSummary()
         Task { await self.interviewState.resetLedger() }
     }
 
