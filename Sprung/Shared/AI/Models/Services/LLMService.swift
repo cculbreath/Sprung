@@ -19,6 +19,7 @@ enum LLMError: LocalizedError {
     case rateLimited(retryAfter: TimeInterval?)
     case timeout
     case unauthorized(String)
+    case invalidModelId(String)
 
     var errorDescription: String? {
         switch self {
@@ -38,6 +39,8 @@ enum LLMError: LocalizedError {
             return "Request timed out"
         case .unauthorized(let modelId):
             return "Access denied for model '\(modelId)'. This model may require special authorization or billing setup."
+        case .invalidModelId(let modelId):
+            return "Model '\(modelId)' is no longer available."
         }
     }
 }

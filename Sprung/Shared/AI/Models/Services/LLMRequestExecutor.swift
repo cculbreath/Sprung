@@ -107,19 +107,24 @@ actor LLMRequestExecutor {
                 // Handle SwiftOpenAI APIErrors with enhanced 403 detection
                 if let apiError = error as? SwiftOpenAI.APIError {
                     Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
-                    
+
                     // Check for 403 Unauthorized specifically
                     if apiError.displayDescription.contains("status code 403") {
                         let modelId = extractModelId(from: parameters)
                         Logger.debug("🚫 403 Unauthorized detected for model: \(modelId)", category: .networking)
                         throw LLMError.unauthorized(modelId)
                     }
+                    if apiError.displayDescription.lowercased().contains("not a valid model id") {
+                        let modelId = extractModelId(from: parameters)
+                        Logger.debug("🚫 Invalid model ID detected: \(modelId)", category: .networking)
+                        throw LLMError.invalidModelId(modelId)
+                    }
                 }
-                
+
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {
                     switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized:
+                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId:
                         throw appError
                     case .rateLimited(let retryAfter):
                         if let delay = retryAfter, attempt < retries {
@@ -192,19 +197,24 @@ actor LLMRequestExecutor {
                 // Handle SwiftOpenAI APIErrors with enhanced 403 detection
                 if let apiError = error as? SwiftOpenAI.APIError {
                     Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
-                    
+
                     // Check for 403 Unauthorized specifically
                     if apiError.displayDescription.contains("status code 403") {
                         let modelId = extractModelId(from: parameters)
                         Logger.debug("🚫 403 Unauthorized detected for model: \(modelId)", category: .networking)
                         throw LLMError.unauthorized(modelId)
                     }
+                    if apiError.displayDescription.lowercased().contains("not a valid model id") {
+                        let modelId = extractModelId(from: parameters)
+                        Logger.debug("🚫 Invalid model ID detected: \(modelId)", category: .networking)
+                        throw LLMError.invalidModelId(modelId)
+                    }
                 }
-                
+
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {
                     switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized:
+                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId:
                         throw appError
                     case .rateLimited(let retryAfter):
                         if let delay = retryAfter, attempt < retries {

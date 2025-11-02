@@ -7,7 +7,7 @@ struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "openai/gpt-5"
-    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash"
+    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
 
@@ -24,6 +24,8 @@ struct SettingsView: View {
     @State private var resetError: String?
     @State private var isResetting = false
     private let dataResetService = DataResetService()
+    private let onboardingDefaultModelFallback = "openai/gpt-5"
+    private let pdfExtractionFallbackModelId = "google/gemini-2.0-flash-001"
 
     private let reasoningOptions: [(value: String, label: String, detail: String)] = [
         ("minimal", "Minimal", "Fastest responses; rely on tools and concise reasoning"),
@@ -75,11 +77,16 @@ struct SettingsView: View {
                     get: { onboardingWebSearchAllowed },
                     set: { newValue in
                         onboardingWebSearchAllowed = newValue
-                        onboardingInterviewService.setPreferredDefaults(
-                            modelId: onboardingModelId,
+                        let sanitized = sanitizeOnboardingModelIfNeeded()
+                        let resolved = onboardingInterviewService.setPreferredDefaults(
+                            modelId: sanitized,
                             backend: .openAI,
                             webSearchAllowed: newValue
                         )
+                        if onboardingModelId != resolved {
+                            onboardingModelId = resolved
+                        }
+                        onboardingInterviewService.clearModelAvailabilityMessage()
                     }
                 ))
                 .toggleStyle(.switch)
@@ -172,6 +179,14 @@ struct SettingsView: View {
         } message: {
             Text("This is your final chance to cancel. Once confirmed, all data will be deleted and the app will restart.")
         }
+        .task {
+            sanitizeOnboardingModelIfNeeded()
+            sanitizePDFExtractionModelIfNeeded()
+        }
+        .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
+            sanitizeOnboardingModelIfNeeded()
+            sanitizePDFExtractionModelIfNeeded()
+        }
     }
 
     private func performReset() async {
@@ -231,11 +246,16 @@ private extension SettingsView {
                     get: { onboardingModelId },
                     set: { newValue in
                         onboardingModelId = newValue
-                        onboardingInterviewService.setPreferredDefaults(
-                            modelId: newValue,
+                        let sanitized = sanitizeOnboardingModelIfNeeded()
+                        let resolved = onboardingInterviewService.setPreferredDefaults(
+                            modelId: sanitized,
                             backend: .openAI,
                             webSearchAllowed: onboardingWebSearchAllowed
                         )
+                        if onboardingModelId != resolved {
+                            onboardingModelId = resolved
+                        }
+                        onboardingInterviewService.clearModelAvailabilityMessage()
                     }
                 )) {
                     ForEach(onboardingInterviewModels, id: \.modelId) { model in
@@ -261,7 +281,13 @@ private extension SettingsView {
                     .foregroundStyle(.orange)
                     .font(.callout)
             } else {
-                Picker("PDF Extraction Model", selection: $pdfExtractionModelId) {
+                Picker("PDF Extraction Model", selection: Binding(
+                    get: { pdfExtractionModelId },
+                    set: { newValue in
+                        pdfExtractionModelId = newValue
+                        _ = sanitizePDFExtractionModelIfNeeded()
+                    }
+                )) {
                     ForEach(allOpenRouterModels, id: \.modelId) { model in
                         Text(model.displayName.isEmpty ? model.modelId : model.displayName)
                             .tag(model.modelId)
@@ -296,10 +322,40 @@ private extension SettingsView {
         enabledLLMStore.enabledModels
             .sorted { lhs, rhs in
                 // Sort Gemini 2.0 Flash first, then alphabetically
-                if lhs.modelId == "google/gemini-2.0-flash" { return true }
-                if rhs.modelId == "google/gemini-2.0-flash" { return false }
+                if lhs.modelId == "google/gemini-2.0-flash-001" { return true }
+                if rhs.modelId == "google/gemini-2.0-flash-001" { return false }
                 return (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
+    }
+
+    @discardableResult
+    func sanitizeOnboardingModelIfNeeded() -> String {
+        let ids = onboardingInterviewModels.map(\.modelId)
+        onboardingInterviewService.updateAvailableModelIds(ids)
+        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
+            requested: onboardingModelId,
+            available: ids,
+            fallback: onboardingDefaultModelFallback
+        )
+        if adjusted {
+            onboardingModelId = sanitized
+        }
+        return sanitized
+    }
+
+    @discardableResult
+    func sanitizePDFExtractionModelIfNeeded() -> String {
+        let ids = allOpenRouterModels.map(\.modelId)
+        onboardingInterviewService.updateExtractionModelIds(ids)
+        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
+            requested: pdfExtractionModelId,
+            available: ids,
+            fallback: pdfExtractionFallbackModelId
+        )
+        if adjusted {
+            pdfExtractionModelId = sanitized
+        }
+        return sanitized
     }
 }

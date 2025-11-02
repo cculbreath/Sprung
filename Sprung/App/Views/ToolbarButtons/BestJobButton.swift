@@ -96,6 +96,8 @@ struct BestJobButton: View {
                 switch llmError {
                 case .unauthorized(let modelId):
                     bestJobResult = "Access denied for model '\(modelId)'.\n\nThis model may require special authorization or billing setup. Try using a different model like GPT-4.1 instead."
+                case .invalidModelId(let modelId):
+                    bestJobResult = "Model '\(modelId)' is no longer available. Choose a different model in Settings and try again."
                 default:
                     bestJobResult = "Error: \(error.localizedDescription)"
                 }

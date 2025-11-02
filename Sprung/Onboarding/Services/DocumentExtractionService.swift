@@ -9,6 +9,8 @@ import SwiftyJSON
 /// It converts local PDF/DOCX files into enriched markdown using the configured
 /// PDF extraction model (default: Gemini 2.0 Flash via OpenRouter).
 actor DocumentExtractionService {
+    var onInvalidModelId: ((String) -> Void)?
+
     struct ExtractionRequest {
         let fileURL: URL
         let purpose: String
@@ -71,10 +73,19 @@ actor DocumentExtractionService {
 
     private let requestExecutor: LLMRequestExecutor
     private let maxCharactersForPrompt = 18_000
-    private let defaultModelId = "google/gemini-2.0-flash"
+    private let defaultModelId = "google/gemini-2.0-flash-001"
+    private var availableModelIds: [String] = []
 
     init(requestExecutor: LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
+    }
+
+    func updateAvailableModels(_ ids: [String]) {
+        availableModelIds = ids
+    }
+
+    func setInvalidModelHandler(_ handler: @escaping (String) -> Void) {
+        onInvalidModelId = handler
     }
 
     // MARK: - Public API
@@ -123,7 +134,7 @@ actor DocumentExtractionService {
             ? "Extracting resume details"
             : "Extracting document text"
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
-        let (markdown, markdownIssues) = await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
+        let (markdown, markdownIssues) = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         Logger.info(
             "📄 Extraction LLM phase completed",
@@ -219,7 +230,16 @@ actor DocumentExtractionService {
     }
 
     private func currentModelId() -> String {
-        UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? defaultModelId
+        let stored = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? defaultModelId
+        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
+            requested: stored,
+            available: availableModelIds,
+            fallback: defaultModelId
+        )
+        if adjusted {
+            UserDefaults.standard.set(sanitized, forKey: "onboardingPDFExtractionModelId")
+        }
+        return sanitized
     }
 
     private func contentTypeForFile(at url: URL) -> String? {
@@ -278,7 +298,7 @@ actor DocumentExtractionService {
         return (nil, ["text_extraction_warning"])
     }
 
-    private func enrichText(_ rawText: String, purpose: String, timeout: TimeInterval?) async -> (String?, [String]) {
+    private func enrichText(_ rawText: String, purpose: String, timeout: TimeInterval?) async throws -> (String?, [String]) {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return (nil, ["llm_failure_empty_input"])
@@ -323,6 +343,13 @@ Requirements:
         let response: LLMResponse
         do {
             response = try await requestExecutor.execute(parameters: parameters)
+        } catch let llmError as LLMError {
+            if case .invalidModelId(let modelId) = llmError {
+                onInvalidModelId?(modelId)
+                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
+            }
+            issues.append("llm_failure_\(llmError.localizedDescription)")
+            return (nil, issues)
         } catch {
             issues.append("llm_failure_\(error.localizedDescription)")
             return (nil, issues)

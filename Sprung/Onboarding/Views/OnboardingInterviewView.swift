@@ -7,6 +7,7 @@ struct OnboardingInterviewView: View {
     @Environment(OnboardingToolRouter.self) private var toolRouter
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
+    private let onboardingFallbackModelId = "openai/gpt-5"
 
     @State private var viewModel = OnboardingInterviewViewModel(
         fallbackModelId: "openai/gpt-5"
@@ -118,26 +119,28 @@ struct OnboardingInterviewView: View {
 
         // --- Lifecycle bindings and tasks ---
         .task {
+            let modelIds = openAIModels.map(\.modelId)
             uiState.configureIfNeeded(
                 service: service,
                 defaultModelId: defaultModelId,
                 defaultWebSearchAllowed: defaultWebSearchAllowed,
                 defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
-                availableModelIds: openAIModels.map(\.modelId)
+                availableModelIds: modelIds
             )
-            updateServiceDefaults()
+            applyPreferredModel()
         }
         .onChange(of: defaultModelId) { _, newValue in
+            let modelIds = openAIModels.map(\.modelId)
             uiState.handleDefaultModelChange(
                 newValue: newValue,
-                availableModelIds: openAIModels.map(\.modelId)
+                availableModelIds: modelIds
             )
-            updateServiceDefaults()
+            applyPreferredModel(requestedId: newValue)
         }
         .onChange(of: defaultWebSearchAllowed) { _, newValue in
             if !service.isActive {
                 uiState.webSearchAllowed = newValue
-                updateServiceDefaults()
+                applyPreferredModel()
             }
         }
         .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
@@ -154,6 +157,9 @@ struct OnboardingInterviewView: View {
             if service.isActive {
                 uiState.writingAnalysisAllowed = newValue
             }
+        }
+        .onChange(of: enabledLLMStore.enabledModels) { _, _ in
+            applyPreferredModel()
         }
         .sheet(isPresented: Binding(
             get: { service.pendingExtraction != nil },
@@ -380,11 +386,7 @@ private extension OnboardingInterviewView {
 
 private extension OnboardingInterviewView {
     func updateServiceDefaults() {
-        interviewService.setPreferredDefaults(
-            modelId: viewModel.currentModelId,
-            backend: .openAI,
-            webSearchAllowed: viewModel.webSearchAllowed
-        )
+        applyPreferredModel()
     }
 
     func openSettings() {
@@ -449,6 +451,27 @@ private extension OnboardingInterviewView {
             defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
             availableModelIds: openAIModels.map(\.modelId)
         )
-        updateServiceDefaults()
+        applyPreferredModel()
+    }
+
+    func applyPreferredModel(requestedId: String? = nil) {
+        let ids = openAIModels.map(\.modelId)
+        interviewService.updateAvailableModelIds(ids)
+
+        let targetId = requestedId ?? defaultModelId
+
+        let resolvedId = interviewService.setPreferredDefaults(
+            modelId: targetId,
+            backend: .openAI,
+            webSearchAllowed: viewModel.webSearchAllowed
+        )
+
+        if viewModel.selectedModelId != resolvedId {
+            viewModel.selectedModelId = resolvedId
+        }
+
+        if defaultModelId != resolvedId {
+            defaultModelId = resolvedId
+        }
     }
 }
