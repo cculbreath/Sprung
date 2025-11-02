@@ -156,9 +156,6 @@ struct OnboardingInterviewChatPanel: View {
         .onChange(of: coordinator.messages.count, initial: true) { _, newValue in
             handleMessageCountChange(newValue: newValue, proxy: proxy)
         }
-        .onChange(of: coordinator.messages.last?.text ?? "", initial: false) { _, _ in
-            scrollToLatestMessage(proxy)
-        }
         .onChange(of: service.isProcessing, initial: false) { _, isProcessing in
             guard isProcessing == false else { return }
             scrollToLatestMessage(proxy)
@@ -205,6 +202,7 @@ struct OnboardingInterviewChatPanel: View {
     private func handleMessageCountChange(newValue: Int, proxy: ScrollViewProxy) {
         defer { lastMessageCount = newValue }
         guard newValue > lastMessageCount else { return }
+        guard state.shouldAutoScroll else { return }
         scrollToLatestMessage(proxy)
     }
 
