@@ -42,6 +42,7 @@ final class OnboardingInterviewService {
     var allowWebSearch: Bool { coordinator.preferences.allowWebSearch }
     var allowWritingAnalysis: Bool { coordinator.preferences.allowWritingAnalysis }
     var lastError: String? { coordinator.lastError }
+    var modelAvailabilityMessage: String?
 
     var preferredModelIdForDisplay: String? {
         coordinator.preferences.preferredModelId
@@ -70,6 +71,9 @@ final class OnboardingInterviewService {
         return formatter
     }()
     private var validationRetryCounts: [String: Int] = [:]
+    private var availableModelIds: [String] = []
+    private let onboardingFallbackModelId = "openai/gpt-5"
+    private let modelAvailabilityBannerText = "Your selected model is no longer available. Pick a model in Settings."
     var applicantProfileJSON: JSON? { coordinator.applicantProfileJSON }
     var skeletonTimelineJSON: JSON? { coordinator.skeletonTimelineJSON }
 
@@ -84,6 +88,7 @@ final class OnboardingInterviewService {
         self.applicantProfileStore = applicantProfileStore
         self.documentExtractionService = documentExtractionService
         self.knowledgeCardAgent = openAIService.map { KnowledgeCardAgent(client: $0) }
+        self.availableModelIds = [onboardingFallbackModelId]
 
         let interviewState = InterviewState()
         let checkpoints = Checkpoints()
@@ -117,6 +122,20 @@ final class OnboardingInterviewService {
             interviewState: interviewState,
             openAIService: openAIService
         )
+        coordinator.onModelAvailabilityIssue = { [weak self] modelId in
+            guard let self else { return }
+            Task { @MainActor in
+                self.reportInvalidModelSelection(modelId: modelId)
+            }
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            await self.documentExtractionService.setInvalidModelHandler { [weak self] modelId in
+                Task { @MainActor in
+                    self?.reportInvalidModelSelection(modelId: modelId)
+                }
+            }
+        }
 
         let progressHandler: ExtractionProgressHandler = { [weak self] update in
             guard let self else { return }
@@ -292,6 +311,22 @@ final class OnboardingInterviewService {
         resetLocalTransientState()
     }
 
+    // MARK: - Model Availability
+
+    func updateAvailableModelIds(_ ids: [String]) {
+        availableModelIds = ids.isEmpty ? [onboardingFallbackModelId] : ids
+    }
+
+    func updateExtractionModelIds(_ ids: [String]) {
+        Task {
+            await documentExtractionService.updateAvailableModels(ids)
+        }
+    }
+
+    func clearModelAvailabilityMessage() {
+        modelAvailabilityMessage = nil
+    }
+
     // MARK: - Phase Handling
 
     func setPhase(_ step: OnboardingWizardStep) {
@@ -300,20 +335,48 @@ final class OnboardingInterviewService {
 
     // MARK: - Preferences
 
+    @discardableResult
     func setPreferredDefaults(
         modelId: String,
         backend: LLMFacade.Backend,
         webSearchAllowed: Bool
-    ) {
+    ) -> String {
+        let (sanitizedId, adjusted) = ModelPreferenceValidator.sanitize(
+            requested: modelId,
+            available: availableModelIds,
+            fallback: onboardingFallbackModelId
+        )
         coordinator.setPreferredDefaults(
-            modelId: modelId,
+            modelId: sanitizedId,
             backend: backend,
             webSearchAllowed: webSearchAllowed
         )
+        if adjusted {
+            Logger.warning("⚠️ Requested onboarding model '\(modelId)' unavailable. Using '\(sanitizedId)'.", category: .ai)
+            modelAvailabilityMessage = modelAvailabilityBannerText
+        }
+        return sanitizedId
     }
 
     func setWritingAnalysisConsent(_ allowed: Bool) {
         coordinator.setWritingAnalysisConsent(allowed)
+    }
+
+    private func reportInvalidModelSelection(modelId: String) {
+        let currentPreference = coordinator.preferences.preferredModelId ?? modelId
+        let (sanitizedId, _) = ModelPreferenceValidator.sanitize(
+            requested: currentPreference,
+            available: availableModelIds,
+            fallback: onboardingFallbackModelId
+        )
+        Logger.warning("⚠️ Invalid model id detected: \(modelId). Using \(sanitizedId) instead.", category: .ai)
+        UserDefaults.standard.set(sanitizedId, forKey: "onboardingInterviewDefaultModelId")
+        coordinator.setPreferredDefaults(
+            modelId: sanitizedId,
+            backend: coordinator.preferences.preferredBackend,
+            webSearchAllowed: coordinator.preferences.allowWebSearch
+        )
+        modelAvailabilityMessage = modelAvailabilityBannerText
     }
 
     func recordObjective(

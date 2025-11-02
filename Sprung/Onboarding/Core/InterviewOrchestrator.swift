@@ -48,6 +48,7 @@ actor InterviewOrchestrator {
         let persistCheckpoint: @Sendable () async -> Void
         let registerToolWait: @Sendable (UUID, String, String, String?) async -> Void
         let clearToolWait: @Sendable (UUID, String) async -> Void
+        let handleInvalidModelId: @Sendable (String) async -> Void
         let dequeueDeveloperMessages: @Sendable () async -> [String]
     }
 
@@ -792,6 +793,17 @@ actor InterviewOrchestrator {
                 }
             }
         } catch {
+            if let llmError = error as? LLMError {
+                switch llmError {
+                case .invalidModelId(let modelId):
+                    await clearSilenceStatus()
+                    await callbacks.updateProcessingState(false)
+                    await callbacks.handleInvalidModelId(modelId)
+                    return
+                default:
+                    break
+                }
+            }
             throw error
         }
 

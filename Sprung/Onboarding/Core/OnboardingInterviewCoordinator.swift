@@ -49,6 +49,7 @@ final class OnboardingInterviewCoordinator {
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     private(set) var pendingStreamingStatus: String?
     private var reasoningSummaryClearTask: Task<Void, Never>?
+    var onModelAvailabilityIssue: ((String) -> Void)?
     private let ledgerDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -420,6 +421,11 @@ final class OnboardingInterviewCoordinator {
         reasoningSummaryClearTask?.cancel()
         reasoningSummaryClearTask = nil
         latestReasoningSummary = nil
+    }
+
+    func notifyInvalidModel(id: String) {
+        Logger.warning("⚠️ Invalid model id reported: \(id)", category: .ai)
+        onModelAvailabilityIssue?(id)
     }
 
     func setStreamingStatus(_ status: String?) {
@@ -1345,6 +1351,10 @@ final class OnboardingInterviewCoordinator {
                 await MainActor.run {
                     self.clearToolWait(tokenId: tokenId, outcome: outcome)
                 }
+            },
+            handleInvalidModelId: { [weak self] modelId in
+                guard let self else { return }
+                await MainActor.run { self.notifyInvalidModel(id: modelId) }
             },
             dequeueDeveloperMessages: { [weak self] in
                 guard let self else { return [] }

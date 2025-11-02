@@ -33,12 +33,25 @@ struct OnboardingInterviewChatPanel: View {
         let topPadding: CGFloat = 28
         let bottomPadding: CGFloat = 28
         let sectionSpacing: CGFloat = 20
+        let bannerVisible = !(service.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
 
         return VStack(spacing: 0) {
+            if bannerVisible, let alert = service.modelAvailabilityMessage {
+                ModelAvailabilityBanner(
+                    text: alert,
+                    onOpenSettings: onOpenSettings,
+                    onDismiss: { service.clearModelAvailabilityMessage() }
+                )
+                .padding(.horizontal, horizontalPadding)
+                .padding(.top, topPadding)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             ScrollViewReader { proxy in
                 messageScrollView(proxy: proxy)
             }
-            .padding(.top, topPadding)
+            .padding(.top, bannerVisible ? 8 : topPadding)
             .padding(.horizontal, horizontalPadding)
 
             if !service.nextQuestions.isEmpty {
@@ -130,6 +143,7 @@ struct OnboardingInterviewChatPanel: View {
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
+        .animation(.easeInOut(duration: 0.2), value: service.modelAvailabilityMessage)
         .alert("Export Failed", isPresented: Binding(
             get: { exportErrorMessage != nil },
             set: { _ in exportErrorMessage = nil }
@@ -287,6 +301,41 @@ private struct ReasoningStatusBar: View {
         }
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ModelAvailabilityBanner: View {
+    let text: String
+    let onOpenSettings: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.orange)
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+            Spacer()
+            Button("Change in Settings…") {
+                onOpenSettings()
+            }
+            .buttonStyle(.link)
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .imageScale(.small)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.orange.opacity(0.12))
+        )
     }
 }
 
