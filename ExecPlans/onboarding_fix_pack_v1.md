@@ -14,6 +14,7 @@ The onboarding interview currently exposes reliability gaps: the left pane spinn
 - [x] (2025-11-02T06:12Z) Chat autoscroll guard added in `OnboardingInterviewChatPanel` so scrolling only occurs when `state.shouldAutoScroll` is true; prep for glow stability validation.
 - [x] (2025-11-02T06:40Z) Added reasoning status bar plumbing (coordinator state, orchestrator callbacks, status bar view) so reasoning-only turns surface in the chat panel footer with auto-fade behavior.
 - [x] (2025-11-02T07:03Z) Hardened model selection validation and invalid-model messaging across service, UI, settings, and extraction pathways; banner now surfaces when IDs fall out of rotation and sanitize routines coerce AppStorage to available entries.
+- [x] (2025-11-03T02:31Z) Overhauled the objective ledger: added skip/in-progress states, wired applicant profile reevaluation, updated prompt guidance, and gated recap cards on completed/ skipped profile status.
 
 ## Surprises & Discoveries
 

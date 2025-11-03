@@ -157,20 +157,15 @@ struct LLMActivityView: View {
 
 private struct ReasoningSummaryPlaceholderView: View {
     var body: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .controlSize(.small)
-                .scaleEffect(0.8)
+
 
             Text("Thinking…")
                 .font(.footnote)
                 .italic()
                 .foregroundStyle(.secondary)
                 .modifier(ShimmerModifier())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 1)
     }
 }
 

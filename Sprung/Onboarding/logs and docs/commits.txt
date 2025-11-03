@@ -1,0 +1,35 @@
+d813f10 Log objective ledger milestone in ExecPlan
+ExecPlans/onboarding_fix_pack_v1.md
+
+059a61f Respect user scroll state when streaming completes
+Sprung/Onboarding/Views/Components/OnboardingInterviewChatPanel.swift
+
+8ccb915 Refine onboarding objective ledger flow
+Sprung/Onboarding/Core/InterviewSession.swift
+Sprung/Onboarding/Core/ObjectiveLedger.swift
+Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift
+Sprung/Onboarding/Core/OnboardingInterviewService.swift
+Sprung/Onboarding/Phase/PhaseOneScript.swift
+Sprung/Onboarding/Tools/Implementations/SetObjectiveStatusTool.swift
+Sprung/Onboarding/Views/Components/OnboardingInterviewToolPane.swift
+Sprung/Onboarding/Views/Components/OnboardingInterviewUploadRequestCard.swift
+
+cb67cbe Handle invalid onboarding model selection
+ExecPlans/onboarding_fix_pack_v1.md
+Sprung/App/Views/SettingsView.swift
+Sprung/App/Views/ToolbarButtons/BestJobButton.swift
+Sprung/Onboarding/Core/InterviewOrchestrator.swift
+Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift
+Sprung/Onboarding/Core/OnboardingInterviewService.swift
+Sprung/Onboarding/Services/DocumentExtractionService.swift
+Sprung/Onboarding/Views/Components/OnboardingInterviewChatPanel.swift
+Sprung/Onboarding/Views/OnboardingInterviewView.swift
+Sprung/Shared/AI/Models/Services/LLMRequestExecutor.swift
+Sprung/Shared/AI/Models/Services/LLMService.swift
+Sprung/Shared/Utilities/ModelPreferenceValidator.swift
+
+461284e Add reasoning status bar to onboarding chat
+ExecPlans/onboarding_fix_pack_v1.md
+Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift
+Sprung/Onboarding/Core/OnboardingInterviewService.swift
+Sprung/Onboarding/Views/Components/OnboardingInterviewChatPanel.swift
