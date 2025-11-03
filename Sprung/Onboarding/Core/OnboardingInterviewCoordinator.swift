@@ -30,7 +30,7 @@ final class OnboardingInterviewCoordinator {
 
     private var orchestrator: InterviewOrchestrator?
     private var phaseAdvanceContinuationId: UUID?
-    private var phaseAdvanceBlockCache: PhaseAdvanceBlockCache?
+    // Phase advance cache removed - no longer needed with centralized state
     private var toolQueueEntries: [UUID: ToolQueueEntry] = [:]
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     private var reasoningSummaryClearTask: Task<Void, Never>?
@@ -250,7 +250,6 @@ final class OnboardingInterviewCoordinator {
             completedSteps: completedSteps
         )
 
-        phaseAdvanceBlockCache = nil
         await registerObjectivesForCurrentPhase()
         return newPhase
     }
@@ -283,17 +282,9 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Objective Management
 
     func registerObjectivesForCurrentPhase() async {
-        let phase = await state.phase
-        let objectives = ObjectiveCatalog.objectives(for: phase)
-
-        for descriptor in objectives {
-            await state.registerObjective(
-                descriptor.id,
-                label: descriptor.label,
-                phase: descriptor.phase,
-                source: descriptor.initialSource
-            )
-        }
+        // Objectives are now automatically registered by OnboardingState
+        // when the phase is set, so this is no longer needed
+        Logger.info("📋 Objectives auto-registered by OnboardingState for current phase", category: .ai)
     }
 
     func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {

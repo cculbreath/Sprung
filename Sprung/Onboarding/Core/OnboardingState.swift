@@ -86,6 +86,48 @@ actor OnboardingState {
 
     init() {
         Logger.info("🎯 OnboardingState initialized - single source of truth", category: .ai)
+        registerDefaultObjectives(for: phase)
+    }
+
+    // MARK: - Objective Catalog
+
+    private func registerDefaultObjectives(for phase: InterviewPhase) {
+        let descriptors = Self.objectivesForPhase(phase)
+        for descriptor in descriptors {
+            registerObjective(
+                descriptor.id,
+                label: descriptor.label,
+                phase: descriptor.phase,
+                source: descriptor.source
+            )
+        }
+    }
+
+    private static func objectivesForPhase(_ phase: InterviewPhase) -> [(id: String, label: String, phase: InterviewPhase, source: String)] {
+        switch phase {
+        case .phase1CoreFacts:
+            return [
+                ("applicant_profile", "Applicant profile objective", .phase1CoreFacts, "system"),
+                ("skeleton_timeline", "Skeleton timeline objective", .phase1CoreFacts, "system"),
+                ("enabled_sections", "Enabled sections objective", .phase1CoreFacts, "system"),
+                ("contact_source_selected", "Contact source selected", .phase1CoreFacts, "system"),
+                ("contact_data_collected", "Contact data collected", .phase1CoreFacts, "system"),
+                ("contact_data_validated", "Contact data validated", .phase1CoreFacts, "system"),
+                ("contact_photo_collected", "Contact photo collected", .phase1CoreFacts, "system")
+            ]
+        case .phase2DeepDive:
+            return [
+                ("interviewed_one_experience", "Experience interview completed", .phase2DeepDive, "system"),
+                ("one_card_generated", "Knowledge card generated", .phase2DeepDive, "system")
+            ]
+        case .phase3WritingCorpus:
+            return [
+                ("one_writing_sample", "Writing sample collected", .phase3WritingCorpus, "system"),
+                ("dossier_complete", "Dossier completed", .phase3WritingCorpus, "system")
+            ]
+        case .complete:
+            return []
+        }
     }
 
     // MARK: - Phase Management
@@ -93,6 +135,7 @@ actor OnboardingState {
     func setPhase(_ phase: InterviewPhase) {
         self.phase = phase
         Logger.info("📍 Phase changed to: \(phase)", category: .ai)
+        registerDefaultObjectives(for: phase)
         updateWizardProgress()
     }
 
