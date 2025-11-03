@@ -24,8 +24,8 @@ struct ObjectiveDescriptor {
         self.details = details
     }
 
-    func makeEntry(date: Date = Date.distantPast) -> ObjectiveEntry {
-        ObjectiveEntry(
+    func makeEntry(date: Date = Date.distantPast) -> OnboardingObjectiveEntry {
+        OnboardingObjectiveEntry(
             id: id,
             label: label,
             status: initialStatus,
@@ -37,7 +37,7 @@ struct ObjectiveDescriptor {
     }
 }
 
-struct ObjectiveEntry: Codable, Equatable {
+struct OnboardingObjectiveEntry: Codable, Equatable {
     let id: String
     var label: String
     var status: ObjectiveStatus
@@ -48,7 +48,7 @@ struct ObjectiveEntry: Codable, Equatable {
 }
 
 struct ObjectiveLedgerSnapshot {
-    let entries: [ObjectiveEntry]
+    let entries: [OnboardingObjectiveEntry]
 
     var signature: String {
         entries
