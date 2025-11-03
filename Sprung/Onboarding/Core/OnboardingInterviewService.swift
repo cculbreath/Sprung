@@ -54,7 +54,7 @@ final class OnboardingInterviewService {
 
     enum ToolWaitingStateInstruction {
         case leaveUnchanged
-        case set(InterviewSession.Waiting?)
+        case set(OnboardingState.WaitingState?)
     }
 
     // MARK: - Internal state
@@ -144,10 +144,12 @@ final class OnboardingInterviewService {
             }
         }
         uploadHandler.updateExtractionProgressHandler(progressHandler)
-        coordinator.addObjectiveStatusObserver { [weak self] update in
-            guard let self else { return }
-            self.handleObjectiveStatusUpdate(update)
-        }
+        // TODO: Replace with event-based objective status handling
+        // OnboardingState is now the single source of truth
+        // coordinator.addObjectiveStatusObserver { [weak self] update in
+        //     guard let self else { return }
+        //     self.handleObjectiveStatusUpdate(update)
+        // }
         registerTools(progressHandler: progressHandler)
     }
 
@@ -757,7 +759,7 @@ final class OnboardingInterviewService {
         coordinator.recordError(message)
     }
 
-    func updateWaitingState(_ waiting: InterviewSession.Waiting?) {
+    func updateWaitingState(_ waiting: OnboardingState.WaitingState?) {
         coordinator.updateWaitingState(waiting)
     }
 
@@ -1121,30 +1123,32 @@ final class OnboardingInterviewService {
         return given ?? family
     }
 
-    private func handleObjectiveStatusUpdate(_ update: OnboardingInterviewCoordinator.ObjectiveStatusUpdate) {
-        switch update.id {
-        case "contact_photo_collected":
-            hasContactPhoto = update.status == .completed || update.status == .skipped
-        default:
-            break
-        }
-
-        Task { @MainActor in
-            let phase = await coordinator.currentPhase
-            guard let script = coordinator.phaseRegistry.currentScript(for: phase),
-                  let workflow = script.workflow(for: update.id) else { return }
-
-            let completedObjectives = await coordinator.getCompletedObjectiveIds()
-            let context = ObjectiveWorkflowContext(
-                completedObjectives: completedObjectives,
-                status: update.status,
-                details: update.details ?? ["source": update.source]
-            )
-
-            let outputs = workflow.outputs(for: update.status, context: context)
-            applyWorkflowOutputs(outputs)
-        }
-    }
+    // TODO: Replace with event-based objective status handling via OnboardingState
+    // OnboardingState is now the single source of truth for all state changes
+    // private func handleObjectiveStatusUpdate(_ update: OnboardingInterviewCoordinator.ObjectiveStatusUpdate) {
+    //     switch update.id {
+    //     case "contact_photo_collected":
+    //         hasContactPhoto = update.status == .completed || update.status == .skipped
+    //     default:
+    //         break
+    //     }
+    //
+    //     Task { @MainActor in
+    //         let phase = await coordinator.currentPhase
+    //         guard let script = coordinator.phaseRegistry.currentScript(for: phase),
+    //               let workflow = script.workflow(for: update.id) else { return }
+    //
+    //         let completedObjectives = await coordinator.getCompletedObjectiveIds()
+    //         let context = ObjectiveWorkflowContext(
+    //             completedObjectives: completedObjectives,
+    //             status: update.status,
+    //             details: update.details ?? ["source": update.source]
+    //         )
+    //
+    //         let outputs = workflow.outputs(for: update.status, context: context)
+    //         applyWorkflowOutputs(outputs)
+    //     }
+    // }
 
     private func applyWorkflowOutputs(_ outputs: [ObjectiveWorkflowOutput]) {
         guard !outputs.isEmpty else { return }

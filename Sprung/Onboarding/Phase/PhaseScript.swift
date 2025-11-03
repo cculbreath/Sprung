@@ -12,7 +12,7 @@ import SwiftyJSON
 /// Context passed to workflow closures when objectives change state.
 struct ObjectiveWorkflowContext {
     let completedObjectives: Set<String>
-    let status: ObjectiveStatus  // From InterviewPhase.swift
+    let status: ObjectiveStatus  // From InterviewPhase.swift file
     let details: [String: String]
 }
 

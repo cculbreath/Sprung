@@ -204,11 +204,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             case .require(let toolNames):
                 if let toolName = toolNames.first {
                     // Force the model to call a specific function
-                    toolChoice = .functionTool(Tool.FunctionTool(
-                        name: toolName,
-                        parameters: JSONSchema(type: .object, properties: [:]),
-                        description: "Tool: \(toolName)"
-                    ))
+                    toolChoice = .functionTool(FunctionTool(name: toolName))
                 } else {
                     toolChoice = .auto
                 }
@@ -278,8 +274,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
                 switch item {
                 case .message(let message):
                     for contentItem in message.content {
-                        if case .text(let text) = contentItem {
-                            await processContentDelta(0, text.text)
+                        if case .outputText(let outputText) = contentItem {
+                            await processContentDelta(0, outputText.text)
                         }
                     }
                 case .functionCall(let toolCall):
@@ -324,7 +320,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         streamingBuffers[itemId] = buffer
     }
 
-    private func processToolCall(_ toolCall: FunctionToolCall) async {
+    private func processToolCall(_ toolCall: OutputItem.FunctionToolCall) async {
         let functionName = toolCall.name
         let arguments = toolCall.arguments
 
