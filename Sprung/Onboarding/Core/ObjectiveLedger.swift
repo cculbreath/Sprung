@@ -1,12 +1,5 @@
 import Foundation
 
-enum ObjectiveStatus: String, Codable {
-    case pending
-    case inProgress = "in_progress"
-    case completed
-    case skipped
-}
-
 struct ObjectiveDescriptor {
     let id: String
     let label: String
