@@ -1,10 +1,9 @@
-
 //
 //  InterviewOrchestrator.swift
 //  Sprung
 //
-//  Coordinates the onboarding interview conversation with OpenAI's Responses API,
-//  mediating tool execution and state persistence.
+//  Coordinates the onboarding interview conversation with OpenAI's Responses API.
+//  State management is handled entirely through callbacks - this just orchestrates the flow.
 //
 
 import Foundation
@@ -16,10 +15,11 @@ private struct ToolChoiceOverride {
         case require(tools: [String])
         case auto
     }
-
     let mode: Mode
 }
 
+/// Orchestrates the interview conversation with the LLM.
+/// All state is managed externally via callbacks - this is purely orchestration.
 actor InterviewOrchestrator {
     // MARK: - Error Handling
 
@@ -29,6 +29,9 @@ actor InterviewOrchestrator {
         }
         return error.localizedDescription
     }
+
+    // MARK: - Callbacks
+
     struct Callbacks {
         let updateProcessingState: @Sendable (Bool) async -> Void
         let emitAssistantMessage: @Sendable (String, Bool) async -> UUID
@@ -38,27 +41,50 @@ actor InterviewOrchestrator {
         let updateReasoningSummary: @Sendable (UUID, String, Bool) async -> Void
         let finalizeReasoningSummaries: @Sendable ([UUID]) async -> Void
         let updateStreamingStatus: @Sendable (String?) async -> Void
-        let handleWaitingState: @Sendable (InterviewSession.Waiting?) async -> Void
+        let handleWaitingState: @Sendable (String?) async -> Void
         let handleError: @Sendable (String) async -> Void
         let storeApplicantProfile: @Sendable (JSON) async -> Void
         let storeSkeletonTimeline: @Sendable (JSON) async -> Void
-        let storeArtifactRecord: @Sendable (JSON) async -> Void
-        let storeKnowledgeCard: @Sendable (JSON) async -> Void
-        let setExtractionStatus: @Sendable (OnboardingPendingExtraction?) async -> Void
-        let updateExtractionProgress: ExtractionProgressHandler
+        let updateEnabledSections: @Sendable (Set<String>) async -> Void
         let persistCheckpoint: @Sendable () async -> Void
-        let registerToolWait: @Sendable (UUID, String, String, String?) async -> Void
-        let clearToolWait: @Sendable (UUID, String) async -> Void
-        let handleInvalidModelId: @Sendable (String) async -> Void
+        let getObjectiveStatus: @Sendable (String) async -> String?
+        let processToolCall: @Sendable (ToolCall) async -> JSON?
     }
 
-    private let client: OpenAIService
-    private let state: InterviewState
-    private let toolExecutor: ToolExecutor
-    private let callbacks: Callbacks
+    // MARK: - Properties
+
+    private let service: OpenAIService
     private let systemPrompt: String
-    private let allowedToolsMap: [InterviewPhase: [String]] = [
-        .phase1CoreFacts: [
+    private let callbacks: Callbacks
+
+    // Conversation state
+    private var conversationId: String?
+    private var lastResponseId: String?
+    private var currentModelId: String = "gpt-5"
+
+    // Tool execution tracking
+    private var continuationCallIds: [UUID: String] = [:]
+    private var continuationToolNames: [UUID: String] = [:]
+    private var pendingToolContinuations: [UUID: CheckedContinuation<JSON, Error>] = [:]
+
+    // Cached data for quick reference
+    private var applicantProfileData: JSON?
+    private var skeletonTimelineData: JSON?
+
+    // Tool choice override for forcing specific tools
+    private var nextToolChoiceOverride: ToolChoiceOverride?
+
+    // Timeline tool names for special handling
+    private let timelineToolNames: Set<String> = [
+        "create_timeline_card",
+        "update_timeline_card",
+        "reorder_timeline_cards",
+        "delete_timeline_card"
+    ]
+
+    // Phase-specific tool allowlists
+    private let allowedToolsMap: [String: [String]] = [
+        "phase1": [
             "get_user_option",
             "get_applicant_profile",
             "get_user_upload",
@@ -77,7 +103,7 @@ actor InterviewOrchestrator {
             "set_objective_status",
             "next_phase"
         ],
-        .phase2DeepDive: [
+        "phase2": [
             "get_user_option",
             "get_user_upload",
             "extract_document",
@@ -91,7 +117,7 @@ actor InterviewOrchestrator {
             "next_phase",
             "generate_knowledge_card"
         ],
-        .phase3WritingCorpus: [
+        "phase3": [
             "get_user_option",
             "get_user_upload",
             "extract_document",
@@ -102,9 +128,6 @@ actor InterviewOrchestrator {
             "submit_for_validation",
             "persist_data",
             "set_objective_status",
-            "next_phase"
-        ],
-        .complete: [
             "next_phase"
         ]
     ]
@@ -117,1091 +140,351 @@ actor InterviewOrchestrator {
         var firstDeltaLogged: Bool
     }
 
-    private var conversationId: String?
-    private var lastResponseId: String?
-    private var currentModelId: String = "gpt-5"
-    private var continuationCallIds: [UUID: String] = [:]
-    private var continuationToolNames: [UUID: String] = [:]
-    private var pendingToolContinuations: [UUID: CheckedContinuation<JSON, Error>] = [:]
-    private var applicantProfileData: JSON?
-    private var skeletonTimelineData: JSON?
-    private var nextToolChoiceOverride: ToolChoiceOverride?
-    private let timelineToolNames: Set<String> = [
-        "create_timeline_card",
-        "update_timeline_card",
-        "reorder_timeline_cards",
-        "delete_timeline_card"
-    ]
+    private var streamingBuffers: [String: StreamBuffer] = [:]
+    private var reasoningSummaryBuffers: [String: String] = [:]
+    private var reasoningSummaryFinalized: Set<String> = []
+    private var messageIds: [String: UUID] = [:]
+    private var pendingSummaryByItem: [String: String] = [:]
+    private var appendedMessageUUIDs: [UUID] = []
+    private var pendingSummaryFragments: [String] = []
+    private var lastMessageUUID: UUID?
+    private var isActive = false
+
+    // MARK: - Initialization
 
     init(
-        client: OpenAIService,
-        state: InterviewState,
-        toolExecutor: ToolExecutor,
-        callbacks: Callbacks,
-        systemPrompt: String
+        state: InterviewState,  // Temporary - will be removed completely in final cleanup
+        service: OpenAIService,
+        systemPrompt: String,
+        callbacks: Callbacks
     ) {
-        self.client = client
-        self.state = state
-        self.toolExecutor = toolExecutor
-        self.callbacks = callbacks
+        self.service = service
         self.systemPrompt = systemPrompt
+        self.callbacks = callbacks
     }
 
-    func startInterview(modelId: String) async {
-        currentModelId = modelId
+    // MARK: - Interview Control
+
+    func startInterview() async throws {
+        isActive = true
         conversationId = nil
         lastResponseId = nil
 
         // Let the LLM drive the conversation via tool calls
-        // Send initial trigger message to activate the system prompt instructions
-        do {
-            try await requestResponse(withUserMessage: "Begin the onboarding interview.")
-        } catch {
-            let errorDetails = formatError(error)
-            await callbacks.handleError("Failed to start interview: \(errorDetails)")
-        }
+        try await requestResponse(withUserMessage: "Begin the onboarding interview.")
     }
 
-    func sendUserMessage(_ text: String) async {
+    func endInterview() {
+        isActive = false
+        conversationId = nil
+        lastResponseId = nil
+        streamingBuffers.removeAll()
+        reasoningSummaryBuffers.removeAll()
+        continuationCallIds.removeAll()
+        continuationToolNames.removeAll()
+    }
+
+    func sendUserMessage(_ text: String) async throws {
+        guard isActive else { return }
         await callbacks.updateProcessingState(true)
         defer { Task { await self.callbacks.updateProcessingState(false) } }
 
-        do {
-            try await requestResponse(withUserMessage: text)
-        } catch {
-            let errorDetails = formatError(error)
-            await callbacks.handleError("Failed to send message: \(errorDetails)")
-        }
+        try await requestResponse(withUserMessage: text)
     }
 
-    func resumeToolContinuation(id: UUID, payload: JSON) async {
+    // MARK: - Tool Continuation
+
+    func resumeToolContinuation(id: UUID, payload: JSON) async throws {
         await callbacks.updateProcessingState(true)
         defer { Task { await self.callbacks.updateProcessingState(false) } }
 
-        var callId: String?
-        var toolName: String?
-        do {
-            let result = try await toolExecutor.resumeContinuation(id: id, with: payload)
-            let outcomeDescription: String
-            switch result {
-            case .immediate(let json):
-                let statusValue = json["status"].string ?? json["status"].stringValue
-                outcomeDescription = statusValue.isEmpty ? "completed" : "completed(status: \(statusValue))"
-            case .waiting:
-                outcomeDescription = "continued"
-            case .error:
-                outcomeDescription = "completed"
-            }
-            await callbacks.clearToolWait(id, outcomeDescription)
+        // Complete the pending continuation
+        if let continuation = pendingToolContinuations.removeValue(forKey: id) {
+            continuation.resume(returning: payload)
+        }
 
-            callId = continuationCallIds.removeValue(forKey: id)
-            toolName = continuationToolNames.removeValue(forKey: id)
+        // Clear waiting state
+        await callbacks.handleWaitingState(nil)
 
-            await state.setWaiting(nil)
-            await callbacks.handleWaitingState(nil)
-
-            var waitingToken: ContinuationToken?
-            let immediate = try await handleToolResult(
-                result,
-                callId: callId,
-                toolName: toolName,
-                waitingHandler: { token in waitingToken = token }
-            )
-
-            if let continuation = pendingToolContinuations.removeValue(forKey: id) {
-                if let json = immediate {
-                    continuation.resume(returning: json)
-                } else if let token = waitingToken {
-                    pendingToolContinuations[token.id] = continuation
-                    if let toolName {
-                        continuationToolNames[token.id] = toolName
-                    }
-                } else {
-                    continuation.resume(throwing: ToolError.executionFailed("Tool resumed without output."))
-                }
-            }
-        } catch {
-            if let toolName,
-               await handleToolExecutionError(error, callId: callId, toolName: toolName) {
-                return
-            }
-            await callbacks.clearToolWait(id, "error")
-            if let continuation = pendingToolContinuations.removeValue(forKey: id) {
-                continuation.resume(throwing: error)
-            }
-            let errorDetails = formatError(error)
-            await callbacks.handleError("Failed to resume tool: \(errorDetails)")
+        // Continue the conversation
+        if let callId = continuationCallIds.removeValue(forKey: id) {
+            try await requestResponse(withToolOutput: payload, callId: callId)
         }
     }
 
-    // DEPRECATED: This imperative orchestration is replaced by LLM-driven flow via tool calls.
-    // The LLM now drives Phase 1 by calling get_user_option, get_macos_contact_card,
-    // submit_for_validation, and other tools as needed based on user choices.
-    // Kept for reference only.
-    private func runPhaseOne() async {
-        await callbacks.updateProcessingState(true)
-        defer { Task { await self.callbacks.updateProcessingState(false) } }
-
-        do {
-            let profile = try await collectApplicantProfile()
-            applicantProfileData = profile
-            await state.completeObjective("applicant_profile")
-            _ = await callbacks.emitAssistantMessage("Excellent. Contact information is set.", false)
-            await callbacks.persistCheckpoint()
-        } catch ToolError.userCancelled {
-            _ = await callbacks.emitAssistantMessage("⚠️ Applicant profile entry skipped for now.", false)
-        } catch {
-            let errorDetails = formatError(error)
-            await callbacks.handleError("Failed to collect applicant profile: \(errorDetails)")
-        }
-
-        do {
-            let timeline = try await collectSkeletonTimeline()
-            skeletonTimelineData = timeline
-            await state.completeObjective("skeleton_timeline")
-            _ = await callbacks.emitAssistantMessage("✅ Skeleton timeline prepared.", false)
-            await callbacks.persistCheckpoint()
-        } catch ToolError.userCancelled {
-            _ = await callbacks.emitAssistantMessage("⚠️ Resume upload skipped.", false)
-        } catch {
-            let errorDetails = formatError(error)
-            await callbacks.handleError("Failed to build skeleton timeline: \(errorDetails)")
-        }
-
-        let current = await state.currentSession()
-        if current.objectivesDone.contains("skeleton_timeline") && !current.objectivesDone.contains("enabled_sections") {
-            await state.completeObjective("enabled_sections")
-            _ = await callbacks.emitAssistantMessage("📋 Enabled sections recorded for Phase 1.", false)
-            await callbacks.persistCheckpoint()
-        }
-    }
-
-    private func collectApplicantProfile() async throws -> JSON {
-        // Quietly try to fetch contact data first (no message to user yet)
-        var draft = ApplicantProfileDraft()
-        var sources: [String] = []
-
-        do {
-            let contactResponse = try await callTool(name: "get_macos_contact_card", arguments: JSON())
-            if contactResponse["status"].stringValue == "fetched" {
-                let contactDraft = buildApplicantProfileDraft(from: contactResponse["contact"])
-                draft = draft.merging(contactDraft)
-                sources.append("macOS Contacts")
-                let artifact = contactResponse["artifact_record"]
-                if artifact != .null {
-                    await callbacks.storeArtifactRecord(artifact)
-                    await persistData(artifact, as: "artifact_record")
-                }
-            }
-        } catch {
-            Logger.debug("Contact card fetch unavailable: \(error)")
-        }
-
-        // Immediately submit for validation (even if empty) as per spec
-        var args = JSON()
-        args["dataType"].string = "applicant_profile"
-        args["data"] = draft.toJSON()
-        args["message"].string = "Review the suggested details below. Edit anything that needs correction or add missing information before continuing."
-        if !sources.isEmpty {
-            args["sources"] = JSON(sources)
-        }
-
-        let validation = try await callTool(name: "submit_for_validation", arguments: args)
-        let status = validation["status"].stringValue
-        guard status != "rejected" else {
-            throw ToolError.executionFailed("Applicant profile rejected.")
-        }
-
-        let data = validation["data"]
-        let final = data != .null ? data : draft.toJSON()
-        await callbacks.storeApplicantProfile(final)
-        await persistData(final, as: "applicant_profile")
-        return final
-    }
-
-    private func collectSkeletonTimeline() async throws -> JSON {
-        _ = await callbacks.emitAssistantMessage("Next, let's build a high-level timeline of your career. Upload your most recent résumé or a PDF of LinkedIn and I'll map out the roles we'll dig into later.", false)
-
-        var uploadArgs = JSON()
-        uploadArgs["uploadType"].string = "resume"
-        uploadArgs["prompt"].string = "Upload your latest resume to extract a skeleton timeline."
-
-        let uploadResult = try await callTool(name: "get_user_upload", arguments: uploadArgs)
-        guard uploadResult["status"].stringValue == "uploaded",
-              let firstUpload = uploadResult["uploads"].array?.first else {
-            throw ToolError.userCancelled
-        }
-
-        guard let fileURLString = firstUpload["file_url"].string ?? firstUpload["storageUrl"].string,
-              let fileURL = URL(string: fileURLString) else {
-            throw ToolError.executionFailed("Uploaded file URL missing or invalid.")
-        }
-
-        var extractionArgs = JSON()
-        extractionArgs["file_url"].string = fileURL.absoluteString
-        extractionArgs["purpose"].string = "resume_timeline"
-        extractionArgs["return_types"] = JSON(["artifact_record"])
-
-        await callbacks.setExtractionStatus(
-            OnboardingPendingExtraction(
-                title: "Extracting résumé",
-                summary: "Processing your uploaded résumé to draft a skeleton timeline."
-            )
-        )
-
-        defer {
-            Task { await callbacks.setExtractionStatus(nil) }
-        }
-
-        let extractionResult = try await callTool(name: "extract_document", arguments: extractionArgs)
-        let artifact = extractionResult["artifact_record"]
-        let extractedText = artifact["extracted_content"].stringValue
-        guard !extractedText.isEmpty else {
-            throw ToolError.executionFailed("Document extraction did not yield text content.")
-        }
-        if artifact != .null {
-            await callbacks.updateExtractionProgress(
-                ExtractionProgressUpdate(
-                    stage: .artifactSave,
-                    state: .active,
-                    detail: artifact["filename"].string
-                )
-            )
-            await callbacks.storeArtifactRecord(artifact)
-            await persistData(artifact, as: "artifact_record")
-            await callbacks.updateExtractionProgress(
-                ExtractionProgressUpdate(
-                    stage: .artifactSave,
-                    state: .completed,
-                    detail: artifact["filename"].string
-                )
-            )
-        } else {
-            await callbacks.updateExtractionProgress(
-                ExtractionProgressUpdate(
-                    stage: .artifactSave,
-                    state: .completed,
-                    detail: "No new artifact generated"
-                )
-            )
-        }
-
-        await callbacks.updateExtractionProgress(
-            ExtractionProgressUpdate(
-                stage: .assistantHandoff,
-                state: .active,
-                detail: "Generating timeline"
-            )
-        )
-
-        do {
-            let timeline = try await generateTimeline(from: extractedText)
-
-            var validationArgs = JSON()
-            validationArgs["dataType"].string = "skeleton_timeline"
-            validationArgs["data"] = timeline
-            validationArgs["message"].string = "Review the generated skeleton timeline."
-
-            let validation = try await callTool(name: "submit_for_validation", arguments: validationArgs)
-            let status = validation["status"].stringValue
-            guard status != "rejected" else {
-                throw ToolError.executionFailed("Skeleton timeline rejected.")
-            }
-
-            let data = validation["data"]
-            let final = data != .null ? data : timeline
-            await callbacks.storeSkeletonTimeline(final)
-            await persistData(final, as: "skeleton_timeline")
-            await callbacks.updateExtractionProgress(
-                ExtractionProgressUpdate(
-                    stage: .assistantHandoff,
-                    state: .completed,
-                    detail: "Timeline ready"
-                )
-            )
-            return final
-        } catch {
-            await callbacks.updateExtractionProgress(
-                ExtractionProgressUpdate(
-                    stage: .assistantHandoff,
-                    state: .failed,
-                    detail: error.localizedDescription
-                )
-            )
-            throw error
-        }
-    }
-
-    private func persistData(_ payload: JSON, as dataType: String) async {
-        guard payload != .null else { return }
-
-        var args = JSON()
-        args["dataType"].string = dataType
-        args["data"] = payload
-
-        do {
-            _ = try await callTool(name: "persist_data", arguments: args)
-            if dataType == "knowledge_card" {
-                await callbacks.storeKnowledgeCard(payload)
-            }
-        } catch {
-            Logger.debug("Persist data for \(dataType) failed: \(error)")
-        }
-    }
-
-    private func buildApplicantProfileDraft(from contact: JSON) -> ApplicantProfileDraft {
-        var draft = ApplicantProfileDraft()
-
-        let given = contact["name"]["given"].stringValue
-        let family = contact["name"]["family"].stringValue
-        let fullName = [given, family].filter { !$0.isEmpty }.joined(separator: " ")
-        if !fullName.isEmpty { draft.name = fullName }
-
-        if let jobTitle = contact["jobTitle"].string, !jobTitle.isEmpty {
-            draft.label = jobTitle
-        }
-
-        if let organization = contact["organization"].string, !organization.isEmpty {
-            draft.summary = "Current role at \(organization)."
-        }
-
-        if let emailEntry = contact["email"].array?.compactMap({ $0["value"].string }).first,
-           !emailEntry.isEmpty {
-            draft.email = emailEntry
-        }
-
-        if let phoneEntry = contact["phone"].array?.compactMap({ $0["value"].string }).first,
-           !phoneEntry.isEmpty {
-            draft.phone = phoneEntry
-        }
-
-        return draft
-    }
-
-    private func generateTimeline(from resumeText: String) async throws -> JSON {
-        let config = ModelProvider.forTask(.extract)
-        let textConfig = TextConfiguration(format: .jsonObject, verbosity: config.defaultVerbosity)
-
-        let prompt = buildTimelineExtractionPrompt(resumeText: resumeText)
-        let message = InputMessage(role: "user", content: .text(prompt))
-
-        var parameters = ModelResponseParameter(
-            input: .array([.message(message)]),
-            model: .custom(config.id),
-            text: textConfig
-        )
-
-        if let effort = config.defaultReasoningEffort {
-            parameters.reasoning = Reasoning(effort: effort, summary: .auto)
-        }
-
-        let response = try await client.responseCreate(parameters)
-        guard let output = response.outputText else {
-            throw ToolError.executionFailed("Timeline extraction returned no content.")
-        }
-
-        guard let data = output.data(using: .utf8) else {
-            throw ToolError.executionFailed("Timeline extraction output was not valid UTF-8.")
-        }
-
-        if let usage = response.usage {
-            var parts: [String] = []
-            if let input = usage.inputTokens ?? usage.promptTokens {
-                parts.append("input: \(input)")
-            }
-            if let output = usage.outputTokens ?? usage.completionTokens {
-                parts.append("output: \(output)")
-            }
-            if let reasoning = usage.outputTokensDetails?.reasoningTokens {
-                parts.append("reasoning: \(reasoning)")
-            }
-            if !parts.isEmpty {
-                Logger.debug("🧠 extract_document usage — " + parts.joined(separator: ", "), category: .ai)
-            }
-        }
-
-        return try JSON(data: data)
-    }
-
-    private func buildTimelineExtractionPrompt(resumeText: String) -> String {
-        let truncated = truncateText(resumeText, limit: 8000)
-        return """
-        You are an assistant that extracts a chronological career timeline from resume text.
-        Respond with a JSON object containing a key \"experiences\" which holds an array of entries.
-        Each entry must include the fields: title, organization, start, end, and summary.
-        Use ISO 8601 date strings in the format YYYY-MM when dates are available; otherwise use null.
-        Resume text:
-        \(truncated)
-        """
-    }
-
-    private func truncateText(_ text: String, limit: Int) -> String {
-        guard text.count > limit else { return text }
-        return String(text.prefix(limit))
-    }
+    // MARK: - Response Handling
 
     private func requestResponse(
-        withUserMessage userMessage: String? = nil,
-        functionOutputs: [FunctionToolCallOutput] = []
+        withUserMessage text: String? = nil,
+        withToolOutput output: JSON? = nil,
+        callId: String? = nil
     ) async throws {
-        var inputItems: [InputItem] = []
+        guard isActive else { return }
 
-      
-        if let userMessage {
-            let contentItem = ContentItem.text(TextContent(text: userMessage))
-            let inputMessage = InputMessage(role: "user", content: .array([contentItem]))
-            inputItems.append(.message(inputMessage))
-        }
-
-        for output in functionOutputs {
-            inputItems.append(.functionToolCallOutput(output))
-        }
-
-        guard !inputItems.isEmpty else {
-            Logger.debug("No input items provided for response request.")
-            return
-        }
-
-        let session = await state.currentSession()
-        let baseAllowedToolNames = allowedToolNames(for: session)
-        let pendingOverride = nextToolChoiceOverride
-        nextToolChoiceOverride = nil
-
-        var effectiveAllowedToolNames = baseAllowedToolNames
-        var overrideMode: AllowedToolsChoice.Mode = .auto
-
-        if let pendingOverride {
-            switch pendingOverride.mode {
-            case .auto:
-                break
-            case .require(let tools):
-                let overrideSet = Set(tools)
-                let intersection = baseAllowedToolNames.intersection(overrideSet)
-                if intersection.isEmpty {
-                    Logger.warning("⚠️ Tool override could not locate any allowed timeline tools; falling back to phase defaults.", category: .ai)
-                } else {
-                    effectiveAllowedToolNames = intersection
-                    overrideMode = .required
-                    let forcedList = intersection.sorted().joined(separator: ", ")
-                    Logger.debug("🧭 Applying one-shot tool override for timeline creation: \(forcedList)", category: .ai)
-                }
-            }
-        }
-
-        let config = ModelProvider.forTask(.orchestrator)
-        let textConfig = TextConfiguration(format: .text, verbosity: config.defaultVerbosity)
-
-        let apiModelId = currentModelId.replacingOccurrences(of: "openai/", with: "")
-
-        let reasoningRequested = config.defaultReasoningEffort != nil
-        var parameters = ModelResponseParameter(
-            input: .array(inputItems),
-            model: .custom(apiModelId),
-            conversation: conversationId.map { .id($0) },
-            instructions: conversationId == nil ? systemPrompt : nil,
-            previousResponseId: lastResponseId,
-            store: true,
-            text: textConfig
+        let request = buildRequest(
+            userMessage: text,
+            toolOutput: output,
+            callId: callId
         )
-        parameters.parallelToolCalls = false
-        let toolSchemas = await toolExecutor.availableToolSchemas(allowedNames: effectiveAllowedToolNames)
-        parameters.tools = toolSchemas
-        let availableToolNames: [String] = toolSchemas.compactMap { schema in
-            switch schema {
-            case let .function(function):
-                return function.name
-            default:
-                return nil
+
+        let responsesTask = Task {
+            try await service.createAsyncRun(request: request)
+        }
+
+        do {
+            for try await event in try await responsesTask.value {
+                await handleResponseEvent(event)
+            }
+        } catch let error as APIError {
+            if error.message?.contains("invalid model id") == true {
+                await callbacks.handleError("Invalid model selected. Please check settings.")
+            } else {
+                throw error
             }
         }
-        if !availableToolNames.isEmpty {
-            let allowedToolEntries = availableToolNames.sorted().map { AllowedToolsChoice.AllowedTool(name: $0) }
-            parameters.toolChoice = .allowedTools(AllowedToolsChoice(mode: overrideMode, tools: allowedToolEntries))
+    }
+
+    private func buildRequest(
+        userMessage: String?,
+        toolOutput: JSON?,
+        callId: String?
+    ) -> ResponseCreateRequest {
+        var messages: [Message] = []
+
+        // Add system prompt
+        messages.append(.system(content: .text(systemPrompt)))
+
+        // Add user message if provided
+        if let text = userMessage {
+            messages.append(.user(content: .text(text)))
         }
 
-        if let effort = config.defaultReasoningEffort {
-            parameters.reasoning = Reasoning(effort: effort, summary: .auto)
+        // Add tool output if provided
+        if let output = toolOutput, let callId = callId {
+            let content = MessageContent.toolOutput(
+                ToolOutput(
+                    toolCallId: callId,
+                    output: output.rawString() ?? "{}"
+                )
+            )
+            messages.append(.user(content: content))
         }
 
-        parameters.stream = true
+        // Build tool configuration
+        let tools = buildAvailableTools()
 
-        var streamBuffers: [String: StreamBuffer] = [:]
-        var finalizedMessageIds: Set<String> = []
-        var finalResponse: ResponseModel?
-        var messageIdByOutputItem: [String: UUID] = [:]
-        var reasoningSummaryBuffers: [String: String] = [:]
-        var reasoningSummaryFinalized: Set<String> = []
-        var pendingSummaryByItem: [String: String] = [:]
-        let flushCharacters: Set<Character> = [" ", "\n", "\t", ".", ",", "?", "!", ";", ":"]
-        let streamingStart = Date()
-        var silenceTask: Task<Void, Never>?
-
-        await callbacks.updateStreamingStatus(nil)
-
-        func scheduleSilenceStatus() {
-            silenceTask?.cancel()
-            silenceTask = Task { [callbacks] in
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                await callbacks.updateStreamingStatus("Connecting to Agent…")
+        // Apply tool choice override if set
+        let toolChoice: ResponseToolChoice = if let override = nextToolChoiceOverride {
+            nextToolChoiceOverride = nil
+            switch override.mode {
+            case .require(let toolNames):
+                .required(tools.filter { toolNames.contains($0.name) })
+            case .auto:
+                .auto
             }
+        } else {
+            .auto
         }
 
-        func clearSilenceStatus() async {
-            silenceTask?.cancel()
-            silenceTask = nil
-            await callbacks.updateStreamingStatus(nil)
+        return ResponseCreateRequest(
+            model: currentModelId,
+            modalities: [.text],
+            messages: messages,
+            tools: tools,
+            toolChoice: toolChoice,
+            metadata: conversationId.map { ["conversationId": $0] } ?? [:],
+            stream: true
+        )
+    }
+
+    private func buildAvailableTools() -> [ToolDefinition] {
+        // Get current phase tools (simplified - no state dependency)
+        let phaseTools = allowedToolsMap["phase1"] ?? []
+
+        return phaseTools.compactMap { toolName in
+            // Build tool definitions
+            // This will be expanded with actual tool schemas
+            ToolDefinition(
+                type: "function",
+                function: ToolFunction(
+                    name: toolName,
+                    description: "Tool: \(toolName)",
+                    parameters: .init(type: .object, properties: [:])
+                )
+            )
+        }
+    }
+
+    // MARK: - Event Stream Processing
+
+    private func handleResponseEvent(_ event: ResponseStreamEvent) async {
+        switch event {
+        case .created(let response):
+            conversationId = response.id
+            lastResponseId = response.id
+
+        case .done(let response):
+            await finalizePendingMessages()
+            conversationId = response.id
+            lastResponseId = response.id
+
+        case .contentDelta(let delta):
+            await processContentDelta(delta)
+
+        case .reasoning(let reasoning):
+            await processReasoning(reasoning)
+
+        case .toolCallDelta(let delta):
+            await processToolCallDelta(delta)
+
+        case .toolCallDone(let toolCall):
+            await processToolCall(toolCall)
+
+        default:
+            break
+        }
+    }
+
+    private func processContentDelta(_ delta: ResponseContentDelta) async {
+        guard case .text(let text) = delta.content else { return }
+
+        let itemId = delta.contentId
+        if streamingBuffers[itemId] == nil {
+            let messageId = await callbacks.beginStreamingAssistantMessage("", false)
+            streamingBuffers[itemId] = StreamBuffer(
+                messageId: messageId,
+                text: "",
+                pendingFragment: "",
+                startedAt: Date(),
+                firstDeltaLogged: false
+            )
+            messageIds[itemId] = messageId
+            lastMessageUUID = messageId
         }
 
-        scheduleSilenceStatus()
-        defer {
-            silenceTask?.cancel()
-            Task { await callbacks.updateStreamingStatus(nil) }
-        }
+        guard var buffer = streamingBuffers[itemId] else { return }
+        buffer.text += text
+        buffer.pendingFragment += text
 
-        func deliverSummary(for itemId: String, isFinalOverride: Bool?) async {
-            guard let summary = reasoningSummaryBuffers[itemId] else { return }
-            guard let messageId = messageIdByOutputItem[itemId] else {
-                pendingSummaryByItem[itemId] = summary
-                return
+        await callbacks.updateStreamingAssistantMessage(buffer.messageId, buffer.pendingFragment)
+        buffer.pendingFragment = ""
+        streamingBuffers[itemId] = buffer
+    }
+
+    private func processReasoning(_ reasoning: ResponseReasoning) async {
+        let summaryText = reasoning.summary
+            .map(\.text)
+            .joined(separator: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !summaryText.isEmpty else { return }
+
+        if let currentMessage = lastMessageUUID {
+            await callbacks.updateReasoningSummary(currentMessage, summaryText, true)
+        } else if let mappedMessage = messageIds[reasoning.id] {
+            await callbacks.updateReasoningSummary(mappedMessage, summaryText, true)
+        } else {
+            pendingSummaryFragments.append(summaryText)
+        }
+    }
+
+    private func processToolCallDelta(_ delta: ResponseToolCallDelta) async {
+        // Tool call deltas can be used for progress tracking
+        // Currently not implemented
+    }
+
+    private func processToolCall(_ toolCall: ResponseToolCall) async {
+        guard case .function(let call) = toolCall else { return }
+
+        // Process the tool call through callbacks
+        if let result = await callbacks.processToolCall(ToolCall(
+            id: toolCall.id,
+            type: "function",
+            function: FunctionCall(
+                name: call.name,
+                arguments: call.arguments
+            )
+        )) {
+            // Tool returned immediate result
+            do {
+                try await requestResponse(
+                    withToolOutput: result,
+                    callId: toolCall.id
+                )
+            } catch {
+                await callbacks.handleError("Tool execution failed: \(error)")
             }
-            let isFinal = isFinalOverride ?? reasoningSummaryFinalized.contains(itemId)
-            await callbacks.updateReasoningSummary(messageId, summary, isFinal)
-            if isFinal {
-                reasoningSummaryBuffers.removeValue(forKey: itemId)
-                reasoningSummaryFinalized.remove(itemId)
+        } else {
+            // Tool requires user interaction - will resume later
+            let waitingState = waitingStateForTool(call.name)
+            await callbacks.handleWaitingState(waitingState)
+        }
+    }
+
+    private func finalizePendingMessages() async {
+        for (itemId, buffer) in streamingBuffers {
+            await callbacks.finalizeStreamingAssistantMessage(buffer.messageId, buffer.text)
+
+            // Apply any pending reasoning summaries
+            if let summary = pendingSummaryByItem[itemId] {
+                await callbacks.updateReasoningSummary(buffer.messageId, summary, true)
                 pendingSummaryByItem.removeValue(forKey: itemId)
             }
         }
 
-        do {
-            let stream = try await client.responseCreateStream(parameters)
-            for try await event in stream {
-                try Task.checkCancellation()
-                switch event {
-                case .responseCreated(let created):
-                    updateConversationState(from: created.response)
-                case .responseInProgress(let inProgress):
-                    updateConversationState(from: inProgress.response)
-                case .responseCompleted(let completed):
-                    updateConversationState(from: completed.response)
-                    finalResponse = completed.response
-                case .responseFailed(let failed):
-                    updateConversationState(from: failed.response)
-                    let message = failed.response.error?.message ?? "Model response failed."
-                    await clearSilenceStatus()
-                    throw ToolError.executionFailed(message)
-                case .responseIncomplete(let incomplete):
-                    updateConversationState(from: incomplete.response)
-                    let reason = incomplete.response.incompleteDetails?.reason ?? "unknown"
-                    await clearSilenceStatus()
-                    throw ToolError.executionFailed("Model response incomplete: \(reason)")
-                case .outputTextDelta(let delta):
-                    let fragment = delta.delta
-                    guard !fragment.isEmpty else { continue }
-                    await clearSilenceStatus()
-                    var buffer = streamBuffers[delta.itemId]
-                    if buffer == nil {
-                        let messageId = await callbacks.beginStreamingAssistantMessage("", reasoningRequested)
-                        buffer = StreamBuffer(
-                            messageId: messageId,
-                            text: "",
-                            pendingFragment: "",
-                            startedAt: Date(),
-                            firstDeltaLogged: false
-                        )
-                        messageIdByOutputItem[delta.itemId] = messageId
-                    }
-                    if messageIdByOutputItem[delta.itemId] == nil {
-                        messageIdByOutputItem[delta.itemId] = buffer!.messageId
-                        if pendingSummaryByItem[delta.itemId] != nil {
-                            await deliverSummary(for: delta.itemId, isFinalOverride: nil)
-                        }
-                    }
-                    if buffer!.firstDeltaLogged == false {
-                        let latencyMs = Int(Date().timeIntervalSince(streamingStart) * 1000)
-                        Logger.info("🕑 First token streaming latency \(latencyMs)ms", category: .diagnostics, metadata: ["item_id": delta.itemId])
-                        buffer!.firstDeltaLogged = true
-                    }
-                    buffer!.text.append(contentsOf: fragment)
-                    buffer!.pendingFragment.append(contentsOf: fragment)
-                    let shouldFlush = buffer!.pendingFragment.contains(where: { flushCharacters.contains($0) }) || buffer!.pendingFragment.count >= 12
-                    if shouldFlush {
-                        buffer!.pendingFragment.removeAll(keepingCapacity: true)
-                        streamBuffers[delta.itemId] = buffer!
-                        await callbacks.updateStreamingAssistantMessage(buffer!.messageId, buffer!.text)
-                    } else {
-                        streamBuffers[delta.itemId] = buffer!
-                    }
-                    scheduleSilenceStatus()
-                    await deliverSummary(for: delta.itemId, isFinalOverride: false)
-                case .outputTextDone(let done):
-                    let finalText = done.text
-                    var buffer = streamBuffers[done.itemId]
-                    if buffer == nil {
-                        let messageId = await callbacks.beginStreamingAssistantMessage(finalText, reasoningRequested)
-                        buffer = StreamBuffer(
-                            messageId: messageId,
-                            text: finalText,
-                            pendingFragment: "",
-                            startedAt: Date(),
-                            firstDeltaLogged: true
-                        )
-                        messageIdByOutputItem[done.itemId] = messageId
-                    } else {
-                        buffer!.text = finalText
-                    }
-                    if messageIdByOutputItem[done.itemId] == nil {
-                        messageIdByOutputItem[done.itemId] = buffer!.messageId
-                        if pendingSummaryByItem[done.itemId] != nil {
-                            await deliverSummary(for: done.itemId, isFinalOverride: nil)
-                        }
-                    }
-                    buffer!.pendingFragment.removeAll(keepingCapacity: false)
-                    streamBuffers[done.itemId] = buffer!
-                    await callbacks.updateStreamingAssistantMessage(buffer!.messageId, buffer!.text)
-                    await callbacks.finalizeStreamingAssistantMessage(buffer!.messageId, buffer!.text)
-                    finalizedMessageIds.insert(done.itemId)
-                    streamBuffers.removeValue(forKey: done.itemId)
-                    let totalMs = Int(Date().timeIntervalSince(buffer!.startedAt) * 1000)
-                    Logger.info("✅ Streaming completed in \(totalMs)ms", category: .diagnostics, metadata: ["item_id": done.itemId, "length": "\(buffer!.text.count)"])
-                    await clearSilenceStatus()
-                    await deliverSummary(for: done.itemId, isFinalOverride: nil)
-                case .reasoningSummaryTextDelta(let delta):
-                    let fragment = delta.delta
-                    guard !fragment.isEmpty else { continue }
-                    await clearSilenceStatus()
-                    reasoningSummaryBuffers[delta.itemId, default: ""] += fragment
-                    if messageIdByOutputItem[delta.itemId] != nil {
-                        await deliverSummary(for: delta.itemId, isFinalOverride: false)
-                    }
-                    scheduleSilenceStatus()
-                
-                    // (patch) no buffer update found to hook into
-case .reasoningSummaryTextDone(let done):
-                    await clearSilenceStatus()
-                    reasoningSummaryBuffers[done.itemId] = done.text
-                    reasoningSummaryFinalized.insert(done.itemId)
-                    if messageIdByOutputItem[done.itemId] != nil {
-                        await deliverSummary(for: done.itemId, isFinalOverride: true)
-                    }
-                default:
-                    continue
-                }
-            }
-        } catch {
-            if let llmError = error as? LLMError {
-                switch llmError {
-                case .invalidModelId(let modelId):
-                    await clearSilenceStatus()
-                    await callbacks.updateProcessingState(false)
-                    await callbacks.handleInvalidModelId(modelId)
-                    return
-                default:
-                    break
-                }
-            }
-            throw error
-        }
-
-        guard let response = finalResponse else {
-            Logger.debug("Streaming response completed without final response payload.")
-            await callbacks.persistCheckpoint()
-            return
-        }
-
-        let appendedMessages = try await handleResponse(
-            response,
-            finalizedMessageIds: finalizedMessageIds,
-            messageIdByOutputItem: messageIdByOutputItem,
-            reasoningRequested: reasoningRequested
-        )
-        let completedMessages = finalizedMessageIds.compactMap { messageIdByOutputItem[$0] }
-        let allMessagesNeedingFinalization = Array(Set(completedMessages + appendedMessages))
-        if !allMessagesNeedingFinalization.isEmpty {
-            await callbacks.finalizeReasoningSummaries(allMessagesNeedingFinalization)
-        }
-        await callbacks.persistCheckpoint()
+        streamingBuffers.removeAll()
+        messageIds.removeAll()
+        lastMessageUUID = nil
+        pendingSummaryFragments.removeAll()
     }
 
-    private func callTool(name: String, arguments: JSON) async throws -> JSON {
-        let call = ToolCall(
-            id: UUID().uuidString,
-            name: name,
-            arguments: arguments,
-            callId: UUID().uuidString
-        )
-
-        let result = try await toolExecutor.handleToolCall(call)
-        var waitingToken: ContinuationToken?
-        if let immediate = try await handleToolResult(
-            result,
-            callId: nil,
-            toolName: name,
-            waitingHandler: { token in waitingToken = token }
-        ) {
-            return immediate
-        }
-
-        guard let token = waitingToken else {
-            throw ToolError.executionFailed("Tool \(name) entered waiting state without a continuation token.")
-        }
-
-        await callbacks.updateProcessingState(false)
-        do {
-            let resultJSON = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<JSON, Error>) in
-                pendingToolContinuations[token.id] = continuation
-            }
-            await callbacks.updateProcessingState(true)
-            return resultJSON
-        } catch {
-            await callbacks.updateProcessingState(true)
-            throw error
-        }
-    }
-
-    private func handleResponse(
-        _ response: ResponseModel,
-        finalizedMessageIds: Set<String> = [],
-        messageIdByOutputItem: [String: UUID] = [:],
-        reasoningRequested: Bool
-    ) async throws -> [UUID] {
-        var messageIds = messageIdByOutputItem
-        var lastMessageUUID: UUID?
-        var appendedMessageUUIDs: [UUID] = []
-        var pendingSummaryFragments: [String] = []
-
-        for item in response.output {
-            switch item {
-            case .message(let message):
-                let text = extractAssistantText(from: message)
-                if let existing = messageIds[message.id] {
-                    lastMessageUUID = existing
-                }
-                if finalizedMessageIds.contains(message.id) || text.isEmpty {
-                    continue
-                }
-                let messageUUID = await callbacks.emitAssistantMessage(text, reasoningRequested)
-                messageIds[message.id] = messageUUID
-                lastMessageUUID = messageUUID
-                appendedMessageUUIDs.append(messageUUID)
-                if !pendingSummaryFragments.isEmpty {
-                    let combined = pendingSummaryFragments.joined(separator: "\n\n")
-                    await callbacks.updateReasoningSummary(messageUUID, combined, true)
-                    pendingSummaryFragments.removeAll(keepingCapacity: true)
-                }
-            case .reasoning(let reasoning):
-                let summaryText = reasoning.summary
-                    .map(\.text)
-                    .joined(separator: "\n\n")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !summaryText.isEmpty else { continue }
-
-                if let currentMessage = lastMessageUUID {
-                    await callbacks.updateReasoningSummary(currentMessage, summaryText, true)
-                } else if let mappedMessage = messageIds[reasoning.id] {
-                    await callbacks.updateReasoningSummary(mappedMessage, summaryText, true)
-                } else {
-                    pendingSummaryFragments.append(summaryText)
-                }
-            case .functionCall(let functionCall):
-                try await handleFunctionCall(functionCall)
-            default:
-                continue
-            }
-        }
-
-        if !pendingSummaryFragments.isEmpty {
-            Logger.debug("Reasoning summaries received without any assistant message in response (count: \(pendingSummaryFragments.count)).")
-        }
-        return appendedMessageUUIDs
-    }
-
-    private func handleFunctionCall(_ functionCall: OutputItem.FunctionToolCall) async throws {
-        let argumentsJSON = JSON(parseJSON: functionCall.arguments)
-        guard argumentsJSON != .null else {
-            await callbacks.handleError("Tool call \(functionCall.name) had invalid parameters.")
-            return
-        }
-
-        let callId = functionCall.callId
-        let identifier = functionCall.id
-        let call = ToolCall(id: identifier, name: functionCall.name, arguments: argumentsJSON, callId: callId)
-        do {
-            let result = try await toolExecutor.handleToolCall(call)
-            _ = try await handleToolResult(result, callId: callId, toolName: functionCall.name)
-        } catch {
-            if await handleToolExecutionError(error, callId: callId, toolName: functionCall.name) {
-                return
-            }
-            throw error
-        }
-    }
-
-    private func handleToolResult(
-        _ result: ToolResult,
-        callId: String?,
-        toolName: String? = nil,
-        waitingHandler: ((ContinuationToken) -> Void)? = nil
-    ) async throws -> JSON? {
-        switch result {
-        case .immediate(let json):
-            let sanitized = sanitizeToolOutput(for: toolName, payload: json)
-            if let callId {
-                Logger.info("📦 Tool immediate result for \(toolName ?? "unknown"): \(sanitized)", category: .ai)
-                try await sendToolOutput(callId: callId, output: sanitized)
-            }
-            return sanitized
-        case .waiting(let message, let token):
-            let statusPayload = sanitizeToolOutput(for: toolName, payload: token.initialPayload ?? JSON(["status": "waiting_for_user"]))
-            if let callId {
-                // Send status to LLM to prevent tool call timeout
-                try await sendToolOutput(callId: callId, output: statusPayload)
-                continuationCallIds[token.id] = callId
-            }
-            let queueMessage = queueDescription(
-                for: toolName ?? token.toolName,
-                statusPayload: statusPayload,
-                explicitMessage: message
-            )
-            if let toolName {
-                continuationToolNames[token.id] = toolName
-                let waitingState = waitingState(for: toolName)
-                await state.setWaiting(waitingState)
-                await callbacks.handleWaitingState(waitingState)
-                let resolvedCallId = callId ?? continuationCallIds[token.id] ?? "call_\(token.id.uuidString)"
-                await callbacks.registerToolWait(token.id, toolName, resolvedCallId, queueMessage)
-            } else {
-                let resolvedCallId = callId ?? continuationCallIds[token.id] ?? "call_\(token.id.uuidString)"
-                await callbacks.registerToolWait(token.id, token.toolName, resolvedCallId, queueMessage)
-            }
-            waitingHandler?(token)
-            return nil
-        case .error(let error):
-            throw error
-        }
-    }
-
-    private func sendToolOutput(callId: String, output: JSON) async throws {
-        guard
-            let data = try? output.rawData(options: []),
-            let outputString = String(data: data, encoding: .utf8)
-        else {
-            throw NSError(domain: "InterviewOrchestrator", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to encode tool output as JSON string."
-            ])
-        }
-
-        let functionOutput = FunctionToolCallOutput(callId: callId, output: outputString)
-        Logger.info("📨 Sending function_call_output for call_id=\(callId): \(outputString)", category: .ai)
-        try await requestResponse(functionOutputs: [functionOutput])
-    }
-
-    private func sanitizeToolOutput(for toolName: String?, payload: JSON) -> JSON {
-        guard let toolName else { return payload }
-        switch toolName {
-        case "get_applicant_profile":
-            var sanitized = payload
-            if sanitized["data"] != .null {
-                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
-                let channel = sanitized["mode"].string ?? "intake"
-                data = attachValidationMetaIfNeeded(to: data, defaultChannel: channel)
-                sanitized["data"] = data
-            }
-            return sanitized
-        case "validate_applicant_profile":
-            var sanitized = payload
-            if sanitized["data"] != .null {
-                var data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
-                data = attachValidationMetaIfNeeded(to: data, defaultChannel: "validation_card")
-                sanitized["data"] = data
-            }
-            if sanitized["changes"] != .null {
-                sanitized["changes"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["changes"])
-            }
-            return sanitized
-        case "submit_for_validation":
-            var sanitized = payload
-            if sanitized["data"] != .null {
-                let data = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["data"])
-                sanitized["data"] = data
-            }
-            if sanitized["changes"] != .null {
-                sanitized["changes"] = ApplicantProfileDraft.removeHiddenEmailOptions(from: sanitized["changes"])
-            }
-            return sanitized
-        default:
-            return payload
-        }
-    }
-
-    private func attachValidationMetaIfNeeded(to json: JSON, defaultChannel: String) -> JSON {
-        var enriched = json
-        let currentState = enriched["meta"]["validation_state"].stringValue.lowercased()
-        guard currentState.isEmpty || currentState == "user_validated" else {
-            return enriched
-        }
-        if enriched["meta"] == .null {
-            enriched["meta"] = JSON()
-        }
-        enriched["meta"]["validation_state"].string = "user_validated"
-        if enriched["meta"]["validated_via"].stringValue.isEmpty {
-            enriched["meta"]["validated_via"].string = defaultChannel
-        }
-        if enriched["meta"]["validated_at"].stringValue.isEmpty {
-            let formatter = ISO8601DateFormatter()
-            enriched["meta"]["validated_at"].string = formatter.string(from: Date())
-        }
-        return enriched
-    }
-
-    private func updateConversationState(from response: ResponseModel) {
-        lastResponseId = response.id
-        if let conversation = response.conversation {
-            conversationId = extractConversationId(from: conversation)
-        }
-    }
-
-    private func extractAssistantText(from message: OutputItem.Message) -> String {
-        message.content.compactMap { content -> String? in
-            if case let .outputText(output) = content {
-                return output.text
-            }
-            return nil
-        }
-        .joined(separator: "\n")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func extractConversationId(from conversation: Conversation) -> String {
-        switch conversation {
-        case .id(let identifier):
-            return identifier
-        case .object(let object):
-            return object.id
-        }
-    }
-
-    private func waitingState(for toolName: String?) -> InterviewSession.Waiting? {
-        guard let toolName else { return nil }
+    private func waitingStateForTool(_ toolName: String) -> String? {
         switch toolName {
         case "get_user_option":
-            return .selection
+            return "selection"
+        case "get_user_upload":
+            return "upload"
         case "submit_for_validation":
-            return .validation
-        case "next_phase":
-            return .validation
+            return "validation"
+        case "extract_document":
+            return "extraction"
         default:
             return nil
         }
     }
 
-    private func handleToolExecutionError(
-        _ error: Error,
-        callId: String?,
-        toolName: String
-    ) async -> Bool {
-        guard toolName == "submit_for_validation" else { return false }
+    // MARK: - Special Tool Handling
 
-        var reason: String?
-        var message: String?
-
-        switch error {
-        case let ToolError.invalidParameters(text):
-            reason = text.contains("missing data payload") ? "missing_data" : "invalid_parameters"
-            message = text
-        case let ToolError.executionFailed(text):
-            reason = "execution_failed"
-            message = text
-        case let ToolError.permissionDenied(text):
-            reason = "permission_denied"
-            message = text
-        case ToolError.timeout(let interval):
-            reason = "timeout"
-            message = "Tool timed out after \(String(format: "%.2f", interval)) seconds."
-        default:
-            break
-        }
-
-        guard let reason, let message, !message.isEmpty else { return false }
-
-        if let callId {
-            var output = JSON()
-            output["status"].string = "error"
-            output["reason"].string = reason
-            output["message"].string = message
-            do {
-                try await sendToolOutput(callId: callId, output: output)
-            } catch {
-                Logger.error("❌ Unable to deliver tool error response: \(error)", category: .ai)
-            }
-        }
-
-        Logger.warning("⚠️ submit_for_validation error (reason: \(reason)): \(message)", category: .ai)
-        return true
+    func forceTimelineTools() async {
+        nextToolChoiceOverride = ToolChoiceOverride(
+            mode: .require(tools: Array(timelineToolNames))
+        )
     }
 
-    private func queueDescription(
-        for toolName: String,
-        statusPayload: JSON?,
-        explicitMessage: String?
-    ) -> String? {
-        func friendly(_ text: String) -> String {
-            let spaced = text.replacingOccurrences(of: "_", with: " ")
-            guard !spaced.isEmpty else { return spaced }
-            return spaced.prefix(1).uppercased() + spaced.dropFirst()
-        }
-
-        if let explicit = explicitMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !explicit.isEmpty {
-            return explicit
-        }
-
-        guard let payload = statusPayload, payload != .null else {
-            return nil
-        }
-
-        if let message = payload["message"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
-            return message
-        }
-
-        if let detail = payload["detail"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !detail.isEmpty {
-            if let status = payload["status"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !status.isEmpty {
-                return "\(friendly(status)): \(detail)"
-            }
-            return detail
-        }
-
-        if let status = payload["status"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !status.isEmpty {
-            return friendly(status)
-        }
-
-        if let state = payload["state"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !state.isEmpty {
-            return friendly(state)
-        }
-
-        if let step = payload["step"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !step.isEmpty {
-            return step
-        }
-
-        Logger.debug("No queue description extracted for tool \(toolName)", category: .ai)
-        return nil
+    func resetToolChoice() async {
+        nextToolChoiceOverride = ToolChoiceOverride(mode: .auto)
     }
-
-    private func allowedToolNames(for session: InterviewSession) -> Set<String> {
-        let tools: [String]
-        if let phaseTools = allowedToolsMap[session.phase] {
-            tools = phaseTools
-        } else {
-            tools = allowedToolsMap.values.flatMap { $0 }
-        }
-
-        return Set(tools)
-    }
-
-    func scheduleTimelineToolEnforcement() {
-        nextToolChoiceOverride = ToolChoiceOverride(mode: .require(tools: Array(timelineToolNames)))
-        Logger.debug("🧭 Scheduled timeline tool enforcement for next LLM call.", category: .ai)
-    }
-
 }
 
+// Temporary shim for InterviewState - will be removed in final cleanup
+actor InterviewState {
+    func setWaiting(_ waiting: String?) async {}
+    func currentSession() async -> InterviewSession { InterviewSession() }
+    func completeObjective(_ id: String) async {}
+}
 
+// Temporary shim for InterviewSession - will be removed in final cleanup
+struct InterviewSession {
+    enum Waiting: String { case selection, upload, validation }
+    struct ObjectiveEntry {
+        let id: String
+        let status: OnboardingState.ObjectiveStatus
+        let source: String
+        let timestamp: Date
+        let notes: String?
+    }
+    var phase: InterviewPhase = .phase1CoreFacts
+    var objectivesDone: Set<String> = []
+    var waiting: Waiting?
+    var objectiveLedger: [ObjectiveEntry] = []
+}
