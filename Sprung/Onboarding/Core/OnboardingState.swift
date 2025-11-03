@@ -16,7 +16,7 @@ actor OnboardingState {
     /// The ONLY objective tracking in the entire system
     private var objectives: [String: ObjectiveEntry] = [:]
 
-    struct ObjectiveEntry {
+    struct ObjectiveEntry: Codable {
         let id: String
         let label: String
         var status: ObjectiveStatus
@@ -24,13 +24,6 @@ actor OnboardingState {
         var source: String
         var completedAt: Date?
         var notes: String?
-    }
-
-    enum ObjectiveStatus: String {
-        case pending
-        case inProgress = "in_progress"
-        case completed
-        case skipped
     }
 
     // MARK: - Artifacts
@@ -488,7 +481,3 @@ actor OnboardingState {
         Logger.info("📥 State restored from snapshot", category: .ai)
     }
 }
-
-// Make ObjectiveEntry Codable for snapshots
-extension OnboardingState.ObjectiveEntry: Codable {}
-extension OnboardingState.ObjectiveStatus: Codable {}
