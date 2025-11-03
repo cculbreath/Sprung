@@ -146,6 +146,7 @@ final class OnboardingInterviewCoordinator {
         preferences: OnboardingPreferences
     ) {
         self.state = OnboardingState()
+        self.eventBus = OnboardingEventBus()
         self.openAIService = openAIService
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
@@ -162,10 +163,108 @@ final class OnboardingInterviewCoordinator {
         self.toolRegistry = ToolRegistry()
         self.toolExecutor = ToolExecutor()
 
-        Logger.info("🎯 OnboardingInterviewCoordinator initialized with centralized state", category: .ai)
+        Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
+
+        // Subscribe to events from the orchestrator
+        Task { await subscribeToEvents() }
 
         // Start observation task to sync critical UI state
         Task { await startStateObservation() }
+    }
+
+    // MARK: - Event Subscription
+
+    private func subscribeToEvents() async {
+        eventSubscriptionId = await eventBus.subscribe { [weak self] event in
+            guard let self else { return }
+            await self.handleEvent(event)
+        }
+    }
+
+    private func handleEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .processingStateChanged(let processing):
+            await state.setProcessingState(processing)
+            _isProcessingSync = processing
+
+        case .assistantMessageEmitted(let id, let text, let reasoningExpected):
+            await MainActor.run {
+                _ = self.appendAssistantMessage(text, reasoningExpected: reasoningExpected)
+            }
+
+        case .streamingMessageBegan(let id, let text, let reasoningExpected):
+            await MainActor.run {
+                _ = self.beginAssistantStream(initialText: text, reasoningExpected: reasoningExpected)
+            }
+
+        case .streamingMessageUpdated(let id, let delta):
+            await MainActor.run {
+                self.updateAssistantStream(id: id, text: delta)
+            }
+
+        case .streamingMessageFinalized(let id, let finalText):
+            await MainActor.run {
+                _ = self.finalizeAssistantStream(id: id, text: finalText)
+            }
+
+        case .reasoningSummaryUpdated(let messageId, let summary, let isFinal):
+            await MainActor.run {
+                self.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
+            }
+
+        case .reasoningSummariesFinalized(let messageIds):
+            await MainActor.run {
+                for id in messageIds {
+                    self.chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: [id])
+                }
+            }
+
+        case .streamingStatusUpdated(let status):
+            await MainActor.run {
+                self.setStreamingStatus(status)
+            }
+
+        case .waitingStateChanged(let waiting):
+            await MainActor.run {
+                self.updateWaitingState(waiting)
+            }
+
+        case .errorOccurred(let error):
+            Logger.error("Interview error: \(error)", category: .ai)
+
+        case .applicantProfileStored(let json):
+            await MainActor.run {
+                self.storeApplicantProfile(json)
+            }
+
+        case .skeletonTimelineStored(let json):
+            await MainActor.run {
+                self.storeSkeletonTimeline(json)
+            }
+
+        case .enabledSectionsUpdated(let sections):
+            await MainActor.run {
+                self.updateEnabledSections(sections)
+            }
+
+        case .checkpointRequested:
+            await saveCheckpoint()
+
+        case .toolCallRequested(let call):
+            await processToolCall(call)
+
+        case .toolCallCompleted(let id, let result):
+            // Tool completion is handled by toolContinuationNeeded
+            break
+
+        case .toolContinuationNeeded(let id, let toolName):
+            // This will be connected to the tool router
+            break
+
+        case .objectiveStatusRequested(let id, let response):
+            let status = await state.getObjectiveStatus(id)?.rawValue
+            response(status)
+        }
     }
 
     // MARK: - State Observation
@@ -695,110 +794,10 @@ final class OnboardingInterviewCoordinator {
         service: OpenAIService,
         systemPrompt: String
     ) -> InterviewOrchestrator {
-        let callbacks = InterviewOrchestrator.Callbacks(
-            updateProcessingState: { [weak self] processing in
-                guard let self else { return }
-                Task {
-                    await self.state.setProcessingState(processing)
-                    self._isProcessingSync = processing
-                }
-            },
-            emitAssistantMessage: { [weak self] text, reasoningExpected in
-                guard let self else { return UUID() }
-                return await MainActor.run {
-                    self.appendAssistantMessage(text, reasoningExpected: reasoningExpected)
-                }
-            },
-            beginStreamingAssistantMessage: { [weak self] initialText, reasoningExpected in
-                guard let self else { return UUID() }
-                return await MainActor.run {
-                    self.beginAssistantStream(
-                        initialText: initialText,
-                        reasoningExpected: reasoningExpected
-                    )
-                }
-            },
-            updateStreamingAssistantMessage: { [weak self] id, delta in
-                guard let self else { return }
-                await MainActor.run {
-                    self.updateAssistantStream(id: id, text: delta)
-                }
-            },
-            finalizeStreamingAssistantMessage: { [weak self] id, final in
-                guard let self else { return }
-                await MainActor.run {
-                    _ = self.finalizeAssistantStream(id: id, text: final)
-                }
-            },
-            updateReasoningSummary: { [weak self] messageId, summary, isFinal in
-                guard let self else { return }
-                await MainActor.run {
-                    self.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
-                }
-            },
-            finalizeReasoningSummaries: { [weak self] messageIds in
-                guard let self else { return }
-                await MainActor.run {
-                    for id in messageIds {
-                        self.chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: [id])
-                    }
-                }
-            },
-            updateStreamingStatus: { [weak self] status in
-                guard let self else { return }
-                await MainActor.run {
-                    self.setStreamingStatus(status)
-                }
-            },
-            handleWaitingState: { [weak self] waiting in
-                guard let self else { return }
-                await MainActor.run {
-                    self.updateWaitingState(waiting?.rawValue)
-                }
-            },
-            handleError: { [weak self] error in
-                guard let self else { return }
-                await MainActor.run {
-                    Logger.error("Interview error: \(error)", category: .ai)
-                }
-            },
-            storeApplicantProfile: { [weak self] json in
-                guard let self else { return }
-                await MainActor.run {
-                    self.storeApplicantProfile(json)
-                }
-            },
-            storeSkeletonTimeline: { [weak self] json in
-                guard let self else { return }
-                await MainActor.run {
-                    self.storeSkeletonTimeline(json)
-                }
-            },
-            updateEnabledSections: { [weak self] sections in
-                guard let self else { return }
-                await MainActor.run {
-                    self.updateEnabledSections(sections)
-                }
-            },
-            persistCheckpoint: { [weak self] in
-                guard let self else { return }
-                await self.saveCheckpoint()
-            },
-            getObjectiveStatus: { [weak self] objectiveId in
-                guard let self else { return nil }
-                return await self.state.getObjectiveStatus(objectiveId)?.rawValue
-            },
-            processToolCall: { [weak self] call in
-                guard let self else { return nil }
-                return await self.processToolCall(call)
-            }
-        )
-
         return InterviewOrchestrator(
-            state: InterviewState(), // Will be removed in Phase 2
             service: service,
             systemPrompt: systemPrompt,
-            callbacks: callbacks
+            eventBus: eventBus
         )
     }
 
