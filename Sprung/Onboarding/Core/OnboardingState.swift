@@ -3,7 +3,6 @@ import SwiftyJSON
 
 /// Single source of truth for ALL onboarding state.
 /// This replaces InterviewSession, InterviewState, objective ledgers, and all distributed state.
-@MainActor
 actor OnboardingState {
     // MARK: - Core Interview State
 
