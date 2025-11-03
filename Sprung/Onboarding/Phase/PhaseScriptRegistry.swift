@@ -30,16 +30,16 @@ final class PhaseScriptRegistry {
         scripts[phase]
     }
 
-    /// Returns the script for the current session phase.
-    func currentScript(for session: InterviewSession) -> PhaseScript? {
-        script(for: session.phase)
+    /// Returns the script for the current phase.
+    func currentScript(for phase: InterviewPhase) -> PhaseScript? {
+        script(for: phase)
     }
 
     /// Builds a complete system prompt by combining base instructions with the current phase script.
-    func buildSystemPrompt(for session: InterviewSession) -> String {
+    func buildSystemPrompt(for phase: InterviewPhase) -> String {
         let basePrompt = Self.baseSystemPrompt()
 
-        guard let currentScript = currentScript(for: session) else {
+        guard let currentScript = currentScript(for: phase) else {
             return basePrompt
         }
 

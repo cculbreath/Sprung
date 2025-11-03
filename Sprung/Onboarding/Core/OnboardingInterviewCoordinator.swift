@@ -12,6 +12,7 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Core Dependencies
 
     private let state: OnboardingState
+    private let eventBus: OnboardingEventBus
     private let chatTranscriptStore: ChatTranscriptStore
     let toolRouter: OnboardingToolRouter
     let wizardTracker: WizardProgressTracker
@@ -20,11 +21,14 @@ final class OnboardingInterviewCoordinator {
     private let toolExecutor: ToolExecutor
     private let openAIService: OpenAIService?
 
+    // Event subscription tracking
+    private var eventSubscriptionId: UUID?
+
     // MARK: - Data Store Dependencies
 
     private let applicantProfileStore: ApplicantProfileStore
     private let dataStore: InterviewDataStore
-    private let checkpoints: Checkpoints
+    let checkpoints: Checkpoints
 
     // MARK: - Orchestration State (minimal, not business state)
 
@@ -254,29 +258,11 @@ final class OnboardingInterviewCoordinator {
         return newPhase
     }
 
-    func currentSession() async -> InterviewSession {
-        // Create a legacy InterviewSession for compatibility
-        // This will be removed in Phase 2
-        let phase = await state.phase
+    func getCompletedObjectiveIds() async -> Set<String> {
         let objectives = await state.getAllObjectives()
-        let completedIds = Set(objectives
+        return Set(objectives
             .filter { $0.status == .completed || $0.status == .skipped }
             .map { $0.id })
-
-        return InterviewSession(
-            phase: phase,
-            objectivesDone: completedIds,
-            waiting: nil,
-            objectiveLedger: objectives.map { obj in
-                InterviewSession.ObjectiveEntry(
-                    id: obj.id,
-                    status: obj.status,
-                    source: obj.source,
-                    timestamp: obj.completedAt ?? Date(),
-                    notes: obj.notes
-                )
-            }
-        )
     }
 
     // MARK: - Objective Management
@@ -823,10 +809,10 @@ final class OnboardingInterviewCoordinator {
 
         toolQueueEntries[tokenId] = ToolQueueEntry(
             tokenId: tokenId,
-            callId: call.id,
-            toolName: call.function.name,
+            callId: call.callId,
+            toolName: call.name,
             status: "processing",
-            requestedInput: call.function.arguments,
+            requestedInput: call.arguments.rawString() ?? "{}",
             enqueuedAt: Date()
         )
 
@@ -858,12 +844,8 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
-    func syncWizardProgress(from session: InterviewSession) {
-        // No-op - wizard progress is now managed by state
-    }
-
-    func buildSystemPrompt(for session: InterviewSession) -> String {
-        phaseRegistry.buildSystemPrompt(for: session.phase)
+    func buildSystemPrompt(for phase: InterviewPhase) -> String {
+        phaseRegistry.buildSystemPrompt(for: phase)
     }
 }
 
