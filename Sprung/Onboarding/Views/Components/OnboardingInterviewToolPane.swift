@@ -327,7 +327,11 @@ struct OnboardingInterviewToolPane: View {
     ) -> Bool {
         if service.pendingExtraction != nil { return true }
         if !uploadRequests().isEmpty { return true }
-        if coordinator.pendingApplicantProfileIntake != nil { return true }
+        // Don't count loading state as occupying the pane - allow spinner to show
+        if let intake = coordinator.pendingApplicantProfileIntake {
+            if case .loading = intake.mode { return false }
+            return true
+        }
         if coordinator.pendingChoicePrompt != nil { return true }
         if service.pendingValidationPrompt != nil { return true }
         if coordinator.pendingApplicantProfileRequest != nil { return true }

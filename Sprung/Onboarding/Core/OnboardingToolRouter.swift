@@ -1,3 +1,4 @@
+
 import Foundation
 import Observation
 import SwiftyJSON
@@ -212,6 +213,10 @@ final class OnboardingToolRouter {
         profileHandler.cancelIntake(reason: reason)
     }
 
+    func clearApplicantProfileIntake() {
+        profileHandler.clearIntake()
+    }
+
     // MARK: - Upload Handling
 
     func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
@@ -275,14 +280,19 @@ final class OnboardingToolRouter {
                 return .ready
             },
             .getApplicantProfile: { [unowned self] in
-                if profileHandler.pendingApplicantProfileRequest != nil || profileHandler.pendingApplicantProfileIntake != nil {
-                    return .waitingForUser
-                }
-                return .ready
-            },
+    if let intake = profileHandler.pendingApplicantProfileIntake {
+        if case .loading = intake.mode { return .processing }
+        return .waitingForUser
+    }
+    if profileHandler.pendingApplicantProfileRequest != nil {
+        return .waitingForUser
+    }
+    return .ready
+    },
             .submitForValidation: { [unowned self] in
                 promptHandler.pendingValidationPrompt == nil ? .ready : .waitingForUser
             }
         ]
     }
 }
+

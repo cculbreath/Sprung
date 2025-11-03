@@ -1186,6 +1186,12 @@ final class OnboardingInterviewCoordinator {
             pendingExtractionProgressBuffer.removeAll()
         }
         pendingExtraction = status
+
+        // Clear the applicant profile intake card when extraction begins
+        // This ensures the spinner can show during document processing
+        if status.documentType == "resume" && pendingApplicantProfileIntake != nil {
+            toolRouter.clearApplicantProfileIntake()
+        }
     }
 
     func updateExtractionProgress(with update: ExtractionProgressUpdate) {
@@ -1317,7 +1323,11 @@ final class OnboardingInterviewCoordinator {
         syncWizardProgress(from: session)
     }
 
-    private func makeOrchestrator(service: OpenAIService, systemPrompt: String) -> InterviewOrchestrator {
+    private func makeOrchestrator(
+        service: OpenAIService,
+        systemPrompt: String
+    ) -> InterviewOrchestrator {
+
         let callbacks = InterviewOrchestrator.Callbacks(
             updateProcessingState: { [weak self] processing in
                 guard let self else { return }
@@ -1327,46 +1337,58 @@ final class OnboardingInterviewCoordinator {
                 guard let self else { return UUID() }
                 return await MainActor.run {
                     let messageId = self.appendAssistantMessage(text, reasoningExpected: reasoningExpected)
+                    // If we actually got assistant text, clear any "latest" dangling reasoning.
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                         self.clearLatestReasoningSummary()
                     }
                     return messageId
                 }
             },
-            beginStreamingAssistantMessage: { [weak self] initial, reasoningExpected in
+            beginStreamingAssistantMessage: { [weak self] initialText, reasoningExpected in
                 guard let self else { return UUID() }
-                return await MainActor.run { self.beginAssistantStream(initialText: initial, reasoningExpected: reasoningExpected) }
+                return await MainActor.run {
+                    self.beginAssistantStream(initialText: initialText, reasoningExpected: reasoningExpected)
+                }
             },
-            updateStreamingAssistantMessage: { [weak self] id, text in
+            updateStreamingAssistantMessage: { [weak self] id, delta in
                 guard let self else { return }
-                _ = await MainActor.run { self.updateAssistantStream(id: id, text: text) }
+                _ = await MainActor.run { self.updateAssistantStream(id: id, text: delta) }
             },
-            finalizeStreamingAssistantMessage: { [weak self] id, text in
+            finalizeStreamingAssistantMessage: { [weak self] id, final in
                 guard let self else { return }
-                _ = await MainActor.run { self.finalizeAssistantStream(id: id, text: text) }
+                _ = await MainActor.run { self.finalizeAssistantStream(id: id, text: final) }
             },
             updateReasoningSummary: { [weak self] messageId, summary, isFinal in
                 guard let self else { return }
                 _ = await MainActor.run {
+                    // Keep per-message reasoning paired AND surface the latest summary in the status bar.
                     self.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
                     self.updateLatestReasoningSummary(summary, isFinal: isFinal)
                 }
             },
             finalizeReasoningSummaries: { [weak self] messageIds in
                 guard let self else { return }
-                _ = await MainActor.run { self.finalizeReasoningSummaries(for: messageIds) }
+                _ = await MainActor.run {
+                    self.finalizeReasoningSummaries(for: messageIds)
+                }
             },
             updateStreamingStatus: { [weak self] status in
                 guard let self else { return }
-                await MainActor.run { self.setStreamingStatus(status) }
+                await MainActor.run {
+                    self.setStreamingStatus(status)
+                }
             },
             handleWaitingState: { [weak self] waiting in
                 guard let self else { return }
-                await MainActor.run { self.updateWaitingState(waiting) }
+                await MainActor.run {
+                    self.updateWaitingState(waiting)
+                }
             },
             handleError: { [weak self] message in
                 guard let self else { return }
-                await MainActor.run { self.recordError(message) }
+                await MainActor.run {
+                    self.recordError(message)
+                }
             },
             storeApplicantProfile: { [weak self] json in
                 guard let self else { return }
@@ -1410,12 +1432,11 @@ final class OnboardingInterviewCoordinator {
             },
             handleInvalidModelId: { [weak self] modelId in
                 guard let self else { return }
-                await MainActor.run { self.notifyInvalidModel(id: modelId) }
+                await MainActor.run {
+                    self.notifyInvalidModel(id: modelId)
+                }
             },
-            dequeueDeveloperMessages: { [weak self] in
-                guard let self else { return [] }
-                return await MainActor.run { self.drainDeveloperMessages() }
-            }
+           
         )
 
         return InterviewOrchestrator(

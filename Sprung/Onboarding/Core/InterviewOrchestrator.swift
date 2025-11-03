@@ -1,3 +1,4 @@
+
 //
 //  InterviewOrchestrator.swift
 //  Sprung
@@ -49,7 +50,6 @@ actor InterviewOrchestrator {
         let registerToolWait: @Sendable (UUID, String, String, String?) async -> Void
         let clearToolWait: @Sendable (UUID, String) async -> Void
         let handleInvalidModelId: @Sendable (String) async -> Void
-        let dequeueDeveloperMessages: @Sendable () async -> [String]
     }
 
     private let client: OpenAIService
@@ -546,13 +546,7 @@ actor InterviewOrchestrator {
     ) async throws {
         var inputItems: [InputItem] = []
 
-        let managementMessages = await callbacks.dequeueDeveloperMessages()
-        for message in managementMessages where !message.isEmpty {
-            let contentItem = ContentItem.text(TextContent(text: message))
-            let developerMessage = InputMessage(role: "developer", content: .array([contentItem]))
-            inputItems.append(.message(developerMessage))
-        }
-
+      
         if let userMessage {
             let contentItem = ContentItem.text(TextContent(text: userMessage))
             let inputMessage = InputMessage(role: "user", content: .array([contentItem]))
@@ -648,7 +642,7 @@ actor InterviewOrchestrator {
             silenceTask?.cancel()
             silenceTask = Task { [callbacks] in
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                await callbacks.updateStreamingStatus("Polishing response…")
+                await callbacks.updateStreamingStatus("Connecting to Agent…")
             }
         }
 
@@ -781,7 +775,9 @@ actor InterviewOrchestrator {
                         await deliverSummary(for: delta.itemId, isFinalOverride: false)
                     }
                     scheduleSilenceStatus()
-                case .reasoningSummaryTextDone(let done):
+                
+                    // (patch) no buffer update found to hook into
+case .reasoningSummaryTextDone(let done):
                     await clearSilenceStatus()
                     reasoningSummaryBuffers[done.itemId] = done.text
                     reasoningSummaryFinalized.insert(done.itemId)
@@ -1205,4 +1201,7 @@ actor InterviewOrchestrator {
         nextToolChoiceOverride = ToolChoiceOverride(mode: .require(tools: Array(timelineToolNames)))
         Logger.debug("🧭 Scheduled timeline tool enforcement for next LLM call.", category: .ai)
     }
+
 }
+
+

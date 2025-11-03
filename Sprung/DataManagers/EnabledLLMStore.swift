@@ -21,7 +21,7 @@ class EnabledLLMStore: SwiftDataStore {
         ("anthropic/claude-sonnet-4.5", "Anthropic Claude Sonnet 4.5", "Anthropic"),
         ("deepseek/deepseek-v3.1-terminus", "DeepSeek Terminus v3.1", "DeepSeek"),
         ("deepseek/deepseek-v3.2-exp", "DeepSeek v3.2 Experimental", "DeepSeek"),
-        ("google/gemini-2.0-flash", "Gemini 2.0 Flash", "Google"),
+        ("google/gemini-2.0-flash-001", "Gemini 2.0 Flash", "Google"),
         ("google/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Google"),
         ("google/gemini-2.5-pro", "Gemini 2.5 Pro", "Google"),
         ("openai/gpt-4.1", "GPT-4.1", "OpenAI"),

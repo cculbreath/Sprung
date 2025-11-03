@@ -41,12 +41,16 @@ final class ChatTranscriptStore {
 
     func updateAssistantStream(id: UUID, text: String) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
-        messages[index].text = text
+        var message = messages[index]
+        message.text = text
+        messages[index] = message
     }
 
     func finalizeAssistantStream(id: UUID, text: String) -> TimeInterval {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return 0 }
-        messages[index].text = text
+        var message = messages[index]
+        message.text = text
+        messages[index] = message
         let elapsed: TimeInterval
         if let start = streamingMessageStart.removeValue(forKey: id) {
             elapsed = Date().timeIntervalSince(start)
@@ -60,9 +64,11 @@ final class ChatTranscriptStore {
     func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) {
         let value = isFinal ? summary.trimmingCharacters(in: .whitespacesAndNewlines) : summary
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
-        messages[index].reasoningSummary = value
-        messages[index].showReasoningPlaceholder = false
-        messages[index].isAwaitingReasoningSummary = !isFinal
+        var message = messages[index]
+        message.reasoningSummary = value
+        message.showReasoningPlaceholder = false
+        message.isAwaitingReasoningSummary = !isFinal
+        messages[index] = message
         if isFinal {
             Logger.info("🧠 Reasoning summary attached (len: \(value.count)) for message \(messageId.uuidString)", category: .ai)
         }
@@ -81,9 +87,11 @@ final class ChatTranscriptStore {
         guard !messageIds.isEmpty else { return }
         for id in messageIds {
             guard let index = messages.firstIndex(where: { $0.id == id }) else { continue }
-            if messages[index].isAwaitingReasoningSummary {
-                messages[index].isAwaitingReasoningSummary = false
-                messages[index].showReasoningPlaceholder = false
+            var message = messages[index]
+            if message.isAwaitingReasoningSummary {
+                message.isAwaitingReasoningSummary = false
+                message.showReasoningPlaceholder = false
+                messages[index] = message
                 Logger.info("ℹ️ Reasoning summary unavailable for message \(id.uuidString)", category: .ai)
             }
         }

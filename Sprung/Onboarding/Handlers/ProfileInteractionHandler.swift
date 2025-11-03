@@ -261,6 +261,12 @@ final class ProfileInteractionHandler {
         return completeIntake(continuationId: continuationId, payload: payload)
     }
 
+    /// Clears the applicant profile intake state without completing it.
+    /// Used when extraction begins to allow spinner to show.
+    func clearIntake() {
+        pendingApplicantProfileIntake = nil
+    }
+
     // MARK: - Private Helpers
 
     private func completeIntake(continuationId: UUID, payload: JSON) -> (continuationId: UUID, payload: JSON) {
