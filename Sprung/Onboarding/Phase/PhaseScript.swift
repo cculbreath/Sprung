@@ -11,7 +11,7 @@ import SwiftyJSON
 
 /// Context passed to workflow closures when objectives change state.
 struct ObjectiveWorkflowContext {
-    let session: InterviewSession
+    let completedObjectives: Set<String>
     let status: ObjectiveStatus
     let details: [String: String]
 }
@@ -62,10 +62,10 @@ protocol PhaseScript {
     func workflow(for objectiveId: String) -> ObjectiveWorkflow?
 
     /// Validates whether this phase can advance based on completed objectives.
-    func canAdvance(session: InterviewSession) -> Bool
+    func canAdvance(completedObjectives: Set<String>) -> Bool
 
     /// Returns missing objectives for this phase.
-    func missingObjectives(session: InterviewSession) -> [String]
+    func missingObjectives(completedObjectives: Set<String>) -> [String]
 }
 
 // MARK: - Default Implementations
@@ -77,11 +77,11 @@ extension PhaseScript {
         objectiveWorkflows[objectiveId]
     }
 
-    func canAdvance(session: InterviewSession) -> Bool {
-        requiredObjectives.allSatisfy { session.objectivesDone.contains($0) }
+    func canAdvance(completedObjectives: Set<String>) -> Bool {
+        requiredObjectives.allSatisfy { completedObjectives.contains($0) }
     }
 
-    func missingObjectives(session: InterviewSession) -> [String] {
-        requiredObjectives.filter { !session.objectivesDone.contains($0) }
+    func missingObjectives(completedObjectives: Set<String>) -> [String] {
+        requiredObjectives.filter { !completedObjectives.contains($0) }
     }
 }
