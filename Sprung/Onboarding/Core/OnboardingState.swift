@@ -69,6 +69,13 @@ actor OnboardingState {
 
     private(set) var waitingState: WaitingState?
 
+    // Phase Management
+    private(set) var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest?
+
+    func setPendingPhaseAdvanceRequest(_ request: OnboardingPhaseAdvanceRequest?) {
+        self.pendingPhaseAdvanceRequest = request
+    }
+
     // MARK: - Wizard Progress
 
     enum WizardStep: String, CaseIterable {
@@ -86,7 +93,17 @@ actor OnboardingState {
 
     init() {
         Logger.info("🎯 OnboardingState initialized - single source of truth", category: .ai)
-        registerDefaultObjectives(for: phase)
+        // Register initial objectives directly (can't call actor-isolated method from init)
+        let descriptors = Self.objectivesForPhase(phase)
+        for descriptor in descriptors {
+            objectives[descriptor.id] = ObjectiveEntry(
+                id: descriptor.id,
+                label: descriptor.label,
+                status: .pending,
+                source: "initial",
+                notes: nil
+            )
+        }
     }
 
     // MARK: - Objective Catalog

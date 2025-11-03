@@ -133,7 +133,9 @@ final class OnboardingInterviewCoordinator {
     }
 
     var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? {
-        toolRouter.pendingPhaseAdvanceRequest
+        get async {
+            await state.pendingPhaseAdvanceRequest
+        }
     }
 
     // MARK: - Initialization
@@ -154,14 +156,35 @@ final class OnboardingInterviewCoordinator {
         self.preferences = preferences
 
         self.chatTranscriptStore = ChatTranscriptStore()
+
+        // Create handlers for tool router
+        let promptHandler = PromptInteractionHandler()
+
+        let uploadStorage = OnboardingUploadStorage()
+        let uploadFileService = UploadFileService()
+        let uploadHandler = UploadInteractionHandler(
+            uploadFileService: uploadFileService,
+            uploadStorage: uploadStorage,
+            applicantProfileStore: applicantProfileStore,
+            dataStore: dataStore,
+            extractionProgressHandler: nil
+        )
+
+        let contactsImportService = ContactsImportService()
+        let profileHandler = ProfileInteractionHandler(contactsImportService: contactsImportService)
+
+        let sectionHandler = SectionToggleHandler()
+
         self.toolRouter = OnboardingToolRouter(
-            contactsImportService: ContactsImportService(profileStore: applicantProfileStore),
-            uploadFileService: UploadFileService()
+            promptHandler: promptHandler,
+            uploadHandler: uploadHandler,
+            profileHandler: profileHandler,
+            sectionHandler: sectionHandler
         )
         self.wizardTracker = WizardProgressTracker()
         self.phaseRegistry = PhaseScriptRegistry()
         self.toolRegistry = ToolRegistry()
-        self.toolExecutor = ToolExecutor()
+        self.toolExecutor = ToolExecutor(registry: toolRegistry)
 
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
 
@@ -335,7 +358,7 @@ final class OnboardingInterviewCoordinator {
 
     func endInterview() async {
         Logger.info("🛑 Ending interview", category: .ai)
-        orchestrator?.endInterview()
+        await orchestrator?.endInterview()
         orchestrator = nil
         await state.setActiveState(false)
         await state.setProcessingState(false)
@@ -373,7 +396,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
-        let objectiveStatus: OnboardingState.ObjectiveStatus
+        let objectiveStatus: ObjectiveStatus
 
         switch status.lowercased() {
         case "completed":
@@ -391,9 +414,9 @@ final class OnboardingInterviewCoordinator {
         await state.setObjectiveStatus(objectiveId, status: objectiveStatus, source: "llm")
 
         var result = JSON()
-        result["success"] = true
-        result["objective_id"] = objectiveId
-        result["new_status"] = objectiveStatus.rawValue
+        result["success"].boolValue = true
+        result["objective_id"].stringValue = objectiveId
+        result["new_status"].stringValue = objectiveStatus.rawValue
 
         return result
     }
@@ -412,7 +435,7 @@ final class OnboardingInterviewCoordinator {
             return .phase2DeepDive
         case .phase2DeepDive:
             return .phase3WritingCorpus
-        case .phase3WritingCorpus:
+        case .phase3WritingCorpus, .complete:
             return nil
         }
     }
@@ -422,7 +445,8 @@ final class OnboardingInterviewCoordinator {
     func storeApplicantProfile(_ profile: JSON) {
         Task {
             await state.setApplicantProfile(profile)
-            applicantProfileStore.updateFromJSON(profile)
+            // TODO: Convert JSON to ApplicantProfile model for SwiftData storage
+            // applicantProfileStore.save(convertJSONToApplicantProfile(profile))
             await saveCheckpoint()
         }
     }
@@ -532,9 +556,10 @@ final class OnboardingInterviewCoordinator {
             _pendingExtractionSync = extraction
 
             // Clear applicant profile intake when extraction begins
-            if extraction?.documentType == "resume" {
-                toolRouter.clearApplicantProfileIntake()
-            }
+            // TODO: Check extraction type - OnboardingPendingExtraction doesn't have documentType
+            // if extraction?.title.contains("Resume") || extraction?.title.contains("CV") {
+            //     toolRouter.clearApplicantProfileIntake()
+            // }
         }
     }
 
@@ -590,7 +615,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     func submitChoice(optionId: String) -> (UUID, JSON)? {
-        let result = toolRouter.submitChoice(optionId: optionId)
+        let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId])
         Task {
             await state.setPendingChoice(nil)
         }
@@ -630,7 +655,7 @@ final class OnboardingInterviewCoordinator {
     ) {
         Task {
             phaseAdvanceContinuationId = continuationId
-            toolRouter.pendingPhaseAdvanceRequest = request
+            await state.setPendingPhaseAdvanceRequest(request)
         }
     }
 
@@ -638,13 +663,13 @@ final class OnboardingInterviewCoordinator {
         guard let continuationId = phaseAdvanceContinuationId else { return }
 
         let newPhase = await advancePhase()
-        toolRouter.pendingPhaseAdvanceRequest = nil
+        await state.setPendingPhaseAdvanceRequest(nil)
         phaseAdvanceContinuationId = nil
 
         var payload = JSON()
-        payload["approved"] = true
+        payload["approved"].boolValue = true
         if let phase = newPhase {
-            payload["new_phase"] = phase.rawValue
+            payload["new_phase"].stringValue = phase.rawValue
         }
 
         await resumeToolContinuation(id: continuationId, payload: payload)
@@ -653,13 +678,13 @@ final class OnboardingInterviewCoordinator {
     func denyPhaseAdvance(feedback: String?) async {
         guard let continuationId = phaseAdvanceContinuationId else { return }
 
-        toolRouter.pendingPhaseAdvanceRequest = nil
+        await state.setPendingPhaseAdvanceRequest(nil)
         phaseAdvanceContinuationId = nil
 
         var payload = JSON()
-        payload["approved"] = false
+        payload["approved"].boolValue = false
         if let feedback = feedback {
-            payload["feedback"] = feedback
+            payload["feedback"].stringValue = feedback
         }
 
         await resumeToolContinuation(id: continuationId, payload: payload)
@@ -737,7 +762,8 @@ final class OnboardingInterviewCoordinator {
         // Restore artifacts from checkpoint
         if let profile = checkpoint.profileJSON {
             await state.setApplicantProfile(profile)
-            applicantProfileStore.updateFromJSON(profile)
+            // TODO: Convert JSON to ApplicantProfile model for SwiftData storage
+            // applicantProfileStore.save(convertJSONToApplicantProfile(profile))
         }
 
         if let timeline = checkpoint.timelineJSON {
