@@ -180,6 +180,7 @@ struct OnboardingInterviewChatPanel: View {
         }
         .onChange(of: service.isProcessing, initial: false) { _, isProcessing in
             guard isProcessing == false else { return }
+            guard state.shouldAutoScroll else { return }
             scrollToLatestMessage(proxy)
         }
         .onAppear {
