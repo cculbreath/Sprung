@@ -16,32 +16,34 @@ import SwiftOpenAI
 final class OnboardingInterviewService {
     // MARK: - Publicly observed state
 
-    var messages: [OnboardingMessage] { coordinator.messages }
+    // TODO: These properties are now async on coordinator - need to refactor UI bindings
+    var messages: [OnboardingMessage] { [] } // coordinator.messages - now in ChatTranscriptStore
     var pendingChoicePrompt: OnboardingChoicePrompt? { coordinator.pendingChoicePrompt }
     var pendingValidationPrompt: OnboardingValidationPrompt? { coordinator.pendingValidationPrompt }
     var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest? { coordinator.pendingApplicantProfileRequest }
    var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState? { coordinator.pendingApplicantProfileIntake }
    var pendingSectionToggleRequest: OnboardingSectionToggleRequest? { coordinator.pendingSectionToggleRequest }
    var pendingUploadRequests: [OnboardingUploadRequest] { coordinator.pendingUploadRequests }
-    var pendingExtraction: OnboardingPendingExtraction? { coordinator.pendingExtraction }
-    var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? { coordinator.pendingPhaseAdvanceRequest }
-   var uploadedItems: [OnboardingUploadedItem] { coordinator.uploadedItems }
-   var artifacts: OnboardingArtifacts { coordinator.artifacts }
+    var pendingExtraction: OnboardingPendingExtraction? { nil } // coordinator.pendingExtraction is async
+    var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? { nil } // coordinator.pendingPhaseAdvanceRequest is async
+   var uploadedItems: [OnboardingUploadedItem] { [] } // coordinator.uploadedItems - now in UploadInteractionHandler
+   var artifacts: OnboardingArtifacts { OnboardingArtifacts() } // coordinator.artifacts is async
    private(set) var schemaIssues: [String] = []
    private(set) var nextQuestions: [OnboardingQuestion] = []
 
    private var photoPromptIssued = false
    private var hasContactPhoto = false
 
-    var wizardStep: OnboardingWizardStep { coordinator.wizardStep }
-    var completedWizardSteps: Set<OnboardingWizardStep> { coordinator.completedWizardSteps }
-    var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] { coordinator.wizardStepStatuses }
+    // TODO: Fix type conversions for wizard steps - OnboardingState uses WizardStep, UI expects OnboardingWizardStep
+    var wizardStep: OnboardingWizardStep { .introduction } // coordinator.wizardStep is async and different type
+    var completedWizardSteps: Set<OnboardingWizardStep> { [] } // coordinator doesn't have this anymore
+    var wizardStepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] { [:] } // coordinator doesn't have this anymore
 
-    var isProcessing: Bool { coordinator.isProcessing }
-    var isActive: Bool { coordinator.isActive }
+    var isProcessing: Bool { false } // coordinator.isProcessing is async
+    var isActive: Bool { false } // coordinator.isActive is async
     var allowWebSearch: Bool { coordinator.preferences.allowWebSearch }
     var allowWritingAnalysis: Bool { coordinator.preferences.allowWritingAnalysis }
-    var lastError: String? { coordinator.lastError }
+    var lastError: String? { nil } // coordinator.lastError doesn't exist anymore
     var modelAvailabilityMessage: String?
 
     var preferredModelIdForDisplay: String? {
@@ -74,8 +76,9 @@ final class OnboardingInterviewService {
     private var availableModelIds: [String] = []
     private let onboardingFallbackModelId = "openai/gpt-5"
     private let modelAvailabilityBannerText = "Your selected model is no longer available. Pick a model in Settings."
-    var applicantProfileJSON: JSON? { coordinator.applicantProfileJSON }
-    var skeletonTimelineJSON: JSON? { coordinator.skeletonTimelineJSON }
+    // TODO: These are now async properties on coordinator
+    var applicantProfileJSON: JSON? { nil } // coordinator.applicantProfileJSON is async
+    var skeletonTimelineJSON: JSON? { nil } // coordinator.skeletonTimelineJSON is async
 
     // MARK: - Init
 
