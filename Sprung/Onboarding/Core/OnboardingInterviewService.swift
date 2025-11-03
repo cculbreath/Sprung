@@ -184,12 +184,13 @@ final class OnboardingInterviewService {
         registry.register(DeleteTimelineCardTool(service: self))
     }
 
-    func currentSession() async -> InterviewSession {
-        await coordinator.currentSession()
+    func currentPhase() async -> InterviewPhase {
+        await coordinator.currentPhase
     }
 
     func hasRestorableCheckpoint() async -> Bool {
-        await coordinator.hasRestorableCheckpoint()
+        // Check if we have a checkpoint to restore
+        return coordinator.checkpoints.hasCheckpoint()
     }
 
     func artifactSummaries() -> [JSON] {
@@ -1129,12 +1130,13 @@ final class OnboardingInterviewService {
         }
 
         Task { @MainActor in
-            let session = await coordinator.currentSession()
-            guard let script = coordinator.phaseRegistry.currentScript(for: session),
+            let phase = await coordinator.currentPhase
+            guard let script = coordinator.phaseRegistry.currentScript(for: phase),
                   let workflow = script.workflow(for: update.id) else { return }
 
+            let completedObjectives = await coordinator.getCompletedObjectiveIds()
             let context = ObjectiveWorkflowContext(
-                session: session,
+                completedObjectives: completedObjectives,
                 status: update.status,
                 details: update.details ?? ["source": update.source]
             )

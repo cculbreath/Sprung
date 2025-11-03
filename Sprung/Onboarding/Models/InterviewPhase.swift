@@ -41,12 +41,3 @@ enum ObjectiveStatus: String, Codable {
     case completed
     case skipped
 }
-
-/// Entry in the objective ledger
-struct ObjectiveEntry: Codable {
-    let id: String
-    let status: ObjectiveStatus
-    let source: String
-    let timestamp: Date
-    let notes: String?
-}

@@ -37,7 +37,7 @@ struct NextPhaseTool: InterviewTool {
         let overrides = params["overrides"].arrayValue.compactMap { $0.string?.lowercased() }
         let reason = params["reason"].string?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let session = await service.currentSession()
+        let currentPhase = await service.currentPhase()
         guard let nextPhase = await service.nextPhaseIdentifier() else {
             var response = JSON()
             response["status"].string = "denied"
@@ -73,7 +73,7 @@ struct NextPhaseTool: InterviewTool {
                 reason: nil,
                 userDecision: "approved",
                 advancedTo: nextPhase,
-                currentPhase: session.phase
+                currentPhase: currentPhase
             )
             return .immediate(response)
         }
@@ -117,7 +117,7 @@ struct NextPhaseTool: InterviewTool {
         let continuationId = UUID()
         let request = OnboardingPhaseAdvanceRequest(
             id: continuationId,
-            currentPhase: session.phase,
+            currentPhase: currentPhase,
             nextPhase: nextPhase,
             missingObjectives: missing,
             reason: reason,
