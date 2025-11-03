@@ -203,7 +203,12 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             switch override.mode {
             case .require(let toolNames):
                 if let toolName = toolNames.first {
-                    toolChoice = .function(name: toolName)
+                    // Force the model to call a specific function
+                    toolChoice = .functionTool(Tool.FunctionTool(
+                        name: toolName,
+                        parameters: JSONSchema(type: .object, properties: [:]),
+                        description: "Tool: \(toolName)"
+                    ))
                 } else {
                     toolChoice = .auto
                 }
@@ -246,7 +251,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         ]
 
         return phaseTools.map { toolName in
-            Tool.function(FunctionTool(
+            Tool.function(Tool.FunctionTool(
                 name: toolName,
                 parameters: JSONSchema(type: .object, properties: [:]),
                 description: "Tool: \(toolName)"
@@ -273,14 +278,11 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
                 switch item {
                 case .message(let message):
                     for contentItem in message.content {
-                        switch contentItem {
-                        case .text(let text):
+                        if case .text(let text) = contentItem {
                             await processContentDelta(0, text.text)
-                        default:
-                            break
                         }
                     }
-                case .functionToolCall(let toolCall):
+                case .functionCall(let toolCall):
                     await processToolCall(toolCall)
                 default:
                     break
@@ -333,7 +335,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             id: UUID().uuidString,
             name: functionName,
             arguments: argsJSON,
-            callId: toolCall.id
+            callId: toolCall.id ?? UUID().uuidString
         )
 
         await emit(.toolCallRequested(call))
@@ -344,7 +346,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
 
         // Store continuation info
         let continuationId = UUID()
-        continuationCallIds[continuationId] = toolCall.id
+        let callId = toolCall.id ?? UUID().uuidString
+        continuationCallIds[continuationId] = callId
         continuationToolNames[continuationId] = functionName
         await emit(.toolContinuationNeeded(id: continuationId, toolName: functionName))
     }
