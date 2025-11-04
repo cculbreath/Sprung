@@ -350,6 +350,7 @@ final class OnboardingInterviewCoordinator {
              .phaseAdvanceRequested,
              .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered,
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
+             .artifactRecordProduced, .artifactRecordPersisted,
              // New spec-aligned events that StateCoordinator handles
              .objectiveStatusChanged, .objectiveStatusUpdateRequested,
              .stateSnapshot, .stateAllowedToolsUpdated,
