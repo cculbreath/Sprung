@@ -51,6 +51,13 @@ enum OnboardingEvent {
     case applicantProfileIntakeCleared
     case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest, continuationId: UUID)
 
+    // MARK: - Artifact Management (§4.8 spec)
+    case artifactGetRequested(id: UUID)
+    case artifactNewRequested(fileURL: URL, kind: OnboardingUploadKind, performExtraction: Bool)
+    case artifactAdded(id: UUID, kind: OnboardingUploadKind)
+    case artifactUpdated(id: UUID, extractedText: String?)
+    case artifactDeleted(id: UUID)
+
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardDeleted(id: String)
@@ -229,6 +236,10 @@ actor EventCoordinator {
         case .toolCallRequested, .toolCallCompleted, .toolContinuationNeeded:
             return .tool
 
+        // Artifact events
+        case .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted:
+            return .artifact
+
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
@@ -317,6 +328,16 @@ actor EventCoordinator {
             description = "Profile intake cleared"
         case .phaseAdvanceRequested:
             description = "Phase advance requested"
+        case .artifactGetRequested(let id):
+            description = "Artifact get requested: \(id)"
+        case .artifactNewRequested:
+            description = "Artifact new requested"
+        case .artifactAdded(let id, _):
+            description = "Artifact added: \(id)"
+        case .artifactUpdated(let id, _):
+            description = "Artifact updated: \(id)"
+        case .artifactDeleted(let id):
+            description = "Artifact deleted: \(id)"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardDeleted:

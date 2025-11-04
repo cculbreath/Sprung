@@ -204,17 +204,28 @@ UI uses existing “reasoning summary” constructs.
 
 ---
 
-### 4.7 ToolPane Handler
+### 4.7 ToolPane Handler (ToolHandler)
+**Implementation:** `ToolHandler` (@MainActor @Observable class) serves as the ToolPane Handler
+- Subscribes to toolpane events and presents UI via specialized handlers
+- Delegates to: PromptInteractionHandler, UploadInteractionHandler, ProfileInteractionHandler, SectionToggleHandler
+- Observable state allows SwiftUI views to reactively display UI cards
+
 **Responsibilities**
-- Card/spinner visibility & lifecycle, separate from business logic.
+- Card/spinner visibility & lifecycle, separate from business logic
+- Bridge between event-driven architecture and SwiftUI's Observable system
 
-**Subscribes**
-- `Toolpane.show(card, init_params)`  
-- `Toolpane.hide(card)`  
-- `LLM.status`
+**Subscriptions** (via event stream)
+- `.choicePromptRequested(prompt, continuationId)`
+- `.choicePromptCleared(continuationId)`
+- `.uploadRequestPresented(request, continuationId)`
+- `.validationPromptRequested(prompt, continuationId)`
+- `.validationPromptCleared(continuationId)`
+- `.applicantProfileIntakeRequested(continuationId)`
+- `.applicantProfileIntakeCleared`
 
-**Publishes**
-- `Toolpane.showing(card|none)`
+**Publications** (via Observable state changes)
+- UI state updates trigger SwiftUI view re-renders
+- User interactions flow back through continuation resumption
 
 ---
 
