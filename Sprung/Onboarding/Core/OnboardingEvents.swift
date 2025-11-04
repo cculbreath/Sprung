@@ -58,6 +58,10 @@ enum OnboardingEvent {
     case artifactUpdated(id: UUID, extractedText: String?)
     case artifactDeleted(id: UUID)
 
+    // Artifact pipeline (tool → state → persistence)
+    case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
+    case artifactRecordPersisted(record: JSON) // emitted after persistence/index update succeeds
+
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -70,7 +74,6 @@ enum OnboardingEvent {
     case objectiveStatusChanged(id: String, status: String, phase: String)
 
     // MARK: - State Management (§6 spec)
-    case stateSet(partialUpdate: JSON)
     case stateSnapshot(updatedKeys: [String], snapshot: JSON)
     case stateAllowedToolsUpdated(tools: Set<String>)
 
@@ -221,7 +224,7 @@ actor EventCoordinator {
             return .llm
 
         // State events
-        case .stateSet, .stateSnapshot, .stateAllowedToolsUpdated,
+        case .stateSnapshot, .stateAllowedToolsUpdated,
              .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated,
              .checkpointRequested:
             return .state
@@ -239,7 +242,8 @@ actor EventCoordinator {
             return .tool
 
         // Artifact events
-        case .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted:
+        case .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
+             .artifactRecordProduced, .artifactRecordPersisted:
             return .artifact
 
         // Toolpane events
@@ -340,6 +344,10 @@ actor EventCoordinator {
             description = "Artifact updated: \(id)"
         case .artifactDeleted(let id):
             description = "Artifact deleted: \(id)"
+        case .artifactRecordProduced(let record):
+            description = "Artifact record produced: \(record["id"].stringValue)"
+        case .artifactRecordPersisted(let record):
+            description = "Artifact record persisted: \(record["id"].stringValue)"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):
@@ -354,8 +362,6 @@ actor EventCoordinator {
             description = "Objective update requested: \(id) → \(status)"
         case .objectiveStatusChanged(let id, let status, _):
             description = "Objective \(id) → \(status)"
-        case .stateSet:
-            description = "State partial update"
         case .stateSnapshot(let keys, _):
             description = "State snapshot (\(keys.count) keys updated)"
         case .stateAllowedToolsUpdated(let tools):

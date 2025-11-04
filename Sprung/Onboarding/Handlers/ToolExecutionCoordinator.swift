@@ -84,7 +84,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         // Execute tool
         do {
             let result = try await toolExecutor.handleToolCall(call)
-            await handleToolResult(result, callId: call.callId)
+            await handleToolResult(result, callId: call.callId, toolName: call.name)
         } catch {
             Logger.error("Tool execution failed: \(error)", category: .ai)
             await emitToolError(callId: call.callId, message: "Tool execution failed: \(error.localizedDescription)")
@@ -92,13 +92,29 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     }
 
     /// Handle tool execution result
-    private func handleToolResult(_ result: ToolResult, callId: String) async {
+    private func handleToolResult(_ result: ToolResult, callId: String, toolName: String?) async {
         switch result {
         case .immediate(let output):
+            // Special handling for extract_document tool - emit artifact record produced event
+            if toolName == "extract_document", output["artifact_record"] != .null {
+                await emit(.artifactRecordProduced(record: output["artifact_record"]))
+
+                // Optional: Emit developer message about artifact storage
+                var devPayload = JSON()
+                devPayload["text"].string = "Developer status: Artifact stored"
+                let artifactId = output["artifact_record"]["id"].stringValue
+                devPayload["details"] = JSON([
+                    "artifact_id": artifactId,
+                    "status": "stored"
+                ])
+                devPayload["payload"] = output["artifact_record"]
+                await emit(.llmSendDeveloperMessage(payload: devPayload))
+            }
+
             // Tool completed immediately - send response to LLM
             await emitToolResponse(callId: callId, output: output)
 
-        case .waiting(let message, let continuation):
+        case .waiting(_, let continuation):
             // Tool needs user input - store continuation and emit UI event
             pendingContinuations[continuation.id] = callId
 
@@ -130,7 +146,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         // Resume the continuation
         do {
             let result = try await toolExecutor.resumeContinuation(id: id, with: userInput)
-            await handleToolResult(result, callId: callId)
+            await handleToolResult(result, callId: callId, toolName: nil)
         } catch {
             Logger.error("Continuation resumption failed: \(error)", category: .ai)
             await emitToolError(callId: callId, message: "Continuation failed: \(error.localizedDescription)")

@@ -317,6 +317,37 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
+    /// Idempotent upsert of artifact record by id or sha256
+    private func upsertArtifactRecord(_ record: JSON) {
+        let id = record["id"].string ?? record["sha256"].string ?? UUID().uuidString
+        var replaced = false
+
+        for i in artifacts.artifactRecords.indices {
+            let existingId = artifacts.artifactRecords[i]["id"].string ?? artifacts.artifactRecords[i]["sha256"].string
+            if existingId == id {
+                artifacts.artifactRecords[i] = record
+                replaced = true
+                break
+            }
+        }
+
+        if !replaced {
+            artifacts.artifactRecords.append(record)
+        }
+    }
+
+    /// List artifact summaries (id, filename, size, content_type)
+    func listArtifactSummaries() -> [JSON] {
+        artifacts.artifactRecords.map { artifact in
+            var summary = JSON()
+            summary["id"].string = artifact["id"].string ?? artifact["sha256"].string
+            summary["filename"].string = artifact["filename"].string
+            summary["size_bytes"].int = artifact["size_bytes"].int
+            summary["content_type"].string = artifact["content_type"].string
+            return summary
+        }
+    }
+
     // MARK: - Timeline Card Management
 
     /// Helper to get current timeline cards using TimelineCardAdapter
@@ -661,6 +692,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                         await self.handleTimelineEvent(event)
                     }
                 }
+
+                // Subscribe to Artifact topic
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .artifact) {
+                        await self.handleArtifactEvent(event)
+                    }
+                }
             }
         }
 
@@ -766,6 +804,23 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .timelineCardsReordered(let orderedIds):
             reorderTimelineCards(orderedIds: orderedIds)
             Logger.info("📅 Timeline cards reordered via event", category: .ai)
+
+        default:
+            break
+        }
+    }
+
+    private func handleArtifactEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .artifactRecordProduced(let record):
+            // Idempotent insert/update by id/sha
+            upsertArtifactRecord(record)
+            Logger.info("📦 Artifact record produced: \(record["id"].stringValue)", category: .ai)
+
+        case .artifactRecordPersisted(let record):
+            // Ensure persisted copy is reflected in state
+            upsertArtifactRecord(record)
+            Logger.info("📦 Artifact record persisted: \(record["id"].stringValue)", category: .ai)
 
         default:
             break

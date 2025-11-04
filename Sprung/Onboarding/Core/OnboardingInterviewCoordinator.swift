@@ -16,6 +16,7 @@ final class OnboardingInterviewCoordinator {
     private let chatTranscriptStore: ChatTranscriptStore
     private let chatboxHandler: ChatboxHandler
     private let toolExecutionCoordinator: ToolExecutionCoordinator
+    private let artifactHandler: ArtifactHandler
     let toolRouter: ToolHandler
     let wizardTracker: WizardProgressTracker
     let phaseRegistry: PhaseScriptRegistry
@@ -200,6 +201,9 @@ final class OnboardingInterviewCoordinator {
             stateCoordinator: state
         )
 
+        // Create artifact handler for persistence/indexing
+        self.artifactHandler = ArtifactHandler(eventBus: eventBus, dataStore: dataStore)
+
         // Create handlers for tool router
         let promptHandler = PromptInteractionHandler()
 
@@ -235,6 +239,9 @@ final class OnboardingInterviewCoordinator {
         }
 
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
+
+        // Start artifact handler subscriptions
+        Task { await artifactHandler.startEventSubscriptions() }
 
         // Subscribe to events from the orchestrator
         Task { await subscribeToEvents() }
@@ -654,6 +661,10 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Artifact Queries (Read-Only State Access)
+
+    func listArtifactSummaries() async -> [JSON] {
+        await state.listArtifactSummaries()
+    }
 
     func getArtifactRecord(id: String) async -> JSON? {
         await state.getArtifactRecord(id: id)
