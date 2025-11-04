@@ -2,43 +2,31 @@
 //  ArtifactHandler.swift
 //  Sprung
 //
-//  Artifact management handler (Spec §4.8)
-//  Manages artifact creation, retrieval, and extraction coordination
+//  Artifact persistence and indexing reactor (Spec §4.8)
+//  Subscribes to artifactRecordProduced events and persists to dataStore
 //
 
 import Foundation
 import SwiftyJSON
 
-/// Coordinates artifact management and document extraction
+/// Artifact persistence and indexing reactor
 /// Responsibilities (Spec §4.8):
-/// - Subscribe to Artifact.get and Artifact.new events
-/// - Delegate to DocumentExtractionService for extraction
-/// - Manage artifact store integration
-/// - Emit Artifact.added and Artifact.updated events
+/// - Subscribe to .artifactRecordProduced events
+/// - Persist artifact records to InterviewDataStore
+/// - Emit .artifactRecordPersisted after successful persistence
+/// - Does NOT perform extraction (that's in ExtractDocumentTool)
 actor ArtifactHandler: OnboardingEventEmitter {
     // MARK: - Properties
 
     let eventBus: EventCoordinator
-    private let extractionService: DocumentExtractionService
-    private let artifactStore: OnboardingArtifactStore
     private let dataStore: InterviewDataStore
-
-    // Track ongoing extractions
-    private var activeExtractions: [UUID: Date] = [:] // extractionId -> startTime
 
     // MARK: - Initialization
 
-    init(
-        eventBus: EventCoordinator,
-        extractionService: DocumentExtractionService,
-        artifactStore: OnboardingArtifactStore,
-        dataStore: InterviewDataStore
-    ) {
+    init(eventBus: EventCoordinator, dataStore: InterviewDataStore) {
         self.eventBus = eventBus
-        self.extractionService = extractionService
-        self.artifactStore = artifactStore
         self.dataStore = dataStore
-        Logger.info("📦 ArtifactHandler initialized", category: .ai)
+        Logger.info("📦 ArtifactHandler initialized as persistence reactor", category: .ai)
     }
 
     // MARK: - Event Subscriptions
@@ -47,7 +35,7 @@ actor ArtifactHandler: OnboardingEventEmitter {
     func startEventSubscriptions() {
         Task {
             for await event in await eventBus.stream(topic: .artifact) {
-                await handleArtifactEvent(event)
+                await handle(event)
             }
         }
 
@@ -56,63 +44,21 @@ actor ArtifactHandler: OnboardingEventEmitter {
 
     // MARK: - Event Handlers
 
-    private func handleArtifactEvent(_ event: OnboardingEvent) async {
-        switch event {
-        case .artifactNewRequested(let fileURL, let kind, let performExtraction):
-            if performExtraction {
-                do {
-                    let extractedText = try await extractDocument(fileURL: fileURL, kind: kind)
-                    await emit(.artifactAdded(id: UUID(), kind: kind))
-                    Logger.info("Artifact created and extracted", category: .ai)
-                } catch {
-                    Logger.error("Failed to create/extract artifact: \(error)", category: .ai)
-                }
-            }
+    private func handle(_ event: OnboardingEvent) async {
+        guard case .artifactRecordProduced(let record) = event else { return }
 
-        default:
-            break
-        }
-    }
-
-    // MARK: - Public API (called by tools until events are added)
-
-    /// Extract document and store results
-    func extractDocument(fileURL: URL, kind: OnboardingUploadKind) async throws -> String {
-        let extractionId = UUID()
-        activeExtractions[extractionId] = Date()
-
-        Logger.info("🔍 Starting extraction for: \(fileURL.lastPathComponent)", category: .ai)
-
-        defer {
-            activeExtractions.removeValue(forKey: extractionId)
-        }
+        Logger.info("📦 Persisting artifact record: \(record["id"].stringValue)", category: .ai)
 
         do {
-            // Delegate to extraction service
-            let extractionRequest = DocumentExtractionService.ExtractionRequest(
-                fileURL: fileURL,
-                purpose: "Resume/Profile extraction",
-                returnTypes: ["text", "markdown"],
-                autoPersist: false,
-                timeout: 60.0
-            )
+            // Persist to dataStore
+            _ = try await dataStore.persist(dataType: "artifact_record", payload: record)
 
-            let result = try await extractionService.extract(using: extractionRequest)
+            // Emit confirmation event (so state/UI can react)
+            await emit(.artifactRecordPersisted(record: record))
 
-            guard let artifact = result.artifact else {
-                throw NSError(domain: "ArtifactHandler", code: 1, userInfo: [NSLocalizedDescriptionKey: "No artifact returned from extraction"])
-            }
-
-            // Emit artifact updated event
-            await emit(.artifactUpdated(id: UUID(), extractedText: artifact.extractedContent))
-
-            Logger.info("✅ Extraction complete: \(fileURL.lastPathComponent)", category: .ai)
-
-            return artifact.extractedContent
-
+            Logger.info("✅ Artifact record persisted: \(record["id"].stringValue)", category: .ai)
         } catch {
-            Logger.error("❌ Extraction failed: \(error)", category: .ai)
-            throw error
+            Logger.error("❌ Failed to persist artifact record: \(error)", category: .ai)
         }
     }
 }
