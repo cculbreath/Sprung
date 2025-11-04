@@ -101,6 +101,12 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         case .waiting(let message, let continuation):
             // Tool needs user input - store continuation and emit UI event
             pendingContinuations[continuation.id] = callId
+
+            // Emit UI-specific events based on the tool's UI request
+            if let uiRequest = continuation.uiRequest {
+                await emitUIRequest(uiRequest, continuationId: continuation.id)
+            }
+
             await emit(.toolContinuationNeeded(id: continuation.id, toolName: continuation.toolName))
             Logger.info("🔄 Tool waiting for user input: \(continuation.toolName)", category: .ai)
 
@@ -149,5 +155,26 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         errorOutput["error"].string = message
         errorOutput["status"].string = "error"
         await emitToolResponse(callId: callId, output: errorOutput)
+    }
+
+    /// Emit UI request events based on tool's UI needs
+    private func emitUIRequest(_ request: ToolUIRequest, continuationId: UUID) async {
+        switch request {
+        case .choicePrompt(let prompt):
+            await emit(.choicePromptRequested(prompt: prompt, continuationId: continuationId))
+            Logger.info("📋 Choice prompt requested", category: .ai)
+
+        case .uploadRequest(let uploadRequest):
+            await emit(.uploadRequestPresented(request: uploadRequest, continuationId: continuationId))
+            Logger.info("📤 Upload request presented", category: .ai)
+
+        case .validationPrompt(let validationPrompt):
+            await emit(.validationPromptRequested(prompt: validationPrompt, continuationId: continuationId))
+            Logger.info("✅ Validation prompt requested", category: .ai)
+
+        case .applicantProfileIntake:
+            await emit(.applicantProfileIntakeRequested(continuationId: continuationId))
+            Logger.info("👤 Applicant profile intake requested", category: .ai)
+        }
     }
 }

@@ -22,10 +22,32 @@ struct GetApplicantProfileTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // TODO: Reimplement using event-driven architecture
-        // await service.presentApplicantProfileIntake(continuationId: tokenId)
-        var response = JSON()
-        response["status"] = "pending"
-        return .immediate(response)
+        let continuationId = UUID()
+
+        var waitingPayload = JSON()
+        waitingPayload["status"].string = "waiting"
+        waitingPayload["tool"].string = name
+        waitingPayload["message"].string = "Waiting for applicant profile input"
+
+        let token = ContinuationToken(
+            id: continuationId,
+            toolName: name,
+            initialPayload: waitingPayload,
+            uiRequest: .applicantProfileIntake,
+            resumeHandler: { input in
+                if input["cancelled"].boolValue {
+                    return .error(.userCancelled)
+                }
+
+                // Return the profile data from user input
+                var response = JSON()
+                response["status"].string = "completed"
+                response["profile"] = input["profile"]
+                response["source"].string = input["source"].stringValue
+                return .immediate(response)
+            }
+        )
+
+        return .waiting(message: "Waiting for applicant profile input", continuation: token)
     }
 }

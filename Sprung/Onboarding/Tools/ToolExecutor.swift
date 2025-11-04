@@ -42,6 +42,11 @@ actor ToolExecutor {
         return normalize(result, toolName: token.toolName)
     }
 
+    /// Get a continuation token (without removing it)
+    func getContinuation(id: UUID) -> ContinuationToken? {
+        continuations[id]
+    }
+
     // MARK: - Helpers
 
     private func normalize(_ result: ToolResult, toolName: String) -> ToolResult {

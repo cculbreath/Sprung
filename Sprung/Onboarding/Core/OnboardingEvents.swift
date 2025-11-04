@@ -45,7 +45,10 @@ enum OnboardingEvent {
     case choicePromptCleared(continuationId: UUID)
     case uploadRequestPresented(request: OnboardingUploadRequest, continuationId: UUID)
     case uploadRequestCancelled(id: UUID)
-    case applicantProfileIntakeRequested(request: OnboardingApplicantProfileRequest, continuationId: UUID)
+    case validationPromptRequested(prompt: OnboardingValidationPrompt, continuationId: UUID)
+    case validationPromptCleared(continuationId: UUID)
+    case applicantProfileIntakeRequested(continuationId: UUID)
+    case applicantProfileIntakeCleared
     case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest, continuationId: UUID)
 
     // MARK: - Timeline Operations
@@ -228,7 +231,8 @@ actor EventCoordinator {
 
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
-             .uploadRequestCancelled, .applicantProfileIntakeRequested:
+             .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
+             .applicantProfileIntakeRequested, .applicantProfileIntakeCleared:
             return .toolpane
 
         // Timeline events
@@ -303,8 +307,14 @@ actor EventCoordinator {
             description = "Upload request presented"
         case .uploadRequestCancelled:
             description = "Upload request cancelled"
+        case .validationPromptRequested:
+            description = "Validation prompt requested"
+        case .validationPromptCleared:
+            description = "Validation prompt cleared"
         case .applicantProfileIntakeRequested:
             description = "Profile intake requested"
+        case .applicantProfileIntakeCleared:
+            description = "Profile intake cleared"
         case .phaseAdvanceRequested:
             description = "Phase advance requested"
         case .timelineCardCreated:

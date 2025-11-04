@@ -72,15 +72,11 @@ struct GetUserUploadTool: InterviewTool {
         let requestId = UUID()
         let continuationId = UUID()
 
-        // TODO: Emit event for upload request instead of direct service call
-        // await service.presentUploadRequest(
-        //     OnboardingUploadRequest(
-        //         id: requestId,
-        //         kind: requestPayload.kind,
-        //         metadata: requestPayload.metadata
-        //     ),
-        //     continuationId: continuationId
-        // )
+        let uploadRequest = OnboardingUploadRequest(
+            id: requestId,
+            kind: requestPayload.kind,
+            metadata: requestPayload.metadata
+        )
 
         var waitingPayload = JSON()
         waitingPayload["status"].string = "waiting"
@@ -99,6 +95,7 @@ struct GetUserUploadTool: InterviewTool {
             id: continuationId,
             toolName: name,
             initialPayload: waitingPayload,
+            uiRequest: .uploadRequest(uploadRequest),
             resumeHandler: { input in
                 do {
                     let userResponse = try UploadUserResponse(json: input)
