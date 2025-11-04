@@ -48,7 +48,7 @@ struct OnboardingToolStatusSnapshot: Equatable {
 /// a single surface for the coordinator and service to query state and construct continuation payloads.
 @MainActor
 @Observable
-final class OnboardingToolRouter {
+final class ToolHandler {
     // MARK: - Handlers
 
     let promptHandler: PromptInteractionHandler

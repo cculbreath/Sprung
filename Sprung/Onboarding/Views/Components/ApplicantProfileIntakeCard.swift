@@ -73,7 +73,8 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Upload your resume PDF, DOCX, or text file",
                     icon: "arrow.up.doc"
                 ) {
-                    service.beginApplicantProfileUpload()
+                    // TODO: Emit event instead
+                    // service.beginApplicantProfileUpload()
                 }
 
                 optionButton(
@@ -81,7 +82,8 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Provide a link to your resume or LinkedIn profile",
                     icon: "link"
                 ) {
-                    service.beginApplicantProfileURL()
+                    // TODO: Emit event instead
+                    // service.beginApplicantProfileURL()
                 }
 
                 optionButton(
@@ -89,7 +91,8 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Import details from your macOS Contacts or vCard",
                     icon: "person.crop.circle"
                 ) {
-                    service.beginApplicantProfileContactsFetch()
+                    // TODO: Emit event instead
+                    // service.beginApplicantProfileContactsFetch()
                 }
 
                 optionButton(
@@ -97,7 +100,8 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Fill in your contact details step by step",
                     icon: "square.and.pencil"
                 ) {
-                    service.beginApplicantProfileManualEntry()
+                    // TODO: Emit event instead
+                    // service.beginApplicantProfileManualEntry()
                 }
             }
 
@@ -159,14 +163,16 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    service.resetApplicantProfileIntakeToOptions()
+                    // TODO: Emit event instead
+                    // service.resetApplicantProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("Save & Continue") {
-                    Task { await service.completeApplicantProfileDraft(draft, source: source) }
+                    // TODO: Emit event instead
+                    // Task { await service.completeApplicantProfileDraft(draft, source: source) }
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -189,14 +195,16 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    service.resetApplicantProfileIntakeToOptions()
+                    // TODO: Emit event instead
+                    // service.resetApplicantProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("Submit URL") {
-                    Task { await service.submitApplicantProfileURL(urlString) }
+                    // TODO: Emit event instead
+                    // Task { await service.submitApplicantProfileURL(urlString) }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

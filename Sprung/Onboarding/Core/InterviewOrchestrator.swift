@@ -11,31 +11,29 @@ import SwiftyJSON
 import SwiftOpenAI
 
 /// Orchestrates the interview conversation with the LLM.
-/// All communication happens through events - clean unidirectional flow.
+/// Delegates to LLMMessenger (§4.3) for message sending.
+/// Delegates to NetworkRouter (§4.4) for stream event processing.
 actor InterviewOrchestrator: OnboardingEventEmitter {
     // MARK: - Properties
 
-    let eventBus: OnboardingEventBus
+    let eventBus: EventCoordinator
+    private let llmMessenger: LLMMessenger
+    private let networkRouter: NetworkRouter
     private let service: OpenAIService
     private let systemPrompt: String
 
-    // Conversation state
-    private var conversationId: String?
-    private var lastResponseId: String?
-    private var currentModelId: String = "gpt-5"
-
-    // Tool execution tracking
+    // Tool execution tracking (continuations)
     private var continuationCallIds: [UUID: String] = [:]
     private var continuationToolNames: [UUID: String] = [:]
 
-    // Cached data for quick reference
+    // Cached data for quick reference (TODO: Move to StateCoordinator)
     private var applicantProfileData: JSON?
     private var skeletonTimelineData: JSON?
 
-    // Tool choice override for forcing specific tools
+    // Tool choice override for forcing specific tools (TODO: Move to LLMMessenger)
     private var nextToolChoiceOverride: ToolChoiceOverride?
 
-    // Timeline tool names for special handling
+    // Timeline tool names for special handling (TODO: Move to configuration)
     private let timelineToolNames: Set<String> = [
         "create_timeline_card",
         "update_timeline_card",
@@ -43,17 +41,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         "delete_timeline_card"
     ]
 
-    private struct StreamBuffer {
-        var messageId: UUID
-        var text: String
-        var pendingFragment: String
-        var startedAt: Date
-        var firstDeltaLogged: Bool
-    }
-
-    private var streamingBuffers: [String: StreamBuffer] = [:]
-    private var messageIds: [String: UUID] = [:]
-    private var lastMessageUUID: UUID?
     private var isActive = false
 
     // MARK: - Initialization
@@ -61,42 +48,44 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     init(
         service: OpenAIService,
         systemPrompt: String,
-        eventBus: OnboardingEventBus
+        eventBus: EventCoordinator
     ) {
         self.service = service
         self.systemPrompt = systemPrompt
         self.eventBus = eventBus
-        Logger.info("🎯 InterviewOrchestrator initialized with event bus", category: .ai)
+        self.networkRouter = NetworkRouter(eventBus: eventBus)
+        self.llmMessenger = LLMMessenger(
+            service: service,
+            systemPrompt: systemPrompt,
+            eventBus: eventBus,
+            networkRouter: networkRouter
+        )
+        Logger.info("🎯 InterviewOrchestrator initialized with LLMMessenger", category: .ai)
     }
 
     // MARK: - Interview Control
 
     func startInterview() async throws {
         isActive = true
-        conversationId = nil
-        lastResponseId = nil
+        await llmMessenger.activate()
+
+        // Start event subscriptions
+        await llmMessenger.startEventSubscriptions()
+        startToolSubscription()
 
         await emit(.processingStateChanged(true))
-        defer {
-            Task {
-                await emit(.processingStateChanged(false))
-            }
-        }
 
-        // Let the LLM drive the conversation via tool calls
-        do {
-            try await requestResponse(withUserMessage: "Begin the onboarding interview.")
-        } catch {
-            await emit(.errorOccurred("Failed to start interview: \(error.localizedDescription)"))
-            throw error
-        }
+        // Emit message request event (§4.3)
+        var payload = JSON()
+        payload["text"].string = "Begin the onboarding interview."
+        await emit(.llmSendUserMessage(payload: payload))
     }
 
     func endInterview() {
         isActive = false
-        conversationId = nil
-        lastResponseId = nil
-        streamingBuffers.removeAll()
+        Task {
+            await llmMessenger.deactivate()
+        }
         continuationCallIds.removeAll()
         continuationToolNames.removeAll()
     }
@@ -105,257 +94,59 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         guard isActive else { return }
 
         await emit(.processingStateChanged(true))
-        defer {
-            Task {
-                await emit(.processingStateChanged(false))
-            }
-        }
 
-        do {
-            try await requestResponse(withUserMessage: text)
-        } catch {
-            await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
-            throw error
-        }
+        // Emit message request event (§4.3)
+        var payload = JSON()
+        payload["text"].string = text
+        await emit(.llmSendUserMessage(payload: payload))
     }
 
     // MARK: - Tool Continuation
 
     func resumeToolContinuation(id: UUID, payload: JSON) async throws {
         await emit(.processingStateChanged(true))
-        defer {
-            Task {
-                await emit(.processingStateChanged(false))
-            }
-        }
 
         // Clear waiting state
         await emit(.waitingStateChanged(nil))
 
-        // Continue the conversation
-        if let callId = continuationCallIds.removeValue(forKey: id) {
-            try await requestResponse(withToolOutput: payload, callId: callId)
+        // Get the call ID for this continuation
+        guard let callId = continuationCallIds.removeValue(forKey: id) else {
+            Logger.warning("No continuation found for id: \(id)", category: .ai)
+            return
         }
+
+        // Emit tool response event (§4.3)
+        var responsePayload = JSON()
+        responsePayload["callId"].string = callId
+        responsePayload["output"] = payload
+        await emit(.llmToolResponseMessage(payload: responsePayload))
     }
 
-    // MARK: - Response Handling
+    // MARK: - Tool Continuation Management
+    // Note: Request building moved to LLMMessenger (§4.3)
+    // TODO: Move tool choice override and available tools logic to StateCoordinator/LLMMessenger
 
-    private func requestResponse(
-        withUserMessage text: String? = nil,
-        withToolOutput output: JSON? = nil,
-        callId: String? = nil
-    ) async throws {
-        guard isActive else { return }
-
-        let request = buildRequest(
-            userMessage: text,
-            toolOutput: output,
-            callId: callId
-        )
-
-        do {
-            let stream = try await service.responseCreateStream(request)
-            for try await event in stream {
-                await handleResponseEvent(event)
-            }
-        } catch {
-            await emit(.errorOccurred("API Error: \(error.localizedDescription)"))
-            throw error
-        }
-    }
-
-    private func buildRequest(
-        userMessage: String?,
-        toolOutput: JSON?,
-        callId: String?
-    ) -> ModelResponseParameter {
-        var inputItems: [InputItem] = []
-
-        // Add system prompt
-        inputItems.append(.message(InputMessage(
-            role: "developer",
-            content: .text(systemPrompt)
-        )))
-
-        // Add user message if provided
-        if let text = userMessage {
-            inputItems.append(.message(InputMessage(
-                role: "user",
-                content: .text(text)
-            )))
-        }
-
-        // Add tool output if provided
-        if let output = toolOutput, let callId = callId {
-            inputItems.append(.functionToolCallOutput(FunctionToolCallOutput(
-                callId: callId,
-                output: output.rawString() ?? "{}"
-            )))
-        }
-
-        // Build tool configuration
-        let tools = buildAvailableTools()
-
-        // Apply tool choice override if set
-        let toolChoice: ToolChoiceMode?
-        if let override = nextToolChoiceOverride {
-            nextToolChoiceOverride = nil
-            switch override.mode {
-            case .require(let toolNames):
-                if let toolName = toolNames.first {
-                    // Force the model to call a specific function
-                    toolChoice = .functionTool(FunctionTool(name: toolName))
-                } else {
-                    toolChoice = .auto
-                }
-            case .auto:
-                toolChoice = .auto
-            }
-        } else {
-            toolChoice = .auto
-        }
-
-        return ModelResponseParameter(
-            input: .array(inputItems),
-            model: .custom(currentModelId),
-            stream: true,
-            toolChoice: toolChoice,
-            tools: tools
-        )
-    }
-
-    private func buildAvailableTools() -> [Tool] {
-        // Get current phase tools (simplified - no state dependency)
-        let phaseTools = [
-            "get_user_option",
-            "get_applicant_profile",
-            "get_user_upload",
-            "get_macos_contact_card",
-            "extract_document",
-            "list_artifacts",
-            "get_artifact",
-            "cancel_user_upload",
-            "request_raw_file",
-            "create_timeline_card",
-            "update_timeline_card",
-            "reorder_timeline_cards",
-            "delete_timeline_card",
-            "submit_for_validation",
-            "persist_data",
-            "set_objective_status",
-            "next_phase"
-        ]
-
-        return phaseTools.map { toolName in
-            Tool.function(Tool.FunctionTool(
-                name: toolName,
-                parameters: JSONSchema(type: .object, properties: [:]),
-                description: "Tool: \(toolName)"
-            ))
-        }
-    }
-
-    // MARK: - Event Stream Processing
-
-    private func handleResponseEvent(_ event: ResponseStreamEvent) async {
-        switch event {
-        case .responseFailed(let failed):
-            let message = failed.response.error?.message ?? "Response failed"
-            await emit(.errorOccurred("Stream error: \(message)"))
-
-        case .responseCompleted(let completed):
-            await finalizePendingMessages()
-            conversationId = completed.response.id
-            lastResponseId = completed.response.id
-
-        case .responseInProgress(let inProgress):
-            // Process deltas from in-progress response
-            for item in inProgress.response.output {
-                switch item {
-                case .message(let message):
-                    for contentItem in message.content {
-                        if case .outputText(let outputText) = contentItem {
-                            await processContentDelta(0, outputText.text)
-                        }
-                    }
-                case .functionCall(let toolCall):
-                    await processToolCall(toolCall)
-                default:
-                    break
+    /// Subscribe to tool call events and manage continuations
+    func startToolSubscription() {
+        Task {
+            for await event in await eventBus.stream(topic: .tool) {
+                if case .toolCallRequested(let call) = event {
+                    await handleToolCall(call)
                 }
             }
-
-        case .responseCreated, .responseIncomplete:
-            // These events don't need special handling for our use case
-            break
-
-        default:
-            break
         }
     }
 
-    private func processContentDelta(_ index: Int, _ text: String) async {
-        let itemId = "message_\(index)"
-
-        if streamingBuffers[itemId] == nil {
-            let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: "", reasoningExpected: false))
-            streamingBuffers[itemId] = StreamBuffer(
-                messageId: messageId,
-                text: "",
-                pendingFragment: "",
-                startedAt: Date(),
-                firstDeltaLogged: false
-            )
-            messageIds[itemId] = messageId
-            lastMessageUUID = messageId
-        }
-
-        guard var buffer = streamingBuffers[itemId] else { return }
-        buffer.text += text
-        buffer.pendingFragment += text
-
-        await emit(.streamingMessageUpdated(id: buffer.messageId, delta: buffer.pendingFragment))
-        buffer.pendingFragment = ""
-        streamingBuffers[itemId] = buffer
-    }
-
-    private func processToolCall(_ toolCall: OutputItem.FunctionToolCall) async {
-        let functionName = toolCall.name
-        let arguments = toolCall.arguments
-
-        // Convert arguments string to JSON
-        let argsJSON = JSON(parseJSON: arguments)
-
-        let call = ToolCall(
-            id: UUID().uuidString,
-            name: functionName,
-            arguments: argsJSON,
-            callId: toolCall.id ?? UUID().uuidString
-        )
-
-        await emit(.toolCallRequested(call))
-
+    private func handleToolCall(_ call: ToolCall) async {
         // Set waiting state based on tool
-        let waitingState = waitingStateForTool(functionName)
+        let waitingState = waitingStateForTool(call.name)
         await emit(.waitingStateChanged(waitingState))
 
         // Store continuation info
         let continuationId = UUID()
-        let callId = toolCall.id ?? UUID().uuidString
-        continuationCallIds[continuationId] = callId
-        continuationToolNames[continuationId] = functionName
-        await emit(.toolContinuationNeeded(id: continuationId, toolName: functionName))
-    }
-
-    private func finalizePendingMessages() async {
-        for (_, buffer) in streamingBuffers {
-            await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: buffer.text))
-        }
-
-        streamingBuffers.removeAll()
-        messageIds.removeAll()
-        lastMessageUUID = nil
+        continuationCallIds[continuationId] = call.callId
+        continuationToolNames[continuationId] = call.name
+        await emit(.toolContinuationNeeded(id: continuationId, toolName: call.name))
     }
 
     private func waitingStateForTool(_ toolName: String) -> String? {

@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Provides lightweight persistence for interview session checkpoints.
-//  Works with the centralized OnboardingState system.
+//  Works with the centralized StateCoordinator system.
 //
 
 import Foundation
@@ -12,7 +12,7 @@ import SwiftyJSON
 /// Represents a saved checkpoint of the interview state
 struct OnboardingCheckpoint: Codable {
     let timestamp: Date
-    let snapshot: OnboardingState.StateSnapshot
+    let snapshot: StateCoordinator.StateSnapshot
     let profileJSON: String?
     let timelineJSON: String?
     let enabledSections: Set<String>
@@ -48,15 +48,15 @@ final class Checkpoints {
     /// Saves a checkpoint with the current state
     func save(
         phase: InterviewPhase,
-        objectives: [String: OnboardingState.ObjectiveEntry],
+        objectives: [String: StateCoordinator.ObjectiveEntry],
         profileJSON: JSON?,
         timelineJSON: JSON?,
         enabledSections: Set<String>
     ) {
-        let snapshot = OnboardingState.StateSnapshot(
+        let snapshot = StateCoordinator.StateSnapshot(
             phase: phase,
             objectives: objectives,
-            artifacts: OnboardingState.StateSnapshot.ArtifactsSnapshot(
+            artifacts: StateCoordinator.StateSnapshot.ArtifactsSnapshot(
                 hasApplicantProfile: profileJSON != nil,
                 hasSkeletonTimeline: timelineJSON != nil,
                 enabledSections: enabledSections,
@@ -87,7 +87,7 @@ final class Checkpoints {
 
     /// Restores the most recent checkpoint
     func restore() -> (
-        snapshot: OnboardingState.StateSnapshot,
+        snapshot: StateCoordinator.StateSnapshot,
         profileJSON: JSON?,
         timelineJSON: JSON?,
         enabledSections: Set<String>
@@ -148,7 +148,7 @@ final class Checkpoints {
     }
 
     private func determineWizardStep(
-        from objectives: [String: OnboardingState.ObjectiveEntry]
+        from objectives: [String: StateCoordinator.ObjectiveEntry]
     ) -> String {
         let completed = Set(objectives
             .filter { $0.value.status == .completed }
@@ -166,7 +166,7 @@ final class Checkpoints {
     }
 
     private func determineCompletedSteps(
-        from objectives: [String: OnboardingState.ObjectiveEntry]
+        from objectives: [String: StateCoordinator.ObjectiveEntry]
     ) -> Set<String> {
         let completed = Set(objectives
             .filter { $0.value.status == .completed }

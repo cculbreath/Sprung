@@ -4,7 +4,7 @@ import SwiftUI
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewService.self) private var interviewService
     @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
-    @Environment(OnboardingToolRouter.self) private var toolRouter
+    @Environment(ToolHandler.self) private var toolRouter
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
     private let onboardingFallbackModelId = "openai/gpt-5"
@@ -24,6 +24,10 @@ struct OnboardingInterviewView: View {
     @Namespace private var wizardTransition
 
     var body: some View {
+        bodyContent
+    }
+
+    private var bodyContent: some View {
         @Bindable var service = interviewService
         @Bindable var coordinator = interviewCoordinator
         @Bindable var router = toolRouter
@@ -35,7 +39,7 @@ struct OnboardingInterviewView: View {
         let shadowY: CGFloat = 22
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
 
-        VStack(spacing: 0) {
+        let contentStack = VStack(spacing: 0) {
             // Progress bar anchored close to top
             OnboardingInterviewStepProgressView(coordinator: coordinator)
                 .padding(.top, 16)
@@ -50,13 +54,13 @@ struct OnboardingInterviewView: View {
                     router: router,
                     state: uiState
                 )
-                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardStep)
+                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: service.wizardStep)
 
                 Spacer(minLength: 16) // centers body relative to bottom bar
 
                 OnboardingInterviewBottomBar(
-                    showBack: shouldShowBackButton(for: coordinator.wizardStep),
-                    continueTitle: continueButtonTitle(for: coordinator.wizardStep),
+                    showBack: shouldShowBackButton(for: service.wizardStep),
+                    continueTitle: continueButtonTitle(for: service.wizardStep),
                     isContinueDisabled: isContinueDisabled(service: service, coordinator: coordinator),
                     onShowSettings: openSettings,
                     onBack: { handleBack(service: service, coordinator: coordinator) },
@@ -64,139 +68,148 @@ struct OnboardingInterviewView: View {
                     onContinue: { handleContinue(service: service, coordinator: coordinator) }
                 )
                 .padding(.horizontal, 16)
-                .animation(.easeInOut(duration: 0.25), value: coordinator.wizardStep)
+                .animation(.easeInOut(duration: 0.25), value: service.wizardStep)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal,32)
         }
-        .frame(minWidth: 1040)
-        .padding(.horizontal, 32)
-        .padding(.vertical, 24)
-        .mask(cardShape) // clip content to rounded shape
-        .background(
-            cardShape.fill(.thickMaterial)
-        )
-        .overlay(
-            cardShape
-                .stroke(.clear)
-                .shadow(color: .black.opacity(0.5), radius: shadowR, y: shadowY)
-                .allowsHitTesting(false)
-        )
-        .padding(.top, shadowR)
-        .padding(.leading, shadowR)
-        .padding(.trailing, shadowR)
-        .padding(.bottom, shadowR + abs(shadowY))
-        .overlay {
-            if showResumeOptions {
-                ZStack {
-                    Color.black.opacity(0.001)
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            pendingStartModelId = nil
-                            showResumeOptions = false
-                        }
 
-                    ResumeInterviewPromptView(
-                        onResume: {
-                            respondToResumeChoice(resume: true)
-                        },
-                        onStartOver: {
-                            respondToResumeChoice(resume: false)
-                        },
-                        onCancel: {
-                            pendingStartModelId = nil
-                            showResumeOptions = false
-                        }
-                    )
-                    .transition(.opacity.combined(with: .scale))
+        let styledContent = contentStack
+            .frame(minWidth: 1040)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 24)
+            .mask(cardShape)
+            .background(cardShape.fill(.thickMaterial))
+            .overlay(
+                cardShape
+                    .stroke(.clear)
+                    .shadow(color: .black.opacity(0.5), radius: shadowR, y: shadowY)
+                    .allowsHitTesting(false)
+            )
+            .padding(.top, shadowR)
+            .padding(.leading, shadowR)
+            .padding(.trailing, shadowR)
+            .padding(.bottom, shadowR + abs(shadowY))
+
+        let withResumeOverlay = styledContent
+            .overlay {
+                if showResumeOptions {
+                    ZStack {
+                        Color.black.opacity(0.001)
+                            .ignoresSafeArea()
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                pendingStartModelId = nil
+                                showResumeOptions = false
+                            }
+
+                        ResumeInterviewPromptView(
+                            onResume: {
+                                respondToResumeChoice(resume: true)
+                            },
+                            onStartOver: {
+                                respondToResumeChoice(resume: false)
+                            },
+                            onCancel: {
+                                pendingStartModelId = nil
+                                showResumeOptions = false
+                            }
+                        )
+                        .transition(.opacity.combined(with: .scale))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .zIndex(5)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .zIndex(5)
             }
-        }
-        .animation(.easeInOut(duration: 0.2), value: showResumeOptions)
+            .animation(.easeInOut(duration: 0.2), value: showResumeOptions)
 
         // --- Lifecycle bindings and tasks ---
-        .task {
-            let modelIds = openAIModels.map(\.modelId)
-            uiState.configureIfNeeded(
-                service: service,
-                defaultModelId: defaultModelId,
-                defaultWebSearchAllowed: defaultWebSearchAllowed,
-                defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
-                availableModelIds: modelIds
-            )
-            applyPreferredModel()
-        }
-        .onChange(of: defaultModelId) { _, newValue in
-            let modelIds = openAIModels.map(\.modelId)
-            uiState.handleDefaultModelChange(
-                newValue: newValue,
-                availableModelIds: modelIds
-            )
-            applyPreferredModel(requestedId: newValue)
-        }
-        .onChange(of: defaultWebSearchAllowed) { _, newValue in
-            if !service.isActive {
-                uiState.webSearchAllowed = newValue
+        let withLifecycle = withResumeOverlay
+            .task {
+                let modelIds = openAIModels.map(\.modelId)
+                uiState.configureIfNeeded(
+                    service: service,
+                    defaultModelId: defaultModelId,
+                    defaultWebSearchAllowed: defaultWebSearchAllowed,
+                    defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
+                    availableModelIds: modelIds
+                )
                 applyPreferredModel()
             }
-        }
-        .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
-            if !service.isActive {
-                uiState.writingAnalysisAllowed = newValue
+            .onChange(of: defaultModelId) { _, newValue in
+                let modelIds = openAIModels.map(\.modelId)
+                uiState.handleDefaultModelChange(
+                    newValue: newValue,
+                    availableModelIds: modelIds
+                )
+                applyPreferredModel(requestedId: newValue)
             }
-        }
-        .onChange(of: service.allowWebSearch) { _, newValue in
-            if service.isActive {
-                uiState.webSearchAllowed = newValue
-            }
-        }
-        .onChange(of: service.allowWritingAnalysis) { _, newValue in
-            if service.isActive {
-                uiState.writingAnalysisAllowed = newValue
-            }
-        }
-        .onChange(of: enabledLLMStore.enabledModels) { _, _ in
-            applyPreferredModel()
-        }
-        .sheet(isPresented: Binding(
-            get: { service.pendingExtraction != nil },
-            set: { newValue in
-                if !newValue {
-                    service.setExtractionStatus(nil)
+            .onChange(of: defaultWebSearchAllowed) { _, newValue in
+                if !service.isActive {
+                    uiState.webSearchAllowed = newValue
+                    applyPreferredModel()
                 }
             }
-        )) {
-            if let pending = service.pendingExtraction {
-                ExtractionReviewSheet(
-                    extraction: pending,
-                    onConfirm: { updated, notes in
-                        // TODO: Implement extraction confirmation post-M0
-                        Logger.debug("Extraction confirmation is not implemented in milestone M0.")
-                    },
-                    onCancel: {
-                        service.setExtractionStatus(nil)
-                    }
-                )
+            .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
+                if !service.isActive {
+                    uiState.writingAnalysisAllowed = newValue
+                }
             }
-        }
-        .alert("Import Failed", isPresented: $uiState.showImportError, presenting: uiState.importErrorText) { _ in
-            Button("OK") { uiState.clearImportError() }
-        } message: { message in
-            Text(message)
-        }
-        .onAppear {
-            let initialStatuses = router.statusSnapshot.rawValueMap
-            loggedToolStatuses = initialStatuses
-            Logger.info("📊 Tool status update", category: .ai, metadata: initialStatuses)
-        }
-        .onChange(of: router.statusSnapshot.rawValueMap) { _, newValue in
-            guard newValue != loggedToolStatuses else { return }
-            Logger.info("📊 Tool status update", category: .ai, metadata: newValue)
-            loggedToolStatuses = newValue
-        }
+            .onChange(of: service.allowWebSearch) { _, newValue in
+                if service.isActive {
+                    uiState.webSearchAllowed = newValue
+                }
+            }
+            .onChange(of: service.allowWritingAnalysis) { _, newValue in
+                if service.isActive {
+                    uiState.writingAnalysisAllowed = newValue
+                }
+            }
+            .onChange(of: enabledLLMStore.enabledModels) { _, _ in
+                applyPreferredModel()
+            }
+
+        let withSheets = withLifecycle
+            .sheet(isPresented: Binding(
+                get: { service.pendingExtraction != nil },
+                set: { newValue in
+                    if !newValue {
+                        // TODO: Implement with event-driven architecture
+                        // service.setExtractionStatus(nil)
+                    }
+                }
+            )) {
+                if let pending = service.pendingExtraction {
+                    ExtractionReviewSheet(
+                        extraction: pending,
+                        onConfirm: { updated, notes in
+                            // TODO: Implement extraction confirmation post-M0
+                            Logger.debug("Extraction confirmation is not implemented in milestone M0.")
+                        },
+                        onCancel: {
+                            // TODO: Implement with event-driven architecture
+                            // service.setExtractionStatus(nil)
+                        }
+                    )
+                }
+            }
+            .alert("Import Failed", isPresented: $uiState.showImportError, presenting: uiState.importErrorText) { _ in
+                Button("OK") { uiState.clearImportError() }
+            } message: { message in
+                Text(message)
+            }
+
+        return withSheets
+            .onAppear {
+                let initialStatuses = router.statusSnapshot.rawValueMap
+                loggedToolStatuses = initialStatuses
+                Logger.info("📊 Tool status update", category: .ai, metadata: initialStatuses)
+            }
+            .onChange(of: router.statusSnapshot.rawValueMap) { _, newValue in
+                guard newValue != loggedToolStatuses else { return }
+                Logger.info("📊 Tool status update", category: .ai, metadata: newValue)
+                loggedToolStatuses = newValue
+            }
     }
 }
 
@@ -264,11 +277,11 @@ private extension OnboardingInterviewView {
     func mainCard(
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator,
-        router: OnboardingToolRouter,
+        router: ToolHandler,
         state: OnboardingInterviewViewModel
     ) -> some View {
         Group {
-            if coordinator.wizardStep == .introduction {
+            if service.wizardStep == .introduction {
                 OnboardingInterviewIntroductionCard()
                     .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
                     .transition(.asymmetric(
@@ -315,7 +328,7 @@ private extension OnboardingInterviewView {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        switch coordinator.wizardStep {
+        switch service.wizardStep {
             case .introduction:
                 return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
             case .resumeIntake:
@@ -335,7 +348,7 @@ private extension OnboardingInterviewView {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) {
-        switch coordinator.wizardStep {
+        switch service.wizardStep {
             case .introduction:
                 beginInterview(service: service)
             case .resumeIntake:
@@ -343,12 +356,17 @@ private extension OnboardingInterviewView {
                    coordinator.pendingChoicePrompt == nil,
                    coordinator.pendingApplicantProfileRequest == nil,
                    coordinator.pendingApplicantProfileIntake == nil {
-                    coordinator.setWizardStep(.artifactDiscovery)
+                    // TODO: Emit event instead
+                    // coordinator.setWizardStep(.artifactDiscovery)
                 }
             case .artifactDiscovery:
-                coordinator.setWizardStep(.writingCorpus)
+                // TODO: Emit event instead
+                // coordinator.setWizardStep(.writingCorpus)
+                break
             case .writingCorpus:
-                coordinator.setWizardStep(.wrapUp)
+                // TODO: Emit event instead
+                // coordinator.setWizardStep(.wrapUp)
+                break
             case .wrapUp:
                 handleCancel()
         }
@@ -358,23 +376,31 @@ private extension OnboardingInterviewView {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) {
-        switch coordinator.wizardStep {
+        switch service.wizardStep {
             case .resumeIntake:
-                service.resetInterview()
+                // TODO: Emit event instead
+                // service.resetInterview()
                 reinitializeUIState(service: service)
             case .artifactDiscovery:
-                coordinator.setWizardStep(.resumeIntake)
+                // TODO: Emit event instead
+                // coordinator.setWizardStep(.resumeIntake)
+                break
             case .writingCorpus:
-                coordinator.setWizardStep(.artifactDiscovery)
+                // TODO: Emit event instead
+                // coordinator.setWizardStep(.artifactDiscovery)
+                break
             case .wrapUp:
-                coordinator.setWizardStep(.writingCorpus)
+                // TODO: Emit event instead
+                // coordinator.setWizardStep(.writingCorpus)
+                break
             case .introduction:
                 break
         }
     }
 
     func handleCancel() {
-        interviewService.resetInterview()
+        // TODO: Emit event instead
+        // interviewService.resetInterview()
         reinitializeUIState(service: interviewService)
         if let window = NSApp.windows.first(where: { $0 is BorderlessOverlayWindow }) {
             window.orderOut(nil)
@@ -394,7 +420,8 @@ private extension OnboardingInterviewView {
     }
 
     func modelStatusDescription(service: OnboardingInterviewService) -> String {
-        let rawId = service.preferredModelIdForDisplay ?? viewModel.currentModelId
+        // TODO: Get from event-driven state
+        let rawId = viewModel.currentModelId // service.preferredModelIdForDisplay ?? viewModel.currentModelId
         let display = rawId.split(separator: "/").last.map(String.init) ?? rawId
         let webText = service.allowWebSearch ? "on" : "off"
         return "Using \(display) with web search \(webText)."
@@ -404,7 +431,8 @@ private extension OnboardingInterviewView {
         let modelId = viewModel.currentModelId
         Task { @MainActor in
             guard service.isActive == false else { return }
-            let hasCheckpoint = await service.hasRestorableCheckpoint()
+            // TODO: Get from event-driven state
+            let hasCheckpoint = false // await service.hasRestorableCheckpoint()
             if hasCheckpoint {
                 pendingStartModelId = modelId
                 showResumeOptions = true
@@ -417,9 +445,10 @@ private extension OnboardingInterviewView {
     @MainActor
     func launchInterview(modelId: String, resume: Bool) async {
         await interviewService.startInterview(modelId: modelId, backend: .openAI, resumeExisting: resume)
-        if viewModel.writingAnalysisAllowed {
-            interviewService.setWritingAnalysisConsent(true)
-        }
+        // TODO: Implement with event-driven architecture
+        // if viewModel.writingAnalysisAllowed {
+        //     interviewService.setWritingAnalysisConsent(true)
+        // }
         pendingStartModelId = nil
         showResumeOptions = false
     }
@@ -455,23 +484,24 @@ private extension OnboardingInterviewView {
     }
 
     func applyPreferredModel(requestedId: String? = nil) {
-        let ids = openAIModels.map(\.modelId)
-        interviewService.updateAvailableModelIds(ids)
-
-        let targetId = requestedId ?? defaultModelId
-
-        let resolvedId = interviewService.setPreferredDefaults(
-            modelId: targetId,
-            backend: .openAI,
-            webSearchAllowed: viewModel.webSearchAllowed
-        )
-
-        if viewModel.selectedModelId != resolvedId {
-            viewModel.selectedModelId = resolvedId
-        }
-
-        if defaultModelId != resolvedId {
-            defaultModelId = resolvedId
-        }
+        // TODO: Implement with event-driven architecture
+        // let ids = openAIModels.map(\.modelId)
+        // interviewService.updateAvailableModelIds(ids)
+        //
+        // let targetId = requestedId ?? defaultModelId
+        //
+        // let resolvedId = interviewService.setPreferredDefaults(
+        //     modelId: targetId,
+        //     backend: .openAI,
+        //     webSearchAllowed: viewModel.webSearchAllowed
+        // )
+        //
+        // if viewModel.selectedModelId != resolvedId {
+        //     viewModel.selectedModelId = resolvedId
+        // }
+        //
+        // if defaultModelId != resolvedId {
+        //     defaultModelId = resolvedId
+        // }
     }
 }

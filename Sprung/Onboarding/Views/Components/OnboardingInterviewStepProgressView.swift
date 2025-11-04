@@ -5,12 +5,14 @@ struct OnboardingInterviewStepProgressView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 28) {
+            // TODO: Reimplement using event-driven architecture
             ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
-                let status = coordinator.wizardStepStatuses[step] ?? .pending
+                // let status = coordinator.wizardStepStatuses[step] ?? .pending
+                let status = OnboardingWizardStepStatus.pending
                 OnboardingStepProgressItem(title: step.title, status: status)
             }
         }
-        .animation(.bouncy(duration: 0.55, extraBounce: 0.12), value: coordinator.wizardStepStatuses)
+        // .animation(.bouncy(duration: 0.55, extraBounce: 0.12), value: coordinator.wizardStepStatuses)
     }
 }
 

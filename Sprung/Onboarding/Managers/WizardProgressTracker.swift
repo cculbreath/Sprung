@@ -43,6 +43,9 @@ final class WizardProgressTracker {
             stepStatuses[currentStep] = .current
         case .none:
             stepStatuses[currentStep] = nil
+        default:
+            // Other waiting states don't affect step status
+            break
         }
     }
 

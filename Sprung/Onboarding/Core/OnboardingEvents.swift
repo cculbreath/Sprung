@@ -40,36 +40,148 @@ enum OnboardingEvent {
     case toolCallCompleted(id: UUID, result: JSON)
     case toolContinuationNeeded(id: UUID, toolName: String)
 
+    // MARK: - Tool UI Requests
+    case choicePromptRequested(prompt: OnboardingChoicePrompt, continuationId: UUID)
+    case choicePromptCleared(continuationId: UUID)
+    case uploadRequestPresented(request: OnboardingUploadRequest, continuationId: UUID)
+    case uploadRequestCancelled(id: UUID)
+    case applicantProfileIntakeRequested(request: OnboardingApplicantProfileRequest, continuationId: UUID)
+    case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest, continuationId: UUID)
+
+    // MARK: - Timeline Operations
+    case timelineCardCreated(card: JSON)
+    case timelineCardDeleted(id: String)
+    case timelineCardsReordered(ids: [String])
+
     // MARK: - Objective Management
     case objectiveStatusRequested(id: String, response: (String?) -> Void)
+    case objectiveStatusChanged(id: String, status: String, phase: String)
+
+    // MARK: - State Management (§6 spec)
+    case stateSet(partialUpdate: JSON)
+    case stateSnapshot(updatedKeys: [String], snapshot: JSON)
+    case stateAllowedToolsUpdated(tools: Set<String>)
+
+    // MARK: - LLM Topics (§6 spec)
+    case llmUserMessageSent(messageId: String, payload: JSON)
+    case llmDeveloperMessageSent(messageId: String, payload: JSON)
+    case llmSentToolResponseMessage(messageId: String, payload: JSON)
+    case llmSendUserMessage(payload: JSON)
+    case llmSendDeveloperMessage(payload: JSON)
+    case llmToolResponseMessage(payload: JSON)
+    case llmStatus(status: LLMStatus)
+    case llmReasoningSummary(messageId: UUID, summary: String, isFinal: Bool)
+    case llmReasoningStatus(String) // "incoming" or "none"
+
+    // MARK: - Phase Management (§6 spec)
+    case phaseTransitionRequested(from: String, to: String, reason: String?)
+    case phaseTransitionApplied(phase: String, timestamp: Date)
 }
 
-/// Event bus that manages event distribution in the onboarding system
-actor OnboardingEventBus {
-    typealias EventHandler = (OnboardingEvent) async -> Void
+enum LLMStatus: String {
+    case busy
+    case idle
+    case error
+}
 
-    private var handlers: [UUID: EventHandler] = [:]
+/// Event topics for routing (spec §6)
+enum EventTopic: String, CaseIterable {
+    case llm = "LLM"
+    case toolpane = "Toolpane"
+    case artifact = "Artifact"
+    case userInput = "UserInput"
+    case state = "State"
+    case phase = "Phase"
+    case objective = "Objective"
+    case tool = "Tool"
+    case timeline = "Timeline"
+    case processing = "Processing"
+}
+
+/// Event bus that manages event distribution using AsyncStream
+actor EventCoordinator {
+    // Stream continuations for each topic
+    private var streamContinuations: [EventTopic: AsyncStream<OnboardingEvent>.Continuation] = [:]
+    private var streams: [EventTopic: AsyncStream<OnboardingEvent>] = [:]
+
+    // Event history for debugging
     private var eventHistory: [OnboardingEvent] = []
     private let maxHistorySize = 100
 
-    /// Subscribe to events with a handler
-    func subscribe(_ handler: @escaping EventHandler) -> UUID {
-        let id = UUID()
-        handlers[id] = handler
-        Logger.debug("[EventBus] Handler \(id) subscribed", category: .ai)
-        return id
+    // Metrics
+    private var metrics = EventMetrics()
+
+    struct EventMetrics {
+        var publishedCount: [EventTopic: Int] = [:]
+        var queueDepth: [EventTopic: Int] = [:]
+        var lastPublishTime: [EventTopic: Date] = [:]
     }
 
-    /// Unsubscribe a handler
-    func unsubscribe(_ id: UUID) {
-        handlers.removeValue(forKey: id)
-        Logger.debug("[EventBus] Handler \(id) unsubscribed", category: .ai)
+    init() {
+        // Initialize streams for each topic
+        for topic in EventTopic.allCases {
+            let (stream, continuation) = AsyncStream<OnboardingEvent>.makeStream(
+                bufferingPolicy: .bufferingNewest(50)  // Buffer up to 50 events per topic
+            )
+            streams[topic] = stream
+            streamContinuations[topic] = continuation
+            metrics.publishedCount[topic] = 0
+        }
+
+        Logger.info("📡 EventCoordinator initialized with AsyncStream architecture", category: .ai)
     }
 
-    /// Publish an event to all subscribers
+    deinit {
+        // Clean up continuations
+        for continuation in streamContinuations.values {
+            continuation.finish()
+        }
+    }
+
+    /// Subscribe to events for a specific topic
+    func stream(topic: EventTopic) -> AsyncStream<OnboardingEvent> {
+        guard let stream = streams[topic] else {
+            Logger.error("[EventBus] Stream not found for topic: \(topic)", category: .ai)
+            return AsyncStream { _ in }
+        }
+        Logger.debug("[EventBus] Subscriber connected to topic: \(topic.rawValue)", category: .ai)
+        return stream
+    }
+
+    /// Subscribe to all events (for compatibility/debugging)
+    func streamAll() -> AsyncStream<OnboardingEvent> {
+        // Create streams for all topics upfront
+        let topicStreams = EventTopic.allCases.compactMap { topic in
+            streams[topic]
+        }
+
+        return AsyncStream { continuation in
+            Task {
+                // Merge all topic streams
+                await withTaskGroup(of: Void.self) { group in
+                    for stream in topicStreams {
+                        group.addTask {
+                            for await event in stream {
+                                continuation.yield(event)
+                            }
+                        }
+                    }
+                }
+                continuation.finish()
+            }
+        }
+    }
+
+    /// Publish an event to its appropriate topic
     func publish(_ event: OnboardingEvent) async {
+        let topic = extractTopic(from: event)
+
         // Log the event
         logEvent(event)
+
+        // Update metrics
+        metrics.publishedCount[topic, default: 0] += 1
+        metrics.lastPublishTime[topic] = Date()
 
         // Add to history
         eventHistory.append(event)
@@ -77,14 +189,61 @@ actor OnboardingEventBus {
             eventHistory.removeFirst(eventHistory.count - maxHistorySize)
         }
 
-        // Distribute to all handlers
-        await withTaskGroup(of: Void.self) { group in
-            for handler in handlers.values {
-                group.addTask {
-                    await handler(event)
-                }
-            }
+        // Send to the appropriate stream
+        if let continuation = streamContinuations[topic] {
+            continuation.yield(event)
+        } else {
+            Logger.warning("[EventBus] No stream for topic: \(topic)", category: .ai)
         }
+    }
+
+    /// Extract topic from event type
+    private func extractTopic(from event: OnboardingEvent) -> EventTopic {
+        switch event {
+        // LLM events
+        case .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
+             .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
+             .llmReasoningSummary, .llmReasoningStatus,
+             .assistantMessageEmitted, .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized,
+             .reasoningSummaryUpdated, .reasoningSummariesFinalized:
+            return .llm
+
+        // State events
+        case .stateSet, .stateSnapshot, .stateAllowedToolsUpdated,
+             .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated,
+             .checkpointRequested:
+            return .state
+
+        // Phase events
+        case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested:
+            return .phase
+
+        // Objective events
+        case .objectiveStatusRequested, .objectiveStatusChanged:
+            return .objective
+
+        // Tool events
+        case .toolCallRequested, .toolCallCompleted, .toolContinuationNeeded:
+            return .tool
+
+        // Toolpane events
+        case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
+             .uploadRequestCancelled, .applicantProfileIntakeRequested:
+            return .toolpane
+
+        // Timeline events
+        case .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered:
+            return .timeline
+
+        // Processing events
+        case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged, .errorOccurred:
+            return .processing
+        }
+    }
+
+    /// Get metrics for monitoring
+    func getMetrics() -> EventMetrics {
+        metrics
     }
 
     /// Get recent event history
@@ -136,8 +295,56 @@ actor OnboardingEventBus {
             description = "Tool call completed"
         case .toolContinuationNeeded:
             description = "Tool continuation needed"
+        case .choicePromptRequested:
+            description = "Choice prompt requested"
+        case .choicePromptCleared:
+            description = "Choice prompt cleared"
+        case .uploadRequestPresented:
+            description = "Upload request presented"
+        case .uploadRequestCancelled:
+            description = "Upload request cancelled"
+        case .applicantProfileIntakeRequested:
+            description = "Profile intake requested"
+        case .phaseAdvanceRequested:
+            description = "Phase advance requested"
+        case .timelineCardCreated:
+            description = "Timeline card created"
+        case .timelineCardDeleted:
+            description = "Timeline card deleted"
+        case .timelineCardsReordered:
+            description = "Timeline cards reordered"
         case .objectiveStatusRequested:
             description = "Objective status requested"
+        case .objectiveStatusChanged(let id, let status, _):
+            description = "Objective \(id) → \(status)"
+        case .stateSet:
+            description = "State partial update"
+        case .stateSnapshot(let keys, _):
+            description = "State snapshot (\(keys.count) keys updated)"
+        case .stateAllowedToolsUpdated(let tools):
+            description = "Allowed tools updated (\(tools.count) tools)"
+        case .llmUserMessageSent:
+            description = "LLM user message sent"
+        case .llmDeveloperMessageSent:
+            description = "LLM developer message sent"
+        case .llmSentToolResponseMessage:
+            description = "LLM tool response sent"
+        case .llmSendUserMessage:
+            description = "LLM send user message requested"
+        case .llmSendDeveloperMessage:
+            description = "LLM send developer message requested"
+        case .llmToolResponseMessage:
+            description = "LLM tool response requested"
+        case .llmStatus(let status):
+            description = "LLM status: \(status.rawValue)"
+        case .llmReasoningSummary(let messageId, _, let isFinal):
+            description = "LLM reasoning summary (message: \(messageId.uuidString.prefix(8)), final: \(isFinal))"
+        case .llmReasoningStatus(let status):
+            description = "LLM reasoning status: \(status)"
+        case .phaseTransitionRequested(let from, let to, _):
+            description = "Phase transition requested: \(from) → \(to)"
+        case .phaseTransitionApplied(let phase, _):
+            description = "Phase transition applied: \(phase)"
         }
 
         Logger.debug("[Event] \(description)", category: .ai)
@@ -146,7 +353,7 @@ actor OnboardingEventBus {
 
 /// Protocol for components that can emit events
 protocol OnboardingEventEmitter {
-    var eventBus: OnboardingEventBus { get }
+    var eventBus: EventCoordinator { get }
 }
 
 /// Extension to make event emission convenient
