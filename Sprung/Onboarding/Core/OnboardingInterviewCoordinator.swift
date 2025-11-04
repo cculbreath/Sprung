@@ -334,8 +334,9 @@ final class OnboardingInterviewCoordinator {
              .validationPromptRequested, .validationPromptCleared,
              .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
              .phaseAdvanceRequested,
-             .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered:
-            // These are handled by ToolHandler via event subscriptions
+             .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered,
+             .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted:
+            // These are handled by specialized handlers via event subscriptions
             break
 
         // New spec-aligned events that StateCoordinator handles
