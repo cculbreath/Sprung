@@ -131,21 +131,23 @@
 
 ## 🚧 Phase 3: Tool & UI Handler Infrastructure (IN PROGRESS - ChatboxHandler Complete)
 
-### 3.1 Tool Handler (§4.6)
-- [x] Skeleton exists ✅
-- [x] Renamed to `ToolHandler` ✅ **RENAMED** (matches spec §4.6)
-- [ ] Refactor to emit events instead of callbacks
-- [ ] **Subscriptions:**
-  - [ ] `LLM.toolCallReceived`
-- [ ] **Publications:**
-  - [ ] `Tool.result(immediate|waiting|error)`
-  - [ ] `LLM.toolResponseMessage(payload)`
-  - [ ] `State.allowedTools()` (on phase change)
-- [ ] Validate tool names against `State.allowedTools`
-- [ ] Manage continuation tokens via events
+### 3.1 Tool Execution Coordination (§4.6)
+- [x] Create ToolExecutionCoordinator actor ✅
+- [x] **Subscriptions:** ✅
+  - [x] `.toolCallRequested` (from NetworkRouter)
+- [x] **Publications:** ✅
+  - [x] `.llmToolResponseMessage(payload)` (immediate results & errors)
+  - [x] `.toolContinuationNeeded(id, toolName)` (waiting for user input)
+- [x] Validate tool names against `State.allowedTools` ✅
+- [x] Manage continuation tokens via events ✅
+- [x] Execute tools via ToolExecutor ✅
+- [x] Handle ToolResult (immediate/waiting/error) ✅
+- [ ] **TODO:** Tool implementations need to return proper data instead of placeholders
 
-**File:** `Sprung/Onboarding/Core/ToolHandler.swift` ✅
-**Updated calling sites:** `OnboardingInterviewCoordinator.swift`, `OnboardingInterviewView.swift`, `OnboardingInterviewInteractiveCard.swift` ✅
+**File:** `Sprung/Onboarding/Handlers/ToolExecutionCoordinator.swift` ✅
+**Status:** ✅ Core infrastructure complete
+**Cleanup:** Removed 42 lines of duplicate tool handling from InterviewOrchestrator
+**Integration:** Wired into coordinator, starts subscriptions, handles resumption
 
 ---
 
