@@ -23,10 +23,15 @@ struct UpdateTimelineCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
     
     func execute(_ params: JSON) async throws -> ToolResult {
-        // TODO: Reimplement using event-driven architecture
-        var response = JSON()
-        response["success"].bool = true
-        response["id"].string = params["id"].stringValue
-        return .immediate(response)
+        guard let id = params["id"].string, !id.isEmpty else {
+            throw ToolError.invalidParameters("id must be provided")
+        }
+        guard let fields = params["fields"].dictionary else {
+            throw ToolError.invalidParameters("fields must be provided")
+        }
+
+        // Update timeline card via coordinator (which emits events)
+        let result = await service.coordinator.updateTimelineCard(id: id, fields: JSON(fields))
+        return .immediate(result)
     }
 }

@@ -340,12 +340,13 @@ final class OnboardingInterviewCoordinator {
             break
 
         // New spec-aligned events that StateCoordinator handles
-        case .objectiveStatusChanged,
+        case .objectiveStatusChanged, .objectiveStatusUpdateRequested,
              .stateSet, .stateSnapshot, .stateAllowedToolsUpdated,
              .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .llmReasoningSummary, .llmReasoningStatus,
-             .phaseTransitionRequested, .phaseTransitionApplied:
+             .phaseTransitionRequested, .phaseTransitionApplied,
+             .timelineCardUpdated:
             // These events are handled by StateCoordinator/handlers, not the coordinator
             break
         }
@@ -465,29 +466,76 @@ final class OnboardingInterviewCoordinator {
     }
 
     func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
-        let objectiveStatus: ObjectiveStatus
-
-        switch status.lowercased() {
-        case "completed":
-            objectiveStatus = .completed
-        case "pending", "reset":
-            objectiveStatus = .pending
-        case "in_progress":
-            objectiveStatus = .inProgress
-        case "skipped":
-            objectiveStatus = .skipped
-        default:
-            throw ToolError.invalidParameters("Unsupported status: \(status)")
-        }
-
-        await state.setObjectiveStatus(objectiveId, status: objectiveStatus, source: "llm")
+        // Emit event to update objective status
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: objectiveId,
+            status: status.lowercased(),
+            source: "tool",
+            notes: nil
+        ))
 
         var result = JSON()
         result["success"].boolValue = true
         result["objective_id"].stringValue = objectiveId
-        result["new_status"].stringValue = objectiveStatus.rawValue
+        result["new_status"].stringValue = status.lowercased()
 
         return result
+    }
+
+    // MARK: - Timeline Management (Event-Driven)
+
+    func createTimelineCard(fields: JSON) async -> JSON {
+        var card = fields
+        // Add ID if not present
+        if card["id"].string == nil {
+            card["id"].string = UUID().uuidString
+        }
+
+        // Emit event to create timeline card
+        await eventBus.publish(.timelineCardCreated(card: card))
+
+        var result = JSON()
+        result["success"].boolValue = true
+        result["id"].string = card["id"].string
+        return result
+    }
+
+    func updateTimelineCard(id: String, fields: JSON) async -> JSON {
+        // Emit event to update timeline card
+        await eventBus.publish(.timelineCardUpdated(id: id, fields: fields))
+
+        var result = JSON()
+        result["success"].boolValue = true
+        result["id"].string = id
+        return result
+    }
+
+    func deleteTimelineCard(id: String) async -> JSON {
+        // Emit event to delete timeline card
+        await eventBus.publish(.timelineCardDeleted(id: id))
+
+        var result = JSON()
+        result["success"].boolValue = true
+        result["id"].string = id
+        return result
+    }
+
+    func reorderTimelineCards(orderedIds: [String]) async -> JSON {
+        // Emit event to reorder timeline cards
+        await eventBus.publish(.timelineCardsReordered(ids: orderedIds))
+
+        var result = JSON()
+        result["success"].boolValue = true
+        result["count"].int = orderedIds.count
+        return result
+    }
+
+    func requestPhaseTransition(from: String, to: String, reason: String?) async {
+        await eventBus.publish(.phaseTransitionRequested(
+            from: from,
+            to: to,
+            reason: reason
+        ))
     }
 
     func missingObjectives() async -> [String] {

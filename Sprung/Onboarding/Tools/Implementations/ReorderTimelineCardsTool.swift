@@ -28,9 +28,13 @@ struct ReorderTimelineCardsTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // TODO: Reimplement using event-driven architecture
-        var response = JSON()
-        response["success"] = true
-        return .immediate(response)
+        guard let orderedIds = params["ordered_ids"].array?.compactMap({ $0.string }),
+              !orderedIds.isEmpty else {
+            throw ToolError.invalidParameters("ordered_ids must be a non-empty array of strings")
+        }
+
+        // Reorder timeline cards via coordinator (which emits events)
+        let result = await service.coordinator.reorderTimelineCards(orderedIds: orderedIds)
+        return .immediate(result)
     }
 }

@@ -24,10 +24,12 @@ struct DeleteTimelineCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // TODO: Reimplement using event-driven architecture
-        var response = JSON()
-        response["success"].bool = true
-        response["id"].string = params["id"].stringValue
-        return .immediate(response)
+        guard let id = params["id"].string, !id.isEmpty else {
+            throw ToolError.invalidParameters("id must be provided")
+        }
+
+        // Delete timeline card via coordinator (which emits events)
+        let result = await service.coordinator.deleteTimelineCard(id: id)
+        return .immediate(result)
     }
 }

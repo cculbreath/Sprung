@@ -306,6 +306,69 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("📅 Skeleton timeline \(timeline != nil ? "saved" : "cleared")", category: .ai)
     }
 
+    // MARK: - Timeline Card Management
+
+    func createTimelineCard(_ card: JSON) {
+        // Ensure timeline array exists
+        if artifacts.skeletonTimeline == nil {
+            artifacts.skeletonTimeline = JSON([])
+        }
+
+        // Add card to timeline
+        if var timeline = artifacts.skeletonTimeline?.array {
+            timeline.append(card)
+            artifacts.skeletonTimeline = JSON(timeline)
+            Logger.info("📅 Timeline card created", category: .ai)
+        }
+    }
+
+    func updateTimelineCard(id: String, fields: JSON) {
+        guard var timeline = artifacts.skeletonTimeline?.array else { return }
+
+        for (index, card) in timeline.enumerated() {
+            if card["id"].string == id {
+                // Merge fields into existing card
+                var updatedCard = card
+                for (key, value) in fields {
+                    updatedCard[key] = value
+                }
+                timeline[index] = updatedCard
+                artifacts.skeletonTimeline = JSON(timeline)
+                Logger.info("📅 Timeline card \(id) updated", category: .ai)
+                break
+            }
+        }
+    }
+
+    func deleteTimelineCard(id: String) {
+        guard var timeline = artifacts.skeletonTimeline?.array else { return }
+
+        timeline.removeAll { $0["id"].string == id }
+        artifacts.skeletonTimeline = JSON(timeline)
+        Logger.info("📅 Timeline card \(id) deleted", category: .ai)
+    }
+
+    func reorderTimelineCards(orderedIds: [String]) {
+        guard let timeline = artifacts.skeletonTimeline?.array else { return }
+
+        var cardMap: [String: JSON] = [:]
+        for card in timeline {
+            if let id = card["id"].string {
+                cardMap[id] = card
+            }
+        }
+
+        var reorderedTimeline: [JSON] = []
+        for id in orderedIds {
+            if let card = cardMap[id] {
+                reorderedTimeline.append(card)
+            }
+        }
+
+        artifacts.skeletonTimeline = JSON(reorderedTimeline)
+        Logger.info("📅 Timeline cards reordered", category: .ai)
+    }
+
     func setEnabledSections(_ sections: Set<String>) {
         artifacts.enabledSections = sections
         if !sections.isEmpty {
@@ -587,6 +650,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                         await self.handlePhaseEvent(event)
                     }
                 }
+
+                // Subscribe to Timeline topic
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .timeline) {
+                        await self.handleTimelineEvent(event)
+                    }
+                }
             }
         }
 
@@ -642,6 +712,18 @@ actor StateCoordinator: OnboardingEventEmitter {
             let status = objectives[id]?.status.rawValue
             response(status)
 
+        case .objectiveStatusUpdateRequested(let id, let statusString, let source, let notes):
+            // Parse status string to ObjectiveStatus enum
+            guard let status = ObjectiveStatus(rawValue: statusString) else {
+                Logger.warning("Invalid objective status requested: \(statusString)", category: .ai)
+                return
+            }
+
+            // Update the objective status
+            setObjectiveStatus(id, status: status, source: source, notes: notes)
+
+            // The setObjectiveStatus method will emit .objectiveStatusChanged event
+
         default:
             break
         }
@@ -660,6 +742,30 @@ actor StateCoordinator: OnboardingEventEmitter {
                     await emitAllowedTools()
                 }
             }
+
+        default:
+            break
+        }
+    }
+
+    private func handleTimelineEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .timelineCardCreated(let card):
+            createTimelineCard(card)
+            // Emit confirmation event if needed
+            Logger.info("📅 Timeline card created via event", category: .ai)
+
+        case .timelineCardUpdated(let id, let fields):
+            updateTimelineCard(id: id, fields: fields)
+            Logger.info("📅 Timeline card \(id) updated via event", category: .ai)
+
+        case .timelineCardDeleted(let id):
+            deleteTimelineCard(id: id)
+            Logger.info("📅 Timeline card \(id) deleted via event", category: .ai)
+
+        case .timelineCardsReordered(let orderedIds):
+            reorderTimelineCards(orderedIds: orderedIds)
+            Logger.info("📅 Timeline cards reordered via event", category: .ai)
 
         default:
             break

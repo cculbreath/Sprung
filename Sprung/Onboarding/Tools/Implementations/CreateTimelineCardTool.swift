@@ -30,10 +30,12 @@ struct CreateTimelineCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // TODO: Reimplement using event-driven architecture
-        var response = JSON()
-        response["id"].string = UUID().uuidString
-        response["success"].bool = true
-        return .immediate(response)
+        guard let fields = params["fields"].dictionary else {
+            throw ToolError.invalidParameters("fields must be provided")
+        }
+
+        // Create timeline card via coordinator (which emits events)
+        let result = await service.coordinator.createTimelineCard(fields: JSON(fields))
+        return .immediate(result)
     }
 }
