@@ -152,16 +152,22 @@
 ---
 
 ### 3.2 ToolPane Handler (§4.7)
-- [x] Add service bridge methods for tool UI presentation ✅
-- [x] Enable GetUserOptionTool to present choice cards ✅
-- [ ] **TODO:** Migrate remaining tools (upload, validation, profile, etc.)
-- [ ] **Future:** Consider event-driven card coordination if needed
+- [x] Implement event-driven UI presentation ✅
+- [x] Add ToolUIRequest enum to ContinuationToken ✅
+- [x] ToolExecutionCoordinator emits UI events ✅
+- [x] ToolHandler subscribes to toolpane events ✅
+- [x] Migrate GetUserOptionTool ✅
+- [x] Migrate GetUserUploadTool ✅
+- [x] Migrate GetApplicantProfileTool ✅
+- [x] Migrate SubmitForValidationTool ✅
+- [x] Add validationPromptRequested/Cleared events ✅
+- [x] Add applicantProfileIntakeRequested/Cleared events ✅
 
-**Status:** ✅ Core mechanism working
-**Solution:** Tools call service bridge methods → service delegates to ToolHandler → UI observes
-**Architecture:** Using existing Observable pattern instead of pure events for UI cards
-**Reasoning:** Simpler and works well with SwiftUI's observation system
-**First Working Tool:** get_user_option now presents/clears UI cards correctly
+**Status:** ✅ **COMPLETE - Event-Driven Architecture Implemented**
+**Solution:** Tools specify UI via ToolUIRequest → ToolExecutionCoordinator emits events → ToolHandler subscribes and presents UI
+**Architecture:** Pure event-driven with no service coupling
+**Flow:** Tool returns `.waiting(uiRequest: .choicePrompt())` → Coordinator emits `.choicePromptRequested` → ToolHandler presents UI
+**Tools Migrated:** get_user_option, get_user_upload, get_applicant_profile, submit_for_validation
 
 ---
 
