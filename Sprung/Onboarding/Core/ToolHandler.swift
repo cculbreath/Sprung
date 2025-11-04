@@ -57,19 +57,67 @@ final class ToolHandler {
     let sectionHandler: SectionToggleHandler
     private var statusResolvers: [OnboardingToolIdentifier: () -> OnboardingToolStatus] = [:]
 
+    // Event subscription
+    private weak var eventBus: EventCoordinator?
+
     // MARK: - Init
 
     init(
         promptHandler: PromptInteractionHandler,
         uploadHandler: UploadInteractionHandler,
         profileHandler: ProfileInteractionHandler,
-        sectionHandler: SectionToggleHandler
+        sectionHandler: SectionToggleHandler,
+        eventBus: EventCoordinator? = nil
     ) {
         self.promptHandler = promptHandler
         self.uploadHandler = uploadHandler
         self.profileHandler = profileHandler
         self.sectionHandler = sectionHandler
+        self.eventBus = eventBus
         configureStatusResolvers()
+    }
+
+    // MARK: - Event Subscriptions
+
+    /// Start listening to tool UI events
+    func startEventSubscriptions() {
+        guard let eventBus = eventBus else { return }
+
+        Task {
+            for await event in await eventBus.stream(topic: .toolpane) {
+                await handleToolUIEvent(event)
+            }
+        }
+
+        Logger.info("📡 ToolHandler subscribed to toolpane events", category: .ai)
+    }
+
+    private func handleToolUIEvent(_ event: OnboardingEvent) {
+        switch event {
+        case .choicePromptRequested(let prompt, let continuationId):
+            presentChoicePrompt(prompt, continuationId: continuationId)
+
+        case .choicePromptCleared(let continuationId):
+            clearChoicePrompt(continuationId: continuationId)
+
+        case .uploadRequestPresented(let request, let continuationId):
+            presentUploadRequest(request, continuationId: continuationId)
+
+        case .validationPromptRequested(let prompt, let continuationId):
+            presentValidationPrompt(prompt, continuationId: continuationId)
+
+        case .validationPromptCleared(let continuationId):
+            clearValidationPrompt(continuationId: continuationId)
+
+        case .applicantProfileIntakeRequested(let continuationId):
+            presentApplicantProfileIntake(continuationId: continuationId)
+
+        case .applicantProfileIntakeCleared:
+            clearApplicantProfileIntake()
+
+        default:
+            break
+        }
     }
 
     // MARK: - Status Snapshot

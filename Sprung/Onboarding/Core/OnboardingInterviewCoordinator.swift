@@ -204,7 +204,8 @@ final class OnboardingInterviewCoordinator {
             promptHandler: promptHandler,
             uploadHandler: uploadHandler,
             profileHandler: profileHandler,
-            sectionHandler: sectionHandler
+            sectionHandler: sectionHandler,
+            eventBus: eventBus
         )
         self.wizardTracker = WizardProgressTracker()
         self.phaseRegistry = PhaseScriptRegistry()
@@ -327,12 +328,14 @@ final class OnboardingInterviewCoordinator {
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
 
-        // Tool UI events - will be handled when flattening architecture
+        // Tool UI events - handled by ToolHandler
         case .choicePromptRequested, .choicePromptCleared,
              .uploadRequestPresented, .uploadRequestCancelled,
-             .applicantProfileIntakeRequested, .phaseAdvanceRequested,
+             .validationPromptRequested, .validationPromptCleared,
+             .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
+             .phaseAdvanceRequested,
              .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered:
-            // TODO: Handle these events after flattening architecture
+            // These are handled by ToolHandler via event subscriptions
             break
 
         // New spec-aligned events that StateCoordinator handles
@@ -405,6 +408,9 @@ final class OnboardingInterviewCoordinator {
         await chatboxHandler.startEventSubscriptions()
         await toolExecutionCoordinator.startEventSubscriptions()
         await state.startEventSubscriptions()
+        await MainActor.run {
+            toolRouter.startEventSubscriptions()
+        }
 
         Task {
             do {
