@@ -1,6 +1,12 @@
 import Foundation
 import SwiftyJSON
 
+/// Immutable phase policy configuration derived from PhaseScriptRegistry.
+struct PhasePolicy {
+    let requiredObjectives: [InterviewPhase: [String]]
+    let allowedTools: [InterviewPhase: Set<String>]
+}
+
 /// Single source of truth for ALL onboarding state.
 /// This replaces InterviewSession, InterviewState, objective ledgers, and all distributed state.
 actor StateCoordinator: OnboardingEventEmitter {
@@ -8,6 +14,10 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     let eventBus: EventCoordinator
     private var subscriptionTask: Task<Void, Never>?
+
+    // MARK: - Phase Policy
+
+    private let phasePolicy: PhasePolicy
 
     // MARK: - Core Interview State
 
@@ -40,6 +50,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         var enabledSections: Set<String> = []
         var experienceCards: [JSON] = []
         var writingSamples: [JSON] = []
+        var artifactRecords: [JSON] = []
     }
 
     // MARK: - Chat & Messages
@@ -96,11 +107,12 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Initialization
 
-    init(eventBus: EventCoordinator) {
+    init(eventBus: EventCoordinator, phasePolicy: PhasePolicy) {
         self.eventBus = eventBus
+        self.phasePolicy = phasePolicy
         Logger.info("🎯 StateCoordinator initialized - single source of truth", category: .ai)
         // Register initial objectives directly (can't call actor-isolated method from init)
-        let descriptors = Self.objectivesForPhase(phase)
+        let descriptors = Self.objectivesForPhase(phase, policy: phasePolicy)
         for descriptor in descriptors {
             objectives[descriptor.id] = ObjectiveEntry(
                 id: descriptor.id,
@@ -116,8 +128,38 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Objective Catalog
 
+    /// Hardcoded objective metadata (labels and structure) for each phase.
+    /// The phasePolicy (from PhaseScriptRegistry) provides required objectives and allowed tools.
+    private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String)]] = [
+        .phase1CoreFacts: [
+            ("applicant_profile", "Applicant profile objective"),
+            ("skeleton_timeline", "Skeleton timeline objective"),
+            ("enabled_sections", "Enabled sections objective"),
+            ("contact_source_selected", "Contact source selected"),
+            ("contact_data_collected", "Contact data collected"),
+            ("contact_data_validated", "Contact data validated"),
+            ("contact_photo_collected", "Contact photo collected")
+        ],
+        .phase2DeepDive: [
+            ("interviewed_one_experience", "Experience interview completed"),
+            ("one_card_generated", "Knowledge card generated")
+        ],
+        .phase3WritingCorpus: [
+            ("one_writing_sample", "Writing sample collected"),
+            ("dossier_complete", "Dossier completed")
+        ],
+        .complete: []
+    ]
+
+    private static let nextPhaseMap: [InterviewPhase: InterviewPhase?] = [
+        .phase1CoreFacts: .phase2DeepDive,
+        .phase2DeepDive: .phase3WritingCorpus,
+        .phase3WritingCorpus: .complete,
+        .complete: nil
+    ]
+
     private func registerDefaultObjectives(for phase: InterviewPhase) {
-        let descriptors = Self.objectivesForPhase(phase)
+        let descriptors = Self.objectivesForPhase(phase, policy: phasePolicy)
         for descriptor in descriptors {
             registerObjective(
                 descriptor.id,
@@ -128,31 +170,9 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
-    private static func objectivesForPhase(_ phase: InterviewPhase) -> [(id: String, label: String, phase: InterviewPhase, source: String)] {
-        switch phase {
-        case .phase1CoreFacts:
-            return [
-                ("applicant_profile", "Applicant profile objective", .phase1CoreFacts, "system"),
-                ("skeleton_timeline", "Skeleton timeline objective", .phase1CoreFacts, "system"),
-                ("enabled_sections", "Enabled sections objective", .phase1CoreFacts, "system"),
-                ("contact_source_selected", "Contact source selected", .phase1CoreFacts, "system"),
-                ("contact_data_collected", "Contact data collected", .phase1CoreFacts, "system"),
-                ("contact_data_validated", "Contact data validated", .phase1CoreFacts, "system"),
-                ("contact_photo_collected", "Contact photo collected", .phase1CoreFacts, "system")
-            ]
-        case .phase2DeepDive:
-            return [
-                ("interviewed_one_experience", "Experience interview completed", .phase2DeepDive, "system"),
-                ("one_card_generated", "Knowledge card generated", .phase2DeepDive, "system")
-            ]
-        case .phase3WritingCorpus:
-            return [
-                ("one_writing_sample", "Writing sample collected", .phase3WritingCorpus, "system"),
-                ("dossier_complete", "Dossier completed", .phase3WritingCorpus, "system")
-            ]
-        case .complete:
-            return []
-        }
+    private static func objectivesForPhase(_ phase: InterviewPhase, policy: PhasePolicy) -> [(id: String, label: String, phase: InterviewPhase, source: String)] {
+        let metadata = objectiveMetadata[phase] ?? []
+        return metadata.map { (id: $0.id, label: $0.label, phase: phase, source: "system") }
     }
 
     // MARK: - Phase Management
@@ -167,14 +187,8 @@ actor StateCoordinator: OnboardingEventEmitter {
     func advanceToNextPhase() -> InterviewPhase? {
         guard canAdvancePhase() else { return nil }
 
-        let nextPhase: InterviewPhase
-        switch phase {
-        case .phase1CoreFacts:
-            nextPhase = .phase2DeepDive
-        case .phase2DeepDive:
-            nextPhase = .phase3WritingCorpus
-        case .phase3WritingCorpus, .complete:
-            return nil // Already at final phase
+        guard let nextPhase = Self.nextPhaseMap[phase] ?? nil else {
+            return nil
         }
 
         setPhase(nextPhase)
@@ -182,19 +196,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     func canAdvancePhase() -> Bool {
-        let requiredObjectives: [String]
-
-        switch phase {
-        case .phase1CoreFacts:
-            requiredObjectives = ["applicant_profile", "skeleton_timeline", "enabled_sections"]
-        case .phase2DeepDive:
-            requiredObjectives = ["interviewed_one_experience", "one_card_generated"]
-        case .phase3WritingCorpus:
-            requiredObjectives = ["one_writing_sample", "dossier_complete"]
-        case .complete:
-            requiredObjectives = []
+        guard let requiredObjectives = phasePolicy.requiredObjectives[phase] else {
+            return false
         }
-
         return requiredObjectives.allSatisfy { objectiveId in
             objectives[objectiveId]?.status == .completed ||
             objectives[objectiveId]?.status == .skipped
@@ -269,18 +273,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     func getMissingObjectives() -> [String] {
-        let requiredForPhase: [String]
-
-        switch phase {
-        case .phase1CoreFacts:
-            requiredForPhase = ["applicant_profile", "skeleton_timeline", "enabled_sections"]
-        case .phase2DeepDive:
-            requiredForPhase = ["interviewed_one_experience", "one_card_generated"]
-        case .phase3WritingCorpus:
-            requiredForPhase = ["one_writing_sample", "dossier_complete"]
-        case .complete:
-            requiredForPhase = []
-        }
+        let requiredForPhase = phasePolicy.requiredObjectives[phase] ?? []
 
         return requiredForPhase.filter { id in
             let status = objectives[id]?.status
@@ -306,66 +299,77 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("📅 Skeleton timeline \(timeline != nil ? "saved" : "cleared")", category: .ai)
     }
 
+    func setArtifactRecords(_ records: [JSON]) {
+        artifacts.artifactRecords = records
+        Logger.info("📦 Artifact records restored: \(records.count)", category: .ai)
+    }
+
+    func addArtifactRecord(_ artifact: JSON) {
+        artifacts.artifactRecords.append(artifact)
+        Logger.info("📦 Artifact record added: \(artifact["id"].stringValue)", category: .ai)
+    }
+
+    func getArtifactRecord(id: String) -> JSON? {
+        artifacts.artifactRecords.first { artifact in
+            let artifactId = artifact["id"].stringValue
+            let sha256 = artifact["sha256"].stringValue
+            return artifactId == id || sha256 == id
+        }
+    }
+
     // MARK: - Timeline Card Management
 
+    /// Helper to get current timeline cards using TimelineCardAdapter
+    private func currentTimelineCards() -> (cards: [TimelineCard], meta: JSON?) {
+        let timelineJSON = artifacts.skeletonTimeline ?? JSON()
+        return TimelineCardAdapter.cards(from: TimelineCardAdapter.normalizedTimeline(timelineJSON))
+    }
+
     func createTimelineCard(_ card: JSON) {
-        // Ensure timeline array exists
-        if artifacts.skeletonTimeline == nil {
-            artifacts.skeletonTimeline = JSON([])
+        var (cards, meta) = currentTimelineCards()
+
+        // Create new timeline card
+        let newCard: TimelineCard
+        if let id = card["id"].string {
+            newCard = TimelineCard(id: id, fields: card)
+        } else {
+            newCard = TimelineCard(id: UUID().uuidString, fields: card)
         }
 
-        // Add card to timeline
-        if var timeline = artifacts.skeletonTimeline?.array {
-            timeline.append(card)
-            artifacts.skeletonTimeline = JSON(timeline)
-            Logger.info("📅 Timeline card created", category: .ai)
-        }
+        cards.append(newCard)
+        artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
+        setObjectiveStatus("skeleton_timeline", status: .inProgress)
+        Logger.info("📅 Timeline card created", category: .ai)
     }
 
     func updateTimelineCard(id: String, fields: JSON) {
-        guard var timeline = artifacts.skeletonTimeline?.array else { return }
+        var (cards, meta) = currentTimelineCards()
 
-        for (index, card) in timeline.enumerated() {
-            if card["id"].string == id {
-                // Merge fields into existing card
-                var updatedCard = card
-                for (key, value) in fields {
-                    updatedCard[key] = value
-                }
-                timeline[index] = updatedCard
-                artifacts.skeletonTimeline = JSON(timeline)
-                Logger.info("📅 Timeline card \(id) updated", category: .ai)
-                break
-            }
+        guard let idx = cards.firstIndex(where: { $0.id == id }) else {
+            Logger.warning("Timeline card \(id) not found for update", category: .ai)
+            return
         }
+
+        cards[idx] = cards[idx].applying(fields: fields)
+        artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
+        Logger.info("📅 Timeline card \(id) updated", category: .ai)
     }
 
     func deleteTimelineCard(id: String) {
-        guard var timeline = artifacts.skeletonTimeline?.array else { return }
+        var (cards, meta) = currentTimelineCards()
 
-        timeline.removeAll { $0["id"].string == id }
-        artifacts.skeletonTimeline = JSON(timeline)
+        cards.removeAll { $0.id == id }
+        artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
         Logger.info("📅 Timeline card \(id) deleted", category: .ai)
     }
 
     func reorderTimelineCards(orderedIds: [String]) {
-        guard let timeline = artifacts.skeletonTimeline?.array else { return }
+        let (cards, meta) = currentTimelineCards()
 
-        var cardMap: [String: JSON] = [:]
-        for card in timeline {
-            if let id = card["id"].string {
-                cardMap[id] = card
-            }
-        }
+        let cardMap = Dictionary(uniqueKeysWithValues: cards.map { ($0.id, $0) })
+        let reordered = orderedIds.compactMap { cardMap[$0] }
 
-        var reorderedTimeline: [JSON] = []
-        for id in orderedIds {
-            if let card = cardMap[id] {
-                reorderedTimeline.append(card)
-            }
-        }
-
-        artifacts.skeletonTimeline = JSON(reorderedTimeline)
+        artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: reordered, meta: meta)
         Logger.info("📅 Timeline cards reordered", category: .ai)
     }
 
@@ -516,7 +520,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         let hasProfile = objectives["applicant_profile"]?.status == .completed
         let hasTimeline = objectives["skeleton_timeline"]?.status == .completed
         let hasSections = objectives["enabled_sections"]?.status == .completed
-        let hasExperience = objectives["interviewed_one_experience"]?.status == .completed
+        _ = objectives["interviewed_one_experience"]?.status == .completed
         let hasWriting = objectives["one_writing_sample"]?.status == .completed
 
         if hasProfile {
@@ -667,10 +671,6 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handleStateEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .stateSet(let partialUpdate):
-            // Apply partial state update
-            await applyPartialUpdate(partialUpdate)
-
         case .checkpointRequested:
             // Emit state snapshot for checkpointing
             await emitSnapshot(reason: "checkpoint")
@@ -731,7 +731,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handlePhaseEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .phaseTransitionRequested(let from, let to, let reason):
+        case .phaseTransitionRequested(let from, let to, _):
             // Validate and apply phase transition
             if from == phase.rawValue {
                 if let newPhase = InterviewPhase(rawValue: to) {
@@ -774,12 +774,6 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Event Publications
 
-    /// Apply partial state update from event
-    private func applyPartialUpdate(_ update: JSON) async {
-        // TODO: Implement partial state updates based on JSON
-        Logger.debug("Applying partial state update", category: .ai)
-    }
-
     /// Emit state snapshot
     private func emitSnapshot(reason: String) async {
         let snapshot = createSnapshot()
@@ -795,24 +789,17 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     /// Get allowed tools for the current phase
     func getAllowedToolsForCurrentPhase() -> Set<String> {
-        // TODO: Get from phase configuration
-        // For now, return a basic set based on phase
-        switch phase {
-        case .phase1CoreFacts:
-            return ["get_user_option", "get_applicant_profile", "get_user_upload", "extract_document", "submit_for_validation"]
-        case .phase2DeepDive:
-            return ["get_user_option", "generate_knowledge_card", "get_user_upload"]
-        case .phase3WritingCorpus:
-            return ["get_user_option", "get_user_upload", "submit_for_validation"]
-        case .complete:
-            return []
-        }
+        return phasePolicy.allowedTools[phase] ?? []
     }
 
     /// Emit allowed tools when phase changes
     private func emitAllowedTools() async {
         let tools = getAllowedToolsForCurrentPhase()
         await emit(.stateAllowedToolsUpdated(tools: tools))
+    }
+
+    func publishAllowedToolsNow() async {
+        await emitAllowedTools()
     }
 
     /// When objectives change, emit update

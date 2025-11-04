@@ -25,6 +25,7 @@ final class OnboardingInterviewCoordinator {
 
     // Event subscription tracking
     private var eventSubscriptionTask: Task<Void, Never>?
+    private var stateUpdateTasks: [Task<Void, Never>] = []
 
     // MARK: - Data Store Dependencies
 
@@ -150,6 +151,10 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
+    func eventStream(for topic: EventTopic) async -> AsyncStream<OnboardingEvent> {
+        await eventBus.stream(topic: topic)
+    }
+
     // MARK: - Initialization
 
     init(
@@ -161,7 +166,20 @@ final class OnboardingInterviewCoordinator {
     ) {
         let eventBus = EventCoordinator()
         self.eventBus = eventBus
-        self.state = StateCoordinator(eventBus: eventBus)
+
+        // Build phase policy from PhaseScriptRegistry
+        let registry = PhaseScriptRegistry()
+        self.phaseRegistry = registry
+        let phasePolicy = PhasePolicy(
+            requiredObjectives: Dictionary(uniqueKeysWithValues: InterviewPhase.allCases.map {
+                ($0, registry.script(for: $0)?.requiredObjectives ?? [])
+            }),
+            allowedTools: Dictionary(uniqueKeysWithValues: InterviewPhase.allCases.map {
+                ($0, Set(registry.script(for: $0)?.allowedTools ?? []))
+            })
+        )
+
+        self.state = StateCoordinator(eventBus: eventBus, phasePolicy: phasePolicy)
         self.openAIService = openAIService
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
@@ -208,15 +226,18 @@ final class OnboardingInterviewCoordinator {
             eventBus: eventBus
         )
         self.wizardTracker = WizardProgressTracker()
-        self.phaseRegistry = PhaseScriptRegistry()
+
+        toolRouter.uploadHandler.updateExtractionProgressHandler { [weak self] update in
+            Task { @MainActor in
+                guard let self else { return }
+                self.updateExtractionProgress(with: update)
+            }
+        }
 
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
 
         // Subscribe to events from the orchestrator
         Task { await subscribeToEvents() }
-
-        // Start observation task to sync critical UI state
-        Task { await startStateObservation() }
     }
 
     // MARK: - Event Subscription
@@ -239,44 +260,30 @@ final class OnboardingInterviewCoordinator {
         switch event {
         case .processingStateChanged(let processing):
             await state.setProcessingState(processing)
-            _isProcessingSync = processing
 
-        case .assistantMessageEmitted(let id, let text, let reasoningExpected):
-            await MainActor.run {
-                _ = self.appendAssistantMessage(text, reasoningExpected: reasoningExpected)
-            }
+        case .assistantMessageEmitted(_, let text, let reasoningExpected):
+            _ = await appendAssistantMessage(text, reasoningExpected: reasoningExpected)
 
-        case .streamingMessageBegan(let id, let text, let reasoningExpected):
-            await MainActor.run {
-                _ = self.beginAssistantStream(initialText: text, reasoningExpected: reasoningExpected)
-            }
+        case .streamingMessageBegan(_, let text, let reasoningExpected):
+            _ = await beginAssistantStream(initialText: text, reasoningExpected: reasoningExpected)
 
         case .streamingMessageUpdated(let id, let delta):
-            await MainActor.run {
-                self.updateAssistantStream(id: id, text: delta)
-            }
+            await updateAssistantStream(id: id, text: delta)
 
         case .streamingMessageFinalized(let id, let finalText):
-            await MainActor.run {
-                _ = self.finalizeAssistantStream(id: id, text: finalText)
-            }
+            _ = await finalizeAssistantStream(id: id, text: finalText)
 
         case .reasoningSummaryUpdated(let messageId, let summary, let isFinal):
-            await MainActor.run {
-                self.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
-            }
+            await updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
+
+        case .llmReasoningSummary(let messageId, let summary, let isFinal):
+            await updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
 
         case .reasoningSummariesFinalized(let messageIds):
-            await MainActor.run {
-                for id in messageIds {
-                    self.chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: [id])
-                }
-            }
+            chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: messageIds)
 
         case .streamingStatusUpdated(let status):
-            await MainActor.run {
-                self.setStreamingStatus(status)
-            }
+            await setStreamingStatus(status)
 
         case .waitingStateChanged(let waiting):
             await MainActor.run {
@@ -304,11 +311,11 @@ final class OnboardingInterviewCoordinator {
         case .checkpointRequested:
             await saveCheckpoint()
 
-        case .toolCallRequested(let call):
+        case .toolCallRequested:
             // Tool execution now handled by ToolExecutionCoordinator
             break
 
-        case .toolCallCompleted(let id, let result):
+        case .toolCallCompleted:
             // Tool completion is handled by toolContinuationNeeded
             break
 
@@ -335,16 +342,13 @@ final class OnboardingInterviewCoordinator {
              .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
              .phaseAdvanceRequested,
              .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered,
-             .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted:
-            // These are handled by specialized handlers via event subscriptions
-            break
-
-        // New spec-aligned events that StateCoordinator handles
-        case .objectiveStatusChanged, .objectiveStatusUpdateRequested,
-             .stateSet, .stateSnapshot, .stateAllowedToolsUpdated,
+             .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
+             // New spec-aligned events that StateCoordinator handles
+             .objectiveStatusChanged, .objectiveStatusUpdateRequested,
+             .stateSnapshot, .stateAllowedToolsUpdated,
              .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
-             .llmReasoningSummary, .llmReasoningStatus,
+             .llmReasoningStatus,
              .phaseTransitionRequested, .phaseTransitionApplied,
              .timelineCardUpdated:
             // These events are handled by StateCoordinator/handlers, not the coordinator
@@ -352,22 +356,127 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
-    // MARK: - State Observation
+    // MARK: - State Updates
 
-    private func startStateObservation() async {
-        // Monitor state changes and update synchronous properties for UI
-        while true {
-            _isProcessingSync = await state.isProcessing
-            _pendingExtractionSync = await state.pendingExtraction
-            _pendingStreamingStatusSync = await state.pendingStreamingStatus
+    private func subscribeToStateUpdates() {
+        stateUpdateTasks.forEach { $0.cancel() }
+        stateUpdateTasks.removeAll()
 
-            // Update wizard tracker
-            let step = await state.currentWizardStep
-            let completed = await state.completedWizardSteps
-            wizardTracker.updateFromState(currentStep: step, completedSteps: completed)
+        let processingTask = Task { [weak self] in
+            guard let self else { return }
 
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            for await event in await self.eventBus.stream(topic: .processing) {
+                if Task.isCancelled { break }
+                await self.handleProcessingEvent(event)
+            }
         }
+        stateUpdateTasks.append(processingTask)
+
+        let artifactTask = Task { [weak self] in
+            guard let self else { return }
+
+            for await event in await self.eventBus.stream(topic: .artifact) {
+                if Task.isCancelled { break }
+                await self.handleArtifactEvent(event)
+            }
+        }
+        stateUpdateTasks.append(artifactTask)
+
+        let llmTask = Task { [weak self] in
+            guard let self else { return }
+
+            for await event in await self.eventBus.stream(topic: .llm) {
+                if Task.isCancelled { break }
+                await self.handleLLMEvent(event)
+            }
+        }
+        stateUpdateTasks.append(llmTask)
+
+        let stateTask = Task { [weak self] in
+            guard let self else { return }
+
+            for await event in await self.eventBus.stream(topic: .state) {
+                if Task.isCancelled { break }
+                await self.handleStateSyncEvent(event)
+            }
+        }
+        stateUpdateTasks.append(stateTask)
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.initialStateSync()
+        }
+    }
+
+    private func handleProcessingEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .processingStateChanged(let processing):
+            _isProcessingSync = processing
+            await syncWizardProgressFromState()
+
+        case .streamingStatusUpdated(let status):
+            _pendingStreamingStatusSync = status
+
+        case .waitingStateChanged:
+            await syncPendingExtractionFromState()
+
+        default:
+            break
+        }
+    }
+
+    private func handleArtifactEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted:
+            await syncPendingExtractionFromState()
+            await syncWizardProgressFromState()
+
+        default:
+            break
+        }
+    }
+
+    private func handleLLMEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .llmReasoningStatus(let status):
+            _pendingStreamingStatusSync = status == "none" ? nil : status
+
+        case .llmStatus(let status):
+            if status == .idle || status == .error {
+                _pendingStreamingStatusSync = nil
+            }
+
+        default:
+            break
+        }
+    }
+
+    private func handleStateSyncEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .stateSnapshot, .stateAllowedToolsUpdated:
+            await syncWizardProgressFromState()
+            await syncPendingExtractionFromState()
+
+        default:
+            break
+        }
+    }
+
+    private func syncPendingExtractionFromState() async {
+        _pendingExtractionSync = await state.pendingExtraction
+    }
+
+    private func syncWizardProgressFromState() async {
+        let step = await state.currentWizardStep
+        let completed = await state.completedWizardSteps
+        synchronizeWizardTracker(currentStep: step, completedSteps: completed)
+    }
+
+    private func initialStateSync() async {
+        _isProcessingSync = await state.isProcessing
+        await syncPendingExtractionFromState()
+        _pendingStreamingStatusSync = await state.pendingStreamingStatus
+        await syncWizardProgressFromState()
     }
 
     // MARK: - Interview Lifecycle
@@ -410,9 +519,11 @@ final class OnboardingInterviewCoordinator {
         await chatboxHandler.startEventSubscriptions()
         await toolExecutionCoordinator.startEventSubscriptions()
         await state.startEventSubscriptions()
+        subscribeToStateUpdates()
         await MainActor.run {
             toolRouter.startEventSubscriptions()
         }
+        await state.publishAllowedToolsNow()
 
         Task {
             do {
@@ -432,6 +543,8 @@ final class OnboardingInterviewCoordinator {
         orchestrator = nil
         await state.setActiveState(false)
         await state.setProcessingState(false)
+        stateUpdateTasks.forEach { $0.cancel() }
+        stateUpdateTasks.removeAll()
     }
 
     // MARK: - Phase Management
@@ -441,10 +554,8 @@ final class OnboardingInterviewCoordinator {
 
         // Update wizard progress
         let completedSteps = await state.completedWizardSteps
-        wizardTracker.updateFromState(
-            currentStep: await state.currentWizardStep,
-            completedSteps: completedSteps
-        )
+        let currentStep = await state.currentWizardStep
+        synchronizeWizardTracker(currentStep: currentStep, completedSteps: completedSteps)
 
         await registerObjectivesForCurrentPhase()
         return newPhase
@@ -544,6 +655,10 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Artifact Queries (Read-Only State Access)
 
+    func getArtifactRecord(id: String) async -> JSON? {
+        await state.getArtifactRecord(id: id)
+    }
+
     func getArtifact(id: String) async -> JSON? {
         // Query StateCoordinator's artifact state
         let artifacts = await state.artifacts
@@ -584,11 +699,13 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Artifact Management
 
     func storeApplicantProfile(_ profile: JSON) {
-        Task {
-            await state.setApplicantProfile(profile)
-            // TODO: Convert JSON to ApplicantProfile model for SwiftData storage
-            // applicantProfileStore.save(convertJSONToApplicantProfile(profile))
-            await saveCheckpoint()
+        Task { [weak self] in
+            guard let self else { return }
+            await self.state.setApplicantProfile(profile)
+            await MainActor.run {
+                self.persistApplicantProfileToSwiftData(json: profile)
+            }
+            await self.saveCheckpoint()
         }
     }
 
@@ -608,58 +725,49 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Message Management
 
-    func appendUserMessage(_ text: String) -> UUID {
-        Task {
-            let id = await state.appendUserMessage(text)
-            chatTranscriptStore.appendUserMessage(text)
-            return id
-        }.value
+    @discardableResult
+    func appendUserMessage(_ text: String) async -> UUID {
+        let id = await state.appendUserMessage(text)
+        chatTranscriptStore.appendUserMessage(text)
+        return id
     }
 
-    func appendAssistantMessage(_ text: String, reasoningExpected: Bool) -> UUID {
-        Task {
-            let id = await state.appendAssistantMessage(text)
-            chatTranscriptStore.appendAssistantMessage(
-                text,
-                reasoningExpected: reasoningExpected
-            )
-            return id
-        }.value
+    @discardableResult
+    func appendAssistantMessage(_ text: String, reasoningExpected: Bool) async -> UUID {
+        let id = await state.appendAssistantMessage(text)
+        chatTranscriptStore.appendAssistantMessage(
+            text,
+            reasoningExpected: reasoningExpected
+        )
+        return id
     }
 
-    func beginAssistantStream(initialText: String, reasoningExpected: Bool) -> UUID {
-        Task {
-            let id = await state.beginStreamingMessage(
-                initialText: initialText,
-                reasoningExpected: reasoningExpected
-            )
-            chatTranscriptStore.beginAssistantStream(
-                initialText: initialText,
-                reasoningExpected: reasoningExpected
-            )
-            return id
-        }.value
+    @discardableResult
+    func beginAssistantStream(initialText: String, reasoningExpected: Bool) async -> UUID {
+        let id = await state.beginStreamingMessage(
+            initialText: initialText,
+            reasoningExpected: reasoningExpected
+        )
+        chatTranscriptStore.beginAssistantStream(
+            initialText: initialText,
+            reasoningExpected: reasoningExpected
+        )
+        return id
     }
 
-    func updateAssistantStream(id: UUID, text: String) {
-        Task {
-            await state.updateStreamingMessage(id: id, delta: text)
-            chatTranscriptStore.updateAssistantStream(id: id, text: text)
-        }
+    func updateAssistantStream(id: UUID, text: String) async {
+        await state.updateStreamingMessage(id: id, delta: text)
+        chatTranscriptStore.updateAssistantStream(id: id, text: text)
     }
 
-    func finalizeAssistantStream(id: UUID, text: String) -> TimeInterval {
-        Task {
-            await state.finalizeStreamingMessage(id: id, finalText: text)
-        }
+    func finalizeAssistantStream(id: UUID, text: String) async -> TimeInterval {
+        await state.finalizeStreamingMessage(id: id, finalText: text)
         let elapsed = chatTranscriptStore.finalizeAssistantStream(id: id, text: text)
         return elapsed
     }
 
-    func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) {
-        Task {
-            await state.setReasoningSummary(summary, for: messageId)
-        }
+    func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) async {
+        await state.setReasoningSummary(summary, for: messageId)
         chatTranscriptStore.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
     }
 
@@ -697,12 +805,53 @@ final class OnboardingInterviewCoordinator {
             await state.setPendingExtraction(extraction)
             _pendingExtractionSync = extraction
 
-            // Clear applicant profile intake when extraction begins
-            // TODO: Check extraction type - OnboardingPendingExtraction doesn't have documentType
-            // if extraction?.title.contains("Resume") || extraction?.title.contains("CV") {
-            //     toolRouter.clearApplicantProfileIntake()
-            // }
+            guard let extraction else { return }
+            if shouldClearApplicantProfileIntake(for: extraction) {
+                await MainActor.run {
+                    toolRouter.clearApplicantProfileIntake()
+                }
+                Logger.debug(
+                    "🧹 Cleared applicant profile intake for extraction",
+                    category: .ai,
+                    metadata: [
+                        "title": extraction.title,
+                        "summary": extraction.summary
+                    ]
+                )
+            }
         }
+    }
+
+    private func shouldClearApplicantProfileIntake(for extraction: OnboardingPendingExtraction) -> Bool {
+        // If the extraction already contains an applicant profile, clear the intake immediately.
+        if extraction.rawExtraction["derived"]["applicant_profile"] != .null {
+            return true
+        }
+
+        let metadata = extraction.rawExtraction["metadata"]
+        var candidateStrings: [String] = []
+
+        if let purpose = metadata["purpose"].string { candidateStrings.append(purpose) }
+        if let documentKind = metadata["document_kind"].string { candidateStrings.append(documentKind) }
+        if let sourceFilename = metadata["source_filename"].string { candidateStrings.append(sourceFilename) }
+
+        candidateStrings.append(extraction.title)
+        candidateStrings.append(extraction.summary)
+
+        let resumeKeywords = ["resume", "curriculum vitae", "curriculum", "cv", "applicant profile"]
+        for value in candidateStrings {
+            let lowercased = value.lowercased()
+            if resumeKeywords.contains(where: { lowercased.contains($0) }) {
+                return true
+            }
+        }
+
+        let tags = metadata["tags"].arrayValue.compactMap { $0.string?.lowercased() }
+        if tags.contains(where: { tag in resumeKeywords.contains(where: { tag.contains($0) }) }) {
+            return true
+        }
+
+        return false
     }
 
     func updateExtractionProgress(with update: ExtractionProgressUpdate) {
@@ -717,11 +866,20 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
-    func setStreamingStatus(_ status: String?) {
-        Task {
-            await state.setStreamingStatus(status)
-            _pendingStreamingStatusSync = status
-        }
+    func setStreamingStatus(_ status: String?) async {
+        await state.setStreamingStatus(status)
+        _pendingStreamingStatusSync = status
+    }
+
+    private func synchronizeWizardTracker(
+        currentStep: StateCoordinator.WizardStep,
+        completedSteps: Set<StateCoordinator.WizardStep>
+    ) {
+        let mappedCurrent = OnboardingWizardStep(rawValue: currentStep.rawValue) ?? .introduction
+        let mappedCompleted = Set(
+            completedSteps.compactMap { OnboardingWizardStep(rawValue: $0.rawValue) }
+        )
+        wizardTracker.synchronize(currentStep: mappedCurrent, completedSteps: mappedCompleted)
     }
 
     // MARK: - Tool Management
@@ -798,21 +956,36 @@ final class OnboardingInterviewCoordinator {
         Task {
             phaseAdvanceContinuationId = continuationId
             await state.setPendingPhaseAdvanceRequest(request)
+            // Emit event to notify UI about the request
+            await eventBus.publish(.phaseAdvanceRequested(request: request, continuationId: continuationId))
         }
     }
 
     func approvePhaseAdvance() async {
-        guard let continuationId = phaseAdvanceContinuationId else { return }
+        guard let continuationId = phaseAdvanceContinuationId,
+              let request = await state.pendingPhaseAdvanceRequest else { return }
 
-        let newPhase = await advancePhase()
+        // Perform the actual phase transition
+        await requestPhaseTransition(
+            from: request.currentPhase.rawValue,
+            to: request.nextPhase.rawValue,
+            reason: request.reason ?? "User approved phase advance"
+        )
+
+        // Wait a moment for the transition to complete
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+
+        // Get the new phase after transition
+        let newPhase = await state.phase
+
+        // Clear the request
         await state.setPendingPhaseAdvanceRequest(nil)
         phaseAdvanceContinuationId = nil
 
+        // Resume the tool continuation
         var payload = JSON()
         payload["approved"].boolValue = true
-        if let phase = newPhase {
-            payload["new_phase"].stringValue = phase.rawValue
-        }
+        payload["new_phase"].stringValue = newPhase.rawValue
 
         await resumeToolContinuation(id: continuationId, payload: payload)
     }
@@ -904,8 +1077,7 @@ final class OnboardingInterviewCoordinator {
         // Restore artifacts from checkpoint
         if let profile = checkpoint.profileJSON {
             await state.setApplicantProfile(profile)
-            // TODO: Convert JSON to ApplicantProfile model for SwiftData storage
-            // applicantProfileStore.save(convertJSONToApplicantProfile(profile))
+            persistApplicantProfileToSwiftData(json: profile)
         }
 
         if let timeline = checkpoint.timelineJSON {
@@ -927,23 +1099,35 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Data Store Management
 
     func loadPersistedArtifacts() async {
-        // TODO: Implement loading from dataStore.list
-        let records: [JSON] = []  // dataStore.list("artifact")
+        let profileRecords = (await dataStore.list(dataType: "applicant_profile")).filter { $0 != .null }
+        let timelineRecords = (await dataStore.list(dataType: "skeleton_timeline")).filter { $0 != .null }
+        let artifactRecords = (await dataStore.list(dataType: "artifact_record")).filter { $0 != .null }
 
-        for record in records {
-            // TODO: Properly parse artifact records from dataStore
-            // The dataStore returns JSON objects, need to extract type and data
-            let recordType = record["type"].string
-            let data = record["data"]
+        if let profile = profileRecords.last {
+            await state.setApplicantProfile(profile)
+            persistApplicantProfileToSwiftData(json: profile)
+        }
 
-            switch recordType {
-            case "applicantProfile":
-                await state.setApplicantProfile(data)
-            case "skeletonTimeline":
-                await state.setSkeletonTimeline(data)
-            default:
-                break
-            }
+        if let timeline = timelineRecords.last {
+            await state.setSkeletonTimeline(timeline)
+        }
+
+        if !artifactRecords.isEmpty {
+            await state.setArtifactRecords(artifactRecords)
+        }
+
+        if profileRecords.isEmpty && timelineRecords.isEmpty && artifactRecords.isEmpty {
+            Logger.info("📂 No persisted artifacts discovered", category: .ai)
+        } else {
+            Logger.info(
+                "📂 Loaded persisted artifacts",
+                category: .ai,
+                metadata: [
+                    "applicant_profile_count": "\(profileRecords.count)",
+                    "skeleton_timeline_count": "\(timelineRecords.count)",
+                    "artifact_record_count": "\(artifactRecords.count)"
+                ]
+            )
         }
     }
 
@@ -958,6 +1142,17 @@ final class OnboardingInterviewCoordinator {
         chatTranscriptStore.reset()
         toolRouter.reset()
         wizardTracker.reset()
+    }
+
+    // MARK: - Persistence Helpers
+
+    @MainActor
+    private func persistApplicantProfileToSwiftData(json: JSON) {
+        let draft = ApplicantProfileDraft(json: json)
+        let profile = applicantProfileStore.currentProfile()
+        draft.apply(to: profile, replaceMissing: false)
+        applicantProfileStore.save(profile)
+        Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
     }
 
     // MARK: - Orchestrator Factory
@@ -1004,43 +1199,7 @@ final class OnboardingInterviewCoordinator {
         chatTranscriptStore.formattedTranscript()
     }
 
-    // MARK: - Legacy Support (will be removed in Phase 2)
-
-    var objectiveStatuses: [String: ObjectiveStatus] {
-        // For UI compatibility during transition
-        get async {
-            let objectives = await state.getAllObjectives()
-            return objectives.reduce(into: [:]) { dict, entry in
-                dict[entry.id] = ObjectiveStatus(rawValue: entry.status.rawValue) ?? .pending
-            }
-        }
-    }
-
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
         phaseRegistry.buildSystemPrompt(for: phase)
-    }
-}
-
-// Extension to bridge WizardProgressTracker
-extension WizardProgressTracker {
-    func updateFromState(
-        currentStep: StateCoordinator.WizardStep,
-        completedSteps: Set<StateCoordinator.WizardStep>
-    ) {
-        // TODO: Convert to legacy wizard step format properly
-        // Cannot directly set currentStep and completedSteps - they're private(set)
-        // Need to use setStep method instead
-        if let wizardStep = OnboardingWizardStep(rawValue: currentStep.rawValue) {
-            setStep(wizardStep)
-        }
-        // Note: completedSteps cannot be set directly, need to refactor
-    }
-}
-
-// Extension to handle Task.value pattern
-extension Task where Success == UUID, Failure == Never {
-    var value: UUID {
-        // Synchronous wrapper for UI compatibility
-        UUID() // Placeholder, will be properly handled in Phase 2
     }
 }

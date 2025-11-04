@@ -60,7 +60,12 @@ struct GenerateKnowledgeCardTool: InterviewTool {
 
         do {
             let draft = try await agent.generateCard(for: context)
-            return .immediate(draft.toJSON())
+            var response = draft.toJSON()
+
+            // Add validation nudge to guide LLM to validate the card
+            response["next_action_hint"] = JSON("Call submit_for_validation(validation_type: \"knowledge_card\", data: <this draft>) to show the user and capture their feedback.")
+
+            return .immediate(response)
         } catch let error as KnowledgeCardAgentError {
             return .error(.executionFailed(error.localizedDescription))
         } catch {

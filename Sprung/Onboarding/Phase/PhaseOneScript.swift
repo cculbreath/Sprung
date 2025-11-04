@@ -16,6 +16,27 @@ struct PhaseOneScript: PhaseScript {
         "enabled_sections"
     ]
 
+    let allowedTools: [String] = [
+        "get_user_option",
+        "get_applicant_profile",
+        "get_user_upload",
+        "cancel_user_upload",
+        "get_macos_contact_card",
+        "extract_document",
+        "create_timeline_card",
+        "update_timeline_card",
+        "reorder_timeline_cards",
+        "delete_timeline_card",
+        "submit_for_validation",
+        "validate_applicant_profile",
+        "persist_data",
+        "set_objective_status",
+        "list_artifacts",
+        "get_artifact",
+        "request_raw_file",
+        "next_phase"
+    ]
+
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
             "contact_source_selected": ObjectiveWorkflow(

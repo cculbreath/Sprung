@@ -15,6 +15,21 @@ struct PhaseTwoScript: PhaseScript {
         "one_card_generated"
     ]
 
+    let allowedTools: [String] = [
+        "get_user_option",
+        "generate_knowledge_card",
+        "get_user_upload",
+        "cancel_user_upload",
+        "extract_document",
+        "submit_for_validation",
+        "persist_data",
+        "set_objective_status",
+        "list_artifacts",
+        "get_artifact",
+        "request_raw_file",
+        "next_phase"
+    ]
+
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
             "interviewed_one_experience": ObjectiveWorkflow(
