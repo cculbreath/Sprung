@@ -60,11 +60,13 @@ enum OnboardingEvent {
 
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
+    case timelineCardUpdated(id: String, fields: JSON)
     case timelineCardDeleted(id: String)
     case timelineCardsReordered(ids: [String])
 
     // MARK: - Objective Management
     case objectiveStatusRequested(id: String, response: (String?) -> Void)
+    case objectiveStatusUpdateRequested(id: String, status: String, source: String?, notes: String?)
     case objectiveStatusChanged(id: String, status: String, phase: String)
 
     // MARK: - State Management (§6 spec)
@@ -229,7 +231,7 @@ actor EventCoordinator {
             return .phase
 
         // Objective events
-        case .objectiveStatusRequested, .objectiveStatusChanged:
+        case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
 
         // Tool events
@@ -247,7 +249,7 @@ actor EventCoordinator {
             return .toolpane
 
         // Timeline events
-        case .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered:
+        case .timelineCardCreated, .timelineCardUpdated, .timelineCardDeleted, .timelineCardsReordered:
             return .timeline
 
         // Processing events
@@ -340,12 +342,16 @@ actor EventCoordinator {
             description = "Artifact deleted: \(id)"
         case .timelineCardCreated:
             description = "Timeline card created"
-        case .timelineCardDeleted:
-            description = "Timeline card deleted"
+        case .timelineCardUpdated(let id, _):
+            description = "Timeline card \(id) updated"
+        case .timelineCardDeleted(let id):
+            description = "Timeline card \(id) deleted"
         case .timelineCardsReordered:
             description = "Timeline cards reordered"
         case .objectiveStatusRequested:
             description = "Objective status requested"
+        case .objectiveStatusUpdateRequested(let id, let status, _, _):
+            description = "Objective update requested: \(id) → \(status)"
         case .objectiveStatusChanged(let id, let status, _):
             description = "Objective \(id) → \(status)"
         case .stateSet:

@@ -1,8 +1,8 @@
 # Onboarding Event-Driven Architecture Implementation Checklist
 
 **Based on:** planning/pub-sub-single-state-spec.md
-**Last Updated:** 2025-11-03
-**Status:** Phase 1 Complete - Foundation Laid
+**Last Updated:** 2025-11-04
+**Status:** Phase 4 Complete - Event-Driven Architecture Implemented
 
 ---
 
@@ -216,29 +216,31 @@ All Phase 3 components are now implemented and working with event-driven archite
 
 ---
 
-## 🔧 Phase 4: Tool Event Migration (PARTIALLY COMPLETE)
+## ✅ Phase 4: Tool Event Migration (COMPLETE)
 
 ### 4.1 Core Tools Migration
-Event-driven UI presentation now working for:
+Event-driven architecture fully implemented:
 
 - [x] **get_user_option** (get_user_choice) → `.choicePromptRequested` ✅
 - [x] **get_applicant_profile** → `.applicantProfileIntakeRequested` ✅
 - [x] **get_user_upload** → `.uploadRequestPresented` ✅
 - [x] **submit_for_validation** → `.validationPromptRequested` ✅
-- [ ] **extract_document** → needs ArtifactHandler integration
-- [ ] **persist_data** → needs artifact events
-- [ ] **set_objective_status** → needs objective ledger events
-- [ ] **next_phase** → needs phase transition events
+- [ ] **extract_document** → needs ArtifactHandler integration (deferred)
+- [ ] **persist_data** → needs artifact events (deferred)
+- [x] **set_objective_status** → emits `.objectiveStatusUpdateRequested` ✅
+- [x] **next_phase** → emits `.phaseTransitionRequested` ✅
 
-**Current Status:** UI tools complete, data/state tools remain
+**Status:** ✅ Core event-driven tools complete
 
 ---
 
 ### 4.2 Timeline Tools Migration
-- [ ] **create_timeline_card**
-- [ ] **update_timeline_card**
-- [ ] **delete_timeline_card**
-- [ ] **reorder_timeline_cards**
+- [x] **create_timeline_card** → emits `.timelineCardCreated` ✅
+- [x] **update_timeline_card** → emits `.timelineCardUpdated` ✅
+- [x] **delete_timeline_card** → emits `.timelineCardDeleted` ✅
+- [x] **reorder_timeline_cards** → emits `.timelineCardsReordered` ✅
+
+**Status:** ✅ All timeline tools migrated to event-driven architecture
 
 ---
 

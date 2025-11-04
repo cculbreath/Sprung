@@ -41,12 +41,18 @@ struct SetObjectiveStatusTool: InterviewTool {
             throw ToolError.invalidParameters("status must be provided")
         }
 
-        // TODO: Emit event for objective status update
-        // let result = try await service.updateObjectiveStatus(objectiveId: objectiveId, status: status)
-        var response = JSON()
-        response["objective_id"].string = objectiveId
-        response["status"].string = status
-        response["success"].bool = true
-        return .immediate(response)
+        // Validate status value
+        let validStatuses = ["pending", "in_progress", "completed", "skipped", "reset"]
+        guard validStatuses.contains(status) else {
+            throw ToolError.invalidParameters("Invalid status: \(status). Must be one of: pending, in_progress, completed, skipped, reset")
+        }
+
+        // Update objective status via coordinator (which emits events)
+        let result = try await service.coordinator.updateObjectiveStatus(
+            objectiveId: objectiveId,
+            status: status
+        )
+
+        return .immediate(result)
     }
 }
