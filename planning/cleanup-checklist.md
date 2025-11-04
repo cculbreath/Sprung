@@ -5,6 +5,17 @@
 **Estimated Total Effort**: 10-17 days
 **Current Health**: 72% compliant with event-driven architecture
 
+**Architecture Reference**: See `./architecture-patterns.md` for event-driven design patterns
+
+## Architecture Enforcement Rules
+
+**Golden Rules (Never Break These):**
+1. ✅ State mutations → Always emit events
+2. ✅ Tools → Call coordinator methods only (never eventBus, never StateCoordinator)
+3. ✅ Cross-component communication → Always use events
+4. ❌ No timer-based polling (use event subscriptions)
+5. ❌ No direct StateCoordinator access (go through coordinator)
+
 ---
 
 ## Phase 1: Critical Legacy Code Removal (High Priority, 2-3 days)

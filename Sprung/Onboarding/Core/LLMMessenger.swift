@@ -23,6 +23,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let networkRouter: NetworkRouter
     private let service: OpenAIService
     private let systemPrompt: String
+    private let toolRegistry: ToolRegistry
 
     // Conversation tracking
     private var conversationId: String?
@@ -33,18 +34,23 @@ actor LLMMessenger: OnboardingEventEmitter {
     // Tool continuation tracking
     private var continuationCallIds: [UUID: String] = [:]
 
+    // Allowed tools from StateCoordinator
+    private var allowedToolNames: Set<String> = []
+
     // MARK: - Initialization
 
     init(
         service: OpenAIService,
         systemPrompt: String,
         eventBus: EventCoordinator,
-        networkRouter: NetworkRouter
+        networkRouter: NetworkRouter,
+        toolRegistry: ToolRegistry
     ) {
         self.service = service
         self.systemPrompt = systemPrompt
         self.eventBus = eventBus
         self.networkRouter = networkRouter
+        self.toolRegistry = toolRegistry
         Logger.info("📬 LLMMessenger initialized", category: .ai)
     }
 
@@ -65,6 +71,13 @@ actor LLMMessenger: OnboardingEventEmitter {
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .userInput) {
                         await self.handleUserInputEvent(event)
+                    }
+                }
+
+                // Subscribe to State for allowed tools
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .state) {
+                        await self.handleStateEvent(event)
                     }
                 }
             }
@@ -92,8 +105,20 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     private func handleUserInputEvent(_ event: OnboardingEvent) async {
-        // TODO: Wire up UserInput.chatMessage when UI handlers are implemented
+        // UserInput events are currently handled through .llmSendUserMessage
+        // This handler is reserved for future direct user input events
         Logger.debug("LLMMessenger received user input event", category: .ai)
+    }
+
+    private func handleStateEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .stateAllowedToolsUpdated(let tools):
+            allowedToolNames = tools
+            Logger.info("🔧 LLMMessenger updated allowed tools: \(tools.count) tools", category: .ai)
+
+        default:
+            break
+        }
     }
 
     // MARK: - Message Sending
@@ -110,7 +135,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let text = payload["text"].stringValue
 
         do {
-            let request = buildUserMessageRequest(text: text)
+            let request = await buildUserMessageRequest(text: text)
             let messageId = UUID().uuidString
 
             // Emit message sent event
@@ -138,8 +163,40 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     /// Send developer message (system instructions)
     private func sendDeveloperMessage(_ payload: JSON) async {
-        // TODO: Implement developer message sending
-        Logger.debug("LLMMessenger developer message: \(payload)", category: .ai)
+        guard isActive else {
+            Logger.warning("LLMMessenger not active, ignoring developer message", category: .ai)
+            return
+        }
+
+        await emit(.llmStatus(status: .busy))
+
+        let text = payload["text"].stringValue
+
+        do {
+            let request = await buildDeveloperMessageRequest(text: text)
+            let messageId = UUID().uuidString
+
+            // Emit message sent event
+            await emit(.llmDeveloperMessageSent(messageId: messageId, payload: payload))
+
+            // Process stream via NetworkRouter
+            let stream = try await service.responseCreateStream(request)
+            for try await streamEvent in stream {
+                await networkRouter.handleResponseEvent(streamEvent)
+
+                // Track conversation state
+                if case .responseCompleted(let completed) = streamEvent {
+                    conversationId = completed.response.id
+                    lastResponseId = completed.response.id
+                }
+            }
+
+            await emit(.llmStatus(status: .idle))
+
+        } catch {
+            await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
+            await emit(.llmStatus(status: .error))
+        }
     }
 
     /// Send tool response back to LLM
@@ -150,7 +207,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
 
-            let request = buildToolResponseRequest(output: output, callId: callId)
+            let request = await buildToolResponseRequest(output: output, callId: callId)
             let messageId = UUID().uuidString
 
             // Emit message sent event
@@ -176,11 +233,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Request Building
-    // TODO: Implement proper Responses API request building
-    // For now, this is a placeholder - actual implementation will come
-    // when we wire up the full message flow
 
-    private func buildUserMessageRequest(text: String) -> ModelResponseParameter {
+    private func buildUserMessageRequest(text: String) async -> ModelResponseParameter {
         let inputItems: [InputItem] = [
             .message(InputMessage(
                 role: "developer",
@@ -192,16 +246,37 @@ actor LLMMessenger: OnboardingEventEmitter {
             ))
         ]
 
+        let tools = await getToolSchemas()
+
         return ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
             stream: true,
             toolChoice: .auto,
-            tools: [] // TODO: Get from StateCoordinator
+            tools: tools
         )
     }
 
-    private func buildToolResponseRequest(output: JSON, callId: String) -> ModelResponseParameter {
+    private func buildDeveloperMessageRequest(text: String) async -> ModelResponseParameter {
+        let inputItems: [InputItem] = [
+            .message(InputMessage(
+                role: "developer",
+                content: .text(text)
+            ))
+        ]
+
+        let tools = await getToolSchemas()
+
+        return ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(currentModelId),
+            stream: true,
+            toolChoice: .auto,
+            tools: tools
+        )
+    }
+
+    private func buildToolResponseRequest(output: JSON, callId: String) async -> ModelResponseParameter {
         let outputString = output.rawString() ?? "{}"
 
         let inputItems: [InputItem] = [
@@ -211,13 +286,21 @@ actor LLMMessenger: OnboardingEventEmitter {
             ))
         ]
 
+        let tools = await getToolSchemas()
+
         return ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
             stream: true,
             toolChoice: .auto,
-            tools: [] // TODO: Get from StateCoordinator
+            tools: tools
         )
+    }
+
+    /// Get tool schemas from ToolRegistry, filtered by allowed tools
+    private func getToolSchemas() async -> [Tool] {
+        let allowedNames = allowedToolNames.isEmpty ? nil : allowedToolNames
+        return await toolRegistry.toolSchemas(filteredBy: allowedNames)
     }
 
     // MARK: - Lifecycle

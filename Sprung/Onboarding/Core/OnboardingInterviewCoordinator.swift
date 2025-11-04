@@ -542,6 +542,30 @@ final class OnboardingInterviewCoordinator {
         await state.getMissingObjectives()
     }
 
+    // MARK: - Artifact Queries (Read-Only State Access)
+
+    func getArtifact(id: String) async -> JSON? {
+        // Query StateCoordinator's artifact state
+        let artifacts = await state.artifacts
+
+        // Search in experience cards
+        if let card = artifacts.experienceCards.first(where: { $0["id"].string == id }) {
+            return card
+        }
+
+        // Search in writing samples
+        if let sample = artifacts.writingSamples.first(where: { $0["id"].string == id }) {
+            return sample
+        }
+
+        return nil
+    }
+
+    func cancelUploadRequest(id: UUID) async {
+        // Emit upload cancellation event
+        await eventBus.publish(.uploadRequestCancelled(id: id))
+    }
+
     func nextPhase() async -> InterviewPhase? {
         let canAdvance = await state.canAdvancePhase()
         guard canAdvance else { return nil }
@@ -945,7 +969,8 @@ final class OnboardingInterviewCoordinator {
         return InterviewOrchestrator(
             service: service,
             systemPrompt: systemPrompt,
-            eventBus: eventBus
+            eventBus: eventBus,
+            toolRegistry: toolRegistry
         )
     }
 
