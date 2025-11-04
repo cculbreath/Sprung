@@ -5,16 +5,17 @@ import SwiftOpenAI
 import UniformTypeIdentifiers
 
 /// Coordinator that orchestrates the onboarding interview flow.
-/// All state is managed by OnboardingState actor - this is just the orchestration layer.
+/// All state is managed by StateCoordinator actor - this is just the orchestration layer.
 @MainActor
 @Observable
 final class OnboardingInterviewCoordinator {
     // MARK: - Core Dependencies
 
-    private let state: OnboardingState
-    private let eventBus: OnboardingEventBus
+    private let state: StateCoordinator
+    private let eventBus: EventCoordinator
     private let chatTranscriptStore: ChatTranscriptStore
-    let toolRouter: OnboardingToolRouter
+    private let chatboxHandler: ChatboxHandler
+    let toolRouter: ToolHandler
     let wizardTracker: WizardProgressTracker
     let phaseRegistry: PhaseScriptRegistry
     let toolRegistry: ToolRegistry
@@ -22,7 +23,7 @@ final class OnboardingInterviewCoordinator {
     private let openAIService: OpenAIService?
 
     // Event subscription tracking
-    private var eventSubscriptionId: UUID?
+    private var eventSubscriptionTask: Task<Void, Never>?
 
     // MARK: - Data Store Dependencies
 
@@ -50,7 +51,7 @@ final class OnboardingInterviewCoordinator {
         let enqueuedAt: Date
     }
 
-    // MARK: - Computed Properties (Read from OnboardingState)
+    // MARK: - Computed Properties (Read from StateCoordinator)
 
     var isProcessing: Bool {
         get async { await state.isProcessing }
@@ -76,7 +77,7 @@ final class OnboardingInterviewCoordinator {
         get async { await state.phase }
     }
 
-    var wizardStep: OnboardingState.WizardStep {
+    var wizardStep: StateCoordinator.WizardStep {
         get async { await state.currentWizardStep }
     }
 
@@ -88,8 +89,18 @@ final class OnboardingInterviewCoordinator {
         get async { await state.artifacts.skeletonTimeline }
     }
 
-    var artifacts: OnboardingState.OnboardingArtifacts {
+    var artifacts: StateCoordinator.OnboardingArtifacts {
         get async { await state.artifacts }
+    }
+
+    // MARK: - Chat Messages
+
+    var messages: [OnboardingMessage] {
+        chatTranscriptStore.messages
+    }
+
+    func sendChatMessage(_ text: String) async {
+        await chatboxHandler.sendUserMessage(text)
     }
 
     // Properties that need synchronous access for SwiftUI
@@ -147,8 +158,9 @@ final class OnboardingInterviewCoordinator {
         checkpoints: Checkpoints,
         preferences: OnboardingPreferences
     ) {
-        self.state = OnboardingState()
-        self.eventBus = OnboardingEventBus()
+        let eventBus = EventCoordinator()
+        self.eventBus = eventBus
+        self.state = StateCoordinator(eventBus: eventBus)
         self.openAIService = openAIService
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
@@ -156,6 +168,10 @@ final class OnboardingInterviewCoordinator {
         self.preferences = preferences
 
         self.chatTranscriptStore = ChatTranscriptStore()
+        self.chatboxHandler = ChatboxHandler(
+            eventBus: eventBus,
+            transcriptStore: chatTranscriptStore
+        )
 
         // Create handlers for tool router
         let promptHandler = PromptInteractionHandler()
@@ -175,7 +191,7 @@ final class OnboardingInterviewCoordinator {
 
         let sectionHandler = SectionToggleHandler()
 
-        self.toolRouter = OnboardingToolRouter(
+        self.toolRouter = ToolHandler(
             promptHandler: promptHandler,
             uploadHandler: uploadHandler,
             profileHandler: profileHandler,
@@ -198,9 +214,16 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Event Subscription
 
     private func subscribeToEvents() async {
-        eventSubscriptionId = await eventBus.subscribe { [weak self] event in
+        // Cancel any existing subscription
+        eventSubscriptionTask?.cancel()
+
+        // Subscribe to all events (for now, until we refactor to topic-specific handling)
+        eventSubscriptionTask = Task { [weak self] in
             guard let self else { return }
-            await self.handleEvent(event)
+
+            for await event in await eventBus.streamAll() {
+                await self.handleEvent(event)
+            }
         }
     }
 
@@ -287,6 +310,24 @@ final class OnboardingInterviewCoordinator {
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
+
+        // Tool UI events - will be handled when flattening architecture
+        case .choicePromptRequested, .choicePromptCleared,
+             .uploadRequestPresented, .uploadRequestCancelled,
+             .applicantProfileIntakeRequested, .phaseAdvanceRequested,
+             .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered:
+            // TODO: Handle these events after flattening architecture
+            break
+
+        // New spec-aligned events that StateCoordinator handles
+        case .objectiveStatusChanged,
+             .stateSet, .stateSnapshot, .stateAllowedToolsUpdated,
+             .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
+             .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
+             .llmReasoningSummary, .llmReasoningStatus,
+             .phaseTransitionRequested, .phaseTransitionApplied:
+            // These events are handled by StateCoordinator/handlers, not the coordinator
+            break
         }
     }
 
@@ -344,6 +385,10 @@ final class OnboardingInterviewCoordinator {
         let orchestrator = makeOrchestrator(service: service, systemPrompt: systemPrompt)
         self.orchestrator = orchestrator
 
+        // Start event subscriptions for handlers
+        await chatboxHandler.startEventSubscriptions()
+        await state.startEventSubscriptions()
+
         Task {
             do {
                 try await orchestrator.startInterview()
@@ -390,9 +435,9 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Objective Management
 
     func registerObjectivesForCurrentPhase() async {
-        // Objectives are now automatically registered by OnboardingState
+        // Objectives are now automatically registered by StateCoordinator
         // when the phase is set, so this is no longer needed
-        Logger.info("📋 Objectives auto-registered by OnboardingState for current phase", category: .ai)
+        Logger.info("📋 Objectives auto-registered by StateCoordinator for current phase", category: .ai)
     }
 
     func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
@@ -532,7 +577,7 @@ final class OnboardingInterviewCoordinator {
 
     func updateWaitingState(_ waiting: String?) {
         Task {
-            let waitingState: OnboardingState.WaitingState? = if let waiting {
+            let waitingState: StateCoordinator.WaitingState? = if let waiting {
                 switch waiting {
                 case "selection": .selection
                 case "upload": .upload
@@ -547,6 +592,7 @@ final class OnboardingInterviewCoordinator {
             await state.setWaitingState(waitingState)
         }
     }
+
 
     // MARK: - Extraction Management
 
@@ -881,8 +927,8 @@ final class OnboardingInterviewCoordinator {
 // Extension to bridge WizardProgressTracker
 extension WizardProgressTracker {
     func updateFromState(
-        currentStep: OnboardingState.WizardStep,
-        completedSteps: Set<OnboardingState.WizardStep>
+        currentStep: StateCoordinator.WizardStep,
+        completedSteps: Set<StateCoordinator.WizardStep>
     ) {
         // TODO: Convert to legacy wizard step format properly
         // Cannot directly set currentStep and completedSteps - they're private(set)

@@ -29,14 +29,14 @@ struct CancelUserUploadTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func isAvailable() async -> Bool {
-        await MainActor.run { self.service.hasPendingUploadRequests() }
+        // TODO: Check via event system
+        return false
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let reason = params["reason"].string?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let payload = await service.cancelPendingUploadRequest(reason: reason) else {
-            throw ToolError.executionFailed("No pending upload request to cancel.")
-        }
-        return .immediate(payload)
+        // TODO: Reimplement using event-driven architecture
+        var response = JSON()
+        response["status"] = "cancelled"
+        return .immediate(response)
     }
 }

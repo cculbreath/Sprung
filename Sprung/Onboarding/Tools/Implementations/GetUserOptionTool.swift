@@ -67,10 +67,11 @@ struct GetUserOptionTool: InterviewTool {
         let payload = try OptionPromptPayload(json: params)
         let tokenId = UUID()
 
-        await service.presentChoicePrompt(
-            prompt: payload.toChoicePrompt(),
-            continuationId: tokenId
-        )
+        // TODO: Emit event for choice prompt instead of direct service call
+        // await service.presentChoicePrompt(
+        //     prompt: payload.toChoicePrompt(),
+        //     continuationId: tokenId
+        // )
 
         var waitingPayload = JSON()
         waitingPayload["status"].string = "waiting"
@@ -84,7 +85,8 @@ struct GetUserOptionTool: InterviewTool {
             toolName: name,
             initialPayload: waitingPayload,
             resumeHandler: { input in
-                await service.clearChoicePrompt(continuationId: tokenId)
+                // TODO: Emit event to clear choice prompt
+                // await service.clearChoicePrompt(continuationId: tokenId)
 
                 if input["cancelled"].boolValue {
                     return .error(.userCancelled)
@@ -96,7 +98,7 @@ struct GetUserOptionTool: InterviewTool {
 
                 var response = JSON()
                 response["selectedIds"] = JSON(selectedArray)
-                response["timestamp"].string = dateFormatter.string(from: Date())
+                response["timestamp"].string = self.dateFormatter.string(from: Date())
                 return .immediate(response)
             }
         )

@@ -13,7 +13,7 @@ struct OnboardingInterviewToolPane: View {
 
     var body: some View {
         let paneOccupied = isPaneOccupied(service: service, coordinator: coordinator)
-        let isLLMActive = service.isProcessing || coordinator.pendingStreamingStatus != nil
+        let isLLMActive = service.isProcessing // || coordinator.pendingStreamingStatus != nil
         let showSpinner = service.pendingExtraction != nil || (!paneOccupied && isLLMActive)
 
         return VStack(alignment: .leading, spacing: 16) {
@@ -35,14 +35,16 @@ struct OnboardingInterviewToolPane: View {
                         prompt: prompt,
                         onSubmit: { selection in
                             Task {
-                                let result = coordinator.resolveChoice(selectionIds: selection)
-                                await service.resumeToolContinuation(from: result)
+                                // TODO: Emit event instead
+                                // let result = coordinator.resolveChoice(selectionIds: selection)
+                                // await service.resumeToolContinuation(from: result)
                             }
                         },
                         onCancel: {
                             Task {
-                                let result = coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt")
-                                await service.resumeToolContinuation(from: result)
+                                // TODO: Emit event instead
+                                // let result = coordinator.cancelChoicePrompt(reason: "User dismissed choice prompt")
+                                // await service.resumeToolContinuation(from: result)
                             }
                         }
                     )
@@ -65,13 +67,15 @@ struct OnboardingInterviewToolPane: View {
                                         changes: nil,
                                         notes: notes
                                     )
-                                    await service.resumeToolContinuation(from: result)
+                                    // TODO: Emit event instead
+                                    // await service.resumeToolContinuation(from: result)
                                 }
                             },
                             onCancel: {
                                 Task {
-                                    let result = coordinator.cancelValidation(reason: "User cancelled validation review")
-                                    await service.resumeToolContinuation(from: result)
+                                    // TODO: Emit event instead
+                                    // let result = coordinator.cancelValidation(reason: "User cancelled validation review")
+                                    // await service.resumeToolContinuation(from: result)
                                 }
                             }
                         )
@@ -81,14 +85,15 @@ struct OnboardingInterviewToolPane: View {
                         request: phaseAdvanceRequest,
                         onSubmit: { decision, feedback in
                             Task {
-                                switch decision {
-                                case .approved:
-                                    await service.approvePhaseAdvanceRequest()
-                                case .denied:
-                                    await service.denyPhaseAdvanceRequest(feedback: nil)
-                                case .deniedWithFeedback:
-                                    await service.denyPhaseAdvanceRequest(feedback: feedback)
-                                }
+                                // TODO: Emit event instead
+                                // switch decision {
+                                // case .approved:
+                                //     await service.approvePhaseAdvanceRequest()
+                                // case .denied:
+                                //     await service.denyPhaseAdvanceRequest(feedback: nil)
+                                // case .deniedWithFeedback:
+                                //     await service.denyPhaseAdvanceRequest(feedback: feedback)
+                                // }
                             }
                         },
                         onCancel: nil
@@ -98,10 +103,16 @@ struct OnboardingInterviewToolPane: View {
                         request: profileRequest,
                         fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
                         onConfirm: { draft in
-                            Task { await service.resolveApplicantProfile(with: draft) }
+                            Task {
+                                // TODO: Emit event instead
+                                // await service.resolveApplicantProfile(with: draft)
+                            }
                         },
                         onCancel: {
-                            Task { await service.rejectApplicantProfile(reason: "User cancelled applicant profile validation") }
+                            Task {
+                                // TODO: Emit event instead
+                                // await service.rejectApplicantProfile(reason: "User cancelled applicant profile validation")
+                            }
                         }
                     )
                 } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
@@ -110,14 +121,16 @@ struct OnboardingInterviewToolPane: View {
                         existingDraft: experienceDefaultsStore.loadDraft(),
                         onConfirm: { enabled in
                             Task {
-                                let result = coordinator.resolveSectionToggle(enabled: enabled)
-                                await service.resumeToolContinuation(from: result, waitingState: .set(nil), persistCheckpoint: true)
+                                // TODO: Emit event instead
+                                // let result = coordinator.resolveSectionToggle(enabled: enabled)
+                                // await service.resumeToolContinuation(from: result, waitingState: .set(nil), persistCheckpoint: true)
                             }
                         },
                         onCancel: {
                             Task {
-                                let result = coordinator.rejectSectionToggle(reason: "User cancelled section toggle")
-                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                                // TODO: Emit event instead
+                                // let result = coordinator.rejectSectionToggle(reason: "User cancelled section toggle")
+                                // await service.resumeToolContinuation(from: result, waitingState: .set(nil))
                             }
                         }
                     )
@@ -133,21 +146,22 @@ struct OnboardingInterviewToolPane: View {
             if let extraction = service.pendingExtraction {
                 ExtractionProgressOverlay(
                     items: extraction.progressItems,
-                    statusText: coordinator.pendingStreamingStatus
+                    statusText: nil // TODO: Get from event-driven state
                 )
                 .transition(.opacity.combined(with: .scale))
                 .zIndex(1)
             } else if showSpinner {
                 VStack(spacing: 12) {
                     AnimatedThinkingText()
-                    if let status = coordinator.pendingStreamingStatus?.trimmingCharacters(in: .whitespacesAndNewlines),
-                       !status.isEmpty {
-                        Text(status)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .transition(.opacity)
-                    }
+                    // TODO: Get from event-driven state
+                    // if let status = coordinator.pendingStreamingStatus?.trimmingCharacters(in: .whitespacesAndNewlines),
+                    //    !status.isEmpty {
+                    //     Text(status)
+                    //         .font(.footnote)
+                    //         .foregroundStyle(.secondary)
+                    //         .multilineTextAlignment(.center)
+                    //         .transition(.opacity)
+                    // }
                 }
                 .padding(.vertical, 24)
                 .padding(.horizontal, 24)
@@ -181,29 +195,32 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func summaryContent() -> some View {
-        let applicantProfileStatus = coordinator.objectiveStatuses["applicant_profile"]
-        let applicantProfileReady = applicantProfileStatus == .completed || applicantProfileStatus == .skipped
-
-        if coordinator.wizardStep == .wrapUp {
-            WrapUpSummaryView(
-                artifacts: service.artifacts,
-                schemaIssues: service.schemaIssues
-            )
-        } else if coordinator.wizardStep == .resumeIntake,
-                  let profile = service.applicantProfileJSON,
-                  applicantProfileReady {
-            ApplicantProfileSummaryCard(
-                profile: profile,
-                imageData: applicantProfileStore.currentProfile().pictureData
-            )
-        } else if coordinator.wizardStep == .artifactDiscovery, let timeline = service.skeletonTimelineJSON {
-            TimelineCardEditorView(service: service, timeline: timeline)
-        } else if coordinator.wizardStep == .artifactDiscovery,
-                  !service.artifacts.enabledSections.isEmpty {
-            EnabledSectionsSummaryCard(sections: service.artifacts.enabledSections)
-        } else {
+        // TODO: Reimplement using event-driven architecture
+        // let applicantProfileStatus = coordinator.objectiveStatuses["applicant_profile"]
+        // let applicantProfileReady = applicantProfileStatus == .completed || applicantProfileStatus == .skipped
+        //
+        // if coordinator.wizardStep == .wrapUp {
+        //     WrapUpSummaryView(
+        //         artifacts: service.artifacts,
+        //         schemaIssues: [] // TODO: Get from event-driven state
+        //     )
+        // } else if coordinator.wizardStep == .resumeIntake,
+        //           // let profile = service.applicantProfileJSON,
+        //           applicantProfileReady {
+        //     // TODO: Get from event-driven state
+        //     // ApplicantProfileSummaryCard(
+        //     //     profile: profile,
+        //     //     imageData: applicantProfileStore.currentProfile().pictureData
+        //     // )
+        // } else if coordinator.wizardStep == .artifactDiscovery { // let timeline = service.skeletonTimelineJSON {
+        //     // TODO: Get from event-driven state
+        //     // TimelineCardEditorView(service: service, timeline: timeline)
+        // } else if coordinator.wizardStep == .artifactDiscovery,
+        //           !service.artifacts.enabledSections.isEmpty {
+        //     EnabledSectionsSummaryCard(sections: service.artifacts.enabledSections)
+        // } else {
             Spacer()
-        }
+        // }
     }
 
     @ViewBuilder
@@ -217,13 +234,15 @@ struct OnboardingInterviewToolPane: View {
                         onDropFiles: { urls in
                             Task {
                                 let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
-                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                                // TODO: Emit event instead
+                                // await service.resumeToolContinuation(from: result, waitingState: .set(nil))
                             }
                         },
                         onDecline: {
                             Task {
                                 let result = await coordinator.skipUpload(id: request.id)
-                                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                                // TODO: Emit event instead
+                                // await service.resumeToolContinuation(from: result, waitingState: .set(nil))
                             }
                         }
                     )
@@ -284,8 +303,9 @@ struct OnboardingInterviewToolPane: View {
                 urls = Array(panel.urls.prefix(1))
             }
             Task {
-                let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
-                await service.resumeToolContinuation(from: result, waitingState: .set(nil))
+                // TODO: Emit event instead
+                // let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
+                // await service.resumeToolContinuation(from: result, waitingState: .set(nil))
             }
         }
     }
@@ -344,18 +364,22 @@ struct OnboardingInterviewToolPane: View {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        switch coordinator.wizardStep {
-        case .wrapUp:
-            return true
-        case .resumeIntake:
-            return service.applicantProfileJSON != nil
-        case .artifactDiscovery:
-            if service.skeletonTimelineJSON != nil { return true }
-            if !service.artifacts.enabledSections.isEmpty { return true }
-            return false
-        case .writingCorpus, .introduction:
-            return false
-        }
+        // TODO: Reimplement using event-driven architecture
+        return false
+        // switch coordinator.wizardStep {
+        // case .wrapUp:
+        //     return true
+        // case .resumeIntake:
+        //     // TODO: Get from event-driven state
+        //     return false // service.applicantProfileJSON != nil
+        // case .artifactDiscovery:
+        //     // TODO: Get from event-driven state
+        //     // if service.skeletonTimelineJSON != nil { return true }
+        //     if !service.artifacts.enabledSections.isEmpty { return true }
+        //     return false
+        // case .writingCorpus, .introduction:
+        //     return false
+        // }
     }
 }
 
@@ -436,30 +460,32 @@ private struct KnowledgeCardValidationHost: View {
             artifacts: artifactRecords,
             onApprove: { approved in
                 Task {
-                    let result = coordinator.submitValidationResponse(
-                        status: "approved",
-                        updatedData: approved.toJSON(),
-                        changes: nil,
-                        notes: nil
-                    )
-                    await service.resumeToolContinuation(from: result)
+                    // TODO: Emit event instead
+                    // let result = coordinator.submitValidationResponse(
+                    //     status: "approved",
+                    //     updatedData: approved.toJSON(),
+                    //     changes: nil,
+                    //     notes: nil
+                    // )
+                    // await service.resumeToolContinuation(from: result)
                 }
             },
             onReject: { rejectedIds, reason in
                 Task {
-                    var changePayload: JSON?
-                    if !rejectedIds.isEmpty {
-                        var details = JSON()
-                        details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
-                        changePayload = details
-                    }
-                    let result = coordinator.submitValidationResponse(
-                        status: "rejected",
-                        updatedData: nil,
-                        changes: changePayload,
-                        notes: reason.isEmpty ? nil : reason
-                    )
-                    await service.resumeToolContinuation(from: result)
+                    // TODO: Emit event instead
+                    // var changePayload: JSON?
+                    // if !rejectedIds.isEmpty {
+                    //     var details = JSON()
+                    //     details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
+                    //     changePayload = details
+                    // }
+                    // let result = coordinator.submitValidationResponse(
+                    //     status: "rejected",
+                    //     updatedData: nil,
+                    //     changes: changePayload,
+                    //     notes: reason.isEmpty ? nil : reason
+                    // )
+                    // await service.resumeToolContinuation(from: result)
                 }
             }
         )

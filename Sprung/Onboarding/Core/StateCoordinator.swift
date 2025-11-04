@@ -3,7 +3,12 @@ import SwiftyJSON
 
 /// Single source of truth for ALL onboarding state.
 /// This replaces InterviewSession, InterviewState, objective ledgers, and all distributed state.
-actor OnboardingState {
+actor StateCoordinator: OnboardingEventEmitter {
+    // MARK: - Event System
+
+    let eventBus: EventCoordinator
+    private var subscriptionTask: Task<Void, Never>?
+
     // MARK: - Core Interview State
 
     private(set) var phase: InterviewPhase = .phase1CoreFacts
@@ -91,8 +96,9 @@ actor OnboardingState {
 
     // MARK: - Initialization
 
-    init() {
-        Logger.info("🎯 OnboardingState initialized - single source of truth", category: .ai)
+    init(eventBus: EventCoordinator) {
+        self.eventBus = eventBus
+        Logger.info("🎯 StateCoordinator initialized - single source of truth", category: .ai)
         // Register initial objectives directly (can't call actor-isolated method from init)
         let descriptors = Self.objectivesForPhase(phase)
         for descriptor in descriptors {
@@ -100,7 +106,9 @@ actor OnboardingState {
                 id: descriptor.id,
                 label: descriptor.label,
                 status: .pending,
+                phase: phase,
                 source: "initial",
+                completedAt: nil,
                 notes: nil
             )
         }
@@ -165,7 +173,7 @@ actor OnboardingState {
             nextPhase = .phase2DeepDive
         case .phase2DeepDive:
             nextPhase = .phase3WritingCorpus
-        case .phase3WritingCorpus:
+        case .phase3WritingCorpus, .complete:
             return nil // Already at final phase
         }
 
@@ -183,6 +191,8 @@ actor OnboardingState {
             requiredObjectives = ["interviewed_one_experience", "one_card_generated"]
         case .phase3WritingCorpus:
             requiredObjectives = ["one_writing_sample", "dossier_complete"]
+        case .complete:
+            requiredObjectives = []
         }
 
         return requiredObjectives.allSatisfy { objectiveId in
@@ -268,6 +278,8 @@ actor OnboardingState {
             requiredForPhase = ["interviewed_one_experience", "one_card_generated"]
         case .phase3WritingCorpus:
             requiredForPhase = ["one_writing_sample", "dossier_complete"]
+        case .complete:
+            requiredForPhase = []
         }
 
         return requiredForPhase.filter { id in
@@ -353,7 +365,6 @@ actor OnboardingState {
             role: .assistant,
             text: initialText,
             timestamp: Date(),
-            isStreaming: true,
             showReasoningPlaceholder: reasoningExpected
         )
         messages.append(message)
@@ -375,7 +386,6 @@ actor OnboardingState {
 
         if let index = messages.firstIndex(where: { $0.id == id }) {
             messages[index].text = finalText
-            messages[index].isStreaming = false
             messages[index].showReasoningPlaceholder = false
         }
     }
@@ -487,7 +497,7 @@ actor OnboardingState {
         currentWizardStep = .resumeIntake
         completedWizardSteps.removeAll()
 
-        Logger.info("🔄 OnboardingState reset to clean state", category: .ai)
+        Logger.info("🔄 StateCoordinator reset to clean state", category: .ai)
     }
 
     // MARK: - Snapshot for Persistence
@@ -538,5 +548,181 @@ actor OnboardingState {
         completedWizardSteps = Set(snapshot.completedWizardSteps.compactMap { WizardStep(rawValue: $0) })
 
         Logger.info("📥 State restored from snapshot", category: .ai)
+    }
+
+    // MARK: - Event Subscription Setup
+
+    /// Start listening to relevant events
+    func startEventSubscriptions() {
+        subscriptionTask?.cancel()
+
+        subscriptionTask = Task { [weak self] in
+            guard let self else { return }
+
+            await withTaskGroup(of: Void.self) { group in
+                // Subscribe to State topic for state updates
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .state) {
+                        await self.handleStateEvent(event)
+                    }
+                }
+
+                // Subscribe to LLM topic for message tracking
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .llm) {
+                        await self.handleLLMEvent(event)
+                    }
+                }
+
+                // Subscribe to Objective topic
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .objective) {
+                        await self.handleObjectiveEvent(event)
+                    }
+                }
+
+                // Subscribe to Phase topic
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .phase) {
+                        await self.handlePhaseEvent(event)
+                    }
+                }
+            }
+        }
+
+        Logger.info("📡 StateCoordinator subscribed to event streams", category: .ai)
+    }
+
+    // MARK: - Event Handlers
+
+    private func handleStateEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .stateSet(let partialUpdate):
+            // Apply partial state update
+            await applyPartialUpdate(partialUpdate)
+
+        case .checkpointRequested:
+            // Emit state snapshot for checkpointing
+            await emitSnapshot(reason: "checkpoint")
+
+        default:
+            break
+        }
+    }
+
+    private func handleLLMEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .llmUserMessageSent(let messageId, _):
+            // Track message for state
+            Logger.debug("StateCoordinator tracking user message: \(messageId)", category: .ai)
+
+        case .llmSentToolResponseMessage(let messageId, _):
+            // Track tool response
+            Logger.debug("StateCoordinator tracking tool response: \(messageId)", category: .ai)
+
+        default:
+            break
+        }
+    }
+
+    private func handleObjectiveEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .objectiveStatusRequested(let id, let response):
+            // Respond with current objective status
+            let status = objectives[id]?.status.rawValue
+            response(status)
+
+        default:
+            break
+        }
+    }
+
+    private func handlePhaseEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .phaseTransitionRequested(let from, let to, let reason):
+            // Validate and apply phase transition
+            if from == phase.rawValue {
+                if let newPhase = InterviewPhase(rawValue: to) {
+                    setPhase(newPhase)
+                    // Emit confirmation
+                    await emit(.phaseTransitionApplied(phase: newPhase.rawValue, timestamp: Date()))
+                    // Emit updated allowed tools
+                    await emitAllowedTools()
+                }
+            }
+
+        default:
+            break
+        }
+    }
+
+    // MARK: - Event Publications
+
+    /// Apply partial state update from event
+    private func applyPartialUpdate(_ update: JSON) async {
+        // TODO: Implement partial state updates based on JSON
+        Logger.debug("Applying partial state update", category: .ai)
+    }
+
+    /// Emit state snapshot
+    private func emitSnapshot(reason: String) async {
+        let snapshot = createSnapshot()
+        var snapshotJSON = JSON()
+
+        // Convert snapshot to JSON (simplified for now)
+        snapshotJSON["phase"].string = snapshot.phase.rawValue
+        snapshotJSON["wizardStep"].string = snapshot.wizardStep
+
+        let updatedKeys = ["phase", "wizardStep", "objectives"]
+        await emit(.stateSnapshot(updatedKeys: updatedKeys, snapshot: snapshotJSON))
+    }
+
+    /// Get allowed tools for the current phase
+    private func getAllowedToolsForCurrentPhase() -> Set<String> {
+        // TODO: Get from phase configuration
+        // For now, return a basic set based on phase
+        switch phase {
+        case .phase1CoreFacts:
+            return ["get_user_option", "get_applicant_profile", "get_user_upload", "extract_document", "submit_for_validation"]
+        case .phase2DeepDive:
+            return ["get_user_option", "generate_knowledge_card", "get_user_upload"]
+        case .phase3WritingCorpus:
+            return ["get_user_option", "get_user_upload", "submit_for_validation"]
+        case .complete:
+            return []
+        }
+    }
+
+    /// Emit allowed tools when phase changes
+    private func emitAllowedTools() async {
+        let tools = getAllowedToolsForCurrentPhase()
+        await emit(.stateAllowedToolsUpdated(tools: tools))
+    }
+
+    /// When objectives change, emit update
+    func updateObjectiveStatus(_ id: String, status: ObjectiveStatus, source: String = "system") async {
+        guard var objective = objectives[id] else {
+            Logger.warning("Objective not found: \(id)", category: .ai)
+            return
+        }
+
+        let oldStatus = objective.status
+        objective.status = status
+        objective.source = source
+
+        if status == .completed {
+            objective.completedAt = Date()
+        }
+
+        objectives[id] = objective
+
+        // Emit event
+        await emit(.objectiveStatusChanged(
+            id: id,
+            status: status.rawValue,
+            phase: phase.rawValue
+        ))
+
+        Logger.info("📊 Objective \(id): \(oldStatus.rawValue) → \(status.rawValue)", category: .ai)
     }
 }

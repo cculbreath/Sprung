@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 struct OnboardingInterviewInteractiveCard: View {
     @Bindable var service: OnboardingInterviewService
     @Bindable var coordinator: OnboardingInterviewCoordinator
-    @Bindable var router: OnboardingToolRouter
+    @Bindable var router: ToolHandler
     @Bindable var state: OnboardingInterviewViewModel
     let modelStatusDescription: String
     let onOpenSettings: () -> Void

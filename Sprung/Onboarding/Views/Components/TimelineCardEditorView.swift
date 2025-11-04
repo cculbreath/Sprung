@@ -124,9 +124,10 @@ struct TimelineCardEditorView: View {
         errorMessage = nil
 
         Task {
-            let updatedTimeline = await service.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
+            // TODO: Emit event instead
+            // let updatedTimeline = await service.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
             await MainActor.run {
-                load(from: updatedTimeline)
+                // load(from: updatedTimeline)
                 isSaving = false
             }
         }

@@ -170,10 +170,13 @@ final class AppDependencies {
         )
         self.resumeReviseViewModel = resumeReviseViewModel
 
+        let interviewDataStore = InterviewDataStore()
         let onboardingInterviewService = OnboardingInterviewService(
+            modelContext: modelContext,
             openAIService: onboardingOpenAIService,
+            documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
-            documentExtractionService: documentExtractionService
+            dataStore: interviewDataStore
         )
         self.onboardingInterviewService = onboardingInterviewService
 

@@ -40,7 +40,10 @@ struct OnboardingInterviewChatPanel: View {
                 ModelAvailabilityBanner(
                     text: alert,
                     onOpenSettings: onOpenSettings,
-                    onDismiss: { service.clearModelAvailabilityMessage() }
+                    onDismiss: {
+                        // TODO: Emit event instead
+                        // service.clearModelAvailabilityMessage()
+                    }
                 )
                 .padding(.horizontal, horizontalPadding)
                 .padding(.top, topPadding)
@@ -54,40 +57,42 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.top, bannerVisible ? 8 : topPadding)
             .padding(.horizontal, horizontalPadding)
 
-            if !service.nextQuestions.isEmpty {
-                Divider()
-                    .padding(.top, sectionSpacing)
-                    .padding(.horizontal, horizontalPadding)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(service.nextQuestions) { question in
-                            Button(action: { send(question.text) }) {
-                                Text(question.text)
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 12)
-                                    .background(Color.accentColor.opacity(0.15))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 12)
-                }
-                .padding(.horizontal, horizontalPadding)
-            }
+            // TODO: Get nextQuestions from event-driven state
+            // if !service.nextQuestions.isEmpty {
+            //     Divider()
+            //         .padding(.top, sectionSpacing)
+            //         .padding(.horizontal, horizontalPadding)
+            //
+            //     ScrollView(.horizontal, showsIndicators: false) {
+            //         HStack(spacing: 8) {
+            //             ForEach(service.nextQuestions) { question in
+            //                 Button(action: { send(question.text) }) {
+            //                     Text(question.text)
+            //                         .padding(.vertical, 6)
+            //                         .padding(.horizontal, 12)
+            //                         .background(Color.accentColor.opacity(0.15))
+            //                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            //                 }
+            //                 .buttonStyle(.plain)
+            //             }
+            //         }
+            //         .padding(.vertical, 12)
+            //         .padding(.horizontal, 12)
+            //     }
+            //     .padding(.horizontal, horizontalPadding)
+            // }
 
             Divider()
                 .padding(.top, sectionSpacing)
                 .padding(.horizontal, horizontalPadding)
 
-            if let text = coordinator.latestReasoningSummary, !text.isEmpty {
-                ReasoningStatusBar(text: text)
-                    .padding(.horizontal, horizontalPadding)
-                    .padding(.top, 12)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
+            // TODO: Get from event-driven state
+            // if let text = coordinator.latestReasoningSummary, !text.isEmpty {
+            //     ReasoningStatusBar(text: text)
+            //         .padding(.horizontal, horizontalPadding)
+            //         .padding(.top, 12)
+            //         .transition(.opacity.combined(with: .move(edge: .bottom)))
+            // }
 
             HStack(alignment: .bottom, spacing: 12) {
                 ChatComposerTextView(
@@ -142,7 +147,7 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.bottom, bottomPadding)
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
+        // .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
         .animation(.easeInOut(duration: 0.2), value: service.modelAvailabilityMessage)
         .alert("Export Failed", isPresented: Binding(
             get: { exportErrorMessage != nil },
@@ -249,7 +254,9 @@ struct OnboardingInterviewChatPanel: View {
         guard !trimmed.isEmpty else { return }
         state.shouldAutoScroll = true
         state.userInput = ""
-        Task { await service.sendMessage(trimmed) }
+        Task {
+            await coordinator.sendChatMessage(trimmed)
+        }
     }
 
     private func scrollToLatestMessage(_ proxy: ScrollViewProxy) {
@@ -266,7 +273,8 @@ private func exportTranscript() {
 
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            let transcript = service.transcriptExportText()
+            // TODO: Get transcript from event-driven state
+            let transcript = "" // service.transcriptExportText()
             do {
                 try transcript.write(to: url, atomically: true, encoding: .utf8)
                 Logger.info("📝 Transcript exported to \(url.path)", category: .ai)
