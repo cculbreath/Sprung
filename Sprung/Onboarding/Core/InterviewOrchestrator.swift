@@ -40,7 +40,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     init(
         service: OpenAIService,
         systemPrompt: String,
-        eventBus: EventCoordinator
+        eventBus: EventCoordinator,
+        toolRegistry: ToolRegistry
     ) {
         self.service = service
         self.systemPrompt = systemPrompt
@@ -50,7 +51,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             service: service,
             systemPrompt: systemPrompt,
             eventBus: eventBus,
-            networkRouter: networkRouter
+            networkRouter: networkRouter,
+            toolRegistry: toolRegistry
         )
         Logger.info("🎯 InterviewOrchestrator initialized with LLMMessenger", category: .ai)
     }
