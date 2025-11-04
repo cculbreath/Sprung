@@ -15,6 +15,7 @@ final class OnboardingInterviewCoordinator {
     private let eventBus: EventCoordinator
     private let chatTranscriptStore: ChatTranscriptStore
     private let chatboxHandler: ChatboxHandler
+    private let toolExecutionCoordinator: ToolExecutionCoordinator
     let toolRouter: ToolHandler
     let wizardTracker: WizardProgressTracker
     let phaseRegistry: PhaseScriptRegistry
@@ -173,6 +174,14 @@ final class OnboardingInterviewCoordinator {
             transcriptStore: chatTranscriptStore
         )
 
+        self.toolRegistry = ToolRegistry()
+        self.toolExecutor = ToolExecutor(registry: toolRegistry)
+        self.toolExecutionCoordinator = ToolExecutionCoordinator(
+            eventBus: eventBus,
+            toolExecutor: toolExecutor,
+            stateCoordinator: state
+        )
+
         // Create handlers for tool router
         let promptHandler = PromptInteractionHandler()
 
@@ -199,8 +208,6 @@ final class OnboardingInterviewCoordinator {
         )
         self.wizardTracker = WizardProgressTracker()
         self.phaseRegistry = PhaseScriptRegistry()
-        self.toolRegistry = ToolRegistry()
-        self.toolExecutor = ToolExecutor(registry: toolRegistry)
 
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
 
@@ -297,15 +304,24 @@ final class OnboardingInterviewCoordinator {
             await saveCheckpoint()
 
         case .toolCallRequested(let call):
-            await processToolCall(call)
+            // Tool execution now handled by ToolExecutionCoordinator
+            break
 
         case .toolCallCompleted(let id, let result):
             // Tool completion is handled by toolContinuationNeeded
             break
 
-        case .toolContinuationNeeded(let id, let toolName):
-            // This will be connected to the tool router
-            break
+        case .toolContinuationNeeded(let continuationId, let toolName):
+            // Track continuation for UI resume methods
+            // Note: callId is not available here, stored by ToolExecutionCoordinator
+            toolQueueEntries[continuationId] = ToolQueueEntry(
+                tokenId: continuationId,
+                callId: "", // CallId managed by ToolExecutionCoordinator
+                toolName: toolName,
+                status: "waiting",
+                requestedInput: "{}",
+                enqueuedAt: Date()
+            )
 
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
@@ -387,6 +403,7 @@ final class OnboardingInterviewCoordinator {
 
         // Start event subscriptions for handlers
         await chatboxHandler.startEventSubscriptions()
+        await toolExecutionCoordinator.startEventSubscriptions()
         await state.startEventSubscriptions()
 
         Task {
@@ -767,12 +784,12 @@ final class OnboardingInterviewCoordinator {
             return
         }
 
-        Logger.info("✅ Tool \(entry.toolName) completed", category: .ai)
+        Logger.info("✅ Tool \(entry.toolName) resuming", category: .ai)
 
         do {
-            _ = try await toolExecutor.resumeContinuation(
+            try await toolExecutionCoordinator.resumeToolContinuation(
                 id: id,
-                with: payload
+                userInput: payload
             )
         } catch {
             Logger.error("Failed to resume tool: \(error)", category: .ai)

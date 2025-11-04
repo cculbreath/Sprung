@@ -688,7 +688,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     /// Get allowed tools for the current phase
-    private func getAllowedToolsForCurrentPhase() -> Set<String> {
+    func getAllowedToolsForCurrentPhase() -> Set<String> {
         // TODO: Get from phase configuration
         // For now, return a basic set based on phase
         switch phase {
