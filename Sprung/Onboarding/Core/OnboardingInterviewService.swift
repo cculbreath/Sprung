@@ -127,43 +127,6 @@ final class OnboardingInterviewService {
         await coordinator.endInterview()
     }
 
-    // MARK: - Tool UI Presentation (for Tool Implementations)
-
-    /// Present a choice prompt card (used by get_user_option tool)
-    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt, continuationId: UUID) {
-        coordinator.toolRouter.presentChoicePrompt(prompt, continuationId: continuationId)
-    }
-
-    /// Clear a choice prompt card
-    func clearChoicePrompt(continuationId: UUID) {
-        coordinator.toolRouter.clearChoicePrompt(continuationId: continuationId)
-    }
-
-    /// Present a validation prompt card (used by submit_for_validation tool)
-    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt, continuationId: UUID) {
-        coordinator.toolRouter.presentValidationPrompt(prompt, continuationId: continuationId)
-    }
-
-    /// Clear a validation prompt card
-    func clearValidationPrompt(continuationId: UUID) {
-        coordinator.toolRouter.clearValidationPrompt(continuationId: continuationId)
-    }
-
-    /// Present an upload request (used by get_user_upload tool)
-    func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
-        coordinator.toolRouter.presentUploadRequest(request, continuationId: continuationId)
-    }
-
-    /// Present applicant profile intake (used by get_applicant_profile tool)
-    func presentApplicantProfileIntake(continuationId: UUID) {
-        coordinator.toolRouter.presentApplicantProfileIntake(continuationId: continuationId)
-    }
-
-    /// Clear applicant profile intake
-    func clearApplicantProfileIntake() {
-        coordinator.toolRouter.clearApplicantProfileIntake()
-    }
-
     func hasCheckpoint() -> Bool {
         coordinator.checkpoints.hasCheckpoint()
     }
