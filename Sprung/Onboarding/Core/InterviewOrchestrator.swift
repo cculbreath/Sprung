@@ -22,14 +22,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     private let service: OpenAIService
     private let systemPrompt: String
 
-    // Tool execution tracking (continuations)
-    private var continuationCallIds: [UUID: String] = [:]
-    private var continuationToolNames: [UUID: String] = [:]
-
-    // Cached data for quick reference (TODO: Move to StateCoordinator)
-    private var applicantProfileData: JSON?
-    private var skeletonTimelineData: JSON?
-
     // Tool choice override for forcing specific tools (TODO: Move to LLMMessenger)
     private var nextToolChoiceOverride: ToolChoiceOverride?
 
@@ -71,7 +63,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
 
         // Start event subscriptions
         await llmMessenger.startEventSubscriptions()
-        startToolSubscription()
+        // Note: Tool subscription now handled by ToolExecutionCoordinator
 
         await emit(.processingStateChanged(true))
 
@@ -86,8 +78,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         Task {
             await llmMessenger.deactivate()
         }
-        continuationCallIds.removeAll()
-        continuationToolNames.removeAll()
     }
 
     func sendUserMessage(_ text: String) async throws {
@@ -104,65 +94,14 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     // MARK: - Tool Continuation
 
     func resumeToolContinuation(id: UUID, payload: JSON) async throws {
-        await emit(.processingStateChanged(true))
-
-        // Clear waiting state
-        await emit(.waitingStateChanged(nil))
-
-        // Get the call ID for this continuation
-        guard let callId = continuationCallIds.removeValue(forKey: id) else {
-            Logger.warning("No continuation found for id: \(id)", category: .ai)
-            return
-        }
-
-        // Emit tool response event (§4.3)
-        var responsePayload = JSON()
-        responsePayload["callId"].string = callId
-        responsePayload["output"] = payload
-        await emit(.llmToolResponseMessage(payload: responsePayload))
+        // Note: This method is deprecated - tool continuations now handled by ToolExecutionCoordinator
+        // Kept for compatibility during migration
+        Logger.warning("InterviewOrchestrator.resumeToolContinuation is deprecated", category: .ai)
     }
 
     // MARK: - Tool Continuation Management
-    // Note: Request building moved to LLMMessenger (§4.3)
+    // Note: Tool execution and continuation management moved to ToolExecutionCoordinator (§4.6)
     // TODO: Move tool choice override and available tools logic to StateCoordinator/LLMMessenger
-
-    /// Subscribe to tool call events and manage continuations
-    func startToolSubscription() {
-        Task {
-            for await event in await eventBus.stream(topic: .tool) {
-                if case .toolCallRequested(let call) = event {
-                    await handleToolCall(call)
-                }
-            }
-        }
-    }
-
-    private func handleToolCall(_ call: ToolCall) async {
-        // Set waiting state based on tool
-        let waitingState = waitingStateForTool(call.name)
-        await emit(.waitingStateChanged(waitingState))
-
-        // Store continuation info
-        let continuationId = UUID()
-        continuationCallIds[continuationId] = call.callId
-        continuationToolNames[continuationId] = call.name
-        await emit(.toolContinuationNeeded(id: continuationId, toolName: call.name))
-    }
-
-    private func waitingStateForTool(_ toolName: String) -> String? {
-        switch toolName {
-        case "get_user_option":
-            return "selection"
-        case "get_user_upload":
-            return "upload"
-        case "submit_for_validation":
-            return "validation"
-        case "extract_document":
-            return "extraction"
-        default:
-            return nil
-        }
-    }
 
     // MARK: - Special Tool Handling
 
