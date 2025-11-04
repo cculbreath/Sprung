@@ -195,35 +195,42 @@
 ---
 
 ### 3.4 Artifact Handler (§4.8)
-- [ ] Create Artifact Handler
-- [ ] **Subscriptions:**
-  - [ ] `Artifact.get(id)`
-  - [ ] `Artifact.new(payload)`
-- [ ] **Publications:**
-  - [ ] `Artifact.added`
-  - [ ] `Artifact.updated`
-- [ ] Delegate to DocumentExtractionService
-- [ ] Manage artifact store integration
+- [x] Create Artifact Handler ✅
+- [x] **Subscriptions:** ✅
+  - [x] `.artifactNewRequested(fileURL, kind, performExtraction)`
+- [x] **Publications:** ✅
+  - [x] `.artifactAdded(id, kind)`
+  - [x] `.artifactUpdated(id, extractedText)`
+- [x] Delegate to DocumentExtractionService ✅
+- [x] Use existing OnboardingArtifactStore (avoided duplication) ✅
 
-**Status:** Not started
+**Status:** ✅ **COMPLETE**
+**File:** `Sprung/Onboarding/Handlers/ArtifactHandler.swift`
+**Integration:** Standalone actor, ready for extract_document tool migration
 
 ---
 
-## 🔧 Phase 4: Tool Event Migration (NOT STARTED)
+## ✅ Phase 3: Tool & UI Infrastructure **COMPLETE**
+
+All Phase 3 components are now implemented and working with event-driven architecture!
+
+---
+
+## 🔧 Phase 4: Tool Event Migration (PARTIALLY COMPLETE)
 
 ### 4.1 Core Tools Migration
-Update tools to emit events instead of immediate responses:
+Event-driven UI presentation now working for:
 
-- [ ] **get_user_choice** → `Toolpane.cards.choiceForm.show`
-- [ ] **get_applicant_profile** → profile intake flow events
-- [ ] **get_user_upload** → upload request events
-- [ ] **extract_document** → extraction progress events
-- [ ] **submit_for_validation** → validation review events
-- [ ] **persist_data** → artifact events
-- [ ] **set_objective_status** → objective ledger events
-- [ ] **next_phase** → phase transition events
+- [x] **get_user_option** (get_user_choice) → `.choicePromptRequested` ✅
+- [x] **get_applicant_profile** → `.applicantProfileIntakeRequested` ✅
+- [x] **get_user_upload** → `.uploadRequestPresented` ✅
+- [x] **submit_for_validation** → `.validationPromptRequested` ✅
+- [ ] **extract_document** → needs ArtifactHandler integration
+- [ ] **persist_data** → needs artifact events
+- [ ] **set_objective_status** → needs objective ledger events
+- [ ] **next_phase** → needs phase transition events
 
-**Current Status:** All tools return `ToolResult.immediate(placeholder)` with TODO comments
+**Current Status:** UI tools complete, data/state tools remain
 
 ---
 
