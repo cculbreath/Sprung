@@ -55,6 +55,9 @@ protocol PhaseScript {
     /// Required objectives that must be completed before advancing.
     var requiredObjectives: [String] { get }
 
+    /// Tools that are allowed in this phase.
+    var allowedTools: [String] { get }
+
     /// Declarative workflows for objectives in this phase.
     var objectiveWorkflows: [String: ObjectiveWorkflow] { get }
 
