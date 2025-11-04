@@ -620,6 +620,16 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Track tool response
             Logger.debug("StateCoordinator tracking tool response: \(messageId)", category: .ai)
 
+        case .llmStatus(let status):
+            // Update processing state based on LLM status
+            switch status {
+            case .busy:
+                isProcessing = true
+            case .idle, .error:
+                isProcessing = false
+            }
+            Logger.debug("StateCoordinator processing state: \(isProcessing)", category: .ai)
+
         default:
             break
         }

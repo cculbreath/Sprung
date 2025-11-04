@@ -359,10 +359,10 @@ Update tools to emit events instead of immediate responses:
 
 ## ⚠️ Known Issues (Blocking UI Feedback)
 
-1. **Spinner/glow not working** → Needs ToolPane Handler + LLM.status events
-2. **Reasoning summaries not displaying** → Needs LLM Reasoning Handler
-3. **Timeline card tools not working** → Tools need to emit events
-4. **Phase transitions commented out** → Need event-driven implementation
+1. ~~**Spinner/glow not working**~~ → ✅ **FIXED**: LLM.status events wired to StateCoordinator → UI
+2. ~~**Reasoning summaries not displaying**~~ → ✅ **INFRASTRUCTURE READY**: LLM Reasoning Handler complete (waiting for API support)
+3. **Timeline card tools not working** → Tools need to emit events (Phase 4)
+4. **Phase transitions commented out** → Need event-driven implementation (Phase 4)
 
 ---
 

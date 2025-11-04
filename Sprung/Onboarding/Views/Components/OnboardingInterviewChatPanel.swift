@@ -126,7 +126,7 @@ struct OnboardingInterviewChatPanel: View {
                 .disabled(
                     state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                         !service.isActive ||
-                        service.isProcessing
+                        coordinator.isProcessingSync
                 )
             }
             .padding(.top, sectionSpacing)
@@ -174,7 +174,7 @@ struct OnboardingInterviewChatPanel: View {
         .textSelection(.enabled)
         .background(bubbleShape.fill(.thinMaterial))
         .clipShape(bubbleShape)
-        .modifier(ConditionalIntelligenceGlow(isActive: service.isProcessing, shape: bubbleShape))
+        .modifier(ConditionalIntelligenceGlow(isActive: coordinator.isProcessingSync, shape: bubbleShape))
         .overlay(alignment: .bottomTrailing) {
             scrollToLatestButton(proxy: proxy)
         }
@@ -183,7 +183,7 @@ struct OnboardingInterviewChatPanel: View {
         .onChange(of: coordinator.messages.count, initial: true) { _, newValue in
             handleMessageCountChange(newValue: newValue, proxy: proxy)
         }
-        .onChange(of: service.isProcessing, initial: false) { _, isProcessing in
+        .onChange(of: coordinator.isProcessingSync, initial: false) { _, isProcessing in
             guard isProcessing == false else { return }
             guard state.shouldAutoScroll else { return }
             scrollToLatestMessage(proxy)
@@ -249,7 +249,7 @@ struct OnboardingInterviewChatPanel: View {
     }
 
     private func send(_ text: String) {
-        guard service.isProcessing == false else { return }
+        guard coordinator.isProcessingSync == false else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         state.shouldAutoScroll = true
