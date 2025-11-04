@@ -152,17 +152,16 @@
 ---
 
 ### 3.2 ToolPane Handler (§4.7)
-- [ ] Create ToolPane Handler (separate from business logic)
-- [ ] **Subscriptions:**
-  - [ ] `Toolpane.show(card, init_params)`
-  - [ ] `Toolpane.hide(card)`
-  - [ ] `LLM.status`
-- [ ] **Publications:**
-  - [ ] `Toolpane.showing(card|none)`
-- [ ] Card lifecycle management (show/hide/transitions)
+- [x] Add service bridge methods for tool UI presentation ✅
+- [x] Enable GetUserOptionTool to present choice cards ✅
+- [ ] **TODO:** Migrate remaining tools (upload, validation, profile, etc.)
+- [ ] **Future:** Consider event-driven card coordination if needed
 
-**Status:** Not started
-**Fixes:** Spinner/glow indicators not working
+**Status:** ✅ Core mechanism working
+**Solution:** Tools call service bridge methods → service delegates to ToolHandler → UI observes
+**Architecture:** Using existing Observable pattern instead of pure events for UI cards
+**Reasoning:** Simpler and works well with SwiftUI's observation system
+**First Working Tool:** get_user_option now presents/clears UI cards correctly
 
 ---
 
