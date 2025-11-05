@@ -1,5 +1,6 @@
 import Foundation
 import SwiftyJSON
+import SwiftOpenAI
 
 /// Manages interview lifecycle: start/end, orchestrator setup, and event subscriptions.
 /// Extracted from OnboardingInterviewCoordinator to improve maintainability.
@@ -215,7 +216,8 @@ final class InterviewLifecycleController {
             service: service,
             systemPrompt: systemPrompt,
             eventBus: eventBus,
-            toolRegistry: toolRegistry
+            toolRegistry: toolRegistry,
+            state: state
         )
     }
 }

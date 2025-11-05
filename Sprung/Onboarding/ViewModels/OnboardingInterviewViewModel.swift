@@ -46,7 +46,7 @@ final class OnboardingInterviewViewModel {
         }
 
         Task {
-            if let coordinator = coordinator, await coordinator.isActive {
+            if let coordinator = coordinator, coordinator.isActiveSync {
                 await MainActor.run {
                     webSearchAllowed = coordinator.preferences.allowWebSearch
                     writingAnalysisAllowed = coordinator.preferences.allowWritingAnalysis
@@ -92,7 +92,7 @@ final class OnboardingInterviewViewModel {
     func syncConsentFromCoordinator(_ coordinator: OnboardingInterviewCoordinator?) {
         guard let coordinator = coordinator else { return }
         Task {
-            guard await coordinator.isActive else { return }
+            guard coordinator.isActiveSync else { return }
             await MainActor.run {
                 webSearchAllowed = coordinator.preferences.allowWebSearch
                 writingAnalysisAllowed = coordinator.preferences.allowWritingAnalysis

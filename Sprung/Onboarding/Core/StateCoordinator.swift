@@ -442,10 +442,10 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("🃏 Knowledge card added (total: \(artifacts.knowledgeCards.count))", category: .ai)
     }
 
-    func setKnowledgeCards(_ cards: [JSON]) {
+    func setKnowledgeCards(_ cards: [JSON]) async {
         artifacts.knowledgeCards = cards
         if !artifacts.knowledgeCards.isEmpty {
-            setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
+            await setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
         }
         Logger.info("🃏 Knowledge cards loaded (total: \(artifacts.knowledgeCards.count))", category: .ai)
     }
@@ -749,17 +749,17 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         case .applicantProfileStored(let profile):
             // Handle applicant profile storage via event
-            setApplicantProfile(profile)
+            await setApplicantProfile(profile)
             Logger.info("👤 Applicant profile stored via event", category: .ai)
 
         case .skeletonTimelineStored(let timeline):
             // Handle skeleton timeline storage via event
-            setSkeletonTimeline(timeline)
+            await setSkeletonTimeline(timeline)
             Logger.info("📅 Skeleton timeline stored via event", category: .ai)
 
         case .enabledSectionsUpdated(let sections):
             // Handle enabled sections update via event
-            setEnabledSections(sections)
+            await setEnabledSections(sections)
             Logger.info("📑 Enabled sections updated via event (\(sections.count) sections)", category: .ai)
 
         default:

@@ -142,23 +142,23 @@ struct OnboardingInterviewView: View {
                 applyPreferredModel(requestedId: newValue)
             }
             .onChange(of: defaultWebSearchAllowed) { _, newValue in
-                if !coordinator.isActive {
+                if !coordinator.isActiveSync {
                     uiState.webSearchAllowed = newValue
                     applyPreferredModel()
                 }
             }
             .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
-                if !coordinator.isActive {
+                if !coordinator.isActiveSync {
                     uiState.writingAnalysisAllowed = newValue
                 }
             }
             .onChange(of: coordinator.preferences.allowWebSearch) { _, newValue in
-                if coordinator.isActive {
+                if coordinator.isActiveSync {
                     uiState.webSearchAllowed = newValue
                 }
             }
             .onChange(of: coordinator.preferences.allowWritingAnalysis) { _, newValue in
-                if coordinator.isActive {
+                if coordinator.isActiveSync {
                     uiState.writingAnalysisAllowed = newValue
                 }
             }
@@ -409,7 +409,7 @@ private extension OnboardingInterviewView {
     func beginInterview() {
         let modelId = viewModel.currentModelId
         Task { @MainActor in
-            guard coordinator.isActive == false else { return }
+            guard interviewCoordinator.isActiveSync == false else { return }
             // TODO: Get from event-driven state
             let hasCheckpoint = false // await service.hasRestorableCheckpoint()
             if hasCheckpoint {

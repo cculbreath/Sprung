@@ -111,6 +111,10 @@ final class OnboardingInterviewCoordinator {
     var isProcessingSync: Bool { _isProcessingSync }
 
     @ObservationIgnored
+    private var _isActiveSync = false
+    var isActiveSync: Bool { _isActiveSync }
+
+    @ObservationIgnored
     private var _pendingExtractionSync: OnboardingPendingExtraction?
     var pendingExtractionSync: OnboardingPendingExtraction? { _pendingExtractionSync }
 
@@ -121,6 +125,10 @@ final class OnboardingInterviewCoordinator {
     @ObservationIgnored
     private var _artifactRecordsSync: [JSON] = []
     var artifactRecordsSync: [JSON] { _artifactRecordsSync }
+
+    @ObservationIgnored
+    private var _pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest?
+    var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest? { _pendingPhaseAdvanceRequestSync }
 
     // MARK: - UI State Properties (from ToolRouter)
 
@@ -327,7 +335,7 @@ final class OnboardingInterviewCoordinator {
             toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))
         }
 
-        Logger.info("✅ Registered \(toolRegistry.allToolNames.count) tools", category: .ai)
+        Logger.info("✅ Registered \(toolRegistry.allTools().count) tools", category: .ai)
     }
 
     // MARK: - Event Subscription
@@ -385,14 +393,14 @@ final class OnboardingInterviewCoordinator {
             await MainActor.run {
                 self.persistApplicantProfileToSwiftData(json: json)
             }
-            await saveCheckpoint()
+            await checkpointManager.saveCheckpoint()
 
         case .skeletonTimelineStored, .enabledSectionsUpdated:
             // Events now handled by StateCoordinator - just checkpoint
-            await saveCheckpoint()
+            await checkpointManager.saveCheckpoint()
 
         case .checkpointRequested:
-            await saveCheckpoint()
+            await checkpointManager.saveCheckpoint()
 
         case .toolCallRequested:
             // Tool execution now handled by ToolExecutionCoordinator
@@ -410,12 +418,15 @@ final class OnboardingInterviewCoordinator {
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
 
+        case .phaseAdvanceRequested:
+            // Handled by state sync - trigger sync of pendingPhaseAdvanceRequest
+            break
+
         // Tool UI events - handled by ToolHandler
         case .choicePromptRequested, .choicePromptCleared,
              .uploadRequestPresented, .uploadRequestCancelled,
              .validationPromptRequested, .validationPromptCleared,
              .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
-             .phaseAdvanceRequested,
              .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered,
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordPersisted,
@@ -432,6 +443,10 @@ final class OnboardingInterviewCoordinator {
         case .phaseTransitionApplied(let phaseName, _):
             // Update the system prompt when phase transitions (delegated to PhaseTransitionController)
             await phaseTransitionController.handlePhaseTransition(phaseName)
+
+        @unknown default:
+            // Handle any new cases that might be added in the future
+            break
         }
     }
 
@@ -510,6 +525,9 @@ final class OnboardingInterviewCoordinator {
             await syncWizardProgressFromState()
             await syncPendingExtractionFromState()
 
+        case .phaseAdvanceRequested:
+            await syncPendingPhaseAdvanceRequestFromState()
+
         default:
             break
         }
@@ -529,12 +547,18 @@ final class OnboardingInterviewCoordinator {
         _artifactRecordsSync = await state.artifacts.artifactRecords
     }
 
+    private func syncPendingPhaseAdvanceRequestFromState() async {
+        _pendingPhaseAdvanceRequestSync = await state.pendingPhaseAdvanceRequest
+    }
+
     private func initialStateSync() async {
         _isProcessingSync = await state.isProcessing
+        _isActiveSync = await state.isActive
         await syncPendingExtractionFromState()
         _pendingStreamingStatusSync = await state.pendingStreamingStatus
         await syncWizardProgressFromState()
         await syncArtifactRecordsFromState()
+        await syncPendingPhaseAdvanceRequestFromState()
     }
 
     // MARK: - Interview Lifecycle
@@ -565,14 +589,17 @@ final class OnboardingInterviewCoordinator {
         let success = await lifecycleController.startInterview()
         if success {
             subscribeToStateUpdates()
+            // Get the orchestrator created by lifecycleController
+            self.orchestrator = lifecycleController.orchestrator
+            // Update sync cache for isActive
+            _isActiveSync = true
         }
 
-        let orchestrator = makeOrchestrator(service: service, systemPrompt: systemPrompt)
-        self.orchestrator = orchestrator
-
         // Set model ID from preferences or ModelProvider default
-        let cfg = ModelProvider.forTask(.orchestrator)
-        await orchestrator.setModelId(preferences.preferredModelId ?? cfg.id)
+        if let orchestrator = self.orchestrator {
+            let cfg = ModelProvider.forTask(.orchestrator)
+            await orchestrator.setModelId(preferences.preferredModelId ?? cfg.id)
+        }
 
         // Start event subscriptions for handlers
         await chatboxHandler.startEventSubscriptions()
@@ -584,26 +611,14 @@ final class OnboardingInterviewCoordinator {
         }
         await state.publishAllowedToolsNow()
 
-        // Phase 3: Start workflow engine
-        let engine = ObjectiveWorkflowEngine(
-            eventBus: eventBus,
-            phaseRegistry: phaseRegistry,
-            state: state
-        )
-        workflowEngine = engine
-        await engine.start()
+        // Workflow engine is managed by lifecycle controller
 
-        // Phase 3: Start artifact persistence handler
-        let persistenceHandler = ArtifactPersistenceHandler(
-            eventBus: eventBus,
-            dataStore: dataStore
-        )
-        artifactPersistenceHandler = persistenceHandler
-        await persistenceHandler.start()
-
+        // Start the orchestrator interview
         Task {
             do {
-                try await orchestrator.startInterview()
+                if let orchestrator = self.orchestrator {
+                    try await orchestrator.startInterview()
+                }
             } catch {
                 Logger.error("Interview failed: \(error)", category: .ai)
                 await endInterview()
@@ -616,6 +631,8 @@ final class OnboardingInterviewCoordinator {
     func endInterview() async {
         // Delegate to lifecycle controller
         await lifecycleController.endInterview()
+        // Update sync cache for isActive
+        _isActiveSync = false
     }
 
     // MARK: - Phase Management
@@ -1020,6 +1037,7 @@ final class OnboardingInterviewCoordinator {
 
         // Clear the request
         await state.setPendingPhaseAdvanceRequest(nil)
+        _pendingPhaseAdvanceRequestSync = nil
         continuationTracker.clearPhaseAdvanceContinuation()
 
         // Resume the tool continuation
@@ -1034,6 +1052,7 @@ final class OnboardingInterviewCoordinator {
         guard let continuationId = continuationTracker.getPhaseAdvanceContinuationId() else { return }
 
         await state.setPendingPhaseAdvanceRequest(nil)
+        _pendingPhaseAdvanceRequestSync = nil
         continuationTracker.clearPhaseAdvanceContinuation()
 
         var payload = JSON()

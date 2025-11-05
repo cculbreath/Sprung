@@ -23,7 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var enabledLLMStore: EnabledLLMStore?
     var applicantProfileStore: ApplicantProfileStore?
     var llmService: LLMService?
-    var onboardingInterviewService: OnboardingInterviewService?
+    var onboardingCoordinator: OnboardingInterviewCoordinator?
     var onboardingArtifactStore: OnboardingArtifactStore?
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?
@@ -139,7 +139,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment)
                     .environment(appState)
                     .environment(appEnvironment.navigationState)
-                    .environment(appEnvironment.onboardingInterviewService)
+                    .environment(appEnvironment.onboardingCoordinator)
                     .environment(enabledLLMStore)
                     .environment(applicantProfileStore)
                     .environment(experienceDefaultsStore)
@@ -320,7 +320,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let modelContainer,
                let appEnvironment,
                let enabledLLMStore {
-                let onboardingService = onboardingInterviewService ?? appEnvironment.onboardingInterviewService
+                let onboardingService = onboardingCoordinator ?? appEnvironment.onboardingCoordinator
                 let root = interviewView
                     .modelContainer(modelContainer)
                     .environment(appEnvironment)
@@ -330,8 +330,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.applicantProfileStore)
                     .environment(appEnvironment.experienceDefaultsStore)
                     .environment(onboardingService)
-                    .environment(onboardingService.coordinator)
-                    .environment(onboardingService.coordinator.toolRouter)
+                    .environment(onboardingService.toolRouter)
 
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {
