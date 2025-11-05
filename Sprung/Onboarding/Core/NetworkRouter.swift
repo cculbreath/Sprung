@@ -127,6 +127,33 @@ actor NetworkRouter: OnboardingEventEmitter {
         lastMessageUUID = nil
     }
 
+    // MARK: - Stream Cancellation (Phase 2)
+
+    /// Cancel and clean up any in-progress streaming messages
+    /// Called when user cancels LLM mid-response
+    func cancelPendingStreams() async {
+        guard !streamingBuffers.isEmpty else {
+            Logger.debug("No pending streams to cancel", category: .ai)
+            return
+        }
+
+        let bufferCount = streamingBuffers.count
+
+        // Finalize all partial messages with their current text
+        for (_, buffer) in streamingBuffers {
+            let cancelledText = buffer.text.isEmpty ? "(cancelled)" : buffer.text
+            await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: cancelledText))
+            Logger.debug("🛑 Finalized cancelled stream: \(buffer.messageId)", category: .ai)
+        }
+
+        // Clean up all tracking state
+        streamingBuffers.removeAll()
+        messageIds.removeAll()
+        lastMessageUUID = nil
+
+        Logger.info("🧹 NetworkRouter cleaned up \(bufferCount) cancelled stream(s)", category: .ai)
+    }
+
     // MARK: - Tool Call Processing
 
     private func processToolCall(_ toolCall: OutputItem.FunctionToolCall) async {
