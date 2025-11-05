@@ -15,7 +15,7 @@ struct SubmitForValidationTool: InterviewTool {
             "validation_type": JSONSchema(
                 type: .string,
                 description: "Type of validation to perform",
-                enum: ["applicant_profile", "skeleton_timeline", "enabled_sections"]
+                enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card"]
             ),
             "data": JSONSchema(
                 type: .object,
@@ -101,7 +101,7 @@ private struct ValidationPayload {
             throw ToolError.invalidParameters("validation_type must be provided")
         }
 
-        let validTypes = ["applicant_profile", "skeleton_timeline", "enabled_sections"]
+        let validTypes = ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card"]
         guard validTypes.contains(type) else {
             throw ToolError.invalidParameters("validation_type must be one of: \(validTypes.joined(separator: ", "))")
         }
