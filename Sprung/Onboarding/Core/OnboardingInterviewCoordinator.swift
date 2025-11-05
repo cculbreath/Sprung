@@ -383,9 +383,13 @@ final class OnboardingInterviewCoordinator {
             // StateCoordinator only - ChatboxHandler mirrors to transcript
             _ = await state.finalizeStreamingMessage(id: id, finalText: finalText)
 
-        case .llmReasoningSummary(let messageId, let summary, let isFinal):
-            // StateCoordinator only - ChatboxHandler mirrors to transcript
-            await state.setReasoningSummary(summary, for: messageId)
+        case .llmReasoningSummaryDelta(let delta):
+            // Sidebar reasoning (ChatGPT-style) - not attached to messages
+            await state.updateReasoningSummary(delta: delta)
+
+        case .llmReasoningSummaryComplete(let text):
+            // Sidebar reasoning complete
+            await state.completeReasoningSummary(finalText: text)
 
         case .streamingStatusUpdated:
             // Event now handled by StateCoordinator - StateCoordinator maintains sync cache
@@ -449,7 +453,6 @@ final class OnboardingInterviewCoordinator {
              .stateSnapshot, .stateAllowedToolsUpdated,
              .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
-             .llmReasoningStatus,
              .phaseTransitionRequested, .timelineCardUpdated:
             // These events are handled by StateCoordinator/handlers, not the coordinator
             break
@@ -521,10 +524,6 @@ final class OnboardingInterviewCoordinator {
 
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmReasoningStatus:
-            // Sync cache now maintained by StateCoordinator
-            break
-
         case .llmStatus:
             // Sync cache now maintained by StateCoordinator
             break
@@ -597,30 +596,6 @@ final class OnboardingInterviewCoordinator {
         if let orchestrator = self.orchestrator {
             let cfg = ModelProvider.forTask(.orchestrator)
             await orchestrator.setModelId(preferences.preferredModelId ?? cfg.id)
-        }
-
-        // Start event subscriptions for handlers
-        await chatboxHandler.startEventSubscriptions()
-        await toolExecutionCoordinator.startEventSubscriptions()
-        await state.startEventSubscriptions()
-        subscribeToStateUpdates()
-        await MainActor.run {
-            toolRouter.startEventSubscriptions()
-        }
-        await state.publishAllowedToolsNow()
-
-        // Workflow engine is managed by lifecycle controller
-
-        // Start the orchestrator interview
-        Task {
-            do {
-                if let orchestrator = self.orchestrator {
-                    try await orchestrator.startInterview()
-                }
-            } catch {
-                Logger.error("Interview failed: \(error)", category: .ai)
-                await endInterview()
-            }
         }
 
         return true
@@ -779,17 +754,6 @@ final class OnboardingInterviewCoordinator {
         return 0 // Elapsed time now tracked by ChatboxHandler
     }
 
-    func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) async {
-        // Only update StateCoordinator - ChatboxHandler mirrors to transcript
-        await state.setReasoningSummary(summary, for: messageId)
-    }
-
-    func clearLatestReasoningSummary() {
-        Task {
-            await state.setReasoningSummary(nil, for: UUID())
-        }
-    }
-
     // MARK: - Waiting State
     // Note: Waiting state mutations now happen via events in StateCoordinator
 
@@ -820,7 +784,6 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Tool Management
 
     func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
-        toolRouter.presentUploadRequest(request, continuationId: continuationId)
         Task {
             await eventBus.publish(.uploadRequestPresented(request: request, continuationId: continuationId))
         }
@@ -843,7 +806,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt, continuationId: UUID) {
-        toolRouter.presentChoicePrompt(prompt, continuationId: continuationId)
         Task {
             await eventBus.publish(.choicePromptRequested(prompt: prompt, continuationId: continuationId))
         }
@@ -860,7 +822,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt, continuationId: UUID) {
-        toolRouter.presentValidationPrompt(prompt, continuationId: continuationId)
         Task {
             await eventBus.publish(.validationPromptRequested(prompt: prompt, continuationId: continuationId))
         }
@@ -1132,21 +1093,6 @@ final class OnboardingInterviewCoordinator {
 
     func resetStore() async {
         await dataPersistenceService.resetStore()
-    }
-
-    // MARK: - Orchestrator Factory
-
-    private func makeOrchestrator(
-        service: OpenAIService,
-        systemPrompt: String
-    ) -> InterviewOrchestrator {
-        return InterviewOrchestrator(
-            service: service,
-            systemPrompt: systemPrompt,
-            eventBus: eventBus,
-            toolRegistry: toolRegistry,
-            state: state
-        )
     }
 
     // MARK: - Utility

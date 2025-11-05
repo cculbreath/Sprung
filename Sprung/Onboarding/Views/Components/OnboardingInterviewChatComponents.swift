@@ -42,15 +42,7 @@ struct MessageBubble: View {
         return VStack(alignment: .leading, spacing: 8) {
             Text(displayText)
                 .multilineTextAlignment(multilineAlignment)
-            if let summary = message.reasoningSummary, !summary.isEmpty, message.role == .assistant {
-                Text(summary)
-                    .font(.footnote)
-                    .italic()
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-            } else if message.showReasoningPlaceholder && message.role == .assistant {
-                ReasoningSummaryPlaceholderView()
-            }
+            // Reasoning summaries now display in dedicated sidebar (ChatGPT-style)
         }
         .frame(
             maxWidth: .infinity,

@@ -51,6 +51,10 @@ actor StateCoordinator: OnboardingEventEmitter {
     nonisolated(unsafe) private(set) var messagesSync: [OnboardingMessage] = []
     nonisolated(unsafe) private(set) var streamingMessageSync: StreamingMessage?
 
+    // Reasoning summary sync cache for sidebar display (ChatGPT-style)
+    nonisolated(unsafe) private(set) var currentReasoningSummarySync: String?
+    nonisolated(unsafe) private(set) var isReasoningActiveSync = false
+
     // MARK: - Objectives (Single Source)
 
     /// The ONLY objective tracking in the entire system
@@ -85,6 +89,11 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var messages: [OnboardingMessage] = []
     private(set) var streamingMessage: StreamingMessage?
     private(set) var latestReasoningSummary: String?
+
+    // MARK: - Reasoning Summary (Sidebar Display)
+
+    private(set) var currentReasoningSummary: String?
+    private(set) var isReasoningActive = false
 
     struct StreamingMessage {
         let id: UUID
@@ -524,8 +533,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             id: id,
             role: .assistant,
             text: initialText,
-            timestamp: Date(),
-            showReasoningPlaceholder: reasoningExpected
+            timestamp: Date()
         )
         messages.append(message)
         messagesSync = messages // Update sync cache
@@ -550,20 +558,45 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         if let index = messages.firstIndex(where: { $0.id == id }) {
             messages[index].text = finalText
-            messages[index].showReasoningPlaceholder = false
             messagesSync = messages // Update sync cache
         }
     }
 
-    func setReasoningSummary(_ summary: String?, for messageId: UUID) {
-        if let index = messages.firstIndex(where: { $0.id == messageId }) {
-            messages[index].reasoningSummary = summary
-            messages[index].showReasoningPlaceholder = false
-            messagesSync = messages // Update sync cache
+    // MARK: - Reasoning Summary (Sidebar Display)
+
+    /// Update the current reasoning summary for sidebar display (ChatGPT-style)
+    func updateReasoningSummary(delta: String) {
+        if currentReasoningSummary == nil {
+            currentReasoningSummary = delta
+            isReasoningActive = true
+        } else {
+            currentReasoningSummary! += delta
         }
 
-        // Also update latest for the status bar
-        latestReasoningSummary = summary
+        // Update sync caches
+        currentReasoningSummarySync = currentReasoningSummary
+        isReasoningActiveSync = isReasoningActive
+    }
+
+    /// Complete the reasoning summary and store as final
+    func completeReasoningSummary(finalText: String) {
+        currentReasoningSummary = finalText
+        isReasoningActive = false
+        latestReasoningSummary = finalText
+
+        // Update sync caches
+        currentReasoningSummarySync = currentReasoningSummary
+        isReasoningActiveSync = false
+    }
+
+    /// Clear the current reasoning summary (called when new message starts)
+    func clearReasoningSummary() {
+        currentReasoningSummary = nil
+        isReasoningActive = false
+
+        // Update sync caches
+        currentReasoningSummarySync = nil
+        isReasoningActiveSync = false
     }
 
     // MARK: - UI State Management

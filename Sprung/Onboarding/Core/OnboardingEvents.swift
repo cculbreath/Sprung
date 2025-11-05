@@ -84,8 +84,9 @@ enum OnboardingEvent {
     case llmSendDeveloperMessage(payload: JSON)
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
-    case llmReasoningSummary(messageId: UUID, summary: String, isFinal: Bool)
-    case llmReasoningStatus(String) // "incoming" or "none"
+    // Sidebar reasoning (ChatGPT-style, not attached to messages)
+    case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
+    case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
 
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
@@ -221,7 +222,7 @@ actor EventCoordinator {
         // LLM events
         case .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
-             .llmReasoningSummary, .llmReasoningStatus, .llmCancelRequested,
+             .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
 
@@ -384,10 +385,10 @@ actor EventCoordinator {
             description = "LLM tool response requested"
         case .llmStatus(let status):
             description = "LLM status: \(status.rawValue)"
-        case .llmReasoningSummary(let messageId, _, let isFinal):
-            description = "LLM reasoning summary (message: \(messageId.uuidString.prefix(8)), final: \(isFinal))"
-        case .llmReasoningStatus(let status):
-            description = "LLM reasoning status: \(status)"
+        case .llmReasoningSummaryDelta(let delta):
+            description = "LLM reasoning summary delta (\(delta.prefix(50))...)"
+        case .llmReasoningSummaryComplete(let text):
+            description = "LLM reasoning summary complete (\(text.count) chars)"
         case .phaseTransitionRequested(let from, let to, _):
             description = "Phase transition requested: \(from) → \(to)"
         case .phaseTransitionApplied(let phase, _):

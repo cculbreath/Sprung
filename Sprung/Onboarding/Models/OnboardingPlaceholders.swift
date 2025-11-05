@@ -20,26 +20,17 @@ struct OnboardingMessage: Identifiable, Codable {
     let role: OnboardingMessageRole
     var text: String
     let timestamp: Date
-    var reasoningSummary: String?
-    var isAwaitingReasoningSummary: Bool
-    var showReasoningPlaceholder: Bool
 
     init(
         id: UUID = UUID(),
         role: OnboardingMessageRole,
         text: String,
-        timestamp: Date = Date(),
-        reasoningSummary: String? = nil,
-        isAwaitingReasoningSummary: Bool = false,
-        showReasoningPlaceholder: Bool = false
+        timestamp: Date = Date()
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.timestamp = timestamp
-        self.reasoningSummary = reasoningSummary
-        self.isAwaitingReasoningSummary = isAwaitingReasoningSummary
-        self.showReasoningPlaceholder = showReasoningPlaceholder
     }
 }
 
