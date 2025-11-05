@@ -159,13 +159,8 @@ struct OnboardingUploadedItem: Identifiable, Codable {
     let uploadedAt: Date
 }
 
-struct OnboardingArtifacts {
-    var applicantProfile: JSON?
-    var skeletonTimeline: JSON?
-    var artifactRecords: [JSON] = []
-    var enabledSections: [String] = []
-    var knowledgeCards: [JSON] = []
-}
+// OnboardingArtifacts is now defined as a typealias to StateCoordinator.OnboardingArtifacts
+// See: Core/OnboardingArtifacts+Alias.swift
 
 struct OnboardingApplicantProfileIntakeState: Equatable {
     enum Mode: Equatable {
