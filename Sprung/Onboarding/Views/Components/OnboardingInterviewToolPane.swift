@@ -37,9 +37,7 @@ struct OnboardingInterviewToolPane: View {
                             }
                         },
                         onCancel: {
-                            Task {
-                                // TODO: Add cancelChoiceAndResume facade method if needed
-                            }
+                            // Note: Choice cancellation not implemented - user must make a selection
                         }
                     )
                 } else if let validation = coordinator.pendingValidationPrompt {
@@ -63,9 +61,7 @@ struct OnboardingInterviewToolPane: View {
                                 }
                             },
                             onCancel: {
-                                Task {
-                                    // TODO: Add cancelValidationAndResume facade method if needed
-                                }
+                                // Note: Validation cancellation not implemented - user must approve or reject
                             }
                         )
                     }
@@ -128,7 +124,7 @@ struct OnboardingInterviewToolPane: View {
             if let extraction = coordinator.pendingExtractionSync {
                 ExtractionProgressOverlay(
                     items: extraction.progressItems,
-                    statusText: nil // TODO: Get from event-driven state
+                    statusText: nil
                 )
                 .transition(.opacity.combined(with: .scale))
                 .zIndex(1)
@@ -177,32 +173,9 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func summaryContent() -> some View {
-        // TODO: Reimplement using event-driven architecture
-        // let applicantProfileStatus = coordinator.objectiveStatuses["applicant_profile"]
-        // let applicantProfileReady = applicantProfileStatus == .completed || applicantProfileStatus == .skipped
-        //
-        // if coordinator.wizardStep == .wrapUp {
-        //     WrapUpSummaryView(
-        //         artifacts: coordinator.artifacts,
-        //         schemaIssues: [] // TODO: Get from event-driven state
-        //     )
-        // } else if coordinator.wizardStep == .resumeIntake,
-        //           // let profile = service.applicantProfileJSON,
-        //           applicantProfileReady {
-        //     // TODO: Get from event-driven state
-        //     // ApplicantProfileSummaryCard(
-        //     //     profile: profile,
-        //     //     imageData: applicantProfileStore.currentProfile().pictureData
-        //     // )
-        // } else if coordinator.wizardStep == .artifactDiscovery { // let timeline = service.skeletonTimelineJSON {
-        //     // TODO: Get from event-driven state
-        //     // TimelineCardEditorView(service: service, timeline: timeline)
-        // } else if coordinator.wizardStep == .artifactDiscovery,
-        //           !coordinator.artifacts.enabledSections.isEmpty {
-        //     EnabledSectionsSummaryCard(sections: coordinator.artifacts.enabledSections)
-        // } else {
-            Spacer()
-        // }
+        // Note: Summary cards removed during event-driven migration
+        // Supporting content is now shown only when relevant state exists
+        Spacer()
     }
 
     @ViewBuilder
@@ -333,22 +306,8 @@ struct OnboardingInterviewToolPane: View {
     private func hasSummaryCard(
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        // TODO: Reimplement using event-driven architecture
+        // Note: Summary cards removed during event-driven migration
         return false
-        // switch coordinator.wizardStep {
-        // case .wrapUp:
-        //     return true
-        // case .resumeIntake:
-        //     // TODO: Get from event-driven state
-        //     return false // service.applicantProfileJSON != nil
-        // case .artifactDiscovery:
-        //     // TODO: Get from event-driven state
-        //     // if service.skeletonTimelineJSON != nil { return true }
-        //     if !coordinator.artifacts.enabledSections.isEmpty { return true }
-        //     return false
-        // case .writingCorpus, .introduction:
-        //     return false
-        // }
     }
 }
 

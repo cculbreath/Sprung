@@ -71,6 +71,9 @@ actor ChatboxHandler: OnboardingEventEmitter {
         var payload = JSON()
         payload["text"].string = text
 
+        // Emit processing state change for UI feedback
+        await emit(.processingStateChanged(true))
+
         // Emit event for LLMMessenger to handle
         await emit(.llmSendUserMessage(payload: payload))
     }
