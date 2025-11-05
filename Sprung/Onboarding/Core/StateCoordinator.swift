@@ -25,6 +25,22 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var isActive = false
     private(set) var isProcessing = false
 
+    // MARK: - Synchronous Caches (for SwiftUI)
+
+    /// TODO: SYNC CACHE DUPLICATION
+    /// These nonisolated(unsafe) properties are synchronous caches of the async state above.
+    /// They exist solely to enable SwiftUI views to access state synchronously in view body computations.
+    /// StateCoordinator is the ONLY source of truth - these caches are updated automatically
+    /// when the async state changes. DO NOT modify these directly.
+    /// Future refactoring: Consider ObservableObject wrapper or @Published properties.
+
+    nonisolated(unsafe) private(set) var isProcessingSync = false
+    nonisolated(unsafe) private(set) var isActiveSync = false
+    nonisolated(unsafe) private(set) var pendingExtractionSync: OnboardingPendingExtraction?
+    nonisolated(unsafe) private(set) var pendingStreamingStatusSync: String?
+    nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
+    nonisolated(unsafe) private(set) var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest?
+
     // MARK: - Objectives (Single Source)
 
     /// The ONLY objective tracking in the entire system
@@ -91,6 +107,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func setPendingPhaseAdvanceRequest(_ request: OnboardingPhaseAdvanceRequest?) {
         self.pendingPhaseAdvanceRequest = request
+        self.pendingPhaseAdvanceRequestSync = request // Update sync cache
     }
 
     // MARK: - Wizard Progress
@@ -309,11 +326,13 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func setArtifactRecords(_ records: [JSON]) {
         artifacts.artifactRecords = records
+        artifactRecordsSync = records // Update sync cache
         Logger.info("📦 Artifact records restored: \(records.count)", category: .ai)
     }
 
     func addArtifactRecord(_ artifact: JSON) {
         artifacts.artifactRecords.append(artifact)
+        artifactRecordsSync = artifacts.artifactRecords // Update sync cache
         Logger.info("📦 Artifact record added: \(artifact["id"].stringValue)", category: .ai)
     }
 
@@ -342,6 +361,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         if !replaced {
             artifacts.artifactRecords.append(record)
         }
+
+        artifactRecordsSync = artifacts.artifactRecords // Update sync cache
     }
 
     /// List artifact summaries (id, filename, size, content_type)
@@ -526,10 +547,12 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func setProcessingState(_ processing: Bool) {
         isProcessing = processing
+        isProcessingSync = processing // Update sync cache
     }
 
     func setActiveState(_ active: Bool) {
         isActive = active
+        isActiveSync = active // Update sync cache
     }
 
     func setWaitingState(_ state: WaitingState?) async {
@@ -563,12 +586,14 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) {
         pendingExtraction = extraction
+        pendingExtractionSync = extraction // Update sync cache
         let newWaitingState: WaitingState? = extraction != nil ? .extraction : nil
         Task { await setWaitingState(newWaitingState) }
     }
 
     func setStreamingStatus(_ status: String?) {
         pendingStreamingStatus = status
+        pendingStreamingStatusSync = status // Update sync cache
     }
 
     // MARK: - Wizard Progress
@@ -621,6 +646,14 @@ actor StateCoordinator: OnboardingEventEmitter {
         waitingState = nil
         currentWizardStep = .resumeIntake
         completedWizardSteps.removeAll()
+
+        // Reset sync caches
+        isProcessingSync = false
+        isActiveSync = false
+        pendingExtractionSync = nil
+        pendingStreamingStatusSync = nil
+        artifactRecordsSync = []
+        pendingPhaseAdvanceRequestSync = nil
 
         Logger.info("🔄 StateCoordinator reset to clean state", category: .ai)
     }
@@ -820,8 +853,10 @@ actor StateCoordinator: OnboardingEventEmitter {
             switch status {
             case .busy:
                 isProcessing = true
+                isProcessingSync = true // Update sync cache
             case .idle, .error:
                 isProcessing = false
+                isProcessingSync = false // Update sync cache
             }
             Logger.debug("StateCoordinator processing state: \(isProcessing)", category: .ai)
 
