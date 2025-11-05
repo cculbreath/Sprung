@@ -353,22 +353,37 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.info("📝 LLMMessenger system prompt updated (\(text.count) chars)", category: .ai)
     }
 
-    // MARK: - Stream Cancellation (Phase 3)
+    // MARK: - Stream Cancellation (Phase 2)
 
     /// Cancel the currently running stream
+    ///
+    /// This method handles immediate cancellation of LLM streaming responses:
+    /// - Cancels the active network stream task
+    /// - Finalizes partial messages (displayed in chat as-is or marked cancelled)
+    /// - Updates UI state to idle
+    ///
+    /// Note on tool execution: If tool calls were emitted before cancellation,
+    /// they will continue executing. This is intentional - cancellation stops
+    /// the LLM from generating more output, not already-started tool operations.
     private func cancelCurrentStream() async {
         guard let task = currentStreamTask else {
             Logger.debug("No active stream to cancel", category: .ai)
             return
         }
 
+        Logger.info("🛑 Cancelling LLM stream...", category: .ai)
+
+        // Cancel the stream task
         task.cancel()
         currentStreamTask = nil
 
-        // Emit idle status
+        // Clean up partial messages in NetworkRouter
+        await networkRouter.cancelPendingStreams()
+
+        // Emit idle status to update UI
         await emit(.llmStatus(status: .idle))
 
-        Logger.info("🛑 LLM stream cancelled", category: .ai)
+        Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
     }
 }
 
