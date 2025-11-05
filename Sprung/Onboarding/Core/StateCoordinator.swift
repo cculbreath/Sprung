@@ -714,6 +714,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                         await self.handleArtifactEvent(event)
                     }
                 }
+
+                // Subscribe to Processing topic
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .processing) {
+                        await self.handleProcessingEvent(event)
+                    }
+                }
             }
         }
 
@@ -727,6 +734,57 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .checkpointRequested:
             // Emit state snapshot for checkpointing
             await emitSnapshot(reason: "checkpoint")
+
+        case .applicantProfileStored(let profile):
+            // Handle applicant profile storage via event
+            setApplicantProfile(profile)
+            Logger.info("👤 Applicant profile stored via event", category: .ai)
+
+        case .skeletonTimelineStored(let timeline):
+            // Handle skeleton timeline storage via event
+            setSkeletonTimeline(timeline)
+            Logger.info("📅 Skeleton timeline stored via event", category: .ai)
+
+        case .enabledSectionsUpdated(let sections):
+            // Handle enabled sections update via event
+            setEnabledSections(sections)
+            Logger.info("📑 Enabled sections updated via event (\(sections.count) sections)", category: .ai)
+
+        default:
+            break
+        }
+    }
+
+    private func handleProcessingEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .waitingStateChanged(let waiting):
+            // Convert string to WaitingState enum and update state
+            let waitingState: WaitingState? = if let waiting {
+                switch waiting {
+                case "selection": .selection
+                case "upload": .upload
+                case "validation": .validation
+                case "extraction": .extraction
+                case "processing": .processing
+                default: nil
+                }
+            } else {
+                nil
+            }
+
+            let previousWaitingState = self.waitingState
+            self.waitingState = waitingState
+
+            // Emit tool restrictions when waiting state changes
+            if waitingState != nil {
+                // Entering waiting state - restrict tools
+                await emitRestrictedTools()
+                Logger.info("🚫 Waiting state set to \(waiting ?? "nil") - tools restricted", category: .ai)
+            } else if previousWaitingState != nil {
+                // Exiting waiting state - restore normal tools
+                await emitAllowedTools()
+                Logger.info("✅ Waiting state cleared - tools restored", category: .ai)
+            }
 
         default:
             break
