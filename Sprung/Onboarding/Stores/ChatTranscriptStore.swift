@@ -3,7 +3,12 @@ import Observation
 
 /// Sync cache for chat transcript display in UI
 /// NOTE: This is NOT the single source of truth. StateCoordinator.messages is authoritative.
-/// TODO: Replace with direct StateCoordinator access in UI (requires SwiftUI actor support)
+///
+/// FUTURE IMPROVEMENT: Replace with direct StateCoordinator access in UI
+/// This requires SwiftUI to support actor-isolated @Observable types. When available,
+/// views could directly observe StateCoordinator.messages instead of using this cache.
+/// Until then, ChatboxHandler syncs this store from StateCoordinator to provide
+/// MainActor-isolated state for SwiftUI views.
 @MainActor
 @Observable
 final class ChatTranscriptStore {

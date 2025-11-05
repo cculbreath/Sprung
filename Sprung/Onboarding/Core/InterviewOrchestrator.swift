@@ -23,8 +23,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     private let service: OpenAIService
     private let systemPrompt: String
 
-    // Timeline tool names for special handling (TODO: Move to configuration)
-
     private var isActive = false
 
     // MARK: - Initialization
