@@ -713,7 +713,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Artifact Management
-
     // Note: Artifact state mutations now happen via events in StateCoordinator
     // The coordinator only handles side effects like SwiftData persistence
 
