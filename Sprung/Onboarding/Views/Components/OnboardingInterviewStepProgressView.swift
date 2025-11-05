@@ -6,9 +6,12 @@ struct OnboardingInterviewStepProgressView: View {
     var body: some View {
         HStack(alignment: .center, spacing: 28) {
             // Note: Wizard step status tracking is handled by WizardProgressTracker
-            // This view shows a simplified progress display
+            // This view shows the actual progress from the tracker
+            let tracker = coordinator.wizardTracker
             ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
-                let status = OnboardingWizardStepStatus.pending
+                let status = tracker.stepStatuses[step]
+                    ?? (tracker.currentStep == step ? .current
+                        : (tracker.completedSteps.contains(step) ? .completed : .pending))
                 OnboardingStepProgressItem(title: step.title, status: status)
             }
         }
