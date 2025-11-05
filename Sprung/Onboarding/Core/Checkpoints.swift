@@ -47,26 +47,11 @@ final class Checkpoints {
 
     /// Saves a checkpoint with the current state
     func save(
-        phase: InterviewPhase,
-        objectives: [String: StateCoordinator.ObjectiveEntry],
+        snapshot: StateCoordinator.StateSnapshot,
         profileJSON: JSON?,
         timelineJSON: JSON?,
         enabledSections: Set<String>
     ) {
-        let snapshot = StateCoordinator.StateSnapshot(
-            phase: phase,
-            objectives: objectives,
-            artifacts: StateCoordinator.StateSnapshot.ArtifactsSnapshot(
-                hasApplicantProfile: profileJSON != nil,
-                hasSkeletonTimeline: timelineJSON != nil,
-                enabledSections: enabledSections,
-                experienceCardCount: 0,
-                writingSampleCount: 0
-            ),
-            wizardStep: determineWizardStep(from: objectives),
-            completedWizardSteps: determineCompletedSteps(from: objectives)
-        )
-
         let checkpoint = OnboardingCheckpoint(
             timestamp: Date(),
             snapshot: snapshot,
@@ -145,48 +130,5 @@ final class Checkpoints {
         } catch {
             Logger.debug("Checkpoint save failed: \(error)")
         }
-    }
-
-    private func determineWizardStep(
-        from objectives: [String: StateCoordinator.ObjectiveEntry]
-    ) -> String {
-        let completed = Set(objectives
-            .filter { $0.value.status == .completed }
-            .map { $0.key })
-
-        if completed.contains("dossier_complete") {
-            return "wrapUp"
-        } else if completed.contains("one_writing_sample") {
-            return "writingCorpus"
-        } else if completed.contains("skeleton_timeline") {
-            return "artifactDiscovery"
-        } else {
-            return "resumeIntake"
-        }
-    }
-
-    private func determineCompletedSteps(
-        from objectives: [String: StateCoordinator.ObjectiveEntry]
-    ) -> Set<String> {
-        let completed = Set(objectives
-            .filter { $0.value.status == .completed }
-            .map { $0.key })
-
-        var steps: Set<String> = []
-
-        if completed.contains("applicant_profile") {
-            steps.insert("resumeIntake")
-        }
-        if completed.contains("skeleton_timeline") && completed.contains("enabled_sections") {
-            steps.insert("artifactDiscovery")
-        }
-        if completed.contains("one_writing_sample") {
-            steps.insert("writingCorpus")
-        }
-        if completed.contains("dossier_complete") {
-            steps.insert("wrapUp")
-        }
-
-        return steps
     }
 }

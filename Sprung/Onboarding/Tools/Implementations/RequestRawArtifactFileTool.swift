@@ -18,10 +18,10 @@ struct RequestRawArtifactFileTool: InterviewTool {
         )
     }()
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "request_raw_file" }
@@ -34,8 +34,8 @@ struct RequestRawArtifactFileTool: InterviewTool {
             throw ToolError.invalidParameters("artifact_id is required and must be non-empty.")
         }
 
-        // Get the artifact to find the file URL (coordinator queries StateCoordinator)
-        guard let artifact = await service.coordinator.getArtifact(id: artifactId) else {
+        // Get the artifact record to find the file URL
+        guard let artifact = await coordinator.getArtifactRecord(id: artifactId) else {
             var response = JSON()
             response["status"].string = "not_found"
             response["artifact_id"].string = artifactId

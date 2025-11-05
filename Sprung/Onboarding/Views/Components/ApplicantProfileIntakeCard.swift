@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ApplicantProfileIntakeCard: View {
     let state: OnboardingApplicantProfileIntakeState
-    let service: OnboardingInterviewService
     let coordinator: OnboardingInterviewCoordinator
 
     @State private var draft: ApplicantProfileDraft
@@ -10,11 +9,9 @@ struct ApplicantProfileIntakeCard: View {
 
     init(
         state: OnboardingApplicantProfileIntakeState,
-        service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) {
         self.state = state
-        self.service = service
         self.coordinator = coordinator
         _draft = State(initialValue: state.draft)
         _urlString = State(initialValue: state.urlString)
@@ -73,8 +70,9 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Upload your resume PDF, DOCX, or text file",
                     icon: "arrow.up.doc"
                 ) {
-                    // TODO: Emit event instead
-                    // service.beginApplicantProfileUpload()
+                    if let (request, continuationId) = coordinator.toolRouter.beginApplicantProfileUpload() {
+                        coordinator.presentUploadRequest(request, continuationId: continuationId)
+                    }
                 }
 
                 optionButton(
@@ -82,8 +80,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Provide a link to your resume or LinkedIn profile",
                     icon: "link"
                 ) {
-                    // TODO: Emit event instead
-                    // service.beginApplicantProfileURL()
+                    coordinator.toolRouter.beginApplicantProfileURL()
                 }
 
                 optionButton(
@@ -91,8 +88,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Import details from your macOS Contacts or vCard",
                     icon: "person.crop.circle"
                 ) {
-                    // TODO: Emit event instead
-                    // service.beginApplicantProfileContactsFetch()
+                    coordinator.toolRouter.beginApplicantProfileContactsFetch()
                 }
 
                 optionButton(
@@ -100,8 +96,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Fill in your contact details step by step",
                     icon: "square.and.pencil"
                 ) {
-                    // TODO: Emit event instead
-                    // service.beginApplicantProfileManualEntry()
+                    coordinator.toolRouter.beginApplicantProfileManualEntry()
                 }
             }
 

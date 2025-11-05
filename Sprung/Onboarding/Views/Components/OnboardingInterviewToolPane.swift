@@ -7,17 +7,16 @@ struct OnboardingInterviewToolPane: View {
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
 
-    @Bindable var service: OnboardingInterviewService
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Binding var isOccupied: Bool
 
     var body: some View {
-        let paneOccupied = isPaneOccupied(service: service, coordinator: coordinator)
-        let isLLMActive = service.isProcessing // || coordinator.pendingStreamingStatus != nil
-        let showSpinner = service.pendingExtraction != nil || (!paneOccupied && isLLMActive)
+        let paneOccupied = isPaneOccupied(coordinator: coordinator)
+        let isLLMActive = coordinator.isProcessingSync || coordinator.pendingStreamingStatusSync != nil
+        let showSpinner = coordinator.pendingExtractionSync != nil || (!paneOccupied && isLLMActive)
 
         return VStack(alignment: .leading, spacing: 16) {
-            if service.pendingExtraction != nil {
+            if coordinator.pendingExtractionSync != nil {
                 Spacer(minLength: 0)
             } else {
                 let uploads = uploadRequests()
@@ -27,7 +26,6 @@ struct OnboardingInterviewToolPane: View {
                 } else if let intake = coordinator.pendingApplicantProfileIntake {
                     ApplicantProfileIntakeCard(
                         state: intake,
-                        service: service,
                         coordinator: coordinator
                     )
                 } else if let prompt = coordinator.pendingChoicePrompt {
@@ -52,8 +50,7 @@ struct OnboardingInterviewToolPane: View {
                     if validation.dataType == "knowledge_card" {
                         KnowledgeCardValidationHost(
                             prompt: validation,
-                            artifactsJSON: service.artifacts.artifactRecords,
-                            service: service,
+                            artifactsJSON: coordinator.artifacts.artifactRecords,
                             coordinator: coordinator
                         )
                     } else {
@@ -80,7 +77,7 @@ struct OnboardingInterviewToolPane: View {
                             }
                         )
                     }
-                } else if let phaseAdvanceRequest = service.pendingPhaseAdvanceRequest {
+                } else if let phaseAdvanceRequest = coordinator.pendingPhaseAdvanceRequest {
                     OnboardingPhaseAdvanceDialog(
                         request: phaseAdvanceRequest,
                         onSubmit: { decision, feedback in
@@ -143,7 +140,7 @@ struct OnboardingInterviewToolPane: View {
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .center) {
-            if let extraction = service.pendingExtraction {
+            if let extraction = coordinator.pendingExtractionSync {
                 ExtractionProgressOverlay(
                     items: extraction.progressItems,
                     statusText: nil // TODO: Get from event-driven state
@@ -153,15 +150,15 @@ struct OnboardingInterviewToolPane: View {
             } else if showSpinner {
                 VStack(spacing: 12) {
                     AnimatedThinkingText()
-                    // TODO: Get from event-driven state
-                    // if let status = coordinator.pendingStreamingStatus?.trimmingCharacters(in: .whitespacesAndNewlines),
-                    //    !status.isEmpty {
-                    //     Text(status)
-                    //         .font(.footnote)
-                    //         .foregroundStyle(.secondary)
-                    //         .multilineTextAlignment(.center)
-                    //         .transition(.opacity)
-                    // }
+                    if let status = coordinator.pendingStreamingStatusSync?
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                       !status.isEmpty {
+                        Text(status)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .transition(.opacity)
+                    }
                 }
                 .padding(.vertical, 24)
                 .padding(.horizontal, 24)
@@ -183,7 +180,7 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func supportingContent() -> some View {
-        if let extraction = service.pendingExtraction {
+        if let extraction = coordinator.pendingExtractionSync {
             VStack(alignment: .leading, spacing: 16) {
                 ExtractionStatusCard(extraction: extraction)
                 summaryContent()
@@ -201,7 +198,7 @@ struct OnboardingInterviewToolPane: View {
         //
         // if coordinator.wizardStep == .wrapUp {
         //     WrapUpSummaryView(
-        //         artifacts: service.artifacts,
+        //         artifacts: coordinator.artifacts,
         //         schemaIssues: [] // TODO: Get from event-driven state
         //     )
         // } else if coordinator.wizardStep == .resumeIntake,
@@ -216,8 +213,8 @@ struct OnboardingInterviewToolPane: View {
         //     // TODO: Get from event-driven state
         //     // TimelineCardEditorView(service: service, timeline: timeline)
         // } else if coordinator.wizardStep == .artifactDiscovery,
-        //           !service.artifacts.enabledSections.isEmpty {
-        //     EnabledSectionsSummaryCard(sections: service.artifacts.enabledSections)
+        //           !coordinator.artifacts.enabledSections.isEmpty {
+        //     EnabledSectionsSummaryCard(sections: coordinator.artifacts.enabledSections)
         // } else {
             Spacer()
         // }
@@ -253,26 +250,26 @@ struct OnboardingInterviewToolPane: View {
 
     private func uploadRequests() -> [OnboardingUploadRequest] {
         var filtered: [OnboardingUploadRequest]
-        switch service.wizardStep {
+        switch coordinator.wizardTracker.currentStep {
         case .resumeIntake:
-            filtered = service.pendingUploadRequests.filter {
+            filtered = coordinator.pendingUploadRequests.filter {
                 [.resume, .linkedIn].contains($0.kind) ||
                     ($0.kind == .generic && $0.metadata.targetKey == "basics.image")
             }
         case .artifactDiscovery:
-            filtered = service.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
+            filtered = coordinator.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
         case .writingCorpus:
-            filtered = service.pendingUploadRequests.filter { $0.kind == .writingSample }
+            filtered = coordinator.pendingUploadRequests.filter { $0.kind == .writingSample }
         case .wrapUp:
-            filtered = service.pendingUploadRequests
+            filtered = coordinator.pendingUploadRequests
         case .introduction:
-            filtered = service.pendingUploadRequests.filter {
+            filtered = coordinator.pendingUploadRequests.filter {
                 $0.kind == .generic && $0.metadata.targetKey == "basics.image"
             }
         }
 
-        if filtered.count != service.pendingUploadRequests.count {
-            let headshotRequests = service.pendingUploadRequests.filter { $0.metadata.targetKey == "basics.image" }
+        if filtered.count != coordinator.pendingUploadRequests.count {
+            let headshotRequests = coordinator.pendingUploadRequests.filter { $0.metadata.targetKey == "basics.image" }
             for request in headshotRequests where filtered.contains(where: { $0.id == request.id }) == false {
                 filtered.append(request)
             }
@@ -280,7 +277,7 @@ struct OnboardingInterviewToolPane: View {
 
         if !filtered.isEmpty {
             let kinds = filtered.map { $0.kind.rawValue }.joined(separator: ",")
-            Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(service.wizardStep.rawValue), kinds: \(kinds))", category: .ai)
+            Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(coordinator.wizardTracker.currentStep.rawValue), kinds: \(kinds))", category: .ai)
         }
 
         return filtered
@@ -337,15 +334,15 @@ struct OnboardingInterviewToolPane: View {
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        hasInteractiveCard(service: service, coordinator: coordinator) ||
-            hasSummaryCard(service: service, coordinator: coordinator)
+        hasInteractiveCard(coordinator: coordinator) ||
+            hasSummaryCard(coordinator: coordinator)
     }
 
     private func hasInteractiveCard(
         service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        if service.pendingExtraction != nil { return true }
+        if coordinator.pendingExtractionSync != nil { return true }
         if !uploadRequests().isEmpty { return true }
         // Don't count loading state as occupying the pane - allow spinner to show
         if let intake = coordinator.pendingApplicantProfileIntake {
@@ -353,15 +350,14 @@ struct OnboardingInterviewToolPane: View {
             return true
         }
         if coordinator.pendingChoicePrompt != nil { return true }
-        if service.pendingValidationPrompt != nil { return true }
+        if coordinator.pendingValidationPrompt != nil { return true }
         if coordinator.pendingApplicantProfileRequest != nil { return true }
         if coordinator.pendingSectionToggleRequest != nil { return true }
-        if service.pendingPhaseAdvanceRequest != nil { return true }
+        if coordinator.pendingPhaseAdvanceRequest != nil { return true }
         return false
     }
 
     private func hasSummaryCard(
-        service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
         // TODO: Reimplement using event-driven architecture
@@ -375,7 +371,7 @@ struct OnboardingInterviewToolPane: View {
         // case .artifactDiscovery:
         //     // TODO: Get from event-driven state
         //     // if service.skeletonTimelineJSON != nil { return true }
-        //     if !service.artifacts.enabledSections.isEmpty { return true }
+        //     if !coordinator.artifacts.enabledSections.isEmpty { return true }
         //     return false
         // case .writingCorpus, .introduction:
         //     return false
@@ -435,7 +431,6 @@ private struct ExtractionProgressOverlay: View {
 
 private struct KnowledgeCardValidationHost: View {
     let prompt: OnboardingValidationPrompt
-    let service: OnboardingInterviewService
     let coordinator: OnboardingInterviewCoordinator
 
     @State private var draft: KnowledgeCardDraft
@@ -444,11 +439,9 @@ private struct KnowledgeCardValidationHost: View {
     init(
         prompt: OnboardingValidationPrompt,
         artifactsJSON: [JSON],
-        service: OnboardingInterviewService,
         coordinator: OnboardingInterviewCoordinator
     ) {
         self.prompt = prompt
-        self.service = service
         self.coordinator = coordinator
         _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
         artifactRecords = artifactsJSON.map { ArtifactRecord(json: $0) }

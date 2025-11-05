@@ -13,10 +13,10 @@ struct DeleteTimelineCardTool: InterviewTool {
         additionalProperties: false
     )
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "delete_timeline_card" }
@@ -29,7 +29,7 @@ struct DeleteTimelineCardTool: InterviewTool {
         }
 
         // Delete timeline card via coordinator (which emits events)
-        let result = await service.coordinator.deleteTimelineCard(id: id)
+        let result = await coordinator.deleteTimelineCard(id: id)
         return .immediate(result)
     }
 }

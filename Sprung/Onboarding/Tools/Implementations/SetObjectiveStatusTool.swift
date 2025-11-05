@@ -23,10 +23,10 @@ struct SetObjectiveStatusTool: InterviewTool {
         )
     }()
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "set_objective_status" }
@@ -48,7 +48,7 @@ struct SetObjectiveStatusTool: InterviewTool {
         }
 
         // Update objective status via coordinator (which emits events)
-        let result = try await service.coordinator.updateObjectiveStatus(
+        let result = try await coordinator.updateObjectiveStatus(
             objectiveId: objectiveId,
             status: status
         )

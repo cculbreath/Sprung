@@ -18,10 +18,10 @@ struct CancelUserUploadTool: InterviewTool {
         )
     }()
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "cancel_user_upload" }
@@ -31,7 +31,7 @@ struct CancelUserUploadTool: InterviewTool {
     func isAvailable() async -> Bool {
         // Check if there's an active upload request
         await MainActor.run {
-            !service.pendingUploadRequests.isEmpty
+            !coordinator.pendingUploadRequests.isEmpty
         }
     }
 
@@ -39,7 +39,7 @@ struct CancelUserUploadTool: InterviewTool {
         let reason = params["reason"].string
 
         // Get the current upload requests
-        let uploadRequests = await MainActor.run { service.pendingUploadRequests }
+        let uploadRequests = await MainActor.run { coordinator.pendingUploadRequests }
 
         guard let firstRequest = uploadRequests.first else {
             var response = JSON()
@@ -49,7 +49,7 @@ struct CancelUserUploadTool: InterviewTool {
         }
 
         // Cancel upload via coordinator (which emits event)
-        await service.coordinator.cancelUploadRequest(id: firstRequest.id)
+        await coordinator.cancelUploadRequest(id: firstRequest.id)
 
         // Build response
         var response = JSON()
