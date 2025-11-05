@@ -18,7 +18,6 @@ private struct ConditionalIntelligenceGlow<S: InsettableShape>: ViewModifier {
 }
 
 struct OnboardingInterviewChatPanel: View {
-    @Bindable var service: OnboardingInterviewService
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Bindable var state: OnboardingInterviewViewModel
     let modelStatusDescription: String
@@ -33,16 +32,15 @@ struct OnboardingInterviewChatPanel: View {
         let topPadding: CGFloat = 28
         let bottomPadding: CGFloat = 28
         let sectionSpacing: CGFloat = 20
-        let bannerVisible = !(service.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let bannerVisible = !(coordinator.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
 
         return VStack(spacing: 0) {
-            if bannerVisible, let alert = service.modelAvailabilityMessage {
+            if bannerVisible, let alert = coordinator.modelAvailabilityMessage {
                 ModelAvailabilityBanner(
                     text: alert,
                     onOpenSettings: onOpenSettings,
                     onDismiss: {
-                        // TODO: Emit event instead
-                        // service.clearModelAvailabilityMessage()
+                        coordinator.clearModelAvailabilityMessage()
                     }
                 )
                 .padding(.horizontal, horizontalPadding)
@@ -100,7 +98,7 @@ struct OnboardingInterviewChatPanel: View {
                         get: { state.userInput },
                         set: { state.userInput = $0 }
                     ),
-                    isEditable: service.isActive,
+                    isEditable: coordinator.isActive,
                     onSubmit: { text in
                         send(text)
                     },
@@ -125,7 +123,7 @@ struct OnboardingInterviewChatPanel: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(
                     state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                        !service.isActive ||
+                        !coordinator.isActive ||
                         coordinator.isProcessingSync
                 )
             }
@@ -148,7 +146,7 @@ struct OnboardingInterviewChatPanel: View {
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
         // .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
-        .animation(.easeInOut(duration: 0.2), value: service.modelAvailabilityMessage)
+        .animation(.easeInOut(duration: 0.2), value: coordinator.modelAvailabilityMessage)
         .alert("Export Failed", isPresented: Binding(
             get: { exportErrorMessage != nil },
             set: { _ in exportErrorMessage = nil }

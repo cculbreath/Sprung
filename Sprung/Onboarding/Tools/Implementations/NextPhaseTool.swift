@@ -29,7 +29,11 @@ struct NextPhaseTool: InterviewTool {
         )
     }()
 
-    let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
+
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
+    }
 
     var name: String { "next_phase" }
     var description: String { "Request advancing to the next interview phase." }
@@ -37,25 +41,8 @@ struct NextPhaseTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         // Check if we can advance to the next phase
-        let currentPhase = await service.coordinator.currentPhase
-        let missingObjectives = await service.coordinator.missingObjectives()
-
-        if !missingObjectives.isEmpty {
-            // Check for overrides
-            let overrides = params["overrides"].array?.compactMap { $0.string } ?? []
-            let reason = params["reason"].string
-
-            let unmetObjectives = missingObjectives.filter { !overrides.contains($0) }
-
-            if !unmetObjectives.isEmpty {
-                var response = JSON()
-                response["status"].string = "blocked"
-                response["message"].string = "Cannot advance phase due to unmet objectives"
-                response["missing_objectives"] = JSON(unmetObjectives)
-                response["current_phase"].string = currentPhase.rawValue
-                return .immediate(response)
-            }
-        }
+        let currentPhase = await coordinator.currentPhase
+        let missingObjectives = await coordinator.missingObjectives()
 
         // Determine the next phase
         let nextPhase: InterviewPhase
@@ -73,19 +60,66 @@ struct NextPhaseTool: InterviewTool {
             return .immediate(response)
         }
 
-        // Request phase transition via coordinator (which emits events)
-        let reason = params["reason"].string ?? "Tool requested phase advance"
-        await service.coordinator.requestPhaseTransition(
-            from: currentPhase.rawValue,
-            to: nextPhase.rawValue,
-            reason: reason
+        // If all objectives are met, transition immediately
+        if missingObjectives.isEmpty {
+            let reason = params["reason"].string ?? "All objectives completed"
+            await coordinator.requestPhaseTransition(
+                from: currentPhase.rawValue,
+                to: nextPhase.rawValue,
+                reason: reason
+            )
+
+            var response = JSON()
+            response["status"].string = "success"
+            response["previous_phase"].string = currentPhase.rawValue
+            response["new_phase"].string = nextPhase.rawValue
+            response["message"].string = "Phase transition completed"
+            return .immediate(response)
+        }
+
+        // If objectives are missing, present a dialog and wait for user approval
+        let overrides = params["overrides"].array?.compactMap { $0.string } ?? []
+        let request = OnboardingPhaseAdvanceRequest(
+            currentPhase: currentPhase,
+            nextPhase: nextPhase,
+            missingObjectives: missingObjectives,
+            reason: params["reason"].string,
+            proposedOverrides: overrides
         )
 
-        var response = JSON()
-        response["status"].string = "success"
-        response["previous_phase"].string = currentPhase.rawValue
-        response["new_phase"].string = nextPhase.rawValue
-        response["message"].string = "Phase transition initiated"
-        return .immediate(response)
+        let tokenId = UUID()
+        let token = ContinuationToken(
+            id: tokenId,
+            toolName: name,
+            initialPayload: JSON([
+                "status": "waiting",
+                "tool": name,
+                "message": "Waiting for phase advance decision"
+            ]),
+            uiRequest: nil, // Dialog is shown by coordinator state
+            resumeHandler: { input in
+                if input["approved"].boolValue {
+                    return .immediate(JSON([
+                        "status": "success",
+                        "previous_phase": currentPhase.rawValue,
+                        "new_phase": nextPhase.rawValue,
+                        "message": "Phase transition approved and completed"
+                    ]))
+                } else {
+                    var res = JSON()
+                    res["status"].string = "denied"
+                    res["message"].string = "Phase advance denied by user"
+                    if let fb = input["feedback"].string {
+                        res["feedback"].string = fb
+                    }
+                    return .immediate(res)
+                }
+            }
+        )
+
+        // Present the dialog via coordinator
+        await coordinator.presentPhaseAdvanceRequest(request, continuationId: tokenId)
+
+        return .waiting(message: "Waiting for phase advance decision", continuation: token)
     }
 }

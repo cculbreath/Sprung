@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftyJSON
 
 struct TimelineCardEditorView: View {
-    @Bindable var service: OnboardingInterviewService
     let timeline: JSON
 
     @State private var drafts: [WorkExperienceDraft] = []

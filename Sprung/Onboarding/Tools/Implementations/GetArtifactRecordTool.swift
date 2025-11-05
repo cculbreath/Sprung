@@ -18,10 +18,10 @@ struct GetArtifactRecordTool: InterviewTool {
         )
     }()
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "get_artifact" }
@@ -34,8 +34,8 @@ struct GetArtifactRecordTool: InterviewTool {
             throw ToolError.invalidParameters("artifact_id is required and must be non-empty.")
         }
 
-        // Get artifact from coordinator (which queries StateCoordinator)
-        if let artifact = await service.coordinator.getArtifact(id: artifactId) {
+        // Get artifact record from coordinator state
+        if let artifact = await coordinator.getArtifactRecord(id: artifactId) {
             var response = JSON()
             response["status"].string = "found"
             response["artifact"] = artifact

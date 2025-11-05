@@ -15,14 +15,9 @@ enum OnboardingEvent {
     case processingStateChanged(Bool)
 
     // MARK: - Messages
-    case assistantMessageEmitted(id: UUID, text: String, reasoningExpected: Bool)
     case streamingMessageBegan(id: UUID, text: String, reasoningExpected: Bool)
     case streamingMessageUpdated(id: UUID, delta: String)
     case streamingMessageFinalized(id: UUID, finalText: String)
-
-    // MARK: - Reasoning
-    case reasoningSummaryUpdated(messageId: UUID, summary: String, isFinal: Bool)
-    case reasoningSummariesFinalized([UUID])
 
     // MARK: - Status Updates
     case streamingStatusUpdated(String?)
@@ -91,12 +86,33 @@ enum OnboardingEvent {
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
     case phaseTransitionApplied(phase: String, timestamp: Date)
+
+    // MARK: - Phase 3: Workflow Automation & Robustness
+    case llmCancelRequested
+    case skeletonTimelineReplaced(timeline: JSON, diff: TimelineDiff?, meta: JSON?)
 }
 
 enum LLMStatus: String {
     case busy
     case idle
     case error
+}
+
+/// Timeline diff structure for tracking user edits
+struct TimelineDiff: Codable {
+    let added: Int
+    let modified: Int
+    let deleted: Int
+    let reordered: Bool
+
+    var summary: String {
+        var parts: [String] = []
+        if added > 0 { parts.append("\(added) added") }
+        if modified > 0 { parts.append("\(modified) modified") }
+        if deleted > 0 { parts.append("\(deleted) deleted") }
+        if reordered { parts.append("reordered") }
+        return parts.isEmpty ? "no changes" : parts.joined(separator: ", ")
+    }
 }
 
 /// Event topics for routing (spec §6)
@@ -218,9 +234,8 @@ actor EventCoordinator {
         // LLM events
         case .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
-             .llmReasoningSummary, .llmReasoningStatus,
-             .assistantMessageEmitted, .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized,
-             .reasoningSummaryUpdated, .reasoningSummariesFinalized:
+             .llmReasoningSummary, .llmReasoningStatus, .llmCancelRequested,
+             .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
 
         // State events
@@ -253,7 +268,8 @@ actor EventCoordinator {
             return .toolpane
 
         // Timeline events
-        case .timelineCardCreated, .timelineCardUpdated, .timelineCardDeleted, .timelineCardsReordered:
+        case .timelineCardCreated, .timelineCardUpdated, .timelineCardDeleted, .timelineCardsReordered,
+             .skeletonTimelineReplaced:
             return .timeline
 
         // Processing events
@@ -284,18 +300,12 @@ actor EventCoordinator {
         switch event {
         case .processingStateChanged(let processing):
             description = "Processing: \(processing)"
-        case .assistantMessageEmitted:
-            description = "Assistant message"
         case .streamingMessageBegan:
             description = "Streaming began"
         case .streamingMessageUpdated:
             description = "Streaming update"
         case .streamingMessageFinalized:
             description = "Streaming finalized"
-        case .reasoningSummaryUpdated:
-            description = "Reasoning updated"
-        case .reasoningSummariesFinalized:
-            description = "Reasoning finalized"
         case .streamingStatusUpdated(let status):
             description = "Status: \(status ?? "nil")"
         case .waitingStateChanged(let state):
@@ -388,6 +398,14 @@ actor EventCoordinator {
             description = "Phase transition requested: \(from) → \(to)"
         case .phaseTransitionApplied(let phase, _):
             description = "Phase transition applied: \(phase)"
+        case .llmCancelRequested:
+            description = "LLM cancel requested"
+        case .skeletonTimelineReplaced(_, let diff, _):
+            if let diff = diff {
+                description = "Skeleton timeline replaced (\(diff.summary))"
+            } else {
+                description = "Skeleton timeline replaced"
+            }
         }
 
         Logger.debug("[Event] \(description)", category: .ai)

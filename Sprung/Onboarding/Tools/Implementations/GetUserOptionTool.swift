@@ -48,7 +48,7 @@ struct GetUserOptionTool: InterviewTool {
         )
     }()
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
     private let dateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -59,8 +59,8 @@ struct GetUserOptionTool: InterviewTool {
     var description: String { "Present a multiple choice prompt to the user and return the selected option identifiers." }
     var parameters: JSONSchema { Self.schema }
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {

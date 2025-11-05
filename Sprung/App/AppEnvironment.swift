@@ -24,7 +24,7 @@ final class AppEnvironment {
     let careerKeywordStore: CareerKeywordStore
     let resumeExportCoordinator: ResumeExportCoordinator
     let applicantProfileStore: ApplicantProfileStore
-    let onboardingInterviewService: OnboardingInterviewService
+    let onboardingCoordinator: OnboardingInterviewCoordinator
     var launchState: LaunchState
     var requiresTemplateSetup: Bool = false
 
@@ -41,7 +41,7 @@ final class AppEnvironment {
         careerKeywordStore: CareerKeywordStore,
         resumeExportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
-        onboardingInterviewService: OnboardingInterviewService,
+        onboardingCoordinator: OnboardingInterviewCoordinator,
         launchState: LaunchState
     ) {
         self.appState = appState
@@ -56,7 +56,7 @@ final class AppEnvironment {
         self.careerKeywordStore = careerKeywordStore
         self.resumeExportCoordinator = resumeExportCoordinator
         self.applicantProfileStore = applicantProfileStore
-        self.onboardingInterviewService = onboardingInterviewService
+        self.onboardingCoordinator = onboardingCoordinator
         self.launchState = launchState
     }
 }

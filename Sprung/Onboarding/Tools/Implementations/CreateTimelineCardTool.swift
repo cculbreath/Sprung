@@ -19,10 +19,10 @@ struct CreateTimelineCardTool: InterviewTool {
         )
     }()
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "create_timeline_card" }
@@ -35,7 +35,7 @@ struct CreateTimelineCardTool: InterviewTool {
         }
 
         // Create timeline card via coordinator (which emits events)
-        let result = await service.coordinator.createTimelineCard(fields: JSON(fields))
+        let result = await coordinator.createTimelineCard(fields: JSON(fields))
         return .immediate(result)
     }
 }

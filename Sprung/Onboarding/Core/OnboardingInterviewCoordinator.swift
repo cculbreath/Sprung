@@ -16,17 +16,27 @@ final class OnboardingInterviewCoordinator {
     private let chatTranscriptStore: ChatTranscriptStore
     private let chatboxHandler: ChatboxHandler
     private let toolExecutionCoordinator: ToolExecutionCoordinator
-    private let artifactHandler: ArtifactHandler
     let toolRouter: ToolHandler
     let wizardTracker: WizardProgressTracker
     let phaseRegistry: PhaseScriptRegistry
     let toolRegistry: ToolRegistry
     private let toolExecutor: ToolExecutor
     private let openAIService: OpenAIService?
+    private let documentExtractionService: DocumentExtractionService
+    private let knowledgeCardAgent: KnowledgeCardAgent?
 
     // Event subscription tracking
     private var eventSubscriptionTask: Task<Void, Never>?
     private var stateUpdateTasks: [Task<Void, Never>] = []
+
+    // Phase 3: Workflow engine
+    private var workflowEngine: ObjectiveWorkflowEngine?
+
+    // Phase 3: Artifact persistence handler
+    private var artifactPersistenceHandler: ArtifactPersistenceHandler?
+
+    // Phase 3: Debounced checkpointing
+    private var checkpointDebounce: Task<Void, Never>?
 
     // MARK: - Data Store Dependencies
 
@@ -44,6 +54,7 @@ final class OnboardingInterviewCoordinator {
     private var reasoningSummaryClearTask: Task<Void, Never>?
     var onModelAvailabilityIssue: ((String) -> Void)?
     private(set) var preferences: OnboardingPreferences
+    private(set) var modelAvailabilityMessage: String?
 
     private struct ToolQueueEntry {
         let tokenId: UUID
@@ -160,6 +171,7 @@ final class OnboardingInterviewCoordinator {
 
     init(
         openAIService: OpenAIService?,
+        documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore,
         checkpoints: Checkpoints,
@@ -182,6 +194,8 @@ final class OnboardingInterviewCoordinator {
 
         self.state = StateCoordinator(eventBus: eventBus, phasePolicy: phasePolicy)
         self.openAIService = openAIService
+        self.documentExtractionService = documentExtractionService
+        self.knowledgeCardAgent = openAIService.map { KnowledgeCardAgent(client: $0) }
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
         self.checkpoints = checkpoints
@@ -200,9 +214,6 @@ final class OnboardingInterviewCoordinator {
             toolExecutor: toolExecutor,
             stateCoordinator: state
         )
-
-        // Create artifact handler for persistence/indexing
-        self.artifactHandler = ArtifactHandler(eventBus: eventBus, dataStore: dataStore)
 
         // Create handlers for tool router
         let promptHandler = PromptInteractionHandler()
@@ -238,13 +249,62 @@ final class OnboardingInterviewCoordinator {
             }
         }
 
-        Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
+        // Register all tools
+        registerTools()
 
-        // Start artifact handler subscriptions
-        Task { await artifactHandler.startEventSubscriptions() }
+        Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
 
         // Subscribe to events from the orchestrator
         Task { await subscribeToEvents() }
+    }
+
+    // MARK: - Tool Registration
+
+    private func registerTools() {
+        // Set up extraction progress handler
+        Task {
+            await documentExtractionService.setInvalidModelHandler { [weak self] modelId in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.notifyInvalidModel(id: modelId)
+                    self.onModelAvailabilityIssue?("Your selected model (\(modelId)) is not available. Choose another model in Settings.")
+                }
+            }
+        }
+
+        // Register all tools with coordinator reference
+        toolRegistry.register(GetUserOptionTool(coordinator: self))
+        toolRegistry.register(GetUserUploadTool(coordinator: self))
+        toolRegistry.register(CancelUserUploadTool(coordinator: self))
+        toolRegistry.register(GetApplicantProfileTool(coordinator: self))
+        toolRegistry.register(GetMacOSContactCardTool())
+        toolRegistry.register(ExtractDocumentTool(
+            extractionService: documentExtractionService,
+            progressHandler: { [weak self] update in
+                await MainActor.run {
+                    guard let self else { return }
+                    self.updateExtractionProgress(with: update)
+                }
+            }
+        ))
+        toolRegistry.register(CreateTimelineCardTool(coordinator: self))
+        toolRegistry.register(UpdateTimelineCardTool(coordinator: self))
+        toolRegistry.register(DeleteTimelineCardTool(coordinator: self))
+        toolRegistry.register(ReorderTimelineCardsTool(coordinator: self))
+        toolRegistry.register(SubmitForValidationTool(coordinator: self))
+        toolRegistry.register(ListArtifactsTool(coordinator: self))
+        toolRegistry.register(GetArtifactRecordTool(coordinator: self))
+        toolRegistry.register(RequestRawArtifactFileTool(coordinator: self))
+        toolRegistry.register(PersistDataTool(dataStore: dataStore))
+        toolRegistry.register(SetObjectiveStatusTool(coordinator: self))
+        toolRegistry.register(NextPhaseTool(coordinator: self))
+        toolRegistry.register(ValidateApplicantProfileTool(coordinator: self))
+
+        if let agent = knowledgeCardAgent {
+            toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))
+        }
+
+        Logger.info("✅ Registered \(toolRegistry.allToolNames.count) tools", category: .ai)
     }
 
     // MARK: - Event Subscription
@@ -264,30 +324,35 @@ final class OnboardingInterviewCoordinator {
     }
 
     private func handleEvent(_ event: OnboardingEvent) async {
+        // Phase 3: Schedule checkpoint for significant events
+        switch event {
+        case .objectiveStatusChanged, .timelineCardCreated, .timelineCardUpdated,
+             .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced,
+             .artifactRecordPersisted, .phaseTransitionApplied:
+            scheduleCheckpoint()
+        default:
+            break
+        }
+
         switch event {
         case .processingStateChanged(let processing):
             await state.setProcessingState(processing)
 
-        case .assistantMessageEmitted(_, let text, let reasoningExpected):
-            _ = await appendAssistantMessage(text, reasoningExpected: reasoningExpected)
-
         case .streamingMessageBegan(_, let text, let reasoningExpected):
-            _ = await beginAssistantStream(initialText: text, reasoningExpected: reasoningExpected)
+            // StateCoordinator only - ChatboxHandler mirrors to transcript
+            _ = await state.beginStreamingMessage(initialText: text, reasoningExpected: reasoningExpected)
 
         case .streamingMessageUpdated(let id, let delta):
-            await updateAssistantStream(id: id, text: delta)
+            // StateCoordinator only - ChatboxHandler mirrors to transcript
+            await state.updateStreamingMessage(id: id, delta: delta)
 
         case .streamingMessageFinalized(let id, let finalText):
-            _ = await finalizeAssistantStream(id: id, text: finalText)
-
-        case .reasoningSummaryUpdated(let messageId, let summary, let isFinal):
-            await updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
+            // StateCoordinator only - ChatboxHandler mirrors to transcript
+            _ = await state.finalizeStreamingMessage(id: id, finalText: finalText)
 
         case .llmReasoningSummary(let messageId, let summary, let isFinal):
-            await updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
-
-        case .reasoningSummariesFinalized(let messageIds):
-            chatTranscriptStore.finalizeReasoningSummariesIfNeeded(for: messageIds)
+            // StateCoordinator only - ChatboxHandler mirrors to transcript
+            await state.setReasoningSummary(summary, for: messageId)
 
         case .streamingStatusUpdated(let status):
             await setStreamingStatus(status)
@@ -357,10 +422,13 @@ final class OnboardingInterviewCoordinator {
              .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .llmReasoningStatus,
-             .phaseTransitionRequested, .phaseTransitionApplied,
-             .timelineCardUpdated:
+             .phaseTransitionRequested, .timelineCardUpdated:
             // These events are handled by StateCoordinator/handlers, not the coordinator
             break
+
+        case .phaseTransitionApplied(let phaseName, _):
+            // Update the system prompt when phase transitions (Phase 3)
+            await handlePhaseTransition(phaseName)
         }
     }
 
@@ -533,6 +601,23 @@ final class OnboardingInterviewCoordinator {
         }
         await state.publishAllowedToolsNow()
 
+        // Phase 3: Start workflow engine
+        let engine = ObjectiveWorkflowEngine(
+            eventBus: eventBus,
+            phaseRegistry: phaseRegistry,
+            state: state
+        )
+        workflowEngine = engine
+        await engine.start()
+
+        // Phase 3: Start artifact persistence handler
+        let persistenceHandler = ArtifactPersistenceHandler(
+            eventBus: eventBus,
+            dataStore: dataStore
+        )
+        artifactPersistenceHandler = persistenceHandler
+        await persistenceHandler.start()
+
         Task {
             do {
                 try await orchestrator.startInterview()
@@ -549,6 +634,10 @@ final class OnboardingInterviewCoordinator {
         Logger.info("🛑 Ending interview", category: .ai)
         await orchestrator?.endInterview()
         orchestrator = nil
+        await workflowEngine?.stop()
+        workflowEngine = nil
+        await artifactPersistenceHandler?.stop()
+        artifactPersistenceHandler = nil
         await state.setActiveState(false)
         await state.setProcessingState(false)
         stateUpdateTasks.forEach { $0.cancel() }
@@ -556,6 +645,21 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Phase Management
+
+    private func handlePhaseTransition(_ phaseName: String) async {
+        guard let phase = InterviewPhase(rawValue: phaseName) else {
+            Logger.warning("Invalid phase name: \(phaseName)", category: .ai)
+            return
+        }
+
+        // Rebuild system prompt for new phase
+        let newPrompt = phaseRegistry.buildSystemPrompt(for: phase)
+
+        // Update orchestrator's system prompt (Phase 3)
+        await orchestrator?.updateSystemPrompt(newPrompt)
+
+        Logger.info("🔄 System prompt updated for phase: \(phaseName)", category: .ai)
+    }
 
     func advancePhase() async -> InterviewPhase? {
         guard let newPhase = await state.advanceToNextPhase() else { return nil }
@@ -602,6 +706,32 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Timeline Management (Event-Driven)
+
+    /// Apply user timeline update from editor (Phase 3)
+    /// Replaces timeline in one shot and sends developer message
+    func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
+        // Build timeline JSON
+        let timeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
+
+        // Emit replacement event
+        await eventBus.publish(.skeletonTimelineReplaced(timeline: timeline, diff: diff, meta: meta))
+
+        // Build developer message
+        var payload = JSON()
+        payload["text"].string = "Developer status: Timeline cards updated by the user (\(diff.summary)). The skeleton_timeline artifact now reflects their edits. Do not re-validate unless new information is introduced."
+
+        var details = JSON()
+        details["validation_state"].string = "user_validated"
+        details["diff_summary"].string = diff.summary
+        details["updated_count"].int = cards.count
+        payload["details"] = details
+        payload["payload"] = timeline
+
+        // Send developer message
+        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
+
+        Logger.info("📋 User timeline update applied (\(diff.summary))", category: .ai)
+    }
 
     func createTimelineCard(fields: JSON) async -> JSON {
         var card = fields
@@ -739,28 +869,22 @@ final class OnboardingInterviewCoordinator {
 
     @discardableResult
     func appendUserMessage(_ text: String) async -> UUID {
+        // Only update StateCoordinator - ChatboxHandler mirrors to transcript
         let id = await state.appendUserMessage(text)
-        chatTranscriptStore.appendUserMessage(text)
         return id
     }
 
     @discardableResult
     func appendAssistantMessage(_ text: String, reasoningExpected: Bool) async -> UUID {
+        // Only update StateCoordinator - ChatboxHandler mirrors to transcript
         let id = await state.appendAssistantMessage(text)
-        chatTranscriptStore.appendAssistantMessage(
-            text,
-            reasoningExpected: reasoningExpected
-        )
         return id
     }
 
     @discardableResult
     func beginAssistantStream(initialText: String, reasoningExpected: Bool) async -> UUID {
+        // Only update StateCoordinator - ChatboxHandler mirrors to transcript
         let id = await state.beginStreamingMessage(
-            initialText: initialText,
-            reasoningExpected: reasoningExpected
-        )
-        chatTranscriptStore.beginAssistantStream(
             initialText: initialText,
             reasoningExpected: reasoningExpected
         )
@@ -768,19 +892,19 @@ final class OnboardingInterviewCoordinator {
     }
 
     func updateAssistantStream(id: UUID, text: String) async {
+        // Only update StateCoordinator - ChatboxHandler mirrors to transcript
         await state.updateStreamingMessage(id: id, delta: text)
-        chatTranscriptStore.updateAssistantStream(id: id, text: text)
     }
 
     func finalizeAssistantStream(id: UUID, text: String) async -> TimeInterval {
+        // Only update StateCoordinator - ChatboxHandler mirrors to transcript
         await state.finalizeStreamingMessage(id: id, finalText: text)
-        let elapsed = chatTranscriptStore.finalizeAssistantStream(id: id, text: text)
-        return elapsed
+        return 0 // Elapsed time now tracked by ChatboxHandler
     }
 
     func updateReasoningSummary(_ summary: String, for messageId: UUID, isFinal: Bool) async {
+        // Only update StateCoordinator - ChatboxHandler mirrors to transcript
         await state.setReasoningSummary(summary, for: messageId)
-        chatTranscriptStore.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
     }
 
     func clearLatestReasoningSummary() {
@@ -1067,18 +1191,33 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Checkpoint Management
 
+    /// Schedule a debounced checkpoint save (Phase 3)
+    /// Rapid edits don't spam disk; saves occur 300ms after last change
+    private func scheduleCheckpoint() {
+        checkpointDebounce?.cancel()
+        checkpointDebounce = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+                guard let self else { return }
+                await self.saveCheckpoint()
+            } catch {
+                // Task was cancelled (new edit came in)
+            }
+        }
+    }
+
     func saveCheckpoint() async {
         let snapshot = await state.createSnapshot()
         let artifacts = await state.artifacts
 
-        // Save to persistent storage
+        // Save to persistent storage - snapshot is used as-is
         checkpoints.save(
-            phase: snapshot.phase,
-            objectives: snapshot.objectives,
+            snapshot: snapshot,
             profileJSON: artifacts.applicantProfile,
             timelineJSON: artifacts.skeletonTimeline,
             enabledSections: artifacts.enabledSections
         )
+        Logger.debug("💾 Checkpoint saved", category: .ai)
     }
 
     func restoreFromCheckpointIfAvailable() async -> Bool {
@@ -1204,7 +1343,12 @@ final class OnboardingInterviewCoordinator {
 
     func notifyInvalidModel(id: String) {
         Logger.warning("⚠️ Invalid model id reported: \(id)", category: .ai)
+        modelAvailabilityMessage = "Your selected model (\(id)) is not available. Choose another model in Settings."
         onModelAvailabilityIssue?(id)
+    }
+
+    func clearModelAvailabilityMessage() {
+        modelAvailabilityMessage = nil
     }
 
     func transcriptExportString() -> String {
