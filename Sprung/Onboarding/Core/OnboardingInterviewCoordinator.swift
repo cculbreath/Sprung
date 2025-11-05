@@ -1067,7 +1067,39 @@ final class OnboardingInterviewCoordinator {
         Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
     }
 
+    // MARK: - Orchestrator Factory
 
+    private func makeOrchestrator(
+        service: OpenAIService,
+        systemPrompt: String
+    ) -> InterviewOrchestrator {
+        return InterviewOrchestrator(
+            service: service,
+            systemPrompt: systemPrompt,
+            eventBus: eventBus,
+            toolRegistry: toolRegistry,
+            state: state
+        )
+    }
+
+    // MARK: - Tool Processing
+
+    private func processToolCall(_ call: ToolCall) async -> JSON? {
+        let tokenId = UUID()
+
+        toolQueueEntries[tokenId] = ToolQueueEntry(
+            tokenId: tokenId,
+            callId: call.callId,
+            toolName: call.name,
+            status: "processing",
+            requestedInput: call.arguments.rawString() ?? "{}",
+            enqueuedAt: Date()
+        )
+
+        // Process the tool call through the executor
+        // This will be expanded in Phase 2
+        return nil
+    }
     // MARK: - Utility
 
     func notifyInvalidModel(id: String) {
