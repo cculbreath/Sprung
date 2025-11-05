@@ -1,6 +1,9 @@
 import Foundation
 import Observation
 
+/// Sync cache for chat transcript display in UI
+/// NOTE: This is NOT the single source of truth. StateCoordinator.messages is authoritative.
+/// TODO: Replace with direct StateCoordinator access in UI (requires SwiftUI actor support)
 @MainActor
 @Observable
 final class ChatTranscriptStore {
@@ -99,5 +102,14 @@ final class ChatTranscriptStore {
 
     func formattedTranscript() -> String {
         ChatTranscriptFormatter.format(messages: messages)
+    }
+
+    // MARK: - Sync from StateCoordinator
+
+    /// Sync messages from StateCoordinator (single source of truth)
+    /// This maintains the sync cache for UI display
+    func syncFromState(messages stateMessages: [OnboardingMessage]) {
+        self.messages = stateMessages
+        Logger.debug("💬 ChatTranscriptStore synced \(stateMessages.count) messages from StateCoordinator", category: .ai)
     }
 }
