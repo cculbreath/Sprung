@@ -16,6 +16,10 @@ struct OnboardingInterviewView: View {
     @State private var pendingStartModelId: String?
     @State private var loggedToolStatuses: [String: String] = [:]
 
+    #if DEBUG
+    @State private var showEventDump = false
+    #endif
+
     @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
@@ -211,7 +215,32 @@ struct OnboardingInterviewView: View {
                 Logger.info("📊 Tool status update", category: .ai, metadata: newValue)
                 loggedToolStatuses = newValue
             }
+            #if DEBUG
+            .overlay(alignment: .bottomTrailing) {
+                debugButton
+            }
+            .sheet(isPresented: $showEventDump) {
+                EventDumpView(coordinator: coordinator)
+            }
+            #endif
     }
+
+    #if DEBUG
+    private var debugButton: some View {
+        Button {
+            showEventDump.toggle()
+        } label: {
+            Image(systemName: "ladybug.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+                .padding(12)
+                .background(.purple.gradient, in: Circle())
+                .shadow(radius: 4)
+        }
+        .buttonStyle(.plain)
+        .padding(24)
+    }
+    #endif
 }
 
 private struct ResumeInterviewPromptView: View {

@@ -1004,8 +1004,9 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         case .skeletonTimelineReplaced(let timeline, let diff, _):
             // User edited timeline in UI - replace in one shot (Phase 3)
+            // User validation via timeline editor marks this complete (spec: dev_b_onboarding_ux_v2.md)
             artifacts.skeletonTimeline = TimelineCardAdapter.normalizedTimeline(timeline)
-            await setObjectiveStatus("skeleton_timeline", status: .inProgress, source: "user_edit")
+            await setObjectiveStatus("skeleton_timeline", status: .completed, source: "user_edit")
             if let diff = diff {
                 Logger.info("📅 Skeleton timeline replaced by user (\(diff.summary))", category: .ai)
             } else {

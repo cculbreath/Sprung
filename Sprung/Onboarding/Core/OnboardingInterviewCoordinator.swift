@@ -607,7 +607,6 @@ final class OnboardingInterviewCoordinator {
         // Delegate to lifecycle controller
         await lifecycleController.endInterview()
         // StateCoordinator maintains sync cache for isActive
-        hasSubscribedToStateUpdates = false
     }
 
     // MARK: - Phase Management
@@ -1133,4 +1132,20 @@ final class OnboardingInterviewCoordinator {
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
         phaseTransitionController.buildSystemPrompt(for: phase)
     }
+
+    #if DEBUG
+    // MARK: - Debug Event Diagnostics
+
+    func getRecentEvents(count: Int = 10) async -> [OnboardingEvent] {
+        await eventBus.getRecentEvents(count: count)
+    }
+
+    func getEventMetrics() async -> EventCoordinator.EventMetrics {
+        await eventBus.getMetrics()
+    }
+
+    func clearEventHistory() async {
+        await eventBus.clearHistory()
+    }
+    #endif
 }
