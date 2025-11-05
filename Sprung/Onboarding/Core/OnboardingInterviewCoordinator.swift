@@ -117,6 +117,10 @@ final class OnboardingInterviewCoordinator {
         await chatboxHandler.sendUserMessage(text)
     }
 
+    func requestCancelLLM() async {
+        await eventBus.publish(.llmCancelRequested)
+    }
+
     // Properties that need synchronous access for SwiftUI
     // These will be updated via observation when state changes
     @ObservationIgnored

@@ -115,17 +115,27 @@ struct OnboardingInterviewChatPanel: View {
                         )
                 )
 
-                Button {
-                    send(state.userInput)
-                } label: {
-                    Label("Send", systemImage: "paperplane.fill")
+                if coordinator.isProcessingSync {
+                    Button {
+                        Task {
+                            await coordinator.requestCancelLLM()
+                        }
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Button {
+                        send(state.userInput)
+                    } label: {
+                        Label("Send", systemImage: "paperplane.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                            !coordinator.isActive
+                    )
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(
-                    state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                        !coordinator.isActive ||
-                        coordinator.isProcessingSync
-                )
             }
             .padding(.top, sectionSpacing)
             .padding(.horizontal, horizontalPadding)
