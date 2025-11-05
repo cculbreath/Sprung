@@ -62,14 +62,15 @@ actor ArtifactPersistenceHandler: OnboardingEventEmitter {
 
         Logger.info("💾 Persisting artifact record: \(record["id"].stringValue)", category: .ai)
 
-        // Write to InterviewDataStore
-        await dataStore.save(
-            data: record,
-            dataType: "artifact_record",
-            filename: "artifact_\(record["id"].stringValue).json"
-        )
+        // Write to InterviewDataStore using the correct persist API
+        do {
+            let identifier = try await dataStore.persist(dataType: "artifact_record", payload: record)
+            Logger.info("✅ Artifact record persisted with identifier: \(identifier)", category: .ai)
 
-        // Emit confirmation
-        await emit(.artifactRecordPersisted(record: record))
+            // Emit confirmation
+            await emit(.artifactRecordPersisted(record: record))
+        } catch {
+            Logger.error("❌ Failed to persist artifact record: \(error)", category: .ai)
+        }
     }
 }
