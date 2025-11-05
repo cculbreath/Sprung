@@ -25,18 +25,12 @@ final class OnboardingInterviewCoordinator {
     private let documentExtractionService: DocumentExtractionService
     private let knowledgeCardAgent: KnowledgeCardAgent?
 
-    // Event subscription tracking
-    private var eventSubscriptionTask: Task<Void, Never>?
-    private var stateUpdateTasks: [Task<Void, Never>] = []
+    // MARK: - Core Controllers (Decomposed Components)
 
-    // Phase 3: Workflow engine
-    private var workflowEngine: ObjectiveWorkflowEngine?
-
-    // Phase 3: Artifact persistence handler
-    private var artifactPersistenceHandler: ArtifactPersistenceHandler?
-
-    // Phase 3: Debounced checkpointing
-    private var checkpointDebounce: Task<Void, Never>?
+    private let lifecycleController: InterviewLifecycleController
+    private let checkpointManager: CheckpointManager
+    private let phaseTransitionController: PhaseTransitionController
+    private let continuationTracker: ContinuationTracker
 
     // MARK: - Data Store Dependencies
 
@@ -46,24 +40,11 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Orchestration State (minimal, not business state)
 
-    private var orchestrator: InterviewOrchestrator?
-    private var phaseAdvanceContinuationId: UUID?
-    // Phase advance cache removed - no longer needed with centralized state
-    private var toolQueueEntries: [UUID: ToolQueueEntry] = [:]
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     private var reasoningSummaryClearTask: Task<Void, Never>?
     var onModelAvailabilityIssue: ((String) -> Void)?
     private(set) var preferences: OnboardingPreferences
     private(set) var modelAvailabilityMessage: String?
-
-    private struct ToolQueueEntry {
-        let tokenId: UUID
-        let callId: String
-        let toolName: String
-        let status: String
-        let requestedInput: String
-        let enqueuedAt: Date
-    }
 
     // MARK: - Computed Properties (Read from StateCoordinator)
 
@@ -242,6 +223,38 @@ final class OnboardingInterviewCoordinator {
         )
         self.wizardTracker = WizardProgressTracker()
 
+        // Initialize core controllers
+        self.lifecycleController = InterviewLifecycleController(
+            state: state,
+            eventBus: eventBus,
+            phaseRegistry: registry,
+            chatboxHandler: chatboxHandler,
+            toolExecutionCoordinator: toolExecutionCoordinator,
+            toolRouter: toolRouter,
+            openAIService: openAIService,
+            toolRegistry: toolRegistry,
+            dataStore: dataStore
+        )
+
+        self.checkpointManager = CheckpointManager(
+            state: state,
+            checkpoints: checkpoints,
+            applicantProfileStore: applicantProfileStore
+        )
+
+        self.phaseTransitionController = PhaseTransitionController(
+            state: state,
+            eventBus: eventBus,
+            phaseRegistry: registry
+        )
+
+        self.continuationTracker = ContinuationTracker(
+            toolExecutionCoordinator: toolExecutionCoordinator
+        )
+
+        // Wire up lifecycle controller to phase transition controller
+        phaseTransitionController.setLifecycleController(lifecycleController)
+
         toolRouter.uploadHandler.updateExtractionProgressHandler { [weak self] update in
             Task { @MainActor in
                 guard let self else { return }
@@ -310,26 +323,19 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Event Subscription
 
     private func subscribeToEvents() async {
-        // Cancel any existing subscription
-        eventSubscriptionTask?.cancel()
-
-        // Subscribe to all events (for now, until we refactor to topic-specific handling)
-        eventSubscriptionTask = Task { [weak self] in
-            guard let self else { return }
-
-            for await event in await eventBus.streamAll() {
-                await self.handleEvent(event)
-            }
+        // Delegate to lifecycle controller
+        lifecycleController.subscribeToEvents { [weak self] event in
+            await self?.handleEvent(event)
         }
     }
 
     private func handleEvent(_ event: OnboardingEvent) async {
-        // Phase 3: Schedule checkpoint for significant events
+        // Schedule checkpoint for significant events (delegated to CheckpointManager)
         switch event {
         case .objectiveStatusChanged, .timelineCardCreated, .timelineCardUpdated,
              .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced,
              .artifactRecordPersisted, .phaseTransitionApplied:
-            scheduleCheckpoint()
+            checkpointManager.scheduleCheckpoint()
         default:
             break
         }
@@ -392,16 +398,8 @@ final class OnboardingInterviewCoordinator {
             break
 
         case .toolContinuationNeeded(let continuationId, let toolName):
-            // Track continuation for UI resume methods
-            // Note: callId is not available here, stored by ToolExecutionCoordinator
-            toolQueueEntries[continuationId] = ToolQueueEntry(
-                tokenId: continuationId,
-                callId: "", // CallId managed by ToolExecutionCoordinator
-                toolName: toolName,
-                status: "waiting",
-                requestedInput: "{}",
-                enqueuedAt: Date()
-            )
+            // Track continuation for UI resume methods (delegated to ContinuationTracker)
+            continuationTracker.trackContinuation(id: continuationId, toolName: toolName)
 
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
@@ -427,61 +425,33 @@ final class OnboardingInterviewCoordinator {
             break
 
         case .phaseTransitionApplied(let phaseName, _):
-            // Update the system prompt when phase transitions (Phase 3)
-            await handlePhaseTransition(phaseName)
+            // Update the system prompt when phase transitions (delegated to PhaseTransitionController)
+            await phaseTransitionController.handlePhaseTransition(phaseName)
         }
     }
 
     // MARK: - State Updates
 
     private func subscribeToStateUpdates() {
-        stateUpdateTasks.forEach { $0.cancel() }
-        stateUpdateTasks.removeAll()
-
-        let processingTask = Task { [weak self] in
-            guard let self else { return }
-
-            for await event in await self.eventBus.stream(topic: .processing) {
-                if Task.isCancelled { break }
-                await self.handleProcessingEvent(event)
+        // Delegate to lifecycle controller
+        let handlers = StateUpdateHandlers(
+            handleProcessingEvent: { [weak self] event in
+                await self?.handleProcessingEvent(event)
+            },
+            handleArtifactEvent: { [weak self] event in
+                await self?.handleArtifactEvent(event)
+            },
+            handleLLMEvent: { [weak self] event in
+                await self?.handleLLMEvent(event)
+            },
+            handleStateEvent: { [weak self] event in
+                await self?.handleStateSyncEvent(event)
+            },
+            performInitialSync: { [weak self] in
+                await self?.initialStateSync()
             }
-        }
-        stateUpdateTasks.append(processingTask)
-
-        let artifactTask = Task { [weak self] in
-            guard let self else { return }
-
-            for await event in await self.eventBus.stream(topic: .artifact) {
-                if Task.isCancelled { break }
-                await self.handleArtifactEvent(event)
-            }
-        }
-        stateUpdateTasks.append(artifactTask)
-
-        let llmTask = Task { [weak self] in
-            guard let self else { return }
-
-            for await event in await self.eventBus.stream(topic: .llm) {
-                if Task.isCancelled { break }
-                await self.handleLLMEvent(event)
-            }
-        }
-        stateUpdateTasks.append(llmTask)
-
-        let stateTask = Task { [weak self] in
-            guard let self else { return }
-
-            for await event in await self.eventBus.stream(topic: .state) {
-                if Task.isCancelled { break }
-                await self.handleStateSyncEvent(event)
-            }
-        }
-        stateUpdateTasks.append(stateTask)
-
-        Task { [weak self] in
-            guard let self else { return }
-            await self.initialStateSync()
-        }
+        )
+        lifecycleController.subscribeToStateUpdates(handlers)
     }
 
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
@@ -563,130 +533,54 @@ final class OnboardingInterviewCoordinator {
         // Reset or restore state
         if resumeExisting {
             await loadPersistedArtifacts()
-            let didRestore = await restoreFromCheckpointIfAvailable()
+            let didRestore = await checkpointManager.restoreFromCheckpointIfAvailable()
             if !didRestore {
                 await state.reset()
-                await clearCheckpoints()
+                checkpointManager.clearCheckpoints()
                 clearArtifacts()
                 await resetStore()
             }
         } else {
             await state.reset()
-            await clearCheckpoints()
+            checkpointManager.clearCheckpoints()
             clearArtifacts()
             await resetStore()
         }
 
-        await state.setActiveState(true)
-        await registerObjectivesForCurrentPhase()
+        await phaseTransitionController.registerObjectivesForCurrentPhase()
 
-        // Build and start orchestrator
-        let phase = await state.phase
-        let systemPrompt = phaseRegistry.buildSystemPrompt(for: phase)
-        guard let service = openAIService else {
-            await state.setActiveState(false)
-            return false
+        // Start interview through lifecycle controller
+        let success = await lifecycleController.startInterview()
+        if success {
+            subscribeToStateUpdates()
         }
 
-        let orchestrator = makeOrchestrator(service: service, systemPrompt: systemPrompt)
-        self.orchestrator = orchestrator
-
-        // Start event subscriptions for handlers
-        await chatboxHandler.startEventSubscriptions()
-        await toolExecutionCoordinator.startEventSubscriptions()
-        await state.startEventSubscriptions()
-        subscribeToStateUpdates()
-        await MainActor.run {
-            toolRouter.startEventSubscriptions()
-        }
-        await state.publishAllowedToolsNow()
-
-        // Phase 3: Start workflow engine
-        let engine = ObjectiveWorkflowEngine(
-            eventBus: eventBus,
-            phaseRegistry: phaseRegistry,
-            state: state
-        )
-        workflowEngine = engine
-        await engine.start()
-
-        // Phase 3: Start artifact persistence handler
-        let persistenceHandler = ArtifactPersistenceHandler(
-            eventBus: eventBus,
-            dataStore: dataStore
-        )
-        artifactPersistenceHandler = persistenceHandler
-        await persistenceHandler.start()
-
-        Task {
-            do {
-                try await orchestrator.startInterview()
-            } catch {
-                Logger.error("Interview failed: \(error)", category: .ai)
-                await endInterview()
-            }
-        }
-
-        return true
+        return success
     }
 
     func endInterview() async {
-        Logger.info("🛑 Ending interview", category: .ai)
-        await orchestrator?.endInterview()
-        orchestrator = nil
-        await workflowEngine?.stop()
-        workflowEngine = nil
-        await artifactPersistenceHandler?.stop()
-        artifactPersistenceHandler = nil
-        await state.setActiveState(false)
-        await state.setProcessingState(false)
-        stateUpdateTasks.forEach { $0.cancel() }
-        stateUpdateTasks.removeAll()
+        // Delegate to lifecycle controller
+        await lifecycleController.endInterview()
     }
 
     // MARK: - Phase Management
 
-    private func handlePhaseTransition(_ phaseName: String) async {
-        guard let phase = InterviewPhase(rawValue: phaseName) else {
-            Logger.warning("Invalid phase name: \(phaseName)", category: .ai)
-            return
-        }
-
-        // Rebuild system prompt for new phase
-        let newPrompt = phaseRegistry.buildSystemPrompt(for: phase)
-
-        // Update orchestrator's system prompt (Phase 3)
-        await orchestrator?.updateSystemPrompt(newPrompt)
-
-        Logger.info("🔄 System prompt updated for phase: \(phaseName)", category: .ai)
-    }
-
     func advancePhase() async -> InterviewPhase? {
-        guard let newPhase = await state.advanceToNextPhase() else { return nil }
+        let newPhase = await phaseTransitionController.advancePhase()
 
         // Update wizard progress
         let completedSteps = await state.completedWizardSteps
         let currentStep = await state.currentWizardStep
         synchronizeWizardTracker(currentStep: currentStep, completedSteps: completedSteps)
 
-        await registerObjectivesForCurrentPhase()
         return newPhase
     }
 
     func getCompletedObjectiveIds() async -> Set<String> {
-        let objectives = await state.getAllObjectives()
-        return Set(objectives
-            .filter { $0.status == .completed || $0.status == .skipped }
-            .map { $0.id })
+        await phaseTransitionController.getCompletedObjectiveIds()
     }
 
     // MARK: - Objective Management
-
-    func registerObjectivesForCurrentPhase() async {
-        // Objectives are now automatically registered by StateCoordinator
-        // when the phase is set, so this is no longer needed
-        Logger.info("📋 Objectives auto-registered by StateCoordinator for current phase", category: .ai)
-    }
 
     func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
         // Emit event to update objective status
@@ -780,15 +674,11 @@ final class OnboardingInterviewCoordinator {
     }
 
     func requestPhaseTransition(from: String, to: String, reason: String?) async {
-        await eventBus.publish(.phaseTransitionRequested(
-            from: from,
-            to: to,
-            reason: reason
-        ))
+        await phaseTransitionController.requestPhaseTransition(from: from, to: to, reason: reason)
     }
 
     func missingObjectives() async -> [String] {
-        await state.getMissingObjectives()
+        await phaseTransitionController.missingObjectives()
     }
 
     // MARK: - Artifact Queries (Read-Only State Access)
@@ -824,18 +714,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     func nextPhase() async -> InterviewPhase? {
-        let canAdvance = await state.canAdvancePhase()
-        guard canAdvance else { return nil }
-
-        let currentPhase = await state.phase
-        switch currentPhase {
-        case .phase1CoreFacts:
-            return .phase2DeepDive
-        case .phase2DeepDive:
-            return .phase3WritingCorpus
-        case .phase3WritingCorpus, .complete:
-            return nil
-        }
+        await phaseTransitionController.nextPhase()
     }
 
     // MARK: - Artifact Management
@@ -847,21 +726,21 @@ final class OnboardingInterviewCoordinator {
             await MainActor.run {
                 self.persistApplicantProfileToSwiftData(json: profile)
             }
-            await self.saveCheckpoint()
+            await self.checkpointManager.saveCheckpoint()
         }
     }
 
     func storeSkeletonTimeline(_ timeline: JSON) {
         Task {
             await state.setSkeletonTimeline(timeline)
-            await saveCheckpoint()
+            await checkpointManager.saveCheckpoint()
         }
     }
 
     func updateEnabledSections(_ sections: Set<String>) {
         Task {
             await state.setEnabledSections(sections)
-            await saveCheckpoint()
+            await checkpointManager.saveCheckpoint()
         }
     }
 
@@ -1090,7 +969,7 @@ final class OnboardingInterviewCoordinator {
         continuationId: UUID
     ) {
         Task {
-            phaseAdvanceContinuationId = continuationId
+            continuationTracker.trackPhaseAdvanceContinuation(id: continuationId)
             await state.setPendingPhaseAdvanceRequest(request)
             // Emit event to notify UI about the request
             await eventBus.publish(.phaseAdvanceRequested(request: request, continuationId: continuationId))
@@ -1098,7 +977,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     func approvePhaseAdvance() async {
-        guard let continuationId = phaseAdvanceContinuationId,
+        guard let continuationId = continuationTracker.getPhaseAdvanceContinuationId(),
               let request = await state.pendingPhaseAdvanceRequest else { return }
 
         // Perform the actual phase transition
@@ -1116,21 +995,21 @@ final class OnboardingInterviewCoordinator {
 
         // Clear the request
         await state.setPendingPhaseAdvanceRequest(nil)
-        phaseAdvanceContinuationId = nil
+        continuationTracker.clearPhaseAdvanceContinuation()
 
         // Resume the tool continuation
         var payload = JSON()
         payload["approved"].boolValue = true
         payload["new_phase"].stringValue = newPhase.rawValue
 
-        await resumeToolContinuation(id: continuationId, payload: payload)
+        await continuationTracker.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
     func denyPhaseAdvance(feedback: String?) async {
-        guard let continuationId = phaseAdvanceContinuationId else { return }
+        guard let continuationId = continuationTracker.getPhaseAdvanceContinuationId() else { return }
 
         await state.setPendingPhaseAdvanceRequest(nil)
-        phaseAdvanceContinuationId = nil
+        continuationTracker.clearPhaseAdvanceContinuation()
 
         var payload = JSON()
         payload["approved"].boolValue = false
@@ -1138,14 +1017,13 @@ final class OnboardingInterviewCoordinator {
             payload["feedback"].stringValue = feedback
         }
 
-        await resumeToolContinuation(id: continuationId, payload: payload)
+        await continuationTracker.resumeToolContinuation(id: continuationId, payload: payload)
     }
 
     // MARK: - Tool Execution
 
     func resumeToolContinuation(from result: (UUID, JSON)?) async {
-        guard let (id, payload) = result else { return }
-        await resumeToolContinuation(id: id, payload: payload)
+        await continuationTracker.resumeToolContinuation(from: result)
     }
 
     func resumeToolContinuation(
@@ -1160,28 +1038,10 @@ final class OnboardingInterviewCoordinator {
         }
 
         if persistCheckpoint {
-            await saveCheckpoint()
+            await checkpointManager.saveCheckpoint()
         }
 
-        await resumeToolContinuation(id: id, payload: payload)
-    }
-
-    func resumeToolContinuation(id: UUID, payload: JSON) async {
-        guard let entry = toolQueueEntries.removeValue(forKey: id) else {
-            Logger.warning("No queue entry for continuation \(id)", category: .ai)
-            return
-        }
-
-        Logger.info("✅ Tool \(entry.toolName) resuming", category: .ai)
-
-        do {
-            try await toolExecutionCoordinator.resumeToolContinuation(
-                id: id,
-                userInput: payload
-            )
-        } catch {
-            Logger.error("Failed to resume tool: \(error)", category: .ai)
-        }
+        await continuationTracker.resumeToolContinuation(id: id, payload: payload)
     }
 
     enum WaitingStateChange {
@@ -1189,63 +1049,8 @@ final class OnboardingInterviewCoordinator {
         case set(String?)
     }
 
-    // MARK: - Checkpoint Management
-
-    /// Schedule a debounced checkpoint save (Phase 3)
-    /// Rapid edits don't spam disk; saves occur 300ms after last change
-    private func scheduleCheckpoint() {
-        checkpointDebounce?.cancel()
-        checkpointDebounce = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
-                guard let self else { return }
-                await self.saveCheckpoint()
-            } catch {
-                // Task was cancelled (new edit came in)
-            }
-        }
-    }
-
-    func saveCheckpoint() async {
-        let snapshot = await state.createSnapshot()
-        let artifacts = await state.artifacts
-
-        // Save to persistent storage - snapshot is used as-is
-        checkpoints.save(
-            snapshot: snapshot,
-            profileJSON: artifacts.applicantProfile,
-            timelineJSON: artifacts.skeletonTimeline,
-            enabledSections: artifacts.enabledSections
-        )
-        Logger.debug("💾 Checkpoint saved", category: .ai)
-    }
-
-    func restoreFromCheckpointIfAvailable() async -> Bool {
-        guard let checkpoint = checkpoints.restore() else { return false }
-
-        await state.restoreFromSnapshot(checkpoint.snapshot)
-
-        // Restore artifacts from checkpoint
-        if let profile = checkpoint.profileJSON {
-            await state.setApplicantProfile(profile)
-            persistApplicantProfileToSwiftData(json: profile)
-        }
-
-        if let timeline = checkpoint.timelineJSON {
-            await state.setSkeletonTimeline(timeline)
-        }
-
-        if !checkpoint.enabledSections.isEmpty {
-            await state.setEnabledSections(checkpoint.enabledSections)
-        }
-
-        Logger.info("✅ Restored from checkpoint", category: .ai)
-        return true
-    }
-
-    func clearCheckpoints() async {
-        checkpoints.clear()
-    }
+    // MARK: - Checkpoint Management (Delegated to CheckpointManager)
+    // No methods needed here - all delegated to checkpointManager
 
     // MARK: - Data Store Management
 
@@ -1306,38 +1111,6 @@ final class OnboardingInterviewCoordinator {
         Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
     }
 
-    // MARK: - Orchestrator Factory
-
-    private func makeOrchestrator(
-        service: OpenAIService,
-        systemPrompt: String
-    ) -> InterviewOrchestrator {
-        return InterviewOrchestrator(
-            service: service,
-            systemPrompt: systemPrompt,
-            eventBus: eventBus,
-            toolRegistry: toolRegistry
-        )
-    }
-
-    // MARK: - Tool Processing
-
-    private func processToolCall(_ call: ToolCall) async -> JSON? {
-        let tokenId = UUID()
-
-        toolQueueEntries[tokenId] = ToolQueueEntry(
-            tokenId: tokenId,
-            callId: call.callId,
-            toolName: call.name,
-            status: "processing",
-            requestedInput: call.arguments.rawString() ?? "{}",
-            enqueuedAt: Date()
-        )
-
-        // Process the tool call through the executor
-        // This will be expanded in Phase 2
-        return nil
-    }
 
     // MARK: - Utility
 
@@ -1356,6 +1129,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
-        phaseRegistry.buildSystemPrompt(for: phase)
+        phaseTransitionController.buildSystemPrompt(for: phase)
     }
 }
