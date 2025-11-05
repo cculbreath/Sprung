@@ -17,6 +17,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     // MARK: - Properties
 
     let eventBus: EventCoordinator
+    private let state: StateCoordinator
     private let llmMessenger: LLMMessenger
     private let networkRouter: NetworkRouter
     private let service: OpenAIService
@@ -38,6 +39,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         self.service = service
         self.systemPrompt = systemPrompt
         self.eventBus = eventBus
+        self.state = state
         self.networkRouter = NetworkRouter(eventBus: eventBus)
         self.llmMessenger = LLMMessenger(
             service: service,
