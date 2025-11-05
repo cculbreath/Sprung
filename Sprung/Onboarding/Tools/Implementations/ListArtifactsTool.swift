@@ -13,10 +13,10 @@ struct ListArtifactsTool: InterviewTool {
         )
     }()
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "list_artifacts" }
@@ -24,13 +24,12 @@ struct ListArtifactsTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func isAvailable() async -> Bool {
-        await MainActor.run { self.service.hasArtifacts() }
+        let summaries = await coordinator.listArtifactSummaries()
+        return !summaries.isEmpty
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let summaries = await MainActor.run {
-            service.artifactSummaries()
-        }
+        let summaries = await coordinator.listArtifactSummaries()
 
         var response = JSON()
         response["count"].int = summaries.count

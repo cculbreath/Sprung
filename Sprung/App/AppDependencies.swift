@@ -31,7 +31,7 @@ final class AppDependencies {
     let applicantProfileStore: ApplicantProfileStore
     let onboardingArtifactStore: OnboardingArtifactStore
     let documentExtractionService: DocumentExtractionService
-    let onboardingInterviewService: OnboardingInterviewService
+    let onboardingCoordinator: OnboardingInterviewCoordinator
     let llmService: LLMService
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
@@ -171,14 +171,17 @@ final class AppDependencies {
         self.resumeReviseViewModel = resumeReviseViewModel
 
         let interviewDataStore = InterviewDataStore()
-        let onboardingInterviewService = OnboardingInterviewService(
-            modelContext: modelContext,
+        let checkpoints = Checkpoints()
+        let preferences = OnboardingPreferences()
+        let onboardingCoordinator = OnboardingInterviewCoordinator(
             openAIService: onboardingOpenAIService,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
-            dataStore: interviewDataStore
+            dataStore: interviewDataStore,
+            checkpoints: checkpoints,
+            preferences: preferences
         )
-        self.onboardingInterviewService = onboardingInterviewService
+        self.onboardingCoordinator = onboardingCoordinator
 
         self.appEnvironment = AppEnvironment(
             appState: appState,
@@ -193,7 +196,7 @@ final class AppDependencies {
             careerKeywordStore: careerKeywordStore,
             resumeExportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
-            onboardingInterviewService: onboardingInterviewService,
+            onboardingCoordinator: onboardingCoordinator,
             launchState: .ready
         )
 

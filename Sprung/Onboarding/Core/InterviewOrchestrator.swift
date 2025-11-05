@@ -22,16 +22,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     private let service: OpenAIService
     private let systemPrompt: String
 
-    // Tool choice override for forcing specific tools (TODO: Move to LLMMessenger)
-    private var nextToolChoiceOverride: ToolChoiceOverride?
-
     // Timeline tool names for special handling (TODO: Move to configuration)
-    private let timelineToolNames: Set<String> = [
-        "create_timeline_card",
-        "update_timeline_card",
-        "reorder_timeline_cards",
-        "delete_timeline_card"
-    ]
 
     private var isActive = false
 
@@ -93,35 +84,11 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         await emit(.llmSendUserMessage(payload: payload))
     }
 
-    // MARK: - Tool Continuation
+    // MARK: - Dynamic Prompt Update (Phase 3)
 
-    func resumeToolContinuation(id: UUID, payload: JSON) async throws {
-        // Note: This method is deprecated - tool continuations now handled by ToolExecutionCoordinator
-        // Kept for compatibility during migration
-        Logger.warning("InterviewOrchestrator.resumeToolContinuation is deprecated", category: .ai)
+    /// Update the system prompt when phases transition
+    func updateSystemPrompt(_ text: String) async {
+        await llmMessenger.updateSystemPrompt(text)
     }
 
-    // MARK: - Tool Continuation Management
-    // Note: Tool execution and continuation management moved to ToolExecutionCoordinator (§4.6)
-    // TODO: Move tool choice override and available tools logic to StateCoordinator/LLMMessenger
-
-    // MARK: - Special Tool Handling
-
-    func forceTimelineTools() async {
-        nextToolChoiceOverride = ToolChoiceOverride(
-            mode: .require(tools: Array(timelineToolNames))
-        )
-    }
-
-    func resetToolChoice() async {
-        nextToolChoiceOverride = ToolChoiceOverride(mode: .auto)
-    }
-}
-
-private struct ToolChoiceOverride {
-    enum Mode {
-        case require(tools: [String])
-        case auto
-    }
-    let mode: Mode
 }

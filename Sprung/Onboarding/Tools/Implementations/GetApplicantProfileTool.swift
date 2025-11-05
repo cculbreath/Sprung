@@ -11,10 +11,10 @@ struct GetApplicantProfileTool: InterviewTool {
         additionalProperties: false
     )
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "get_applicant_profile" }

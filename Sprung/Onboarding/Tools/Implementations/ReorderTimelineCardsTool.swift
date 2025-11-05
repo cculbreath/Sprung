@@ -17,10 +17,10 @@ struct ReorderTimelineCardsTool: InterviewTool {
         additionalProperties: false
     )
 
-    private let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
 
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
 
     var name: String { "reorder_timeline_cards" }
@@ -34,7 +34,7 @@ struct ReorderTimelineCardsTool: InterviewTool {
         }
 
         // Reorder timeline cards via coordinator (which emits events)
-        let result = await service.coordinator.reorderTimelineCards(orderedIds: orderedIds)
+        let result = await coordinator.reorderTimelineCards(orderedIds: orderedIds)
         return .immediate(result)
     }
 }

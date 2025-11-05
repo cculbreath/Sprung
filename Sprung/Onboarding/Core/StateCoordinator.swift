@@ -51,6 +51,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         var experienceCards: [JSON] = []
         var writingSamples: [JSON] = []
         var artifactRecords: [JSON] = []
+        var knowledgeCards: [JSON] = [] // Phase 3: Knowledge card storage
     }
 
     // MARK: - Chat & Messages
@@ -426,6 +427,14 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
+    func addKnowledgeCard(_ card: JSON) {
+        artifacts.knowledgeCards.append(card)
+        if !artifacts.knowledgeCards.isEmpty {
+            setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
+        }
+        Logger.info("🃏 Knowledge card added (total: \(artifacts.knowledgeCards.count))", category: .ai)
+    }
+
     // MARK: - Message Management
 
     func appendUserMessage(_ text: String) -> UUID {
@@ -516,6 +525,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         pendingUploadRequest = request
         if request != nil {
             waitingState = .upload
+            // Phase 3: Gate tools during upload waiting state
+            Task { await emitRestrictedTools() }
         }
     }
 
@@ -523,6 +534,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         pendingChoicePrompt = prompt
         if prompt != nil {
             waitingState = .selection
+            // Phase 3: Gate tools during selection waiting state
+            Task { await emitRestrictedTools() }
         }
     }
 
@@ -530,6 +543,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         pendingValidationPrompt = prompt
         if prompt != nil {
             waitingState = .validation
+            // Phase 3: Gate tools during validation waiting state
+            Task { await emitRestrictedTools() }
         }
     }
 
@@ -805,6 +820,16 @@ actor StateCoordinator: OnboardingEventEmitter {
             reorderTimelineCards(orderedIds: orderedIds)
             Logger.info("📅 Timeline cards reordered via event", category: .ai)
 
+        case .skeletonTimelineReplaced(let timeline, let diff, _):
+            // User edited timeline in UI - replace in one shot (Phase 3)
+            artifacts.skeletonTimeline = TimelineCardAdapter.normalizedTimeline(timeline)
+            setObjectiveStatus("skeleton_timeline", status: .inProgress, source: "user_edit")
+            if let diff = diff {
+                Logger.info("📅 Skeleton timeline replaced by user (\(diff.summary))", category: .ai)
+            } else {
+                Logger.info("📅 Skeleton timeline replaced by user", category: .ai)
+            }
+
         default:
             break
         }
@@ -855,6 +880,30 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func publishAllowedToolsNow() async {
         await emitAllowedTools()
+    }
+
+    // MARK: - Tool Gating (Phase 3)
+
+    /// Emit restricted tool set during waiting states
+    /// When user is interacting with UI (selection/upload/validation), restrict other tools
+    private func emitRestrictedTools() async {
+        guard waitingState != nil else {
+            // Not in waiting state - use normal allowed tools
+            await emitAllowedTools()
+            return
+        }
+
+        // During waiting states, restrict to empty set (only continuation path allowed)
+        let restrictedTools: Set<String> = []
+        await emit(.stateAllowedToolsUpdated(tools: restrictedTools))
+        Logger.debug("🚫 Tools gated during waiting state: \(waitingState?.rawValue ?? "unknown")", category: .ai)
+    }
+
+    /// Clear waiting state and restore normal tools
+    func clearWaitingState() async {
+        waitingState = nil
+        await emitAllowedTools()
+        Logger.debug("✅ Waiting state cleared, tools restored", category: .ai)
     }
 
     /// When objectives change, emit update

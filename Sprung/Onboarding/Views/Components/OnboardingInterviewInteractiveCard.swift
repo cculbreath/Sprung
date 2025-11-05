@@ -3,7 +3,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct OnboardingInterviewInteractiveCard: View {
-    @Bindable var service: OnboardingInterviewService
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Bindable var router: ToolHandler
     @Bindable var state: OnboardingInterviewViewModel
@@ -15,14 +14,13 @@ struct OnboardingInterviewInteractiveCard: View {
         let cornerRadius: CGFloat = 28  // Reduced for more natural appearance
         let statusMap: [OnboardingToolIdentifier: OnboardingToolStatus] = {
             var map = router.statusSnapshot.statuses
-            map[.extractDocument] = service.pendingExtraction == nil ? .ready : .processing
+            map[.extractDocument] = coordinator.pendingExtractionSync == nil ? .ready : .processing
             return map
         }()
 
         return VStack(spacing: 18) {
             HStack(spacing: 0) {
                 OnboardingInterviewToolPane(
-                    service: service,
                     coordinator: coordinator,
                     isOccupied: $isToolPaneOccupied
                 )
@@ -32,7 +30,6 @@ struct OnboardingInterviewInteractiveCard: View {
                 Divider()
 
                 OnboardingInterviewChatPanel(
-                    service: service,
                     coordinator: coordinator,
                     state: state,
                     modelStatusDescription: modelStatusDescription,
