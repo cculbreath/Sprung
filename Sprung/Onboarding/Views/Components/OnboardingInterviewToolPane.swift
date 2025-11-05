@@ -453,32 +453,34 @@ private struct KnowledgeCardValidationHost: View {
             artifacts: artifactRecords,
             onApprove: { approved in
                 Task {
-                    // TODO: Emit event instead
-                    // let result = coordinator.submitValidationResponse(
-                    //     status: "approved",
-                    //     updatedData: approved.toJSON(),
-                    //     changes: nil,
-                    //     notes: nil
-                    // )
-                    // await service.resumeToolContinuation(from: result)
+                    let result = coordinator.submitValidationResponse(
+                        status: "approved",
+                        updatedData: approved.toJSON(),
+                        changes: nil,
+                        notes: nil
+                    )
+                    if let (continuationId, payload) = result {
+                        await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
+                    }
                 }
             },
             onReject: { rejectedIds, reason in
                 Task {
-                    // TODO: Emit event instead
-                    // var changePayload: JSON?
-                    // if !rejectedIds.isEmpty {
-                    //     var details = JSON()
-                    //     details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
-                    //     changePayload = details
-                    // }
-                    // let result = coordinator.submitValidationResponse(
-                    //     status: "rejected",
-                    //     updatedData: nil,
-                    //     changes: changePayload,
-                    //     notes: reason.isEmpty ? nil : reason
-                    // )
-                    // await service.resumeToolContinuation(from: result)
+                    var changePayload: JSON?
+                    if !rejectedIds.isEmpty {
+                        var details = JSON()
+                        details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
+                        changePayload = details
+                    }
+                    let result = coordinator.submitValidationResponse(
+                        status: "rejected",
+                        updatedData: nil,
+                        changes: changePayload,
+                        notes: reason.isEmpty ? nil : reason
+                    )
+                    if let (continuationId, payload) = result {
+                        await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
+                    }
                 }
             }
         )
