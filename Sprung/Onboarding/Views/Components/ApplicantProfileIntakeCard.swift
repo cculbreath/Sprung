@@ -70,9 +70,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Upload your resume PDF, DOCX, or text file",
                     icon: "arrow.up.doc"
                 ) {
-                    if let (request, continuationId) = coordinator.toolRouter.beginApplicantProfileUpload() {
-                        coordinator.presentUploadRequest(request, continuationId: continuationId)
-                    }
+                    coordinator.beginProfileUpload()
                 }
 
                 optionButton(
@@ -80,7 +78,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Provide a link to your resume or LinkedIn profile",
                     icon: "link"
                 ) {
-                    coordinator.toolRouter.beginApplicantProfileURL()
+                    coordinator.beginProfileURLEntry()
                 }
 
                 optionButton(
@@ -88,7 +86,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Import details from your macOS Contacts or vCard",
                     icon: "person.crop.circle"
                 ) {
-                    coordinator.toolRouter.beginApplicantProfileContactsFetch()
+                    coordinator.beginProfileContactsFetch()
                 }
 
                 optionButton(
@@ -96,7 +94,7 @@ struct ApplicantProfileIntakeCard: View {
                     subtitle: "Fill in your contact details step by step",
                     icon: "square.and.pencil"
                 ) {
-                    coordinator.toolRouter.beginApplicantProfileManualEntry()
+                    coordinator.beginProfileManualEntry()
                 }
             }
 
@@ -158,7 +156,7 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    coordinator.toolRouter.resetApplicantProfileIntakeToOptions()
+                    coordinator.resetProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
@@ -166,8 +164,7 @@ struct ApplicantProfileIntakeCard: View {
 
                 Button("Save & Continue") {
                     Task {
-                        let result = coordinator.toolRouter.completeApplicantProfileDraft(draft, source: source)
-                        await coordinator.resumeToolContinuation(from: result)
+                        await coordinator.submitProfileDraft(draft: draft, source: source)
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -191,7 +188,7 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    coordinator.toolRouter.resetApplicantProfileIntakeToOptions()
+                    coordinator.resetProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
@@ -199,8 +196,7 @@ struct ApplicantProfileIntakeCard: View {
 
                 Button("Submit URL") {
                     Task {
-                        let result = coordinator.toolRouter.submitApplicantProfileURL(urlString)
-                        await coordinator.resumeToolContinuation(from: result)
+                        await coordinator.submitProfileURL(urlString)
                     }
                 }
                 .buttonStyle(.borderedProminent)

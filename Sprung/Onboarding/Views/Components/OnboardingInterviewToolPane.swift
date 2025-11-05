@@ -33,12 +33,12 @@ struct OnboardingInterviewToolPane: View {
                         prompt: prompt,
                         onSubmit: { selection in
                             Task {
-                                // Event-driven: Choice resolution handled via ToolHandler
+                                await coordinator.submitChoiceSelection(selection)
                             }
                         },
                         onCancel: {
                             Task {
-                                // Event-driven: Cancellation handled via ToolHandler
+                                // TODO: Add cancelChoiceAndResume facade method if needed
                             }
                         }
                     )
@@ -54,18 +54,17 @@ struct OnboardingInterviewToolPane: View {
                             prompt: validation,
                             onSubmit: { decision, updated, notes in
                                 Task {
-                                    let result = coordinator.submitValidationResponse(
+                                    await coordinator.submitValidationAndResume(
                                         status: decision.rawValue,
                                         updatedData: updated,
                                         changes: nil,
                                         notes: notes
                                     )
-                                    await coordinator.resumeToolContinuation(from: result)
                                 }
                             },
                             onCancel: {
                                 Task {
-                                    // Event-driven: Cancellation handled via ToolHandler
+                                    // TODO: Add cancelValidationAndResume facade method if needed
                                 }
                             }
                         )
@@ -93,12 +92,12 @@ struct OnboardingInterviewToolPane: View {
                         fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
                         onConfirm: { draft in
                             Task {
-                                // Event-driven: Profile resolution handled via ToolHandler
+                                await coordinator.confirmApplicantProfile(draft: draft)
                             }
                         },
                         onCancel: {
                             Task {
-                                // Event-driven: Profile rejection handled via ToolHandler
+                                await coordinator.rejectApplicantProfile(reason: "User cancelled")
                             }
                         }
                     )
@@ -108,12 +107,12 @@ struct OnboardingInterviewToolPane: View {
                         existingDraft: experienceDefaultsStore.loadDraft(),
                         onConfirm: { enabled in
                             Task {
-                                // Event-driven: Section toggle resolution handled via ToolHandler
+                                await coordinator.confirmSectionToggle(enabled: enabled)
                             }
                         },
                         onCancel: {
                             Task {
-                                // Event-driven: Section toggle rejection handled via ToolHandler
+                                await coordinator.rejectSectionToggle(reason: "User cancelled")
                             }
                         }
                     )
@@ -216,14 +215,12 @@ struct OnboardingInterviewToolPane: View {
                         onSelectFile: { openPanel(for: request) },
                         onDropFiles: { urls in
                             Task {
-                                let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
-                                await coordinator.resumeToolContinuation(from: result)
+                                await coordinator.completeUploadAndResume(id: request.id, fileURLs: urls)
                             }
                         },
                         onDecline: {
                             Task {
-                                let result = await coordinator.skipUpload(id: request.id)
-                                await coordinator.resumeToolContinuation(from: result)
+                                await coordinator.skipUploadAndResume(id: request.id)
                             }
                         }
                     )
@@ -284,8 +281,7 @@ struct OnboardingInterviewToolPane: View {
                 urls = Array(panel.urls.prefix(1))
             }
             Task {
-                let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
-                await coordinator.resumeToolContinuation(from: result)
+                await coordinator.completeUploadAndResume(id: request.id, fileURLs: urls)
             }
         }
     }
@@ -430,13 +426,12 @@ private struct KnowledgeCardValidationHost: View {
             artifacts: artifactRecords,
             onApprove: { approved in
                 Task {
-                    let result = coordinator.submitValidationResponse(
+                    await coordinator.submitValidationAndResume(
                         status: "approved",
                         updatedData: approved.toJSON(),
                         changes: nil,
                         notes: nil
                     )
-                    await coordinator.resumeToolContinuation(from: result)
                 }
             },
             onReject: { rejectedIds, reason in
@@ -447,13 +442,12 @@ private struct KnowledgeCardValidationHost: View {
                         details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
                         changePayload = details
                     }
-                    let result = coordinator.submitValidationResponse(
+                    await coordinator.submitValidationAndResume(
                         status: "rejected",
                         updatedData: nil,
                         changes: changePayload,
                         notes: reason.isEmpty ? nil : reason
                     )
-                    await coordinator.resumeToolContinuation(from: result)
                 }
             }
         )
