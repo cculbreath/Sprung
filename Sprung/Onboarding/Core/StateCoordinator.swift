@@ -41,6 +41,10 @@ actor StateCoordinator: OnboardingEventEmitter {
     nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
     nonisolated(unsafe) private(set) var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest?
 
+    // Message sync caches for SwiftUI access
+    nonisolated(unsafe) private(set) var messagesSync: [OnboardingMessage] = []
+    nonisolated(unsafe) private(set) var streamingMessageSync: StreamingMessage?
+
     // MARK: - Objectives (Single Source)
 
     /// The ONLY objective tracking in the entire system
@@ -485,6 +489,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             timestamp: Date()
         )
         messages.append(message)
+        messagesSync = messages // Update sync cache
         return message.id
     }
 
@@ -496,6 +501,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             timestamp: Date()
         )
         messages.append(message)
+        messagesSync = messages // Update sync cache
         return message.id
     }
 
@@ -506,6 +512,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             text: initialText,
             reasoningExpected: reasoningExpected
         )
+        streamingMessageSync = streamingMessage // Update sync cache
 
         let message = OnboardingMessage(
             id: id,
@@ -515,6 +522,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             showReasoningPlaceholder: reasoningExpected
         )
         messages.append(message)
+        messagesSync = messages // Update sync cache
         return id
     }
 
@@ -522,18 +530,22 @@ actor StateCoordinator: OnboardingEventEmitter {
         guard var streaming = streamingMessage, streaming.id == id else { return }
         streaming.text += delta
         streamingMessage = streaming
+        streamingMessageSync = streaming // Update sync cache
 
         if let index = messages.firstIndex(where: { $0.id == id }) {
             messages[index].text += delta
+            messagesSync = messages // Update sync cache
         }
     }
 
     func finalizeStreamingMessage(id: UUID, finalText: String) {
         streamingMessage = nil
+        streamingMessageSync = nil // Update sync cache
 
         if let index = messages.firstIndex(where: { $0.id == id }) {
             messages[index].text = finalText
             messages[index].showReasoningPlaceholder = false
+            messagesSync = messages // Update sync cache
         }
     }
 
@@ -541,6 +553,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
             messages[index].reasoningSummary = summary
             messages[index].showReasoningPlaceholder = false
+            messagesSync = messages // Update sync cache
         }
 
         // Also update latest for the status bar
@@ -658,6 +671,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         pendingStreamingStatusSync = nil
         artifactRecordsSync = []
         pendingPhaseAdvanceRequestSync = nil
+        messagesSync = []
+        streamingMessageSync = nil
 
         Logger.info("🔄 StateCoordinator reset to clean state", category: .ai)
     }
