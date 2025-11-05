@@ -118,6 +118,10 @@ final class OnboardingInterviewCoordinator {
     private var _pendingStreamingStatusSync: String?
     var pendingStreamingStatusSync: String? { _pendingStreamingStatusSync }
 
+    @ObservationIgnored
+    private var _artifactRecordsSync: [JSON] = []
+    var artifactRecordsSync: [JSON] { _artifactRecordsSync }
+
     // MARK: - UI State Properties (from ToolRouter)
 
     var pendingUploadRequests: [OnboardingUploadRequest] {
@@ -474,9 +478,11 @@ final class OnboardingInterviewCoordinator {
 
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted:
+        case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
+             .artifactRecordProduced, .artifactRecordPersisted:
             await syncPendingExtractionFromState()
             await syncWizardProgressFromState()
+            await syncArtifactRecordsFromState()
 
         default:
             break
@@ -519,11 +525,16 @@ final class OnboardingInterviewCoordinator {
         synchronizeWizardTracker(currentStep: step, completedSteps: completed)
     }
 
+    private func syncArtifactRecordsFromState() async {
+        _artifactRecordsSync = await state.artifacts.artifactRecords
+    }
+
     private func initialStateSync() async {
         _isProcessingSync = await state.isProcessing
         await syncPendingExtractionFromState()
         _pendingStreamingStatusSync = await state.pendingStreamingStatus
         await syncWizardProgressFromState()
+        await syncArtifactRecordsFromState()
     }
 
     // MARK: - Interview Lifecycle
@@ -686,6 +697,10 @@ final class OnboardingInterviewCoordinator {
 
     func listArtifactSummaries() async -> [JSON] {
         await state.listArtifactSummaries()
+    }
+
+    func listArtifactRecords() async -> [JSON] {
+        await state.artifacts.artifactRecords
     }
 
     func getArtifactRecord(id: String) async -> JSON? {
