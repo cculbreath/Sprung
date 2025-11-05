@@ -733,6 +733,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                         await self.handleToolpaneEvent(event)
                     }
                 }
+
+                // Subscribe to Processing topic
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .processing) {
+                        await self.handleProcessingEvent(event)
+                    }
+                }
             }
         }
 
@@ -797,6 +804,16 @@ actor StateCoordinator: OnboardingEventEmitter {
                 await emitAllowedTools()
                 Logger.info("✅ Waiting state cleared - tools restored", category: .ai)
             }
+
+        case .pendingExtractionUpdated(let extraction):
+            // Handle pending extraction update via event
+            setPendingExtraction(extraction)
+            Logger.info("📄 Pending extraction updated via event: \(extraction?.title ?? "nil")", category: .ai)
+
+        case .streamingStatusUpdated(let status):
+            // Handle streaming status update via event
+            setStreamingStatus(status)
+            Logger.info("💬 Streaming status updated via event: \(status ?? "nil")", category: .ai)
 
         default:
             break

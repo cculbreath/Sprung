@@ -22,6 +22,7 @@ enum OnboardingEvent {
     // MARK: - Status Updates
     case streamingStatusUpdated(String?)
     case waitingStateChanged(String?)
+    case pendingExtractionUpdated(OnboardingPendingExtraction?)
     case errorOccurred(String)
 
     // MARK: - Data Storage
@@ -259,7 +260,8 @@ actor EventCoordinator {
             return .timeline
 
         // Processing events
-        case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged, .errorOccurred:
+        case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged,
+             .pendingExtractionUpdated, .errorOccurred:
             return .processing
         }
     }
@@ -296,6 +298,8 @@ actor EventCoordinator {
             description = "Status: \(status ?? "nil")"
         case .waitingStateChanged(let state):
             description = "Waiting: \(state ?? "nil")"
+        case .pendingExtractionUpdated(let extraction):
+            description = "Pending extraction: \(extraction?.title ?? "nil")"
         case .errorOccurred(let error):
             description = "Error: \(error)"
         case .applicantProfileStored:
