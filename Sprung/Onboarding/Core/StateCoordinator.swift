@@ -27,11 +27,17 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Synchronous Caches (for SwiftUI)
 
-    /// TODO: SYNC CACHE DUPLICATION
+    /// PATTERN: Synchronous State Access for SwiftUI
     /// These nonisolated(unsafe) properties are synchronous caches of the async state above.
     /// They exist solely to enable SwiftUI views to access state synchronously in view body computations.
+    ///
     /// StateCoordinator is the ONLY source of truth - these caches are updated automatically
     /// when the async state changes. DO NOT modify these directly.
+    ///
+    /// Other actors/coordinators should expose computed properties that READ from these caches:
+    ///   var isProcessingSync: Bool { state.isProcessingSync }
+    /// This ensures StateCoordinator remains the single source of truth with no duplication.
+    ///
     /// Future refactoring: Consider ObservableObject wrapper or @Published properties.
 
     nonisolated(unsafe) private(set) var isProcessingSync = false

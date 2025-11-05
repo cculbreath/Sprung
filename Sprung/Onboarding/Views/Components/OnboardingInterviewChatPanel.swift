@@ -55,42 +55,13 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.top, bannerVisible ? 8 : topPadding)
             .padding(.horizontal, horizontalPadding)
 
-            // TODO: Get nextQuestions from event-driven state
-            // if !service.nextQuestions.isEmpty {
-            //     Divider()
-            //         .padding(.top, sectionSpacing)
-            //         .padding(.horizontal, horizontalPadding)
-            //
-            //     ScrollView(.horizontal, showsIndicators: false) {
-            //         HStack(spacing: 8) {
-            //             ForEach(service.nextQuestions) { question in
-            //                 Button(action: { send(question.text) }) {
-            //                     Text(question.text)
-            //                         .padding(.vertical, 6)
-            //                         .padding(.horizontal, 12)
-            //                         .background(Color.accentColor.opacity(0.15))
-            //                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            //                 }
-            //                 .buttonStyle(.plain)
-            //             }
-            //         }
-            //         .padding(.vertical, 12)
-            //         .padding(.horizontal, 12)
-            //     }
-            //     .padding(.horizontal, horizontalPadding)
-            // }
+            // Note: Next questions feature removed during event-driven migration
 
             Divider()
                 .padding(.top, sectionSpacing)
                 .padding(.horizontal, horizontalPadding)
 
-            // TODO: Get from event-driven state
-            // if let text = coordinator.latestReasoningSummary, !text.isEmpty {
-            //     ReasoningStatusBar(text: text)
-            //         .padding(.horizontal, horizontalPadding)
-            //         .padding(.top, 12)
-            //         .transition(.opacity.combined(with: .move(edge: .bottom)))
-            // }
+            // Note: Reasoning summary display removed during event-driven migration
 
             HStack(alignment: .bottom, spacing: 12) {
                 ChatComposerTextView(

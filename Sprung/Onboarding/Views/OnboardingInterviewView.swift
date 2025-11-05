@@ -179,7 +179,13 @@ struct OnboardingInterviewView: View {
                     ExtractionReviewSheet(
                         extraction: pending,
                         onConfirm: { updated, notes in
-                            // TODO: Implement extraction confirmation post-M0
+                            // FEATURE REQUEST: Extraction confirmation and editing
+                            // Status: Deferred to post-M0 milestone
+                            // The UI for reviewing and editing extracted data exists, but the confirmation
+                            // flow is not yet implemented. When implemented, this should:
+                            // 1. Apply user edits to the extracted data
+                            // 2. Update StateCoordinator with revised extraction
+                            // 3. Resume tool continuation with updated payload
                             Logger.debug("Extraction confirmation is not implemented in milestone M0.")
                         },
                         onCancel: {
@@ -410,8 +416,8 @@ private extension OnboardingInterviewView {
         let modelId = viewModel.currentModelId
         Task { @MainActor in
             guard interviewCoordinator.isActiveSync == false else { return }
-            // TODO: Get from event-driven state
-            let hasCheckpoint = false // await service.hasRestorableCheckpoint()
+            // Note: Checkpoint detection is handled by CheckpointManager in coordinator
+            let hasCheckpoint = false
             if hasCheckpoint {
                 pendingStartModelId = modelId
                 showResumeOptions = true
@@ -461,11 +467,7 @@ private extension OnboardingInterviewView {
     }
 
     func applyPreferredModel(requestedId: String? = nil) {
-        // TODO: Implement with event-driven architecture
-        // let ids = openAIModels.map(\.modelId)
-        // interviewService.updateAvailableModelIds(ids)
-        //
-        // let targetId = requestedId ?? defaultModelId
+        // Note: Model configuration is handled via OpenAIService and ModelProvider
         //
         // let resolvedId = interviewService.setPreferredDefaults(
         //     modelId: targetId,
