@@ -3,6 +3,7 @@ import SwiftyJSON
 
 struct TimelineCardEditorView: View {
     let timeline: JSON
+    let coordinator: OnboardingInterviewCoordinator
 
     @State private var drafts: [WorkExperienceDraft] = []
     @State private var baselineCards: [TimelineCard] = []
@@ -123,10 +124,10 @@ struct TimelineCardEditorView: View {
         errorMessage = nil
 
         Task {
-            // TODO: Emit event instead
-            // let updatedTimeline = await service.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
+            await coordinator.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
             await MainActor.run {
-                // load(from: updatedTimeline)
+                baselineCards = updatedCards
+                hasChanges = false
                 isSaving = false
             }
         }
