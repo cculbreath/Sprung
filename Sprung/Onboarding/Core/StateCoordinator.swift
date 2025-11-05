@@ -522,6 +522,10 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func beginStreamingMessage(initialText: String, reasoningExpected: Bool) -> UUID {
         let id = UUID()
+        return beginStreamingMessage(id: id, initialText: initialText, reasoningExpected: reasoningExpected)
+    }
+
+    func beginStreamingMessage(id: UUID, initialText: String, reasoningExpected: Bool) -> UUID {
         streamingMessage = StreamingMessage(
             id: id,
             text: initialText,
@@ -937,6 +941,29 @@ actor StateCoordinator: OnboardingEventEmitter {
                 isProcessingSync = false // Update sync cache
             }
             Logger.debug("StateCoordinator processing state: \(isProcessing)", category: .ai)
+
+        case .streamingMessageBegan(let id, let text, let reasoningExpected):
+            // Handle streaming message begin via event
+            beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
+            Logger.debug("StateCoordinator began streaming message: \(id)", category: .ai)
+
+        case .streamingMessageUpdated(let id, let delta):
+            // Handle streaming message update via event
+            updateStreamingMessage(id: id, delta: delta)
+
+        case .streamingMessageFinalized(let id, let finalText):
+            // Handle streaming message finalization via event
+            finalizeStreamingMessage(id: id, finalText: finalText)
+            Logger.debug("StateCoordinator finalized streaming message: \(id)", category: .ai)
+
+        case .llmReasoningSummaryDelta(let delta):
+            // Handle reasoning summary delta via event
+            updateReasoningSummary(delta: delta)
+
+        case .llmReasoningSummaryComplete(let text):
+            // Handle reasoning summary completion via event
+            completeReasoningSummary(finalText: text)
+            Logger.debug("StateCoordinator completed reasoning summary", category: .ai)
 
         default:
             break
