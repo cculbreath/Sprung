@@ -285,7 +285,6 @@ private extension SprungApp {
                     ConversationContext.self,
                     ConversationMessage.self,
                     EnabledLLM.self,
-                    OnboardingArtifactRecord.self,
                 configurations: configuration
             )
         } else {
@@ -302,8 +301,7 @@ private extension SprungApp {
                     ApplicantProfile.self,
                     ConversationContext.self,
                     ConversationMessage.self,
-                    EnabledLLM.self,
-                    OnboardingArtifactRecord.self
+                    EnabledLLM.self
             )
         }
     }

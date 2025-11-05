@@ -40,6 +40,8 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Orchestration State (minimal, not business state)
 
+    private var orchestrator: InterviewOrchestrator?
+    private var phaseAdvanceContinuationId: UUID?
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     private var reasoningSummaryClearTask: Task<Void, Never>?
     var onModelAvailabilityIssue: ((String) -> Void)?
@@ -396,9 +398,9 @@ final class OnboardingInterviewCoordinator {
             // Tool completion is handled by toolContinuationNeeded
             break
 
-        case .toolContinuationNeeded(let continuationId, let toolName):
-            // Track continuation for UI resume methods (delegated to ContinuationTracker)
-            continuationTracker.trackContinuation(id: continuationId, toolName: toolName)
+        case .toolContinuationNeeded:
+            // Tool continuation managed by ToolExecutionCoordinator
+            break
 
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
@@ -1010,6 +1012,17 @@ final class OnboardingInterviewCoordinator {
         await continuationTracker.resumeToolContinuation(id: id, payload: payload)
     }
 
+    func resumeToolContinuation(id: UUID, payload: JSON) async {
+        do {
+            try await toolExecutionCoordinator.resumeToolContinuation(
+                id: id,
+                userInput: payload
+            )
+        } catch {
+            Logger.error("Failed to resume tool continuation \(id): \(error)", category: .ai)
+        }
+    }
+
     enum WaitingStateChange {
         case keep
         case set(String?)
@@ -1098,24 +1111,6 @@ final class OnboardingInterviewCoordinator {
         )
     }
 
-    // MARK: - Tool Processing
-
-    private func processToolCall(_ call: ToolCall) async -> JSON? {
-        let tokenId = UUID()
-
-        toolQueueEntries[tokenId] = ToolQueueEntry(
-            tokenId: tokenId,
-            callId: call.callId,
-            toolName: call.name,
-            status: "processing",
-            requestedInput: call.arguments.rawString() ?? "{}",
-            enqueuedAt: Date()
-        )
-
-        // Process the tool call through the executor
-        // This will be expanded in Phase 2
-        return nil
-    }
     // MARK: - Utility
 
     func notifyInvalidModel(id: String) {
