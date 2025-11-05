@@ -369,9 +369,9 @@ final class OnboardingInterviewCoordinator {
             // StateCoordinator only - ChatboxHandler mirrors to transcript
             await state.setReasoningSummary(summary, for: messageId)
 
-        case .streamingStatusUpdated(let status):
-            // Event now handled by StateCoordinator - just sync cache
-            _pendingStreamingStatusSync = status
+        case .streamingStatusUpdated:
+            // Event now handled by StateCoordinator - StateCoordinator maintains sync cache
+            break
 
         case .waitingStateChanged:
             // Event now handled by StateCoordinator
