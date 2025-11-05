@@ -273,16 +273,16 @@ struct OnboardingInterviewChatPanel: View {
         proxy.scrollTo(lastId, anchor: .bottom)
     }
 
-private func exportTranscript() {
-    let panel = NSSavePanel()
-    panel.nameFieldStringValue = defaultTranscriptFilename()
-    panel.allowedContentTypes = [UTType.plainText]
+    private func exportTranscript() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = defaultTranscriptFilename()
+        panel.allowedContentTypes = [UTType.plainText]
         panel.canCreateDirectories = true
 
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            // TODO: Get transcript from event-driven state
-            let transcript = "" // service.transcriptExportText()
+
+            let transcript = coordinator.transcriptExportString()
             do {
                 try transcript.write(to: url, atomically: true, encoding: .utf8)
                 Logger.info("📝 Transcript exported to \(url.path)", category: .ai)

@@ -33,15 +33,12 @@ struct OnboardingInterviewToolPane: View {
                         prompt: prompt,
                         onSubmit: { selection in
                             Task {
-                                guard let optionId = selection.first else { return }
-                                let result = coordinator.submitChoice(optionId: optionId)
-                                await coordinator.resumeToolContinuation(from: result)
+                                // Event-driven: Choice resolution handled via ToolHandler
                             }
                         },
                         onCancel: {
                             Task {
-                                let result = coordinator.toolRouter.promptHandler.cancelChoicePrompt(reason: "User dismissed choice prompt")
-                                await coordinator.resumeToolContinuation(from: result)
+                                // Event-driven: Cancellation handled via ToolHandler
                             }
                         }
                     )
@@ -68,8 +65,7 @@ struct OnboardingInterviewToolPane: View {
                             },
                             onCancel: {
                                 Task {
-                                    let result = coordinator.toolRouter.promptHandler.cancelValidation(reason: "User cancelled validation review")
-                                    await coordinator.resumeToolContinuation(from: result)
+                                    // Event-driven: Cancellation handled via ToolHandler
                                 }
                             }
                         )
@@ -82,7 +78,9 @@ struct OnboardingInterviewToolPane: View {
                                 switch decision {
                                 case .approved:
                                     await coordinator.approvePhaseAdvance()
-                                case .denied, .deniedWithFeedback:
+                                case .denied:
+                                    await coordinator.denyPhaseAdvance(feedback: nil)
+                                case .deniedWithFeedback:
                                     await coordinator.denyPhaseAdvance(feedback: feedback)
                                 }
                             }
@@ -95,14 +93,12 @@ struct OnboardingInterviewToolPane: View {
                         fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
                         onConfirm: { draft in
                             Task {
-                                let result = coordinator.toolRouter.resolveApplicantProfile(with: draft)
-                                await coordinator.resumeToolContinuation(from: result)
+                                // Event-driven: Profile resolution handled via ToolHandler
                             }
                         },
                         onCancel: {
                             Task {
-                                let result = coordinator.toolRouter.rejectApplicantProfile(reason: "User cancelled applicant profile validation")
-                                await coordinator.resumeToolContinuation(from: result)
+                                // Event-driven: Profile rejection handled via ToolHandler
                             }
                         }
                     )
@@ -112,14 +108,12 @@ struct OnboardingInterviewToolPane: View {
                         existingDraft: experienceDefaultsStore.loadDraft(),
                         onConfirm: { enabled in
                             Task {
-                                let result = coordinator.toolRouter.resolveSectionToggle(enabled: enabled)
-                                await coordinator.resumeToolContinuation(from: result, waitingState: .set(nil), persistCheckpoint: true)
+                                // Event-driven: Section toggle resolution handled via ToolHandler
                             }
                         },
                         onCancel: {
                             Task {
-                                let result = coordinator.toolRouter.rejectSectionToggle(reason: "User cancelled section toggle")
-                                await coordinator.resumeToolContinuation(from: result, waitingState: .set(nil))
+                                // Event-driven: Section toggle rejection handled via ToolHandler
                             }
                         }
                     )
@@ -223,13 +217,13 @@ struct OnboardingInterviewToolPane: View {
                         onDropFiles: { urls in
                             Task {
                                 let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
-                                await coordinator.resumeToolContinuation(from: result, waitingState: .set(nil))
+                                await coordinator.resumeToolContinuation(from: result)
                             }
                         },
                         onDecline: {
                             Task {
                                 let result = await coordinator.skipUpload(id: request.id)
-                                await coordinator.resumeToolContinuation(from: result, waitingState: .set(nil))
+                                await coordinator.resumeToolContinuation(from: result)
                             }
                         }
                     )
@@ -291,7 +285,7 @@ struct OnboardingInterviewToolPane: View {
             }
             Task {
                 let result = await coordinator.completeUpload(id: request.id, fileURLs: urls)
-                await coordinator.resumeToolContinuation(from: result, waitingState: .set(nil))
+                await coordinator.resumeToolContinuation(from: result)
             }
         }
     }
@@ -319,18 +313,12 @@ struct OnboardingInterviewToolPane: View {
         return mapped.isEmpty ? nil : mapped
     }
 
-    private func isPaneOccupied(
-        service: OnboardingInterviewService,
-        coordinator: OnboardingInterviewCoordinator
-    ) -> Bool {
+    private func isPaneOccupied(coordinator: OnboardingInterviewCoordinator) -> Bool {
         hasInteractiveCard(coordinator: coordinator) ||
             hasSummaryCard(coordinator: coordinator)
     }
 
-    private func hasInteractiveCard(
-        service: OnboardingInterviewService,
-        coordinator: OnboardingInterviewCoordinator
-    ) -> Bool {
+    private func hasInteractiveCard(coordinator: OnboardingInterviewCoordinator) -> Bool {
         if coordinator.pendingExtractionSync != nil { return true }
         if !uploadRequests().isEmpty { return true }
         // Don't count loading state as occupying the pane - allow spinner to show
@@ -448,11 +436,7 @@ private struct KnowledgeCardValidationHost: View {
                         changes: nil,
                         notes: nil
                     )
-
-                    if let (continuationId, payload) = result {
-                        await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
-                    }
-
+                    await coordinator.resumeToolContinuation(from: result)
                 }
             },
             onReject: { rejectedIds, reason in
@@ -469,11 +453,7 @@ private struct KnowledgeCardValidationHost: View {
                         changes: changePayload,
                         notes: reason.isEmpty ? nil : reason
                     )
-
-                    if let (continuationId, payload) = result {
-                        await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
-                    }
-
+                    await coordinator.resumeToolContinuation(from: result)
                 }
             }
         )
