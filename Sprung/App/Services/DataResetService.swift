@@ -121,14 +121,6 @@ final class DataResetService {
         }
 
         do {
-            // Delete onboarding artifacts
-            try modelContext.delete(model: OnboardingArtifactRecord.self)
-            Logger.debug("✅ OnboardingArtifactRecord records deleted", category: .appLifecycle)
-        } catch {
-            Logger.warning("⚠️ Could not delete OnboardingArtifactRecord records: \(error)", category: .appLifecycle)
-        }
-
-        do {
             // Delete templates (will re-seed defaults)
             try modelContext.delete(model: Template.self)
             Logger.debug("✅ Template records deleted", category: .appLifecycle)

@@ -48,22 +48,11 @@ final class OnboardingInterviewCoordinator {
 
     private var orchestrator: InterviewOrchestrator?
     private var phaseAdvanceContinuationId: UUID?
-    // Phase advance cache removed - no longer needed with centralized state
-    private var toolQueueEntries: [UUID: ToolQueueEntry] = [:]
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     private var reasoningSummaryClearTask: Task<Void, Never>?
     var onModelAvailabilityIssue: ((String) -> Void)?
     private(set) var preferences: OnboardingPreferences
     private(set) var modelAvailabilityMessage: String?
-
-    private struct ToolQueueEntry {
-        let tokenId: UUID
-        let callId: String
-        let toolName: String
-        let status: String
-        let requestedInput: String
-        let enqueuedAt: Date
-    }
 
     // MARK: - Computed Properties (Read from StateCoordinator)
 
@@ -391,17 +380,9 @@ final class OnboardingInterviewCoordinator {
             // Tool completion is handled by toolContinuationNeeded
             break
 
-        case .toolContinuationNeeded(let continuationId, let toolName):
-            // Track continuation for UI resume methods
-            // Note: callId is not available here, stored by ToolExecutionCoordinator
-            toolQueueEntries[continuationId] = ToolQueueEntry(
-                tokenId: continuationId,
-                callId: "", // CallId managed by ToolExecutionCoordinator
-                toolName: toolName,
-                status: "waiting",
-                requestedInput: "{}",
-                enqueuedAt: Date()
-            )
+        case .toolContinuationNeeded:
+            // Tool continuation managed by ToolExecutionCoordinator
+            break
 
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
@@ -1167,20 +1148,13 @@ final class OnboardingInterviewCoordinator {
     }
 
     func resumeToolContinuation(id: UUID, payload: JSON) async {
-        guard let entry = toolQueueEntries.removeValue(forKey: id) else {
-            Logger.warning("No queue entry for continuation \(id)", category: .ai)
-            return
-        }
-
-        Logger.info("✅ Tool \(entry.toolName) resuming", category: .ai)
-
         do {
             try await toolExecutionCoordinator.resumeToolContinuation(
                 id: id,
                 userInput: payload
             )
         } catch {
-            Logger.error("Failed to resume tool: \(error)", category: .ai)
+            Logger.error("Failed to resume tool continuation \(id): \(error)", category: .ai)
         }
     }
 
@@ -1318,25 +1292,6 @@ final class OnboardingInterviewCoordinator {
             eventBus: eventBus,
             toolRegistry: toolRegistry
         )
-    }
-
-    // MARK: - Tool Processing
-
-    private func processToolCall(_ call: ToolCall) async -> JSON? {
-        let tokenId = UUID()
-
-        toolQueueEntries[tokenId] = ToolQueueEntry(
-            tokenId: tokenId,
-            callId: call.callId,
-            toolName: call.name,
-            status: "processing",
-            requestedInput: call.arguments.rawString() ?? "{}",
-            enqueuedAt: Date()
-        )
-
-        // Process the tool call through the executor
-        // This will be expanded in Phase 2
-        return nil
     }
 
     // MARK: - Utility
