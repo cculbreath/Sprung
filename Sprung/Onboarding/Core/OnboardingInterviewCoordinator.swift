@@ -363,28 +363,23 @@ final class OnboardingInterviewCoordinator {
         case .streamingStatusUpdated(let status):
             await setStreamingStatus(status)
 
-        case .waitingStateChanged(let waiting):
-            await MainActor.run {
-                self.updateWaitingState(waiting)
-            }
+        case .waitingStateChanged:
+            // Event now handled by StateCoordinator
+            break
 
         case .errorOccurred(let error):
             Logger.error("Interview error: \(error)", category: .ai)
 
         case .applicantProfileStored(let json):
+            // Event now handled by StateCoordinator - persist to SwiftData
             await MainActor.run {
-                self.storeApplicantProfile(json)
+                self.persistApplicantProfileToSwiftData(json: json)
             }
+            await saveCheckpoint()
 
-        case .skeletonTimelineStored(let json):
-            await MainActor.run {
-                self.storeSkeletonTimeline(json)
-            }
-
-        case .enabledSectionsUpdated(let sections):
-            await MainActor.run {
-                self.updateEnabledSections(sections)
-            }
+        case .skeletonTimelineStored, .enabledSectionsUpdated:
+            // Events now handled by StateCoordinator - just checkpoint
+            await saveCheckpoint()
 
         case .checkpointRequested:
             await saveCheckpoint()
@@ -719,30 +714,8 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Artifact Management
 
-    func storeApplicantProfile(_ profile: JSON) {
-        Task { [weak self] in
-            guard let self else { return }
-            await self.state.setApplicantProfile(profile)
-            await MainActor.run {
-                self.persistApplicantProfileToSwiftData(json: profile)
-            }
-            await self.checkpointManager.saveCheckpoint()
-        }
-    }
-
-    func storeSkeletonTimeline(_ timeline: JSON) {
-        Task {
-            await state.setSkeletonTimeline(timeline)
-            await checkpointManager.saveCheckpoint()
-        }
-    }
-
-    func updateEnabledSections(_ sections: Set<String>) {
-        Task {
-            await state.setEnabledSections(sections)
-            await checkpointManager.saveCheckpoint()
-        }
-    }
+    // Note: Artifact state mutations now happen via events in StateCoordinator
+    // The coordinator only handles side effects like SwiftData persistence
 
     // MARK: - Message Management
 
@@ -793,25 +766,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Waiting State
-
-    func updateWaitingState(_ waiting: String?) {
-        Task {
-            let waitingState: StateCoordinator.WaitingState? = if let waiting {
-                switch waiting {
-                case "selection": .selection
-                case "upload": .upload
-                case "validation": .validation
-                case "extraction": .extraction
-                case "processing": .processing
-                default: nil
-                }
-            } else {
-                nil
-            }
-            await state.setWaitingState(waitingState)
-        }
-    }
-
+    // Note: Waiting state mutations now happen via events in StateCoordinator
 
     // MARK: - Extraction Management
 
@@ -1034,7 +989,8 @@ final class OnboardingInterviewCoordinator {
         guard let (id, payload) = result else { return }
 
         if case .set(let state) = waitingState {
-            updateWaitingState(state)
+            // Publish event instead of direct mutation
+            await eventBus.publish(.waitingStateChanged(state))
         }
 
         if persistCheckpoint {
