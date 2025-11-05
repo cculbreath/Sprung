@@ -19,7 +19,7 @@ actor DocumentExtractionService {
         let timeout: TimeInterval?
     }
 
-    struct ArtifactRecord {
+    struct ExtractedArtifact {
         let id: String
         let filename: String
         let contentType: String
@@ -42,7 +42,7 @@ actor DocumentExtractionService {
         }
 
         let status: Status
-        let artifact: ArtifactRecord?
+        let artifact: ExtractedArtifact?
         let quality: Quality
         let derivedApplicantProfile: JSON?
         let derivedSkeletonTimeline: JSON?
@@ -173,7 +173,7 @@ actor DocumentExtractionService {
             metadata["truncated_input"] = true
         }
 
-        let artifact = ArtifactRecord(
+        let artifact = ExtractedArtifact(
             id: UUID().uuidString,
             filename: filename,
             contentType: contentType,

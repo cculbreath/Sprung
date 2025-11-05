@@ -115,7 +115,7 @@ struct ExtractDocumentTool: InterviewTool {
         return response
     }
 
-    private func makeArtifactJSON(from artifact: DocumentExtractionService.ArtifactRecord) -> JSON {
+    private func makeArtifactJSON(from artifact: DocumentExtractionService.ExtractedArtifact) -> JSON {
         var json = JSON()
         json["id"].string = artifact.id
         json["filename"].string = artifact.filename
