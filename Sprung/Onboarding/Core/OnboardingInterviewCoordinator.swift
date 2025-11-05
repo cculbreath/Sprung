@@ -32,6 +32,12 @@ final class OnboardingInterviewCoordinator {
     private let phaseTransitionController: PhaseTransitionController
     private let continuationTracker: ContinuationTracker
 
+    // MARK: - Services (Phase 3 Decomposition)
+
+    private let extractionManagementService: ExtractionManagementService
+    private let timelineManagementService: TimelineManagementService
+    private let dataPersistenceService: DataPersistenceService
+
     // MARK: - Data Store Dependencies
 
     private let applicantProfileStore: ApplicantProfileStore
@@ -41,8 +47,6 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Orchestration State (minimal, not business state)
 
     private var orchestrator: InterviewOrchestrator?
-    private var phaseAdvanceContinuationId: UUID?
-    private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     private var reasoningSummaryClearTask: Task<Void, Never>?
     var onModelAvailabilityIssue: ((String) -> Void)?
     private(set) var preferences: OnboardingPreferences
@@ -106,13 +110,8 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Synchronous Cache Properties (Read from StateCoordinator)
 
-    /// TODO: SYNC CACHE DUPLICATION
-    /// These properties read from StateCoordinator's sync caches, which are the single source of truth.
-    /// OnboardingInterviewCoordinator bridges between async StateCoordinator and synchronous SwiftUI.
-    /// StateCoordinator maintains both async authoritative state and nonisolated(unsafe) sync caches.
-    /// These computed properties enable SwiftUI views to access state synchronously.
-    /// Future refactoring: Consider removing this bridge layer entirely with ObservableObject wrapper.
-
+    /// Sync cache access for SwiftUI views
+    /// StateCoordinator is the single source of truth with nonisolated(unsafe) sync caches
     var isProcessingSync: Bool { state.isProcessingSync }
     var isActiveSync: Bool { state.isActiveSync }
     var pendingExtractionSync: OnboardingPendingExtraction? { state.pendingExtractionSync }
@@ -261,13 +260,36 @@ final class OnboardingInterviewCoordinator {
             toolExecutionCoordinator: toolExecutionCoordinator
         )
 
+        // Initialize services (Phase 3)
+        self.extractionManagementService = ExtractionManagementService(
+            eventBus: eventBus,
+            state: state,
+            toolRouter: toolRouter,
+            wizardTracker: wizardTracker
+        )
+
+        self.timelineManagementService = TimelineManagementService(
+            eventBus: eventBus,
+            phaseTransitionController: phaseTransitionController
+        )
+
+        self.dataPersistenceService = DataPersistenceService(
+            eventBus: eventBus,
+            state: state,
+            dataStore: dataStore,
+            applicantProfileStore: applicantProfileStore,
+            chatTranscriptStore: chatTranscriptStore,
+            toolRouter: toolRouter,
+            wizardTracker: wizardTracker
+        )
+
         // Wire up lifecycle controller to phase transition controller
         phaseTransitionController.setLifecycleController(lifecycleController)
 
         toolRouter.uploadHandler.updateExtractionProgressHandler { [weak self] update in
             Task { @MainActor in
                 guard let self else { return }
-                self.updateExtractionProgress(with: update)
+                self.extractionManagementService.updateExtractionProgress(with: update)
             }
         }
 
@@ -383,7 +405,11 @@ final class OnboardingInterviewCoordinator {
         case .applicantProfileStored(let json):
             // Event now handled by StateCoordinator - persist to SwiftData
             await MainActor.run {
-                self.persistApplicantProfileToSwiftData(json: json)
+                let draft = ApplicantProfileDraft(json: json)
+                let profile = self.applicantProfileStore.currentProfile()
+                draft.apply(to: profile, replaceMissing: false)
+                self.applicantProfileStore.save(profile)
+                Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
             }
             await checkpointManager.saveCheckpoint()
 
@@ -646,86 +672,34 @@ final class OnboardingInterviewCoordinator {
         return result
     }
 
-    // MARK: - Timeline Management (Event-Driven)
+    // MARK: - Timeline Management (Delegated to TimelineManagementService)
 
-    /// Apply user timeline update from editor (Phase 3)
-    /// Replaces timeline in one shot and sends developer message
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
-        // Build timeline JSON
-        let timeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
-
-        // Emit replacement event
-        await eventBus.publish(.skeletonTimelineReplaced(timeline: timeline, diff: diff, meta: meta))
-
-        // Build developer message
-        var payload = JSON()
-        payload["text"].string = "Developer status: Timeline cards updated by the user (\(diff.summary)). The skeleton_timeline artifact now reflects their edits. Do not re-validate unless new information is introduced."
-
-        var details = JSON()
-        details["validation_state"].string = "user_validated"
-        details["diff_summary"].string = diff.summary
-        details["updated_count"].int = cards.count
-        payload["details"] = details
-        payload["payload"] = timeline
-
-        // Send developer message
-        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
-
-        Logger.info("📋 User timeline update applied (\(diff.summary))", category: .ai)
+        await timelineManagementService.applyUserTimelineUpdate(cards: cards, meta: meta, diff: diff)
     }
 
     func createTimelineCard(fields: JSON) async -> JSON {
-        var card = fields
-        // Add ID if not present
-        if card["id"].string == nil {
-            card["id"].string = UUID().uuidString
-        }
-
-        // Emit event to create timeline card
-        await eventBus.publish(.timelineCardCreated(card: card))
-
-        var result = JSON()
-        result["success"].boolValue = true
-        result["id"].string = card["id"].string
-        return result
+        await timelineManagementService.createTimelineCard(fields: fields)
     }
 
     func updateTimelineCard(id: String, fields: JSON) async -> JSON {
-        // Emit event to update timeline card
-        await eventBus.publish(.timelineCardUpdated(id: id, fields: fields))
-
-        var result = JSON()
-        result["success"].boolValue = true
-        result["id"].string = id
-        return result
+        await timelineManagementService.updateTimelineCard(id: id, fields: fields)
     }
 
     func deleteTimelineCard(id: String) async -> JSON {
-        // Emit event to delete timeline card
-        await eventBus.publish(.timelineCardDeleted(id: id))
-
-        var result = JSON()
-        result["success"].boolValue = true
-        result["id"].string = id
-        return result
+        await timelineManagementService.deleteTimelineCard(id: id)
     }
 
     func reorderTimelineCards(orderedIds: [String]) async -> JSON {
-        // Emit event to reorder timeline cards
-        await eventBus.publish(.timelineCardsReordered(ids: orderedIds))
-
-        var result = JSON()
-        result["success"].boolValue = true
-        result["count"].int = orderedIds.count
-        return result
+        await timelineManagementService.reorderTimelineCards(orderedIds: orderedIds)
     }
 
     func requestPhaseTransition(from: String, to: String, reason: String?) async {
-        await phaseTransitionController.requestPhaseTransition(from: from, to: to, reason: reason)
+        await timelineManagementService.requestPhaseTransition(from: from, to: to, reason: reason)
     }
 
     func missingObjectives() async -> [String] {
-        await phaseTransitionController.missingObjectives()
+        await timelineManagementService.missingObjectives()
     }
 
     // MARK: - Artifact Queries (Read-Only State Access)
@@ -823,91 +797,28 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Waiting State
     // Note: Waiting state mutations now happen via events in StateCoordinator
 
-    // MARK: - Extraction Management
+    // MARK: - Extraction Management (Delegated to ExtractionManagementService)
 
     func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
-        Task {
-            // Publish event instead of direct state mutation
-            await eventBus.publish(.pendingExtractionUpdated(extraction))
-            // StateCoordinator maintains sync cache
-
-            guard let extraction else { return }
-            if shouldClearApplicantProfileIntake(for: extraction) {
-                await MainActor.run {
-                    toolRouter.clearApplicantProfileIntake()
-                }
-                Logger.debug(
-                    "🧹 Cleared applicant profile intake for extraction",
-                    category: .ai,
-                    metadata: [
-                        "title": extraction.title,
-                        "summary": extraction.summary
-                    ]
-                )
-            }
-        }
-    }
-
-    private func shouldClearApplicantProfileIntake(for extraction: OnboardingPendingExtraction) -> Bool {
-        // If the extraction already contains an applicant profile, clear the intake immediately.
-        if extraction.rawExtraction["derived"]["applicant_profile"] != .null {
-            return true
-        }
-
-        let metadata = extraction.rawExtraction["metadata"]
-        var candidateStrings: [String] = []
-
-        if let purpose = metadata["purpose"].string { candidateStrings.append(purpose) }
-        if let documentKind = metadata["document_kind"].string { candidateStrings.append(documentKind) }
-        if let sourceFilename = metadata["source_filename"].string { candidateStrings.append(sourceFilename) }
-
-        candidateStrings.append(extraction.title)
-        candidateStrings.append(extraction.summary)
-
-        let resumeKeywords = ["resume", "curriculum vitae", "curriculum", "cv", "applicant profile"]
-        for value in candidateStrings {
-            let lowercased = value.lowercased()
-            if resumeKeywords.contains(where: { lowercased.contains($0) }) {
-                return true
-            }
-        }
-
-        let tags = metadata["tags"].arrayValue.compactMap { $0.string?.lowercased() }
-        if tags.contains(where: { tag in resumeKeywords.contains(where: { tag.contains($0) }) }) {
-            return true
-        }
-
-        return false
+        extractionManagementService.setExtractionStatus(extraction)
     }
 
     func updateExtractionProgress(with update: ExtractionProgressUpdate) {
-        Task {
-            if var extraction = await state.pendingExtraction {
-                extraction.applyProgressUpdate(update)
-                // Publish event instead of direct state mutation
-                await eventBus.publish(.pendingExtractionUpdated(extraction))
-                // StateCoordinator maintains sync cache
-            } else {
-                pendingExtractionProgressBuffer.append(update)
-            }
-        }
+        extractionManagementService.updateExtractionProgress(with: update)
     }
 
     func setStreamingStatus(_ status: String?) async {
-        // Publish event instead of direct state mutation
-        await eventBus.publish(.streamingStatusUpdated(status))
-        // StateCoordinator maintains sync cache
+        await extractionManagementService.setStreamingStatus(status)
     }
 
     private func synchronizeWizardTracker(
         currentStep: StateCoordinator.WizardStep,
         completedSteps: Set<StateCoordinator.WizardStep>
     ) {
-        let mappedCurrent = OnboardingWizardStep(rawValue: currentStep.rawValue) ?? .introduction
-        let mappedCompleted = Set(
-            completedSteps.compactMap { OnboardingWizardStep(rawValue: $0.rawValue) }
+        extractionManagementService.synchronizeWizardTracker(
+            currentStep: currentStep,
+            completedSteps: completedSteps
         )
-        wizardTracker.synchronize(currentStep: mappedCurrent, completedSteps: mappedCompleted)
     }
 
     // MARK: - Tool Management
@@ -1211,71 +1122,20 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Checkpoint Management (Delegated to CheckpointManager)
     // No methods needed here - all delegated to checkpointManager
 
-    // MARK: - Data Store Management
+    // MARK: - Data Store Management (Delegated to DataPersistenceService)
 
     func loadPersistedArtifacts() async {
-        let profileRecords = (await dataStore.list(dataType: "applicant_profile")).filter { $0 != .null }
-        let timelineRecords = (await dataStore.list(dataType: "skeleton_timeline")).filter { $0 != .null }
-        let artifactRecords = (await dataStore.list(dataType: "artifact_record")).filter { $0 != .null }
-        let knowledgeCardRecords = (await dataStore.list(dataType: "knowledge_card")).filter { $0 != .null }
-
-        if let profile = profileRecords.last {
-            // Publish event instead of direct state mutation
-            await eventBus.publish(.applicantProfileStored(profile))
-            persistApplicantProfileToSwiftData(json: profile)
-        }
-
-        if let timeline = timelineRecords.last {
-            // Publish event instead of direct state mutation
-            await eventBus.publish(.skeletonTimelineStored(timeline))
-        }
-
-        if !artifactRecords.isEmpty {
-            await state.setArtifactRecords(artifactRecords)
-        }
-
-        if !knowledgeCardRecords.isEmpty {
-            await state.setKnowledgeCards(knowledgeCardRecords)
-        }
-
-        if profileRecords.isEmpty && timelineRecords.isEmpty && artifactRecords.isEmpty && knowledgeCardRecords.isEmpty {
-            Logger.info("📂 No persisted artifacts discovered", category: .ai)
-        } else {
-            Logger.info(
-                "📂 Loaded persisted artifacts",
-                category: .ai,
-                metadata: [
-                    "applicant_profile_count": "\(profileRecords.count)",
-                    "skeleton_timeline_count": "\(timelineRecords.count)",
-                    "artifact_record_count": "\(artifactRecords.count)",
-                    "knowledge_card_count": "\(knowledgeCardRecords.count)"
-                ]
-            )
-        }
+        await dataPersistenceService.loadPersistedArtifacts()
     }
 
     func clearArtifacts() {
         Task {
-            await dataStore.reset()
+            await dataPersistenceService.clearArtifacts()
         }
     }
 
     func resetStore() async {
-        await state.reset()
-        chatTranscriptStore.reset()
-        toolRouter.reset()
-        wizardTracker.reset()
-    }
-
-    // MARK: - Persistence Helpers
-
-    @MainActor
-    private func persistApplicantProfileToSwiftData(json: JSON) {
-        let draft = ApplicantProfileDraft(json: json)
-        let profile = applicantProfileStore.currentProfile()
-        draft.apply(to: profile, replaceMissing: false)
-        applicantProfileStore.save(profile)
-        Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
+        await dataPersistenceService.resetStore()
     }
 
     // MARK: - Orchestrator Factory
