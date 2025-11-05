@@ -591,6 +591,10 @@ final class OnboardingInterviewCoordinator {
         let orchestrator = makeOrchestrator(service: service, systemPrompt: systemPrompt)
         self.orchestrator = orchestrator
 
+        // Set model ID from preferences or ModelProvider default
+        let cfg = ModelProvider.forTask(.orchestrator)
+        await orchestrator.setModelId(preferences.preferredModelId ?? cfg.id)
+
         // Start event subscriptions for handlers
         await chatboxHandler.startEventSubscriptions()
         await toolExecutionCoordinator.startEventSubscriptions()
