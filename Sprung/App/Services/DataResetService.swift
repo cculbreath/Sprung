@@ -24,7 +24,6 @@ final class DataResetService {
         applicantProfileStore: ApplicantProfileStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         enabledLLMStore: EnabledLLMStore,
-        onboardingArtifactStore: OnboardingArtifactStore,
         careerKeywordStore: CareerKeywordStore
     ) async throws {
         isResetting = true
@@ -39,7 +38,6 @@ final class DataResetService {
                 applicantProfileStore: applicantProfileStore,
                 experienceDefaultsStore: experienceDefaultsStore,
                 enabledLLMStore: enabledLLMStore,
-                onboardingArtifactStore: onboardingArtifactStore,
                 careerKeywordStore: careerKeywordStore
             )
 
@@ -200,7 +198,6 @@ final class DataResetService {
         applicantProfileStore: ApplicantProfileStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         enabledLLMStore: EnabledLLMStore,
-        onboardingArtifactStore: OnboardingArtifactStore,
         careerKeywordStore: CareerKeywordStore
     ) throws {
         // Clear in-memory caches in each store
@@ -214,9 +211,6 @@ final class DataResetService {
 
         // EnabledLLMStore maintains in-memory models; clear the array to avoid dangling SwiftData objects
         enabledLLMStore.clearCache()
-
-        // OnboardingArtifactStore manages artifacts in-memory; reset to empty state
-        onboardingArtifactStore.reset()
 
         // CareerKeywordStore rebuilds its keyword list from bundled defaults
         careerKeywordStore.resetAfterDataClear()

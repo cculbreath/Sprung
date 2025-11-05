@@ -29,7 +29,6 @@ final class AppDependencies {
     let experienceDefaultsStore: ExperienceDefaultsStore
     let careerKeywordStore: CareerKeywordStore
     let applicantProfileStore: ApplicantProfileStore
-    let onboardingArtifactStore: OnboardingArtifactStore
     let documentExtractionService: DocumentExtractionService
     let onboardingCoordinator: OnboardingInterviewCoordinator
     let llmService: LLMService
@@ -66,8 +65,6 @@ final class AppDependencies {
 
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
-        let onboardingArtifactStore = OnboardingArtifactStore(context: modelContext)
-        self.onboardingArtifactStore = onboardingArtifactStore
 
         // Core export orchestration
         let resumeExportService = ResumeExportService(
