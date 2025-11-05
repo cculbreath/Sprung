@@ -125,7 +125,7 @@ struct OnboardingInterviewView: View {
             .task {
                 let modelIds = openAIModels.map(\.modelId)
                 uiState.configureIfNeeded(
-                    service: service,
+                    coordinator: interviewCoordinator,
                     defaultModelId: defaultModelId,
                     defaultWebSearchAllowed: defaultWebSearchAllowed,
                     defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
@@ -343,20 +343,13 @@ private extension OnboardingInterviewView {
             case .introduction:
                 beginInterview()
             case .resumeIntake:
-                if coordinator.isActive,
-                   coordinator.pendingChoicePrompt == nil,
-                   coordinator.pendingApplicantProfileRequest == nil,
-                   coordinator.pendingApplicantProfileIntake == nil {
-                    // TODO: Emit event instead
-                    // coordinator.setWizardStep(.artifactDiscovery)
-                }
+                // Wizard steps are now derived from objectives - no manual setting needed
+                break
             case .artifactDiscovery:
-                // TODO: Emit event instead
-                // coordinator.setWizardStep(.writingCorpus)
+                // Wizard steps are now derived from objectives - no manual setting needed
                 break
             case .writingCorpus:
-                // TODO: Emit event instead
-                // coordinator.setWizardStep(.wrapUp)
+                // Wizard steps are now derived from objectives - no manual setting needed
                 break
             case .wrapUp:
                 handleCancel()
@@ -371,16 +364,13 @@ private extension OnboardingInterviewView {
                 // Wizard steps are now derived from objectives - no manual reset needed
                 reinitializeUIState()
             case .artifactDiscovery:
-                // TODO: Emit event instead
-                // coordinator.setWizardStep(.resumeIntake)
+                // Wizard steps are now derived from objectives - no manual setting needed
                 break
             case .writingCorpus:
-                // TODO: Emit event instead
-                // coordinator.setWizardStep(.artifactDiscovery)
+                // Wizard steps are now derived from objectives - no manual setting needed
                 break
             case .wrapUp:
-                // TODO: Emit event instead
-                // coordinator.setWizardStep(.writingCorpus)
+                // Wizard steps are now derived from objectives - no manual setting needed
                 break
             case .introduction:
                 break
@@ -388,9 +378,10 @@ private extension OnboardingInterviewView {
     }
 
     func handleCancel() {
-        // TODO: Emit event instead
-        // interviewService.resetInterview()
-        reinitializeUIState(service: interviewService)
+        Task {
+            await interviewCoordinator.endInterview()
+        }
+        reinitializeUIState()
         if let window = NSApp.windows.first(where: { $0 is BorderlessOverlayWindow }) {
             window.orderOut(nil)
         }
@@ -460,7 +451,7 @@ private extension OnboardingInterviewView {
 
     func reinitializeUIState() {
         viewModel.configureIfNeeded(
-            service: service,
+            coordinator: interviewCoordinator,
             defaultModelId: defaultModelId,
             defaultWebSearchAllowed: defaultWebSearchAllowed,
             defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
