@@ -62,19 +62,27 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     // MARK: - Event Handling
 
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
-        guard case .objectiveStatusChanged(let id, let statusString, let phaseString) = event else {
+        guard case .objectiveStatusChanged(
+            let id,
+            let oldStatusString,
+            let newStatusString,
+            let phaseString,
+            let source,
+            let notes
+        ) = event else {
             return
         }
 
-        guard let status = ObjectiveStatus(rawValue: statusString) else {
-            Logger.warning("Invalid objective status: \(statusString)", category: .ai)
+        guard let status = ObjectiveStatus(rawValue: newStatusString) else {
+            Logger.warning("Invalid objective status: \(newStatusString)", category: .ai)
             return
         }
 
         // Only process completed objectives
         guard status == .completed else { return }
 
-        Logger.info("🎯 Processing workflow for completed objective: \(id)", category: .ai)
+        let sourceInfo = source.map { " from \($0)" } ?? ""
+        Logger.info("🎯 Processing workflow for completed objective: \(id)\(sourceInfo)", category: .ai)
 
         // Get the phase script
         guard let phase = InterviewPhase(rawValue: phaseString),
