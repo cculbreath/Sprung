@@ -98,23 +98,6 @@ enum LLMStatus: String {
     case error
 }
 
-/// Timeline diff structure for tracking user edits
-struct TimelineDiff: Codable {
-    let added: Int
-    let modified: Int
-    let deleted: Int
-    let reordered: Bool
-
-    var summary: String {
-        var parts: [String] = []
-        if added > 0 { parts.append("\(added) added") }
-        if modified > 0 { parts.append("\(modified) modified") }
-        if deleted > 0 { parts.append("\(deleted) deleted") }
-        if reordered { parts.append("reordered") }
-        return parts.isEmpty ? "no changes" : parts.joined(separator: ", ")
-    }
-}
-
 /// Event topics for routing (spec §6)
 enum EventTopic: String, CaseIterable {
     case llm = "LLM"
@@ -434,4 +417,18 @@ protocol OnboardingEventHandler {
 struct FunctionCall: Codable {
     let name: String
     let arguments: String
+}
+
+// MARK: - TimelineDiff Summary Extension
+
+/// Extension to provide a summary string for the detailed TimelineDiff type
+extension TimelineDiff {
+    var summary: String {
+        var parts: [String] = []
+        if !added.isEmpty { parts.append("\(added.count) added") }
+        if !removed.isEmpty { parts.append("\(removed.count) removed") }
+        if !updated.isEmpty { parts.append("\(updated.count) updated") }
+        if reordered { parts.append("reordered") }
+        return parts.isEmpty ? "no changes" : parts.joined(separator: ", ")
+    }
 }
