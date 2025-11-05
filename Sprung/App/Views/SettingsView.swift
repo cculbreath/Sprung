@@ -15,7 +15,6 @@ struct SettingsView: View {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
-    @Environment(OnboardingArtifactStore.self) private var onboardingArtifactStore
     @Environment(CareerKeywordStore.self) private var careerKeywordStore
     @Environment(\.modelContext) private var modelContext
 
@@ -201,7 +200,6 @@ struct SettingsView: View {
                 applicantProfileStore: applicantProfileStore,
                 experienceDefaultsStore: experienceDefaultsStore,
                 enabledLLMStore: enabledLLMStore,
-                onboardingArtifactStore: onboardingArtifactStore,
                 careerKeywordStore: careerKeywordStore
             )
 
