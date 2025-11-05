@@ -243,6 +243,7 @@ final class OnboardingInterviewCoordinator {
 
         self.checkpointManager = CheckpointManager(
             state: state,
+            eventBus: eventBus,
             checkpoints: checkpoints,
             applicantProfileStore: applicantProfileStore
         )

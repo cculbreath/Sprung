@@ -8,6 +8,7 @@ final class CheckpointManager {
     // MARK: - Dependencies
 
     private let state: StateCoordinator
+    private let eventBus: EventCoordinator
     private let checkpoints: Checkpoints
     private let applicantProfileStore: ApplicantProfileStore
 
@@ -19,10 +20,12 @@ final class CheckpointManager {
 
     init(
         state: StateCoordinator,
+        eventBus: EventCoordinator,
         checkpoints: Checkpoints,
         applicantProfileStore: ApplicantProfileStore
     ) {
         self.state = state
+        self.eventBus = eventBus
         self.checkpoints = checkpoints
         self.applicantProfileStore = applicantProfileStore
     }
@@ -65,18 +68,18 @@ final class CheckpointManager {
 
         await state.restoreFromSnapshot(checkpoint.snapshot)
 
-        // Restore artifacts from checkpoint
+        // Restore artifacts from checkpoint via events
         if let profile = checkpoint.profileJSON {
-            await state.setApplicantProfile(profile)
+            await eventBus.publish(.applicantProfileStored(profile))
             persistApplicantProfileToSwiftData(json: profile)
         }
 
         if let timeline = checkpoint.timelineJSON {
-            await state.setSkeletonTimeline(timeline)
+            await eventBus.publish(.skeletonTimelineStored(timeline))
         }
 
         if !checkpoint.enabledSections.isEmpty {
-            await state.setEnabledSections(checkpoint.enabledSections)
+            await eventBus.publish(.enabledSectionsUpdated(checkpoint.enabledSections))
         }
 
         Logger.info("✅ Restored from checkpoint", category: .ai)
