@@ -982,6 +982,131 @@ final class OnboardingInterviewCoordinator {
         return result
     }
 
+    // MARK: - UI Continuation Facade Methods (Architecture-Compliant)
+    // These methods provide simple interfaces for views to submit user input
+    // without exposing internal coordination logic or requiring direct continuation calls.
+
+    /// Submit a user's choice selection and automatically resume tool execution.
+    /// Views should call this instead of manually resolving and resuming.
+    func submitChoiceSelection(_ selectionIds: [String]) async {
+        let result = toolRouter.promptHandler.resolveChoice(selectionIds: selectionIds)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Submit validation response and automatically resume tool execution.
+    /// Views should call this instead of manually submitting and resuming.
+    func submitValidationAndResume(
+        status: String,
+        updatedData: JSON?,
+        changes: JSON?,
+        notes: String?
+    ) async {
+        let result = submitValidationResponse(
+            status: status,
+            updatedData: updatedData,
+            changes: changes,
+            notes: notes
+        )
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Complete an upload with file URLs and automatically resume tool execution.
+    /// Views should call this instead of manually completing and resuming.
+    func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
+        let result = await completeUpload(id: id, fileURLs: fileURLs)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Complete an upload with a link and automatically resume tool execution.
+    /// Views should call this instead of manually completing and resuming.
+    func completeUploadAndResume(id: UUID, link: URL) async {
+        let result = await toolRouter.completeUpload(id: id, link: link)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Skip an upload and automatically resume tool execution.
+    /// Views should call this instead of manually skipping and resuming.
+    func skipUploadAndResume(id: UUID) async {
+        let result = await skipUpload(id: id)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Confirm applicant profile and automatically resume tool execution.
+    /// Views should call this instead of manually resolving and resuming.
+    func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
+        let result = toolRouter.resolveApplicantProfile(with: draft)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Reject applicant profile and automatically resume tool execution.
+    /// Views should call this instead of manually rejecting and resuming.
+    func rejectApplicantProfile(reason: String) async {
+        let result = toolRouter.rejectApplicantProfile(reason: reason)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Confirm section toggle and automatically resume tool execution.
+    /// Views should call this instead of manually resolving and resuming.
+    func confirmSectionToggle(enabled: [String]) async {
+        let result = toolRouter.resolveSectionToggle(enabled: enabled)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Reject section toggle and automatically resume tool execution.
+    /// Views should call this instead of manually rejecting and resuming.
+    func rejectSectionToggle(reason: String) async {
+        let result = toolRouter.rejectSectionToggle(reason: reason)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    // MARK: - Applicant Profile Intake Facade Methods
+
+    /// Begin profile upload flow.
+    /// Views should call this instead of accessing toolRouter directly.
+    func beginProfileUpload() {
+        if let (request, continuationId) = toolRouter.beginApplicantProfileUpload() {
+            presentUploadRequest(request, continuationId: continuationId)
+        }
+    }
+
+    /// Begin profile URL entry flow.
+    /// Views should call this instead of accessing toolRouter directly.
+    func beginProfileURLEntry() {
+        toolRouter.beginApplicantProfileURL()
+    }
+
+    /// Begin profile contacts fetch flow.
+    /// Views should call this instead of accessing toolRouter directly.
+    func beginProfileContactsFetch() {
+        toolRouter.beginApplicantProfileContactsFetch()
+    }
+
+    /// Begin profile manual entry flow.
+    /// Views should call this instead of accessing toolRouter directly.
+    func beginProfileManualEntry() {
+        toolRouter.beginApplicantProfileManualEntry()
+    }
+
+    /// Reset profile intake to options view.
+    /// Views should call this instead of accessing toolRouter directly.
+    func resetProfileIntakeToOptions() {
+        toolRouter.resetApplicantProfileIntakeToOptions()
+    }
+
+    /// Submit profile draft and automatically resume tool execution.
+    /// Views should call this instead of manually completing and resuming.
+    func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
+        let result = toolRouter.completeApplicantProfileDraft(draft, source: source)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
+    /// Submit profile URL and automatically resume tool execution.
+    /// Views should call this instead of manually submitting and resuming.
+    func submitProfileURL(_ urlString: String) async {
+        let result = toolRouter.submitApplicantProfileURL(urlString)
+        await continuationTracker.resumeToolContinuation(from: result)
+    }
+
     // MARK: - Phase Advance
 
     func presentPhaseAdvanceRequest(
