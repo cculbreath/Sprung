@@ -126,9 +126,9 @@ final class InterviewLifecycleController {
         await artifactPersistenceHandler?.stop()
         artifactPersistenceHandler = nil
 
-        // Update state
-        await state.setActiveState(false)
-        await state.setProcessingState(false)
+        // Update state via events
+        await eventBus.publish(.processingStateChanged(false))
+        await eventBus.publish(.waitingStateChanged(nil))
 
         // Cancel state update tasks
         stateUpdateTasks.forEach { $0.cancel() }
