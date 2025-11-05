@@ -234,7 +234,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         status: ObjectiveStatus,
         source: String? = nil,
         notes: String? = nil
-    ) {
+    ) async {
         guard var objective = objectives[id] else {
             Logger.warning("⚠️ Attempted to update unknown objective: \(id)", category: .ai)
             return
@@ -256,6 +256,13 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
 
         objectives[id] = objective
+
+        // Emit event to notify listeners (e.g., ObjectiveWorkflowEngine)
+        await emit(.objectiveStatusChanged(
+            id: id,
+            status: status.rawValue,
+            phase: phase.rawValue
+        ))
 
         Logger.info("✅ Objective \(id): \(oldStatus) → \(status)", category: .ai)
         updateWizardProgress()
@@ -284,18 +291,18 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Artifact Management
 
-    func setApplicantProfile(_ profile: JSON?) {
+    func setApplicantProfile(_ profile: JSON?) async {
         artifacts.applicantProfile = profile
         if profile != nil {
-            setObjectiveStatus("applicant_profile", status: .completed, source: "artifact_saved")
+            await setObjectiveStatus("applicant_profile", status: .completed, source: "artifact_saved")
         }
         Logger.info("👤 Applicant profile \(profile != nil ? "saved" : "cleared")", category: .ai)
     }
 
-    func setSkeletonTimeline(_ timeline: JSON?) {
+    func setSkeletonTimeline(_ timeline: JSON?) async {
         artifacts.skeletonTimeline = timeline
         if timeline != nil {
-            setObjectiveStatus("skeleton_timeline", status: .completed, source: "artifact_saved")
+            await setObjectiveStatus("skeleton_timeline", status: .completed, source: "artifact_saved")
         }
         Logger.info("📅 Skeleton timeline \(timeline != nil ? "saved" : "cleared")", category: .ai)
     }
@@ -357,7 +364,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         return TimelineCardAdapter.cards(from: TimelineCardAdapter.normalizedTimeline(timelineJSON))
     }
 
-    func createTimelineCard(_ card: JSON) {
+    func createTimelineCard(_ card: JSON) async {
         var (cards, meta) = currentTimelineCards()
 
         // Create new timeline card
@@ -370,7 +377,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         cards.append(newCard)
         artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
-        setObjectiveStatus("skeleton_timeline", status: .inProgress)
+        await setObjectiveStatus("skeleton_timeline", status: .inProgress)
         Logger.info("📅 Timeline card created", category: .ai)
     }
 
@@ -405,32 +412,32 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("📅 Timeline cards reordered", category: .ai)
     }
 
-    func setEnabledSections(_ sections: Set<String>) {
+    func setEnabledSections(_ sections: Set<String>) async {
         artifacts.enabledSections = sections
         if !sections.isEmpty {
-            setObjectiveStatus("enabled_sections", status: .completed, source: "artifact_saved")
+            await setObjectiveStatus("enabled_sections", status: .completed, source: "artifact_saved")
         }
         Logger.info("📑 Enabled sections updated: \(sections.count) sections", category: .ai)
     }
 
-    func addExperienceCard(_ card: JSON) {
+    func addExperienceCard(_ card: JSON) async {
         artifacts.experienceCards.append(card)
         if !artifacts.experienceCards.isEmpty {
-            setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
+            await setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
         }
     }
 
-    func addWritingSample(_ sample: JSON) {
+    func addWritingSample(_ sample: JSON) async {
         artifacts.writingSamples.append(sample)
         if !artifacts.writingSamples.isEmpty {
-            setObjectiveStatus("one_writing_sample", status: .completed, source: "artifact_saved")
+            await setObjectiveStatus("one_writing_sample", status: .completed, source: "artifact_saved")
         }
     }
 
-    func addKnowledgeCard(_ card: JSON) {
+    func addKnowledgeCard(_ card: JSON) async {
         artifacts.knowledgeCards.append(card)
         if !artifacts.knowledgeCards.isEmpty {
-            setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
+            await setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
         }
         Logger.info("🃏 Knowledge card added (total: \(artifacts.knowledgeCards.count))", category: .ai)
     }
@@ -773,7 +780,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             }
 
             // Update the objective status
-            setObjectiveStatus(id, status: status, source: source, notes: notes)
+            await setObjectiveStatus(id, status: status, source: source, notes: notes)
 
             // The setObjectiveStatus method will emit .objectiveStatusChanged event
 
@@ -804,7 +811,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleTimelineEvent(_ event: OnboardingEvent) async {
         switch event {
         case .timelineCardCreated(let card):
-            createTimelineCard(card)
+            await createTimelineCard(card)
             // Emit confirmation event if needed
             Logger.info("📅 Timeline card created via event", category: .ai)
 
@@ -823,7 +830,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .skeletonTimelineReplaced(let timeline, let diff, _):
             // User edited timeline in UI - replace in one shot (Phase 3)
             artifacts.skeletonTimeline = TimelineCardAdapter.normalizedTimeline(timeline)
-            setObjectiveStatus("skeleton_timeline", status: .inProgress, source: "user_edit")
+            await setObjectiveStatus("skeleton_timeline", status: .inProgress, source: "user_edit")
             if let diff = diff {
                 Logger.info("📅 Skeleton timeline replaced by user (\(diff.summary))", category: .ai)
             } else {
