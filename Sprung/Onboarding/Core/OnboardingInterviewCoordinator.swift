@@ -379,7 +379,8 @@ final class OnboardingInterviewCoordinator {
             await state.setReasoningSummary(summary, for: messageId)
 
         case .streamingStatusUpdated(let status):
-            await setStreamingStatus(status)
+            // Event now handled by StateCoordinator - just sync cache
+            _pendingStreamingStatusSync = status
 
         case .waitingStateChanged:
             // Event now handled by StateCoordinator
@@ -852,7 +853,8 @@ final class OnboardingInterviewCoordinator {
 
     func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
         Task {
-            await state.setPendingExtraction(extraction)
+            // Publish event instead of direct state mutation
+            await eventBus.publish(.pendingExtractionUpdated(extraction))
             _pendingExtractionSync = extraction
 
             guard let extraction else { return }
@@ -908,7 +910,8 @@ final class OnboardingInterviewCoordinator {
         Task {
             if var extraction = await state.pendingExtraction {
                 extraction.applyProgressUpdate(update)
-                await state.setPendingExtraction(extraction)
+                // Publish event instead of direct state mutation
+                await eventBus.publish(.pendingExtractionUpdated(extraction))
                 _pendingExtractionSync = extraction
             } else {
                 pendingExtractionProgressBuffer.append(update)
@@ -917,7 +920,8 @@ final class OnboardingInterviewCoordinator {
     }
 
     func setStreamingStatus(_ status: String?) async {
-        await state.setStreamingStatus(status)
+        // Publish event instead of direct state mutation
+        await eventBus.publish(.streamingStatusUpdated(status))
         _pendingStreamingStatusSync = status
     }
 
@@ -1117,12 +1121,14 @@ final class OnboardingInterviewCoordinator {
         let knowledgeCardRecords = (await dataStore.list(dataType: "knowledge_card")).filter { $0 != .null }
 
         if let profile = profileRecords.last {
-            await state.setApplicantProfile(profile)
+            // Publish event instead of direct state mutation
+            await eventBus.publish(.applicantProfileStored(profile))
             persistApplicantProfileToSwiftData(json: profile)
         }
 
         if let timeline = timelineRecords.last {
-            await state.setSkeletonTimeline(timeline)
+            // Publish event instead of direct state mutation
+            await eventBus.publish(.skeletonTimelineStored(timeline))
         }
 
         if !artifactRecords.isEmpty {
