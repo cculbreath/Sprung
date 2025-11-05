@@ -24,6 +24,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let service: OpenAIService
     private var systemPrompt: String
     private let toolRegistry: ToolRegistry
+    private let contextAssembler: ConversationContextAssembler
 
     // Conversation tracking
     private var conversationId: String?
@@ -46,14 +47,16 @@ actor LLMMessenger: OnboardingEventEmitter {
         systemPrompt: String,
         eventBus: EventCoordinator,
         networkRouter: NetworkRouter,
-        toolRegistry: ToolRegistry
+        toolRegistry: ToolRegistry,
+        state: StateCoordinator
     ) {
         self.service = service
         self.systemPrompt = systemPrompt
         self.eventBus = eventBus
         self.networkRouter = networkRouter
         self.toolRegistry = toolRegistry
-        Logger.info("📬 LLMMessenger initialized", category: .ai)
+        self.contextAssembler = ConversationContextAssembler(state: state)
+        Logger.info("📬 LLMMessenger initialized with ConversationContextAssembler", category: .ai)
     }
 
     // MARK: - Event Subscription
@@ -241,16 +244,11 @@ actor LLMMessenger: OnboardingEventEmitter {
     // MARK: - Request Building
 
     private func buildUserMessageRequest(text: String) async -> ModelResponseParameter {
-        let inputItems: [InputItem] = [
-            .message(InputMessage(
-                role: "developer",
-                content: .text(systemPrompt)
-            )),
-            .message(InputMessage(
-                role: "user",
-                content: .text(text)
-            ))
-        ]
+        let inputItems = await contextAssembler.buildForUserMessage(
+            text: text,
+            systemPrompt: systemPrompt,
+            allowedTools: allowedToolNames
+        )
 
         let tools = await getToolSchemas()
 
@@ -264,12 +262,11 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     private func buildDeveloperMessageRequest(text: String) async -> ModelResponseParameter {
-        let inputItems: [InputItem] = [
-            .message(InputMessage(
-                role: "developer",
-                content: .text(text)
-            ))
-        ]
+        let inputItems = await contextAssembler.buildForDeveloperMessage(
+            text: text,
+            systemPrompt: systemPrompt,
+            allowedTools: allowedToolNames
+        )
 
         let tools = await getToolSchemas()
 
@@ -283,14 +280,11 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     private func buildToolResponseRequest(output: JSON, callId: String) async -> ModelResponseParameter {
-        let outputString = output.rawString() ?? "{}"
-
-        let inputItems: [InputItem] = [
-            .functionToolCallOutput(FunctionToolCallOutput(
-                callId: callId,
-                output: outputString
-            ))
-        ]
+        let inputItems = await contextAssembler.buildForToolResponse(
+            output: output,
+            callId: callId,
+            systemPrompt: systemPrompt
+        )
 
         let tools = await getToolSchemas()
 
