@@ -70,7 +70,7 @@ enum OnboardingEvent {
     // MARK: - Objective Management
     case objectiveStatusRequested(id: String, response: (String?) -> Void)
     case objectiveStatusUpdateRequested(id: String, status: String, source: String?, notes: String?)
-    case objectiveStatusChanged(id: String, status: String, phase: String)
+    case objectiveStatusChanged(id: String, oldStatus: String?, newStatus: String, phase: String, source: String?, notes: String?)
 
     // MARK: - State Management (§6 spec)
     case stateSnapshot(updatedKeys: [String], snapshot: JSON)
@@ -362,8 +362,10 @@ actor EventCoordinator {
             description = "Objective status requested"
         case .objectiveStatusUpdateRequested(let id, let status, _, _):
             description = "Objective update requested: \(id) → \(status)"
-        case .objectiveStatusChanged(let id, let status, _):
-            description = "Objective \(id) → \(status)"
+        case .objectiveStatusChanged(let id, let oldStatus, let newStatus, _, let source, _):
+            let sourceInfo = source.map { " (source: \($0))" } ?? ""
+            let oldInfo = oldStatus.map { "\($0) → " } ?? ""
+            description = "Objective \(id): \(oldInfo)\(newStatus)\(sourceInfo)"
         case .stateSnapshot(let keys, _):
             description = "State snapshot (\(keys.count) keys updated)"
         case .stateAllowedToolsUpdated(let tools):
