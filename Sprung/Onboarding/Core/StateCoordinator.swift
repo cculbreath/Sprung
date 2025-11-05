@@ -570,29 +570,29 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
-    func setPendingUpload(_ request: OnboardingUploadRequest?) {
+    func setPendingUpload(_ request: OnboardingUploadRequest?) async {
         pendingUploadRequest = request
         let newWaitingState: WaitingState? = request != nil ? .upload : nil
-        Task { await setWaitingState(newWaitingState) }
+        await setWaitingState(newWaitingState)
     }
 
-    func setPendingChoice(_ prompt: OnboardingChoicePrompt?) {
+    func setPendingChoice(_ prompt: OnboardingChoicePrompt?) async {
         pendingChoicePrompt = prompt
         let newWaitingState: WaitingState? = prompt != nil ? .selection : nil
-        Task { await setWaitingState(newWaitingState) }
+        await setWaitingState(newWaitingState)
     }
 
-    func setPendingValidation(_ prompt: OnboardingValidationPrompt?) {
+    func setPendingValidation(_ prompt: OnboardingValidationPrompt?) async {
         pendingValidationPrompt = prompt
         let newWaitingState: WaitingState? = prompt != nil ? .validation : nil
-        Task { await setWaitingState(newWaitingState) }
+        await setWaitingState(newWaitingState)
     }
 
-    func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) {
+    func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) async {
         pendingExtraction = extraction
         pendingExtractionSync = extraction // Update sync cache
         let newWaitingState: WaitingState? = extraction != nil ? .extraction : nil
-        Task { await setWaitingState(newWaitingState) }
+        await setWaitingState(newWaitingState)
     }
 
     func setStreamingStatus(_ status: String?) {
@@ -832,19 +832,19 @@ actor StateCoordinator: OnboardingEventEmitter {
             self.waitingState = waitingState
 
             // Emit tool restrictions when waiting state changes
-            if waitingState != nil {
+            if let waitingState = waitingState {
                 // Entering waiting state - restrict tools
+                Logger.info("⏸️  ENTERING WAITING STATE: \(waitingState.rawValue)", category: .ai)
                 await emitRestrictedTools()
-                Logger.info("🚫 Waiting state set to \(waiting ?? "nil") - tools restricted", category: .ai)
             } else if previousWaitingState != nil {
                 // Exiting waiting state - restore normal tools
+                Logger.info("▶️  EXITING WAITING STATE (was: \(previousWaitingState!.rawValue))", category: .ai)
                 await emitAllowedTools()
-                Logger.info("✅ Waiting state cleared - tools restored", category: .ai)
             }
 
         case .pendingExtractionUpdated(let extraction):
             // Handle pending extraction update via event
-            setPendingExtraction(extraction)
+            await setPendingExtraction(extraction)
             Logger.info("📄 Pending extraction updated via event: \(extraction?.title ?? "nil")", category: .ai)
 
         case .streamingStatusUpdated(let status):
@@ -983,29 +983,29 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleToolpaneEvent(_ event: OnboardingEvent) async {
         switch event {
         case .choicePromptRequested(let prompt, _):
-            setPendingChoice(prompt)
+            await setPendingChoice(prompt)
             Logger.debug("🎯 Choice prompt requested - waiting state set", category: .ai)
 
         case .choicePromptCleared:
-            setPendingChoice(nil)
+            await setPendingChoice(nil)
             await clearWaitingState()
             Logger.debug("🎯 Choice prompt cleared - waiting state restored", category: .ai)
 
         case .uploadRequestPresented(let request, _):
-            setPendingUpload(request)
+            await setPendingUpload(request)
             Logger.debug("📤 Upload request presented - waiting state set", category: .ai)
 
         case .uploadRequestCancelled:
-            setPendingUpload(nil)
+            await setPendingUpload(nil)
             await clearWaitingState()
             Logger.debug("📤 Upload request cancelled - waiting state restored", category: .ai)
 
         case .validationPromptRequested(let prompt, _):
-            setPendingValidation(prompt)
+            await setPendingValidation(prompt)
             Logger.debug("✅ Validation prompt requested - waiting state set", category: .ai)
 
         case .validationPromptCleared:
-            setPendingValidation(nil)
+            await setPendingValidation(nil)
             await clearWaitingState()
             Logger.debug("✅ Validation prompt cleared - waiting state restored", category: .ai)
 
@@ -1038,34 +1038,67 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func emitAllowedTools() async {
         let tools = getAllowedToolsForCurrentPhase()
         await emit(.stateAllowedToolsUpdated(tools: tools))
+
+        if tools.isEmpty {
+            Logger.info("🔧 No tools available in current phase", category: .ai)
+        } else {
+            Logger.info("🔧 Tools enabled (\(tools.count)): \(tools.sorted().joined(separator: ", "))", category: .ai)
+        }
     }
 
     func publishAllowedToolsNow() async {
         await emitAllowedTools()
     }
 
-    // MARK: - Tool Gating (Phase 3)
+    // MARK: - Tool Gating (Phase 2)
+    //
+    // Tool Gating Strategy:
+    // When the system enters a waiting state (upload, selection, validation, extraction, processing),
+    // ALL tools are gated (empty tool set) to prevent the LLM from calling tools while waiting for
+    // user input. This ensures:
+    // 1. The LLM cannot make progress until the user responds
+    // 2. Tool calls don't interfere with the UI continuation flow
+    // 3. Clear state boundaries between AI processing and user interaction
+    //
+    // The gating is enforced at two levels:
+    // 1. LLMMessenger: Filters tool schemas based on allowedTools from .stateAllowedToolsUpdated events
+    // 2. ToolExecutionCoordinator: Validates waiting state before executing any tool call
+    //
+    // When the waiting state is cleared, normal phase-based tool permissions are restored.
 
     /// Emit restricted tool set during waiting states
     /// When user is interacting with UI (selection/upload/validation), restrict other tools
     private func emitRestrictedTools() async {
-        guard waitingState != nil else {
+        guard let waitingState = waitingState else {
             // Not in waiting state - use normal allowed tools
             await emitAllowedTools()
             return
         }
 
+        // Get the tools that would normally be available (for logging purposes)
+        let normalTools = getAllowedToolsForCurrentPhase()
+
         // During waiting states, restrict to empty set (only continuation path allowed)
         let restrictedTools: Set<String> = []
         await emit(.stateAllowedToolsUpdated(tools: restrictedTools))
-        Logger.debug("🚫 Tools gated during waiting state: \(waitingState?.rawValue ?? "unknown")", category: .ai)
+
+        Logger.info("🚫 ALL TOOLS GATED - Waiting for user input (state: \(waitingState.rawValue))", category: .ai)
+        if !normalTools.isEmpty {
+            Logger.info("   ⛔️ Blocked tools (\(normalTools.count)): \(normalTools.sorted().joined(separator: ", "))", category: .ai)
+        }
     }
 
     /// Clear waiting state and restore normal tools
     func clearWaitingState() async {
+        let previousState = waitingState
         waitingState = nil
         await emitAllowedTools()
-        Logger.debug("✅ Waiting state cleared, tools restored", category: .ai)
+
+        if let previousState = previousState {
+            Logger.info("✅ Waiting state cleared (was: \(previousState.rawValue)) - tools restored", category: .ai)
+        } else {
+            Logger.debug("✅ Waiting state cleared (was already nil)", category: .ai)
+        }
     }
 
     /// When objectives change, emit update

@@ -73,15 +73,27 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
 
     /// Execute a tool call
     private func handleToolCall(_ call: ToolCall) async {
+        // First, check if we're in a waiting state
+        let waitingState = await stateCoordinator.waitingState
+        if let waitingState = waitingState {
+            Logger.warning("🚫 Tool call '\(call.name)' blocked - system in waiting state: \(waitingState.rawValue)", category: .ai)
+            await emitToolError(
+                callId: call.callId,
+                message: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue)). Please respond to the pending request first."
+            )
+            return
+        }
+
         // Validate against allowed tools
         let allowedTools = await stateCoordinator.getAllowedToolsForCurrentPhase()
         guard allowedTools.contains(call.name) else {
-            Logger.warning("Tool '\(call.name)' not allowed in current phase", category: .ai)
+            Logger.warning("🚫 Tool '\(call.name)' not allowed in current phase", category: .ai)
             await emitToolError(callId: call.callId, message: "Tool '\(call.name)' is not available in the current phase")
             return
         }
 
         // Execute tool
+        Logger.debug("🔧 Executing tool: \(call.name)", category: .ai)
         do {
             let result = try await toolExecutor.handleToolCall(call)
             await handleToolResult(result, callId: call.callId, toolName: call.name)
