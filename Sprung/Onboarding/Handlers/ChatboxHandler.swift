@@ -76,6 +76,9 @@ actor ChatboxHandler: OnboardingEventEmitter {
         case .llmUserMessageSent(_, let payload):
             await handleUserMessageSent(payload: payload)
 
+        case .llmReasoningSummary(let messageId, let summary, let isFinal):
+            await handleReasoningSummary(messageId: messageId, summary: summary, isFinal: isFinal)
+
         case .errorOccurred(let message):
             await handleError(message: message)
 
@@ -137,6 +140,12 @@ actor ChatboxHandler: OnboardingEventEmitter {
     private func handleError(message: String) async {
         await MainActor.run {
             transcriptStore.appendSystemMessage("Error: \(message)")
+        }
+    }
+
+    private func handleReasoningSummary(messageId: UUID, summary: String, isFinal: Bool) async {
+        await MainActor.run {
+            transcriptStore.updateReasoningSummary(summary, for: messageId, isFinal: isFinal)
         }
     }
 
