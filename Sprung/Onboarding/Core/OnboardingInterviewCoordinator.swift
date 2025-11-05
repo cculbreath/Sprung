@@ -372,25 +372,13 @@ final class OnboardingInterviewCoordinator {
         case .processingStateChanged(let processing):
             await state.setProcessingState(processing)
 
-        case .streamingMessageBegan(_, let text, let reasoningExpected):
-            // StateCoordinator only - ChatboxHandler mirrors to transcript
-            _ = await state.beginStreamingMessage(initialText: text, reasoningExpected: reasoningExpected)
+        case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
+            // Event now handled by StateCoordinator - ChatboxHandler mirrors to transcript
+            break
 
-        case .streamingMessageUpdated(let id, let delta):
-            // StateCoordinator only - ChatboxHandler mirrors to transcript
-            await state.updateStreamingMessage(id: id, delta: delta)
-
-        case .streamingMessageFinalized(let id, let finalText):
-            // StateCoordinator only - ChatboxHandler mirrors to transcript
-            _ = await state.finalizeStreamingMessage(id: id, finalText: finalText)
-
-        case .llmReasoningSummaryDelta(let delta):
-            // Sidebar reasoning (ChatGPT-style) - not attached to messages
-            await state.updateReasoningSummary(delta: delta)
-
-        case .llmReasoningSummaryComplete(let text):
-            // Sidebar reasoning complete
-            await state.completeReasoningSummary(finalText: text)
+        case .llmReasoningSummaryDelta, .llmReasoningSummaryComplete:
+            // Event now handled by StateCoordinator - sidebar reasoning display
+            break
 
         case .streamingStatusUpdated:
             // Event now handled by StateCoordinator - StateCoordinator maintains sync cache
