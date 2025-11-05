@@ -735,9 +735,11 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmUserMessageSent(let messageId, _):
-            // Track message for state
-            Logger.debug("StateCoordinator tracking user message: \(messageId)", category: .ai)
+        case .llmUserMessageSent(let messageId, let payload):
+            // Append user message to maintain single source of truth
+            let text = payload["text"].stringValue
+            appendUserMessage(text)
+            Logger.debug("StateCoordinator appended user message: \(messageId)", category: .ai)
 
         case .llmSentToolResponseMessage(let messageId, _):
             // Track tool response
