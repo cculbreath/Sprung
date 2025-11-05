@@ -1029,6 +1029,18 @@ actor StateCoordinator: OnboardingEventEmitter {
             upsertArtifactRecord(record)
             Logger.info("📦 Artifact record persisted: \(record["id"].stringValue)", category: .ai)
 
+        case .artifactRecordsReplaced(let records):
+            setArtifactRecords(records)
+            Logger.info("📦 Artifact records replaced via snapshot (count: \(records.count))", category: .ai)
+
+        case .knowledgeCardPersisted(let card):
+            await addKnowledgeCard(card)
+            Logger.info("🃏 Knowledge card persisted via event", category: .ai)
+
+        case .knowledgeCardsReplaced(let cards):
+            await setKnowledgeCards(cards)
+            Logger.info("🃏 Knowledge cards replaced via snapshot (count: \(cards.count))", category: .ai)
+
         default:
             break
         }
