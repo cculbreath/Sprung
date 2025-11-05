@@ -104,31 +104,21 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.llmCancelRequested)
     }
 
-    // Properties that need synchronous access for SwiftUI
-    // These will be updated via observation when state changes
-    @ObservationIgnored
-    private var _isProcessingSync = false
-    var isProcessingSync: Bool { _isProcessingSync }
+    // MARK: - Synchronous Cache Properties (Read from StateCoordinator)
 
-    @ObservationIgnored
-    private var _isActiveSync = false
-    var isActiveSync: Bool { _isActiveSync }
+    /// TODO: SYNC CACHE DUPLICATION
+    /// These properties read from StateCoordinator's sync caches, which are the single source of truth.
+    /// OnboardingInterviewCoordinator bridges between async StateCoordinator and synchronous SwiftUI.
+    /// StateCoordinator maintains both async authoritative state and nonisolated(unsafe) sync caches.
+    /// These computed properties enable SwiftUI views to access state synchronously.
+    /// Future refactoring: Consider removing this bridge layer entirely with ObservableObject wrapper.
 
-    @ObservationIgnored
-    private var _pendingExtractionSync: OnboardingPendingExtraction?
-    var pendingExtractionSync: OnboardingPendingExtraction? { _pendingExtractionSync }
-
-    @ObservationIgnored
-    private var _pendingStreamingStatusSync: String?
-    var pendingStreamingStatusSync: String? { _pendingStreamingStatusSync }
-
-    @ObservationIgnored
-    private var _artifactRecordsSync: [JSON] = []
-    var artifactRecordsSync: [JSON] { _artifactRecordsSync }
-
-    @ObservationIgnored
-    private var _pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest?
-    var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest? { _pendingPhaseAdvanceRequestSync }
+    var isProcessingSync: Bool { state.isProcessingSync }
+    var isActiveSync: Bool { state.isActiveSync }
+    var pendingExtractionSync: OnboardingPendingExtraction? { state.pendingExtractionSync }
+    var pendingStreamingStatusSync: String? { state.pendingStreamingStatusSync }
+    var artifactRecordsSync: [JSON] { state.artifactRecordsSync }
+    var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest? { state.pendingPhaseAdvanceRequestSync }
 
     // MARK: - UI State Properties (from ToolRouter)
 
@@ -478,15 +468,17 @@ final class OnboardingInterviewCoordinator {
 
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .processingStateChanged(let processing):
-            _isProcessingSync = processing
+        case .processingStateChanged:
+            // Sync cache now maintained by StateCoordinator
             await syncWizardProgressFromState()
 
-        case .streamingStatusUpdated(let status):
-            _pendingStreamingStatusSync = status
+        case .streamingStatusUpdated:
+            // Sync cache now maintained by StateCoordinator
+            break
 
         case .waitingStateChanged:
-            await syncPendingExtractionFromState()
+            // Sync cache now maintained by StateCoordinator
+            break
 
         default:
             break
@@ -497,9 +489,8 @@ final class OnboardingInterviewCoordinator {
         switch event {
         case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordPersisted:
-            await syncPendingExtractionFromState()
+            // Sync caches now maintained by StateCoordinator
             await syncWizardProgressFromState()
-            await syncArtifactRecordsFromState()
 
         default:
             break
@@ -508,13 +499,13 @@ final class OnboardingInterviewCoordinator {
 
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmReasoningStatus(let status):
-            _pendingStreamingStatusSync = status == "none" ? nil : status
+        case .llmReasoningStatus:
+            // Sync cache now maintained by StateCoordinator
+            break
 
-        case .llmStatus(let status):
-            if status == .idle || status == .error {
-                _pendingStreamingStatusSync = nil
-            }
+        case .llmStatus:
+            // Sync cache now maintained by StateCoordinator
+            break
 
         default:
             break
@@ -524,19 +515,16 @@ final class OnboardingInterviewCoordinator {
     private func handleStateSyncEvent(_ event: OnboardingEvent) async {
         switch event {
         case .stateSnapshot, .stateAllowedToolsUpdated:
+            // Sync caches now maintained by StateCoordinator
             await syncWizardProgressFromState()
-            await syncPendingExtractionFromState()
 
         case .phaseAdvanceRequested:
-            await syncPendingPhaseAdvanceRequestFromState()
+            // Sync cache now maintained by StateCoordinator
+            break
 
         default:
             break
         }
-    }
-
-    private func syncPendingExtractionFromState() async {
-        _pendingExtractionSync = await state.pendingExtraction
     }
 
     private func syncWizardProgressFromState() async {
@@ -545,22 +533,9 @@ final class OnboardingInterviewCoordinator {
         synchronizeWizardTracker(currentStep: step, completedSteps: completed)
     }
 
-    private func syncArtifactRecordsFromState() async {
-        _artifactRecordsSync = await state.artifacts.artifactRecords
-    }
-
-    private func syncPendingPhaseAdvanceRequestFromState() async {
-        _pendingPhaseAdvanceRequestSync = await state.pendingPhaseAdvanceRequest
-    }
-
     private func initialStateSync() async {
-        _isProcessingSync = await state.isProcessing
-        _isActiveSync = await state.isActive
-        await syncPendingExtractionFromState()
-        _pendingStreamingStatusSync = await state.pendingStreamingStatus
+        // Sync caches now maintained by StateCoordinator
         await syncWizardProgressFromState()
-        await syncArtifactRecordsFromState()
-        await syncPendingPhaseAdvanceRequestFromState()
     }
 
     // MARK: - Interview Lifecycle
@@ -593,8 +568,7 @@ final class OnboardingInterviewCoordinator {
             subscribeToStateUpdates()
             // Get the orchestrator created by lifecycleController
             self.orchestrator = lifecycleController.orchestrator
-            // Update sync cache for isActive
-            _isActiveSync = true
+            // StateCoordinator maintains sync cache for isActive
         }
 
         // Set model ID from preferences or ModelProvider default
@@ -633,8 +607,7 @@ final class OnboardingInterviewCoordinator {
     func endInterview() async {
         // Delegate to lifecycle controller
         await lifecycleController.endInterview()
-        // Update sync cache for isActive
-        _isActiveSync = false
+        // StateCoordinator maintains sync cache for isActive
     }
 
     // MARK: - Phase Management
@@ -856,7 +829,7 @@ final class OnboardingInterviewCoordinator {
         Task {
             // Publish event instead of direct state mutation
             await eventBus.publish(.pendingExtractionUpdated(extraction))
-            _pendingExtractionSync = extraction
+            // StateCoordinator maintains sync cache
 
             guard let extraction else { return }
             if shouldClearApplicantProfileIntake(for: extraction) {
@@ -913,7 +886,7 @@ final class OnboardingInterviewCoordinator {
                 extraction.applyProgressUpdate(update)
                 // Publish event instead of direct state mutation
                 await eventBus.publish(.pendingExtractionUpdated(extraction))
-                _pendingExtractionSync = extraction
+                // StateCoordinator maintains sync cache
             } else {
                 pendingExtractionProgressBuffer.append(update)
             }
@@ -923,7 +896,7 @@ final class OnboardingInterviewCoordinator {
     func setStreamingStatus(_ status: String?) async {
         // Publish event instead of direct state mutation
         await eventBus.publish(.streamingStatusUpdated(status))
-        _pendingStreamingStatusSync = status
+        // StateCoordinator maintains sync cache
     }
 
     private func synchronizeWizardTracker(
@@ -1042,7 +1015,7 @@ final class OnboardingInterviewCoordinator {
 
         // Clear the request
         await state.setPendingPhaseAdvanceRequest(nil)
-        _pendingPhaseAdvanceRequestSync = nil
+        // StateCoordinator maintains sync cache
         continuationTracker.clearPhaseAdvanceContinuation()
 
         // Resume the tool continuation
@@ -1057,7 +1030,7 @@ final class OnboardingInterviewCoordinator {
         guard let continuationId = continuationTracker.getPhaseAdvanceContinuationId() else { return }
 
         await state.setPendingPhaseAdvanceRequest(nil)
-        _pendingPhaseAdvanceRequestSync = nil
+        // StateCoordinator maintains sync cache
         continuationTracker.clearPhaseAdvanceContinuation()
 
         var payload = JSON()
