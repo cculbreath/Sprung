@@ -567,7 +567,50 @@ final class OnboardingInterviewCoordinator {
             subscribeToStateUpdates()
         }
 
-        return success
+        let orchestrator = makeOrchestrator(service: service, systemPrompt: systemPrompt)
+        self.orchestrator = orchestrator
+
+        // Set model ID from preferences or ModelProvider default
+        let cfg = ModelProvider.forTask(.orchestrator)
+        await orchestrator.setModelId(preferences.preferredModelId ?? cfg.id)
+
+        // Start event subscriptions for handlers
+        await chatboxHandler.startEventSubscriptions()
+        await toolExecutionCoordinator.startEventSubscriptions()
+        await state.startEventSubscriptions()
+        subscribeToStateUpdates()
+        await MainActor.run {
+            toolRouter.startEventSubscriptions()
+        }
+        await state.publishAllowedToolsNow()
+
+        // Phase 3: Start workflow engine
+        let engine = ObjectiveWorkflowEngine(
+            eventBus: eventBus,
+            phaseRegistry: phaseRegistry,
+            state: state
+        )
+        workflowEngine = engine
+        await engine.start()
+
+        // Phase 3: Start artifact persistence handler
+        let persistenceHandler = ArtifactPersistenceHandler(
+            eventBus: eventBus,
+            dataStore: dataStore
+        )
+        artifactPersistenceHandler = persistenceHandler
+        await persistenceHandler.start()
+
+        Task {
+            do {
+                try await orchestrator.startInterview()
+            } catch {
+                Logger.error("Interview failed: \(error)", category: .ai)
+                await endInterview()
+            }
+        }
+
+        return true
     }
 
     func endInterview() async {
