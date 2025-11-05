@@ -856,14 +856,14 @@ final class OnboardingInterviewCoordinator {
     func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
         toolRouter.presentUploadRequest(request, continuationId: continuationId)
         Task {
-            await state.setPendingUpload(request)
+            await eventBus.publish(.uploadRequestPresented(request: request, continuationId: continuationId))
         }
     }
 
     func completeUpload(id: UUID, fileURLs: [URL]) async -> (UUID, JSON)? {
         let result = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
         Task {
-            await state.setPendingUpload(nil)
+            await eventBus.publish(.uploadRequestCancelled(id: id))
         }
         return result
     }
@@ -871,7 +871,7 @@ final class OnboardingInterviewCoordinator {
     func skipUpload(id: UUID) async -> (UUID, JSON)? {
         let result = await toolRouter.skipUpload(id: id)
         Task {
-            await state.setPendingUpload(nil)
+            await eventBus.publish(.uploadRequestCancelled(id: id))
         }
         return result
     }
@@ -879,14 +879,16 @@ final class OnboardingInterviewCoordinator {
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt, continuationId: UUID) {
         toolRouter.presentChoicePrompt(prompt, continuationId: continuationId)
         Task {
-            await state.setPendingChoice(prompt)
+            await eventBus.publish(.choicePromptRequested(prompt: prompt, continuationId: continuationId))
         }
     }
 
     func submitChoice(optionId: String) -> (UUID, JSON)? {
         let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId])
-        Task {
-            await state.setPendingChoice(nil)
+        if let (continuationId, _) = result {
+            Task {
+                await eventBus.publish(.choicePromptCleared(continuationId: continuationId))
+            }
         }
         return result
     }
@@ -894,7 +896,7 @@ final class OnboardingInterviewCoordinator {
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt, continuationId: UUID) {
         toolRouter.presentValidationPrompt(prompt, continuationId: continuationId)
         Task {
-            await state.setPendingValidation(prompt)
+            await eventBus.publish(.validationPromptRequested(prompt: prompt, continuationId: continuationId))
         }
     }
 
@@ -913,30 +915,10 @@ final class OnboardingInterviewCoordinator {
             changes: changes,
             notes: notes
         )
-
-        Task {
-            // Handle knowledge card approval persistence
-            if let validation = pendingValidation,
-               validation.dataType == "knowledge_card",
-               status == "approved",
-               let cardData = updatedData {
-
-                // Add to in-memory state
-                await state.addKnowledgeCard(cardData)
-
-                // Persist to disk
-                do {
-                    try await dataStore.persist(dataType: "knowledge_card", payload: cardData)
-                    Logger.info("💾 Knowledge card persisted to disk", category: .ai)
-
-                    // Emit persistence event
-                    await eventBus.publish(.knowledgeCardPersisted(card: cardData))
-                } catch {
-                    Logger.error("Failed to persist knowledge card: \(error)", category: .ai)
-                }
+        if let (continuationId, _) = result {
+            Task {
+                await eventBus.publish(.validationPromptCleared(continuationId: continuationId))
             }
-
-            await state.setPendingValidation(nil)
         }
         return result
     }
