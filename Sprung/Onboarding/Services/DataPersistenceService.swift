@@ -17,7 +17,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
     private let state: StateCoordinator
     private let dataStore: InterviewDataStore
     private let applicantProfileStore: ApplicantProfileStore
-    private let chatTranscriptStore: ChatTranscriptStore
     private let toolRouter: ToolHandler
     private let wizardTracker: WizardProgressTracker
 
@@ -28,7 +27,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
         state: StateCoordinator,
         dataStore: InterviewDataStore,
         applicantProfileStore: ApplicantProfileStore,
-        chatTranscriptStore: ChatTranscriptStore,
         toolRouter: ToolHandler,
         wizardTracker: WizardProgressTracker
     ) {
@@ -36,7 +34,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
         self.state = state
         self.dataStore = dataStore
         self.applicantProfileStore = applicantProfileStore
-        self.chatTranscriptStore = chatTranscriptStore
         self.toolRouter = toolRouter
         self.wizardTracker = wizardTracker
     }
@@ -93,7 +90,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
     func resetStore() async {
         await state.reset()
         await MainActor.run {
-            chatTranscriptStore.reset()
             toolRouter.reset()
             wizardTracker.reset()
         }

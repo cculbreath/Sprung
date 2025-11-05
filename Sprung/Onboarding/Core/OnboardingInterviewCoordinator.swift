@@ -13,7 +13,6 @@ final class OnboardingInterviewCoordinator {
 
     private let state: StateCoordinator
     private let eventBus: EventCoordinator
-    private let chatTranscriptStore: ChatTranscriptStore
     private let chatboxHandler: ChatboxHandler
     private let toolExecutionCoordinator: ToolExecutionCoordinator
     let toolRouter: ToolHandler
@@ -97,7 +96,7 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Chat Messages
 
     var messages: [OnboardingMessage] {
-        chatTranscriptStore.messages
+        state.messagesSync
     }
 
     func sendChatMessage(_ text: String) async {
@@ -189,10 +188,8 @@ final class OnboardingInterviewCoordinator {
         self.checkpoints = checkpoints
         self.preferences = preferences
 
-        self.chatTranscriptStore = ChatTranscriptStore()
         self.chatboxHandler = ChatboxHandler(
             eventBus: eventBus,
-            transcriptStore: chatTranscriptStore,
             state: state
         )
 
@@ -278,7 +275,6 @@ final class OnboardingInterviewCoordinator {
             state: state,
             dataStore: dataStore,
             applicantProfileStore: applicantProfileStore,
-            chatTranscriptStore: chatTranscriptStore,
             toolRouter: toolRouter,
             wizardTracker: wizardTracker
         )
@@ -1166,7 +1162,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     func transcriptExportString() -> String {
-        chatTranscriptStore.formattedTranscript()
+        ChatTranscriptFormatter.format(messages: state.messagesSync)
     }
 
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
