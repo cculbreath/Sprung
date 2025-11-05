@@ -34,7 +34,11 @@ struct SubmitForValidationTool: InterviewTool {
         )
     }()
 
-    let service: OnboardingInterviewService
+    private unowned let coordinator: OnboardingInterviewCoordinator
+
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
+    }
 
     var name: String { "submit_for_validation" }
     var description: String { "Submit collected data for user validation" }

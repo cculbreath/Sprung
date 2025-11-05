@@ -12,10 +12,10 @@ struct UpdateTimelineCardTool: InterviewTool {
         required: ["id", "fields"]
     )
     
-    let service: OnboardingInterviewService
-    
-    init(service: OnboardingInterviewService) {
-        self.service = service
+    private unowned let coordinator: OnboardingInterviewCoordinator
+
+    init(coordinator: OnboardingInterviewCoordinator) {
+        self.coordinator = coordinator
     }
     
     var name: String { "update_timeline_card" }
@@ -31,7 +31,7 @@ struct UpdateTimelineCardTool: InterviewTool {
         }
 
         // Update timeline card via coordinator (which emits events)
-        let result = await service.coordinator.updateTimelineCard(id: id, fields: JSON(fields))
+        let result = await coordinator.updateTimelineCard(id: id, fields: JSON(fields))
         return .immediate(result)
     }
 }

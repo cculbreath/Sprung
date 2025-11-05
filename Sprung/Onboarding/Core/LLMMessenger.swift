@@ -22,7 +22,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     let eventBus: EventCoordinator
     private let networkRouter: NetworkRouter
     private let service: OpenAIService
-    private let systemPrompt: String
+    private var systemPrompt: String
     private let toolRegistry: ToolRegistry
 
     // Conversation tracking
@@ -32,10 +32,12 @@ actor LLMMessenger: OnboardingEventEmitter {
     private var isActive = false
 
     // Tool continuation tracking
-    private var continuationCallIds: [UUID: String] = [:]
 
     // Allowed tools from StateCoordinator
     private var allowedToolNames: Set<String> = []
+
+    // Phase 3: Stream cancellation tracking
+    private var currentStreamTask: Task<Void, Error>?
 
     // MARK: - Initialization
 
@@ -98,6 +100,10 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
+
+        case .llmCancelRequested:
+            // Phase 3: Cancel current stream
+            await cancelCurrentStream()
 
         default:
             break
@@ -316,7 +322,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         isActive = false
         conversationId = nil
         lastResponseId = nil
-        continuationCallIds.removeAll()
         Logger.info("⏹️ LLMMessenger deactivated", category: .ai)
     }
 
@@ -324,4 +329,31 @@ actor LLMMessenger: OnboardingEventEmitter {
         currentModelId = modelId
         Logger.info("🔧 LLMMessenger model set to: \(modelId)", category: .ai)
     }
+
+    // MARK: - Dynamic Prompt Update (Phase 3)
+
+    /// Update the system prompt (used when phases transition)
+    func updateSystemPrompt(_ text: String) {
+        systemPrompt = text
+        Logger.info("📝 LLMMessenger system prompt updated (\(text.count) chars)", category: .ai)
+    }
+
+    // MARK: - Stream Cancellation (Phase 3)
+
+    /// Cancel the currently running stream
+    private func cancelCurrentStream() async {
+        guard let task = currentStreamTask else {
+            Logger.debug("No active stream to cancel", category: .ai)
+            return
+        }
+
+        task.cancel()
+        currentStreamTask = nil
+
+        // Emit idle status
+        await emit(.llmStatus(status: .idle))
+
+        Logger.info("🛑 LLM stream cancelled", category: .ai)
+    }
 }
+
