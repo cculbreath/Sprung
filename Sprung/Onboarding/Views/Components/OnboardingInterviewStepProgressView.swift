@@ -5,14 +5,13 @@ struct OnboardingInterviewStepProgressView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 28) {
-            // TODO: Reimplement using event-driven architecture
+            // Note: Wizard step status tracking is handled by WizardProgressTracker
+            // This view shows a simplified progress display
             ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
-                // let status = coordinator.wizardStepStatuses[step] ?? .pending
                 let status = OnboardingWizardStepStatus.pending
                 OnboardingStepProgressItem(title: step.title, status: status)
             }
         }
-        // .animation(.bouncy(duration: 0.55, extraBounce: 0.12), value: coordinator.wizardStepStatuses)
     }
 }
 

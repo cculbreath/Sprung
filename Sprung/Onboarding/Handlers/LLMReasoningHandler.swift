@@ -52,7 +52,10 @@ actor LLMReasoningHandler: OnboardingEventEmitter {
 
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        // TODO: Uncomment when OpenAI Responses API exposes reasoning
+        // EXTERNAL BLOCKER: Waiting for OpenAI Responses API to expose reasoning
+        // The handler methods are implemented below but not connected to events yet.
+        // Uncomment these cases when OpenAI adds reasoning support to their Responses API.
+        //
         // case .llmReasoningDelta(let messageId, let delta):
         //     await handleReasoningDelta(messageId: messageId, delta: delta)
         //

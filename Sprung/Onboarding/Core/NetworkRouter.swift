@@ -178,12 +178,18 @@ actor NetworkRouter: OnboardingEventEmitter {
         Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
     }
 
-    // MARK: - Reasoning Support (TODO)
+    // MARK: - Reasoning Support
+    //
+    // EXTERNAL BLOCKER: Waiting for OpenAI Responses API to expose reasoning
+    // The architecture is ready to support reasoning deltas, but OpenAI's API does not
+    // currently provide reasoning events in the Responses API streaming format.
+    // When available, this method should emit LLM.reasoningDelta and LLM.reasoningDone events
+    // as specified in §4.4 of the architecture spec.
 
-    /// Process reasoning deltas (for future implementation)
+    /// Process reasoning deltas (placeholder for future OpenAI API support)
     /// Spec §4.4: Should emit LLM.reasoningDelta and LLM.reasoningDone
     func processReasoningDelta(_ delta: String) async {
-        // TODO: Implement when OpenAI exposes reasoning in Responses API
+        // Blocked: OpenAI Responses API does not expose reasoning yet
         Logger.debug("Reasoning delta: \(delta.prefix(50))...", category: .ai)
     }
 }

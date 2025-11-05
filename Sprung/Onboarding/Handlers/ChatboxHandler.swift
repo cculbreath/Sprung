@@ -94,7 +94,23 @@ actor ChatboxHandler: OnboardingEventEmitter {
     }
 
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
-        // TODO: Handle processing state changes for UI feedback
+        switch event {
+        case .processingStateChanged(let isProcessing):
+            // Processing state is managed by StateCoordinator
+            // ChatTranscriptStore doesn't need to track this separately
+            Logger.debug("Processing state: \(isProcessing)", category: .ai)
+
+        case .waitingStateChanged(let state):
+            // Waiting state changes affect UI but are managed by StateCoordinator
+            Logger.debug("Waiting state: \(state ?? "nil")", category: .ai)
+
+        case .streamingStatusUpdated(let status):
+            // Streaming status is managed by StateCoordinator
+            Logger.debug("Streaming status: \(status ?? "nil")", category: .ai)
+
+        default:
+            break
+        }
     }
 
     // MARK: - Message Streaming
@@ -164,6 +180,9 @@ actor ChatboxHandler: OnboardingEventEmitter {
         var payload = JSON()
         payload["text"].string = text
 
+        // Emit processing state change for UI feedback
+        await emit(.processingStateChanged(true))
+
         // Emit event for LLMMessenger to handle
         await emit(.llmSendUserMessage(payload: payload))
     }
@@ -171,7 +190,9 @@ actor ChatboxHandler: OnboardingEventEmitter {
     // MARK: - Sync from StateCoordinator
 
     /// Sync ChatTranscriptStore from StateCoordinator (single source of truth)
-    /// TODO: Replace ChatTranscriptStore with direct StateCoordinator access in UI
+    ///
+    /// FUTURE IMPROVEMENT: Replace ChatTranscriptStore with direct StateCoordinator access
+    /// See ChatTranscriptStore.swift for details on why this sync cache is currently needed.
     private func syncMessagesFromState() async {
         let stateMessages = await state.messages
         await MainActor.run {
