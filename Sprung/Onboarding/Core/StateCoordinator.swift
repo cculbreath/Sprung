@@ -714,6 +714,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                         await self.handleArtifactEvent(event)
                     }
                 }
+
+                // Subscribe to Toolpane topic
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .toolpane) {
+                        await self.handleToolpaneEvent(event)
+                    }
+                }
             }
         }
 
@@ -846,6 +853,40 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Ensure persisted copy is reflected in state
             upsertArtifactRecord(record)
             Logger.info("📦 Artifact record persisted: \(record["id"].stringValue)", category: .ai)
+
+        default:
+            break
+        }
+    }
+
+    private func handleToolpaneEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .choicePromptRequested(let prompt, _):
+            setPendingChoice(prompt)
+            Logger.debug("🎯 Choice prompt requested - waiting state set", category: .ai)
+
+        case .choicePromptCleared:
+            setPendingChoice(nil)
+            await clearWaitingState()
+            Logger.debug("🎯 Choice prompt cleared - waiting state restored", category: .ai)
+
+        case .uploadRequestPresented(let request, _):
+            setPendingUpload(request)
+            Logger.debug("📤 Upload request presented - waiting state set", category: .ai)
+
+        case .uploadRequestCancelled:
+            setPendingUpload(nil)
+            await clearWaitingState()
+            Logger.debug("📤 Upload request cancelled - waiting state restored", category: .ai)
+
+        case .validationPromptRequested(let prompt, _):
+            setPendingValidation(prompt)
+            Logger.debug("✅ Validation prompt requested - waiting state set", category: .ai)
+
+        case .validationPromptCleared:
+            setPendingValidation(nil)
+            await clearWaitingState()
+            Logger.debug("✅ Validation prompt cleared - waiting state restored", category: .ai)
 
         default:
             break
