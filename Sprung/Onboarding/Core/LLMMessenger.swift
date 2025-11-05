@@ -148,19 +148,26 @@ actor LLMMessenger: OnboardingEventEmitter {
             await emit(.llmUserMessageSent(messageId: messageId, payload: payload))
 
             // Process stream via NetworkRouter
-            let stream = try await service.responseCreateStream(request)
-            for try await streamEvent in stream {
-                await networkRouter.handleResponseEvent(streamEvent)
+            currentStreamTask = Task {
+                let stream = try await service.responseCreateStream(request)
+                for try await streamEvent in stream {
+                    await networkRouter.handleResponseEvent(streamEvent)
 
-                // Track conversation state
-                if case .responseCompleted(let completed) = streamEvent {
-                    conversationId = completed.response.id
-                    lastResponseId = completed.response.id
+                    // Track conversation state
+                    if case .responseCompleted(let completed) = streamEvent {
+                        conversationId = completed.response.id
+                        lastResponseId = completed.response.id
+                    }
                 }
+                await emit(.llmStatus(status: .idle))
             }
 
-            await emit(.llmStatus(status: .idle))
+            try await currentStreamTask?.value
+            currentStreamTask = nil
 
+        } catch is CancellationError {
+            Logger.info("User message stream cancelled", category: .ai)
+            // Status already set to idle by cancelCurrentStream()
         } catch {
             await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
@@ -186,19 +193,26 @@ actor LLMMessenger: OnboardingEventEmitter {
             await emit(.llmDeveloperMessageSent(messageId: messageId, payload: payload))
 
             // Process stream via NetworkRouter
-            let stream = try await service.responseCreateStream(request)
-            for try await streamEvent in stream {
-                await networkRouter.handleResponseEvent(streamEvent)
+            currentStreamTask = Task {
+                let stream = try await service.responseCreateStream(request)
+                for try await streamEvent in stream {
+                    await networkRouter.handleResponseEvent(streamEvent)
 
-                // Track conversation state
-                if case .responseCompleted(let completed) = streamEvent {
-                    conversationId = completed.response.id
-                    lastResponseId = completed.response.id
+                    // Track conversation state
+                    if case .responseCompleted(let completed) = streamEvent {
+                        conversationId = completed.response.id
+                        lastResponseId = completed.response.id
+                    }
                 }
+                await emit(.llmStatus(status: .idle))
             }
 
-            await emit(.llmStatus(status: .idle))
+            try await currentStreamTask?.value
+            currentStreamTask = nil
 
+        } catch is CancellationError {
+            Logger.info("Developer message stream cancelled", category: .ai)
+            // Status already set to idle by cancelCurrentStream()
         } catch {
             await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
@@ -220,18 +234,25 @@ actor LLMMessenger: OnboardingEventEmitter {
             await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
 
             // Process stream via NetworkRouter
-            let stream = try await service.responseCreateStream(request)
-            for try await streamEvent in stream {
-                await networkRouter.handleResponseEvent(streamEvent)
+            currentStreamTask = Task {
+                let stream = try await service.responseCreateStream(request)
+                for try await streamEvent in stream {
+                    await networkRouter.handleResponseEvent(streamEvent)
 
-                if case .responseCompleted(let completed) = streamEvent {
-                    conversationId = completed.response.id
-                    lastResponseId = completed.response.id
+                    if case .responseCompleted(let completed) = streamEvent {
+                        conversationId = completed.response.id
+                        lastResponseId = completed.response.id
+                    }
                 }
+                await emit(.llmStatus(status: .idle))
             }
 
-            await emit(.llmStatus(status: .idle))
+            try await currentStreamTask?.value
+            currentStreamTask = nil
 
+        } catch is CancellationError {
+            Logger.info("Tool response stream cancelled", category: .ai)
+            // Status already set to idle by cancelCurrentStream()
         } catch {
             await emit(.errorOccurred("Failed to send tool response: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
