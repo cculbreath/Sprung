@@ -428,9 +428,9 @@ final class OnboardingInterviewCoordinator {
             // Tool completion is handled by toolContinuationNeeded
             break
 
-        case .toolContinuationNeeded:
-            // Tool continuation managed by ToolExecutionCoordinator
-            break
+        case .toolContinuationNeeded(let id, let toolName):
+            continuationTracker.trackContinuation(id: id, toolName: toolName)
+            // no UI side effects here; UI is driven by separate events (.choicePromptRequested, etc.)
 
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
