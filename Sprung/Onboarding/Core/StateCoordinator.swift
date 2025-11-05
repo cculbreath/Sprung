@@ -258,10 +258,14 @@ actor StateCoordinator: OnboardingEventEmitter {
         objectives[id] = objective
 
         // Emit event to notify listeners (e.g., ObjectiveWorkflowEngine)
+        // Include all necessary context: objective ID, old status, new status, source, notes
         await emit(.objectiveStatusChanged(
             id: id,
-            status: status.rawValue,
-            phase: phase.rawValue
+            oldStatus: oldStatus.rawValue,
+            newStatus: status.rawValue,
+            phase: phase.rawValue,
+            source: objective.source,
+            notes: objective.notes
         ))
 
         Logger.info("✅ Objective \(id): \(oldStatus) → \(status)", category: .ai)
@@ -1029,11 +1033,14 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         objectives[id] = objective
 
-        // Emit event
+        // Emit event with all necessary context
         await emit(.objectiveStatusChanged(
             id: id,
-            status: status.rawValue,
-            phase: phase.rawValue
+            oldStatus: oldStatus.rawValue,
+            newStatus: status.rawValue,
+            phase: phase.rawValue,
+            source: objective.source,
+            notes: objective.notes
         ))
 
         Logger.info("📊 Objective \(id): \(oldStatus.rawValue) → \(status.rawValue)", category: .ai)
