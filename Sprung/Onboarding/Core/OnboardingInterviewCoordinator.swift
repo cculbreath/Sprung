@@ -1316,7 +1316,8 @@ final class OnboardingInterviewCoordinator {
             service: service,
             systemPrompt: systemPrompt,
             eventBus: eventBus,
-            toolRegistry: toolRegistry
+            toolRegistry: toolRegistry,
+            state: state
         )
     }
 

@@ -32,7 +32,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         service: OpenAIService,
         systemPrompt: String,
         eventBus: EventCoordinator,
-        toolRegistry: ToolRegistry
+        toolRegistry: ToolRegistry,
+        state: StateCoordinator
     ) {
         self.service = service
         self.systemPrompt = systemPrompt
@@ -43,9 +44,10 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             systemPrompt: systemPrompt,
             eventBus: eventBus,
             networkRouter: networkRouter,
-            toolRegistry: toolRegistry
+            toolRegistry: toolRegistry,
+            state: state
         )
-        Logger.info("🎯 InterviewOrchestrator initialized with LLMMessenger", category: .ai)
+        Logger.info("🎯 InterviewOrchestrator initialized with LLMMessenger and ConversationContextAssembler", category: .ai)
     }
 
     // MARK: - Interview Control
