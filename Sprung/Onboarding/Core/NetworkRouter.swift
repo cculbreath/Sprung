@@ -65,10 +65,19 @@ actor NetworkRouter: OnboardingEventEmitter {
                 case .functionCall(let toolCall):
                     await processToolCall(toolCall)
 
+                case .reasoning(let reasoning):
+                    await processReasoningItem(reasoning)
+
                 default:
                     break
                 }
             }
+
+        case .reasoningSummaryTextDelta(let delta):
+            await processReasoningSummaryDelta(delta)
+
+        case .reasoningSummaryTextDone(let done):
+            await processReasoningSummaryDone(done)
 
         case .responseCreated, .responseIncomplete:
             // These events don't need special handling
@@ -179,17 +188,27 @@ actor NetworkRouter: OnboardingEventEmitter {
     }
 
     // MARK: - Reasoning Support
-    //
-    // EXTERNAL BLOCKER: Waiting for OpenAI Responses API to expose reasoning
-    // The architecture is ready to support reasoning deltas, but OpenAI's API does not
-    // currently provide reasoning events in the Responses API streaming format.
-    // When available, this method should emit LLM.reasoningDelta and LLM.reasoningDone events
-    // as specified in §4.4 of the architecture spec.
 
-    /// Process reasoning deltas (placeholder for future OpenAI API support)
-    /// Spec §4.4: Should emit LLM.reasoningDelta and LLM.reasoningDone
-    func processReasoningDelta(_ delta: String) async {
-        // Blocked: OpenAI Responses API does not expose reasoning yet
-        Logger.debug("Reasoning delta: \(delta.prefix(50))...", category: .ai)
+    /// Process reasoning item from output (indicates reasoning is present)
+    private func processReasoningItem(_ reasoning: OutputItem.Reasoning) async {
+        // Reasoning summaries will arrive via separate streaming events
+        // This just logs that reasoning output is present
+        Logger.debug("🧠 Reasoning output present in response", category: .ai)
+    }
+
+    /// Process reasoning summary text delta (streaming)
+    /// Reasoning summaries display in a separate sidebar, not attached to specific messages
+    private func processReasoningSummaryDelta(_ event: ReasoningSummaryTextDeltaEvent) async {
+        // Emit the actual delta text for StateCoordinator to accumulate in sidebar
+        await emit(.llmReasoningSummaryDelta(delta: event.delta))
+        Logger.debug("🧠 Reasoning summary delta: \(event.delta.prefix(50))...", category: .ai)
+    }
+
+    /// Process reasoning summary completion
+    /// Reasoning summaries display in a separate sidebar, not attached to specific messages
+    private func processReasoningSummaryDone(_ event: ReasoningSummaryTextDoneEvent) async {
+        // Emit the complete text for sidebar display
+        await emit(.llmReasoningSummaryComplete(text: event.text))
+        Logger.info("🧠 Reasoning summary complete (\(event.text.count) chars)", category: .ai)
     }
 }
