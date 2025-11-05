@@ -769,7 +769,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Event Subscription Setup
 
     /// Start listening to relevant events
-    func startEventSubscriptions() {
+    func startEventSubscriptions() async {
         subscriptionTask?.cancel()
 
         subscriptionTask = Task { [weak self] in
@@ -833,6 +833,9 @@ actor StateCoordinator: OnboardingEventEmitter {
                 }
             }
         }
+
+        // Small delay to ensure streams are connected
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
 
         Logger.info("📡 StateCoordinator subscribed to event streams", category: .ai)
     }

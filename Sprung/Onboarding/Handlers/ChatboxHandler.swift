@@ -36,17 +36,15 @@ actor ChatboxHandler: OnboardingEventEmitter {
     // MARK: - Event Subscriptions
 
     /// Start listening to chat-related events
-    func startEventSubscriptions() {
+    func startEventSubscriptions() async {
         Task {
-            await withTaskGroup(of: Void.self) { group in
-                // Subscribe to LLM message events for error handling
-                group.addTask {
-                    for await event in await self.eventBus.stream(topic: .llm) {
-                        await self.handleLLMEvent(event)
-                    }
-                }
+            for await event in await self.eventBus.stream(topic: .llm) {
+                await self.handleLLMEvent(event)
             }
         }
+
+        // Small delay to ensure stream is connected
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
 
         Logger.info("📡 ChatboxHandler subscribed to events", category: .ai)
     }

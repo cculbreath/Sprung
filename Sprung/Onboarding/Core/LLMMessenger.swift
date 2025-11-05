@@ -62,31 +62,28 @@ actor LLMMessenger: OnboardingEventEmitter {
     // MARK: - Event Subscription
 
     /// Start listening to message request events
-    func startEventSubscriptions() {
+    func startEventSubscriptions() async {
+        // Use unstructured tasks so they run independently but ensure streams are ready
         Task {
-            await withTaskGroup(of: Void.self) { group in
-                // Subscribe to LLM topic for message requests
-                group.addTask {
-                    for await event in await self.eventBus.stream(topic: .llm) {
-                        await self.handleLLMEvent(event)
-                    }
-                }
-
-                // Subscribe to UserInput for chat messages
-                group.addTask {
-                    for await event in await self.eventBus.stream(topic: .userInput) {
-                        await self.handleUserInputEvent(event)
-                    }
-                }
-
-                // Subscribe to State for allowed tools
-                group.addTask {
-                    for await event in await self.eventBus.stream(topic: .state) {
-                        await self.handleStateEvent(event)
-                    }
-                }
+            for await event in await self.eventBus.stream(topic: .llm) {
+                await self.handleLLMEvent(event)
             }
         }
+
+        Task {
+            for await event in await self.eventBus.stream(topic: .userInput) {
+                await self.handleUserInputEvent(event)
+            }
+        }
+
+        Task {
+            for await event in await self.eventBus.stream(topic: .state) {
+                await self.handleStateEvent(event)
+            }
+        }
+
+        // Small delay to ensure streams are connected before returning
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
 
         Logger.info("📡 LLMMessenger subscribed to events", category: .ai)
     }

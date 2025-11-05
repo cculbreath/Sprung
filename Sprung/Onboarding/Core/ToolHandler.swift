@@ -80,7 +80,7 @@ final class ToolHandler {
     // MARK: - Event Subscriptions
 
     /// Start listening to tool UI events
-    func startEventSubscriptions() {
+    func startEventSubscriptions() async {
         guard let eventBus = eventBus else { return }
 
         Task {
@@ -88,6 +88,9 @@ final class ToolHandler {
                 await handleToolUIEvent(event)
             }
         }
+
+        // Small delay to ensure stream is connected
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
 
         Logger.info("📡 ToolHandler subscribed to toolpane events", category: .ai)
     }

@@ -76,9 +76,7 @@ final class InterviewLifecycleController {
         await chatboxHandler.startEventSubscriptions()
         await toolExecutionCoordinator.startEventSubscriptions()
         await state.startEventSubscriptions()
-        await MainActor.run {
-            toolRouter.startEventSubscriptions()
-        }
+        await toolRouter.startEventSubscriptions()
         await state.publishAllowedToolsNow()
 
         // Start workflow engine

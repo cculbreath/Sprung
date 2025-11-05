@@ -42,12 +42,15 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Event Subscriptions
 
     /// Start listening to tool call events
-    func startEventSubscriptions() {
+    func startEventSubscriptions() async {
         Task {
             for await event in await eventBus.stream(topic: .tool) {
                 await handleToolEvent(event)
             }
         }
+
+        // Small delay to ensure stream is connected
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
 
         Logger.info("📡 ToolExecutionCoordinator subscribed to tool events", category: .ai)
     }
