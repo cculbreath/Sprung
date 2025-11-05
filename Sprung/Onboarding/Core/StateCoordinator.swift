@@ -517,42 +517,39 @@ actor StateCoordinator: OnboardingEventEmitter {
         isActive = active
     }
 
-    func setWaitingState(_ state: WaitingState?) {
+    func setWaitingState(_ state: WaitingState?) async {
         waitingState = state
+
+        // Re-emit tool permissions whenever waiting state changes
+        if waitingState == nil {
+            await emitAllowedTools()
+        } else {
+            await emitRestrictedTools()
+        }
     }
 
     func setPendingUpload(_ request: OnboardingUploadRequest?) {
         pendingUploadRequest = request
-        if request != nil {
-            waitingState = .upload
-            // Phase 3: Gate tools during upload waiting state
-            Task { await emitRestrictedTools() }
-        }
+        let newWaitingState: WaitingState? = request != nil ? .upload : nil
+        Task { await setWaitingState(newWaitingState) }
     }
 
     func setPendingChoice(_ prompt: OnboardingChoicePrompt?) {
         pendingChoicePrompt = prompt
-        if prompt != nil {
-            waitingState = .selection
-            // Phase 3: Gate tools during selection waiting state
-            Task { await emitRestrictedTools() }
-        }
+        let newWaitingState: WaitingState? = prompt != nil ? .selection : nil
+        Task { await setWaitingState(newWaitingState) }
     }
 
     func setPendingValidation(_ prompt: OnboardingValidationPrompt?) {
         pendingValidationPrompt = prompt
-        if prompt != nil {
-            waitingState = .validation
-            // Phase 3: Gate tools during validation waiting state
-            Task { await emitRestrictedTools() }
-        }
+        let newWaitingState: WaitingState? = prompt != nil ? .validation : nil
+        Task { await setWaitingState(newWaitingState) }
     }
 
     func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) {
         pendingExtraction = extraction
-        if extraction != nil {
-            waitingState = .extraction
-        }
+        let newWaitingState: WaitingState? = extraction != nil ? .extraction : nil
+        Task { await setWaitingState(newWaitingState) }
     }
 
     func setStreamingStatus(_ status: String?) {
