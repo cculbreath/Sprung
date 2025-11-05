@@ -42,6 +42,7 @@ final class ContinuationTracker {
             requestedInput: "{}",
             enqueuedAt: Date()
         )
+        Logger.debug("⏸️ Queued continuation for \(toolName) (\(id))", category: .ai)
     }
 
     func trackPhaseAdvanceContinuation(id: UUID) {
@@ -64,12 +65,9 @@ final class ContinuationTracker {
     }
 
     func resumeToolContinuation(id: UUID, payload: JSON) async {
-        guard let entry = toolQueueEntries.removeValue(forKey: id) else {
-            Logger.warning("No queue entry for continuation \(id)", category: .ai)
-            return
-        }
-
-        Logger.info("✅ Tool \(entry.toolName) resuming", category: .ai)
+        let entry = toolQueueEntries.removeValue(forKey: id)
+        let label = entry?.toolName ?? "unknown_tool"
+        Logger.info("✅ Resuming tool continuation \(label) (\(id))", category: .ai)
 
         do {
             try await toolExecutionCoordinator.resumeToolContinuation(
