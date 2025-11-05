@@ -91,4 +91,11 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         await llmMessenger.updateSystemPrompt(text)
     }
 
+    // MARK: - Model Configuration
+
+    /// Set the model ID for the LLM messenger
+    func setModelId(_ id: String) async {
+        await llmMessenger.setModelId(id)
+    }
+
 }
