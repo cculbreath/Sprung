@@ -57,13 +57,11 @@ actor DataPersistenceService: OnboardingEventEmitter {
             await eventBus.publish(.skeletonTimelineStored(timeline))
         }
 
-        if !artifactRecords.isEmpty {
-            await state.setArtifactRecords(artifactRecords)
-        }
+        // Replace in-memory artifacts with the persisted snapshot (even if empty)
+        await eventBus.publish(.artifactRecordsReplaced(records: artifactRecords))
 
-        if !knowledgeCardRecords.isEmpty {
-            await state.setKnowledgeCards(knowledgeCardRecords)
-        }
+        // Replace in-memory knowledge cards with the persisted snapshot (even if empty)
+        await eventBus.publish(.knowledgeCardsReplaced(cards: knowledgeCardRecords))
 
         if profileRecords.isEmpty && timelineRecords.isEmpty && artifactRecords.isEmpty && knowledgeCardRecords.isEmpty {
             Logger.info("📂 No persisted artifacts discovered", category: .ai)

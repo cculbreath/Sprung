@@ -57,9 +57,11 @@ enum OnboardingEvent {
     // Artifact pipeline (tool → state → persistence)
     case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
     case artifactRecordPersisted(record: JSON) // emitted after persistence/index update succeeds
+    case artifactRecordsReplaced(records: [JSON]) // emitted when persisted artifact records replace in-memory state
 
     // MARK: - Knowledge Card Operations
     case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
+    case knowledgeCardsReplaced(cards: [JSON]) // emitted when persisted knowledge cards replace in-memory state
 
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
@@ -246,7 +248,8 @@ actor EventCoordinator {
 
         // Artifact events
         case .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordPersisted, .knowledgeCardPersisted:
+             .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
+             .knowledgeCardPersisted, .knowledgeCardsReplaced:
             return .artifact
 
         // Toolpane events
@@ -349,8 +352,12 @@ actor EventCoordinator {
             description = "Artifact record produced: \(record["id"].stringValue)"
         case .artifactRecordPersisted(let record):
             description = "Artifact record persisted: \(record["id"].stringValue)"
+        case .artifactRecordsReplaced(let records):
+            description = "Artifact records replaced (\(records.count))"
         case .knowledgeCardPersisted(let card):
             description = "Knowledge card persisted: \(card["title"].stringValue)"
+        case .knowledgeCardsReplaced(let cards):
+            description = "Knowledge cards replaced (\(cards.count))"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):

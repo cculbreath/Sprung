@@ -447,7 +447,8 @@ final class OnboardingInterviewCoordinator {
              .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
              .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered,
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordPersisted,
+             .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
+             .knowledgeCardPersisted, .knowledgeCardsReplaced,
              // New spec-aligned events that StateCoordinator handles
              .objectiveStatusChanged, .objectiveStatusUpdateRequested,
              .stateSnapshot, .stateAllowedToolsUpdated,
@@ -513,7 +514,8 @@ final class OnboardingInterviewCoordinator {
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
         case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordPersisted:
+             .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
+             .knowledgeCardPersisted, .knowledgeCardsReplaced:
             // Sync caches now maintained by StateCoordinator
             await syncWizardProgressFromState()
 
@@ -605,6 +607,7 @@ final class OnboardingInterviewCoordinator {
         // Delegate to lifecycle controller
         await lifecycleController.endInterview()
         // StateCoordinator maintains sync cache for isActive
+        hasSubscribedToStateUpdates = false
     }
 
     // MARK: - Phase Management
@@ -835,6 +838,22 @@ final class OnboardingInterviewCoordinator {
     ) -> (UUID, JSON)? {
         // Get pending validation before clearing it
         let pendingValidation = pendingValidationPrompt
+
+        if let validation = pendingValidation,
+           validation.dataType == "knowledge_card",
+           let data = updatedData,
+           data != .null,
+           ["approved", "modified"].contains(status.lowercased()) {
+            Task {
+                do {
+                    try await dataStore.persist(dataType: "knowledge_card", payload: data)
+                } catch {
+                    Logger.error("Failed to persist knowledge card: \(error)", category: .ai)
+                }
+
+                await eventBus.publish(.knowledgeCardPersisted(card: data))
+            }
+        }
 
         let result = toolRouter.submitValidationResponse(
             status: status,
