@@ -442,6 +442,14 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("🃏 Knowledge card added (total: \(artifacts.knowledgeCards.count))", category: .ai)
     }
 
+    func setKnowledgeCards(_ cards: [JSON]) {
+        artifacts.knowledgeCards = cards
+        if !artifacts.knowledgeCards.isEmpty {
+            setObjectiveStatus("one_card_generated", status: .completed, source: "artifact_saved")
+        }
+        Logger.info("🃏 Knowledge cards loaded (total: \(artifacts.knowledgeCards.count))", category: .ai)
+    }
+
     // MARK: - Message Management
 
     func appendUserMessage(_ text: String) -> UUID {

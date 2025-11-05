@@ -448,7 +448,11 @@ private struct KnowledgeCardValidationHost: View {
                         changes: nil,
                         notes: nil
                     )
-                    await coordinator.resumeToolContinuation(from: result)
+
+                    if let (continuationId, payload) = result {
+                        await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
+                    }
+
                 }
             },
             onReject: { rejectedIds, reason in
@@ -465,7 +469,11 @@ private struct KnowledgeCardValidationHost: View {
                         changes: changePayload,
                         notes: reason.isEmpty ? nil : reason
                     )
-                    await coordinator.resumeToolContinuation(from: result)
+
+                    if let (continuationId, payload) = result {
+                        await coordinator.resumeToolContinuation(id: continuationId, payload: payload)
+                    }
+
                 }
             }
         )
