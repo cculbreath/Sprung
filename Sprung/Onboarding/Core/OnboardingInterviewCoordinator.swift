@@ -904,13 +904,38 @@ final class OnboardingInterviewCoordinator {
         changes: JSON?,
         notes: String?
     ) -> (UUID, JSON)? {
+        // Get pending validation before clearing it
+        let pendingValidation = pendingValidationPrompt
+
         let result = toolRouter.submitValidationResponse(
             status: status,
             updatedData: updatedData,
             changes: changes,
             notes: notes
         )
+
         Task {
+            // Handle knowledge card approval persistence
+            if let validation = pendingValidation,
+               validation.dataType == "knowledge_card",
+               status == "approved",
+               let cardData = updatedData {
+
+                // Add to in-memory state
+                await state.addKnowledgeCard(cardData)
+
+                // Persist to disk
+                do {
+                    try await dataStore.persist(dataType: "knowledge_card", payload: cardData)
+                    Logger.info("💾 Knowledge card persisted to disk", category: .ai)
+
+                    // Emit persistence event
+                    await eventBus.publish(.knowledgeCardPersisted(card: cardData))
+                } catch {
+                    Logger.error("Failed to persist knowledge card: \(error)", category: .ai)
+                }
+            }
+
             await state.setPendingValidation(nil)
         }
         return result
@@ -1013,6 +1038,7 @@ final class OnboardingInterviewCoordinator {
         let profileRecords = (await dataStore.list(dataType: "applicant_profile")).filter { $0 != .null }
         let timelineRecords = (await dataStore.list(dataType: "skeleton_timeline")).filter { $0 != .null }
         let artifactRecords = (await dataStore.list(dataType: "artifact_record")).filter { $0 != .null }
+        let knowledgeCardRecords = (await dataStore.list(dataType: "knowledge_card")).filter { $0 != .null }
 
         if let profile = profileRecords.last {
             await state.setApplicantProfile(profile)
@@ -1027,7 +1053,11 @@ final class OnboardingInterviewCoordinator {
             await state.setArtifactRecords(artifactRecords)
         }
 
-        if profileRecords.isEmpty && timelineRecords.isEmpty && artifactRecords.isEmpty {
+        if !knowledgeCardRecords.isEmpty {
+            await state.setKnowledgeCards(knowledgeCardRecords)
+        }
+
+        if profileRecords.isEmpty && timelineRecords.isEmpty && artifactRecords.isEmpty && knowledgeCardRecords.isEmpty {
             Logger.info("📂 No persisted artifacts discovered", category: .ai)
         } else {
             Logger.info(
@@ -1036,7 +1066,8 @@ final class OnboardingInterviewCoordinator {
                 metadata: [
                     "applicant_profile_count": "\(profileRecords.count)",
                     "skeleton_timeline_count": "\(timelineRecords.count)",
-                    "artifact_record_count": "\(artifactRecords.count)"
+                    "artifact_record_count": "\(artifactRecords.count)",
+                    "knowledge_card_count": "\(knowledgeCardRecords.count)"
                 ]
             )
         }

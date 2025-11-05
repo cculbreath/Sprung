@@ -57,6 +57,9 @@ enum OnboardingEvent {
     case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
     case artifactRecordPersisted(record: JSON) // emitted after persistence/index update succeeds
 
+    // MARK: - Knowledge Card Operations
+    case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
+
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -258,7 +261,7 @@ actor EventCoordinator {
 
         // Artifact events
         case .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordPersisted:
+             .artifactRecordProduced, .artifactRecordPersisted, .knowledgeCardPersisted:
             return .artifact
 
         // Toolpane events
@@ -358,6 +361,8 @@ actor EventCoordinator {
             description = "Artifact record produced: \(record["id"].stringValue)"
         case .artifactRecordPersisted(let record):
             description = "Artifact record persisted: \(record["id"].stringValue)"
+        case .knowledgeCardPersisted(let card):
+            description = "Knowledge card persisted: \(card["title"].stringValue)"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):
