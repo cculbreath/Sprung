@@ -50,7 +50,7 @@ struct OnboardingInterviewToolPane: View {
                     if validation.dataType == "knowledge_card" {
                         KnowledgeCardValidationHost(
                             prompt: validation,
-                            artifactsJSON: coordinator.artifacts.artifactRecords,
+                            artifactsJSON: coordinator.artifactRecordsSync,
                             coordinator: coordinator
                         )
                     } else {
@@ -586,7 +586,7 @@ private struct ApplicantProfileSummaryCard: View {
 }
 
 private struct EnabledSectionsSummaryCard: View {
-    let sections: [String]
+    let sections: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -608,7 +608,7 @@ private struct EnabledSectionsSummaryCard: View {
     }
 
     private func formattedSections() -> [String] {
-        sections.compactMap { identifier in
+        sections.sorted().compactMap { identifier in
             ExperienceSectionKey.fromOnboardingIdentifier(identifier)?.metadata.title
         }
     }

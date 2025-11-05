@@ -49,7 +49,7 @@ struct WrapUpSummaryView: View {
             if !artifacts.enabledSections.isEmpty {
                 ArtifactSection(
                     title: "Enabled Résumé Sections",
-                    content: artifacts.enabledSections.joined(separator: ", ")
+                    content: artifacts.enabledSections.sorted().joined(separator: ", ")
                 )
             }
         }
