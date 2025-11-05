@@ -12,14 +12,18 @@ import SwiftyJSON
 /// Handles chat message display and user input
 /// Responsibilities (Spec §4.9):
 /// - Subscribe to LLM message events
-/// - Update ChatTranscriptStore with streaming messages
+/// - Sync ChatTranscriptStore from StateCoordinator (single source of truth)
 /// - Emit UserInput.chatMessage when user sends messages
 /// - Display error messages and status updates
+///
+/// NOTE: ChatTranscriptStore is a sync cache for UI display.
+/// StateCoordinator.messages is the authoritative source.
 actor ChatboxHandler: OnboardingEventEmitter {
     // MARK: - Properties
 
     let eventBus: EventCoordinator
     private let transcriptStore: ChatTranscriptStore
+    private let state: StateCoordinator
 
     // Track message IDs for updates
     private var streamingMessageIds: [UUID: UUID] = [:]
@@ -28,10 +32,12 @@ actor ChatboxHandler: OnboardingEventEmitter {
 
     init(
         eventBus: EventCoordinator,
-        transcriptStore: ChatTranscriptStore
+        transcriptStore: ChatTranscriptStore,
+        state: StateCoordinator
     ) {
         self.eventBus = eventBus
         self.transcriptStore = transcriptStore
+        self.state = state
         Logger.info("💬 ChatboxHandler initialized", category: .ai)
     }
 
@@ -128,13 +134,15 @@ actor ChatboxHandler: OnboardingEventEmitter {
             let elapsed = transcriptStore.finalizeAssistantStream(id: messageId, text: finalText)
             Logger.info("✅ Message finalized in \(String(format: "%.2f", elapsed))s", category: .ai)
         }
+
+        // Sync from StateCoordinator to ensure consistency
+        await syncMessagesFromState()
     }
 
     private func handleUserMessageSent(payload: JSON) async {
-        let text = payload["text"].stringValue
-        await MainActor.run {
-            transcriptStore.appendUserMessage(text)
-        }
+        // User messages are handled by StateCoordinator (single source of truth)
+        // Sync the transcript store from state
+        await syncMessagesFromState()
     }
 
     private func handleError(message: String) async {
@@ -158,6 +166,17 @@ actor ChatboxHandler: OnboardingEventEmitter {
 
         // Emit event for LLMMessenger to handle
         await emit(.llmSendUserMessage(payload: payload))
+    }
+
+    // MARK: - Sync from StateCoordinator
+
+    /// Sync ChatTranscriptStore from StateCoordinator (single source of truth)
+    /// TODO: Replace ChatTranscriptStore with direct StateCoordinator access in UI
+    private func syncMessagesFromState() async {
+        let stateMessages = await state.messages
+        await MainActor.run {
+            transcriptStore.syncFromState(messages: stateMessages)
+        }
     }
 
     // MARK: - Helpers

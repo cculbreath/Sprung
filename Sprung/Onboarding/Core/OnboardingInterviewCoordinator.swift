@@ -203,7 +203,8 @@ final class OnboardingInterviewCoordinator {
         self.chatTranscriptStore = ChatTranscriptStore()
         self.chatboxHandler = ChatboxHandler(
             eventBus: eventBus,
-            transcriptStore: chatTranscriptStore
+            transcriptStore: chatTranscriptStore,
+            state: state
         )
 
         self.toolRegistry = ToolRegistry()
