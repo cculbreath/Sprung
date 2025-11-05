@@ -158,16 +158,17 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    // TODO: Emit event instead
-                    // service.resetApplicantProfileIntakeToOptions()
+                    coordinator.toolRouter.resetApplicantProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("Save & Continue") {
-                    // TODO: Emit event instead
-                    // Task { await service.completeApplicantProfileDraft(draft, source: source) }
+                    Task {
+                        let result = coordinator.toolRouter.completeApplicantProfileDraft(draft, source: source)
+                        await coordinator.resumeToolContinuation(from: result)
+                    }
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -190,16 +191,17 @@ struct ApplicantProfileIntakeCard: View {
 
             HStack {
                 Button("Back") {
-                    // TODO: Emit event instead
-                    // service.resetApplicantProfileIntakeToOptions()
+                    coordinator.toolRouter.resetApplicantProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
                 Button("Submit URL") {
-                    // TODO: Emit event instead
-                    // Task { await service.submitApplicantProfileURL(urlString) }
+                    Task {
+                        let result = coordinator.toolRouter.submitApplicantProfileURL(urlString)
+                        await coordinator.resumeToolContinuation(from: result)
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
