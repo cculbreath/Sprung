@@ -30,7 +30,7 @@ final class OnboardingInterviewViewModel {
     }
 
     func configureIfNeeded(
-        service: OnboardingInterviewService,
+        coordinator: OnboardingInterviewCoordinator?,
         defaultModelId: String,
         defaultWebSearchAllowed: Bool,
         defaultWritingAnalysisAllowed: Bool,
@@ -45,12 +45,16 @@ final class OnboardingInterviewViewModel {
             hasInitialized = true
         }
 
-        if service.isActive {
-            webSearchAllowed = service.allowWebSearch
-            writingAnalysisAllowed = service.allowWritingAnalysis
-        } else {
-            webSearchAllowed = defaultWebSearchAllowed
-            writingAnalysisAllowed = defaultWritingAnalysisAllowed
+        Task {
+            if let coordinator = coordinator, await coordinator.isActive {
+                await MainActor.run {
+                    webSearchAllowed = coordinator.preferences.allowWebSearch
+                    writingAnalysisAllowed = coordinator.preferences.allowWritingAnalysis
+                }
+            } else {
+                webSearchAllowed = defaultWebSearchAllowed
+                writingAnalysisAllowed = defaultWritingAnalysisAllowed
+            }
         }
     }
 
@@ -85,10 +89,15 @@ final class OnboardingInterviewViewModel {
         )
     }
 
-    func syncConsentFromService(_ service: OnboardingInterviewService) {
-        guard service.isActive else { return }
-        webSearchAllowed = service.allowWebSearch
-        writingAnalysisAllowed = service.allowWritingAnalysis
+    func syncConsentFromCoordinator(_ coordinator: OnboardingInterviewCoordinator?) {
+        guard let coordinator = coordinator else { return }
+        Task {
+            guard await coordinator.isActive else { return }
+            await MainActor.run {
+                webSearchAllowed = coordinator.preferences.allowWebSearch
+                writingAnalysisAllowed = coordinator.preferences.allowWritingAnalysis
+            }
+        }
     }
 
     func registerImportError(_ error: String) {
