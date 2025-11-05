@@ -98,7 +98,7 @@ struct OnboardingInterviewChatPanel: View {
                         get: { state.userInput },
                         set: { state.userInput = $0 }
                     ),
-                    isEditable: coordinator.isActive,
+                    isEditable: coordinator.isActiveSync,
                     onSubmit: { text in
                         send(text)
                     },
@@ -133,7 +133,7 @@ struct OnboardingInterviewChatPanel: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                            !coordinator.isActive
+                            !coordinator.isActiveSync
                     )
                 }
             }

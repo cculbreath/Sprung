@@ -70,7 +70,7 @@ struct OnboardingInterviewToolPane: View {
                             }
                         )
                     }
-                } else if let phaseAdvanceRequest = coordinator.pendingPhaseAdvanceRequest {
+                } else if let phaseAdvanceRequest = coordinator.pendingPhaseAdvanceRequestSync {
                     OnboardingPhaseAdvanceDialog(
                         request: phaseAdvanceRequest,
                         onSubmit: { decision, feedback in
@@ -330,7 +330,7 @@ struct OnboardingInterviewToolPane: View {
         if coordinator.pendingValidationPrompt != nil { return true }
         if coordinator.pendingApplicantProfileRequest != nil { return true }
         if coordinator.pendingSectionToggleRequest != nil { return true }
-        if coordinator.pendingPhaseAdvanceRequest != nil { return true }
+        if coordinator.pendingPhaseAdvanceRequestSync != nil { return true }
         return false
     }
 

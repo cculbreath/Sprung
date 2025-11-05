@@ -11,7 +11,7 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
 
-    @Environment(OnboardingInterviewService.self) private var onboardingInterviewService
+    @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore

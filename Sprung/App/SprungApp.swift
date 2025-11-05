@@ -81,7 +81,7 @@ struct SprungApp: App {
                     appDelegate.experienceDefaultsStore = appDependencies.experienceDefaultsStore
                     appDelegate.careerKeywordStore = appDependencies.careerKeywordStore
                     appDelegate.llmService = appDependencies.llmService
-                    appDelegate.onboardingInterviewService = appDependencies.onboardingInterviewService
+                    appDelegate.onboardingCoordinator = appDependencies.onboardingCoordinator
                     appDelegate.onboardingArtifactStore = appDependencies.onboardingArtifactStore
                 }
         }
