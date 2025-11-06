@@ -15,11 +15,13 @@ Consult the scratchpad before responding so you do not repeat work or contradict
 The scratchpad is append-only data maintained by the system; never attempt to restate or overwrite it in your replies. Reference it implicitly when making decisions.
 OPENING SEQUENCE
 
-When you receive the trigger text "Begin the onboarding interview":
+When you receive a greeting from the user indicating they're ready to begin:
 
-Offer a warm greeting without using the applicant's name.
-Immediately invoke whichever tool is required to start the current phase's first objective.
+Offer a warm welcome message without using the applicant's name.
+Immediately invoke whichever tool is required to start the current phase's first objective (e.g., get_applicant_profile for Phase 1).
 If a tool call reports waiting for user input, reply with a brief nudge such as "Once you complete the form to the left we can continue." This keeps the conversation active while the UI awaits interaction.
+Important: When calling a tool that will present UI to the user (like get_applicant_profile), only call THAT tool - do not call any other tools like set_objective_status in the same response. You must both greet the user AND call the appropriate tool in the same response, but limit yourself to ONE tool call when the tool will require user interaction.
+
 TOOLING PRINCIPLES
 
 Use the native function-calling interface: surface UI or perform actions by invoking the provided tools directly. Describing a tool in text does nothing.
@@ -84,56 +86,53 @@ When the profile is persisted, acknowledge that their details are stored for fut
 
 Input
 User
-Begin the onboarding interview.
+Hello! I'm ready to begin the onboarding interview.
 
 Developer
 State update:
 Phase: Phase 1: Core Facts
-Allowed tools: []
+Allowed tools: [cancel_user_upload, create_timeline_card, delete_timeline_card, extract_document, get_applicant_profile, get_artifact, get_macos_contact_card, get_user_option, get_user_upload, list_artifacts, next_phase, persist_data, reorder_timeline_cards, request_raw_file, set_objective_status, submit_for_validation, update_timeline_card, validate_applicant_profile]
 
 Output
 
 Reasoning
 Empty reasoning item
 
-assistant
-Welcome! Let’s get started.
-
-We’ll begin with a quick profile so we can reuse your details across future resumes and cover letters. Once the profile form appears to the left, please complete it—you can upload a resume, paste a resume URL, import from Contacts, or enter details manually. Once you complete the form to the left we can continue.
+Function call
+No output
 
 ==================
 Properties
 Created
-Nov 5, 2025 at 9:40 PM
+Nov 5, 2025 at 10:06 PM
 
 ID
-resp_0fb79700e07771a600690c189c5ae08195ab835c863502d38b
+resp_0260fd480136e62800690c1ed02e648196b093c9535277709e
 
 Model
 gpt-5-2025-08-07
 
 Tokens
-3,701 total
+4,406 total
 
 
 Functions
 get_macos_contact_card()
-extract_document()
-get_applicant_profile()
-validate_applicant_profile()
-persist_data()
-get_user_option()
-request_raw_file()
-set_objective_status()
-submit_for_validation()
-create_timeline_card()
-update_timeline_card()
 delete_timeline_card()
+extract_document()
 get_artifact()
-get_user_upload()
+persist_data()
 reorder_timeline_cards()
 next_phase()
-generate_knowledge_card()
+get_user_option()
+set_objective_status()
+update_timeline_card()
+create_timeline_card()
+get_applicant_profile()
+request_raw_file()
+submit_for_validation()
+validate_applicant_profile()
+get_user_upload()
 
 
 Configuration

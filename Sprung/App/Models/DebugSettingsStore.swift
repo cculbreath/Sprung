@@ -49,7 +49,9 @@ final class DebugSettingsStore {
             case .info:
                 return .info
             case .verbose:
-                return .verbose
+                // Verbose mode should suppress noisy network debug logs
+                // Only enable full SwiftOpenAI debug output when in Debug mode
+                return .info
             case .debug:
                 return .debug
             }

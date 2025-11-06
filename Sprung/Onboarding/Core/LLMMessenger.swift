@@ -271,15 +271,25 @@ actor LLMMessenger: OnboardingEventEmitter {
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
 
+        // Determine tool_choice based on context
+        let toolChoice = determineToolChoice(for: text)
+
         return ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
             instructions: systemPrompt,
             metadata: metadata,
             stream: true,
-            toolChoice: .auto,
+            toolChoice: toolChoice,
             tools: tools
         )
+    }
+
+    /// Determine appropriate tool_choice for the given message context
+    private func determineToolChoice(for text: String) -> ToolChoiceMode {
+        // Don't force tools on initial greeting - let LLM respond naturally
+        // The system prompt will guide the LLM to call get_applicant_profile after greeting
+        return .auto
     }
 
     private func buildDeveloperMessageRequest(text: String) async -> ModelResponseParameter {

@@ -35,17 +35,21 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. State cues developer message
-        let stateCues = await buildStateCues(allowedTools: allowedTools)
-        if !stateCues.isEmpty {
-            items.append(.message(InputMessage(
-                role: "developer",
-                content: .text(stateCues)
-            )))
+        // 1. Rolling conversation history (last N turns)
+        let conversationItems = await buildConversationHistory()
+
+        // 2. State cues developer message (only if we have conversation history)
+        // Skip for the very first message to encourage natural conversation
+        if !conversationItems.isEmpty {
+            let stateCues = await buildStateCues(allowedTools: allowedTools)
+            if !stateCues.isEmpty {
+                items.append(.message(InputMessage(
+                    role: "developer",
+                    content: .text(stateCues)
+                )))
+            }
         }
 
-        // 2. Rolling conversation history (last N turns)
-        let conversationItems = await buildConversationHistory()
         items.append(contentsOf: conversationItems)
 
         // 3. Current user message

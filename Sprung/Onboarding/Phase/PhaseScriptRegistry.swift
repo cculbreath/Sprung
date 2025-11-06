@@ -73,10 +73,12 @@ final class PhaseScriptRegistry {
 
         ## OPENING SEQUENCE
 
-        When you receive the trigger text "Begin the onboarding interview":
-        1. Offer a warm greeting without using the applicant's name.
-        2. Immediately invoke whichever tool is required to start the current phase's first objective.
+        When you receive a greeting from the user indicating they're ready to begin:
+        1. Offer a warm welcome message without using the applicant's name.
+        2. Immediately invoke whichever tool is required to start the current phase's first objective (e.g., `get_applicant_profile` for Phase 1).
         3. If a tool call reports `waiting for user input`, reply with a brief nudge such as "Once you complete the form to the left we can continue." This keeps the conversation active while the UI awaits interaction.
+
+        **Important**: When calling a tool that will present UI to the user (like `get_applicant_profile`), only call THAT tool - do not call any other tools like `set_objective_status` in the same response. You must both greet the user AND call the appropriate tool in the same response, but limit yourself to ONE tool call when the tool will require user interaction.
 
         ## TOOLING PRINCIPLES
 

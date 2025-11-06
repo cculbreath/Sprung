@@ -65,12 +65,13 @@ final class Logger {
     // MARK: - Nested Types
     
     /// Defines available log levels in increasing order of severity.
+    /// Lower raw values = more output, higher raw values = less output.
     enum Level: Int, CaseIterable {
-        case verbose = 0
-        case debug = 1
+        case debug = 0      // Most output
+        case verbose = 1
         case info = 2
         case warning = 3
-        case error = 4
+        case error = 4      // Least output (highest severity)
         
         /// Returns a string representation of the log level.
         var label: String {
@@ -131,7 +132,8 @@ final class Logger {
     }
     
     static var isVerboseEnabled: Bool {
-        minimumLevel.rawValue <= Level.debug.rawValue
+        // Verbose is enabled if minimum level is verbose (1) or debug (0)
+        minimumLevel.rawValue <= Level.verbose.rawValue
     }
     
     static var shouldSaveDebugFiles: Bool {
@@ -289,10 +291,14 @@ final class Logger {
     }
     
     private static func mapStoredLevel(_ rawValue: Int) -> Level {
+        // DebugSettingsStore.LogLevelSetting:
+        // 0 = quiet, 1 = info, 2 = verbose, 3 = debug
         switch rawValue {
-            case 0: return .error
-            case 2: return .verbose
-            default: return .info
+            case 0: return .error      // quiet (errors only)
+            case 1: return .info       // info
+            case 2: return .verbose    // verbose
+            case 3: return .debug      // debug (most output)
+            default: return .info      // fallback
         }
     }
     
