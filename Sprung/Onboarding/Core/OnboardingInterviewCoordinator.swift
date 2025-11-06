@@ -338,7 +338,7 @@ final class OnboardingInterviewCoordinator {
         toolRegistry.register(ListArtifactsTool(coordinator: self))
         toolRegistry.register(GetArtifactRecordTool(coordinator: self))
         toolRegistry.register(RequestRawArtifactFileTool(coordinator: self))
-        toolRegistry.register(PersistDataTool(dataStore: dataStore))
+        toolRegistry.register(PersistDataTool(dataStore: dataStore, eventBus: eventBus))
         toolRegistry.register(SetObjectiveStatusTool(coordinator: self))
         toolRegistry.register(NextPhaseTool(coordinator: self))
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: self))
