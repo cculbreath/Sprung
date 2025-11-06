@@ -92,8 +92,8 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmSendUserMessage(let payload):
-            await sendUserMessage(payload)
+        case .llmSendUserMessage(let payload, let isSystemGenerated):
+            await sendUserMessage(payload, isSystemGenerated: isSystemGenerated)
 
         case .llmSendDeveloperMessage(let payload):
             await sendDeveloperMessage(payload)
@@ -130,7 +130,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     // MARK: - Message Sending
 
     /// Send user message to LLM
-    private func sendUserMessage(_ payload: JSON) async {
+    private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
             return
@@ -145,7 +145,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let messageId = UUID().uuidString
 
             // Emit message sent event
-            await emit(.llmUserMessageSent(messageId: messageId, payload: payload))
+            await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
 
             // Process stream via NetworkRouter
             currentStreamTask = Task {

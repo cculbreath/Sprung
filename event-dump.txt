@@ -1,14 +1,14 @@
 Sprung Onboarding Event Dump
-Generated: 11/5/2025, 8:15 PM
+Generated: 11/5/2025, 9:23 PM
 ================================================================================
 
 Published Event Counts by Topic:
   Artifact    : 0 events (last: never)
-  LLM         : 6 events (last: 3 minutes ago)
+  LLM         : 6 events (last: 23 seconds ago)
   Objective   : 0 events (last: never)
   Phase       : 0 events (last: never)
-  Processing  : 3 events (last: 3 minutes ago)
-  State       : 1 events (last: 3 minutes ago)
+  Processing  : 3 events (last: 1 minute ago)
+  State       : 1 events (last: 1 minute ago)
   Timeline    : 0 events (last: never)
   Tool        : 0 events (last: never)
   Toolpane    : 0 events (last: never)
@@ -25,7 +25,7 @@ processingStateChanged(false)
 waitingStateChanged(nil)
 
 #8
-stateAllowedToolsUpdated(tools: Set(["get_user_option", "extract_document", "get_artifact", "cancel_user_upload", "next_phase", "get_macos_contact_card", "list_artifacts", "get_applicant_profile", "validate_applicant_profile", "request_raw_file", "persist_data", "create_timeline_card", "reorder_timeline_cards", "submit_for_validation", "get_user_upload", "delete_timeline_card", "update_timeline_card", "set_objective_status"]))
+stateAllowedToolsUpdated(tools: Set(["next_phase", "get_user_option", "create_timeline_card", "submit_for_validation", "validate_applicant_profile", "delete_timeline_card", "set_objective_status", "cancel_user_upload", "update_timeline_card", "get_macos_contact_card", "reorder_timeline_cards", "persist_data", "list_artifacts", "get_artifact", "get_user_upload", "get_applicant_profile", "extract_document", "request_raw_file"]))
 
 #7
 processingStateChanged(true)
@@ -39,15 +39,15 @@ llmSendUserMessage(payload: {
 llmStatus(status: Sprung.LLMStatus.busy)
 
 #4
-llmUserMessageSent(messageId: "DE79D090-185E-4756-9301-CCC26A82A7C4", payload: {
+llmUserMessageSent(messageId: "FF96E667-7720-4C3E-90BF-16816790DC90", payload: {
   "text" : "Begin the onboarding interview."
 })
 
 #3
-streamingMessageBegan(id: 2F560638, reasoningExpected: false)
+streamingMessageBegan(id: 8B538F20, reasoningExpected: false)
 
 #2
-streamingMessageFinalized(id: 2F560638, text: 444 chars)
+streamingMessageFinalized(id: 8B538F20, text: 457 chars)
 
 #1
 llmStatus(status: Sprung.LLMStatus.idle)

@@ -65,7 +65,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         // Emit message request event (§4.3)
         var payload = JSON()
         payload["text"].string = "Begin the onboarding interview."
-        await emit(.llmSendUserMessage(payload: payload))
+        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
     }
 
     func endInterview() {

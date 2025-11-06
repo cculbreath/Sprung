@@ -552,12 +552,13 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Message Management
 
-    func appendUserMessage(_ text: String) -> UUID {
+    func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) -> UUID {
         let message = OnboardingMessage(
             id: UUID(),
             role: .user,
             text: text,
-            timestamp: Date()
+            timestamp: Date(),
+            isSystemGenerated: isSystemGenerated
         )
         messages.append(message)
         messagesSync = messages // Update sync cache
@@ -981,11 +982,11 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmUserMessageSent(let messageId, let payload):
+        case .llmUserMessageSent(let messageId, let payload, let isSystemGenerated):
             // Append user message to maintain single source of truth
             let text = payload["text"].stringValue
-            appendUserMessage(text)
-            Logger.debug("StateCoordinator appended user message: \(messageId)", category: .ai)
+            appendUserMessage(text, isSystemGenerated: isSystemGenerated)
+            Logger.debug("StateCoordinator appended user message: \(messageId) (systemGenerated: \(isSystemGenerated))", category: .ai)
 
         case .llmSentToolResponseMessage(let messageId, _):
             // Track tool response
