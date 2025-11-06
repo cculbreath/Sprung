@@ -264,15 +264,18 @@ actor LLMMessenger: OnboardingEventEmitter {
     private func buildUserMessageRequest(text: String) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForUserMessage(
             text: text,
-            systemPrompt: systemPrompt,
             allowedTools: allowedToolNames
         )
 
         let tools = await getToolSchemas()
+        let scratchpad = await contextAssembler.buildScratchpadSummary()
+        let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
 
         return ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
+            instructions: systemPrompt,
+            metadata: metadata,
             stream: true,
             toolChoice: .auto,
             tools: tools
@@ -281,16 +284,18 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     private func buildDeveloperMessageRequest(text: String) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForDeveloperMessage(
-            text: text,
-            systemPrompt: systemPrompt,
-            allowedTools: allowedToolNames
+            text: text
         )
 
         let tools = await getToolSchemas()
+        let scratchpad = await contextAssembler.buildScratchpadSummary()
+        let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
 
         return ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
+            instructions: systemPrompt,
+            metadata: metadata,
             stream: true,
             toolChoice: .auto,
             tools: tools
@@ -300,15 +305,18 @@ actor LLMMessenger: OnboardingEventEmitter {
     private func buildToolResponseRequest(output: JSON, callId: String) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForToolResponse(
             output: output,
-            callId: callId,
-            systemPrompt: systemPrompt
+            callId: callId
         )
 
         let tools = await getToolSchemas()
+        let scratchpad = await contextAssembler.buildScratchpadSummary()
+        let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
 
         return ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
+            instructions: systemPrompt,
+            metadata: metadata,
             stream: true,
             toolChoice: .auto,
             tools: tools
@@ -383,4 +391,3 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
     }
 }
-
