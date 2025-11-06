@@ -27,6 +27,7 @@ struct PhaseOneScript: PhaseScript {
         "update_timeline_card",
         "reorder_timeline_cards",
         "delete_timeline_card",
+        "display_timeline_entries_for_review",
         "submit_for_validation",
         "validate_applicant_profile",
         "persist_data",
@@ -140,9 +141,9 @@ struct PhaseOneScript: PhaseScript {
         4. Use the timeline tooling in this order whenever you build or revise the skeleton timeline:
            - Call `create_timeline_card` once per role you parsed, supplying title, organization, location, start, and end (omit only fields you truly lack).
            - Refine cards by calling `update_timeline_card`, `reorder_timeline_cards`, or `delete_timeline_card` instead of restating changes in chat.
-           - After the cards represent the currently agreed-upon facts, pass the latest `timeline` payload returned from those tools into `submit_for_validation`.
+           - After the cards represent the currently agreed-upon facts, use `display_timeline_entries_for_review` or `submit_for_validation` to present the end-of-skeleton review card. Do **not** ask the user to confirm in chat without opening the review card.
            - Do **not** use `get_user_option` or other ad-hoc prompts as a substitute for the card tools; keep questions and answers in chat, and keep facts in cards.
-        Use timeline cards to capture and refine facts. When the set is stable, call `submit_for_validation(dataType: "skeleton_timeline")` once to open the review modal. Do **not** rely on chat acknowledgments for final confirmation.
+        Use timeline cards to capture and refine facts. When the set is stable, call `display_timeline_entries_for_review` or `submit_for_validation(dataType: "skeleton_timeline")` once to open the review modal. Do **not** rely on chat acknowledgments for final confirmation.
 
         5. Ask clarifying questions freely whenever data is missing, conflicting, or uncertain. This is an information-gathering exercise—take the time you need before committing facts to cards.
 
