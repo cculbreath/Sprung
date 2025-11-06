@@ -34,37 +34,15 @@ struct ValidateApplicantProfileTool: InterviewTool {
             payload: data,
             message: "Review your contact details."
         )
-        let continuationId = UUID()
 
-        let token = ContinuationToken(
-            id: continuationId,
-            toolName: name,
-            initialPayload: JSON([
-                "status": "waiting",
-                "tool": name,
-                "message": "Waiting for applicant profile validation"
-            ]),
-            uiRequest: .validationPrompt(prompt),
-            resumeHandler: { input in
-                if input["cancelled"].boolValue {
-                    return .error(.userCancelled)
-                }
+        // Emit UI request to show the validation prompt
+        await coordinator.eventBus.publish(.validationPromptRequested(prompt: prompt, continuationId: UUID()))
 
-                var response = JSON()
-                response["status"].string = input["status"].stringValue
-                if input["updatedData"].exists() {
-                    response["updatedData"] = input["updatedData"]
-                }
-                if input["changes"].exists() {
-                    response["changes"] = input["changes"]
-                }
-                if let notes = input["notes"].string {
-                    response["notes"].string = notes
-                }
-                return .immediate(response)
-            }
-        )
+        // Return immediately - we'll handle the validation response as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Applicant profile validation prompt has been presented to the user"
 
-        return .waiting(message: "Waiting for applicant profile validation", continuation: token)
+        return .immediate(response)
     }
 }

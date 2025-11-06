@@ -65,37 +65,16 @@ struct GetUserOptionTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         let payload = try OptionPromptPayload(json: params)
-        let tokenId = UUID()
 
-        var waitingPayload = JSON()
-        waitingPayload["status"].string = "waiting"
-        waitingPayload["tool"].string = name
-        waitingPayload["message"].string = "Waiting for user selection"
-        waitingPayload["prompt"].string = payload.prompt
-        waitingPayload["action_required"].string = payload.allowMultiple ? "multi_select" : "single_select"
+        // Emit UI request to show the choice prompt
+        await coordinator.eventBus.publish(.choicePromptRequested(prompt: payload.toChoicePrompt(), continuationId: UUID()))
 
-        let token = ContinuationToken(
-            id: tokenId,
-            toolName: name,
-            initialPayload: waitingPayload,
-            uiRequest: .choicePrompt(payload.toChoicePrompt()),
-            resumeHandler: { input in
-                if input["cancelled"].boolValue {
-                    return .error(.userCancelled)
-                }
+        // Return immediately - we'll handle the selection as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Choice prompt has been presented to the user"
 
-                guard let selectedArray = input["selectedIds"].arrayObject as? [String], !selectedArray.isEmpty else {
-                    return .error(.invalidParameters("selectedIds must be a non-empty array of strings"))
-                }
-
-                var response = JSON()
-                response["selectedIds"] = JSON(selectedArray)
-                response["timestamp"].string = self.dateFormatter.string(from: Date())
-                return .immediate(response)
-            }
-        )
-
-        return .waiting(message: "Waiting for user selection", continuation: token)
+        return .immediate(response)
     }
 }
 
