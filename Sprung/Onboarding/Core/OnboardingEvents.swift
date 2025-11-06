@@ -46,6 +46,7 @@ enum OnboardingEvent {
     case applicantProfileIntakeRequested(continuationId: UUID)
     case applicantProfileIntakeCleared
     case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest, continuationId: UUID)
+    case phaseAdvanceDismissed
 
     // MARK: - Artifact Management (§4.8 spec)
     case artifactGetRequested(id: UUID)
@@ -235,7 +236,7 @@ actor EventCoordinator {
             return .state
 
         // Phase events
-        case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested:
+        case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested, .phaseAdvanceDismissed:
             return .phase
 
         // Objective events
@@ -338,6 +339,8 @@ actor EventCoordinator {
             description = "Profile intake cleared"
         case .phaseAdvanceRequested:
             description = "Phase advance requested"
+        case .phaseAdvanceDismissed:
+            description = "Phase advance dismissed"
         case .artifactGetRequested(let id):
             description = "Artifact get requested: \(id)"
         case .artifactNewRequested:
