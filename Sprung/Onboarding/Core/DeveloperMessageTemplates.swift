@@ -190,6 +190,16 @@ struct DeveloperMessageTemplates {
 
         return Message(title: title, details: details, payload: payload)
     }
+
+    static func dossierSeedReady(payload: JSON?) -> Message {
+        let title = "Enabled sections set. Seed the candidate dossier with 2–3 quick prompts about goals, motivations, and strengths. For each answer, call persist_data(dataType: 'candidate_dossier_entry', payload: {question, answer, asked_at}). Mark dossier_seed complete after at least two entries."
+        let details: [String: String] = [
+            "next_objective": "dossier_seed",
+            "required": "false",
+            "min_entries": "2"
+        ]
+        return Message(title: title, details: details, payload: payload)
+    }
 }
 
 private extension DeveloperMessageTemplates {
