@@ -22,33 +22,14 @@ struct GetApplicantProfileTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let continuationId = UUID()
+        // Emit UI request to show the form
+        await coordinator.eventBus.publish(.applicantProfileIntakeRequested(continuationId: UUID()))
 
-        var waitingPayload = JSON()
-        waitingPayload["status"].string = "waiting"
-        waitingPayload["tool"].string = name
-        waitingPayload["message"].string = "Waiting for applicant profile input"
+        // Return immediately - we'll handle the form submission as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Applicant profile form has been presented to the user"
 
-        let token = ContinuationToken(
-            id: continuationId,
-            toolName: name,
-            initialPayload: waitingPayload,
-            uiRequest: .applicantProfileIntake,
-            resumeHandler: { input in
-                if input["cancelled"].boolValue {
-                    return .error(.userCancelled)
-                }
-
-                // Return the profile data from user input
-                var response = JSON()
-                response["status"].string = "completed"
-                // ProfileInteractionHandler sends data as "data" key, not "profile"
-                response["profile"] = input["data"]
-                response["source"].string = input["mode"].stringValue
-                return .immediate(response)
-            }
-        )
-
-        return .waiting(message: "Waiting for applicant profile input", continuation: token)
+        return .immediate(response)
     }
 }

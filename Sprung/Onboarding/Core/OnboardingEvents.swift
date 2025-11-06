@@ -17,7 +17,7 @@ enum OnboardingEvent {
     // MARK: - Messages
     case streamingMessageBegan(id: UUID, text: String, reasoningExpected: Bool)
     case streamingMessageUpdated(id: UUID, delta: String)
-    case streamingMessageFinalized(id: UUID, finalText: String)
+    case streamingMessageFinalized(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil)
 
     // MARK: - Status Updates
     case streamingStatusUpdated(String?)
