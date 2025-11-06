@@ -99,9 +99,23 @@ struct PhaseOneScript: PhaseScript {
                 id: "enabled_sections",
                 dependsOn: ["skeleton_timeline"],
                 onComplete: { context in
-                    let title = "Enabled sections confirmed. Next, ask the user 2-3 broad CandidateDossier questions to seed their profile (e.g., 'What roles energize you now?', 'What role type are you aiming for next?', 'What's a recent highlight you're proud of?'). Use persist_data with dataType='candidate_dossier_entry' for each answer (one call per answer). Mark dossier_seed completed once at least 2 answers are saved. Then, when all ledger entries are clear, prompt the user to advance to Phase 2."
-                    let details = ["status": context.status.rawValue, "next_objective": "dossier_seed", "ready_for": "next_phase"]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    var outputs: [ObjectiveWorkflowOutput] = []
+
+                    // First message: Enabled sections confirmed, ready for Phase 2
+                    let readyTitle = "Enabled sections confirmed. When all ledger entries are clear, prompt the user to advance to Phase 2."
+                    let readyDetails = ["status": context.status.rawValue, "ready_for": "next_phase"]
+                    outputs.append(.developerMessage(title: readyTitle, details: readyDetails, payload: nil))
+
+                    // Second message: Trigger dossier seed flow
+                    let dossierTitle = "Enabled sections set. Seed the candidate dossier with 2–3 quick prompts about goals, motivations, and strengths. For each answer, call persist_data(dataType: 'candidate_dossier_entry', payload: {question, answer, asked_at}). Mark dossier_seed complete after at least two entries."
+                    let dossierDetails = [
+                        "next_objective": "dossier_seed",
+                        "required": "false",
+                        "min_entries": "2"
+                    ]
+                    outputs.append(.developerMessage(title: dossierTitle, details: dossierDetails, payload: nil))
+
+                    return outputs
                 }
             )
         ]
@@ -124,7 +138,7 @@ struct PhaseOneScript: PhaseScript {
         1. **applicant_profile**: Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles
         2. **skeleton_timeline**: Build a high-level timeline of positions/roles with dates and organizations
         3. **enabled_sections**: Let user choose which resume sections to include (skills, publications, projects, etc.)
-        4. **dossier_seed**: Capture 2-3 general questions and answers to seed the CandidateDossier (tracked but not required for phase advancement)
+        4. **dossier_seed** (not required to advance): After enabled_sections completes, ask 2–3 open questions about the user's goals, motivations, and strengths. For each answer, call `persist_data` with `dataType='candidate_dossier_entry'`, `payload: { "question": "<your question>", "answer": "<user's response>", "asked_at": "<ISO 8601 timestamp>" }`. When at least two entries are saved, call `set_objective_status('dossier_seed', 'completed')`. This objective enriches future phases but is not mandatory for advancing to Phase 2.
 
         ### Workflow:
         1. Start with `get_applicant_profile` tool to collect contact information via one of four paths:
