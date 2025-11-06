@@ -874,6 +874,11 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
+        case .processingStateChanged(let processing):
+            isProcessing = processing
+            isProcessingSync = processing
+            Logger.debug("StateCoordinator processing state (event): \(processing)", category: .ai)
+
         case .waitingStateChanged(let waiting):
             // Convert string to WaitingState enum and update state
             let waitingState: WaitingState? = if let waiting {

@@ -369,8 +369,9 @@ final class OnboardingInterviewCoordinator {
         }
 
         switch event {
-        case .processingStateChanged(let processing):
-            await state.setProcessingState(processing)
+        case .processingStateChanged:
+            // Event now handled by StateCoordinator
+            break
 
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             // Event now handled by StateCoordinator - ChatboxHandler mirrors to transcript
