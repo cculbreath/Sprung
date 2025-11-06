@@ -206,6 +206,10 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         case .applicantProfileIntake:
             await emit(.applicantProfileIntakeRequested(continuationId: continuationId))
             Logger.info("👤 Applicant profile intake requested", category: .ai)
+
+        case .sectionToggle(let request):
+            await emit(.sectionToggleRequested(request: request, continuationId: continuationId))
+            Logger.info("🔀 Section toggle requested", category: .ai)
         }
     }
 }
