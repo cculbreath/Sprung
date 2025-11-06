@@ -12,7 +12,7 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Core Dependencies
 
     private let state: StateCoordinator
-    private let eventBus: EventCoordinator
+    let eventBus: EventCoordinator
     private let chatboxHandler: ChatboxHandler
     private let toolExecutionCoordinator: ToolExecutionCoordinator
     let toolRouter: ToolHandler
@@ -987,7 +987,6 @@ final class OnboardingInterviewCoordinator {
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         // Close the profile intake UI
         toolRouter.profileHandler.clearIntake()
-        pendingApplicantProfileIntake = nil
 
         // Send the profile data as a new user message (not as a tool response)
         var payload = JSON()
