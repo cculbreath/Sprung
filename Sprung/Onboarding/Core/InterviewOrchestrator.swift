@@ -73,19 +73,15 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
 
         await emit(.processingStateChanged(true))
 
-        // Send developer instruction requiring tool call
+        // Send user message to trigger conversational response
+        // The system prompt's OPENING SEQUENCE section instructs the LLM to:
+        // 1. Offer a warm welcome message
+        // 2. Immediately invoke get_applicant_profile tool
         var payload = JSON()
-        payload["text"].string = """
-        Greet the user warmly without using their name. For example: "Welcome! I'm here to help you \
-        build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a \
-        collaborative session to uncover the great work you've done. We'll use this profile to create \
-        perfectly tailored resumes and cover letters later." \
-        You MUST call the get_applicant_profile tool in this same response after your greeting.
-        """
-        payload["forceToolName"].string = "get_applicant_profile"
-        await emit(.llmSendDeveloperMessage(payload: payload))
+        payload["text"].string = "I'm ready to begin."
+        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
 
-        Logger.info("📤 Initial developer message sent with forced get_applicant_profile tool call", category: .ai)
+        Logger.info("📤 Initial user message sent to trigger greeting and get_applicant_profile", category: .ai)
     }
 
     func startInterview() async throws {

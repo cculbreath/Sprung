@@ -308,10 +308,11 @@ actor LLMMessenger: OnboardingEventEmitter {
         // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
         if let toolName = forceToolName {
-            // Use .required instead of .functionTool to allow both text and tool calls
-            // The developer instruction will guide which specific tool to call
-            toolChoice = .required
-            Logger.debug("Requiring tool call (developer instruction specifies: \(toolName))", category: .ai)
+            // Use .auto to allow both text and tool calls
+            // The developer instruction explicitly tells the LLM which tool to call
+            // and that it "MUST" call it, which is sufficient guidance
+            toolChoice = .auto
+            Logger.debug("Tool choice set to auto (developer instruction specifies: \(toolName))", category: .ai)
         } else {
             toolChoice = .auto
         }
