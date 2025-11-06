@@ -333,6 +333,7 @@ final class OnboardingInterviewCoordinator {
         toolRegistry.register(UpdateTimelineCardTool(coordinator: self))
         toolRegistry.register(DeleteTimelineCardTool(coordinator: self))
         toolRegistry.register(ReorderTimelineCardsTool(coordinator: self))
+        toolRegistry.register(DisplayTimelineForReviewTool(coordinator: self))
         toolRegistry.register(SubmitForValidationTool(coordinator: self))
         toolRegistry.register(ListArtifactsTool(coordinator: self))
         toolRegistry.register(GetArtifactRecordTool(coordinator: self))
