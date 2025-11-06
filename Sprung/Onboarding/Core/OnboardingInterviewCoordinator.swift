@@ -985,14 +985,54 @@ final class OnboardingInterviewCoordinator {
     /// Submit profile draft and automatically resume tool execution.
     /// Views should call this instead of manually completing and resuming.
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
-        // Close the profile intake UI
-        toolRouter.profileHandler.clearIntake()
+        // Close the profile intake UI via event
+        await eventBus.publish(.applicantProfileIntakeCleared)
 
-        // Send the profile data as a new user message (not as a tool response)
+        // Persist profile immediately via event (StateCoordinator or handler will process)
+        let profileJSON = draft.toSafeJSON()
+        await eventBus.publish(.applicantProfileStored(profileJSON))
+
+        // Format profile data as readable text for the LLM
+        var profileText = "Here is my contact information"
+
+        // Add source indication
+        if source == .contacts {
+            profileText += " (imported from macOS Contacts)"
+        }
+        profileText += ":\n\n"
+
+        // Format profile fields
+        if let name = profileJSON["name"].string, !name.isEmpty {
+            profileText += "Name: \(name)\n"
+        }
+        if let email = profileJSON["email"].string, !email.isEmpty {
+            profileText += "Email: \(email)\n"
+        }
+        if let phone = profileJSON["phone"].string, !phone.isEmpty {
+            profileText += "Phone: \(phone)\n"
+        }
+        if let location = profileJSON["location"].string, !location.isEmpty {
+            profileText += "Location: \(location)\n"
+        }
+        if let url = profileJSON["url"].string, !url.isEmpty {
+            profileText += "Personal URL: \(url)\n"
+        }
+
+        // Add social profiles if present
+        let profiles = profileJSON["profiles"].arrayValue
+        if !profiles.isEmpty {
+            profileText += "\nSocial Profiles:\n"
+            for profile in profiles {
+                if let network = profile["network"].string,
+                   let username = profile["username"].string {
+                    profileText += "- \(network): \(username)\n"
+                }
+            }
+        }
+
+        // Send the profile data as a user message with formatted text
         var payload = JSON()
-        payload["text"].string = "Here is my contact information:"
-        payload["profile_data"] = draft.toSafeJSON()
-        payload["source"].string = source == .contacts ? "contacts" : "manual"
+        payload["text"].string = profileText
 
         await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
         Logger.info("✅ Profile submitted as user message (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
