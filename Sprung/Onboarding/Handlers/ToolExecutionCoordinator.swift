@@ -126,6 +126,13 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 await emit(.llmSendDeveloperMessage(payload: devPayload))
             }
 
+            // Check if tool is awaiting user input - if so, DON'T send response to OpenAI
+            // The user's input will be sent as a new user message when ready
+            if output["status"].string == "awaiting_user_input" {
+                Logger.info("🔄 Tool awaiting user input - not sending tool response to LLM (will be handled via user message)", category: .ai)
+                return
+            }
+
             // Tool completed immediately - send response to LLM
             await emitToolResponse(callId: callId, output: output)
 
