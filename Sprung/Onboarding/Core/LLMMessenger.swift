@@ -184,9 +184,10 @@ actor LLMMessenger: OnboardingEventEmitter {
         await emit(.llmStatus(status: .busy))
 
         let text = payload["text"].stringValue
+        let forceToolName = payload["forceToolName"].string
 
         do {
-            let request = await buildDeveloperMessageRequest(text: text)
+            let request = await buildDeveloperMessageRequest(text: text, forceToolName: forceToolName)
             let messageId = UUID().uuidString
 
             // Emit message sent event
@@ -292,7 +293,10 @@ actor LLMMessenger: OnboardingEventEmitter {
         return .auto
     }
 
-    private func buildDeveloperMessageRequest(text: String) async -> ModelResponseParameter {
+    private func buildDeveloperMessageRequest(
+        text: String,
+        forceToolName: String? = nil
+    ) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForDeveloperMessage(
             text: text
         )
@@ -301,13 +305,24 @@ actor LLMMessenger: OnboardingEventEmitter {
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
 
+        // Determine tool choice - force specific tool if requested
+        let toolChoice: ToolChoiceMode
+        if let toolName = forceToolName {
+            // Use .required instead of .functionTool to allow both text and tool calls
+            // The developer instruction will guide which specific tool to call
+            toolChoice = .required
+            Logger.debug("Requiring tool call (developer instruction specifies: \(toolName))", category: .ai)
+        } else {
+            toolChoice = .auto
+        }
+
         return ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
             instructions: systemPrompt,
             metadata: metadata,
             stream: true,
-            toolChoice: .auto,
+            toolChoice: toolChoice,
             tools: tools
         )
     }

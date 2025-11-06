@@ -994,15 +994,21 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         case .llmStatus(let status):
             // Update processing state based on LLM status
+            let newProcessingState: Bool
             switch status {
             case .busy:
-                isProcessing = true
-                isProcessingSync = true // Update sync cache
+                newProcessingState = true
             case .idle, .error:
-                isProcessing = false
-                isProcessingSync = false // Update sync cache
+                newProcessingState = false
             }
-            Logger.debug("StateCoordinator processing state: \(isProcessing)", category: .ai)
+
+            // Update state and emit if changed
+            if isProcessing != newProcessingState {
+                isProcessing = newProcessingState
+                isProcessingSync = newProcessingState // Update sync cache
+                await eventBus.publish(.processingStateChanged(newProcessingState))
+                Logger.debug("StateCoordinator emitted processingStateChanged: \(newProcessingState)", category: .ai)
+            }
 
         case .streamingMessageBegan(let id, let text, let reasoningExpected):
             // Handle streaming message begin via event
