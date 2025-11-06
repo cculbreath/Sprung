@@ -97,8 +97,8 @@ struct PhaseOneScript: PhaseScript {
                 id: "enabled_sections",
                 dependsOn: ["skeleton_timeline"],
                 onComplete: { context in
-                    let title = "Enabled sections confirmed. When all ledger entries are clear, prompt the user to advance to Phase 2."
-                    let details = ["status": context.status.rawValue, "ready_for": "next_phase"]
+                    let title = "Enabled sections confirmed. Next, ask the user 2-3 broad CandidateDossier questions to seed their profile (e.g., 'What roles energize you now?', 'What role type are you aiming for next?', 'What's a recent highlight you're proud of?'). Use persist_data with dataType='candidate_dossier_entry' for each answer (one call per answer). Mark dossier_seed completed once at least 2 answers are saved. Then, when all ledger entries are clear, prompt the user to advance to Phase 2."
+                    let details = ["status": context.status.rawValue, "next_objective": "dossier_seed", "ready_for": "next_phase"]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             )
@@ -122,6 +122,7 @@ struct PhaseOneScript: PhaseScript {
         1. **applicant_profile**: Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles
         2. **skeleton_timeline**: Build a high-level timeline of positions/roles with dates and organizations
         3. **enabled_sections**: Let user choose which resume sections to include (skills, publications, projects, etc.)
+        4. **dossier_seed**: Capture 2-3 general questions and answers to seed the CandidateDossier (tracked but not required for phase advancement)
 
         ### Workflow:
         1. Start with `get_applicant_profile` tool to collect contact information via one of four paths:
@@ -150,13 +151,22 @@ struct PhaseOneScript: PhaseScript {
 
         7. Phase 1 Focus - Skeleton Only: This phase is strictly about understanding the basic structure of the user's career and education history. Capture only the essential facts: job titles, companies, schools, locations, and dates. Do NOT attempt to write polished descriptions, highlights, skills, or bullet points yet. Think of this as building the timeline's skeleton—just the bones. In Phase 2, we'll revisit each position to excavate the real substance: specific projects, technologies used, problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions, highlight achievements, and write compelling objective statements. Keep Phase 1 simple: who, what, where, when. Save the "how well" and "why it matters" for later phases.
 
-        8. Once the skeleton timeline is saved, continue to enabled sections. When all objectives are satisfied, call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.
+        8. After the skeleton timeline is confirmed and persisted, call `configure_enabled_sections` to present a Section Toggle card where the user can choose which résumé sections to include (skills, publications, projects, etc.). When the user confirms their selections, call `persist_data` with `dataType="experience_defaults"` and payload `{ enabled_sections: [...] }`. Then call `set_objective_status("enabled_sections", "completed")`.
+
+        9. Dossier Seed Questions: During Phase 1 (preferably after enabled_sections is completed), inject 2-3 general CandidateDossier questions in natural conversation. These should be broad, engaging questions that help build rapport and gather initial career insights, such as:
+           - "What types of roles energize you most right now?"
+           - "What kind of position are you aiming for next?"
+           - "What's a recent project or achievement you're particularly proud of?"
+           Persist each answer using `persist_data` with `dataType="candidate_dossier_entry"`. Once at least 2 answers are stored, call `set_objective_status("dossier_seed", "completed")`.
+
+        10. When all objectives are satisfied (applicant_profile, skeleton_timeline, enabled_sections, and ideally dossier_seed), call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.
 
         ### Tools Available:
         - `get_applicant_profile`: Present UI for profile collection
         - `extract_document`: Extract structured content from PDF/DOCX
+        - `configure_enabled_sections`: Present Section Toggle card for user to select résumé sections
         - `submit_for_validation`: Show validation UI for user approval
-        - `persist_data`: Save approved data
+        - `persist_data`: Save approved data (including enabled_sections and candidate_dossier_entry)
         - `set_objective_status`: Mark objectives as completed
         - `next_phase`: Advance to Phase 2 when ready
 
