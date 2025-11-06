@@ -23,6 +23,7 @@ final class InterviewLifecycleController {
     private(set) var orchestrator: InterviewOrchestrator?
     private(set) var workflowEngine: ObjectiveWorkflowEngine?
     private(set) var artifactPersistenceHandler: ArtifactPersistenceHandler?
+    private(set) var transcriptPersistenceHandler: TranscriptPersistenceHandler?
 
     // Event subscription tracking
     private var eventSubscriptionTask: Task<Void, Never>?
@@ -102,6 +103,14 @@ final class InterviewLifecycleController {
         artifactPersistenceHandler = persistenceHandler
         await persistenceHandler.start()
 
+        // Start transcript persistence handler
+        let transcriptHandler = TranscriptPersistenceHandler(
+            eventBus: eventBus,
+            dataStore: dataStore
+        )
+        transcriptPersistenceHandler = transcriptHandler
+        await transcriptHandler.start()
+
         // Finally, send the initial message to start the conversation
         // At this point, LLMMessenger is subscribed and has received allowed tools
         await orchestrator.sendInitialMessage()
@@ -123,6 +132,10 @@ final class InterviewLifecycleController {
         // Stop artifact persistence handler
         await artifactPersistenceHandler?.stop()
         artifactPersistenceHandler = nil
+
+        // Stop transcript persistence handler
+        await transcriptPersistenceHandler?.stop()
+        transcriptPersistenceHandler = nil
 
         // Update state via events
         await eventBus.publish(.processingStateChanged(false))
