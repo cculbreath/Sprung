@@ -61,7 +61,7 @@ actor TranscriptPersistenceHandler: OnboardingEventEmitter {
         case .llmUserMessageSent(let messageId, let payload, _):
             await persistUserMessage(messageId: messageId, payload: payload)
 
-        case .streamingMessageFinalized(let id, let finalText):
+        case .streamingMessageFinalized(let id, let finalText, _):
             await persistAssistantMessage(id: id, finalText: finalText)
 
         default:

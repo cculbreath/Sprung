@@ -136,8 +136,9 @@ struct EventDumpView: View {
             return "streamingMessageBegan(id: \(id.uuidString.prefix(8)), reasoningExpected: \(reasoningExpected))"
         case .streamingMessageUpdated(let id, let delta):
             return "streamingMessageUpdated(id: \(id.uuidString.prefix(8)), delta: \(delta.count) chars)"
-        case .streamingMessageFinalized(let id, let text):
-            return "streamingMessageFinalized(id: \(id.uuidString.prefix(8)), text: \(text.count) chars)"
+        case .streamingMessageFinalized(let id, let text, let toolCalls):
+            let toolInfo = toolCalls.map { " toolCalls: \($0.count)" } ?? ""
+            return "streamingMessageFinalized(id: \(id.uuidString.prefix(8)), text: \(text.count) chars\(toolInfo))"
         case .llmReasoningSummaryDelta(let delta):
             return "llmReasoningSummaryDelta(\(delta.prefix(50))...)"
         case .llmReasoningSummaryComplete(let text):
