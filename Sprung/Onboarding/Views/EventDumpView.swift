@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 #if DEBUG
 struct EventDumpView: View {
@@ -78,6 +79,15 @@ struct EventDumpView: View {
             }
             .navigationTitle("Event Dump")
             .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        exportEventDump()
+                    } label: {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .help("Export event dump to a text file")
+                }
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Refresh") {
                         loadEvents()
@@ -159,6 +169,40 @@ struct EventDumpView: View {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    private func exportEventDump() {
+        let savePanel = NSSavePanel()
+        savePanel.nameFieldStringValue = "event-dump-\(Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).dateSeparator(.dash).dateTimeSeparator(.space).timeSeparator(.colon))).txt"
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.canCreateDirectories = true
+        savePanel.isExtensionHidden = false
+        savePanel.title = "Export Event Dump"
+        savePanel.message = "Choose where to save the event dump"
+
+        savePanel.begin { response in
+            guard response == .OK, let url = savePanel.url else { return }
+
+            var output = "Sprung Onboarding Event Dump\n"
+            output += "Generated: \(Date().formatted())\n"
+            output += String(repeating: "=", count: 80) + "\n\n"
+
+            output += metricsText + "\n\n"
+            output += String(repeating: "=", count: 80) + "\n\n"
+
+            output += "Recent Events (\(events.count)):\n\n"
+            for (index, event) in events.enumerated() {
+                output += "#\(events.count - index)\n"
+                output += event + "\n\n"
+            }
+
+            do {
+                try output.write(to: url, atomically: true, encoding: .utf8)
+                Logger.info("Event dump exported to: \(url.path)", category: .general)
+            } catch {
+                Logger.error("Failed to export event dump: \(error.localizedDescription)", category: .general)
+            }
+        }
     }
 }
 #endif

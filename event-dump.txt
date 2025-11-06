@@ -1,0 +1,48 @@
+Sprung Onboarding Event Dump
+Generated: 11/5/2025, 7:54 PM
+================================================================================
+
+Published Event Counts by Topic:
+  Artifact    : 0 events (last: never)
+  LLM         : 4 events (last: 7 minutes ago)
+  Objective   : 0 events (last: never)
+  Phase       : 0 events (last: never)
+  Processing  : 3 events (last: 7 minutes ago)
+  State       : 1 events (last: 7 minutes ago)
+  Timeline    : 0 events (last: never)
+  Tool        : 0 events (last: never)
+  Toolpane    : 0 events (last: never)
+  UserInput   : 0 events (last: never)
+
+================================================================================
+
+Recent Events (8):
+
+#8
+processingStateChanged(false)
+
+#7
+waitingStateChanged(nil)
+
+#6
+stateAllowedToolsUpdated(tools: Set(["persist_data", "update_timeline_card", "validate_applicant_profile", "get_artifact", "get_applicant_profile", "get_user_option", "reorder_timeline_cards", "request_raw_file", "extract_document", "next_phase", "delete_timeline_card", "cancel_user_upload", "get_user_upload", "create_timeline_card", "set_objective_status", "list_artifacts", "submit_for_validation", "get_macos_contact_card"]))
+
+#5
+processingStateChanged(true)
+
+#4
+llmSendUserMessage(payload: {
+  "text" : "Begin the onboarding interview."
+})
+
+#3
+llmStatus(status: Sprung.LLMStatus.busy)
+
+#2
+llmUserMessageSent(messageId: "07DF99D6-9D38-42D6-8677-E6DE4D94BD98", payload: {
+  "text" : "Begin the onboarding interview."
+})
+
+#1
+llmStatus(status: Sprung.LLMStatus.idle)
+

@@ -74,11 +74,18 @@ final class DebugSettingsStore {
         }
     }
 
+    var showOnboardingDebugButton: Bool {
+        didSet {
+            defaults.set(showOnboardingDebugButton, forKey: Keys.showOnboardingDebugButton)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let storedLevel = LogLevelSetting(rawValue: defaults.integer(forKey: Keys.debugLogLevel)) ?? .info
         self.logLevelSetting = storedLevel
         self.saveDebugPrompts = defaults.bool(forKey: Keys.saveDebugPrompts)
+        self.showOnboardingDebugButton = defaults.object(forKey: Keys.showOnboardingDebugButton) as? Bool ?? true
 
         // Apply persisted settings to the logging facade on initialization.
         Logger.updateMinimumLevel(storedLevel.loggerLevel)
@@ -89,5 +96,6 @@ final class DebugSettingsStore {
     private enum Keys {
         static let debugLogLevel = "debugLogLevel"
         static let saveDebugPrompts = "saveDebugPrompts"
+        static let showOnboardingDebugButton = "showOnboardingDebugButton"
     }
 }
