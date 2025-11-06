@@ -20,17 +20,20 @@ struct OnboardingMessage: Identifiable, Codable {
     let role: OnboardingMessageRole
     var text: String
     let timestamp: Date
+    let isSystemGenerated: Bool  // True for app-generated trigger messages
 
     init(
         id: UUID = UUID(),
         role: OnboardingMessageRole,
         text: String,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        isSystemGenerated: Bool = false
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.timestamp = timestamp
+        self.isSystemGenerated = isSystemGenerated
     }
 }
 

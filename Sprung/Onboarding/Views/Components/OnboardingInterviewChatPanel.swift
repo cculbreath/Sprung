@@ -143,7 +143,7 @@ struct OnboardingInterviewChatPanel: View {
 
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(coordinator.messages) { message in
+                ForEach(coordinator.messages.filter { !$0.isSystemGenerated }) { message in
                     MessageBubble(message: message)
                         .id(message.id)
                 }

@@ -97,6 +97,10 @@ final class OnboardingInterviewCoordinator {
 
     private(set) var messages: [OnboardingMessage] = []
 
+    // MARK: - Processing State
+
+    private(set) var isProcessingSync: Bool = false
+
     func sendChatMessage(_ text: String) async {
         await chatboxHandler.sendUserMessage(text)
     }
@@ -109,7 +113,6 @@ final class OnboardingInterviewCoordinator {
 
     /// Sync cache access for SwiftUI views
     /// StateCoordinator is the single source of truth with nonisolated(unsafe) sync caches
-    var isProcessingSync: Bool { state.isProcessingSync }
     var isActiveSync: Bool { state.isActiveSync }
     var pendingExtractionSync: OnboardingPendingExtraction? { state.pendingExtractionSync }
     var pendingStreamingStatusSync: String? { state.pendingStreamingStatusSync }
@@ -482,8 +485,9 @@ final class OnboardingInterviewCoordinator {
 
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .processingStateChanged:
-            // Sync cache now maintained by StateCoordinator
+        case .processingStateChanged(let isProcessing):
+            // Sync processing state for UI reactivity
+            self.isProcessingSync = isProcessing
             await syncWizardProgressFromState()
 
         case .streamingStatusUpdated:

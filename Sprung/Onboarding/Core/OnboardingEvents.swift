@@ -80,10 +80,10 @@ enum OnboardingEvent {
     case stateAllowedToolsUpdated(tools: Set<String>)
 
     // MARK: - LLM Topics (§6 spec)
-    case llmUserMessageSent(messageId: String, payload: JSON)
+    case llmUserMessageSent(messageId: String, payload: JSON, isSystemGenerated: Bool = false)
     case llmDeveloperMessageSent(messageId: String, payload: JSON)
     case llmSentToolResponseMessage(messageId: String, payload: JSON)
-    case llmSendUserMessage(payload: JSON)
+    case llmSendUserMessage(payload: JSON, isSystemGenerated: Bool = false)
     case llmSendDeveloperMessage(payload: JSON)
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
