@@ -614,12 +614,13 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
-    func finalizeStreamingMessage(id: UUID, finalText: String) {
+    func finalizeStreamingMessage(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil) {
         streamingMessage = nil
         streamingMessageSync = nil // Update sync cache
 
         if let index = messages.firstIndex(where: { $0.id == id }) {
             messages[index].text = finalText
+            messages[index].toolCalls = toolCalls
             messagesSync = messages // Update sync cache
         }
     }
@@ -1025,10 +1026,11 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Handle streaming message update via event
             updateStreamingMessage(id: id, delta: delta)
 
-        case .streamingMessageFinalized(let id, let finalText):
+        case .streamingMessageFinalized(let id, let finalText, let toolCalls):
             // Handle streaming message finalization via event
-            finalizeStreamingMessage(id: id, finalText: finalText)
-            Logger.info("✅ Streaming message finalized: \(id) (\(finalText.count) chars)", category: .ai)
+            finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
+            let toolInfo = toolCalls.map { " with \($0.count) tool call(s)" } ?? ""
+            Logger.info("✅ Streaming message finalized: \(id) (\(finalText.count) chars\(toolInfo))", category: .ai)
 
         case .llmReasoningSummaryDelta(let delta):
             // Handle reasoning summary delta via event

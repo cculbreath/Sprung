@@ -146,35 +146,51 @@ actor NetworkRouter: OnboardingEventEmitter {
     /// Process a completed response that arrived without streaming deltas
     private func processCompletedResponse(_ response: ResponseModel) async {
         // Extract message content and tool calls from the completed response
+        var completeText = ""
+        var toolCalls: [OnboardingMessage.ToolCallInfo] = []
+
+        // First pass: collect message text and tool calls
         for outputItem in response.output {
             switch outputItem {
             case .message(let message):
                 // Extract the complete text from the message
-                var completeText = ""
                 for contentItem in message.content {
                     if case .outputText(let outputText) = contentItem {
                         completeText += outputText.text
                     }
                 }
 
-                // Emit the message as a single complete event
-                if !completeText.isEmpty {
-                    let messageId = UUID()
-                    await emit(.streamingMessageBegan(id: messageId, text: "", reasoningExpected: false))
-                    await emit(.streamingMessageFinalized(id: messageId, finalText: completeText))
-                    Logger.info("📝 Extracted complete message (\(completeText.count) chars) from completed response", category: .ai)
-                } else {
-                    Logger.warning("⚠️ No text content in LLM response - likely due to toolChoice:required suppressing text output", category: .ai)
-                }
-
             case .functionCall(let toolCall):
-                await processToolCall(toolCall)
+                // Collect tool call info for the assistant message
+                toolCalls.append(OnboardingMessage.ToolCallInfo(
+                    id: toolCall.id ?? UUID().uuidString,
+                    name: toolCall.name,
+                    arguments: toolCall.arguments
+                ))
 
             case .reasoning(let reasoning):
                 await processReasoningItem(reasoning)
 
             default:
                 break
+            }
+        }
+
+        // Emit assistant message with tool calls
+        let messageId = UUID()
+        await emit(.streamingMessageBegan(id: messageId, text: completeText, reasoningExpected: false))
+        await emit(.streamingMessageFinalized(id: messageId, finalText: completeText, toolCalls: toolCalls.isEmpty ? nil : toolCalls))
+
+        if completeText.isEmpty && toolCalls.isEmpty {
+            Logger.warning("⚠️ No text or tool calls in LLM response", category: .ai)
+        } else {
+            Logger.info("📝 Extracted complete message (\(completeText.count) chars, \(toolCalls.count) tool calls) from completed response", category: .ai)
+        }
+
+        // Second pass: process tool calls
+        for outputItem in response.output {
+            if case .functionCall(let toolCall) = outputItem {
+                await processToolCall(toolCall)
             }
         }
     }

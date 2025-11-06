@@ -985,8 +985,18 @@ final class OnboardingInterviewCoordinator {
     /// Submit profile draft and automatically resume tool execution.
     /// Views should call this instead of manually completing and resuming.
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
-        let result = toolRouter.completeApplicantProfileDraft(draft, source: source)
-        await continuationTracker.resumeToolContinuation(from: result)
+        // Close the profile intake UI
+        toolRouter.profileHandler.clearIntake()
+        pendingApplicantProfileIntake = nil
+
+        // Send the profile data as a new user message (not as a tool response)
+        var payload = JSON()
+        payload["text"].string = "Here is my contact information:"
+        payload["profile_data"] = draft.toSafeJSON()
+        payload["source"].string = source == .contacts ? "contacts" : "manual"
+
+        await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        Logger.info("✅ Profile submitted as user message (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
 
     /// Submit profile URL and automatically resume tool execution.

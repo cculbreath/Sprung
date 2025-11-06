@@ -1,0 +1,130 @@
+Sprung Onboarding Event Dump
+Generated: 11/6/2025, 3:20 PM
+================================================================================
+
+Published Event Counts by Topic:
+  Artifact    : 0 events (last: never)
+  LLM         : 8 events (last: 2 minutes ago)
+  Objective   : 0 events (last: never)
+  Phase       : 0 events (last: never)
+  Processing  : 8 events (last: 2 minutes ago)
+  State       : 1 events (last: 3 minutes ago)
+  Timeline    : 0 events (last: never)
+  Tool        : 2 events (last: 3 minutes ago)
+  Toolpane    : 1 events (last: 3 minutes ago)
+  UserInput   : 0 events (last: never)
+
+================================================================================
+
+Recent Events (20):
+
+#20
+processingStateChanged(false)
+
+#19
+waitingStateChanged(nil)
+
+#18
+stateAllowedToolsUpdated(tools: Set(["update_timeline_card", "next_phase", "configure_enabled_sections", "request_raw_file", "submit_for_validation", "extract_document", "create_timeline_card", "set_objective_status", "cancel_user_upload", "validate_applicant_profile", "delete_timeline_card", "persist_data", "get_macos_contact_card", "get_applicant_profile", "get_user_option", "list_artifacts", "get_artifact", "get_user_upload", "reorder_timeline_cards", "display_timeline_entries_for_review"]))
+
+#17
+processingStateChanged(true)
+
+#16
+processingStateChanged(true)
+
+#15
+llmSendUserMessage(payload: {
+  "text" : "I'm ready to begin."
+}, isSystemGenerated: true)
+
+#14
+llmStatus(status: Sprung.LLMStatus.busy)
+
+#13
+llmUserMessageSent(messageId: "EBEB8752-9E63-46EE-8BF6-48ABD310023C", payload: {
+  "text" : "I'm ready to begin."
+}, isSystemGenerated: true)
+
+#12
+toolCallRequested(get_applicant_profile)
+
+#11
+llmStatus(status: Sprung.LLMStatus.idle)
+
+#10
+applicantProfileIntakeRequested(continuationId: 983DCEF9-117F-4ABD-8CBF-174A499E7BA7)
+
+#9
+processingStateChanged(false)
+
+#8
+toolContinuationNeeded(id: 983DCEF9-117F-4ABD-8CBF-174A499E7BA7, toolName: "get_applicant_profile")
+
+#7
+llmToolResponseMessage(payload: {
+  "output" : {
+    "profile" : {
+      "location" : {
+        "postalCode" : "78745",
+        "countryCode" : "US",
+        "address" : "7317 Shadywood Drive",
+        "city" : "Austin",
+        "region" : "TX"
+      },
+      "phone" : "805-234-0847",
+      "url" : "",
+      "email" : "christopherculbreath@mac.com",
+      "profiles" : [
+
+      ],
+      "name" : "Christopher Culbreath",
+      "meta" : null
+    },
+    "status" : "completed",
+    "source" : "contacts"
+  },
+  "callId" : "fc_0980ab8a0056496e00690d107bc93481958a38d000298fc605"
+})
+
+#6
+llmStatus(status: Sprung.LLMStatus.busy)
+
+#5
+processingStateChanged(true)
+
+#4
+llmSentToolResponseMessage(messageId: "E95F8541-8496-4492-A8AB-A420574AE714", payload: {
+  "output" : {
+    "profile" : {
+      "location" : {
+        "postalCode" : "78745",
+        "countryCode" : "US",
+        "address" : "7317 Shadywood Drive",
+        "city" : "Austin",
+        "region" : "TX"
+      },
+      "phone" : "805-234-0847",
+      "url" : "",
+      "email" : "christopherculbreath@mac.com",
+      "profiles" : [
+
+      ],
+      "name" : "Christopher Culbreath",
+      "meta" : null
+    },
+    "status" : "completed",
+    "source" : "contacts"
+  },
+  "callId" : "fc_0980ab8a0056496e00690d107bc93481958a38d000298fc605"
+})
+
+#3
+errorOccurred("Failed to send tool response: The operation couldn’t be completed. (SwiftOpenAI.APIError error 1.)")
+
+#2
+llmStatus(status: Sprung.LLMStatus.error)
+
+#1
+processingStateChanged(false)
+

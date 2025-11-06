@@ -21,19 +21,28 @@ struct OnboardingMessage: Identifiable, Codable {
     var text: String
     let timestamp: Date
     let isSystemGenerated: Bool  // True for app-generated trigger messages
+    var toolCalls: [ToolCallInfo]?  // Tool calls made in this message (for assistant messages)
+
+    struct ToolCallInfo: Codable {
+        let id: String
+        let name: String
+        let arguments: String
+    }
 
     init(
         id: UUID = UUID(),
         role: OnboardingMessageRole,
         text: String,
         timestamp: Date = Date(),
-        isSystemGenerated: Bool = false
+        isSystemGenerated: Bool = false,
+        toolCalls: [ToolCallInfo]? = nil
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.timestamp = timestamp
         self.isSystemGenerated = isSystemGenerated
+        self.toolCalls = toolCalls
     }
 }
 
