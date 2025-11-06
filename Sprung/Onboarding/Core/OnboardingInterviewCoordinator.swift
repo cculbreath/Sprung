@@ -991,8 +991,8 @@ final class OnboardingInterviewCoordinator {
     ) {
         Task {
             continuationTracker.trackPhaseAdvanceContinuation(id: continuationId)
-            await state.setPendingPhaseAdvanceRequest(request)
             // Emit event to notify UI about the request
+            // StateCoordinator will set pendingPhaseAdvanceRequest when reducing this event
             await eventBus.publish(.phaseAdvanceRequested(request: request, continuationId: continuationId))
         }
     }
@@ -1014,9 +1014,8 @@ final class OnboardingInterviewCoordinator {
         // Get the new phase after transition
         let newPhase = await state.phase
 
-        // Clear the request
-        await state.setPendingPhaseAdvanceRequest(nil)
-        // StateCoordinator maintains sync cache
+        // Clear the continuation tracker
+        // Note: StateCoordinator will clear pendingPhaseAdvanceRequest when reducing .phaseTransitionApplied
         continuationTracker.clearPhaseAdvanceContinuation()
 
         // Resume the tool continuation
@@ -1030,8 +1029,10 @@ final class OnboardingInterviewCoordinator {
     func denyPhaseAdvance(feedback: String?) async {
         guard let continuationId = continuationTracker.getPhaseAdvanceContinuationId() else { return }
 
-        await state.setPendingPhaseAdvanceRequest(nil)
-        // StateCoordinator maintains sync cache
+        // Emit event to clear pending phase advance request
+        // StateCoordinator will clear pendingPhaseAdvanceRequest when reducing this event
+        await eventBus.publish(.phaseAdvanceDismissed)
+
         continuationTracker.clearPhaseAdvanceContinuation()
 
         var payload = JSON()

@@ -1013,6 +1013,21 @@ actor StateCoordinator: OnboardingEventEmitter {
                 }
             }
 
+        case .phaseAdvanceRequested(let request, _):
+            // Set pending phase advance request
+            setPendingPhaseAdvanceRequest(request)
+            Logger.info("🟡 Phase advance requested → pending set", category: .ai)
+
+        case .phaseTransitionApplied:
+            // Clear pending phase advance request when transition completes
+            setPendingPhaseAdvanceRequest(nil)
+            Logger.info("🟢 Phase advance applied → pending cleared", category: .ai)
+
+        case .phaseAdvanceDismissed:
+            // Clear pending phase advance request when user dismisses
+            setPendingPhaseAdvanceRequest(nil)
+            Logger.info("🔵 Phase advance dismissed → pending cleared", category: .ai)
+
         default:
             break
         }
