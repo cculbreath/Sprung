@@ -31,6 +31,7 @@ struct PhaseOneScript: PhaseScript {
         "validate_applicant_profile",
         "persist_data",
         "set_objective_status",
+        "configure_enabled_sections",
         "list_artifacts",
         "get_artifact",
         "request_raw_file",
