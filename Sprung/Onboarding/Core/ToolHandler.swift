@@ -118,6 +118,12 @@ final class ToolHandler {
         case .applicantProfileIntakeCleared:
             clearApplicantProfileIntake()
 
+        case .sectionToggleRequested(let request, let continuationId):
+            presentSectionToggle(request, continuationId: continuationId)
+
+        case .sectionToggleCleared(let continuationId):
+            clearSectionToggle(continuationId: continuationId)
+
         default:
             break
         }
@@ -298,6 +304,13 @@ final class ToolHandler {
 
     func presentSectionToggle(_ request: OnboardingSectionToggleRequest, continuationId: UUID) {
         sectionHandler.presentToggleRequest(request, continuationId: continuationId)
+    }
+
+    func clearSectionToggle(continuationId: UUID) {
+        // Clear the section toggle if the continuation ID matches
+        if sectionHandler.pendingSectionToggleRequest?.id == continuationId {
+            sectionHandler.reset()
+        }
     }
 
     func resolveSectionToggle(enabled: [String]) -> (UUID, JSON)? {
