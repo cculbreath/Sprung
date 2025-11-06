@@ -121,8 +121,13 @@ final class SwiftOpenAIClient: LLMClient {
         if lowered.contains("error") || lowered.contains("failed") {
             return true
         }
-        if lowered.contains("http status code") || lowered.contains("request") && lowered.contains("curl") {
+        // HTTP status codes are important, but exclude verbose curl statements
+        if lowered.contains("http status code") {
             return true
+        }
+        // Exclude curl request logs - these contain full JSON payloads
+        if lowered.contains("curl") {
+            return false
         }
         if lowered.contains("response completed") || lowered.contains("usage") {
             return true
