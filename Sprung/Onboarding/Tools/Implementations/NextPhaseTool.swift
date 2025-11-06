@@ -87,39 +87,14 @@ struct NextPhaseTool: InterviewTool {
             proposedOverrides: overrides
         )
 
-        let tokenId = UUID()
-        let token = ContinuationToken(
-            id: tokenId,
-            toolName: name,
-            initialPayload: JSON([
-                "status": "waiting",
-                "tool": name,
-                "message": "Waiting for phase advance decision"
-            ]),
-            uiRequest: nil, // Dialog is shown by coordinator state
-            resumeHandler: { input in
-                if input["approved"].boolValue {
-                    return .immediate(JSON([
-                        "status": "success",
-                        "previous_phase": currentPhase.rawValue,
-                        "new_phase": nextPhase.rawValue,
-                        "message": "Phase transition approved and completed"
-                    ]))
-                } else {
-                    var res = JSON()
-                    res["status"].string = "denied"
-                    res["message"].string = "Phase advance denied by user"
-                    if let fb = input["feedback"].string {
-                        res["feedback"].string = fb
-                    }
-                    return .immediate(res)
-                }
-            }
-        )
+        // Emit UI request to show the phase advance dialog
+        await coordinator.eventBus.publish(.phaseAdvanceRequested(request: request, continuationId: UUID()))
 
-        // Present the dialog via coordinator
-        await coordinator.presentPhaseAdvanceRequest(request, continuationId: tokenId)
+        // Return immediately - we'll handle the decision as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Phase advance request has been presented to the user"
 
-        return .waiting(message: "Waiting for phase advance decision", continuation: token)
+        return .immediate(response)
     }
 }

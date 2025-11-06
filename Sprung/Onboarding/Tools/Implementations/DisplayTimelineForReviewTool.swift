@@ -58,47 +58,14 @@ struct DisplayTimelineForReviewTool: InterviewTool {
             message: summary
         )
 
-        // Create continuation with the same resume handler as SubmitForValidationTool
-        let continuationId = UUID()
+        // Emit UI request to show the validation prompt
+        await coordinator.eventBus.publish(.validationPromptRequested(prompt: validationPrompt, continuationId: UUID()))
 
-        var waitingPayload = JSON()
-        waitingPayload["status"].string = "waiting"
-        waitingPayload["tool"].string = name
-        waitingPayload["message"].string = "Waiting for timeline review response"
+        // Return immediately - we'll handle the validation response as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Timeline review prompt has been presented to the user"
 
-        let token = ContinuationToken(
-            id: continuationId,
-            toolName: name,
-            initialPayload: waitingPayload,
-            uiRequest: .validationPrompt(validationPrompt),
-            resumeHandler: { input in
-                if input["cancelled"].boolValue {
-                    return .error(.userCancelled)
-                }
-
-                guard let status = input["status"].string else {
-                    return .error(.invalidParameters("status is required"))
-                }
-
-                var response = JSON()
-                response["status"].string = status
-
-                if input["updatedData"].exists() {
-                    response["updatedData"] = input["updatedData"]
-                }
-
-                if input["changes"].exists() {
-                    response["changes"] = input["changes"]
-                }
-
-                if let notes = input["notes"].string {
-                    response["notes"].string = notes
-                }
-
-                return .immediate(response)
-            }
-        )
-
-        return .waiting(message: "Waiting for timeline review response", continuation: token)
+        return .immediate(response)
     }
 }

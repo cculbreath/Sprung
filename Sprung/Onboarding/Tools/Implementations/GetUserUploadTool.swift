@@ -70,7 +70,6 @@ struct GetUserUploadTool: InterviewTool {
     func execute(_ params: JSON) async throws -> ToolResult {
         let requestPayload = try UploadRequestPayload(json: params)
         let requestId = UUID()
-        let continuationId = UUID()
 
         let uploadRequest = OnboardingUploadRequest(
             id: requestId,
@@ -78,57 +77,15 @@ struct GetUserUploadTool: InterviewTool {
             metadata: requestPayload.metadata
         )
 
-        var waitingPayload = JSON()
-        waitingPayload["status"].string = "waiting"
-        waitingPayload["tool"].string = name
-        waitingPayload["message"].string = requestPayload.waitingMessage
-        waitingPayload["upload_kind"].string = requestPayload.kind.rawValue
-        waitingPayload["cancel_tool"].string = "cancel_user_upload"
-        if let targetKey = requestPayload.targetKey {
-            waitingPayload["target_key"].string = targetKey
-        }
-        if let cancelMessage = requestPayload.metadata.cancelMessage {
-            waitingPayload["cancel_message"].string = cancelMessage
-        }
+        // Emit UI request to show the upload picker
+        await coordinator.eventBus.publish(.uploadRequestPresented(request: uploadRequest, continuationId: UUID()))
 
-        let token = ContinuationToken(
-            id: continuationId,
-            toolName: name,
-            initialPayload: waitingPayload,
-            uiRequest: .uploadRequest(uploadRequest),
-            resumeHandler: { input in
-                do {
-                    let userResponse = try UploadUserResponse(json: input)
+        // Return immediately - we'll handle the upload submission as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Upload picker has been presented to the user"
 
-                    switch userResponse.status {
-                    case .skipped:
-                        var response = JSON()
-                        response["status"].string = "skipped"
-                        response["uploads"] = JSON([])
-                        if let target = userResponse.targetKey {
-                            response["targetKey"].string = target
-                        }
-                        return .immediate(response)
-                    case .uploaded(let files):
-                        let processed = try files.map { try storage.processFile(at: $0) }
-                        let uploadsJSON = processed.map { $0.toJSON() }
-                        var response = JSON()
-                        response["status"].string = "uploaded"
-                        response["uploads"] = JSON(uploadsJSON)
-                        if let target = userResponse.targetKey {
-                            response["targetKey"].string = target
-                        }
-                        return .immediate(response)
-                    case .failed(let message):
-                        return .error(.executionFailed(message))
-                    }
-                } catch {
-                    return .error(.executionFailed("Upload failed: \(error.localizedDescription)"))
-                }
-            }
-        )
-
-        return .waiting(message: requestPayload.waitingMessage, continuation: token)
+        return .immediate(response)
     }
 }
 

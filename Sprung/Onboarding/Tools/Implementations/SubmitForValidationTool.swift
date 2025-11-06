@@ -46,48 +46,16 @@ struct SubmitForValidationTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         let payload = try ValidationPayload(json: params)
-        let continuationId = UUID()
 
-        var waitingPayload = JSON()
-        waitingPayload["status"].string = "waiting"
-        waitingPayload["tool"].string = name
-        waitingPayload["message"].string = "Waiting for validation response"
-        waitingPayload["validation_type"].string = payload.validationType
+        // Emit UI request to show the validation prompt
+        await coordinator.eventBus.publish(.validationPromptRequested(prompt: payload.toValidationPrompt(), continuationId: UUID()))
 
-        let token = ContinuationToken(
-            id: continuationId,
-            toolName: name,
-            initialPayload: waitingPayload,
-            uiRequest: .validationPrompt(payload.toValidationPrompt()),
-            resumeHandler: { input in
-                if input["cancelled"].boolValue {
-                    return .error(.userCancelled)
-                }
+        // Return immediately - we'll handle the validation response as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Validation prompt has been presented to the user"
 
-                guard let status = input["status"].string else {
-                    return .error(.invalidParameters("status is required"))
-                }
-
-                var response = JSON()
-                response["status"].string = status
-
-                if input["updatedData"].exists() {
-                    response["updatedData"] = input["updatedData"]
-                }
-
-                if input["changes"].exists() {
-                    response["changes"] = input["changes"]
-                }
-
-                if let notes = input["notes"].string {
-                    response["notes"].string = notes
-                }
-
-                return .immediate(response)
-            }
-        )
-
-        return .waiting(message: "Waiting for validation response", continuation: token)
+        return .immediate(response)
     }
 }
 

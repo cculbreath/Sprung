@@ -60,44 +60,24 @@ struct ConfigureEnabledSectionsTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         let payload = try SectionTogglePayload(json: params)
-        let tokenId = UUID()
-
-        var waitingPayload = JSON()
-        waitingPayload["status"].string = "waiting"
-        waitingPayload["tool"].string = name
-        waitingPayload["message"].string = "Waiting for user to configure enabled sections"
-        waitingPayload["action_required"].string = "section_toggle"
+        let requestId = UUID()
 
         let request = OnboardingSectionToggleRequest(
-            id: tokenId,
+            id: requestId,
             proposedSections: payload.proposedSections,
             availableSections: payload.availableSections,
             rationale: payload.rationale
         )
 
-        let token = ContinuationToken(
-            id: tokenId,
-            toolName: name,
-            initialPayload: waitingPayload,
-            uiRequest: .sectionToggle(request),
-            resumeHandler: { input in
-                if input["cancelled"].boolValue {
-                    return .error(.userCancelled)
-                }
+        // Emit UI request to show the section toggle UI
+        await coordinator.eventBus.publish(.sectionToggleRequested(request: request, continuationId: UUID()))
 
-                guard let enabledArray = input["enabledSections"].arrayObject as? [String] else {
-                    return .error(.invalidParameters("enabledSections must be an array of strings"))
-                }
+        // Return immediately - we'll handle the section selection as a new user message
+        var response = JSON()
+        response["status"].string = "awaiting_user_input"
+        response["message"].string = "Section toggle UI has been presented to the user"
 
-                var response = JSON()
-                response["status"].string = "confirmed"
-                response["enabledSections"] = JSON(enabledArray)
-                response["timestamp"].string = self.dateFormatter.string(from: Date())
-                return .immediate(response)
-            }
-        )
-
-        return .waiting(message: "Waiting for user to configure enabled sections", continuation: token)
+        return .immediate(response)
     }
 }
 
