@@ -97,41 +97,43 @@ Reasoning
 Empty reasoning item
 
 assistant
-Welcome—great to have you here. We’ll start by capturing your basic contact details. A short intake will appear where you can upload a resume, paste a resume link, import from Contacts, or enter info manually. Once you complete the form to the left, we can continue to your career timeline.
+Welcome! Let’s get started.
+
+We’ll begin with a quick profile so we can reuse your details across future resumes and cover letters. Once the profile form appears to the left, please complete it—you can upload a resume, paste a resume URL, import from Contacts, or enter details manually. Once you complete the form to the left we can continue.
 
 ==================
 Properties
 Created
-Nov 5, 2025 at 8:22 PM
+Nov 5, 2025 at 9:40 PM
 
 ID
-resp_0826166c128d2a9f00690c06527bc881938d728207420e5c32
+resp_0fb79700e07771a600690c189c5ae08195ab835c863502d38b
 
 Model
 gpt-5-2025-08-07
 
 Tokens
-3,817 total
+3,701 total
 
 
 Functions
+get_macos_contact_card()
+extract_document()
+get_applicant_profile()
+validate_applicant_profile()
+persist_data()
+get_user_option()
+request_raw_file()
+set_objective_status()
 submit_for_validation()
-delete_timeline_card()
+create_timeline_card()
 update_timeline_card()
+delete_timeline_card()
+get_artifact()
+get_user_upload()
+reorder_timeline_cards()
 next_phase()
 generate_knowledge_card()
-get_artifact()
-reorder_timeline_cards()
-request_raw_file()
-extract_document()
-get_user_option()
-create_timeline_card()
-get_applicant_profile()
-set_objective_status()
-get_user_upload()
-persist_data()
-get_macos_contact_card()
-validate_applicant_profile()
 
 
 Configuration
