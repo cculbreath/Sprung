@@ -490,6 +490,7 @@ final class OnboardingInterviewCoordinator {
         case .processingStateChanged(let isProcessing):
             // Sync processing state for UI reactivity
             self.isProcessingSync = isProcessing
+            Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessingSync=\(isProcessing)", category: .ai)
             await syncWizardProgressFromState()
 
         case .streamingStatusUpdated:
@@ -584,10 +585,13 @@ final class OnboardingInterviewCoordinator {
 
         await phaseTransitionController.registerObjectivesForCurrentPhase()
 
+        // Subscribe to state updates BEFORE starting interview
+        // This ensures we receive the initial processingStateChanged(true) event
+        subscribeToStateUpdates()
+
         // Start interview through lifecycle controller
         let success = await lifecycleController.startInterview()
         if success {
-            subscribeToStateUpdates()
             // Get the orchestrator created by lifecycleController
             self.orchestrator = lifecycleController.orchestrator
             // StateCoordinator maintains sync cache for isActive

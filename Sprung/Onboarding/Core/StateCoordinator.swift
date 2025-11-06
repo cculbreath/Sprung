@@ -933,9 +933,14 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
         case .processingStateChanged(let processing):
-            isProcessing = processing
-            isProcessingSync = processing
-            Logger.debug("StateCoordinator processing state (event): \(processing)", category: .ai)
+            // Only update if state actually changed to avoid event loops
+            if isProcessing != processing {
+                isProcessing = processing
+                isProcessingSync = processing
+                // Rebroadcast so OnboardingInterviewCoordinator receives the update
+                await eventBus.publish(.processingStateChanged(processing))
+                Logger.info("🔄 Processing state changed to: \(processing) (from external event) → UI glow/spinner: \(processing ? "ON ✨" : "OFF")", category: .ai)
+            }
 
         case .waitingStateChanged(let waiting):
             // Convert string to WaitingState enum and update state
@@ -1008,13 +1013,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                 isProcessing = newProcessingState
                 isProcessingSync = newProcessingState // Update sync cache
                 await eventBus.publish(.processingStateChanged(newProcessingState))
-                Logger.debug("StateCoordinator emitted processingStateChanged: \(newProcessingState)", category: .ai)
+                Logger.info("🔄 Processing state changed to: \(newProcessingState) → UI glow/spinner: \(newProcessingState ? "ON ✨" : "OFF")", category: .ai)
             }
 
         case .streamingMessageBegan(let id, let text, let reasoningExpected):
             // Handle streaming message begin via event
             beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
-            Logger.debug("StateCoordinator began streaming message: \(id)", category: .ai)
+            Logger.info("💬 Streaming message began: \(id) - Welcome message should appear now", category: .ai)
 
         case .streamingMessageUpdated(let id, let delta):
             // Handle streaming message update via event
@@ -1023,7 +1028,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .streamingMessageFinalized(let id, let finalText):
             // Handle streaming message finalization via event
             finalizeStreamingMessage(id: id, finalText: finalText)
-            Logger.debug("StateCoordinator finalized streaming message: \(id)", category: .ai)
+            Logger.info("✅ Streaming message finalized: \(id) (\(finalText.count) chars)", category: .ai)
 
         case .llmReasoningSummaryDelta(let delta):
             // Handle reasoning summary delta via event

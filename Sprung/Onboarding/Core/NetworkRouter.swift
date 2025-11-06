@@ -163,6 +163,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                     await emit(.streamingMessageBegan(id: messageId, text: "", reasoningExpected: false))
                     await emit(.streamingMessageFinalized(id: messageId, finalText: completeText))
                     Logger.info("📝 Extracted complete message (\(completeText.count) chars) from completed response", category: .ai)
+                } else {
+                    Logger.warning("⚠️ No text content in LLM response - likely due to toolChoice:required suppressing text output", category: .ai)
                 }
 
             case .functionCall(let toolCall):
