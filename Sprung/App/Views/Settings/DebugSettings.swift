@@ -23,11 +23,22 @@ struct DebugSettingsView: View {
         )
     }
 
+    private var showDebugButtonBinding: Binding<Bool> {
+        Binding(
+            get: { debugSettings.showOnboardingDebugButton },
+            set: { debugSettings.showOnboardingDebugButton = $0 }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Save debug files to Downloads", isOn: saveDebugPromptsBinding)
                 .toggleStyle(.switch)
                 .help("When enabled, key debug transcripts and payloads are written to ~/Downloads for later analysis.")
+
+            Toggle("Show debug button in onboarding interview", isOn: showDebugButtonBinding)
+                .toggleStyle(.switch)
+                .help("When enabled, shows the ladybug button in the bottom-right corner of the onboarding interview window for viewing event logs.")
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Debug Log Level")

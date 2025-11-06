@@ -6,6 +6,7 @@ struct OnboardingInterviewView: View {
     @Environment(ToolHandler.self) private var toolRouter
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(DebugSettingsStore.self) private var debugSettings
     private let onboardingFallbackModelId = "openai/gpt-5"
 
     @State private var viewModel = OnboardingInterviewViewModel(
@@ -217,7 +218,9 @@ struct OnboardingInterviewView: View {
             }
             #if DEBUG
             .overlay(alignment: .bottomTrailing) {
-                debugButton
+                if debugSettings.showOnboardingDebugButton {
+                    debugButton
+                }
             }
             .sheet(isPresented: $showEventDump) {
                 EventDumpView(coordinator: coordinator)

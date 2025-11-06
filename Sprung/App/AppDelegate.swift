@@ -301,7 +301,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    @objc func showOnboardingInterviewWindow() {
+    @MainActor @objc func showOnboardingInterviewWindow() {
         Logger.info(
             "🎬 showOnboardingInterviewWindow invoked (existing window: \(onboardingInterviewWindow != nil))",
             category: .ui
@@ -318,6 +318,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let appEnvironment,
                let enabledLLMStore {
                 let onboardingService = onboardingCoordinator ?? appEnvironment.onboardingCoordinator
+                let debugSettingsStore = appEnvironment.appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
                 let root = interviewView
                     .modelContainer(modelContainer)
                     .environment(appEnvironment)
@@ -328,6 +329,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.experienceDefaultsStore)
                     .environment(onboardingService)
                     .environment(onboardingService.toolRouter)
+                    .environment(debugSettingsStore)
 
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {

@@ -122,9 +122,8 @@ enum EventTopic: String, CaseIterable {
 
 /// Event bus that manages event distribution using AsyncStream
 actor EventCoordinator {
-    // Stream continuations for each topic
-    private var streamContinuations: [EventTopic: AsyncStream<OnboardingEvent>.Continuation] = [:]
-    private var streams: [EventTopic: AsyncStream<OnboardingEvent>] = [:]
+    // Broadcast continuations: each topic has multiple subscriber continuations
+    private var subscriberContinuations: [EventTopic: [UUID: AsyncStream<OnboardingEvent>.Continuation]] = [:]
 
     // Event history for debugging
     private var eventHistory: [OnboardingEvent] = []
@@ -140,58 +139,75 @@ actor EventCoordinator {
     }
 
     init() {
-        // Initialize streams for each topic
+        // Initialize subscriber dictionaries for each topic
         for topic in EventTopic.allCases {
-            let (stream, continuation) = AsyncStream<OnboardingEvent>.makeStream(
-                bufferingPolicy: .bufferingNewest(50)  // Buffer up to 50 events per topic
-            )
-            streams[topic] = stream
-            streamContinuations[topic] = continuation
+            subscriberContinuations[topic] = [:]
             metrics.publishedCount[topic] = 0
         }
 
-        Logger.info("📡 EventCoordinator initialized with AsyncStream architecture", category: .ai)
+        Logger.info("📡 EventCoordinator initialized with AsyncStream broadcast architecture", category: .ai)
     }
 
     deinit {
-        // Clean up continuations
-        for continuation in streamContinuations.values {
-            continuation.finish()
+        // Clean up all continuations
+        for continuations in subscriberContinuations.values {
+            for continuation in continuations.values {
+                continuation.finish()
+            }
         }
     }
 
     /// Subscribe to events for a specific topic
+    /// Each subscriber gets their own stream that receives ALL events for the topic
     func stream(topic: EventTopic) -> AsyncStream<OnboardingEvent> {
-        guard let stream = streams[topic] else {
-            Logger.error("[EventBus] Stream not found for topic: \(topic)", category: .ai)
-            return AsyncStream { _ in }
+        let subscriberId = UUID()
+        let stream = AsyncStream<OnboardingEvent>(bufferingPolicy: .bufferingNewest(50)) { continuation in
+            Task { [weak self] in
+                // Register this continuation for the topic
+                await self?.registerSubscriber(subscriberId, continuation: continuation, for: topic)
+            }
+
+            continuation.onTermination = { [weak self] _ in
+                Task { [weak self] in
+                    await self?.unregisterSubscriber(subscriberId, for: topic)
+                }
+            }
         }
-        Logger.debug("[EventBus] Subscriber connected to topic: \(topic.rawValue)", category: .ai)
+
+        Logger.debug("[EventBus] Subscriber \(subscriberId) connected to topic: \(topic.rawValue)", category: .ai)
         return stream
+    }
+
+    private func registerSubscriber(_ id: UUID, continuation: AsyncStream<OnboardingEvent>.Continuation, for topic: EventTopic) {
+        subscriberContinuations[topic, default: [:]][id] = continuation
+    }
+
+    private func unregisterSubscriber(_ id: UUID, for topic: EventTopic) {
+        subscriberContinuations[topic]?[id] = nil
     }
 
     /// Subscribe to all events (for compatibility/debugging)
     func streamAll() -> AsyncStream<OnboardingEvent> {
-        // Create streams for all topics upfront
-        let topicStreams = EventTopic.allCases.compactMap { topic in
-            streams[topic]
-        }
+        let subscriberId = UUID()
+        let stream = AsyncStream<OnboardingEvent>(bufferingPolicy: .bufferingNewest(50)) { continuation in
+            Task { [weak self] in
+                // Register this continuation for ALL topics
+                for topic in EventTopic.allCases {
+                    await self?.registerSubscriber(subscriberId, continuation: continuation, for: topic)
+                }
+            }
 
-        return AsyncStream { continuation in
-            Task {
-                // Merge all topic streams
-                await withTaskGroup(of: Void.self) { group in
-                    for stream in topicStreams {
-                        group.addTask {
-                            for await event in stream {
-                                continuation.yield(event)
-                            }
-                        }
+            continuation.onTermination = { [weak self] _ in
+                Task { [weak self] in
+                    for topic in EventTopic.allCases {
+                        await self?.unregisterSubscriber(subscriberId, for: topic)
                     }
                 }
-                continuation.finish()
             }
         }
+
+        Logger.debug("[EventBus] Subscriber \(subscriberId) connected to ALL topics", category: .ai)
+        return stream
     }
 
     /// Publish an event to its appropriate topic
@@ -211,11 +227,13 @@ actor EventCoordinator {
             eventHistory.removeFirst(eventHistory.count - maxHistorySize)
         }
 
-        // Send to the appropriate stream
-        if let continuation = streamContinuations[topic] {
-            continuation.yield(event)
+        // Broadcast to ALL subscriber continuations for this topic
+        if let continuations = subscriberContinuations[topic] {
+            for continuation in continuations.values {
+                continuation.yield(event)
+            }
         } else {
-            Logger.warning("[EventBus] No stream for topic: \(topic)", category: .ai)
+            Logger.warning("[EventBus] No subscribers for topic: \(topic)", category: .ai)
         }
     }
 
