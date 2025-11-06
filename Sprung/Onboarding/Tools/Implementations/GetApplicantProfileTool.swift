@@ -42,8 +42,9 @@ struct GetApplicantProfileTool: InterviewTool {
                 // Return the profile data from user input
                 var response = JSON()
                 response["status"].string = "completed"
-                response["profile"] = input["profile"]
-                response["source"].string = input["source"].stringValue
+                // ProfileInteractionHandler sends data as "data" key, not "profile"
+                response["profile"] = input["data"]
+                response["source"].string = input["mode"].stringValue
                 return .immediate(response)
             }
         )
