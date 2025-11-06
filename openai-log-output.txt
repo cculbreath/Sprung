@@ -85,13 +85,8 @@ Stay on a first-name basis only after the coordinator confirms the applicant pro
 When the profile is persisted, acknowledge that their details are stored for future resume and cover-letter drafts and let them know edits remain welcome—avoid finality phrases like "lock it in".
 
 Input
-User
-Hello! I'm ready to begin the onboarding interview.
-
 Developer
-State update:
-Phase: Phase 1: Core Facts
-Allowed tools: [cancel_user_upload, create_timeline_card, delete_timeline_card, extract_document, get_applicant_profile, get_artifact, get_macos_contact_card, get_user_option, get_user_upload, list_artifacts, next_phase, persist_data, reorder_timeline_cards, request_raw_file, set_objective_status, submit_for_validation, update_timeline_card, validate_applicant_profile]
+Greet the user warmly without using their name. For example: "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later." And immediately use the get_applicant_profile() tool to begin the applicant interview.
 
 Output
 
@@ -104,40 +99,43 @@ No output
 ==================
 Properties
 Created
-Nov 5, 2025 at 10:06 PM
+Nov 6, 2025 at 6:10 AM
 
 ID
-resp_0260fd480136e62800690c1ed02e648196b093c9535277709e
+resp_0a5bfb8985a0895e00690c90485e78819487a4cdd6c58de2fe
 
 Model
 gpt-5-2025-08-07
 
 Tokens
-4,406 total
+3,737 total
 
 
 Functions
-get_macos_contact_card()
-delete_timeline_card()
-extract_document()
-get_artifact()
-persist_data()
 reorder_timeline_cards()
 next_phase()
 get_user_option()
+get_macos_contact_card()
+extract_document()
+get_applicant_profile()
+create_timeline_card()
+submit_for_validation()
+get_user_upload()
+validate_applicant_profile()
+get_artifact()
+delete_timeline_card()
+request_raw_file()
+persist_data()
 set_objective_status()
 update_timeline_card()
-create_timeline_card()
-get_applicant_profile()
-request_raw_file()
-submit_for_validation()
-validate_applicant_profile()
-get_user_upload()
 
 
 Configuration
 Response
 text
+
+Tool choice
+get_applicant_profile
 
 Reasoning effort
 medium
