@@ -172,6 +172,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             ("applicant_profile", "Applicant profile objective"),
             ("skeleton_timeline", "Skeleton timeline objective"),
             ("enabled_sections", "Enabled sections objective"),
+            ("dossier_seed", "Dossier seed questions captured"),
             ("contact_source_selected", "Contact source selected"),
             ("contact_data_collected", "Contact data collected"),
             ("contact_data_validated", "Contact data validated"),
