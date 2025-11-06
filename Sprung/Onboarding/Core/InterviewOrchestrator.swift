@@ -52,7 +52,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
 
     // MARK: - Interview Control
 
-    func startInterview() async throws {
+    /// Initialize and subscribe to events, but don't send the initial message yet
+    func initializeSubscriptions() async {
         isActive = true
         await llmMessenger.activate()
 
@@ -60,12 +61,30 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         await llmMessenger.startEventSubscriptions()
         // Note: Tool subscription now handled by ToolExecutionCoordinator
 
+        Logger.info("📡 InterviewOrchestrator subscriptions initialized", category: .ai)
+    }
+
+    /// Send the initial message to start the interview
+    func sendInitialMessage() async {
+        guard isActive else {
+            Logger.warning("InterviewOrchestrator not active, cannot send initial message", category: .ai)
+            return
+        }
+
         await emit(.processingStateChanged(true))
 
-        // Emit message request event (§4.3)
+        // Send initial greeting message - LLM will respond with welcome
+        // No tool forcing here - let the LLM respond naturally
         var payload = JSON()
-        payload["text"].string = "Begin the onboarding interview."
+        payload["text"].string = "Hello! I'm ready to begin the onboarding interview."
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+
+        Logger.info("📤 Initial interview message sent", category: .ai)
+    }
+
+    func startInterview() async throws {
+        await initializeSubscriptions()
+        await sendInitialMessage()
     }
 
     func endInterview() {

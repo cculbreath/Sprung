@@ -72,11 +72,17 @@ final class InterviewLifecycleController {
         let orchestrator = makeOrchestrator(service: service, systemPrompt: systemPrompt)
         self.orchestrator = orchestrator
 
-        // Start event subscriptions for all handlers
+        // Initialize orchestrator subscriptions FIRST
+        // This ensures LLMMessenger is subscribed before we publish allowed tools
+        await orchestrator.initializeSubscriptions()
+
+        // Start event subscriptions for all other handlers
         await chatboxHandler.startEventSubscriptions()
         await toolExecutionCoordinator.startEventSubscriptions()
         await state.startEventSubscriptions()
         await toolRouter.startEventSubscriptions()
+
+        // NOW publish allowed tools - LLMMessenger is already subscribed
         await state.publishAllowedToolsNow()
 
         // Start workflow engine
@@ -96,15 +102,9 @@ final class InterviewLifecycleController {
         artifactPersistenceHandler = persistenceHandler
         await persistenceHandler.start()
 
-        // Start the interview orchestrator
-        Task {
-            do {
-                try await orchestrator.startInterview()
-            } catch {
-                Logger.error("Interview failed: \(error)", category: .ai)
-                await endInterview()
-            }
-        }
+        // Finally, send the initial message to start the conversation
+        // At this point, LLMMessenger is subscribed and has received allowed tools
+        await orchestrator.sendInitialMessage()
 
         return true
     }
