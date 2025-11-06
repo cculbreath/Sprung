@@ -342,6 +342,7 @@ final class OnboardingInterviewCoordinator {
         toolRegistry.register(SetObjectiveStatusTool(coordinator: self))
         toolRegistry.register(NextPhaseTool(coordinator: self))
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: self))
+        toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: self))
 
         if let agent = knowledgeCardAgent {
             toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))

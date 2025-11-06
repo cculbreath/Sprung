@@ -36,6 +36,7 @@ enum ToolUIRequest {
     case uploadRequest(OnboardingUploadRequest)
     case validationPrompt(OnboardingValidationPrompt)
     case applicantProfileIntake
+    case sectionToggle(OnboardingSectionToggleRequest)
 }
 
 struct ContinuationToken {

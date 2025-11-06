@@ -45,6 +45,8 @@ enum OnboardingEvent {
     case validationPromptCleared(continuationId: UUID)
     case applicantProfileIntakeRequested(continuationId: UUID)
     case applicantProfileIntakeCleared
+    case sectionToggleRequested(request: OnboardingSectionToggleRequest, continuationId: UUID)
+    case sectionToggleCleared(continuationId: UUID)
     case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest, continuationId: UUID)
     case phaseAdvanceDismissed
 
@@ -274,7 +276,8 @@ actor EventCoordinator {
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
-             .applicantProfileIntakeRequested, .applicantProfileIntakeCleared:
+             .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
+             .sectionToggleRequested, .sectionToggleCleared:
             return .toolpane
 
         // Timeline events
@@ -355,6 +358,10 @@ actor EventCoordinator {
             description = "Profile intake requested"
         case .applicantProfileIntakeCleared:
             description = "Profile intake cleared"
+        case .sectionToggleRequested:
+            description = "Section toggle requested"
+        case .sectionToggleCleared:
+            description = "Section toggle cleared"
         case .phaseAdvanceRequested:
             description = "Phase advance requested"
         case .phaseAdvanceDismissed:
