@@ -1,0 +1,59 @@
+Sprung Onboarding Event Dump
+Generated: 11/6/2025, 6:12 AM
+================================================================================
+
+Published Event Counts by Topic:
+  Artifact    : 0 events (last: never)
+  LLM         : 4 events (last: 1 minute ago)
+  Objective   : 0 events (last: never)
+  Phase       : 0 events (last: never)
+  Processing  : 3 events (last: 2 minutes ago)
+  State       : 1 events (last: 2 minutes ago)
+  Timeline    : 0 events (last: never)
+  Tool        : 2 events (last: 1 minute ago)
+  Toolpane    : 1 events (last: 1 minute ago)
+  UserInput   : 0 events (last: never)
+
+================================================================================
+
+Recent Events (11):
+
+#11
+processingStateChanged(false)
+
+#10
+waitingStateChanged(nil)
+
+#9
+stateAllowedToolsUpdated(tools: Set(["delete_timeline_card", "validate_applicant_profile", "extract_document", "request_raw_file", "set_objective_status", "update_timeline_card", "cancel_user_upload", "submit_for_validation", "get_user_upload", "get_user_option", "get_artifact", "get_macos_contact_card", "create_timeline_card", "persist_data", "get_applicant_profile", "next_phase", "list_artifacts", "reorder_timeline_cards"]))
+
+#8
+processingStateChanged(true)
+
+#7
+llmSendDeveloperMessage(payload: {
+  "text" : "Greet the user warmly without using their name. For example: \"Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.\" And immediately use the get_applicant_profile() tool to begin the applicant interview.",
+  "forceToolName" : "get_applicant_profile"
+})
+
+#6
+llmStatus(status: Sprung.LLMStatus.busy)
+
+#5
+llmDeveloperMessageSent(messageId: "8E58086B-B114-47B9-B321-5507D200497F", payload: {
+  "text" : "Greet the user warmly without using their name. For example: \"Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.\" And immediately use the get_applicant_profile() tool to begin the applicant interview.",
+  "forceToolName" : "get_applicant_profile"
+})
+
+#4
+toolCallRequested(get_applicant_profile)
+
+#3
+llmStatus(status: Sprung.LLMStatus.idle)
+
+#2
+applicantProfileIntakeRequested(continuationId: 72872642-698B-43FD-9966-7A1CDE26301E)
+
+#1
+toolContinuationNeeded(id: 72872642-698B-43FD-9966-7A1CDE26301E, toolName: "get_applicant_profile")
+
