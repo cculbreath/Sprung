@@ -12,6 +12,7 @@ import AppKit
 struct EventDumpView: View {
     let coordinator: OnboardingInterviewCoordinator
 
+    @Environment(\.dismiss) private var dismiss
     @State private var events: [String] = []
     @State private var metricsText: String = ""
 
@@ -79,6 +80,12 @@ struct EventDumpView: View {
             }
             .navigationTitle("Event Dump")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+
                 ToolbarItem(placement: .automatic) {
                     Button {
                         exportEventDump()
@@ -88,13 +95,13 @@ struct EventDumpView: View {
                     .help("Export event dump to a text file")
                 }
 
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .automatic) {
                     Button("Refresh") {
                         loadEvents()
                     }
                 }
 
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .destructiveAction) {
                     Button("Clear History") {
                         Task {
                             await coordinator.clearEventHistory()

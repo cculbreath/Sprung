@@ -95,9 +95,7 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Chat Messages
 
-    var messages: [OnboardingMessage] {
-        state.messagesSync
-    }
+    private(set) var messages: [OnboardingMessage] = []
 
     func sendChatMessage(_ text: String) async {
         await chatboxHandler.sendUserMessage(text)
@@ -519,6 +517,11 @@ final class OnboardingInterviewCoordinator {
         case .llmStatus:
             // Sync cache now maintained by StateCoordinator
             break
+
+        case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized,
+             .llmUserMessageSent:
+            // Sync messages from StateCoordinator to trigger UI updates
+            messages = await state.messages
 
         default:
             break

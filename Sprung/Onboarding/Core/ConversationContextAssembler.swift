@@ -31,29 +31,24 @@ actor ConversationContextAssembler {
     /// Build input items for a user message
     func buildForUserMessage(
         text: String,
-        systemPrompt: String,
         allowedTools: Set<String>
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. System prompt
-        items.append(.message(InputMessage(
-            role: "developer",
-            content: .text(systemPrompt)
-        )))
-
-        // 2. State cues developer message
+        // 1. State cues developer message
         let stateCues = await buildStateCues(allowedTools: allowedTools)
-        items.append(.message(InputMessage(
-            role: "developer",
-            content: .text(stateCues)
-        )))
+        if !stateCues.isEmpty {
+            items.append(.message(InputMessage(
+                role: "developer",
+                content: .text(stateCues)
+            )))
+        }
 
-        // 3. Rolling conversation history (last N turns)
+        // 2. Rolling conversation history (last N turns)
         let conversationItems = await buildConversationHistory()
         items.append(contentsOf: conversationItems)
 
-        // 4. Current user message
+        // 3. Current user message
         items.append(.message(InputMessage(
             role: "user",
             content: .text(text)
@@ -66,22 +61,14 @@ actor ConversationContextAssembler {
     /// Build input items for a developer message
     func buildForDeveloperMessage(
         text: String,
-        systemPrompt: String,
-        allowedTools: Set<String>
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. System prompt (optional - may be omitted for developer-only messages)
-        items.append(.message(InputMessage(
-            role: "developer",
-            content: .text(systemPrompt)
-        )))
-
-        // 2. Rolling conversation history
+        // 1. Rolling conversation history
         let conversationItems = await buildConversationHistory()
         items.append(contentsOf: conversationItems)
 
-        // 3. Current developer message
+        // 2. Current developer message
         items.append(.message(InputMessage(
             role: "developer",
             content: .text(text)
@@ -94,22 +81,15 @@ actor ConversationContextAssembler {
     /// Build input items for a tool response
     func buildForToolResponse(
         output: JSON,
-        callId: String,
-        systemPrompt: String
+        callId: String
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. System prompt
-        items.append(.message(InputMessage(
-            role: "developer",
-            content: .text(systemPrompt)
-        )))
-
-        // 2. Rolling conversation history
+        // 1. Rolling conversation history
         let conversationItems = await buildConversationHistory()
         items.append(contentsOf: conversationItems)
 
-        // 3. Tool response
+        // 2. Tool response
         let outputString = output.rawString() ?? "{}"
         items.append(.functionToolCallOutput(FunctionToolCallOutput(
             callId: callId,
@@ -131,7 +111,7 @@ actor ConversationContextAssembler {
         var cues: [String] = []
 
         // Phase info
-        cues.append("Current phase: \(phase.rawValue)")
+        cues.append("Phase: \(phase.rawValue)")
 
         // Allowed tools
         let toolList = allowedTools.sorted().joined(separator: ", ")
@@ -146,10 +126,8 @@ actor ConversationContextAssembler {
             cues.append("Objectives: \(objectiveSummary.joined(separator: ", "))")
         }
 
-        return """
-        Developer: State update
-        \(cues.joined(separator: "\n"))
-        """
+        guard !cues.isEmpty else { return "" }
+        return "State update:\n" + cues.joined(separator: "\n")
     }
 
     /// Build rolling conversation history (last N user/assistant turns)
@@ -174,5 +152,10 @@ actor ConversationContextAssembler {
                 content: .text(message.text)
             ))
         }
+    }
+
+    /// Build scratchpad summary for request metadata.
+    func buildScratchpadSummary() async -> String {
+        await state.scratchpadSummary()
     }
 }

@@ -51,7 +51,14 @@ actor NetworkRouter: OnboardingEventEmitter {
             await emit(.errorOccurred("Stream error: \(message)"))
 
         case .responseCompleted(let completed):
-            await finalizePendingMessages()
+            // If we have buffered messages from streaming, finalize them
+            if !streamingBuffers.isEmpty {
+                await finalizePendingMessages()
+            } else {
+                // No streaming deltas received - extract complete message from final response
+                await processCompletedResponse(completed.response)
+            }
+
             // Emit completion event with response ID
             Logger.info("📨 Response completed: \(completed.response.id)", category: .ai)
 
@@ -134,6 +141,40 @@ actor NetworkRouter: OnboardingEventEmitter {
         streamingBuffers.removeAll()
         messageIds.removeAll()
         lastMessageUUID = nil
+    }
+
+    /// Process a completed response that arrived without streaming deltas
+    private func processCompletedResponse(_ response: ResponseModel) async {
+        // Extract message content and tool calls from the completed response
+        for outputItem in response.output {
+            switch outputItem {
+            case .message(let message):
+                // Extract the complete text from the message
+                var completeText = ""
+                for contentItem in message.content {
+                    if case .outputText(let outputText) = contentItem {
+                        completeText += outputText.text
+                    }
+                }
+
+                // Emit the message as a single complete event
+                if !completeText.isEmpty {
+                    let messageId = UUID()
+                    await emit(.streamingMessageBegan(id: messageId, text: "", reasoningExpected: false))
+                    await emit(.streamingMessageFinalized(id: messageId, finalText: completeText))
+                    Logger.info("📝 Extracted complete message (\(completeText.count) chars) from completed response", category: .ai)
+                }
+
+            case .functionCall(let toolCall):
+                await processToolCall(toolCall)
+
+            case .reasoning(let reasoning):
+                await processReasoningItem(reasoning)
+
+            default:
+                break
+            }
+        }
     }
 
     // MARK: - Stream Cancellation (Phase 2)

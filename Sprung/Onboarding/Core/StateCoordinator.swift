@@ -329,6 +329,62 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
+    /// Build a condensed scratchpad summary used for LLM metadata.
+    func scratchpadSummary(maxCharacters: Int = 1500) -> String {
+        var lines: [String] = []
+
+        lines.append("phase=\(phase.rawValue)")
+
+        let phaseObjectives = getObjectivesForPhase(phase)
+            .sorted { $0.id < $1.id }
+            .map { "\($0.id)=\($0.status.rawValue)" }
+        if !phaseObjectives.isEmpty {
+            lines.append("objectives[\(phase.rawValue)]=\(phaseObjectives.joined(separator: ", "))")
+        }
+
+        lines.append("applicant_profile_status=\(artifacts.applicantProfile == nil ? "missing" : "stored")")
+        lines.append("skeleton_timeline_status=\(artifacts.skeletonTimeline == nil ? "missing" : "stored")")
+        if !artifacts.enabledSections.isEmpty {
+            lines.append("enabled_sections=\(artifacts.enabledSections.sorted().joined(separator: ", "))")
+        } else {
+            lines.append("enabled_sections=pending")
+        }
+
+        if !artifacts.experienceCards.isEmpty {
+            lines.append("experience_cards=\(artifacts.experienceCards.count)")
+        }
+        if !artifacts.writingSamples.isEmpty {
+            lines.append("writing_samples=\(artifacts.writingSamples.count)")
+        }
+
+        if !artifacts.artifactRecords.isEmpty {
+            let hints = artifacts.artifactRecords
+                .compactMap { record -> String? in
+                    if let purpose = record["metadata"]["purpose"].string, !purpose.isEmpty {
+                        return purpose
+                    }
+                    if let label = record["metadata"]["title"].string, !label.isEmpty {
+                        return label
+                    }
+                    return record["id"].string
+                }
+            if !hints.isEmpty {
+                let preview = hints.prefix(5).joined(separator: ", ")
+                lines.append("artifact_hints=\(preview)")
+            }
+            lines.append("artifact_count=\(artifacts.artifactRecords.count)")
+        }
+
+        let combined = lines.joined(separator: "\n")
+        return truncateForScratchpad(combined, limit: maxCharacters)
+    }
+
+    private func truncateForScratchpad(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        let endIndex = text.index(text.startIndex, offsetBy: limit)
+        return String(text[..<endIndex]) + "..."
+    }
+
     // MARK: - Artifact Management
 
     func setApplicantProfile(_ profile: JSON?) async {
