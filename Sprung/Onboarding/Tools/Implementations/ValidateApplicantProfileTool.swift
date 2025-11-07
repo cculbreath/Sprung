@@ -38,10 +38,11 @@ struct ValidateApplicantProfileTool: InterviewTool {
         // Emit UI request to show the validation prompt
         await coordinator.eventBus.publish(.validationPromptRequested(prompt: prompt, continuationId: UUID()))
 
-        // Return immediately - we'll handle the validation response as a new user message
+        // Return completed - the tool's job is to present UI, which it has done
+        // User's validation response will arrive as a new user message
         var response = JSON()
-        response["status"].string = "awaiting_user_input"
-        response["message"].string = "Applicant profile validation prompt has been presented to the user"
+        response["message"].string = "UI presented. Awaiting user input."
+        response["status"].string = "completed"
 
         return .immediate(response)
     }

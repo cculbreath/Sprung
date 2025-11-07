@@ -50,10 +50,11 @@ struct SubmitForValidationTool: InterviewTool {
         // Emit UI request to show the validation prompt
         await coordinator.eventBus.publish(.validationPromptRequested(prompt: payload.toValidationPrompt(), continuationId: UUID()))
 
-        // Return immediately - we'll handle the validation response as a new user message
+        // Return completed - the tool's job is to present UI, which it has done
+        // User's validation response will arrive as a new user message
         var response = JSON()
-        response["status"].string = "awaiting_user_input"
-        response["message"].string = "Validation prompt has been presented to the user"
+        response["message"].string = "UI presented. Awaiting user input."
+        response["status"].string = "completed"
 
         return .immediate(response)
     }

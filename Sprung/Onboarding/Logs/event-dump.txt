@@ -1,91 +1,165 @@
 Sprung Onboarding Event Dump
-Generated: 11/6/2025, 3:20 PM
+Generated: 11/6/2025, 4:39 PM
 ================================================================================
 
 Published Event Counts by Topic:
   Artifact    : 0 events (last: never)
-  LLM         : 8 events (last: 2 minutes ago)
+  LLM         : 20 events (last: 26 seconds ago)
   Objective   : 0 events (last: never)
   Phase       : 0 events (last: never)
-  Processing  : 8 events (last: 2 minutes ago)
-  State       : 1 events (last: 3 minutes ago)
+  Processing  : 13 events (last: 26 seconds ago)
+  State       : 2 events (last: 56 seconds ago)
   Timeline    : 0 events (last: never)
-  Tool        : 2 events (last: 3 minutes ago)
-  Toolpane    : 1 events (last: 3 minutes ago)
+  Tool        : 2 events (last: 27 seconds ago)
+  Toolpane    : 3 events (last: 27 seconds ago)
   UserInput   : 0 events (last: never)
 
 ================================================================================
 
-Recent Events (20):
+Recent Events (40):
+
+#40
+processingStateChanged(false)
+
+#39
+waitingStateChanged(nil)
+
+#38
+stateAllowedToolsUpdated(tools: Set(["validate_applicant_profile", "display_timeline_entries_for_review", "create_timeline_card", "submit_for_validation", "set_objective_status", "update_timeline_card", "reorder_timeline_cards", "get_user_upload", "extract_document", "list_artifacts", "delete_timeline_card", "persist_data", "request_raw_file", "cancel_user_upload", "get_artifact", "next_phase", "get_user_option", "configure_enabled_sections", "get_applicant_profile", "get_macos_contact_card"]))
+
+#37
+processingStateChanged(true)
+
+#36
+processingStateChanged(true)
+
+#35
+llmSendUserMessage(payload: {
+  "text" : "I'm ready to begin."
+}, isSystemGenerated: true)
+
+#34
+llmStatus(status: Sprung.LLMStatus.busy)
+
+#33
+llmUserMessageSent(messageId: "3A715341-5852-402B-8AB2-08B20006DEEF", payload: {
+  "text" : "I'm ready to begin."
+}, isSystemGenerated: true)
+
+#32
+streamingMessageBegan(id: BF23F897, reasoningExpected: false)
+
+#31
+streamingMessageFinalized(id: BF23F897, text: 222 chars toolCalls: 1)
+
+#30
+toolCallRequested(get_applicant_profile)
+
+#29
+llmStatus(status: Sprung.LLMStatus.idle)
+
+#28
+processingStateChanged(false)
+
+#27
+applicantProfileIntakeRequested(continuationId: 5FE09A64-ECF5-4D95-B083-C39CF5C2462F)
+
+#26
+llmToolResponseMessage(payload: {
+  "callId" : "fc_005d97c210ec780400690d236198bc8195871420060394acce",
+  "output" : {
+    "status" : "awaiting_user_input",
+    "message" : "Applicant profile form has been presented to the user"
+  }
+})
+
+#25
+llmStatus(status: Sprung.LLMStatus.busy)
+
+#24
+processingStateChanged(true)
+
+#23
+llmSentToolResponseMessage(messageId: "BD977C04-F952-46A3-80D6-61ADC68601A1", payload: {
+  "callId" : "fc_005d97c210ec780400690d236198bc8195871420060394acce",
+  "output" : {
+    "status" : "awaiting_user_input",
+    "message" : "Applicant profile form has been presented to the user"
+  }
+})
+
+#22
+errorOccurred("Failed to send tool response: The operation couldn’t be completed. (SwiftOpenAI.APIError error 1.)")
+
+#21
+llmStatus(status: Sprung.LLMStatus.error)
 
 #20
 processingStateChanged(false)
 
 #19
-waitingStateChanged(nil)
+applicantProfileIntakeCleared
 
 #18
-stateAllowedToolsUpdated(tools: Set(["update_timeline_card", "next_phase", "configure_enabled_sections", "request_raw_file", "submit_for_validation", "extract_document", "create_timeline_card", "set_objective_status", "cancel_user_upload", "validate_applicant_profile", "delete_timeline_card", "persist_data", "get_macos_contact_card", "get_applicant_profile", "get_user_option", "list_artifacts", "get_artifact", "get_user_upload", "reorder_timeline_cards", "display_timeline_entries_for_review"]))
+applicantProfileStored({
+  "email" : "christopherculbreath@mac.com",
+  "profiles" : [
+
+  ],
+  "name" : "Christopher Culbreath",
+  "location" : {
+    "city" : "Austin",
+    "postalCode" : "78745",
+    "address" : "7317 Shadywood Drive",
+    "region" : "TX",
+    "countryCode" : "US"
+  },
+  "phone" : "805-234-0847",
+  "url" : ""
+})
 
 #17
-processingStateChanged(true)
+llmSendUserMessage(payload: {
+  "text" : "Here is my contact information (imported from macOS Contacts):\n\nName: Christopher Culbreath\nEmail: christopherculbreath@mac.com\nPhone: 805-234-0847\n"
+}, isSystemGenerated: true)
 
 #16
-processingStateChanged(true)
-
-#15
-llmSendUserMessage(payload: {
-  "text" : "I'm ready to begin."
-}, isSystemGenerated: true)
-
-#14
 llmStatus(status: Sprung.LLMStatus.busy)
 
-#13
-llmUserMessageSent(messageId: "EBEB8752-9E63-46EE-8BF6-48ABD310023C", payload: {
-  "text" : "I'm ready to begin."
+#15
+processingStateChanged(true)
+
+#14
+llmUserMessageSent(messageId: "B61491E8-AA38-45A1-8F69-179A5ECE8C2D", payload: {
+  "text" : "Here is my contact information (imported from macOS Contacts):\n\nName: Christopher Culbreath\nEmail: christopherculbreath@mac.com\nPhone: 805-234-0847\n"
 }, isSystemGenerated: true)
 
+#13
+streamingMessageBegan(id: 7246E3BC, reasoningExpected: false)
+
 #12
-toolCallRequested(get_applicant_profile)
+streamingMessageFinalized(id: 7246E3BC, text: 0 chars toolCalls: 1)
 
 #11
-llmStatus(status: Sprung.LLMStatus.idle)
+toolCallRequested(get_applicant_profile)
 
 #10
-applicantProfileIntakeRequested(continuationId: 983DCEF9-117F-4ABD-8CBF-174A499E7BA7)
+applicantProfileIntakeRequested(continuationId: CF19B06C-4F6C-419E-96D2-C3BA129A41BF)
 
 #9
-processingStateChanged(false)
+llmToolResponseMessage(payload: {
+  "callId" : "fc_047840df82b36f9300690d23861a9481908893fdbc67a0cc1b",
+  "output" : {
+    "status" : "awaiting_user_input",
+    "message" : "Applicant profile form has been presented to the user"
+  }
+})
 
 #8
-toolContinuationNeeded(id: 983DCEF9-117F-4ABD-8CBF-174A499E7BA7, toolName: "get_applicant_profile")
+llmStatus(status: Sprung.LLMStatus.idle)
 
 #7
-llmToolResponseMessage(payload: {
-  "output" : {
-    "profile" : {
-      "location" : {
-        "postalCode" : "78745",
-        "countryCode" : "US",
-        "address" : "7317 Shadywood Drive",
-        "city" : "Austin",
-        "region" : "TX"
-      },
-      "phone" : "805-234-0847",
-      "url" : "",
-      "email" : "christopherculbreath@mac.com",
-      "profiles" : [
-
-      ],
-      "name" : "Christopher Culbreath",
-      "meta" : null
-    },
-    "status" : "completed",
-    "source" : "contacts"
-  },
-  "callId" : "fc_0980ab8a0056496e00690d107bc93481958a38d000298fc605"
-})
+processingStateChanged(false)
 
 #6
 llmStatus(status: Sprung.LLMStatus.busy)
@@ -94,29 +168,12 @@ llmStatus(status: Sprung.LLMStatus.busy)
 processingStateChanged(true)
 
 #4
-llmSentToolResponseMessage(messageId: "E95F8541-8496-4492-A8AB-A420574AE714", payload: {
+llmSentToolResponseMessage(messageId: "4B073D6B-C61C-41A8-AB00-FB65199A0E9B", payload: {
+  "callId" : "fc_047840df82b36f9300690d23861a9481908893fdbc67a0cc1b",
   "output" : {
-    "profile" : {
-      "location" : {
-        "postalCode" : "78745",
-        "countryCode" : "US",
-        "address" : "7317 Shadywood Drive",
-        "city" : "Austin",
-        "region" : "TX"
-      },
-      "phone" : "805-234-0847",
-      "url" : "",
-      "email" : "christopherculbreath@mac.com",
-      "profiles" : [
-
-      ],
-      "name" : "Christopher Culbreath",
-      "meta" : null
-    },
-    "status" : "completed",
-    "source" : "contacts"
-  },
-  "callId" : "fc_0980ab8a0056496e00690d107bc93481958a38d000298fc605"
+    "status" : "awaiting_user_input",
+    "message" : "Applicant profile form has been presented to the user"
+  }
 })
 
 #3
