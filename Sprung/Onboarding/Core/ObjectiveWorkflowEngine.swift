@@ -68,21 +68,31 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             let newStatusString,
             let phaseString,
             let source,
-            let notes
+            _
         ) = event else {
             return
         }
 
-        guard let status = ObjectiveStatus(rawValue: newStatusString) else {
+        guard let newStatus = ObjectiveStatus(rawValue: newStatusString) else {
             Logger.warning("Invalid objective status: \(newStatusString)", category: .ai)
             return
         }
 
-        // Only process completed objectives
-        guard status == .completed else { return }
+        // Process workflows for inProgress (onBegin) and completed (onComplete)
+        guard newStatus == .inProgress || newStatus == .completed else { return }
+
+        // For onBegin callbacks, only fire on first transition to inProgress (from pending)
+        if newStatus == .inProgress {
+            let oldStatus = oldStatusString.flatMap { ObjectiveStatus(rawValue: $0) }
+            guard oldStatus == .pending || oldStatus == nil else {
+                Logger.debug("Skipping onBegin for \(id): not a fresh start (was: \(oldStatusString ?? "nil"))", category: .ai)
+                return
+            }
+        }
 
         let sourceInfo = source.map { " from \($0)" } ?? ""
-        Logger.info("🎯 Processing workflow for completed objective: \(id)\(sourceInfo)", category: .ai)
+        let statusLabel = newStatus == .inProgress ? "in-progress" : "completed"
+        Logger.info("🎯 Processing workflow for \(statusLabel) objective: \(id)\(sourceInfo)", category: .ai)
 
         // Get the phase script
         guard let phase = InterviewPhase(rawValue: phaseString),
@@ -104,15 +114,75 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
 
         let context = ObjectiveWorkflowContext(
             completedObjectives: Set(completedObjectives),
-            status: status,
+            status: newStatus,
             details: [:]  // Future: could extract from objective notes
         )
 
-        // Execute the workflow
-        let outputs = workflow.outputs(for: status, context: context)
+        // Execute the workflow callbacks
+        let outputs = workflow.outputs(for: newStatus, context: context)
 
         for output in outputs {
             await processWorkflowOutput(output, objectiveId: id)
+        }
+
+        // If objective completed, check for dependent objectives to auto-start
+        if newStatus == .completed {
+            await checkAndAutoStartDependents(
+                completedObjectiveId: id,
+                phase: phase,
+                script: script,
+                completedObjectives: Set(completedObjectives)
+            )
+        }
+    }
+
+    // MARK: - Auto-Start Logic
+
+    /// Check if any dependent objectives can be auto-started after an objective completes
+    private func checkAndAutoStartDependents(
+        completedObjectiveId: String,
+        phase: InterviewPhase,
+        script: PhaseScript,
+        completedObjectives: Set<String>
+    ) async {
+        // Get all objectives for this phase
+        let allObjectives = await state.getObjectivesForPhase(phase)
+
+        // Find objectives that depend on the completed one
+        for objective in allObjectives {
+            // Skip if not pending
+            guard objective.status == .pending else { continue }
+
+            // Get workflow definition
+            guard let workflow = script.workflow(for: objective.id) else { continue }
+
+            // Skip if doesn't depend on completed objective
+            guard workflow.dependsOn.contains(completedObjectiveId) else { continue }
+
+            // Skip if auto-start not enabled
+            guard workflow.autoStartWhenReady else {
+                Logger.debug("⏸️ Objective \(objective.id) depends on \(completedObjectiveId) but autoStartWhenReady=false", category: .ai)
+                continue
+            }
+
+            // Check if ALL dependencies are met
+            let allDependenciesMet = workflow.dependsOn.allSatisfy { completedObjectives.contains($0) }
+
+            if allDependenciesMet {
+                Logger.info("🚀 Auto-starting objective: \(objective.id) (dependencies met: \(workflow.dependsOn.joined(separator: ", ")))", category: .ai)
+
+                // Emit event to transition to inProgress
+                // This will trigger the onBegin callback via the normal event flow
+                await emit(.objectiveStatusUpdateRequested(
+                    id: objective.id,
+                    status: "inProgress",
+                    source: "workflow_auto_start",
+                    notes: "Auto-started after dependencies completed: \(workflow.dependsOn.joined(separator: ", "))"
+                ))
+            } else {
+                let missingDeps = workflow.dependsOn.filter { !completedObjectives.contains($0) }
+                Logger.debug("⏳ Objective \(objective.id) still waiting for: \(missingDeps.joined(separator: ", "))", category: .ai)
+            }
         }
     }
 
