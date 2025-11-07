@@ -30,18 +30,16 @@ actor ConversationContextAssembler {
 
     /// Build input items for a user message
     func buildForUserMessage(
-        text: String,
-        allowedTools: Set<String>
+        text: String
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. Rolling conversation history (last N turns)
-        let conversationItems = await buildConversationHistory()
-
-        // 2. State cues developer message (only if we have conversation history)
+        // 1. State cues developer message (only if we have conversation history)
         // Skip for the very first message to encourage natural conversation
-        if !conversationItems.isEmpty {
-            let stateCues = await buildStateCues(allowedTools: allowedTools)
+        // Note: Tool management is now handled via API's tools parameter
+        let messages = await state.messages
+        if !messages.isEmpty {
+            let stateCues = await buildStateCues()
             if !stateCues.isEmpty {
                 items.append(.message(InputMessage(
                     role: "developer",
@@ -50,9 +48,7 @@ actor ConversationContextAssembler {
             }
         }
 
-        items.append(contentsOf: conversationItems)
-
-        // 3. Current user message
+        // 2. Current user message (conversation history handled via previous_response_id)
         items.append(.message(InputMessage(
             role: "user",
             content: .text(text)
@@ -64,15 +60,11 @@ actor ConversationContextAssembler {
 
     /// Build input items for a developer message
     func buildForDeveloperMessage(
-        text: String,
+        text: String
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. Rolling conversation history
-        let conversationItems = await buildConversationHistory()
-        items.append(contentsOf: conversationItems)
-
-        // 2. Current developer message
+        // Current developer message (conversation history handled via previous_response_id)
         items.append(.message(InputMessage(
             role: "developer",
             content: .text(text)
@@ -89,11 +81,7 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. Rolling conversation history
-        let conversationItems = await buildConversationHistory()
-        items.append(contentsOf: conversationItems)
-
-        // 2. Tool response - extract status from output JSON if present
+        // Tool response (conversation history handled via previous_response_id)
         let outputString = output.rawString() ?? "{}"
         let status = output["status"].string // Extract status if tool provided it
 
@@ -110,7 +98,8 @@ actor ConversationContextAssembler {
     // MARK: - Private Helpers
 
     /// Build state cues developer message
-    private func buildStateCues(allowedTools: Set<String>) async -> String {
+    /// Note: Tool management is now handled via API's tools parameter, not injected here
+    private func buildStateCues() async -> String {
         let phase = await state.phase
         let objectives = await state.getAllObjectives()
         let phaseObjectives = objectives.filter { $0.phase == phase }
@@ -119,10 +108,6 @@ actor ConversationContextAssembler {
 
         // Phase info
         cues.append("Phase: \(phase.rawValue)")
-
-        // Allowed tools
-        let toolList = allowedTools.sorted().joined(separator: ", ")
-        cues.append("Allowed tools: [\(toolList)]")
 
         // Objectives summary
         var objectiveSummary: [String] = []

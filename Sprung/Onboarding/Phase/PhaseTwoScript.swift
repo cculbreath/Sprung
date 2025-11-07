@@ -51,7 +51,7 @@ struct PhaseTwoScript: PhaseScript {
         ]
     }
 
-    var systemPromptFragment: String {
+    var introductoryPrompt: String {
         """
         ## PHASE 2: DEEP DIVE
 

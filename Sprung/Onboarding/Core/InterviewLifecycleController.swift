@@ -211,12 +211,6 @@ final class InterviewLifecycleController {
         }
     }
 
-    // MARK: - Orchestrator Updates
-
-    func updateOrchestratorSystemPrompt(_ prompt: String) async {
-        await orchestrator?.updateSystemPrompt(prompt)
-    }
-
     // MARK: - Factory Methods
 
     private func makeOrchestrator(

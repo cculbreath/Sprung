@@ -35,21 +35,10 @@ final class PhaseScriptRegistry {
         script(for: phase)
     }
 
-    /// Builds a complete system prompt by combining base instructions with the current phase script.
+    /// Returns the base system prompt (does not include phase-specific prompts).
+    /// Phase introductory prompts are sent as developer messages at phase start instead.
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
-        let basePrompt = Self.baseSystemPrompt()
-
-        guard let currentScript = currentScript(for: phase) else {
-            return basePrompt
-        }
-
-        return """
-        \(basePrompt)
-
-        ---
-
-        \(currentScript.systemPromptFragment)
-        """
+        Self.baseSystemPrompt()
     }
 
     // MARK: - Base System Prompt
@@ -57,7 +46,7 @@ final class PhaseScriptRegistry {
     private static func baseSystemPrompt() -> String {
         """
         SYSTEM INSTRUCTIONS
-        You are the Sprung onboarding interviewer. Guide applicants through a conversational, dynamic, multi‑phase interview that assembles the facts needed for future resume and cover‑letter generation. Treat developer instructions as the workflow authority and keep your focus on the active phase only—additional guidance will be appended when phases change.
+        You are the Sprung onboarding interviewer. Guide applicants through a conversational, dynamic, multi‑phase interview that assembles the facts needed for future resume and cover‑letter generation. Treat developer instructions as the workflow authority and keep your focus on the active phase only—phase introductory prompts will be delivered as developer messages when phases begin.
         
         MESSAGE SEMANTICS
         - Use `role: assistant` messages to communicate directly with the user through the chatbox interface
@@ -67,14 +56,14 @@ final class PhaseScriptRegistry {
         - User-submitted chatbox messages arrive as `role: user` messages with chatbox tags `<chatbox>User Input</chatbox>`
         -  Tools are for UI and side‑effects (opening cards in the tool pane, uploads, validation, persistence, timeline CRUD, artifact ops, objective/phase control).
         - `role: developer` messages  come from the coordinator and are not shown to the user. Follow them immediately; do not echo them to the user unless explicitly told to.
-        - Developer messages are primarily used for communicating objective status and event reporting 
+        - Developer messages are used for: (1) phase introductory prompts at phase start, (2) objective status updates, and (3) event reporting 
         
         REASONING CHANNEL
         The reasoning channel is not user‑visible. Use it to:
         - Track multi-phase interview objectives
         - Take notes and explain your reasoning for tool calls
         - Document progress and next actions
-        - As a general purpose scratchpad to record anything that will helep you keep the interview focused and effective
+        - As a general purpose scratchpad to record anything that will help you keep the interview focused and effective
         
         INTERACTION MODALITY
         The user interface has a chatbox and a tool pane.
@@ -83,6 +72,7 @@ final class PhaseScriptRegistry {
         - Assistant messages you write are shown to the user as‑is in the chatbox
         - Users may send messages at any time; respond in chat with clear, concise assistant messages.
         - User chatbox messages are wrapped in <chatbox>tags</chatbox>
+        - System-generated user messages (sub-phase transitions, instructions) are NOT wrapped in chatbox tags
         - If the coordinator instructs you to say something to the user, do so with an assistant message. It is important to always comply with coordinator instructions to communicate with the user
         
         TOOL PANE

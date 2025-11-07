@@ -68,6 +68,30 @@ actor StateCoordinator: OnboardingEventEmitter {
         var source: String
         var completedAt: Date?
         var notes: String?
+        let parentId: String?      // Parent objective ID (e.g., "P1.1" for "P1.1.A")
+        let level: Int              // Hierarchy level: 0=top, 1=sub, 2=sub-sub, etc.
+
+        init(
+            id: String,
+            label: String,
+            status: ObjectiveStatus,
+            phase: InterviewPhase,
+            source: String,
+            completedAt: Date? = nil,
+            notes: String? = nil,
+            parentId: String? = nil,
+            level: Int = 0
+        ) {
+            self.id = id
+            self.label = label
+            self.status = status
+            self.phase = phase
+            self.source = source
+            self.completedAt = completedAt
+            self.notes = notes
+            self.parentId = parentId
+            self.level = level
+        }
     }
 
     // MARK: - Artifacts
@@ -89,6 +113,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var messages: [OnboardingMessage] = []
     private(set) var streamingMessage: StreamingMessage?
     private(set) var latestReasoningSummary: String?
+    private(set) var previousResponseId: String?  // For Responses API threading
 
     // MARK: - Reasoning Summary (Sidebar Display)
 
@@ -249,9 +274,21 @@ actor StateCoordinator: OnboardingEventEmitter {
         _ id: String,
         label: String,
         phase: InterviewPhase,
-        source: String = "system"
+        source: String = "system",
+        parentId: String? = nil,
+        level: Int? = nil
     ) {
         guard objectives[id] == nil else { return }
+
+        // Auto-detect level from ID format if not provided (e.g., "P1.1.A.2" → level 3)
+        let detectedLevel: Int
+        if let level = level {
+            detectedLevel = level
+        } else {
+            // Count dots in ID: P1.1 = 1 dot = level 1, P1.1.A = 2 parts after P = level 2
+            let parts = id.split(separator: ".")
+            detectedLevel = max(0, parts.count - 1)
+        }
 
         objectives[id] = ObjectiveEntry(
             id: id,
@@ -260,7 +297,9 @@ actor StateCoordinator: OnboardingEventEmitter {
             phase: phase,
             source: source,
             completedAt: nil,
-            notes: nil
+            notes: nil,
+            parentId: parentId,
+            level: detectedLevel
         )
 
         Logger.info("📋 Objective registered: \(id) for \(phase)", category: .ai)
@@ -307,6 +346,31 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         Logger.info("✅ Objective \(id): \(oldStatus) → \(status)", category: .ai)
         updateWizardProgress()
+
+        // Auto-completion: If this objective is completed/skipped and has a parent,
+        // check if all siblings are done and auto-complete parent
+        if (status == .completed || status == .skipped), let parentId = objective.parentId {
+            await checkAndAutoCompleteParent(parentId)
+        }
+    }
+
+    /// Recursively check if parent should be auto-completed
+    private func checkAndAutoCompleteParent(_ parentId: String) async {
+        guard let parent = objectives[parentId] else { return }
+
+        // Only auto-complete if parent is still pending or in-progress
+        guard parent.status == .pending || parent.status == .inProgress else { return }
+
+        // Check if all children are complete
+        if areAllChildrenComplete(parentId) {
+            Logger.info("🎯 Auto-completing parent objective: \(parentId)", category: .ai)
+            await setObjectiveStatus(parentId, status: .completed, source: "auto_completed", notes: "All sub-objectives completed")
+
+            // Recursively check grandparent
+            if let grandparentId = parent.parentId {
+                await checkAndAutoCompleteParent(grandparentId)
+            }
+        }
     }
 
     func getObjectiveStatus(_ id: String) -> ObjectiveStatus? {
@@ -315,6 +379,18 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func getAllObjectives() -> [ObjectiveEntry] {
         Array(objectives.values)
+    }
+
+    /// Get all children of a given parent objective
+    func getChildObjectives(_ parentId: String) -> [ObjectiveEntry] {
+        objectives.values.filter { $0.parentId == parentId }
+    }
+
+    /// Check if all children of a parent are completed or skipped
+    private func areAllChildrenComplete(_ parentId: String) -> Bool {
+        let children = getChildObjectives(parentId)
+        guard !children.isEmpty else { return false }
+        return children.allSatisfy { $0.status == .completed || $0.status == .skipped }
     }
 
     func getObjectivesForPhase(_ phase: InterviewPhase) -> [ObjectiveEntry] {
@@ -421,6 +497,15 @@ actor StateCoordinator: OnboardingEventEmitter {
             let artifactId = artifact["id"].stringValue
             let sha256 = artifact["sha256"].stringValue
             return artifactId == id || sha256 == id
+        }
+    }
+
+    /// Query artifacts by target_phase_objective
+    /// Returns artifacts that have the specified objective in their target_phase_objectives array
+    func getArtifactsForPhaseObjective(_ objectiveId: String) -> [JSON] {
+        artifacts.artifactRecords.filter { artifact in
+            let targetObjectives = artifact["metadata"]["target_phase_objectives"].arrayValue
+            return targetObjectives.contains { $0.stringValue == objectiveId }
         }
     }
 
@@ -605,6 +690,14 @@ actor StateCoordinator: OnboardingEventEmitter {
         messages.append(message)
         messagesSync = messages // Update sync cache
         return message.id
+    }
+
+    func setPreviousResponseId(_ responseId: String?) {
+        previousResponseId = responseId
+    }
+
+    func getPreviousResponseId() -> String? {
+        previousResponseId
     }
 
     func beginStreamingMessage(initialText: String, reasoningExpected: Bool) -> UUID {

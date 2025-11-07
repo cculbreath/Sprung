@@ -107,13 +107,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         await emit(.llmSendUserMessage(payload: payload))
     }
 
-    // MARK: - Dynamic Prompt Update (Phase 3)
-
-    /// Update the system prompt when phases transition
-    func updateSystemPrompt(_ text: String) async {
-        await llmMessenger.updateSystemPrompt(text)
-    }
-
     // MARK: - Model Configuration
 
     /// Set the model ID for the LLM messenger

@@ -200,6 +200,46 @@ struct DeveloperMessageTemplates {
         ]
         return Message(title: title, details: details, payload: payload)
     }
+
+    /// Format objective status as checkbox tree for developer messages with visual hierarchy
+    /// Example output:
+    /// ```
+    /// Phase 1 Progress:
+    /// ✅ P1.1 applicant_profile
+    ///   ✅ P1.1.A Contact Information
+    ///     ✅ P1.1.A.1 Activate applicant profile card
+    ///     ✅ P1.1.A.2 ApplicantProfile updated
+    ///   ◻ P1.1.B Optional Profile Photo
+    /// ◻ P1.2 skeleton_timeline
+    /// ```
+    static func formatObjectiveStatus(
+        phase: InterviewPhase,
+        objectives: [StateCoordinator.ObjectiveEntry]
+    ) -> String {
+        guard !objectives.isEmpty else {
+            return "\(phase.displayName) - No objectives defined"
+        }
+
+        var lines: [String] = ["\(phase.displayName) Progress:"]
+
+        for objective in objectives.sorted(by: { $0.id < $1.id }) {
+            let checkbox: String
+            switch objective.status {
+            case .completed, .skipped:
+                checkbox = "✅"
+            case .inProgress:
+                checkbox = "⏳"
+            case .pending:
+                checkbox = "◻"
+            }
+
+            // Add indentation based on hierarchy level
+            let indent = String(repeating: "  ", count: objective.level)
+            lines.append("\(indent)\(checkbox) \(objective.id)")
+        }
+
+        return lines.joined(separator: "\n")
+    }
 }
 
 private extension DeveloperMessageTemplates {

@@ -157,6 +157,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                     if case .responseCompleted(let completed) = streamEvent {
                         conversationId = completed.response.id
                         lastResponseId = completed.response.id
+                        // Store in StateCoordinator for next request
+                        await state.setPreviousResponseId(completed.response.id)
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -203,6 +205,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                     if case .responseCompleted(let completed) = streamEvent {
                         conversationId = completed.response.id
                         lastResponseId = completed.response.id
+                        // Store in StateCoordinator for next request
+                        await state.setPreviousResponseId(completed.response.id)
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -264,13 +268,13 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     private func buildUserMessageRequest(text: String) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForUserMessage(
-            text: text,
-            allowedTools: allowedToolNames
+            text: text
         )
 
         let tools = await getToolSchemas()
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
+        let previousResponseId = await state.getPreviousResponseId()
 
         // Determine tool_choice based on context
         let toolChoice = determineToolChoice(for: text)
@@ -282,7 +286,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             metadata: metadata,
             stream: true,
             toolChoice: toolChoice,
-            tools: tools
+            tools: tools,
+            previousResponseId: previousResponseId
         )
     }
 
@@ -304,6 +309,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let tools = await getToolSchemas()
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
+        let previousResponseId = await state.getPreviousResponseId()
 
         // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
@@ -324,7 +330,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             metadata: metadata,
             stream: true,
             toolChoice: toolChoice,
-            tools: tools
+            tools: tools,
+            previousResponseId: previousResponseId
         )
     }
 
@@ -337,6 +344,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let tools = await getToolSchemas()
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
+        let previousResponseId = await state.getPreviousResponseId()
 
         return ModelResponseParameter(
             input: .array(inputItems),
@@ -345,7 +353,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             metadata: metadata,
             stream: true,
             toolChoice: .auto,
-            tools: tools
+            tools: tools,
+            previousResponseId: previousResponseId
         )
     }
 
