@@ -33,11 +33,16 @@ final class ProfileInteractionHandler {
     // MARK: - Dependencies
 
     private let contactsImportService: ContactsImportService
+    private let eventBus: EventCoordinator
 
     // MARK: - Init
 
-    init(contactsImportService: ContactsImportService) {
+    init(
+        contactsImportService: ContactsImportService,
+        eventBus: EventCoordinator
+    ) {
         self.contactsImportService = contactsImportService
+        self.eventBus = eventBus
     }
 
     // MARK: - Validation Flow (Approve/Reject)
@@ -141,17 +146,20 @@ final class ProfileInteractionHandler {
         guard let continuationId = applicantIntakeContinuationId else { return nil }
 
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
-            mode: .loading("Processing uploaded résumé…"),
+            mode: .loading("Processing uploaded document…"),
             draft: ApplicantProfileDraft(),
             urlString: "",
             errorMessage: nil
         )
 
         let metadata = OnboardingUploadMetadata(
-            title: "Upload Résumé",
-            instructions: "Select your latest resume (PDF, DOCX, or text).",
+            title: "Upload Contact Information",
+            instructions: "Please upload a document that contains your basic contact information.",
             accepts: ["pdf", "doc", "docx", "txt", "md"],
-            allowMultiple: false
+            allowMultiple: false,
+            targetPhaseObjectives: ["1A"],
+            targetDeliverable: "ApplicantProfile",
+            userValidated: false
         )
 
         Logger.info("📤 Upload mode activated", category: .ai)
@@ -233,20 +241,27 @@ final class ProfileInteractionHandler {
     func completeDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) -> (continuationId: UUID, payload: JSON)? {
         guard let continuationId = applicantIntakeContinuationId else { return nil }
 
-        var payload = JSON()
-        payload["mode"].string = source == .contacts ? "contacts" : "manual"
-        payload["status"].string = "completed"
         let dataJSON = attachingValidationMetadata(
             to: draft.toSafeJSON(),
             via: source == .contacts ? "contacts" : "manual"
         )
-        payload["data"] = dataJSON
 
         if dataJSON != .null {
             lastSubmittedDraft = dataJSON
         }
 
-        Logger.info("✅ Draft completed (source: \(payload["mode"].stringValue))", category: .ai)
+        // Emit artifact record for contacts and manual entry
+        Task {
+            await emitProfileArtifactRecord(profileJSON: dataJSON, source: source)
+        }
+
+        Logger.info("✅ Draft completed (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
+
+        // Return success payload
+        var payload = JSON()
+        payload["mode"].string = source == .contacts ? "contacts" : "manual"
+        payload["status"].string = "completed"
+
         return completeIntake(continuationId: continuationId, payload: payload)
     }
 
@@ -299,5 +314,49 @@ final class ProfileInteractionHandler {
         enriched["meta"]["validated_via"].string = channel
         enriched["meta"]["validated_at"].string = isoFormatter.string(from: Date())
         return enriched
+    }
+
+    // MARK: - Artifact Record Creation
+
+    private func emitProfileArtifactRecord(
+        profileJSON: JSON,
+        source: OnboardingApplicantProfileIntakeState.Source
+    ) async {
+        let artifactId = UUID().uuidString
+
+        // For contacts, use vCard text; for manual, use JSON
+        let extractedText: String
+        if source == .contacts {
+            // Try to get vCard text representation
+            if let vCardData = try? await contactsImportService.fetchMeCardAsVCard(),
+               let vCardString = String(data: vCardData, encoding: .utf8) {
+                extractedText = vCardString
+            } else {
+                // Fallback to JSON if vCard fetch fails
+                extractedText = profileJSON.rawString() ?? "{}"
+            }
+        } else {
+            extractedText = profileJSON.rawString() ?? "{}"
+        }
+
+        var artifactRecord = JSON()
+        artifactRecord["id"].string = artifactId
+        artifactRecord["filename"].string = source == .contacts ? "contact-card.vcf" : "manual-entry.json"
+        artifactRecord["document_type"].string = "applicant_profile"
+        artifactRecord["extracted_text"].string = extractedText
+        artifactRecord["content_type"].string = source == .contacts ? "text/vcard" : "application/json"
+        artifactRecord["created_at"].string = isoFormatter.string(from: Date())
+
+        // Add metadata for LLM
+        var metadata = JSON()
+        metadata["target_phase_objectives"] = JSON(["1A"])
+        metadata["target_deliverable"].string = "ApplicantProfile"
+        metadata["user_validated"].bool = true
+        artifactRecord["metadata"] = metadata
+
+        // Emit artifact record produced event
+        await eventBus.publish(.artifactRecordProduced(record: artifactRecord))
+
+        Logger.info("📦 Profile artifact record emitted: \(artifactId) (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
 }
