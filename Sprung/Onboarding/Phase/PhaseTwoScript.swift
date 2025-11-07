@@ -20,7 +20,6 @@ struct PhaseTwoScript: PhaseScript {
         "generate_knowledge_card",
         "get_user_upload",
         "cancel_user_upload",
-        "extract_document",
         "submit_for_validation",
         "persist_data",
         "set_objective_status",

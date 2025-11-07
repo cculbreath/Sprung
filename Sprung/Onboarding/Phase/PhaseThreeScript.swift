@@ -19,7 +19,6 @@ struct PhaseThreeScript: PhaseScript {
         "get_user_option",
         "get_user_upload",
         "cancel_user_upload",
-        "extract_document",
         "submit_for_validation",
         "persist_data",
         "set_objective_status",
@@ -92,7 +91,6 @@ struct PhaseThreeScript: PhaseScript {
 
         ### Tools Available:
         - `get_user_upload`: Request file uploads
-        - `extract_document`: Extract text from writing samples
         - `submit_for_validation`: Show dossier summary for approval
         - `persist_data`: Save writing samples and dossier
         - `set_objective_status`: Mark objectives as completed
