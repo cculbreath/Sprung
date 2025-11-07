@@ -445,6 +445,35 @@ actor StateCoordinator: OnboardingEventEmitter {
         artifactRecordsSync = artifacts.artifactRecords // Update sync cache
     }
 
+    /// Update artifact metadata (field-level merge)
+    private func updateArtifactMetadata(artifactId: String, updates: JSON) async {
+        // Find the artifact by ID
+        guard let index = artifacts.artifactRecords.firstIndex(where: { record in
+            record["id"].string == artifactId
+        }) else {
+            Logger.warning("⚠️ Artifact not found for metadata update: \(artifactId)", category: .ai)
+            return
+        }
+
+        var artifact = artifacts.artifactRecords[index]
+        var metadata = artifact["metadata"].dictionaryValue.isEmpty ? JSON() : artifact["metadata"]
+
+        // Merge updates into metadata (field-level)
+        for (key, value) in updates.dictionaryValue {
+            metadata[key] = value
+        }
+
+        // Update artifact with new metadata
+        artifact["metadata"] = metadata
+        artifacts.artifactRecords[index] = artifact
+        artifactRecordsSync = artifacts.artifactRecords // Update sync cache
+
+        Logger.info("✅ Artifact metadata updated: \(artifactId) (\(updates.dictionaryValue.keys.count) fields)", category: .ai)
+
+        // Emit confirmation event for persistence (includes full updated artifact)
+        await eventBus.publish(.artifactMetadataUpdated(artifact: artifact))
+    }
+
     /// List artifact summaries (id, filename, size, content_type)
     func listArtifactSummaries() -> [JSON] {
         artifacts.artifactRecords.map { artifact in
@@ -1154,6 +1183,10 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .artifactRecordsReplaced(let records):
             setArtifactRecords(records)
             Logger.info("📦 Artifact records replaced via snapshot (count: \(records.count))", category: .ai)
+
+        case .artifactMetadataUpdateRequested(let artifactId, let updates):
+            // Find and update artifact metadata
+            await updateArtifactMetadata(artifactId: artifactId, updates: updates)
 
         case .knowledgeCardPersisted(let card):
             await addKnowledgeCard(card)
