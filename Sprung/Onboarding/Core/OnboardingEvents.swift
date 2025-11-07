@@ -9,6 +9,15 @@
 import Foundation
 import SwiftyJSON
 
+// MARK: - Supporting Types
+
+/// Information about a processed upload file
+struct ProcessedUploadInfo {
+    let storageURL: URL
+    let contentType: String?
+    let filename: String
+}
+
 /// All events that can occur during the onboarding interview
 enum OnboardingEvent {
     // MARK: - Processing State
@@ -56,6 +65,9 @@ enum OnboardingEvent {
     case artifactAdded(id: UUID, kind: OnboardingUploadKind)
     case artifactUpdated(id: UUID, extractedText: String?)
     case artifactDeleted(id: UUID)
+
+    // Upload completion (generic)
+    case uploadCompleted(files: [ProcessedUploadInfo], requestKind: String, callId: String?, metadata: JSON)
 
     // Artifact pipeline (tool → state → persistence)
     case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
@@ -268,7 +280,8 @@ actor EventCoordinator {
             return .tool
 
         // Artifact events
-        case .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
+        case .uploadCompleted,
+             .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
              .knowledgeCardPersisted, .knowledgeCardsReplaced:
             return .artifact
@@ -436,6 +449,8 @@ actor EventCoordinator {
             } else {
                 description = "Skeleton timeline replaced"
             }
+        case .uploadCompleted(let files, let requestKind, _, _):
+            description = "Upload completed: \(files.count) file(s), kind: \(requestKind)"
         }
 
         Logger.debug("[Event] \(description)", category: .ai)

@@ -43,6 +43,13 @@ final class OnboardingInterviewCoordinator {
     private let dataStore: InterviewDataStore
     let checkpoints: Checkpoints
 
+    // MARK: - Document Processing
+
+    private let uploadStorage: OnboardingUploadStorage
+    private let documentProcessingService: DocumentProcessingService
+    private let documentArtifactHandler: DocumentArtifactHandler
+    private let documentArtifactMessenger: DocumentArtifactMessenger
+
     // MARK: - Orchestration State (minimal, not business state)
 
     private var orchestrator: InterviewOrchestrator?
@@ -189,6 +196,24 @@ final class OnboardingInterviewCoordinator {
         self.checkpoints = checkpoints
         self.preferences = preferences
 
+        // Initialize upload storage (shared across handlers)
+        self.uploadStorage = OnboardingUploadStorage()
+
+        // Initialize document processing service
+        self.documentProcessingService = DocumentProcessingService(
+            documentExtractionService: documentExtractionService,
+            uploadStorage: self.uploadStorage,
+            dataStore: dataStore
+        )
+
+        // Initialize document processing handlers
+        self.documentArtifactHandler = DocumentArtifactHandler(
+            eventBus: eventBus,
+            documentProcessingService: self.documentProcessingService
+        )
+
+        self.documentArtifactMessenger = DocumentArtifactMessenger(eventBus: eventBus)
+
         self.chatboxHandler = ChatboxHandler(
             eventBus: eventBus,
             state: state
@@ -205,13 +230,13 @@ final class OnboardingInterviewCoordinator {
         // Create handlers for tool router
         let promptHandler = PromptInteractionHandler()
 
-        let uploadStorage = OnboardingUploadStorage()
         let uploadFileService = UploadFileService()
         let uploadHandler = UploadInteractionHandler(
             uploadFileService: uploadFileService,
-            uploadStorage: uploadStorage,
+            uploadStorage: self.uploadStorage,
             applicantProfileStore: applicantProfileStore,
             dataStore: dataStore,
+            eventBus: eventBus,
             extractionProgressHandler: nil
         )
 
@@ -442,6 +467,8 @@ final class OnboardingInterviewCoordinator {
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
              .knowledgeCardPersisted, .knowledgeCardsReplaced,
+             // Upload completion - handled by document processing handlers
+             .uploadCompleted,
              // New spec-aligned events that StateCoordinator handles
              .objectiveStatusChanged, .objectiveStatusUpdateRequested,
              .stateSnapshot, .stateAllowedToolsUpdated,
@@ -588,6 +615,10 @@ final class OnboardingInterviewCoordinator {
         // Subscribe to state updates BEFORE starting interview
         // This ensures we receive the initial processingStateChanged(true) event
         subscribeToStateUpdates()
+
+        // Start document processing handlers
+        await documentArtifactHandler.start()
+        await documentArtifactMessenger.start()
 
         // Start interview through lifecycle controller
         let success = await lifecycleController.startInterview()

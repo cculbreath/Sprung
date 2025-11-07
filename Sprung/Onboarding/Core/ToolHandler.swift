@@ -9,6 +9,7 @@ enum OnboardingToolIdentifier: String, CaseIterable {
     case getUserUpload = "get_user_upload"
     case getMacOSContactCard = "get_macos_contact_card"
     case getApplicantProfile = "get_applicant_profile"
+    case extractDocument = "extract_document"
     case submitForValidation = "submit_for_validation"
 }
 
