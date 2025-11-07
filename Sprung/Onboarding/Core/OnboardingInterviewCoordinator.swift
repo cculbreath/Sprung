@@ -241,7 +241,10 @@ final class OnboardingInterviewCoordinator {
         )
 
         let contactsImportService = ContactsImportService()
-        let profileHandler = ProfileInteractionHandler(contactsImportService: contactsImportService)
+        let profileHandler = ProfileInteractionHandler(
+            contactsImportService: contactsImportService,
+            eventBus: eventBus
+        )
 
         let sectionHandler = SectionToggleHandler()
 

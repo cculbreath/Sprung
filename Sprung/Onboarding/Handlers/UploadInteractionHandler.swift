@@ -211,6 +211,15 @@ final class UploadInteractionHandler {
                 if let targetKey = request.metadata.targetKey {
                     uploadMetadata["target_key"].string = targetKey
                 }
+                if let targetPhaseObjectives = request.metadata.targetPhaseObjectives {
+                    uploadMetadata["target_phase_objectives"] = JSON(targetPhaseObjectives)
+                }
+                if let targetDeliverable = request.metadata.targetDeliverable {
+                    uploadMetadata["target_deliverable"].string = targetDeliverable
+                }
+                if let userValidated = request.metadata.userValidated {
+                    uploadMetadata["user_validated"].bool = userValidated
+                }
 
                 // Emit generic upload completed event (downstream handlers will process based on file type)
                 await eventBus.publish(.uploadCompleted(

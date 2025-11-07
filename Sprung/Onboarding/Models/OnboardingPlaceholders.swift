@@ -129,6 +129,9 @@ struct OnboardingUploadMetadata: Codable {
     var allowURL: Bool = true
     var targetKey: String?
     var cancelMessage: String? = nil
+    var targetPhaseObjectives: [String]?
+    var targetDeliverable: String?
+    var userValidated: Bool?
 }
 
 enum OnboardingUploadKind: String, CaseIterable, Codable {
