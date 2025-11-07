@@ -47,7 +47,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
 
         // Emit event for state coordinator to update objectives
         if profile != nil {
-            await emit(.applicantProfileStored(profile: profile!))
+            await emit(.applicantProfileStored(profile!))
         }
     }
 
@@ -64,7 +64,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
 
         // Emit event for state coordinator to update objectives
         if timeline != nil {
-            await emit(.skeletonTimelineStored(timeline: timeline!))
+            await emit(.skeletonTimelineStored(timeline!))
         }
     }
 
@@ -80,7 +80,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         Logger.info("📑 Enabled sections updated: \(sections.count) sections", category: .ai)
 
         // Emit event for state coordinator to update objectives
-        await emit(.enabledSectionsUpdated(sections: sections))
+        await emit(.enabledSectionsUpdated(sections))
     }
 
     /// Get enabled sections
@@ -255,7 +255,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         Logger.info("📅 Timeline cards reordered", category: .ai)
 
         // Emit event to notify state coordinator
-        await emit(.timelineCardsReordered(orderedIds: orderedIds))
+        await emit(.timelineCardsReordered(ids: orderedIds))
     }
 
     /// Replace entire skeleton timeline (user edit in UI)
@@ -270,7 +270,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         }
 
         // Emit event for state coordinator to mark objective complete
-        await emit(.skeletonTimelineReplaced(timeline: timeline, diff: diff, timestamp: Date()))
+        await emit(.skeletonTimelineReplaced(timeline: timeline, diff: diff, meta: nil))
     }
 
     // MARK: - Experience & Knowledge Cards
