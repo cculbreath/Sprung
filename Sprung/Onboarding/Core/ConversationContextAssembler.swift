@@ -150,4 +150,14 @@ actor ConversationContextAssembler {
     func buildScratchpadSummary() async -> String {
         await state.scratchpadSummary()
     }
+
+    /// Get previous response ID for Responses API threading
+    func getPreviousResponseId() async -> String? {
+        await state.getPreviousResponseId()
+    }
+
+    /// Store previous response ID for Responses API threading
+    func storePreviousResponseId(_ responseId: String) async {
+        await state.setPreviousResponseId(responseId)
+    }
 }
