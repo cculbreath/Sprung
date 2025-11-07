@@ -53,12 +53,23 @@ final class PhaseTransitionController {
         ))
 
         // Query and surface artifacts targeted for this phase's objectives
-        let phaseObjectives = script.requiredObjectives
-        var targetedArtifacts: [JSON] = []
+        // Include both required objectives and all their child objectives
+        let allObjectives = await state.getObjectivesForPhase(phase)
+        let allObjectiveIds = allObjectives.map { $0.id }
 
-        for objectiveId in phaseObjectives {
+        var targetedArtifacts: [JSON] = []
+        var seenArtifactIds = Set<String>()
+
+        for objectiveId in allObjectiveIds {
             let artifacts = await state.getArtifactsForPhaseObjective(objectiveId)
-            targetedArtifacts.append(contentsOf: artifacts)
+            for artifact in artifacts {
+                let artifactId = artifact["id"].stringValue
+                // Deduplicate artifacts that might match multiple objectives
+                if !seenArtifactIds.contains(artifactId) {
+                    seenArtifactIds.insert(artifactId)
+                    targetedArtifacts.append(artifact)
+                }
+            }
         }
 
         // If artifacts exist for this phase, send them as a follow-up developer message
