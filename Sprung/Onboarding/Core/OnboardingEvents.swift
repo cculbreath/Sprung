@@ -73,6 +73,8 @@ enum OnboardingEvent {
     case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
     case artifactRecordPersisted(record: JSON) // emitted after persistence/index update succeeds
     case artifactRecordsReplaced(records: [JSON]) // emitted when persisted artifact records replace in-memory state
+    case artifactMetadataUpdateRequested(artifactId: String, updates: JSON) // emitted when LLM requests metadata update
+    case artifactMetadataUpdated(artifact: JSON) // emitted after StateCoordinator updates metadata (includes full artifact)
 
     // MARK: - Knowledge Card Operations
     case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
@@ -283,6 +285,7 @@ actor EventCoordinator {
         case .uploadCompleted,
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
+             .artifactMetadataUpdateRequested, .artifactMetadataUpdated,
              .knowledgeCardPersisted, .knowledgeCardsReplaced:
             return .artifact
 
@@ -395,6 +398,10 @@ actor EventCoordinator {
             description = "Artifact record persisted: \(record["id"].stringValue)"
         case .artifactRecordsReplaced(let records):
             description = "Artifact records replaced (\(records.count))"
+        case .artifactMetadataUpdateRequested(let artifactId, let updates):
+            description = "Artifact metadata update requested: \(artifactId) (\(updates.dictionaryValue.keys.count) fields)"
+        case .artifactMetadataUpdated(let artifact):
+            description = "Artifact metadata updated: \(artifact["id"].stringValue)"
         case .knowledgeCardPersisted(let card):
             description = "Knowledge card persisted: \(card["title"].stringValue)"
         case .knowledgeCardsReplaced(let cards):

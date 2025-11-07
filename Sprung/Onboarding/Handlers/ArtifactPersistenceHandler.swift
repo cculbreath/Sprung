@@ -56,21 +56,35 @@ actor ArtifactPersistenceHandler: OnboardingEventEmitter {
     // MARK: - Event Handling
 
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
-        guard case .artifactRecordProduced(let record) = event else {
-            return
-        }
+        switch event {
+        case .artifactRecordProduced(let record):
+            Logger.info("💾 Persisting artifact record: \(record["id"].stringValue)", category: .ai)
 
-        Logger.info("💾 Persisting artifact record: \(record["id"].stringValue)", category: .ai)
+            // Write to InterviewDataStore using the correct persist API
+            do {
+                let identifier = try await dataStore.persist(dataType: "artifact_record", payload: record)
+                Logger.info("✅ Artifact record persisted with identifier: \(identifier)", category: .ai)
 
-        // Write to InterviewDataStore using the correct persist API
-        do {
-            let identifier = try await dataStore.persist(dataType: "artifact_record", payload: record)
-            Logger.info("✅ Artifact record persisted with identifier: \(identifier)", category: .ai)
+                // Emit confirmation
+                await emit(.artifactRecordPersisted(record: record))
+            } catch {
+                Logger.error("❌ Failed to persist artifact record: \(error)", category: .ai)
+            }
 
-            // Emit confirmation
-            await emit(.artifactRecordPersisted(record: record))
-        } catch {
-            Logger.error("❌ Failed to persist artifact record: \(error)", category: .ai)
+        case .artifactMetadataUpdated(let artifact):
+            // Re-persist the updated artifact to disk
+            let artifactId = artifact["id"].stringValue
+            Logger.info("💾 Re-persisting updated artifact: \(artifactId)", category: .ai)
+
+            do {
+                let identifier = try await dataStore.persist(dataType: "artifact_record", payload: artifact)
+                Logger.info("✅ Artifact metadata persisted with identifier: \(identifier)", category: .ai)
+            } catch {
+                Logger.error("❌ Failed to persist updated artifact: \(error)", category: .ai)
+            }
+
+        default:
+            break
         }
     }
 }

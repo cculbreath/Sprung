@@ -363,6 +363,7 @@ final class OnboardingInterviewCoordinator {
         toolRegistry.register(ListArtifactsTool(coordinator: self))
         toolRegistry.register(GetArtifactRecordTool(coordinator: self))
         toolRegistry.register(RequestRawArtifactFileTool(coordinator: self))
+        toolRegistry.register(UpdateArtifactMetadataTool(coordinator: self))
         toolRegistry.register(PersistDataTool(dataStore: dataStore, eventBus: eventBus))
         toolRegistry.register(SetObjectiveStatusTool(coordinator: self))
         toolRegistry.register(NextPhaseTool(coordinator: self))
@@ -721,6 +722,10 @@ final class OnboardingInterviewCoordinator {
 
     func getArtifactRecord(id: String) async -> JSON? {
         await state.getArtifactRecord(id: id)
+    }
+
+    func requestArtifactMetadataUpdate(artifactId: String, updates: JSON) async {
+        await eventBus.publish(.artifactMetadataUpdateRequested(artifactId: artifactId, updates: updates))
     }
 
     func getArtifact(id: String) async -> JSON? {
