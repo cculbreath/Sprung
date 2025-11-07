@@ -28,6 +28,7 @@ final class UploadInteractionHandler {
     private let uploadStorage: OnboardingUploadStorage
     private let applicantProfileStore: ApplicantProfileStore
     private let dataStore: InterviewDataStore
+    private let eventBus: EventCoordinator
     private var extractionProgressHandler: ExtractionProgressHandler?
 
     // MARK: - Init
@@ -37,12 +38,14 @@ final class UploadInteractionHandler {
         uploadStorage: OnboardingUploadStorage,
         applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore,
+        eventBus: EventCoordinator,
         extractionProgressHandler: ExtractionProgressHandler?
     ) {
         self.uploadFileService = uploadFileService
         self.uploadStorage = uploadStorage
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
+        self.eventBus = eventBus
         self.extractionProgressHandler = extractionProgressHandler
     }
 
@@ -191,6 +194,31 @@ final class UploadInteractionHandler {
 
                 payload["status"].string = "uploaded"
                 payload["files"] = JSON(filesJSON)
+
+                // Emit generic upload completed event
+                let uploadInfos = processed.map { item in
+                    ProcessedUploadInfo(
+                        storageURL: item.storageURL,
+                        contentType: item.contentType,
+                        filename: item.storageURL.lastPathComponent
+                    )
+                }
+
+                // Build metadata from request
+                var uploadMetadata = JSON()
+                uploadMetadata["title"].string = request.metadata.title
+                uploadMetadata["instructions"].string = request.metadata.instructions
+                if let targetKey = request.metadata.targetKey {
+                    uploadMetadata["target_key"].string = targetKey
+                }
+
+                // Emit generic upload completed event (downstream handlers will process based on file type)
+                await eventBus.publish(.uploadCompleted(
+                    files: uploadInfos,
+                    requestKind: request.kind.rawValue,
+                    callId: continuationId.uuidString,
+                    metadata: uploadMetadata
+                ))
 
                 // Handle targeted uploads (e.g., basics.image)
                 if let target = request.metadata.targetKey {
