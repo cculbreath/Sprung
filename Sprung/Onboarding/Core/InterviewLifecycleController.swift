@@ -111,6 +111,11 @@ final class InterviewLifecycleController {
         transcriptPersistenceHandler = transcriptHandler
         await transcriptHandler.start()
 
+        // Send phase introductory prompt for the current phase
+        // This ensures the LLM receives phase-specific instructions on first launch
+        let currentPhase = await state.phase
+        await eventBus.publish(.phaseTransitionApplied(phase: currentPhase.rawValue, timestamp: Date()))
+
         // Finally, send the initial message to start the conversation
         // At this point, LLMMessenger is subscribed and has received allowed tools
         await orchestrator.sendInitialMessage()

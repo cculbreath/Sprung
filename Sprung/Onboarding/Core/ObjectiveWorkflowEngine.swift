@@ -68,7 +68,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             let newStatusString,
             let phaseString,
             let source,
-            _
+            let notes
         ) = event else {
             return
         }
@@ -107,15 +107,23 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             return
         }
 
-        // Build the context
+        // Build the context with source and notes from the event
         let completedObjectives = await state.getAllObjectives()
             .filter { $0.status == .completed || $0.status == .skipped }
             .map { $0.id }
 
+        var details: [String: String] = [:]
+        if let source = source {
+            details["source"] = source
+        }
+        if let notes = notes {
+            details["notes"] = notes
+        }
+
         let context = ObjectiveWorkflowContext(
             completedObjectives: Set(completedObjectives),
             status: newStatus,
-            details: [:]  // Future: could extract from objective notes
+            details: details
         )
 
         // Execute the workflow callbacks

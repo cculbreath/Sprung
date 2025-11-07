@@ -190,26 +190,51 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Objective Catalog
 
-    /// Hardcoded objective metadata (labels and structure) for each phase.
+    /// Hierarchical objective metadata for each phase.
+    /// Structure matches the objective tree in PhaseOneScript.swift prompt.
     /// The phasePolicy (from PhaseScriptRegistry) provides required objectives and allowed tools.
-    private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String)]] = [
+    private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String, parentId: String?)]] = [
         .phase1CoreFacts: [
-            ("applicant_profile", "Applicant profile objective"),
-            ("skeleton_timeline", "Skeleton timeline objective"),
-            ("enabled_sections", "Enabled sections objective"),
-            ("dossier_seed", "Dossier seed questions captured"),
-            ("contact_source_selected", "Contact source selected"),
-            ("contact_data_collected", "Contact data collected"),
-            ("contact_data_validated", "Contact data validated"),
-            ("contact_photo_collected", "Contact photo collected")
+            // P1.1 applicant_profile (top-level)
+            ("P1.1", "Applicant profile", nil),
+            ("P1.1.A", "Contact Information", "P1.1"),
+            ("P1.1.A.1", "Activate applicant profile card", "P1.1.A"),
+            ("P1.1.A.2", "ApplicantProfile updated with user-validated data", "P1.1.A"),
+            ("P1.1.B", "Optional Profile Photo", "P1.1"),
+            ("P1.1.B.1", "Retrieve ApplicantProfile", "P1.1.B"),
+            ("P1.1.B.2", "Check if photo upload required", "P1.1.B"),
+            ("P1.1.B.3", "Activate photo upload card", "P1.1.B"),
+
+            // P1.2 skeleton_timeline (top-level)
+            ("P1.2", "Skeleton timeline", nil),
+            ("P1.2.A", "Use get_user_upload and chat interview to gather timeline data", "P1.2"),
+            ("P1.2.B", "Use TimelineEntry UI to collaborate with user", "P1.2"),
+            ("P1.2.C", "Use chat interview to understand gaps and narrative structure", "P1.2"),
+            ("P1.2.D", "Set status when skeleton timeline data gathering is complete", "P1.2"),
+
+            // P1.3 enabled_sections (top-level)
+            ("P1.3", "Enabled sections", nil),
+
+            // P1.4 dossier_seed (top-level)
+            ("P1.4", "Dossier seed questions", nil),
+
+            // Legacy flat IDs for backward compatibility (mapped to hierarchical)
+            ("applicant_profile", "Applicant profile (legacy)", nil),
+            ("skeleton_timeline", "Skeleton timeline (legacy)", nil),
+            ("enabled_sections", "Enabled sections (legacy)", nil),
+            ("dossier_seed", "Dossier seed (legacy)", nil),
+            ("contact_source_selected", "Contact source selected", nil),
+            ("contact_data_collected", "Contact data collected", nil),
+            ("contact_data_validated", "Contact data validated", nil),
+            ("contact_photo_collected", "Contact photo collected", nil)
         ],
         .phase2DeepDive: [
-            ("interviewed_one_experience", "Experience interview completed"),
-            ("one_card_generated", "Knowledge card generated")
+            ("interviewed_one_experience", "Experience interview completed", nil),
+            ("one_card_generated", "Knowledge card generated", nil)
         ],
         .phase3WritingCorpus: [
-            ("one_writing_sample", "Writing sample collected"),
-            ("dossier_complete", "Dossier completed")
+            ("one_writing_sample", "Writing sample collected", nil),
+            ("dossier_complete", "Dossier completed", nil)
         ],
         .complete: []
     ]
@@ -228,14 +253,15 @@ actor StateCoordinator: OnboardingEventEmitter {
                 descriptor.id,
                 label: descriptor.label,
                 phase: descriptor.phase,
-                source: descriptor.source
+                source: descriptor.source,
+                parentId: descriptor.parentId
             )
         }
     }
 
-    private static func objectivesForPhase(_ phase: InterviewPhase, policy: PhasePolicy) -> [(id: String, label: String, phase: InterviewPhase, source: String)] {
+    private static func objectivesForPhase(_ phase: InterviewPhase, policy: PhasePolicy) -> [(id: String, label: String, phase: InterviewPhase, source: String, parentId: String?)] {
         let metadata = objectiveMetadata[phase] ?? []
-        return metadata.map { (id: $0.id, label: $0.label, phase: phase, source: "system") }
+        return metadata.map { (id: $0.id, label: $0.label, phase: phase, source: "system", parentId: $0.parentId) }
     }
 
     // MARK: - Phase Management

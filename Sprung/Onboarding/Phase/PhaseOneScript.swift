@@ -11,9 +11,10 @@ struct PhaseOneScript: PhaseScript {
     let phase: InterviewPhase = .phase1CoreFacts
 
     let requiredObjectives: [String] = [
-        "applicant_profile",
-        "skeleton_timeline",
-        "enabled_sections"
+        "P1.1",  // applicant_profile
+        "P1.2",  // skeleton_timeline
+        "P1.3"   // enabled_sections
+        // P1.4 (dossier_seed) is optional, not required for phase advancement
     ]
 
     let allowedTools: [String] = [

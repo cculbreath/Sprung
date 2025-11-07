@@ -349,7 +349,7 @@ final class ProfileInteractionHandler {
 
         // Add metadata for LLM
         var metadata = JSON()
-        metadata["target_phase_objectives"] = JSON(["1A"])
+        metadata["target_phase_objectives"] = JSON(["P1.1.A"])  // Contact Information sub-objective
         metadata["target_deliverable"].string = "ApplicantProfile"
         metadata["user_validated"].bool = true
         artifactRecord["metadata"] = metadata
