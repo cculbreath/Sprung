@@ -164,7 +164,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         case wrapUp
     }
 
-    private(set) var currentWizardStep: WizardStep = .resumeIntake
+    private(set) var currentWizardStep: WizardStep = .introduction
     private(set) var completedWizardSteps: Set<WizardStep> = []
 
     // MARK: - Initialization
@@ -866,30 +866,56 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Wizard Progress
 
     private func updateWizardProgress() {
-        // Determine current step based on objectives
-        let hasProfile = objectives["applicant_profile"]?.status == .completed
-        let hasTimeline = objectives["skeleton_timeline"]?.status == .completed
-        let hasSections = objectives["enabled_sections"]?.status == .completed
-        _ = objectives["interviewed_one_experience"]?.status == .completed
+        // Determine current step based on hierarchical objectives
+        // Phase 1 objectives (hierarchical IDs)
+        let hasProfile = objectives["P1.1"]?.status == .completed
+        let hasTimeline = objectives["P1.2"]?.status == .completed
+        let hasSections = objectives["P1.3"]?.status == .completed
+
+        // Phase 2 objectives
+        let hasExperienceInterview = objectives["interviewed_one_experience"]?.status == .completed
+        let hasKnowledgeCard = objectives["one_card_generated"]?.status == .completed
+
+        // Phase 3 objectives
         let hasWriting = objectives["one_writing_sample"]?.status == .completed
+        let hasDossier = objectives["dossier_complete"]?.status == .completed
 
-        if hasProfile {
+        // Start from introduction
+        if currentWizardStep == .introduction {
+            // Advance to resume intake when interview starts
+            if !objectives.isEmpty {
+                currentWizardStep = .resumeIntake
+            }
+        }
+
+        // Resume Intake (Phase 1): Profile + Timeline + Sections
+        if hasProfile && hasTimeline && hasSections {
             completedWizardSteps.insert(.resumeIntake)
+
+            // Only advance to artifact discovery if we're in Phase 2 or completed Phase 1
+            if phase == .phase2DeepDive || phase == .phase3WritingCorpus || phase == .complete {
+                currentWizardStep = .artifactDiscovery
+            }
         }
 
-        if hasTimeline && hasSections {
+        // Artifact Discovery (Phase 2): Experience interviews + Knowledge cards
+        if hasExperienceInterview && hasKnowledgeCard {
             completedWizardSteps.insert(.artifactDiscovery)
-            currentWizardStep = .writingCorpus
-        } else if hasProfile {
-            currentWizardStep = .artifactDiscovery
+
+            // Only advance to writing corpus if we're in Phase 3
+            if phase == .phase3WritingCorpus || phase == .complete {
+                currentWizardStep = .writingCorpus
+            }
         }
 
-        if hasWriting {
+        // Writing Corpus (Phase 3): Writing samples + Dossier
+        if hasWriting && hasDossier {
             completedWizardSteps.insert(.writingCorpus)
             currentWizardStep = .wrapUp
         }
 
-        if phase == .phase3WritingCorpus && hasWriting {
+        // Wrap Up (Final phase)
+        if phase == .complete {
             completedWizardSteps.insert(.wrapUp)
         }
     }
@@ -911,7 +937,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         pendingExtraction = nil
         pendingStreamingStatus = nil
         waitingState = nil
-        currentWizardStep = .resumeIntake
+        currentWizardStep = .introduction
         completedWizardSteps.removeAll()
 
         // Reset sync caches
