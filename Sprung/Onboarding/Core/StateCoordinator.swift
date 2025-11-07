@@ -365,7 +365,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             id: id,
             oldStatus: oldStatus.rawValue,
             newStatus: status.rawValue,
-            phase: phase.rawValue,
+            phase: objective.phase.rawValue,
             source: objective.source,
             notes: objective.notes
         ))
