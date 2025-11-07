@@ -10,6 +10,11 @@ struct PhasePolicy {
 /// Thin orchestrator for onboarding state.
 /// Delegates domain logic to injected services and maintains sync caches for SwiftUI.
 actor StateCoordinator: OnboardingEventEmitter {
+    // MARK: - Type Aliases (Backward Compatibility)
+
+    typealias ObjectiveEntry = ObjectiveStore.ObjectiveEntry
+    typealias OnboardingArtifacts = ArtifactRepository.OnboardingArtifacts
+
     // MARK: - Event System
 
     let eventBus: EventCoordinator
@@ -17,9 +22,9 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Domain Services (Injected)
 
-    private let objectives: ObjectiveStore
-    private let artifacts: ArtifactRepository
-    private let chat: ChatTranscriptStore
+    private let objectiveStore: ObjectiveStore
+    private let artifactRepository: ArtifactRepository
+    private let chatStore: ChatTranscriptStore
     private let uiState: SessionUIState
 
     // MARK: - Phase Policy
@@ -83,9 +88,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     ) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
-        self.objectives = objectives
-        self.artifacts = artifacts
-        self.chat = chat
+        self.objectiveStore = objectives
+        self.artifactRepository = artifacts
+        self.chatStore = chat
         self.uiState = uiState
 
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
@@ -105,7 +110,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("📍 Phase changed to: \(phase)", category: .ai)
 
         // Register default objectives for new phase
-        await objectives.registerDefaultObjectives(for: phase)
+        await objectiveStore.registerDefaultObjectives(for: phase)
 
         // Update UI state phase (for tool permissions)
         await uiState.setPhase(phase)
@@ -126,26 +131,26 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     func canAdvancePhase() async -> Bool {
-        return await objectives.canAdvancePhase(from: phase)
+        return await objectiveStore.canAdvancePhase(from: phase)
     }
 
     // MARK: - Wizard Progress (Queries ObjectiveStore)
 
     private func updateWizardProgress() async {
         // Query objective statuses from ObjectiveStore
-        let hasProfile = await objectives.getObjectiveStatus("P1.1") == .completed
-        let hasTimeline = await objectives.getObjectiveStatus("P1.2") == .completed
-        let hasSections = await objectives.getObjectiveStatus("P1.3") == .completed
+        let hasProfile = await objectiveStore.getObjectiveStatus("P1.1") == .completed
+        let hasTimeline = await objectiveStore.getObjectiveStatus("P1.2") == .completed
+        let hasSections = await objectiveStore.getObjectiveStatus("P1.3") == .completed
 
-        let hasExperienceInterview = await objectives.getObjectiveStatus("interviewed_one_experience") == .completed
-        let hasKnowledgeCard = await objectives.getObjectiveStatus("one_card_generated") == .completed
+        let hasExperienceInterview = await objectiveStore.getObjectiveStatus("interviewed_one_experience") == .completed
+        let hasKnowledgeCard = await objectiveStore.getObjectiveStatus("one_card_generated") == .completed
 
-        let hasWriting = await objectives.getObjectiveStatus("one_writing_sample") == .completed
-        let hasDossier = await objectives.getObjectiveStatus("dossier_complete") == .completed
+        let hasWriting = await objectiveStore.getObjectiveStatus("one_writing_sample") == .completed
+        let hasDossier = await objectiveStore.getObjectiveStatus("dossier_complete") == .completed
 
         // Start from introduction
         if currentWizardStep == .introduction {
-            let allObjectives = await objectives.getAllObjectives()
+            let allObjectives = await objectiveStore.getAllObjectives()
             if !allObjectives.isEmpty {
                 currentWizardStep = .resumeIntake
             }
@@ -189,11 +194,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         lines.append("phase=\(phase.rawValue)")
 
         // Objectives from ObjectiveStore
-        let objectiveSummary = await objectives.scratchpadSummary(for: phase)
+        let objectiveSummary = await objectiveStore.scratchpadSummary(for: phase)
         lines.append(objectiveSummary)
 
         // Artifacts from ArtifactRepository
-        let artifactLines = await artifacts.scratchpadSummary()
+        let artifactLines = await artifactRepository.scratchpadSummary()
         lines.append(contentsOf: artifactLines)
 
         let combined = lines.joined(separator: "\n")
@@ -278,15 +283,15 @@ actor StateCoordinator: OnboardingEventEmitter {
             await emitSnapshot(reason: "checkpoint")
 
         case .applicantProfileStored(let profile):
-            await artifacts.setApplicantProfile(profile)
+            await artifactRepository.setApplicantProfile(profile)
             Logger.info("👤 Applicant profile stored via event", category: .ai)
 
         case .skeletonTimelineStored(let timeline):
-            await artifacts.setSkeletonTimeline(timeline)
+            await artifactRepository.setSkeletonTimeline(timeline)
             Logger.info("📅 Skeleton timeline stored via event", category: .ai)
 
         case .enabledSectionsUpdated(let sections):
-            await artifacts.setEnabledSections(sections)
+            await artifactRepository.setEnabledSections(sections)
             Logger.info("📑 Enabled sections updated via event", category: .ai)
 
         default:
@@ -321,8 +326,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .llmUserMessageSent(let messageId, let payload, let isSystemGenerated):
             let text = payload["text"].stringValue
-            _ = await chat.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
-            messagesSync = await chat.getAllMessages() // Update sync cache
+            _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
+            messagesSync = await chatStore.getAllMessages() // Update sync cache
             Logger.debug("StateCoordinator: user message appended via chat service", category: .ai)
 
         case .llmSentToolResponseMessage:
@@ -334,28 +339,28 @@ actor StateCoordinator: OnboardingEventEmitter {
             isProcessingSync = newProcessingState // Update sync cache
 
         case .streamingMessageBegan(let id, let text, let reasoningExpected):
-            _ = await chat.beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
-            messagesSync = await chat.getAllMessages()
-            streamingMessageSync = await chat.getStreamingMessage()
+            _ = await chatStore.beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
+            messagesSync = await chatStore.getAllMessages()
+            streamingMessageSync = await chatStore.getStreamingMessage()
 
         case .streamingMessageUpdated(let id, let delta):
-            await chat.updateStreamingMessage(id: id, delta: delta)
-            messagesSync = await chat.getAllMessages()
-            streamingMessageSync = await chat.getStreamingMessage()
+            await chatStore.updateStreamingMessage(id: id, delta: delta)
+            messagesSync = await chatStore.getAllMessages()
+            streamingMessageSync = await chatStore.getStreamingMessage()
 
         case .streamingMessageFinalized(let id, let finalText, let toolCalls):
-            await chat.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
-            messagesSync = await chat.getAllMessages()
+            await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
+            messagesSync = await chatStore.getAllMessages()
             streamingMessageSync = nil
 
         case .llmReasoningSummaryDelta(let delta):
-            await chat.updateReasoningSummary(delta: delta)
-            currentReasoningSummarySync = await chat.getCurrentReasoningSummary()
-            isReasoningActiveSync = await chat.getIsReasoningActive()
+            await chatStore.updateReasoningSummary(delta: delta)
+            currentReasoningSummarySync = await chatStore.getCurrentReasoningSummary()
+            isReasoningActiveSync = await chatStore.getIsReasoningActive()
 
         case .llmReasoningSummaryComplete(let text):
-            await chat.completeReasoningSummary(finalText: text)
-            currentReasoningSummarySync = await chat.getCurrentReasoningSummary()
+            await chatStore.completeReasoningSummary(finalText: text)
+            currentReasoningSummarySync = await chatStore.getCurrentReasoningSummary()
             isReasoningActiveSync = false
 
         default:
@@ -366,7 +371,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
         switch event {
         case .objectiveStatusRequested(let id, let response):
-            let status = await objectives.getObjectiveStatus(id)
+            let status = await objectiveStore.getObjectiveStatus(id)
             response(status?.rawValue)
 
         case .objectiveStatusUpdateRequested(let id, let statusString, let source, let notes):
@@ -374,11 +379,11 @@ actor StateCoordinator: OnboardingEventEmitter {
                 Logger.warning("Invalid objective status: \(statusString)", category: .ai)
                 return
             }
-            await objectives.setObjectiveStatus(id, status: status, source: source, notes: notes)
+            await objectiveStore.setObjectiveStatus(id, status: status, source: source, notes: notes)
 
         case .objectiveStatusChanged:
             // Update sync cache when objectives change
-            objectivesSync = await objectives.objectivesSync
+            objectivesSync = await objectiveStore.objectivesSync
             // Update wizard progress
             await updateWizardProgress()
 
@@ -417,19 +422,19 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleTimelineEvent(_ event: OnboardingEvent) async {
         switch event {
         case .timelineCardCreated(let card):
-            await artifacts.createTimelineCard(card)
+            await artifactRepository.createTimelineCard(card)
 
         case .timelineCardUpdated(let id, let fields):
-            await artifacts.updateTimelineCard(id: id, fields: fields)
+            await artifactRepository.updateTimelineCard(id: id, fields: fields)
 
         case .timelineCardDeleted(let id):
-            await artifacts.deleteTimelineCard(id: id)
+            await artifactRepository.deleteTimelineCard(id: id)
 
         case .timelineCardsReordered(let orderedIds):
-            await artifacts.reorderTimelineCards(orderedIds: orderedIds)
+            await artifactRepository.reorderTimelineCards(orderedIds: orderedIds)
 
         case .skeletonTimelineReplaced(let timeline, let diff, _):
-            await artifacts.replaceSkeletonTimeline(timeline, diff: diff)
+            await artifactRepository.replaceSkeletonTimeline(timeline, diff: diff)
 
         default:
             break
@@ -439,26 +444,26 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
         case .artifactRecordProduced(let record):
-            await artifacts.upsertArtifactRecord(record)
-            artifactRecordsSync = await artifacts.artifactRecordsSync
+            await artifactRepository.upsertArtifactRecord(record)
+            artifactRecordsSync = await artifactRepository.artifactRecordsSync
 
         case .artifactRecordPersisted(let record):
-            await artifacts.upsertArtifactRecord(record)
-            artifactRecordsSync = await artifacts.artifactRecordsSync
+            await artifactRepository.upsertArtifactRecord(record)
+            artifactRecordsSync = await artifactRepository.artifactRecordsSync
 
         case .artifactRecordsReplaced(let records):
-            await artifacts.setArtifactRecords(records)
+            await artifactRepository.setArtifactRecords(records)
             artifactRecordsSync = records
 
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
-            await artifacts.updateArtifactMetadata(artifactId: artifactId, updates: updates)
-            artifactRecordsSync = await artifacts.artifactRecordsSync
+            await artifactRepository.updateArtifactMetadata(artifactId: artifactId, updates: updates)
+            artifactRecordsSync = await artifactRepository.artifactRecordsSync
 
         case .knowledgeCardPersisted(let card):
-            await artifacts.addKnowledgeCard(card)
+            await artifactRepository.addKnowledgeCard(card)
 
         case .knowledgeCardsReplaced(let cards):
-            await artifacts.setKnowledgeCards(cards)
+            await artifactRepository.setKnowledgeCards(cards)
 
         default:
             break
@@ -500,7 +505,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     func createSnapshot() async -> StateSnapshot {
-        let allObjectives = await objectives.getAllObjectives()
+        let allObjectives = await objectiveStore.getAllObjectives()
         let objectivesDict = Dictionary(uniqueKeysWithValues: allObjectives.map { ($0.id, $0) })
 
         return StateSnapshot(
@@ -509,6 +514,24 @@ actor StateCoordinator: OnboardingEventEmitter {
             wizardStep: currentWizardStep.rawValue,
             completedWizardSteps: Set(completedWizardSteps.map { $0.rawValue })
         )
+    }
+
+    func restoreFromSnapshot(_ snapshot: StateSnapshot) async {
+        phase = snapshot.phase
+
+        // Restore objectives to ObjectiveStore
+        await objectiveStore.restore(objectives: snapshot.objectives)
+
+        // Restore wizard progress
+        if let step = WizardStep(rawValue: snapshot.wizardStep) {
+            currentWizardStep = step
+        }
+        completedWizardSteps = Set(snapshot.completedWizardSteps.compactMap { WizardStep(rawValue: $0) })
+
+        // Update sync caches
+        objectivesSync = await objectiveStore.objectivesSync
+
+        Logger.info("📥 State restored from snapshot", category: .ai)
     }
 
     private func emitSnapshot(reason: String) async {
@@ -529,9 +552,9 @@ actor StateCoordinator: OnboardingEventEmitter {
         completedWizardSteps.removeAll()
 
         // Reset all services
-        await objectives.reset()
-        await artifacts.reset()
-        await chat.reset()
+        await objectiveStore.reset()
+        await artifactRepository.reset()
+        await chatStore.reset()
         await uiState.reset()
 
         // Reset sync caches
@@ -548,5 +571,145 @@ actor StateCoordinator: OnboardingEventEmitter {
         pendingPhaseAdvanceRequestSync = nil
 
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
+    }
+
+    // MARK: - Delegation Methods (Convenience APIs)
+
+    /// Provides backward compatibility and convenience access to service methods.
+    /// These delegate to the appropriate service actors.
+
+    // Objective delegation
+    func getObjectiveStatus(_ id: String) async -> ObjectiveStatus? {
+        await objectiveStore.getObjectiveStatus(id)
+    }
+
+    func getAllObjectives() async -> [ObjectiveStore.ObjectiveEntry] {
+        await objectiveStore.getAllObjectives()
+    }
+
+    func getMissingObjectives() async -> [String] {
+        await objectiveStore.getMissingObjectives(for: phase)
+    }
+
+    func getObjectivesForPhase(_ phase: InterviewPhase) async -> [ObjectiveStore.ObjectiveEntry] {
+        await objectiveStore.getObjectivesForPhase(phase)
+    }
+
+    // Artifact delegation
+    func getArtifactRecord(id: String) async -> JSON? {
+        await artifactRepository.getArtifactRecord(id: id)
+    }
+
+    func getArtifactsForPhaseObjective(_ objectiveId: String) async -> [JSON] {
+        await artifactRepository.getArtifactsForPhaseObjective(objectiveId)
+    }
+
+    var artifacts: ArtifactRepository.OnboardingArtifacts {
+        get async {
+            // Reconstruct artifacts struct from repository
+            ArtifactRepository.OnboardingArtifacts(
+                applicantProfile: await artifactRepository.getApplicantProfile(),
+                skeletonTimeline: await artifactRepository.getSkeletonTimeline(),
+                enabledSections: await artifactRepository.getEnabledSections(),
+                experienceCards: await artifactRepository.getExperienceCards(),
+                writingSamples: await artifactRepository.getWritingSamples(),
+                artifactRecords: artifactRecordsSync,
+                knowledgeCards: await artifactRepository.getKnowledgeCards()
+            )
+        }
+    }
+
+    func listArtifactSummaries() async -> [JSON] {
+        await artifactRepository.listArtifactSummaries()
+    }
+
+    // Chat delegation
+    var messages: [OnboardingMessage] {
+        get async {
+            await chatStore.getAllMessages()
+        }
+    }
+
+    var latestReasoningSummary: String? {
+        get async {
+            await chatStore.getLatestReasoningSummary()
+        }
+    }
+
+    func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
+        await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
+    }
+
+    func appendAssistantMessage(_ text: String) async -> UUID {
+        await chatStore.appendAssistantMessage(text)
+    }
+
+    func beginStreamingMessage(initialText: String, reasoningExpected: Bool) async -> UUID {
+        await chatStore.beginStreamingMessage(initialText: initialText, reasoningExpected: reasoningExpected)
+    }
+
+    func updateStreamingMessage(id: UUID, delta: String) async {
+        await chatStore.updateStreamingMessage(id: id, delta: delta)
+    }
+
+    func finalizeStreamingMessage(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil) async {
+        await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
+    }
+
+    func getPreviousResponseId() async -> String? {
+        await chatStore.getPreviousResponseId()
+    }
+
+    func setPreviousResponseId(_ responseId: String?) async {
+        await chatStore.setPreviousResponseId(responseId)
+    }
+
+    // UI State delegation
+    func setActiveState(_ active: Bool) async {
+        await uiState.setActiveState(active)
+    }
+
+    func publishAllowedToolsNow() async {
+        await uiState.publishToolPermissionsNow()
+    }
+
+    var waitingState: SessionUIState.WaitingState? {
+        get async {
+            await uiState.getWaitingState()
+        }
+    }
+
+    func getAllowedToolsForCurrentPhase() -> Set<String> {
+        phasePolicy.allowedTools[phase] ?? []
+    }
+
+    var isProcessing: Bool {
+        get async {
+            isProcessingSync
+        }
+    }
+
+    var isActive: Bool {
+        get async {
+            isActiveSync
+        }
+    }
+
+    var pendingExtraction: OnboardingPendingExtraction? {
+        get async {
+            pendingExtractionSync
+        }
+    }
+
+    var pendingStreamingStatus: String? {
+        get async {
+            pendingStreamingStatusSync
+        }
+    }
+
+    var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? {
+        get async {
+            pendingPhaseAdvanceRequestSync
+        }
     }
 }

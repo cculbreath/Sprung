@@ -187,7 +187,21 @@ final class OnboardingInterviewCoordinator {
             })
         )
 
-        self.state = StateCoordinator(eventBus: eventBus, phasePolicy: phasePolicy)
+        // Create domain service actors
+        let objectiveStore = ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
+        let artifactRepository = ArtifactRepository(eventBus: eventBus)
+        let chatTranscriptStore = ChatTranscriptStore(eventBus: eventBus)
+        let sessionUIState = SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
+
+        // Create StateCoordinator with injected services
+        self.state = StateCoordinator(
+            eventBus: eventBus,
+            phasePolicy: phasePolicy,
+            objectives: objectiveStore,
+            artifacts: artifactRepository,
+            chat: chatTranscriptStore,
+            uiState: sessionUIState
+        )
         self.openAIService = openAIService
         self.documentExtractionService = documentExtractionService
         self.knowledgeCardAgent = openAIService.map { KnowledgeCardAgent(client: $0) }
