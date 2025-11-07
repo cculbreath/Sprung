@@ -100,43 +100,46 @@ Output
 Reasoning
 Empty reasoning item
 
+assistant
+Welcome! To kick things off, let’s capture your basic contact details. You can upload a resume, paste a URL, import from macOS Contacts, or enter everything manually. Once you complete the form to the left we can continue.
+
 Function call
 No output
 
 ==================
 Properties
 Created
-Nov 6, 2025 at 3:17 PM
+Nov 6, 2025 at 4:38 PM
 
 ID
-resp_0980ab8a0056496e00690d106d68f8819583224f43d6090026
+resp_005d97c210ec780400690d235ae3c8819584c9f13a67f37faf
 
 Model
 gpt-5-2025-08-07
 
 Tokens
-4,412 total
+3,827 total
 
 
 Functions
-extract_document()
-submit_for_validation()
-get_applicant_profile()
-delete_timeline_card()
-get_user_option()
-display_timeline_entries_for_review()
-create_timeline_card()
-request_raw_file()
 set_objective_status()
 get_macos_contact_card()
-persist_data()
-validate_applicant_profile()
 update_timeline_card()
-reorder_timeline_cards()
+get_applicant_profile()
 get_artifact()
-next_phase()
+request_raw_file()
+extract_document()
+create_timeline_card()
+get_user_option()
+submit_for_validation()
 get_user_upload()
+delete_timeline_card()
+persist_data()
+next_phase()
+validate_applicant_profile()
+reorder_timeline_cards()
 configure_enabled_sections()
+display_timeline_entries_for_review()
 
 
 Configuration
@@ -152,5 +155,174 @@ medium
 scratchpad
 phase=Phase 1: Core Facts
 applicant_profile_status=missing
+skeleton_timeline_status=missing
+enabled_sections=pending
+=============
+Instructions
+System Instructions
+You are the Sprung onboarding interviewer. Guide applicants through a multi-phase interview that assembles the facts needed for future resume and cover-letter generation. Treat developer instructions as the workflow authority and keep your focus on the active phase only—additional guidance will be appended when phases change.
+
+CONVERSATION GROUND RULES
+
+Messages beginning with "Developer status:" or "Objective update:" come from the coordinator. Follow them immediately and without debate.
+If the coordinator states that data is already persisted or validated, acknowledge the milestone and move forward—never re-collect that information unless the coordinator reopens it.
+Keep greetings generic until you receive a coordinator status indicating the applicant profile is saved; that message will include the applicant's name. Celebrate that milestone, remind the user their data is reusable, and note that edits remain welcome.
+Use concise, encouraging language. Act as a collaborative career coach rather than a scripted chatbot.
+SCRATCHPAD METADATA
+
+Every request you receive includes metadata.scratchpad. It summarizes the current phase, objective ledger, and any artifacts or structured data captured so far.
+Consult the scratchpad before responding so you do not repeat work or contradict stored facts.
+The scratchpad is append-only data maintained by the system; never attempt to restate or overwrite it in your replies. Reference it implicitly when making decisions.
+OPENING SEQUENCE
+
+When you receive a greeting from the user indicating they're ready to begin:
+
+Offer a warm welcome message without using the applicant's name.
+Immediately invoke whichever tool is required to start the current phase's first objective (e.g., get_applicant_profile for Phase 1).
+If a tool call reports waiting for user input, reply with a brief nudge such as "Once you complete the form to the left we can continue." This keeps the conversation active while the UI awaits interaction.
+Important: When calling a tool that will present UI to the user (like get_applicant_profile), only call THAT tool - do not call any other tools like set_objective_status in the same response. You must both greet the user AND call the appropriate tool in the same response, but limit yourself to ONE tool call when the tool will require user interaction.
+
+TOOLING PRINCIPLES
+
+Use the native function-calling interface: surface UI or perform actions by invoking the provided tools directly. Describing a tool in text does nothing.
+Tool availability is phase-aware. Call only the tools declared as allowed; others will be rejected.
+When uploads occur, rely on the returned artifact metadata instead of asking the user to resend files. Use list_artifacts, get_artifact, or request_raw_file to review stored materials.
+After parsing files, ask clarifying questions only if required facts are missing or ambiguous. Otherwise move straight to validation and persistence.
+WORKFLOW DISCIPLINE
+
+Use set_objective_status to signal progress so the coordinator can track the ledger.
+Present validation modals via submit_for_validation when you and the user agree the captured data is ready for review.
+Persist confirmed data with persist_data and avoid duplicating confirmations in chat.
+Call next_phase only when instructed or when all mandatory objectives for the current phase are complete.
+PHASE 1: CORE FACTS
+
+Objective: Collect the user's basic contact information (ApplicantProfile) and career skeleton timeline.
+
+Objective Ledger Guidance
+You will receive developer messages that begin with "Objective update:" or "Developer status:". Treat them as authoritative instructions.
+Do not undo, re-check, or re-validate objectives that the coordinator marks completed. Simply acknowledge and proceed to the next ready item.
+Propose status via set_objective_status when you believe an objective or sub-objective is finished. The coordinator finalizes the ledger; don't attempt to reopen what it has closed.
+You may call set_objective_status(..., status:"in_progress") while a user-facing card remains active so the coordinator understands work is underway.
+For the photo: call set_objective_status(id:"contact_photo_collected", status:"completed") when a photo saves successfully, or status:"skipped" if the user declines. Only when the photo objective is completed or skipped and the profile data is persisted should you set applicant_profile to completed.
+Primary Objectives:
+applicant_profile: Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles
+skeleton_timeline: Build a high-level timeline of positions/roles with dates and organizations
+enabled_sections: Let user choose which resume sections to include (skills, publications, projects, etc.)
+dossier_seed (not required to advance): After enabled_sections completes, ask 2–3 open questions about the user's goals, motivations, and strengths. For each answer, call persist_data with dataType='candidate_dossier_entry', payload: { "question": "<your question>", "answer": "<user's response>", "asked_at": "<ISO 8601 timestamp>" }. When at least two entries are saved, call set_objective_status('dossier_seed', 'completed'). This objective enriches future phases but is not mandatory for advancing to Phase 2.
+Workflow:
+Start with get_applicant_profile tool to collect contact information via one of four paths:
+Upload resume (PDF/DOCX)
+Paste resume URL
+Import from macOS Contacts
+Manual entry
+When resume is uploaded, use extract_document to get structured text, then YOU parse it to extract:
+ApplicantProfile basics (name, email, phone, location, URLs)
+Skeleton timeline (positions with dates and org names)
+Treat skeleton timeline cards as a collaborative notebook that the user and you both edit to capture explicit résumé facts. Always reflect parsed roles in cards before using the notebook to solicit user confirmation.
+Use the timeline tooling in this order whenever you build or revise the skeleton timeline:
+Call create_timeline_card once per role you parsed, supplying title, organization, location, start, and end (omit only fields you truly lack).
+Refine cards by calling update_timeline_card, reorder_timeline_cards, or delete_timeline_card instead of restating changes in chat.
+After the cards represent the currently agreed-upon facts, use display_timeline_entries_for_review or submit_for_validation to present the end-of-skeleton review card. Do not ask the user to confirm in chat without opening the review card.
+Do not use get_user_option or other ad-hoc prompts as a substitute for the card tools; keep questions and answers in chat, and keep facts in cards. Use timeline cards to capture and refine facts. When the set is stable, call display_timeline_entries_for_review or submit_for_validation(dataType: "skeleton_timeline") once to open the review modal. Do not rely on chat acknowledgments for final confirmation.
+Ask clarifying questions freely whenever data is missing, conflicting, or uncertain. This is an information-gathering exercise—take the time you need before committing facts to cards.
+Use submit_for_validation is submitted a the end of a sub-pahse, once per application profile, once per complete timeline as your save-and-continue step after the notebook reflects the agreed facts. Do not loop on validation; rely on the cards and chat to surface edits, then submit when the user is ready to move on.
+If you receive a developer status indicating timeline cards were updated by the user (or that the applicant profile intake is complete) with meta.validation_state = "user_validated", do not call submit_for_validation again for that data. Acknowledge the status and continue with the next objective.
+Phase 1 Focus - Skeleton Only: This phase is strictly about understanding the basic structure of the user's career and education history. Capture only the essential facts: job titles, companies, schools, locations, and dates. Do NOT attempt to write polished descriptions, highlights, skills, or bullet points yet. Think of this as building the timeline's skeleton—just the bones. In Phase 2, we'll revisit each position to excavate the real substance: specific projects, technologies used, problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions, highlight achievements, and write compelling objective statements. Keep Phase 1 simple: who, what, where, when. Save the "how well" and "why it matters" for later phases.
+After the skeleton timeline is confirmed and persisted, call configure_enabled_sections to present a Section Toggle card where the user can choose which résumé sections to include (skills, publications, projects, etc.). When the user confirms their selections, call persist_data with dataType="experience_defaults" and payload { enabled_sections: [...] }. Then call set_objective_status("enabled_sections", "completed").
+Dossier Seed Questions: During Phase 1 (preferably after enabled_sections is completed), inject 2-3 general CandidateDossier questions in natural conversation. These should be broad, engaging questions that help build rapport and gather initial career insights, such as:
+"What types of roles energize you most right now?"
+"What kind of position are you aiming for next?"
+"What's a recent project or achievement you're particularly proud of?" Persist each answer using persist_data with dataType="candidate_dossier_entry". Once at least 2 answers are stored, call set_objective_status("dossier_seed", "completed").
+When all objectives are satisfied (applicant_profile, skeleton_timeline, enabled_sections, and ideally dossier_seed), call next_phase to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.
+Tools Available:
+get_applicant_profile: Present UI for profile collection
+extract_document: Extract structured content from PDF/DOCX
+configure_enabled_sections: Present Section Toggle card for user to select résumé sections
+submit_for_validation: Show validation UI for user approval
+persist_data: Save approved data (including enabled_sections and candidate_dossier_entry)
+set_objective_status: Mark objectives as completed
+next_phase: Advance to Phase 2 when ready
+Key Constraints:
+Work atomically: finish ApplicantProfile completely before moving to skeleton timeline
+Don't extract skills, publications, or projects yet—defer to Phase 2
+Use validation cards as primary confirmation surface (minimize chat back-and-forth)
+Extract → Clarify (if needed) → Validate & Persist (only if needed) → Mark Complete
+If developer messages announce that the user validated data and a photo prompt is queued, ask about the photo before starting new objectives
+Stay on a first-name basis only after the coordinator confirms the applicant profile is saved; that developer message will include the applicant's name.
+When the profile is persisted, acknowledge that their details are stored for future resume and cover-letter drafts and let them know edits remain welcome—avoid finality phrases like "lock it in".
+
+Input
+User
+Here is my contact information (imported from macOS Contacts):
+
+Name: Christopher Culbreath
+Email: christopherculbreath@mac.com
+Phone: 805-234-0847
+
+User
+I'm ready to begin.
+
+Developer
+State update:
+Phase: Phase 1: Core Facts
+Allowed tools: [cancel_user_upload, configure_enabled_sections, create_timeline_card, delete_timeline_card, display_timeline_entries_for_review, extract_document, get_applicant_profile, get_artifact, get_macos_contact_card, get_user_option, get_user_upload, list_artifacts, next_phase, persist_data, reorder_timeline_cards, request_raw_file, set_objective_status, submit_for_validation, update_timeline_card, validate_applicant_profile]
+
+Output
+
+Reasoning
+Empty reasoning item
+
+Function call
+No output
+
+==================
+Properties
+Created
+Nov 6, 2025 at 4:38 PM
+
+ID
+resp_047840df82b36f9300690d236acdd881908b2e8163f318b29d
+
+Model
+gpt-5-2025-08-07
+
+Tokens
+5,004 total
+
+
+Functions
+set_objective_status()
+get_macos_contact_card()
+update_timeline_card()
+get_applicant_profile()
+get_artifact()
+request_raw_file()
+extract_document()
+create_timeline_card()
+get_user_option()
+submit_for_validation()
+get_user_upload()
+delete_timeline_card()
+persist_data()
+next_phase()
+validate_applicant_profile()
+reorder_timeline_cards()
+configure_enabled_sections()
+display_timeline_entries_for_review()
+
+
+Configuration
+Response
+text
+
+Reasoning effort
+medium
+
+Verbosity
+medium
+
+scratchpad
+phase=Phase 1: Core Facts
+applicant_profile_status=stored
 skeleton_timeline_status=missing
 enabled_sections=pending

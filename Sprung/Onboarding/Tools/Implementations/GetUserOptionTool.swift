@@ -69,10 +69,11 @@ struct GetUserOptionTool: InterviewTool {
         // Emit UI request to show the choice prompt
         await coordinator.eventBus.publish(.choicePromptRequested(prompt: payload.toChoicePrompt(), continuationId: UUID()))
 
-        // Return immediately - we'll handle the selection as a new user message
+        // Return completed - the tool's job is to present UI, which it has done
+        // User's selection will arrive as a new user message
         var response = JSON()
-        response["status"].string = "awaiting_user_input"
-        response["message"].string = "Choice prompt has been presented to the user"
+        response["message"].string = "UI presented. Awaiting user input."
+        response["status"].string = "completed"
 
         return .immediate(response)
     }

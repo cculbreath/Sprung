@@ -80,10 +80,11 @@ struct GetUserUploadTool: InterviewTool {
         // Emit UI request to show the upload picker
         await coordinator.eventBus.publish(.uploadRequestPresented(request: uploadRequest, continuationId: UUID()))
 
-        // Return immediately - we'll handle the upload submission as a new user message
+        // Return completed - the tool's job is to present UI, which it has done
+        // User's upload will arrive as a new user message
         var response = JSON()
-        response["status"].string = "awaiting_user_input"
-        response["message"].string = "Upload picker has been presented to the user"
+        response["message"].string = "UI presented. Awaiting user input."
+        response["status"].string = "completed"
 
         return .immediate(response)
     }

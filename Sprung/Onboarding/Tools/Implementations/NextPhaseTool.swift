@@ -90,10 +90,11 @@ struct NextPhaseTool: InterviewTool {
         // Emit UI request to show the phase advance dialog
         await coordinator.eventBus.publish(.phaseAdvanceRequested(request: request, continuationId: UUID()))
 
-        // Return immediately - we'll handle the decision as a new user message
+        // Return completed - the tool's job is to present UI, which it has done
+        // User's decision will arrive as a new user message
         var response = JSON()
-        response["status"].string = "awaiting_user_input"
-        response["message"].string = "Phase advance request has been presented to the user"
+        response["message"].string = "UI presented. Awaiting user input."
+        response["status"].string = "completed"
 
         return .immediate(response)
     }

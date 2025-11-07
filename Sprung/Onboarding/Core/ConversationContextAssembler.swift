@@ -93,14 +93,17 @@ actor ConversationContextAssembler {
         let conversationItems = await buildConversationHistory()
         items.append(contentsOf: conversationItems)
 
-        // 2. Tool response
+        // 2. Tool response - extract status from output JSON if present
         let outputString = output.rawString() ?? "{}"
+        let status = output["status"].string // Extract status if tool provided it
+
         items.append(.functionToolCallOutput(FunctionToolCallOutput(
             callId: callId,
-            output: outputString
+            output: outputString,
+            status: status
         )))
 
-        Logger.debug("📦 Assembled tool response context: \(items.count) items", category: .ai)
+        Logger.debug("📦 Assembled tool response context: \(items.count) items (status: \(status ?? "nil"))", category: .ai)
         return items
     }
 
