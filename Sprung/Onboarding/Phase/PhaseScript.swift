@@ -26,21 +26,33 @@ enum ObjectiveWorkflowOutput {
 struct ObjectiveWorkflow {
     let id: String
     let dependsOn: [String]
+    let autoStartWhenReady: Bool
+    private let onBeginHandler: ((ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput])?
     private let onCompleteHandler: ((ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput])?
 
     init(
         id: String,
         dependsOn: [String] = [],
+        autoStartWhenReady: Bool = false,
+        onBegin: ((ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput])? = nil,
         onComplete: ((ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput])? = nil
     ) {
         self.id = id
         self.dependsOn = dependsOn
+        self.autoStartWhenReady = autoStartWhenReady
+        self.onBeginHandler = onBegin
         self.onCompleteHandler = onComplete
     }
 
     func outputs(for status: ObjectiveStatus, context: ObjectiveWorkflowContext) -> [ObjectiveWorkflowOutput] {
-        guard status == .completed else { return [] }
-        return onCompleteHandler?(context) ?? []
+        switch status {
+        case .inProgress:
+            return onBeginHandler?(context) ?? []
+        case .completed:
+            return onCompleteHandler?(context) ?? []
+        case .pending, .skipped:
+            return []
+        }
     }
 }
 
