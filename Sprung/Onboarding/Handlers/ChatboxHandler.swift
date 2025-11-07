@@ -67,12 +67,13 @@ actor ChatboxHandler: OnboardingEventEmitter {
     /// Send user message to LLM
     func sendUserMessage(_ text: String) async {
         var payload = JSON()
-        payload["text"].string = text
+        // Wrap user chatbox messages in <chatbox> tags per system prompt
+        payload["text"].string = "<chatbox>\(text)</chatbox>"
 
         // Emit processing state change for UI feedback
         await emit(.processingStateChanged(true))
 
-        // Emit event for LLMMessenger to handle
+        // Emit event for LLMMessenger to handle (isSystemGenerated defaults to false)
         await emit(.llmSendUserMessage(payload: payload))
     }
 }

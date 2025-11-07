@@ -38,13 +38,60 @@ final class PhaseTransitionController {
             return
         }
 
-        // Rebuild system prompt for new phase
-        let newPrompt = phaseRegistry.buildSystemPrompt(for: phase)
+        // Get the phase script's introductory prompt
+        guard let script = phaseRegistry.script(for: phase) else {
+            Logger.warning("No script found for phase: \(phaseName)", category: .ai)
+            return
+        }
 
-        // Update orchestrator's system prompt
-        await lifecycleController?.updateOrchestratorSystemPrompt(newPrompt)
+        // Send introductory prompt as a developer message
+        let introPrompt = script.introductoryPrompt
+        await eventBus.publish(.llmSendDeveloperMessage(
+            payload: introPrompt
+        ))
 
-        Logger.info("🔄 System prompt updated for phase: \(phaseName)", category: .ai)
+        // Query and surface artifacts targeted for this phase's objectives
+        let phaseObjectives = script.requiredObjectives
+        var targetedArtifacts: [JSON] = []
+
+        for objectiveId in phaseObjectives {
+            let artifacts = await state.getArtifactsForPhaseObjective(objectiveId)
+            targetedArtifacts.append(contentsOf: artifacts)
+        }
+
+        // If artifacts exist for this phase, send them as a follow-up developer message
+        if !targetedArtifacts.isEmpty {
+            var artifactSummaries: [String] = []
+            for artifact in targetedArtifacts {
+                let id = artifact["id"].stringValue
+                let filename = artifact["filename"].stringValue
+                let purpose = artifact["metadata"]["purpose"].stringValue
+                let targetObjectives = artifact["metadata"]["target_phase_objectives"].arrayValue
+                    .map { $0.stringValue }
+                    .joined(separator: ", ")
+
+                artifactSummaries.append(
+                    "- \(filename) (id: \(id), purpose: \(purpose), targets: \(targetObjectives))"
+                )
+            }
+
+            let artifactMessage = """
+            Artifacts Available for This Phase:
+            The following artifacts have been pre-loaded because they target objectives in this phase:
+
+            \(artifactSummaries.joined(separator: "\n"))
+
+            Use list_artifacts, get_artifact, or request_raw_file to access these resources as needed.
+            """
+
+            await eventBus.publish(.llmSendDeveloperMessage(
+                payload: artifactMessage
+            ))
+
+            Logger.info("📦 Surfaced \(targetedArtifacts.count) targeted artifacts for phase: \(phaseName)", category: .ai)
+        }
+
+        Logger.info("🔄 Phase introductory prompt sent as developer message for phase: \(phaseName)", category: .ai)
     }
 
     // MARK: - Phase Advancement

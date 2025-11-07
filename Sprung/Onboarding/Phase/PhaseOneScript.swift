@@ -29,6 +29,7 @@ struct PhaseOneScript: PhaseScript {
         "display_timeline_entries_for_review",
         "submit_for_validation",
         "validate_applicant_profile",
+        "validated_applicant_profile_data",
         "persist_data",
         "set_objective_status",
         "configure_enabled_sections",
@@ -152,7 +153,7 @@ P1.1 **applicant_profile**
         ◻ P1.1.A.2    ApplicantProfile updated with user-validated data
         
     ◻ P1.1.B Optional Profile Photo
-        ◻ P1.1.B.1     Retreive ApplicantProfile
+        ◻ P1.1.B.1     Retrieve ApplicantProfile
         ◻ P1.1.B.2     Check if photo upload required
                     Is there existing photo?
                         Does user want to add one?
@@ -195,11 +196,11 @@ P1.2 **skeleton_timeline**
         2. Wait for developer message(s) related to the completed status of phase P1.1.A OR instructions to start phase P1.1.B
                 
     B. Optional Profile Photo (P1.1.B)
-        1. Use `validated_applicant_profile_data()" call to retrieve persisted ApplicantProfile data
-        2. Check retreived ApplicantProfile -> basics.image
+        1. Use `validated_applicant_profile_data()` call to retrieve persisted ApplicantProfile data
+        2. Check retrieved ApplicantProfile -> basics.image
             a) if basics.image is non-empty, perform tool call: `set_objective_status("P1.1.B", status: "skipped")`
-            b) ir basics.image is empty, ask user "Would you like to add a headshot photograph to your résumé profile?"
-        (3. If use responds affirmatively, perform tool call: get_user_upload(title: "Upload Headshot", 
+            b) if basics.image is empty, ask user "Would you like to add a headshot photograph to your résumé profile?"
+        (3. If user responds affirmatively, perform tool call: get_user_upload(title: "Upload Headshot", 
                     "Please provide a professional quality photograph for inclusion on résumé layouts that require a picture", 
                     "target_deliverable": "ApplicantProfile", "target_phase_objective": "P1.2"))
     
@@ -207,7 +208,7 @@ P1.2 **skeleton_timeline**
             (Any ArtifactRecords with an element of target_phase_objective equal to "P1.2" will automatically be provided for 
                 your reference as part of the phase-start messages)
         
-#### skeleton _timeline (P1.2.x)
+#### skeleton_timeline (P1.2.x)
     • You may injest skeleton timeline data through chatbox messages with user, document upload or user manual entry in TimelineEntries. 
         Ask the user which approach they would prefer and adhere to their preferences.
     • The `get_user_upload` tool presents the upload card to the user. Call get_user_upload with an appropriate title and prompt and set `target_objective_phase: ["P1.2"]` 
@@ -243,12 +244,12 @@ P1.2 **skeleton_timeline**
     • Once the user has confirmed all cards
 #### enabled_sections  (P1.3.x)
 
-Based on user responses in skeleton_timeline indentify which of the the top-level json resume keys the user has alread provided valeus for and any others which, based on previous reponses, they will likely want to include on their final resume. Genereate an a proposed payload for enabled_sections, based on your analysis
+Based on user responses in skeleton_timeline, identify which of the top-level JSON resume keys the user has already provided values for and any others which, based on previous responses, they will likely want to include on their final resume. Generate a proposed payload for enabled_sections based on your analysis.
 
 After the skeleton timeline is confirmed and persisted, call `configure_enabled_sections(proposed_payload)` to present a Section Toggle card where the user can confirm/modify which résumé sections to include (skills, publications, projects, etc.). When the user confirms their selections, call `persist_data` with `dataType="experience_defaults"` and payload `{ verified_enabled_sections: [...] }`. Then call `set_objective_status("enabled_sections", "completed")`.
 
 #### Dossier Seed Questions  (P1.4.x)
-9. Dossier Seed Questions: Statared during P1.2 and finished after P1.3 enabled_sections is completed, include a total of 2-3 general CandidateDossier questions in natural conversation. These should be broad, engaging questions that help build rapport and gather initial career insights, such as:
+9. Dossier Seed Questions: Started during P1.2 and finished after P1.3 enabled_sections is completed, include a total of 2-3 general CandidateDossier questions in natural conversation. These should be broad, engaging questions that help build rapport and gather initial career insights, such as:
    • "What types of roles energize you most right now?"
    • "What kind of position are you aiming for next?"
    • "What's a recent project or achievement you're particularly proud of?"
@@ -259,9 +260,9 @@ When all objectives are satisfied (applicant_profile, skeleton_timeline, enabled
 ### Tools Available:
 • `get_applicant_profile`: Present UI for profile collection
 • `get_user_upload`: Present UI for document upload
-• `display_timeline_entries_for_review,` present timeline entries to user in editor UI
-• `create_timeline_card`, `update_timeline_card`, `reorder_timeline_cards`,`delete_timeline_card` TimelineEntry CRUD functions
-• `validated_applicant_profile_data`: Retreive validated ApplicantProfile data from coordinator
+• `display_timeline_entries_for_review`: present timeline entries to user in editor UI
+• `create_timeline_card`, `update_timeline_card`, `reorder_timeline_cards`, `delete_timeline_card`: TimelineEntry CRUD functions
+• `validated_applicant_profile_data`: Retrieve validated ApplicantProfile data from coordinator
 • `configure_enabled_sections`: Present Section Toggle card for user to select résumé sections
 • `submit_for_validation`: Show validation UI for user approval
 • `persist_data`: Save approved data (including enabled_sections and candidate_dossier_entry)

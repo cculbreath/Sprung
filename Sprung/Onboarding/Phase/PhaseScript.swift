@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Strategy protocol for onboarding interview phases.
-//  Each phase defines its own objectives, system prompt fragment, and validation logic.
+//  Each phase defines its own objectives, introductory prompt, and validation logic.
 //
 
 import Foundation
@@ -49,8 +49,8 @@ protocol PhaseScript {
     /// The phase this script represents.
     var phase: InterviewPhase { get }
 
-    /// System prompt fragment describing this phase's goals and tools.
-    var systemPromptFragment: String { get }
+    /// Introductory prompt sent as a developer message when this phase begins, describing this phase's goals and tools.
+    var introductoryPrompt: String { get }
 
     /// Required objectives that must be completed before advancing.
     var requiredObjectives: [String] { get }

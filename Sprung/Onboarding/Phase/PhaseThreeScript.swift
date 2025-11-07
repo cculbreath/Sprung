@@ -50,7 +50,7 @@ struct PhaseThreeScript: PhaseScript {
         ]
     }
 
-    var systemPromptFragment: String {
+    var introductoryPrompt: String {
         """
         ## PHASE 3: WRITING CORPUS
 
