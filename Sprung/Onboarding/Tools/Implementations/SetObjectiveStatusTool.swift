@@ -15,7 +15,7 @@ struct SetObjectiveStatusTool: InterviewTool {
                 "status": JSONSchema(
                     type: .string,
                     description: "Desired status (pending, in_progress, completed, skipped).",
-                    enum: ["pending", "in_progress", "completed", "skipped", "reset"]
+                    enum: ["pending", "in_progress", "completed", "skipped"]
                 )
             ],
             required: ["objective_id", "status"],
@@ -42,9 +42,9 @@ struct SetObjectiveStatusTool: InterviewTool {
         }
 
         // Validate status value
-        let validStatuses = ["pending", "in_progress", "completed", "skipped", "reset"]
+        let validStatuses = ["pending", "in_progress", "completed", "skipped"]
         guard validStatuses.contains(status) else {
-            throw ToolError.invalidParameters("Invalid status: \(status). Must be one of: pending, in_progress, completed, skipped, reset")
+            throw ToolError.invalidParameters("Invalid status: \(status). Must be one of: pending, in_progress, completed, skipped")
         }
 
         // Update objective status via coordinator (which emits events)
