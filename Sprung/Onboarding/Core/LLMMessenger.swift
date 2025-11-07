@@ -157,8 +157,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                     if case .responseCompleted(let completed) = streamEvent {
                         conversationId = completed.response.id
                         lastResponseId = completed.response.id
-                        // Store in StateCoordinator for next request
-                        await state.setPreviousResponseId(completed.response.id)
+                        // Store in conversation context for next request
+                        await contextAssembler.storePreviousResponseId(completed.response.id)
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -205,8 +205,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                     if case .responseCompleted(let completed) = streamEvent {
                         conversationId = completed.response.id
                         lastResponseId = completed.response.id
-                        // Store in StateCoordinator for next request
-                        await state.setPreviousResponseId(completed.response.id)
+                        // Store in conversation context for next request
+                        await contextAssembler.storePreviousResponseId(completed.response.id)
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -274,21 +274,28 @@ actor LLMMessenger: OnboardingEventEmitter {
         let tools = await getToolSchemas()
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
-        let previousResponseId = await state.getPreviousResponseId()
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         // Determine tool_choice based on context
         let toolChoice = determineToolChoice(for: text)
 
-        return ModelResponseParameter(
+        var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
+            conversation: nil,
             instructions: systemPrompt,
-            metadata: metadata,
-            stream: true,
-            toolChoice: toolChoice,
-            tools: tools,
-            previousResponseId: previousResponseId
+            previousResponseId: previousResponseId,
+            store: true,
+            temperature: 1.0,
+            text: TextConfiguration(format: .text)
         )
+        parameters.metadata = metadata
+        parameters.stream = true
+        parameters.toolChoice = toolChoice
+        parameters.tools = tools
+        parameters.parallelToolCalls = false
+
+        return parameters
     }
 
     /// Determine appropriate tool_choice for the given message context
@@ -309,7 +316,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let tools = await getToolSchemas()
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
-        let previousResponseId = await state.getPreviousResponseId()
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
@@ -323,16 +330,23 @@ actor LLMMessenger: OnboardingEventEmitter {
             toolChoice = .auto
         }
 
-        return ModelResponseParameter(
+        var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
+            conversation: nil,
             instructions: systemPrompt,
-            metadata: metadata,
-            stream: true,
-            toolChoice: toolChoice,
-            tools: tools,
-            previousResponseId: previousResponseId
+            previousResponseId: previousResponseId,
+            store: true,
+            temperature: 1.0,
+            text: TextConfiguration(format: .text)
         )
+        parameters.metadata = metadata
+        parameters.stream = true
+        parameters.toolChoice = toolChoice
+        parameters.tools = tools
+        parameters.parallelToolCalls = false
+
+        return parameters
     }
 
     private func buildToolResponseRequest(output: JSON, callId: String) async -> ModelResponseParameter {
@@ -344,18 +358,25 @@ actor LLMMessenger: OnboardingEventEmitter {
         let tools = await getToolSchemas()
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
-        let previousResponseId = await state.getPreviousResponseId()
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
 
-        return ModelResponseParameter(
+        var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(currentModelId),
+            conversation: nil,
             instructions: systemPrompt,
-            metadata: metadata,
-            stream: true,
-            toolChoice: .auto,
-            tools: tools,
-            previousResponseId: previousResponseId
+            previousResponseId: previousResponseId,
+            store: true,
+            temperature: 1.0,
+            text: TextConfiguration(format: .text)
         )
+        parameters.metadata = metadata
+        parameters.stream = true
+        parameters.toolChoice = .auto
+        parameters.tools = tools
+        parameters.parallelToolCalls = false
+
+        return parameters
     }
 
     /// Get tool schemas from ToolRegistry, filtered by allowed tools

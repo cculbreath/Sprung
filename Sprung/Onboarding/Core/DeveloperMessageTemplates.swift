@@ -217,10 +217,10 @@ struct DeveloperMessageTemplates {
         objectives: [StateCoordinator.ObjectiveEntry]
     ) -> String {
         guard !objectives.isEmpty else {
-            return "\(phase.displayName) - No objectives defined"
+            return "\(phase.description) - No objectives defined"
         }
 
-        var lines: [String] = ["\(phase.displayName) Progress:"]
+        var lines: [String] = ["\(phase.description) Progress:"]
 
         for objective in objectives.sorted(by: { $0.id < $1.id }) {
             let checkbox: String

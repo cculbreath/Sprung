@@ -46,8 +46,10 @@ final class PhaseTransitionController {
 
         // Send introductory prompt as a developer message
         let introPrompt = script.introductoryPrompt
+        var introPayload = JSON()
+        introPayload["text"].string = introPrompt
         await eventBus.publish(.llmSendDeveloperMessage(
-            payload: introPrompt
+            payload: introPayload
         ))
 
         // Query and surface artifacts targeted for this phase's objectives
@@ -84,8 +86,10 @@ final class PhaseTransitionController {
             Use list_artifacts, get_artifact, or request_raw_file to access these resources as needed.
             """
 
+            var artifactPayload = JSON()
+            artifactPayload["text"].string = artifactMessage
             await eventBus.publish(.llmSendDeveloperMessage(
-                payload: artifactMessage
+                payload: artifactPayload
             ))
 
             Logger.info("📦 Surfaced \(targetedArtifacts.count) targeted artifacts for phase: \(phaseName)", category: .ai)
