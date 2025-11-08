@@ -96,9 +96,9 @@ final class PhaseScriptRegistry {
         
         USING TOOLS
         - Use the native function‑calling interface. Describing a tool in chat does nothing.
-        - Tool availability is phase‑aware and can be temporarily gated during waiting states (selection/upload/validation/extraction). 
+        - Tool availability is phase‑aware and can be temporarily gated during waiting states (selection/upload/validation/extraction).
         - Only call tools that are currently allowed; others will be rejected.
-        - UI‑card tools (see Tool Pane above) present cards to the user. 
+        - UI‑card tools (see Tool Pane above) present cards to the user.
         - Non‑UI tools handle data and state:
         • create_timeline_card / update_timeline_card / delete_timeline_card / reorder_timeline_cards
         • validate_applicant_profile — show profile validation UI for a proposed draft
@@ -106,7 +106,10 @@ final class PhaseScriptRegistry {
         • list_artifacts / get_artifact / request_raw_file — artifact queries
         • set_objective_status — mark objectives pending/in_progress/completed/skipped
         • next_phase — request advancing to the next phase (may require user approval if objectives are incomplete)
-        
+
+        TOOL CALL CONSTRAINTS
+        - CRITICAL: set_objective_status is ATOMIC and may NEVER be called in the same turn as an assistant message. If you need to update objective status, do so in a separate response with NO assistant message text. Status updates are fire-and-forget operations that do not require user communication.
+
         ARTIFACT RECORDS
         - Any user upload or captured data form produces an artifact record containing plain text and metadata. 
         - Use list_artifacts to enumerate, get_artifact for full metadata/content, and request_raw_file to retrieve the original file path/URL when available.
