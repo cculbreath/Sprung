@@ -34,6 +34,7 @@ actor NetworkRouter: OnboardingEventEmitter {
     private var streamingBuffers: [String: StreamBuffer] = [:]
     private var messageIds: [String: UUID] = [:]
     private var lastMessageUUID: UUID?
+    private var receivedOutputItemDone = false
 
     // MARK: - Initialization
 
@@ -57,12 +58,19 @@ actor NetworkRouter: OnboardingEventEmitter {
 
         case .outputItemDone(let done):
             // Handle completed output items (messages, function calls, etc.)
+            // Mark that we've received output items so we don't double-process in responseCompleted
+            receivedOutputItemDone = true
+
             switch done.item {
             case .functionCall(let toolCall):
                 await processToolCall(toolCall)
 
             case .message(let message):
-                await processMessageContent(message)
+                // Only process message content if we're NOT streaming
+                // (streaming messages already accumulated via outputTextDelta events)
+                if streamingBuffers.isEmpty {
+                    await processMessageContent(message)
+                }
 
             case .reasoning(let reasoning):
                 await processReasoningItem(reasoning)
@@ -75,10 +83,14 @@ actor NetworkRouter: OnboardingEventEmitter {
             // If we have buffered messages from streaming, finalize them
             if !streamingBuffers.isEmpty {
                 await finalizePendingMessages()
-            } else {
-                // No streaming deltas received - extract complete message from final response
+            } else if !receivedOutputItemDone {
+                // No streaming occurred AND no outputItemDone events received
+                // Extract complete message from final response (fallback for non-streaming responses)
                 await processCompletedResponse(completed.response)
             }
+
+            // Reset state for next response
+            receivedOutputItemDone = false
 
             // Emit completion event with response ID
             Logger.info("📨 Response completed: \(completed.response.id)", category: .ai)
@@ -251,6 +263,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         streamingBuffers.removeAll()
         messageIds.removeAll()
         lastMessageUUID = nil
+        receivedOutputItemDone = false
 
         Logger.info("🧹 NetworkRouter cleaned up \(bufferCount) cancelled stream(s)", category: .ai)
     }
