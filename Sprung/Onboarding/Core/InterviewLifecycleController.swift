@@ -113,12 +113,9 @@ final class InterviewLifecycleController {
 
         // Send phase introductory prompt for the current phase
         // This ensures the LLM receives phase-specific instructions on first launch
+        // The phase prompt alone is sufficient to start the conversation - no need for "I'm ready to begin"
         let currentPhase = await state.phase
         await eventBus.publish(.phaseTransitionApplied(phase: currentPhase.rawValue, timestamp: Date()))
-
-        // Finally, send the initial message to start the conversation
-        // At this point, LLMMessenger is subscribed and has received allowed tools
-        await orchestrator.sendInitialMessage()
 
         return true
     }

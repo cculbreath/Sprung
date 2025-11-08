@@ -136,7 +136,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let text = payload["text"].stringValue
 
         do {
-            let request = await buildUserMessageRequest(text: text)
+            let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated)
             let messageId = UUID().uuidString
 
             // Emit message sent event
@@ -311,31 +311,29 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     // MARK: - Request Building
 
-    private func buildUserMessageRequest(text: String) async -> ModelResponseParameter {
+    private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForUserMessage(
             text: text
         )
 
         let tools = await getToolSchemas()
-        let scratchpad = await contextAssembler.buildScratchpadSummary()
-        let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
-        let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         // Determine tool_choice based on context
-        let toolChoice = await determineToolChoice(for: text)
+        let toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
         let modelId = await stateCoordinator.getCurrentModelId()
 
+        // Use stateless conversation management (no previous_response_id)
+        // to avoid OpenAI API bug with "No tool output found for function call"
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
-            previousResponseId: previousResponseId,
-            store: true,
+            previousResponseId: nil,
+            store: false,
             temperature: 1.0,
             text: TextConfiguration(format: .text)
         )
-        parameters.metadata = metadata
         parameters.stream = true
         parameters.toolChoice = toolChoice
         parameters.tools = tools
@@ -345,11 +343,18 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     /// Determine appropriate tool_choice for the given message context
-    private func determineToolChoice(for text: String) async -> ToolChoiceMode {
-        // Force .none on the very first request to guarantee a textual greeting before tools
+    private func determineToolChoice(for text: String, isSystemGenerated: Bool) async -> ToolChoiceMode {
+        // For system-generated messages (like phase prompts), always allow tools
+        // The phase prompt itself will guide the LLM on what tools to use
+        if isSystemGenerated {
+            Logger.info("✅ Allowing tools for system-generated message (phase prompt)", category: .ai)
+            return .auto
+        }
+
+        // For user-generated messages: Force .none on the very first request to guarantee a textual greeting
         let hasStreamed = await stateCoordinator.getHasStreamedFirstResponse()
         if !hasStreamed {
-            Logger.info("🚫 Forcing toolChoice=.none for first request to ensure greeting", category: .ai)
+            Logger.info("🚫 Forcing toolChoice=.none for first user request to ensure greeting", category: .ai)
             return .none
         }
 
@@ -366,9 +371,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         )
 
         let tools = await getToolSchemas()
-        let scratchpad = await contextAssembler.buildScratchpadSummary()
-        let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
-        let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
@@ -384,17 +386,17 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         let modelId = await stateCoordinator.getCurrentModelId()
 
+        // Use stateless conversation management (no previous_response_id)
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
-            previousResponseId: previousResponseId,
-            store: true,
+            previousResponseId: nil,
+            store: false,
             temperature: 1.0,
             text: TextConfiguration(format: .text)
         )
-        parameters.metadata = metadata
         parameters.stream = true
         parameters.toolChoice = toolChoice
         parameters.tools = tools
@@ -410,22 +412,19 @@ actor LLMMessenger: OnboardingEventEmitter {
         )
 
         let tools = await getToolSchemas()
-        let scratchpad = await contextAssembler.buildScratchpadSummary()
-        let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
-        let previousResponseId = await contextAssembler.getPreviousResponseId()
         let modelId = await stateCoordinator.getCurrentModelId()
 
+        // Use stateless conversation management (no previous_response_id)
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
-            previousResponseId: previousResponseId,
-            store: true,
+            previousResponseId: nil,
+            store: false,
             temperature: 1.0,
             text: TextConfiguration(format: .text)
         )
-        parameters.metadata = metadata
         parameters.stream = true
         parameters.toolChoice = .auto
         parameters.tools = tools

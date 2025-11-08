@@ -44,12 +44,14 @@ final class PhaseTransitionController {
             return
         }
 
-        // Send introductory prompt as a developer message
+        // Send introductory prompt as a user message (system-generated)
+        // This triggers the LLM to respond with a welcome message and begin the interview
         let introPrompt = script.introductoryPrompt
         var introPayload = JSON()
         introPayload["text"].string = introPrompt
-        await eventBus.publish(.llmSendDeveloperMessage(
-            payload: introPayload
+        await eventBus.publish(.llmSendUserMessage(
+            payload: introPayload,
+            isSystemGenerated: true
         ))
 
         // Query and surface artifacts targeted for this phase's objectives
@@ -106,7 +108,7 @@ final class PhaseTransitionController {
             Logger.info("📦 Surfaced \(targetedArtifacts.count) targeted artifacts for phase: \(phaseName)", category: .ai)
         }
 
-        Logger.info("🔄 Phase introductory prompt sent as developer message for phase: \(phaseName)", category: .ai)
+        Logger.info("🔄 Phase introductory prompt sent as user message for phase: \(phaseName)", category: .ai)
     }
 
     // MARK: - Phase Advancement
