@@ -207,30 +207,30 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Scratchpad Summary (Aggregates from Services)
 
-    func scratchpadSummary(maxCharacters: Int = 1500) async -> String {
-        var lines: [String] = []
-
-        lines.append("phase=\(phase.rawValue)")
-
-        // Objectives from ObjectiveStore
-        let objectiveSummary = await objectiveStore.scratchpadSummary(for: phase)
-        lines.append(objectiveSummary)
-
-        // Artifacts from ArtifactRepository
-        let artifactLines = await artifactRepository.scratchpadSummary()
-        lines.append(contentsOf: artifactLines)
-
-        let combined = lines.joined(separator: "\n")
-        return truncateForScratchpad(combined, limit: maxCharacters)
-    }
-
-    private func truncateForScratchpad(_ text: String, limit: Int) -> String {
-        guard text.count > limit else { return text }
-        let endIndex = text.index(text.startIndex, offsetBy: limit)
-        return String(text[..<endIndex]) + "..."
-    }
-
-    // MARK: - Event Subscription Setup
+//    func scratchpadSummary(maxCharacters: Int = 1500) async -> String {
+//        var lines: [String] = []
+//
+//        lines.append("phase=\(phase.rawValue)")
+//
+//        // Objectives from ObjectiveStore
+//        let objectiveSummary = await objectiveStore.scratchpadSummary(for: phase)
+//        lines.append(objectiveSummary)
+//
+//        // Artifacts from ArtifactRepository
+//        let artifactLines = await artifactRepository.scratchpadSummary()
+//        lines.append(contentsOf: artifactLines)
+//
+//        let combined = lines.joined(separator: "\n")
+//        return truncateForScratchpad(combined, limit: maxCharacters)
+//    }
+//
+//    private func truncateForScratchpad(_ text: String, limit: Int) -> String {
+//        guard text.count > limit else { return text }
+//        let endIndex = text.index(text.startIndex, offsetBy: limit)
+//        return String(text[..<endIndex]) + "..."
+//    }
+//
+//    // MARK: - Event Subscription Setup
 
     func startEventSubscriptions() async {
         subscriptionTask?.cancel()

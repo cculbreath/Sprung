@@ -182,10 +182,13 @@ skeleton_timeline
 #### applicant_profile namespace
 
     A. Contact Information (applicant_profile.contact_intake.*)
-        1. START HERE: Call `get_applicant_profile` to begin collecting contact information.
-            When the tool activates the card, send the user a brief welcome message.
-            • If a "waiting for user" tool_result is received, send "Use the form on the left to let me know how you 
-            would like to provide your contact information."
+        1. START HERE: Send this welcome message to the user:
+            "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later."
+
+            Then call `get_applicant_profile` to begin collecting contact information.
+
+            • When you receive a "waiting for user" tool_result, send this message:
+            "Once you complete the form to the left we can continue."
             • Users can upload a document (PDF/DOCX), paste a URL, import from macOS Contacts, or enter data manually.
             • If the user uploads a document, the text is extracted automatically and packaged as an ArtifactRecord:
                 • If an ArtifactRecord arrives with a targetDeliverable of ApplicantProfile, YOU parse it and 
