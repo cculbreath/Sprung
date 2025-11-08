@@ -205,12 +205,12 @@ struct DeveloperMessageTemplates {
     /// Example output:
     /// ```
     /// Phase 1 Progress:
-    /// ✅ P1.1 applicant_profile
-    ///   ✅ P1.1.A Contact Information
-    ///     ✅ P1.1.A.1 Activate applicant profile card
-    ///     ✅ P1.1.A.2 ApplicantProfile updated
-    ///   ◻ P1.1.B Optional Profile Photo
-    /// ◻ P1.2 skeleton_timeline
+    /// ✅ applicant_profile
+    ///   ✅ applicant_profile.contact_intake
+    ///     ✅ applicant_profile.contact_intake.activate_card
+    ///     ✅ applicant_profile.contact_intake.persisted
+    ///   ◻ applicant_profile.profile_photo
+    /// ◻ skeleton_timeline
     /// ```
     static func formatObjectiveStatus(
         phase: InterviewPhase,

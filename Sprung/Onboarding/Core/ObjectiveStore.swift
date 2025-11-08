@@ -25,7 +25,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
         var source: String
         var completedAt: Date?
         var notes: String?
-        let parentId: String?      // Parent objective ID (e.g., "P1.1" for "P1.1.A")
+        let parentId: String?      // Parent objective ID (e.g., "applicant_profile" for "applicant_profile.contact_intake")
         let level: Int              // Hierarchy level: 0=top, 1=sub, 2=sub-sub, etc.
 
         init(
@@ -88,34 +88,29 @@ actor ObjectiveStore: OnboardingEventEmitter {
     /// Structure matches the objective tree in PhaseOneScript.swift prompt.
     private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String, parentId: String?)]] = [
         .phase1CoreFacts: [
-            // P1.1 applicant_profile (top-level)
-            ("P1.1", "Applicant profile", nil),
-            ("P1.1.A", "Contact Information", "P1.1"),
-            ("P1.1.A.1", "Activate applicant profile card", "P1.1.A"),
-            ("P1.1.A.2", "ApplicantProfile updated with user-validated data", "P1.1.A"),
-            ("P1.1.B", "Optional Profile Photo", "P1.1"),
-            ("P1.1.B.1", "Retrieve ApplicantProfile", "P1.1.B"),
-            ("P1.1.B.2", "Check if photo upload required", "P1.1.B"),
-            ("P1.1.B.3", "Activate photo upload card", "P1.1.B"),
+            // applicant_profile (top-level)
+            ("applicant_profile", "Applicant profile", nil),
+            ("applicant_profile.contact_intake", "Contact information intake", "applicant_profile"),
+            ("applicant_profile.contact_intake.activate_card", "Activate applicant profile card", "applicant_profile.contact_intake"),
+            ("applicant_profile.contact_intake.persisted", "ApplicantProfile updated with user-validated data", "applicant_profile.contact_intake"),
+            ("applicant_profile.profile_photo", "Optional profile photo", "applicant_profile"),
+            ("applicant_profile.profile_photo.retrieve_profile", "Retrieve ApplicantProfile", "applicant_profile.profile_photo"),
+            ("applicant_profile.profile_photo.evaluate_need", "Check if photo upload required", "applicant_profile.profile_photo"),
+            ("applicant_profile.profile_photo.collect_upload", "Activate photo upload card", "applicant_profile.profile_photo"),
 
-            // P1.2 skeleton_timeline (top-level)
-            ("P1.2", "Skeleton timeline", nil),
-            ("P1.2.A", "Use get_user_upload and chat interview to gather timeline data", "P1.2"),
-            ("P1.2.B", "Use TimelineEntry UI to collaborate with user", "P1.2"),
-            ("P1.2.C", "Use chat interview to understand gaps and narrative structure", "P1.2"),
-            ("P1.2.D", "Set status when skeleton timeline data gathering is complete", "P1.2"),
+            // skeleton_timeline (top-level)
+            ("skeleton_timeline", "Skeleton timeline", nil),
+            ("skeleton_timeline.intake_artifacts", "Use get_user_upload and chat interview to gather timeline data", "skeleton_timeline"),
+            ("skeleton_timeline.timeline_editor", "Use TimelineEntry UI to collaborate with user", "skeleton_timeline"),
+            ("skeleton_timeline.context_interview", "Use chat interview to understand gaps and narrative structure", "skeleton_timeline"),
+            ("skeleton_timeline.completeness_signal", "Set status when skeleton timeline data gathering is complete", "skeleton_timeline"),
 
-            // P1.3 enabled_sections (top-level)
-            ("P1.3", "Enabled sections", nil),
+            // enabled_sections (top-level)
+            ("enabled_sections", "Enabled sections", nil),
 
-            // P1.4 dossier_seed (top-level)
-            ("P1.4", "Dossier seed questions", nil),
+            // dossier_seed (top-level)
+            ("dossier_seed", "Dossier seed questions", nil),
 
-            // Legacy flat IDs for backward compatibility (mapped to hierarchical)
-            ("applicant_profile", "Applicant profile (legacy)", nil),
-            ("skeleton_timeline", "Skeleton timeline (legacy)", nil),
-            ("enabled_sections", "Enabled sections (legacy)", nil),
-            ("dossier_seed", "Dossier seed (legacy)", nil),
             ("contact_source_selected", "Contact source selected", nil),
             ("contact_data_collected", "Contact data collected", nil),
             ("contact_data_validated", "Contact data validated", nil),
@@ -123,11 +118,23 @@ actor ObjectiveStore: OnboardingEventEmitter {
         ],
         .phase2DeepDive: [
             ("interviewed_one_experience", "Experience interview completed", nil),
-            ("one_card_generated", "Knowledge card generated", nil)
+            ("interviewed_one_experience.prep_selection", "Select and frame experience to explore", "interviewed_one_experience"),
+            ("interviewed_one_experience.discovery_interview", "Conduct structured deep-dive interview", "interviewed_one_experience"),
+            ("interviewed_one_experience.capture_notes", "Summarize interview takeaways for cards", "interviewed_one_experience"),
+            ("one_card_generated", "Knowledge card generated", nil),
+            ("one_card_generated.draft", "Draft knowledge card content", "one_card_generated"),
+            ("one_card_generated.validation", "Review card with user via validation UI", "one_card_generated"),
+            ("one_card_generated.persisted", "Persist approved knowledge card", "one_card_generated")
         ],
         .phase3WritingCorpus: [
             ("one_writing_sample", "Writing sample collected", nil),
-            ("dossier_complete", "Dossier completed", nil)
+            ("one_writing_sample.collection_setup", "Request writing sample and capture consent/preferences", "one_writing_sample"),
+            ("one_writing_sample.ingest_sample", "Collect/upload at least one writing sample", "one_writing_sample"),
+            ("one_writing_sample.style_analysis", "Analyze writing style when consented", "one_writing_sample"),
+            ("dossier_complete", "Dossier completed", nil),
+            ("dossier_complete.compile_assets", "Compile applicant assets into dossier", "dossier_complete"),
+            ("dossier_complete.validation", "Present dossier summary for validation", "dossier_complete"),
+            ("dossier_complete.persisted", "Persist final dossier and confirm wrap-up", "dossier_complete")
         ],
         .complete: []
     ]
@@ -138,7 +145,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
     ) -> [(id: String, label: String, phase: InterviewPhase, source: String, parentId: String?, level: Int)] {
         let metadata = objectiveMetadata[phase] ?? []
         return metadata.map { meta in
-            // Auto-detect level from ID format (e.g., "P1.1.A.2" → level 3)
+            // Auto-detect level from ID format (e.g., "applicant_profile.contact_intake.persisted" → level 3)
             let parts = meta.id.split(separator: ".")
             let level = max(0, parts.count - 1)
 
@@ -184,12 +191,12 @@ actor ObjectiveStore: OnboardingEventEmitter {
             return
         }
 
-        // Auto-detect level from ID format if not provided (e.g., "P1.1.A.2" → level 3)
+        // Auto-detect level from ID format if not provided (e.g., "applicant_profile.contact_intake.persisted" → level 3)
         let detectedLevel: Int
         if let level = level {
             detectedLevel = level
         } else {
-            // Count dots in ID: P1.1 = 1 dot = level 1, P1.1.A = 2 parts after P = level 2
+            // Count dots in ID: applicant_profile = level 0, applicant_profile.contact_intake = level 1, etc.
             let parts = id.split(separator: ".")
             detectedLevel = max(0, parts.count - 1)
         }
