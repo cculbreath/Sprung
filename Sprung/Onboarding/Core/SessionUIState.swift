@@ -81,7 +81,7 @@ actor SessionUIState: OnboardingEventEmitter {
     }
 
     /// Set active state
-    func setActiveState(_ active: Bool) {
+    func setActiveState(_ active: Bool) async {
         isActive = active
         isActiveSync = active
     }
