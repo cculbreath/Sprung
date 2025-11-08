@@ -17,6 +17,7 @@ final class ProfileInteractionHandler {
 
     private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
     private(set) var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState?
+    private(set) var pendingApplicantProfileSummary: JSON?
     private(set) var lastSubmittedDraft: JSON?
 
     // MARK: - Private State
@@ -79,6 +80,11 @@ final class ProfileInteractionHandler {
         clearProfileRequest()
         lastSubmittedDraft = enriched
         Logger.info("✅ Profile resolved (status: \(status))", category: .ai)
+
+        // Show the profile summary card in the tool pane
+        // @Observable will handle UI updates automatically
+        showProfileSummary(profile: enriched)
+
         return (continuationId, payload)
     }
 
@@ -358,5 +364,25 @@ final class ProfileInteractionHandler {
         await eventBus.publish(.artifactRecordProduced(record: artifactRecord))
 
         Logger.info("📦 Profile artifact record emitted: \(artifactId) (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
+    }
+
+    // MARK: - Profile Summary Management
+
+    /// Shows the profile summary card in the tool pane.
+    func showProfileSummary(profile: JSON) {
+        pendingApplicantProfileSummary = profile
+        Logger.info("📋 Profile summary shown", category: .ai)
+    }
+
+    /// Updates the profile summary with new data (e.g., when photo is added).
+    func updateProfileSummary(profile: JSON) {
+        pendingApplicantProfileSummary = profile
+        Logger.info("📋 Profile summary updated", category: .ai)
+    }
+
+    /// Dismisses the profile summary card.
+    func dismissProfileSummary() {
+        pendingApplicantProfileSummary = nil
+        Logger.info("📋 Profile summary dismissed", category: .ai)
     }
 }

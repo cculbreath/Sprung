@@ -148,6 +148,10 @@ final class OnboardingInterviewCoordinator {
         toolRouter.pendingApplicantProfileIntake
     }
 
+    var pendingApplicantProfileSummary: JSON? {
+        toolRouter.pendingApplicantProfileSummary
+    }
+
     var pendingSectionToggleRequest: OnboardingSectionToggleRequest? {
         toolRouter.pendingSectionToggleRequest
     }
@@ -407,7 +411,17 @@ final class OnboardingInterviewCoordinator {
     private func handleEvent(_ event: OnboardingEvent) async {
         // Schedule checkpoint for significant events (delegated to CheckpointManager)
         switch event {
-        case .objectiveStatusChanged, .timelineCardCreated, .timelineCardUpdated,
+        case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
+            checkpointManager.scheduleCheckpoint()
+
+            // Dismiss profile summary when moving to skeleton_timeline
+            if id == "applicant_profile" && newStatus == "completed" {
+                await MainActor.run {
+                    toolRouter.profileHandler.dismissProfileSummary()
+                }
+            }
+
+        case .timelineCardCreated, .timelineCardUpdated,
              .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced,
              .artifactRecordPersisted, .phaseTransitionApplied:
             checkpointManager.scheduleCheckpoint()
@@ -447,6 +461,11 @@ final class OnboardingInterviewCoordinator {
                 draft.apply(to: profile, replaceMissing: false)
                 self.applicantProfileStore.save(profile)
                 Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
+
+                // Update summary card if showing (e.g., when photo is added)
+                if toolRouter.profileHandler.pendingApplicantProfileSummary != nil {
+                    toolRouter.profileHandler.updateProfileSummary(profile: json)
+                }
             }
             await checkpointManager.saveCheckpoint()
 

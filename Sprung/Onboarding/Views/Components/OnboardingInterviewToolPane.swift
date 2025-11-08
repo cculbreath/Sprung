@@ -112,6 +112,11 @@ struct OnboardingInterviewToolPane: View {
                             }
                         }
                     )
+                } else if let profileSummary = coordinator.pendingApplicantProfileSummary {
+                    ApplicantProfileSummaryCard(
+                        profile: profileSummary,
+                        imageData: nil  // Image data is in the JSON profile
+                    )
                 } else {
                     supportingContent()
                 }

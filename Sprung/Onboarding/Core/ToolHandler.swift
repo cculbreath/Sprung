@@ -156,6 +156,10 @@ final class ToolHandler {
         profileHandler.pendingApplicantProfileIntake
     }
 
+    var pendingApplicantProfileSummary: JSON? {
+        profileHandler.pendingApplicantProfileSummary
+    }
+
     var pendingUploadRequests: [OnboardingUploadRequest] {
         uploadHandler.pendingUploadRequests
     }

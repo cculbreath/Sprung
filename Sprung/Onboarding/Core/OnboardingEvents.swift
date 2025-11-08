@@ -54,6 +54,8 @@ enum OnboardingEvent {
     case validationPromptCleared(continuationId: UUID)
     case applicantProfileIntakeRequested(continuationId: UUID)
     case applicantProfileIntakeCleared
+    case profileSummaryUpdateRequested(profile: JSON)
+    case profileSummaryDismissRequested
     case sectionToggleRequested(request: OnboardingSectionToggleRequest, continuationId: UUID)
     case sectionToggleCleared(continuationId: UUID)
     case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest, continuationId: UUID)
