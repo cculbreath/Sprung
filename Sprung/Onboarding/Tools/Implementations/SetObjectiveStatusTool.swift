@@ -6,7 +6,7 @@ struct SetObjectiveStatusTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: "Mark an onboarding objective as pending, in progress, completed, or skipped. Optionally provide context details.",
+            description: "ATOMIC OPERATION: Mark an onboarding objective as pending, in progress, completed, or skipped. CRITICAL: This tool must be called ALONE in a separate response with NO assistant message. Never combine with user-facing messages.",
             properties: [
                 "objective_id": JSONSchema(
                     type: .string,
@@ -39,7 +39,7 @@ struct SetObjectiveStatusTool: InterviewTool {
     }
 
     var name: String { "set_objective_status" }
-    var description: String { "Update the status of an onboarding objective." }
+    var description: String { "ATOMIC: Update objective status. Must be called ALONE with NO assistant message in the same turn." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
