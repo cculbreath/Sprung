@@ -144,6 +144,13 @@ actor LLMMessenger: OnboardingEventEmitter {
 
             // Process stream via NetworkRouter
             currentStreamTask = Task {
+                Logger.info("🔍 About to call service.responseCreateStream, service type: \(type(of: service))", category: .ai)
+
+                // Debug: Log request details
+                Logger.debug("📋 Request model: \(request.model)", category: .ai)
+                Logger.debug("📋 Request has previousResponseId: \(request.previousResponseId != nil)", category: .ai)
+                Logger.debug("📋 Request store: \(request.store)", category: .ai)
+
                 let stream = try await service.responseCreateStream(request)
                 for try await streamEvent in stream {
                     await networkRouter.handleResponseEvent(streamEvent)
@@ -312,9 +319,15 @@ actor LLMMessenger: OnboardingEventEmitter {
     // MARK: - Request Building
 
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
-        let inputItems = await contextAssembler.buildForUserMessage(
-            text: text
-        )
+        // Hybrid approach: Use previous_response_id when available,
+        // but don't include conversation history (let OpenAI manage it)
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
+
+        // Build input - just the current message, not full history
+        let inputItems: [InputItem] = [.message(InputMessage(
+            role: "user",
+            content: .text(text)
+        ))]
 
         let tools = await getToolSchemas()
 
@@ -322,15 +335,13 @@ actor LLMMessenger: OnboardingEventEmitter {
         let toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
         let modelId = await stateCoordinator.getCurrentModelId()
 
-        // Use stateless conversation management (no previous_response_id)
-        // to avoid OpenAI API bug with "No tool output found for function call"
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
-            previousResponseId: nil,
-            store: false,
+            previousResponseId: previousResponseId,  // Include if available (nil for first request)
+            store: true,  // Let OpenAI manage conversation state
             temperature: 1.0,
             text: TextConfiguration(format: .text)
         )
@@ -339,6 +350,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.tools = tools
         parameters.parallelToolCalls = false
 
+        Logger.info("📝 Built request: previousResponseId=\(previousResponseId ?? "nil"), store=true", category: .ai)
         return parameters
     }
 
@@ -386,14 +398,16 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         let modelId = await stateCoordinator.getCurrentModelId()
 
-        // Use stateless conversation management (no previous_response_id)
+        // Include previous_response_id for conversation continuity
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
-            previousResponseId: nil,
-            store: false,
+            previousResponseId: previousResponseId,
+            store: true,
             temperature: 1.0,
             text: TextConfiguration(format: .text)
         )
@@ -414,14 +428,16 @@ actor LLMMessenger: OnboardingEventEmitter {
         let tools = await getToolSchemas()
         let modelId = await stateCoordinator.getCurrentModelId()
 
-        // Use stateless conversation management (no previous_response_id)
+        // Include previous_response_id for conversation continuity
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
-            previousResponseId: nil,
-            store: false,
+            previousResponseId: previousResponseId,
+            store: true,
             temperature: 1.0,
             text: TextConfiguration(format: .text)
         )

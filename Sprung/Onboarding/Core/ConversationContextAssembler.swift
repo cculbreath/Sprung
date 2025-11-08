@@ -32,11 +32,10 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. Conversation history (stateless mode - include full history)
-        let history = await buildConversationHistory()
-        items.append(contentsOf: history)
+        // Note: We're back to using previous_response_id, so OpenAI manages conversation history
+        // We only need to send the current message and optional state cues
 
-        // 2. State cues developer message (only if we have conversation history)
+        // 1. State cues developer message (only if we have conversation history)
         // Skip for the very first message to encourage natural conversation
         // Note: Tool management is now handled via API's tools parameter
         let messages = await state.messages
@@ -50,7 +49,7 @@ actor ConversationContextAssembler {
             }
         }
 
-        // 3. Current user message
+        // 2. Current user message
         items.append(.message(InputMessage(
             role: "user",
             content: .text(text)
@@ -66,11 +65,10 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. Conversation history (stateless mode - include full history)
-        let history = await buildConversationHistory()
-        items.append(contentsOf: history)
+        // Note: We're back to using previous_response_id, so OpenAI manages conversation history
+        // We only need to send the current developer message
 
-        // 2. Current developer message
+        // Current developer message
         items.append(.message(InputMessage(
             role: "developer",
             content: .text(text)
@@ -87,11 +85,10 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. Conversation history (stateless mode - include full history)
-        let history = await buildConversationHistory()
-        items.append(contentsOf: history)
+        // Note: We're back to using previous_response_id, so OpenAI manages conversation history
+        // We only need to send the tool response
 
-        // 2. Tool response
+        // Tool response
         let outputString = output.rawString() ?? "{}"
         let status = output["status"].string // Extract status if tool provided it
 
