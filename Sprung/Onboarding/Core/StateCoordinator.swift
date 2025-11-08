@@ -303,7 +303,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .processingStateChanged(let processing):
             // Delegate to SessionUIState
-            await uiState.setProcessingState(processing)
+            await uiState.setProcessingState(processing, emitEvent: false)
 
         case .waitingStateChanged(let waiting):
             // SessionUIState handles this internally, just log
@@ -374,12 +374,12 @@ actor StateCoordinator: OnboardingEventEmitter {
             let status = await objectiveStore.getObjectiveStatus(id)
             response(status?.rawValue)
 
-        case .objectiveStatusUpdateRequested(let id, let statusString, let source, let notes):
+        case .objectiveStatusUpdateRequested(let id, let statusString, let source, let notes, let details):
             guard let status = ObjectiveStatus(rawValue: statusString) else {
                 Logger.warning("Invalid objective status: \(statusString)", category: .ai)
                 return
             }
-            await objectiveStore.setObjectiveStatus(id, status: status, source: source, notes: notes)
+            await objectiveStore.setObjectiveStatus(id, status: status, source: source, notes: notes, details: details)
 
         case .objectiveStatusChanged:
             // Update sync cache when objectives change
@@ -498,10 +498,34 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Snapshot Management
 
     struct StateSnapshot: Codable {
+        let version: Int
         let phase: InterviewPhase
         let objectives: [String: ObjectiveStore.ObjectiveEntry]
         let wizardStep: String
         let completedWizardSteps: Set<String>
+
+        // Custom decoding to handle legacy snapshots without version field
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 0
+            phase = try container.decode(InterviewPhase.self, forKey: .phase)
+            objectives = try container.decode([String: ObjectiveStore.ObjectiveEntry].self, forKey: .objectives)
+            wizardStep = try container.decode(String.self, forKey: .wizardStep)
+            completedWizardSteps = try container.decode(Set<String>.self, forKey: .completedWizardSteps)
+        }
+
+        // Regular initializer for creating new snapshots
+        init(version: Int = 1, phase: InterviewPhase, objectives: [String: ObjectiveStore.ObjectiveEntry], wizardStep: String, completedWizardSteps: Set<String>) {
+            self.version = version
+            self.phase = phase
+            self.objectives = objectives
+            self.wizardStep = wizardStep
+            self.completedWizardSteps = completedWizardSteps
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case version, phase, objectives, wizardStep, completedWizardSteps
+        }
     }
 
     func createSnapshot() async -> StateSnapshot {
@@ -509,6 +533,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         let objectivesDict = Dictionary(uniqueKeysWithValues: allObjectives.map { ($0.id, $0) })
 
         return StateSnapshot(
+            version: 1,
             phase: phase,
             objectives: objectivesDict,
             wizardStep: currentWizardStep.rawValue,
@@ -522,6 +547,16 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Restore objectives to ObjectiveStore
         await objectiveStore.restore(objectives: snapshot.objectives)
 
+        // MIGRATION: Re-register canonical objectives for the current phase
+        // This ensures any newly added objectives are present after restore
+        if snapshot.version == 0 {
+            Logger.info("🔄 Migrating legacy snapshot (version 0) - re-registering canonical objectives", category: .ai)
+            await objectiveStore.registerDefaultObjectives(for: phase)
+
+            // Backfill statuses for known migration scenarios
+            await backfillObjectiveStatuses(snapshot: snapshot)
+        }
+
         // Restore wizard progress
         if let step = WizardStep(rawValue: snapshot.wizardStep) {
             currentWizardStep = step
@@ -531,7 +566,50 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Update sync caches
         objectivesSync = await objectiveStore.objectivesSync
 
-        Logger.info("📥 State restored from snapshot", category: .ai)
+        Logger.info("📥 State restored from snapshot (version: \(snapshot.version))", category: .ai)
+    }
+
+    /// Backfill objective statuses when migrating from legacy snapshots
+    private func backfillObjectiveStatuses(snapshot: StateSnapshot) async {
+        // Migration policy: Infer status for new objectives based on existing state
+        // Example: If applicant_profile is completed, assume contact_source_selected is also completed
+
+        let restoredObjectives = snapshot.objectives
+
+        // contact_source_selected: completed if applicant_profile was completed
+        if let applicantProfile = restoredObjectives["applicant_profile"],
+           applicantProfile.status == .completed {
+            await objectiveStore.setObjectiveStatus(
+                "contact_source_selected",
+                status: .completed,
+                source: "migration",
+                notes: "Backfilled based on applicant_profile completion"
+            )
+        }
+
+        // contact_data_collected: completed if applicant_profile.contact_intake.persisted was completed
+        if let contactPersisted = restoredObjectives["applicant_profile.contact_intake.persisted"],
+           contactPersisted.status == .completed {
+            await objectiveStore.setObjectiveStatus(
+                "contact_data_collected",
+                status: .completed,
+                source: "migration",
+                notes: "Backfilled based on contact_intake.persisted completion"
+            )
+        }
+
+        // contact_data_validated: completed if applicant_profile.contact_intake.persisted was completed
+        if let contactPersisted = restoredObjectives["applicant_profile.contact_intake.persisted"],
+           contactPersisted.status == .completed {
+            await objectiveStore.setObjectiveStatus(
+                "contact_data_validated",
+                status: .completed,
+                source: "migration",
+                notes: "Backfilled based on contact_intake.persisted completion"
+            )
+        }
+
+        Logger.info("✅ Objective status backfill completed", category: .ai)
     }
 
     private func emitSnapshot(reason: String) async {

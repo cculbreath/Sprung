@@ -25,6 +25,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
         var source: String
         var completedAt: Date?
         var notes: String?
+        var details: [String: String]?  // Rich metadata for workflow context
         let parentId: String?      // Parent objective ID (e.g., "applicant_profile" for "applicant_profile.contact_intake")
         let level: Int              // Hierarchy level: 0=top, 1=sub, 2=sub-sub, etc.
 
@@ -36,6 +37,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
             source: String,
             completedAt: Date? = nil,
             notes: String? = nil,
+            details: [String: String]? = nil,
             parentId: String? = nil,
             level: Int = 0
         ) {
@@ -46,6 +48,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
             self.source = source
             self.completedAt = completedAt
             self.notes = notes
+            self.details = details
             self.parentId = parentId
             self.level = level
         }
@@ -224,7 +227,8 @@ actor ObjectiveStore: OnboardingEventEmitter {
         _ id: String,
         status: ObjectiveStatus,
         source: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        details: [String: String]? = nil
     ) async {
         guard var objective = objectives[id] else {
             Logger.warning("⚠️ Attempted to update unknown objective: \(id)", category: .ai)
@@ -242,6 +246,10 @@ actor ObjectiveStore: OnboardingEventEmitter {
             objective.notes = notes
         }
 
+        if let details = details {
+            objective.details = details
+        }
+
         if status == .completed && objective.completedAt == nil {
             objective.completedAt = Date()
         }
@@ -256,7 +264,8 @@ actor ObjectiveStore: OnboardingEventEmitter {
             newStatus: status.rawValue,
             phase: objective.phase.rawValue,
             source: objective.source,
-            notes: objective.notes
+            notes: objective.notes,
+            details: objective.details
         ))
 
         Logger.info("✅ Objective \(id): \(oldStatus) → \(status)", category: .ai)

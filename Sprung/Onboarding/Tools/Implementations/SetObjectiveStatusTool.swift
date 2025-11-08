@@ -6,7 +6,7 @@ struct SetObjectiveStatusTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: "Mark an onboarding objective as pending, in progress, completed, or skipped.",
+            description: "Mark an onboarding objective as pending, in progress, completed, or skipped. Optionally provide context details.",
             properties: [
                 "objective_id": JSONSchema(
                     type: .string,
@@ -16,6 +16,15 @@ struct SetObjectiveStatusTool: InterviewTool {
                     type: .string,
                     description: "Desired status (pending, in_progress, completed, skipped).",
                     enum: ["pending", "in_progress", "completed", "skipped"]
+                ),
+                "notes": JSONSchema(
+                    type: .string,
+                    description: "Optional notes about this status change."
+                ),
+                "details": JSONSchema(
+                    type: .object,
+                    description: "Optional string key-value pairs with context (e.g., source='manual', mode='skip', artifact_id='123').",
+                    additionalProperties: true
                 )
             ],
             required: ["objective_id", "status"],
@@ -47,10 +56,25 @@ struct SetObjectiveStatusTool: InterviewTool {
             throw ToolError.invalidParameters("Invalid status: \(status). Must be one of: pending, in_progress, completed, skipped")
         }
 
+        // Extract optional metadata
+        let notes = params["notes"].string
+        var details: [String: String] = [:]
+        if let detailsJSON = params["details"].dictionary {
+            for (key, value) in detailsJSON {
+                if let stringValue = value.string {
+                    details[key] = stringValue
+                } else {
+                    throw ToolError.invalidParameters("details values must be strings (key: \(key))")
+                }
+            }
+        }
+
         // Update objective status via coordinator (which emits events)
         let result = try await coordinator.updateObjectiveStatus(
             objectiveId: objectiveId,
-            status: status
+            status: status,
+            notes: notes,
+            details: details
         )
 
         return .immediate(result)

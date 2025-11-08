@@ -54,6 +54,7 @@ struct PhaseOneScript: PhaseScript {
             "contact_data_collected": ObjectiveWorkflow(
                 id: "contact_data_collected",
                 dependsOn: ["contact_source_selected"],
+                autoStartWhenReady: true,
                 onComplete: { context in
                     let mode = context.details["source"] ?? context.details["status"] ?? "unspecified"
                     let title = "Applicant contact data collected via \(mode). Await validation status before re-requesting any details."
@@ -72,6 +73,7 @@ struct PhaseOneScript: PhaseScript {
             "contact_photo_collected": ObjectiveWorkflow(
                 id: "contact_photo_collected",
                 dependsOn: ["contact_data_validated"],
+                autoStartWhenReady: true,
                 onComplete: { context in
                     let title = "Profile photo stored successfully. Resume the Phase 1 sequence without re-requesting another upload."
                     let details = ["status": context.status.rawValue, "objective": "contact_photo_collected"]
