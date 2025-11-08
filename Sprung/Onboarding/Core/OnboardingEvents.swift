@@ -103,6 +103,10 @@ enum OnboardingEvent {
     case llmSendDeveloperMessage(payload: JSON)
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
+    // Stream request events (for enqueueing via StateCoordinator)
+    case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool)
+    case llmEnqueueDeveloperMessage(payload: JSON)
+    case llmEnqueueToolResponse(payload: JSON)
     // Stream execution events (for serial processing via StateCoordinator)
     case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool)
     case llmExecuteDeveloperMessage(payload: JSON)
@@ -263,6 +267,7 @@ actor EventCoordinator {
         // LLM events
         case .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
+             .llmEnqueueUserMessage, .llmEnqueueDeveloperMessage, .llmEnqueueToolResponse,
              .llmExecuteUserMessage, .llmExecuteDeveloperMessage, .llmExecuteToolResponse,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
@@ -443,6 +448,12 @@ actor EventCoordinator {
             description = "LLM send developer message requested"
         case .llmToolResponseMessage:
             description = "LLM tool response requested"
+        case .llmEnqueueUserMessage(_, let isSystemGenerated):
+            description = "LLM enqueue user message (system: \(isSystemGenerated))"
+        case .llmEnqueueDeveloperMessage:
+            description = "LLM enqueue developer message"
+        case .llmEnqueueToolResponse:
+            description = "LLM enqueue tool response"
         case .llmExecuteUserMessage(_, let isSystemGenerated):
             description = "LLM execute user message (system: \(isSystemGenerated))"
         case .llmExecuteDeveloperMessage:

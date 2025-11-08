@@ -27,16 +27,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let contextAssembler: ConversationContextAssembler
     private let stateCoordinator: StateCoordinator
 
-    // Conversation tracking
-    private var conversationId: String?
-    private var lastResponseId: String?
-    private var currentModelId: String = "gpt-5"
+    // Active state
     private var isActive = false
-
-    // Tool continuation tracking
-
-    // Allowed tools from StateCoordinator
-    private var allowedToolNames: Set<String> = []
 
     // Phase 3: Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
@@ -75,12 +67,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         Task {
             for await event in await self.eventBus.stream(topic: .userInput) {
                 await self.handleUserInputEvent(event)
-            }
-        }
-
-        Task {
-            for await event in await self.eventBus.stream(topic: .state) {
-                await self.handleStateEvent(event)
             }
         }
 
@@ -130,28 +116,17 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.debug("LLMMessenger received user input event", category: .ai)
     }
 
-    private func handleStateEvent(_ event: OnboardingEvent) async {
-        switch event {
-        case .stateAllowedToolsUpdated(let tools):
-            allowedToolNames = tools
-            Logger.info("🔧 LLMMessenger updated allowed tools: \(tools.count) tools", category: .ai)
-
-        default:
-            break
-        }
-    }
-
     // MARK: - Message Sending
 
-    /// Send user message to LLM (enqueues via StateCoordinator)
+    /// Send user message to LLM (enqueues via event publication)
     private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
             return
         }
 
-        // Enqueue via StateCoordinator for serial processing
-        await stateCoordinator.enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
+        // Publish enqueue event for StateCoordinator to handle
+        await emit(.llmEnqueueUserMessage(payload: payload, isSystemGenerated: isSystemGenerated))
     }
 
     /// Execute user message (called from StateCoordinator queue via event)
@@ -175,8 +150,11 @@ actor LLMMessenger: OnboardingEventEmitter {
 
                     // Track conversation state
                     if case .responseCompleted(let completed) = streamEvent {
-                        conversationId = completed.response.id
-                        lastResponseId = completed.response.id
+                        // Update StateCoordinator (single source of truth)
+                        await stateCoordinator.updateConversationState(
+                            conversationId: completed.response.id,
+                            responseId: completed.response.id
+                        )
                         // Store in conversation context for next request
                         await contextAssembler.storePreviousResponseId(completed.response.id)
                     }
@@ -205,15 +183,15 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
     }
 
-    /// Send developer message (system instructions) - enqueues via StateCoordinator
+    /// Send developer message (system instructions) - enqueues via event publication
     private func sendDeveloperMessage(_ payload: JSON) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring developer message", category: .ai)
             return
         }
 
-        // Enqueue via StateCoordinator for serial processing
-        await stateCoordinator.enqueueStreamRequest(.developerMessage(payload: payload))
+        // Publish enqueue event for StateCoordinator to handle
+        await emit(.llmEnqueueDeveloperMessage(payload: payload))
     }
 
     /// Execute developer message (called from StateCoordinator queue via event)
@@ -241,8 +219,11 @@ actor LLMMessenger: OnboardingEventEmitter {
 
                     // Track conversation state
                     if case .responseCompleted(let completed) = streamEvent {
-                        conversationId = completed.response.id
-                        lastResponseId = completed.response.id
+                        // Update StateCoordinator (single source of truth)
+                        await stateCoordinator.updateConversationState(
+                            conversationId: completed.response.id,
+                            responseId: completed.response.id
+                        )
                         // Store in conversation context for next request
                         await contextAssembler.storePreviousResponseId(completed.response.id)
                     }
@@ -273,10 +254,10 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
     }
 
-    /// Send tool response back to LLM - enqueues via StateCoordinator
+    /// Send tool response back to LLM - enqueues via event publication
     private func sendToolResponse(_ payload: JSON) async {
-        // Enqueue via StateCoordinator for serial processing
-        await stateCoordinator.enqueueStreamRequest(.toolResponse(payload: payload))
+        // Publish enqueue event for StateCoordinator to handle
+        await emit(.llmEnqueueToolResponse(payload: payload))
     }
 
     /// Execute tool response (called from StateCoordinator queue via event)
@@ -300,8 +281,11 @@ actor LLMMessenger: OnboardingEventEmitter {
                     await networkRouter.handleResponseEvent(streamEvent)
 
                     if case .responseCompleted(let completed) = streamEvent {
-                        conversationId = completed.response.id
-                        lastResponseId = completed.response.id
+                        // Update StateCoordinator (single source of truth)
+                        await stateCoordinator.updateConversationState(
+                            conversationId: completed.response.id,
+                            responseId: completed.response.id
+                        )
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -339,10 +323,11 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         // Determine tool_choice based on context
         let toolChoice = await determineToolChoice(for: text)
+        let modelId = await stateCoordinator.getCurrentModelId()
 
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
-            model: .custom(currentModelId),
+            model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
             previousResponseId: previousResponseId,
@@ -397,9 +382,11 @@ actor LLMMessenger: OnboardingEventEmitter {
             toolChoice = .auto
         }
 
+        let modelId = await stateCoordinator.getCurrentModelId()
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
-            model: .custom(currentModelId),
+            model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
             previousResponseId: previousResponseId,
@@ -426,10 +413,11 @@ actor LLMMessenger: OnboardingEventEmitter {
         let scratchpad = await contextAssembler.buildScratchpadSummary()
         let metadata = scratchpad.isEmpty ? nil : ["scratchpad": scratchpad]
         let previousResponseId = await contextAssembler.getPreviousResponseId()
+        let modelId = await stateCoordinator.getCurrentModelId()
 
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
-            model: .custom(currentModelId),
+            model: .custom(modelId),
             conversation: nil,
             instructions: systemPrompt,
             previousResponseId: previousResponseId,
@@ -446,31 +434,27 @@ actor LLMMessenger: OnboardingEventEmitter {
         return parameters
     }
 
-    /// Get tool schemas from ToolRegistry, filtered by allowed tools
+    /// Get tool schemas from ToolRegistry, filtered by allowed tools from StateCoordinator
     private func getToolSchemas() async -> [Tool] {
-        let allowedNames = allowedToolNames.isEmpty ? nil : allowedToolNames
-        return await toolRegistry.toolSchemas(filteredBy: allowedNames)
+        let allowedNames = await stateCoordinator.getAllowedToolNames()
+        let filterNames = allowedNames.isEmpty ? nil : allowedNames
+        return await toolRegistry.toolSchemas(filteredBy: filterNames)
     }
 
     // MARK: - Lifecycle
 
     func activate() {
         isActive = true
-        conversationId = nil
-        lastResponseId = nil
         Logger.info("✅ LLMMessenger activated", category: .ai)
     }
 
     func deactivate() {
         isActive = false
-        conversationId = nil
-        lastResponseId = nil
         Logger.info("⏹️ LLMMessenger deactivated", category: .ai)
     }
 
-    func setModelId(_ modelId: String) {
-        currentModelId = modelId
-        Logger.info("🔧 LLMMessenger model set to: \(modelId)", category: .ai)
+    func setModelId(_ modelId: String) async {
+        await stateCoordinator.setModelId(modelId)
     }
 
     // MARK: - Dynamic Prompt Update (Phase 3)

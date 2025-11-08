@@ -88,6 +88,13 @@ actor StateCoordinator: OnboardingEventEmitter {
     private var streamQueue: [StreamRequestType] = []
     private(set) var hasStreamedFirstResponse = false
 
+    // MARK: - LLM State (Single Source of Truth)
+
+    private var allowedToolNames: Set<String> = []
+    private var conversationId: String?
+    private var lastResponseId: String?
+    private var currentModelId: String = "gpt-5"
+
     // MARK: - Initialization
 
     init(
@@ -306,6 +313,10 @@ actor StateCoordinator: OnboardingEventEmitter {
             await artifactRepository.setEnabledSections(sections)
             Logger.info("📑 Enabled sections updated via event", category: .ai)
 
+        case .stateAllowedToolsUpdated(let tools):
+            allowedToolNames = tools
+            Logger.info("🔧 Allowed tools updated in StateCoordinator: \(tools.count) tools", category: .ai)
+
         default:
             break
         }
@@ -376,6 +387,15 @@ actor StateCoordinator: OnboardingEventEmitter {
             await chatStore.completeReasoningSummary(finalText: text)
             currentReasoningSummarySync = await chatStore.getCurrentReasoningSummary()
             isReasoningActiveSync = false
+
+        case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
+            enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
+
+        case .llmEnqueueDeveloperMessage(let payload):
+            enqueueStreamRequest(.developerMessage(payload: payload))
+
+        case .llmEnqueueToolResponse(let payload):
+            enqueueStreamRequest(.toolResponse(payload: payload))
 
         default:
             break
@@ -577,6 +597,36 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Check if this is the first response (for toolChoice logic)
     func getHasStreamedFirstResponse() -> Bool {
         return hasStreamedFirstResponse
+    }
+
+    // MARK: - LLM State Accessors
+
+    /// Get allowed tool names
+    func getAllowedToolNames() -> Set<String> {
+        return allowedToolNames
+    }
+
+    /// Update conversation state (called by LLMMessenger when response completes)
+    func updateConversationState(conversationId: String, responseId: String) {
+        self.conversationId = conversationId
+        self.lastResponseId = responseId
+        Logger.debug("💬 Conversation state updated: \(responseId.prefix(8))", category: .ai)
+    }
+
+    /// Get last response ID
+    func getLastResponseId() -> String? {
+        return lastResponseId
+    }
+
+    /// Set model ID
+    func setModelId(_ modelId: String) {
+        currentModelId = modelId
+        Logger.info("🔧 Model ID set to: \(modelId)", category: .ai)
+    }
+
+    /// Get current model ID
+    func getCurrentModelId() -> String {
+        return currentModelId
     }
 
     // MARK: - Snapshot Management
