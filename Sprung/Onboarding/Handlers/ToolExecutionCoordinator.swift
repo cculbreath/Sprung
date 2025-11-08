@@ -127,7 +127,12 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             }
 
             // Tool completed - send response to LLM
-            await emitToolResponse(callId: callId, output: output)
+            // Skip sending if there are pending user input continuations (to prevent duplicate LLM responses)
+            if pendingContinuations.isEmpty {
+                await emitToolResponse(callId: callId, output: output)
+            } else {
+                Logger.info("📝 Tool response for \(toolName ?? "unknown") suppressed (waiting for user input on \(pendingContinuations.count) continuation(s))", category: .ai)
+            }
 
         case .waiting(_, let continuation):
             // Tool needs user input - store continuation and emit UI event
