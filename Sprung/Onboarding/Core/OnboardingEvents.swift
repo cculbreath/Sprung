@@ -88,8 +88,8 @@ enum OnboardingEvent {
 
     // MARK: - Objective Management
     case objectiveStatusRequested(id: String, response: (String?) -> Void)
-    case objectiveStatusUpdateRequested(id: String, status: String, source: String?, notes: String?)
-    case objectiveStatusChanged(id: String, oldStatus: String?, newStatus: String, phase: String, source: String?, notes: String?)
+    case objectiveStatusUpdateRequested(id: String, status: String, source: String?, notes: String?, details: [String: String]?)
+    case objectiveStatusChanged(id: String, oldStatus: String?, newStatus: String, phase: String, source: String?, notes: String?, details: [String: String]?)
 
     // MARK: - State Management (§6 spec)
     case stateSnapshot(updatedKeys: [String], snapshot: JSON)
@@ -416,9 +416,9 @@ actor EventCoordinator {
             description = "Timeline cards reordered"
         case .objectiveStatusRequested:
             description = "Objective status requested"
-        case .objectiveStatusUpdateRequested(let id, let status, _, _):
+        case .objectiveStatusUpdateRequested(let id, let status, _, _, _):
             description = "Objective update requested: \(id) → \(status)"
-        case .objectiveStatusChanged(let id, let oldStatus, let newStatus, _, let source, _):
+        case .objectiveStatusChanged(let id, let oldStatus, let newStatus, _, let source, _, _):
             let sourceInfo = source.map { " (source: \($0))" } ?? ""
             let oldInfo = oldStatus.map { "\($0) → " } ?? ""
             description = "Objective \(id): \(oldInfo)\(newStatus)\(sourceInfo)"

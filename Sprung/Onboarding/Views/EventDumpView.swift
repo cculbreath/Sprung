@@ -147,7 +147,7 @@ struct EventDumpView: View {
             return "toolCallRequested(\(call.name))"
         case .toolCallCompleted(let id, _):
             return "toolCallCompleted(\(id.uuidString.prefix(8)))"
-        case .objectiveStatusChanged(let id, let oldStatus, let newStatus, let phase, _, _):
+        case .objectiveStatusChanged(let id, let oldStatus, let newStatus, let phase, _, _, _):
             return "objectiveStatusChanged(\(id): \(oldStatus ?? "nil") → \(newStatus), phase: \(phase))"
         case .phaseTransitionApplied(let phase, let timestamp):
             return "phaseTransitionApplied(\(phase), \(timestamp.formatted()))"

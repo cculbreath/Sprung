@@ -40,6 +40,11 @@ actor LLMMessenger: OnboardingEventEmitter {
     // Phase 3: Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
 
+    // Request serialization: ensure only one stream runs at a time
+    private var isStreaming = false
+    private var requestQueue: [() async -> Void] = []
+    private var hasStreamedFirstResponse = false  // Track if we've had at least one response
+
     // MARK: - Initialization
 
     init(
@@ -136,6 +141,15 @@ actor LLMMessenger: OnboardingEventEmitter {
             return
         }
 
+        // Enqueue the request to serialize with other streaming calls
+        enqueueRequest { [weak self] in
+            guard let self else { return }
+            await self.executeUserMessage(payload, isSystemGenerated: isSystemGenerated)
+        }
+    }
+
+    /// Execute user message (called from queue)
+    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool) async {
         await emit(.llmStatus(status: .busy))
 
         let text = payload["text"].stringValue
@@ -159,6 +173,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         lastResponseId = completed.response.id
                         // Store in conversation context for next request
                         await contextAssembler.storePreviousResponseId(completed.response.id)
+                        hasStreamedFirstResponse = true
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -171,8 +186,11 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.info("User message stream cancelled", category: .ai)
             // Status already set to idle by cancelCurrentStream()
         } catch {
+            Logger.error("❌ Failed to send message: \(error)", category: .ai)
             await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
+            // Surface error as visible assistant message
+            await surfaceErrorToUI(error: error)
         }
     }
 
@@ -183,10 +201,22 @@ actor LLMMessenger: OnboardingEventEmitter {
             return
         }
 
+        // Enqueue the request to serialize with other streaming calls
+        enqueueRequest { [weak self] in
+            guard let self else { return }
+            await self.executeDeveloperMessage(payload)
+        }
+    }
+
+    /// Execute developer message (called from queue)
+    private func executeDeveloperMessage(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
 
         let text = payload["text"].stringValue
         let forceToolName = payload["forceToolName"].string
+
+        // Add telemetry
+        Logger.info("📨 Sending developer message (\(text.prefix(100))...)", category: .ai)
 
         do {
             let request = await buildDeveloperMessageRequest(text: text, forceToolName: forceToolName)
@@ -207,6 +237,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         lastResponseId = completed.response.id
                         // Store in conversation context for next request
                         await contextAssembler.storePreviousResponseId(completed.response.id)
+                        hasStreamedFirstResponse = true
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -215,12 +246,17 @@ actor LLMMessenger: OnboardingEventEmitter {
             try await currentStreamTask?.value
             currentStreamTask = nil
 
+            Logger.info("✅ Developer message completed successfully", category: .ai)
+
         } catch is CancellationError {
             Logger.info("Developer message stream cancelled", category: .ai)
             // Status already set to idle by cancelCurrentStream()
         } catch {
+            Logger.error("❌ Failed to send developer message: \(error)", category: .ai)
             await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
+            // Surface error as visible assistant message
+            await surfaceErrorToUI(error: error)
         }
     }
 
@@ -300,8 +336,13 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     /// Determine appropriate tool_choice for the given message context
     private func determineToolChoice(for text: String) -> ToolChoiceMode {
-        // Don't force tools on initial greeting - let LLM respond naturally
-        // The system prompt will guide the LLM to call get_applicant_profile after greeting
+        // Force .none on the very first request to guarantee a textual greeting before tools
+        if !hasStreamedFirstResponse {
+            Logger.info("🚫 Forcing toolChoice=.none for first request to ensure greeting", category: .ai)
+            return .none
+        }
+
+        // After first response, let LLM use tools naturally
         return .auto
     }
 
@@ -445,5 +486,66 @@ actor LLMMessenger: OnboardingEventEmitter {
         await emit(.llmStatus(status: .idle))
 
         Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
+    }
+
+    // MARK: - Request Queue Management
+
+    /// Enqueue a request to ensure serial processing
+    private func enqueueRequest(_ request: @escaping () async -> Void) {
+        requestQueue.append(request)
+        Logger.debug("📥 Request enqueued (queue size: \(requestQueue.count))", category: .ai)
+
+        // If not currently streaming, process the queue
+        if !isStreaming {
+            Task {
+                await processQueue()
+            }
+        }
+    }
+
+    /// Process the request queue serially
+    private func processQueue() async {
+        while !requestQueue.isEmpty {
+            guard !isStreaming else {
+                Logger.debug("⏸️ Queue processing paused (stream in progress)", category: .ai)
+                return
+            }
+
+            isStreaming = true
+            let request = requestQueue.removeFirst()
+            Logger.debug("▶️ Processing request from queue (\(requestQueue.count) remaining)", category: .ai)
+
+            await request()
+
+            isStreaming = false
+            Logger.debug("✅ Request completed (queue size: \(requestQueue.count))", category: .ai)
+        }
+    }
+
+    // MARK: - Error Handling
+
+    /// Surface bootstrap and API errors as visible assistant messages
+    private func surfaceErrorToUI(error: Error) async {
+        let errorMessage: String
+
+        // Provide user-friendly error messages based on error type
+        let errorDescription = error.localizedDescription
+        if errorDescription.contains("network") || errorDescription.contains("connection") {
+            errorMessage = "I'm having trouble connecting to the AI service. Please check your network connection and try again."
+        } else if errorDescription.contains("401") || errorDescription.contains("403") {
+            errorMessage = "There's an authentication issue with the AI service. Please check your API key and try again."
+        } else if errorDescription.contains("429") {
+            errorMessage = "The AI service is currently rate-limited. Please wait a moment and try again."
+        } else if errorDescription.contains("500") || errorDescription.contains("503") {
+            errorMessage = "The AI service is temporarily unavailable. Please try again in a few moments."
+        } else {
+            errorMessage = "I encountered an error while processing your request: \(errorDescription). Please try again, or contact support if this persists."
+        }
+
+        // Emit a system-generated user message with the error
+        let payload = JSON(["text": errorMessage])
+        await emit(.llmUserMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true))
+
+        Logger.error("📢 Error surfaced to UI: \(errorMessage)", category: .ai)
     }
 }

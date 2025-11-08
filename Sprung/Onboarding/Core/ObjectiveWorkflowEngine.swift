@@ -68,7 +68,8 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             let newStatusString,
             let phaseString,
             let source,
-            let notes
+            let notes,
+            let eventDetails
         ) = event else {
             return
         }
@@ -107,12 +108,13 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             return
         }
 
-        // Build the context with source and notes from the event
+        // Build the context with source, notes, and details from the event
         let completedObjectives = await state.getAllObjectives()
             .filter { $0.status == .completed || $0.status == .skipped }
             .map { $0.id }
 
-        var details: [String: String] = [:]
+        // Merge all metadata: start with event details, then add source and notes
+        var details: [String: String] = eventDetails ?? [:]
         if let source = source {
             details["source"] = source
         }
@@ -183,9 +185,10 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
                 // This will trigger the onBegin callback via the normal event flow
                 await emit(.objectiveStatusUpdateRequested(
                     id: objective.id,
-                    status: "inProgress",
+                    status: ObjectiveStatus.inProgress.rawValue,
                     source: "workflow_auto_start",
-                    notes: "Auto-started after dependencies completed: \(workflow.dependsOn.joined(separator: ", "))"
+                    notes: "Auto-started after dependencies completed: \(workflow.dependsOn.joined(separator: ", "))",
+                    details: nil
                 ))
             } else {
                 let missingDeps = workflow.dependsOn.filter { !completedObjectives.contains($0) }

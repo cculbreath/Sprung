@@ -681,13 +681,19 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Objective Management
 
-    func updateObjectiveStatus(objectiveId: String, status: String) async throws -> JSON {
+    func updateObjectiveStatus(
+        objectiveId: String,
+        status: String,
+        notes: String? = nil,
+        details: [String: String]? = nil
+    ) async throws -> JSON {
         // Emit event to update objective status
         await eventBus.publish(.objectiveStatusUpdateRequested(
             id: objectiveId,
             status: status.lowercased(),
             source: "tool",
-            notes: nil
+            notes: notes,
+            details: details
         ))
 
         var result = JSON()
