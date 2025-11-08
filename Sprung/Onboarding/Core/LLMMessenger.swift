@@ -275,27 +275,46 @@ actor LLMMessenger: OnboardingEventEmitter {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
 
+            // Log the tool response at appropriate levels
+            Logger.debug("📤 Tool response payload: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
+            Logger.info("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
+
             let request = await buildToolResponseRequest(output: output, callId: callId)
+
+            // Log request details
+            Logger.debug("📦 Tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
+
             let messageId = UUID().uuidString
 
             // Emit message sent event
             await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
-
+            
             // Process stream via NetworkRouter
             currentStreamTask = Task {
-                let stream = try await service.responseCreateStream(request)
-                for try await streamEvent in stream {
-                    await networkRouter.handleResponseEvent(streamEvent)
+                do {
+                    let stream = try await service.responseCreateStream(request)
+                    for try await streamEvent in stream {
+                        await networkRouter.handleResponseEvent(streamEvent)
 
-                    if case .responseCompleted(let completed) = streamEvent {
-                        // Update StateCoordinator (single source of truth)
-                        await stateCoordinator.updateConversationState(
-                            conversationId: completed.response.id,
-                            responseId: completed.response.id
-                        )
+                        if case .responseCompleted(let completed) = streamEvent {
+                            // Update StateCoordinator (single source of truth)
+                            await stateCoordinator.updateConversationState(
+                                conversationId: completed.response.id,
+                                responseId: completed.response.id
+                            )
+                            // Store in conversation context for next request
+                            await contextAssembler.storePreviousResponseId(completed.response.id)
+                        }
                     }
+                    await emit(.llmStatus(status: .idle))
+                } catch {
+                    // Log detailed error for debugging
+                    Logger.error("❌ Tool response stream failed: \(error)", category: .ai)
+                    if let apiError = error as? APIError {
+                        Logger.error("❌ API Error details: \(apiError)", category: .ai)
+                    }
+                    throw error
                 }
-                await emit(.llmStatus(status: .idle))
             }
 
             try await currentStreamTask?.value
