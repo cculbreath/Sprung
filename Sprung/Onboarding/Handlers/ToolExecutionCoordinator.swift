@@ -178,6 +178,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
 
         await emit(.llmToolResponseMessage(payload: payload))
         Logger.info("📤 Tool response sent to LLM (call: \(callId.prefix(8)))", category: .ai)
+        Logger.verbose("payload.callId: \(callId), payload.output: \(output)")
     }
 
     /// Emit tool error
