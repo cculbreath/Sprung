@@ -6,7 +6,13 @@ struct SetObjectiveStatusTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: "ATOMIC OPERATION: Mark an onboarding objective as pending, in progress, completed, or skipped. CRITICAL: This tool must be called ALONE in a separate response with NO assistant message. Never combine with user-facing messages.",
+            description: """
+                Update the internal status of an onboarding objective (pending, in_progress, completed, skipped).
+
+                CRITICAL: Responses from this tool are for internal tracking only and must NEVER be communicated to the user. The tool response confirms status was recorded and is only to inform you indirectly with updated state knowledge. Do not acknowledge status changes in chat - they are silent background operations invisible to the user.
+
+                This tool must be called ALONE without any assistant message in the same turn. Status updates are fire-and-forget operations.
+                """,
             properties: [
                 "objective_id": JSONSchema(
                     type: .string,
@@ -39,7 +45,7 @@ struct SetObjectiveStatusTool: InterviewTool {
     }
 
     var name: String { "set_objective_status" }
-    var description: String { "ATOMIC: Update objective status. Must be called ALONE with NO assistant message in the same turn." }
+    var description: String { "Update internal objective status. Response is for internal tracking only - do not communicate status changes to user. Silent background operation." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
