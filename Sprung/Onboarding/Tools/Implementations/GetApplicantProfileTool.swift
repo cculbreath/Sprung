@@ -5,7 +5,13 @@ import SwiftOpenAI
 struct GetApplicantProfileTool: InterviewTool {
     private static let schema = JSONSchema(
         type: .object,
-        description: "Initiate the applicant profile intake flow.",
+        description: """
+            Present the applicant profile intake UI card to collect contact information.
+
+            When this tool returns "waiting for user input", respond with: "Once you complete the form to the left we can continue."
+
+            The user can upload a document, paste a URL, import from macOS Contacts, or enter data manually.
+            """,
         properties: [:],
         required: [],
         additionalProperties: false
@@ -18,7 +24,7 @@ struct GetApplicantProfileTool: InterviewTool {
     }
 
     var name: String { "get_applicant_profile" }
-    var description: String { "Collect applicant profile information using the built-in intake flow." }
+    var description: String { "Present profile intake UI. Response indicates waiting for user - reply: 'Once you complete the form to the left we can continue.'" }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {

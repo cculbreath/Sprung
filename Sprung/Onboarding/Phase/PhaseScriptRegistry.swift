@@ -84,8 +84,7 @@ final class PhaseScriptRegistry {
         • configure_enabled_sections — section toggle card
         • display_timeline_entries_for_review — timeline review UI
         - Cards typically dismiss when the user completes the action. You may cancel/dismiss via the appropriate tool (e.g., cancel_user_upload) when applicable.
-        - Upon activation tool cards return a tool_result with a  "waiting for user input" payload
-        - You should always respond to a "waiting for user input" tool_result with a brief instruction like  "Use the card to the left to specify how you would like to provide your contact information."
+        - UI tools return responses indicating how to guide the user - follow the guidance in each tool's description.
         
         INTERVIEW WORKFLOW
         - The interview is organized into Phases and Sub‑phases, each defined by objectives that must be satisfied to advance.
