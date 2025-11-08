@@ -127,8 +127,15 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             }
 
             // Tool completed - send response to LLM
+            // Never send responses for fire-and-forget status tools or UI presentation tools
+            if toolName == "set_objective_status" {
+                Logger.info("📝 Tool response for set_objective_status suppressed (fire-and-forget status update)", category: .ai)
+            }
+            else if toolName == "get_applicant_profile" || toolName == "configure_enabled_sections" {
+                Logger.info("📝 Tool response for \(toolName!) suppressed (UI presentation tool - continuation path will provide result)", category: .ai)
+            }
             // Skip sending if there are pending user input continuations (to prevent duplicate LLM responses)
-            if pendingContinuations.isEmpty {
+            else if pendingContinuations.isEmpty {
                 await emitToolResponse(callId: callId, output: output)
             } else {
                 Logger.info("📝 Tool response for \(toolName ?? "unknown") suppressed (waiting for user input on \(pendingContinuations.count) continuation(s))", category: .ai)
@@ -136,6 +143,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
 
         case .waiting(_, let continuation):
             // Tool needs user input - store continuation and emit UI event
+            // DO NOT send tool response to LLM - waiting tools don't need LLM acknowledgment
             pendingContinuations[continuation.id] = callId
 
             // Emit UI-specific events based on the tool's UI request
@@ -144,7 +152,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             }
 
             await emit(.toolContinuationNeeded(id: continuation.id, toolName: continuation.toolName))
-            Logger.info("🔄 Tool waiting for user input: \(continuation.toolName)", category: .ai)
+            Logger.info("🔄 Tool waiting for user input: \(continuation.toolName) - NO tool response sent to LLM", category: .ai)
 
         case .error(let error):
             // Tool execution error
