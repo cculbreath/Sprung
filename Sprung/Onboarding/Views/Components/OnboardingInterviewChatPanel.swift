@@ -63,7 +63,7 @@ struct OnboardingInterviewChatPanel: View {
 
             // Note: Reasoning summary display removed during event-driven migration
 
-            HStack(alignment: .bottom, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 ChatComposerTextView(
                     text: Binding(
                         get: { state.userInput },
@@ -78,10 +78,10 @@ struct OnboardingInterviewChatPanel: View {
                 .frame(height: min(max(composerHeight, 44), 140))
                 .padding(2)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                         .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(Color(nsColor: .textBackgroundColor))
                         )
                 )
