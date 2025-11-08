@@ -97,13 +97,11 @@ actor NetworkRouter: OnboardingEventEmitter {
 
         case .responseInProgress(let inProgress):
             // Process deltas from in-progress response
+            // Note: Tool calls are handled by outputItemDone, not here
             for item in inProgress.response.output {
                 switch item {
                 case .message(let message):
                     await processMessageContent(message)
-
-                case .functionCall(let toolCall):
-                    await processToolCall(toolCall)
 
                 case .reasoning(let reasoning):
                     await processReasoningItem(reasoning)
