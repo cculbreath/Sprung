@@ -1,162 +1,105 @@
 Sprung Onboarding Event Dump
-Generated: 11/6/2025, 4:39 PM
+Generated: 11/7/2025, 6:24 PM
 ================================================================================
 
 Published Event Counts by Topic:
   Artifact    : 0 events (last: never)
-  LLM         : 20 events (last: 26 seconds ago)
+  LLM         : 14 events (last: 2 minutes ago)
   Objective   : 0 events (last: never)
-  Phase       : 0 events (last: never)
-  Processing  : 13 events (last: 26 seconds ago)
-  State       : 2 events (last: 56 seconds ago)
+  Phase       : 1 events (last: 3 minutes ago)
+  Processing  : 11 events (last: 2 minutes ago)
+  State       : 2 events (last: 2 minutes ago)
   Timeline    : 0 events (last: never)
-  Tool        : 2 events (last: 27 seconds ago)
-  Toolpane    : 3 events (last: 27 seconds ago)
+  Tool        : 1 events (last: 2 minutes ago)
+  Toolpane    : 1 events (last: 2 minutes ago)
   UserInput   : 0 events (last: never)
 
 ================================================================================
 
-Recent Events (40):
-
-#40
-processingStateChanged(false)
-
-#39
-waitingStateChanged(nil)
-
-#38
-stateAllowedToolsUpdated(tools: Set(["validate_applicant_profile", "display_timeline_entries_for_review", "create_timeline_card", "submit_for_validation", "set_objective_status", "update_timeline_card", "reorder_timeline_cards", "get_user_upload", "extract_document", "list_artifacts", "delete_timeline_card", "persist_data", "request_raw_file", "cancel_user_upload", "get_artifact", "next_phase", "get_user_option", "configure_enabled_sections", "get_applicant_profile", "get_macos_contact_card"]))
-
-#37
-processingStateChanged(true)
-
-#36
-processingStateChanged(true)
-
-#35
-llmSendUserMessage(payload: {
-  "text" : "I'm ready to begin."
-}, isSystemGenerated: true)
-
-#34
-llmStatus(status: Sprung.LLMStatus.busy)
-
-#33
-llmUserMessageSent(messageId: "3A715341-5852-402B-8AB2-08B20006DEEF", payload: {
-  "text" : "I'm ready to begin."
-}, isSystemGenerated: true)
-
-#32
-streamingMessageBegan(id: BF23F897, reasoningExpected: false)
-
-#31
-streamingMessageFinalized(id: BF23F897, text: 222 chars toolCalls: 1)
+Recent Events (30):
 
 #30
-toolCallRequested(get_applicant_profile)
+processingStateChanged(false)
 
 #29
-llmStatus(status: Sprung.LLMStatus.idle)
+waitingStateChanged(nil)
 
 #28
-processingStateChanged(false)
+stateAllowedToolsUpdated(tools: Set(["display_timeline_entries_for_review", "configure_enabled_sections", "next_phase", "create_timeline_card", "cancel_user_upload", "update_timeline_card", "list_artifacts", "get_artifact", "reorder_timeline_cards", "get_macos_contact_card", "get_user_upload", "request_raw_file", "persist_data", "delete_timeline_card", "validated_applicant_profile_data", "get_applicant_profile", "submit_for_validation", "set_objective_status", "get_user_option", "validate_applicant_profile"]))
 
 #27
-applicantProfileIntakeRequested(continuationId: 5FE09A64-ECF5-4D95-B083-C39CF5C2462F)
+phaseTransitionApplied(Phase 1: Core Facts, 11/7/2025, 6:21 PM)
 
 #26
-llmToolResponseMessage(payload: {
-  "callId" : "fc_005d97c210ec780400690d236198bc8195871420060394acce",
-  "output" : {
-    "status" : "awaiting_user_input",
-    "message" : "Applicant profile form has been presented to the user"
-  }
-})
-
-#25
-llmStatus(status: Sprung.LLMStatus.busy)
-
-#24
 processingStateChanged(true)
 
-#23
-llmSentToolResponseMessage(messageId: "BD977C04-F952-46A3-80D6-61ADC68601A1", payload: {
-  "callId" : "fc_005d97c210ec780400690d236198bc8195871420060394acce",
-  "output" : {
-    "status" : "awaiting_user_input",
-    "message" : "Applicant profile form has been presented to the user"
-  }
-})
-
-#22
-errorOccurred("Failed to send tool response: The operation couldn’t be completed. (SwiftOpenAI.APIError error 1.)")
-
-#21
-llmStatus(status: Sprung.LLMStatus.error)
-
-#20
-processingStateChanged(false)
-
-#19
-applicantProfileIntakeCleared
-
-#18
-applicantProfileStored({
-  "email" : "christopherculbreath@mac.com",
-  "profiles" : [
-
-  ],
-  "name" : "Christopher Culbreath",
-  "location" : {
-    "city" : "Austin",
-    "postalCode" : "78745",
-    "address" : "7317 Shadywood Drive",
-    "region" : "TX",
-    "countryCode" : "US"
-  },
-  "phone" : "805-234-0847",
-  "url" : ""
-})
-
-#17
+#25
 llmSendUserMessage(payload: {
-  "text" : "Here is my contact information (imported from macOS Contacts):\n\nName: Christopher Culbreath\nEmail: christopherculbreath@mac.com\nPhone: 805-234-0847\n"
+  "text" : "I'm ready to begin."
 }, isSystemGenerated: true)
 
-#16
+#24
+llmSendDeveloperMessage(payload: {
+  "text" : "        ## PHASE 1: CORE FACTS\n\n**Objective**: Collect the user's basic contact information (ApplicantProfile) and career skeleton timeline.\n\n### Objective Ledger Guidance\n• You will receive developer messages that begin with \"Objective update:\" or \"Developer status:\". Treat them as authoritative instructions.\n• Do not undo, re-check, or re-validate objectives that the coordinator marks completed. Simply acknowledge and proceed to the next ready item.\n• Propose status via `set_objective_status` when you believe an objective or sub-objective is finished. The coordinator finalizes the ledger; don't attempt to reopen what it has closed.\n• You may call `set_objective_status(..., status:\"in_progress\")` while a user-facing card remains active so the coordinator understands work is underway.\n• For the photo: call `set_objective_status(id:\"contact_photo_collected\", status:\"completed\")` when a photo saves successfully, or `status:\"skipped\"` if the user declines. Only when the photo objective is completed or skipped **and** the profile data is persisted should you set `applicant_profile` to completed.\n\n### Phase 1 Primary Objectives (ID namespace)\n    applicant_profile — Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles\n    skeleton_timeline — Build a high-level timeline of positions\/roles with dates and organizations\n    enabled_sections — Let the user choose which resume sections to include (skills, publications, projects, etc.)\n    dossier_seed (optional) — After enabled_sections completes, ask 2–3 open questions about the user's goals, motivations, and strengths. \n        For each answer, call `persist_data` with `dataType=\"candidate_dossier_entry\"`, \n        `payload: { \"question\": \"<your question>\", \"answer\": \"<user's response>\", \"asked_at\": \"<ISO 8601 timestamp>\" }`. \n        When at least two entries are saved, call `set_objective_status(\"dossier_seed\", \"completed\")`. \n        This objective enriches future phases but is not mandatory for advancing to Phase 2.\n\n### Objective Tree\n\napplicant_profile\n    ◻ applicant_profile.contact_intake\n        ◻ applicant_profile.contact_intake.activate_card\n                    Wait for user\n                    Parse and Process\n        ◻ applicant_profile.contact_intake.persisted\n        \n    ◻ applicant_profile.profile_photo (optional)\n        ◻ applicant_profile.profile_photo.retrieve_profile\n        ◻ applicant_profile.profile_photo.evaluate_need\n                    Is there existing photo?\n                        Does user want to add one?\n        (◻ applicant_profile.profile_photo.collect_upload)\n                    Wait for notification of next sub-phase\n\nskeleton_timeline \n    ◻ skeleton_timeline.intake_artifacts — Use `get_user_upload` and chat interview to gather job and educational history timeline data\n    ◻ skeleton_timeline.timeline_editor — Use TimelineEntry UI to collaborate with the user to edit and complete SkeletonTimeline\n    ◻ skeleton_timeline.context_interview — Use chat interview to understand any gaps, unusual job history, and the narrative structure of the user's job history\n    ◻ skeleton_timeline.completeness_signal — Use `set_objective_status(\"skeleton_timeline.completeness_signal\", \"completed\")` to indicate when skeleton timeline data gathering is comprehensive and complete.\n        If skeleton_timeline.completeness_signal is marked complete, the top-level `skeleton_timeline` objective will auto-complete when all cards are validated.\n    ◻ skeleton_timeline.timeline_editor (validation) — Continue collaborating until entries have confirmed\/validated status\n\n    (◻ dossier_seed — Naturally incorporate CandidateDossier questions, if possible)\n    • Use `set_objective_status()` to keep the status ledger up to date throughout the skeleton_timeline sequence\n                \n\n\n### Sub-objectives (Phase 1 namespace)\n\n-----\n#### applicant_profile namespace\n\n    A. Contact Information (applicant_profile.contact_intake.*)\n        1. Following the guidance in the initial user message, use `get_applicant_profile` to collect contact information\n            and send the user a welcome message.\n            • If a \"waiting for user\" tool_result is received, send \"Use the form on the left to let me know how you \n            would like to provide your contact information.\"\n            • Users can upload a document (PDF\/DOCX), paste a URL, import from macOS Contacts, or enter data manually.\n            • If the user uploads a document, the text is extracted automatically and packaged as an ArtifactRecord:\n                • If an ArtifactRecord arrives with a targetDeliverable of ApplicantProfile, YOU parse it and \n                    i) extract ApplicantProfile basics (name, email, phone, location, URLs) only, and\n                    ii) assess whether the document is a resume or another career-history document. \n                         If the artifact is a resume, \n                            use `update_artifact_metadata()` to append the skeleton_timeline objective \n                                `\"skeleton_timeline\"` to the `target_phase_objectives` array.\n            • Use `validate_applicant_profile` to request user validation of the captured contact info.\n        2. Wait for developer message(s) related to the completed status of applicant_profile.contact_intake OR instructions to start applicant_profile.profile_photo.\n    B. Optional Profile Photo (applicant_profile.profile_photo.*)\n        1. Retrieve ApplicantProfile data using `validated_applicant_profile_data`\n            a) if `basics.image` is non-empty, perform tool call: `set_objective_status(\"applicant_profile.profile_photo\", status: \"skipped\")`\n        2. Wait for developer message(s) related to the completed status of applicant_profile OR instructions to start the skeleton_timeline sequence \n            (Any ArtifactRecords with an element of `target_phase_objectives` equal to `\"skeleton_timeline\"` will automatically be provided during skeleton_timeline) \n\n#### skeleton_timeline namespace\n    • The `get_user_upload` tool presents the upload card to the user. Call get_user_upload with an appropriate title and prompt, and set `target_phase_objectives: [\"skeleton_timeline\"]` \n          (the user does NOT upload their document via the chatbox).\n    • Create TimelineEntries with user input using `create_timeline_card`, `update_timeline_card`, `reorder_timeline_cards`, and `delete_timeline_card`.\n            • Use developer messages and chord with card statuses. \n    • Provide recap\/confirmation with the user via `display_timeline_entries_for_review`. Use `submit_for_validation` to collect user validation of timeline contents.\n    • DO NOT generate resume-ready bullet points in Phase 1. \n        ◦ Phase 1 is **only** about collecting raw facts (titles, companies, dates, high-level responsibilities). \n            Think of this as building the timeline's skeleton—just the bones. \n            In Phase 2, we'll revisit each position to excavate the real substance: specific projects, technologies used, \n            problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions, \n            highlight achievements, and write compelling objective statements. \n        ◦ Keep Phase 1 simple: who, what, where, when. Save the \"how well\" and \"why it matters\" for later phases.\n    • Once the user has confirmed all cards, mark `skeleton_timeline.completeness_signal` complete so the top-level objective can advance.\n\n#### enabled_sections namespace\n\nBased on user responses in skeleton_timeline, identify which of the top-level JSON resume keys the user has already provided values for and any others which, based on previous responses, they will likely want to include on their final resume. Generate a proposed payload for enabled_sections based on your analysis.\n\nAfter the skeleton timeline is confirmed and persisted, call `configure_enabled_sections(proposed_payload)` to present a Section Toggle card where the user can confirm\/modify which résumé sections to include (skills, publications, projects, etc.). When the user confirms their selections, call `persist_data` with `dataType=\"experience_defaults\"` and payload `{ enabled_sections: [...] }`. Then call `set_objective_status(\"enabled_sections\", \"completed\")`.\n\n#### Dossier Seed Questions\n9. Dossier Seed Questions: Started during the skeleton_timeline work and finished after enabled_sections is completed, include a total of 2-3 general CandidateDossier questions in natural conversation. These should be broad, engaging questions that help build rapport and gather initial career insights, such as:\n   • \"What types of roles energize you most right now?\"\n   • \"What kind of position are you aiming for next?\"\n   • \"What's a recent project or achievement you're particularly proud of?\"\n   Persist each answer using `persist_data` with `dataType=\"candidate_dossier_entry\"`. Once at least 2 answers are stored, call `set_objective_status(\"dossier_seed\", \"completed\")`.\n\nWhen all objectives are satisfied (applicant_profile, skeleton_timeline, enabled_sections, and ideally dossier_seed), call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.\n\n### Tools Available:\n• `get_applicant_profile`: Present UI for profile collection\n• `get_user_upload`: Present UI for document upload\n• `display_timeline_entries_for_review`: present timeline entries to user in editor UI\n• `create_timeline_card`, `update_timeline_card`, `reorder_timeline_cards`, `delete_timeline_card`: TimelineEntry CRUD functions\n• `validated_applicant_profile_data`: Retrieve validated ApplicantProfile data from coordinator\n• `configure_enabled_sections`: Present Section Toggle card for user to select résumé sections\n• `submit_for_validation`: Show validation UI for user approval\n• `persist_data`: Save approved data (including enabled_sections and candidate_dossier_entry)\n• `set_objective_status`: Mark objectives as completed\n• `next_phase`: Advance to Phase 2 when ready\n\n### Key Constraints:\n• Work atomically: finish ApplicantProfile completely before moving to skeleton timeline\n• Don't extract skills, publications, or projects yet—defer to Phase 2\n• Stay on a first-name basis only after the coordinator confirms the applicant profile is saved; that developer message will include the applicant's name.\n• When the profile is persisted, acknowledge that their details are stored for future resume and cover-letter drafts and let them know edits remain welcome—avoid finality phrases like \"lock it in\"."
+})
+
+#23
 llmStatus(status: Sprung.LLMStatus.busy)
+
+#22
+llmUserMessageSent(messageId: "B381596F-37CD-407E-87BB-040D2D4EEF78", payload: {
+  "text" : "I'm ready to begin."
+}, isSystemGenerated: true)
+
+#21
+streamingMessageBegan(id: 82FEC9F3, reasoningExpected: false)
+
+#20
+streamingMessageFinalized(id: 82FEC9F3, text: 0 chars toolCalls: 1)
+
+#19
+toolCallRequested(get_user_option)
+
+#18
+llmStatus(status: Sprung.LLMStatus.idle)
+
+#17
+llmStatus(status: Sprung.LLMStatus.busy)
+
+#16
+processingStateChanged(false)
 
 #15
 processingStateChanged(true)
 
 #14
-llmUserMessageSent(messageId: "B61491E8-AA38-45A1-8F69-179A5ECE8C2D", payload: {
-  "text" : "Here is my contact information (imported from macOS Contacts):\n\nName: Christopher Culbreath\nEmail: christopherculbreath@mac.com\nPhone: 805-234-0847\n"
-}, isSystemGenerated: true)
+llmDeveloperMessageSent(messageId: "90F8BFA3-05F4-47C7-BC53-7AF8BFA6DF3C", payload: {
+  "text" : "        ## PHASE 1: CORE FACTS\n\n**Objective**: Collect the user's basic contact information (ApplicantProfile) and career skeleton timeline.\n\n### Objective Ledger Guidance\n• You will receive developer messages that begin with \"Objective update:\" or \"Developer status:\". Treat them as authoritative instructions.\n• Do not undo, re-check, or re-validate objectives that the coordinator marks completed. Simply acknowledge and proceed to the next ready item.\n• Propose status via `set_objective_status` when you believe an objective or sub-objective is finished. The coordinator finalizes the ledger; don't attempt to reopen what it has closed.\n• You may call `set_objective_status(..., status:\"in_progress\")` while a user-facing card remains active so the coordinator understands work is underway.\n• For the photo: call `set_objective_status(id:\"contact_photo_collected\", status:\"completed\")` when a photo saves successfully, or `status:\"skipped\"` if the user declines. Only when the photo objective is completed or skipped **and** the profile data is persisted should you set `applicant_profile` to completed.\n\n### Phase 1 Primary Objectives (ID namespace)\n    applicant_profile — Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles\n    skeleton_timeline — Build a high-level timeline of positions\/roles with dates and organizations\n    enabled_sections — Let the user choose which resume sections to include (skills, publications, projects, etc.)\n    dossier_seed (optional) — After enabled_sections completes, ask 2–3 open questions about the user's goals, motivations, and strengths. \n        For each answer, call `persist_data` with `dataType=\"candidate_dossier_entry\"`, \n        `payload: { \"question\": \"<your question>\", \"answer\": \"<user's response>\", \"asked_at\": \"<ISO 8601 timestamp>\" }`. \n        When at least two entries are saved, call `set_objective_status(\"dossier_seed\", \"completed\")`. \n        This objective enriches future phases but is not mandatory for advancing to Phase 2.\n\n### Objective Tree\n\napplicant_profile\n    ◻ applicant_profile.contact_intake\n        ◻ applicant_profile.contact_intake.activate_card\n                    Wait for user\n                    Parse and Process\n        ◻ applicant_profile.contact_intake.persisted\n        \n    ◻ applicant_profile.profile_photo (optional)\n        ◻ applicant_profile.profile_photo.retrieve_profile\n        ◻ applicant_profile.profile_photo.evaluate_need\n                    Is there existing photo?\n                        Does user want to add one?\n        (◻ applicant_profile.profile_photo.collect_upload)\n                    Wait for notification of next sub-phase\n\nskeleton_timeline \n    ◻ skeleton_timeline.intake_artifacts — Use `get_user_upload` and chat interview to gather job and educational history timeline data\n    ◻ skeleton_timeline.timeline_editor — Use TimelineEntry UI to collaborate with the user to edit and complete SkeletonTimeline\n    ◻ skeleton_timeline.context_interview — Use chat interview to understand any gaps, unusual job history, and the narrative structure of the user's job history\n    ◻ skeleton_timeline.completeness_signal — Use `set_objective_status(\"skeleton_timeline.completeness_signal\", \"completed\")` to indicate when skeleton timeline data gathering is comprehensive and complete.\n        If skeleton_timeline.completeness_signal is marked complete, the top-level `skeleton_timeline` objective will auto-complete when all cards are validated.\n    ◻ skeleton_timeline.timeline_editor (validation) — Continue collaborating until entries have confirmed\/validated status\n\n    (◻ dossier_seed — Naturally incorporate CandidateDossier questions, if possible)\n    • Use `set_objective_status()` to keep the status ledger up to date throughout the skeleton_timeline sequence\n                \n\n\n### Sub-objectives (Phase 1 namespace)\n\n-----\n#### applicant_profile namespace\n\n    A. Contact Information (applicant_profile.contact_intake.*)\n        1. Following the guidance in the initial user message, use `get_applicant_profile` to collect contact information\n            and send the user a welcome message.\n            • If a \"waiting for user\" tool_result is received, send \"Use the form on the left to let me know how you \n            would like to provide your contact information.\"\n            • Users can upload a document (PDF\/DOCX), paste a URL, import from macOS Contacts, or enter data manually.\n            • If the user uploads a document, the text is extracted automatically and packaged as an ArtifactRecord:\n                • If an ArtifactRecord arrives with a targetDeliverable of ApplicantProfile, YOU parse it and \n                    i) extract ApplicantProfile basics (name, email, phone, location, URLs) only, and\n                    ii) assess whether the document is a resume or another career-history document. \n                         If the artifact is a resume, \n                            use `update_artifact_metadata()` to append the skeleton_timeline objective \n                                `\"skeleton_timeline\"` to the `target_phase_objectives` array.\n            • Use `validate_applicant_profile` to request user validation of the captured contact info.\n        2. Wait for developer message(s) related to the completed status of applicant_profile.contact_intake OR instructions to start applicant_profile.profile_photo.\n    B. Optional Profile Photo (applicant_profile.profile_photo.*)\n        1. Retrieve ApplicantProfile data using `validated_applicant_profile_data`\n            a) if `basics.image` is non-empty, perform tool call: `set_objective_status(\"applicant_profile.profile_photo\", status: \"skipped\")`\n        2. Wait for developer message(s) related to the completed status of applicant_profile OR instructions to start the skeleton_timeline sequence \n            (Any ArtifactRecords with an element of `target_phase_objectives` equal to `\"skeleton_timeline\"` will automatically be provided during skeleton_timeline) \n\n#### skeleton_timeline namespace\n    • The `get_user_upload` tool presents the upload card to the user. Call get_user_upload with an appropriate title and prompt, and set `target_phase_objectives: [\"skeleton_timeline\"]` \n          (the user does NOT upload their document via the chatbox).\n    • Create TimelineEntries with user input using `create_timeline_card`, `update_timeline_card`, `reorder_timeline_cards`, and `delete_timeline_card`.\n            • Use developer messages and chord with card statuses. \n    • Provide recap\/confirmation with the user via `display_timeline_entries_for_review`. Use `submit_for_validation` to collect user validation of timeline contents.\n    • DO NOT generate resume-ready bullet points in Phase 1. \n        ◦ Phase 1 is **only** about collecting raw facts (titles, companies, dates, high-level responsibilities). \n            Think of this as building the timeline's skeleton—just the bones. \n            In Phase 2, we'll revisit each position to excavate the real substance: specific projects, technologies used, \n            problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions, \n            highlight achievements, and write compelling objective statements. \n        ◦ Keep Phase 1 simple: who, what, where, when. Save the \"how well\" and \"why it matters\" for later phases.\n    • Once the user has confirmed all cards, mark `skeleton_timeline.completeness_signal` complete so the top-level objective can advance.\n\n#### enabled_sections namespace\n\nBased on user responses in skeleton_timeline, identify which of the top-level JSON resume keys the user has already provided values for and any others which, based on previous responses, they will likely want to include on their final resume. Generate a proposed payload for enabled_sections based on your analysis.\n\nAfter the skeleton timeline is confirmed and persisted, call `configure_enabled_sections(proposed_payload)` to present a Section Toggle card where the user can confirm\/modify which résumé sections to include (skills, publications, projects, etc.). When the user confirms their selections, call `persist_data` with `dataType=\"experience_defaults\"` and payload `{ enabled_sections: [...] }`. Then call `set_objective_status(\"enabled_sections\", \"completed\")`.\n\n#### Dossier Seed Questions\n9. Dossier Seed Questions: Started during the skeleton_timeline work and finished after enabled_sections is completed, include a total of 2-3 general CandidateDossier questions in natural conversation. These should be broad, engaging questions that help build rapport and gather initial career insights, such as:\n   • \"What types of roles energize you most right now?\"\n   • \"What kind of position are you aiming for next?\"\n   • \"What's a recent project or achievement you're particularly proud of?\"\n   Persist each answer using `persist_data` with `dataType=\"candidate_dossier_entry\"`. Once at least 2 answers are stored, call `set_objective_status(\"dossier_seed\", \"completed\")`.\n\nWhen all objectives are satisfied (applicant_profile, skeleton_timeline, enabled_sections, and ideally dossier_seed), call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.\n\n### Tools Available:\n• `get_applicant_profile`: Present UI for profile collection\n• `get_user_upload`: Present UI for document upload\n• `display_timeline_entries_for_review`: present timeline entries to user in editor UI\n• `create_timeline_card`, `update_timeline_card`, `reorder_timeline_cards`, `delete_timeline_card`: TimelineEntry CRUD functions\n• `validated_applicant_profile_data`: Retrieve validated ApplicantProfile data from coordinator\n• `configure_enabled_sections`: Present Section Toggle card for user to select résumé sections\n• `submit_for_validation`: Show validation UI for user approval\n• `persist_data`: Save approved data (including enabled_sections and candidate_dossier_entry)\n• `set_objective_status`: Mark objectives as completed\n• `next_phase`: Advance to Phase 2 when ready\n\n### Key Constraints:\n• Work atomically: finish ApplicantProfile completely before moving to skeleton timeline\n• Don't extract skills, publications, or projects yet—defer to Phase 2\n• Stay on a first-name basis only after the coordinator confirms the applicant profile is saved; that developer message will include the applicant's name.\n• When the profile is persisted, acknowledge that their details are stored for future resume and cover-letter drafts and let them know edits remain welcome—avoid finality phrases like \"lock it in\"."
+})
 
 #13
-streamingMessageBegan(id: 7246E3BC, reasoningExpected: false)
+choicePromptRequested(prompt: Sprung.OnboardingChoicePrompt(id: B9B4659F-E1D7-4550-9543-F94DB165FB33, prompt: "Great—let’s start with your basic profile (name, contact info, location, links). How would you like to provide it?", options: [Sprung.OnboardingChoiceOption(id: "manual_profile", title: "Enter details manually", detail: Optional("Open a quick form to type in your basics."), icon: nil), Sprung.OnboardingChoiceOption(id: "mac_me_card", title: "Import from my Mac ‘Me’ card", detail: Optional("We’ll pull your name, phone, email, and address from your macOS contact card."), icon: nil), Sprung.OnboardingChoiceOption(id: "upload_resume", title: "Upload my resume to auto‑fill", detail: Optional("We’ll extract your contact info from a PDF/DOC resume upload."), icon: nil)], selectionStyle: Sprung.OnboardingSelectionStyle.single, required: true), continuationId: AC88D37E-E976-44D8-9482-E4AABB2143D9)
 
 #12
-streamingMessageFinalized(id: 7246E3BC, text: 0 chars toolCalls: 1)
+stateAllowedToolsUpdated(tools: Set([]))
 
 #11
-toolCallRequested(get_applicant_profile)
-
-#10
-applicantProfileIntakeRequested(continuationId: CF19B06C-4F6C-419E-96D2-C3BA129A41BF)
-
-#9
 llmToolResponseMessage(payload: {
-  "callId" : "fc_047840df82b36f9300690d23861a9481908893fdbc67a0cc1b",
+  "callId" : "fc_01f006dae0ec300200690e8d0cea6c81908639799ca491095f",
   "output" : {
-    "status" : "awaiting_user_input",
-    "message" : "Applicant profile form has been presented to the user"
+    "status" : "completed",
+    "message" : "UI presented. Awaiting user input."
   }
 })
 
+#10
+waitingStateChanged(Optional("selection"))
+
+#9
+errorOccurred("Failed to send developer message: The operation couldn’t be completed. (SwiftOpenAI.APIError error 1.)")
+
 #8
-llmStatus(status: Sprung.LLMStatus.idle)
+llmStatus(status: Sprung.LLMStatus.error)
 
 #7
 processingStateChanged(false)
@@ -168,11 +111,11 @@ llmStatus(status: Sprung.LLMStatus.busy)
 processingStateChanged(true)
 
 #4
-llmSentToolResponseMessage(messageId: "4B073D6B-C61C-41A8-AB00-FB65199A0E9B", payload: {
-  "callId" : "fc_047840df82b36f9300690d23861a9481908893fdbc67a0cc1b",
+llmSentToolResponseMessage(messageId: "18DF9809-26C7-4878-93A5-E2A1AEDE087D", payload: {
+  "callId" : "fc_01f006dae0ec300200690e8d0cea6c81908639799ca491095f",
   "output" : {
-    "status" : "awaiting_user_input",
-    "message" : "Applicant profile form has been presented to the user"
+    "status" : "completed",
+    "message" : "UI presented. Awaiting user input."
   }
 })
 

@@ -76,6 +76,18 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var currentWizardStep: WizardStep = .introduction
     private(set) var completedWizardSteps: Set<WizardStep> = []
 
+    // MARK: - Stream Queue Management (Ensures Serial LLM Streaming)
+
+    enum StreamRequestType {
+        case userMessage(payload: JSON, isSystemGenerated: Bool)
+        case developerMessage(payload: JSON)
+        case toolResponse(payload: JSON)
+    }
+
+    private var isStreaming = false
+    private var streamQueue: [StreamRequestType] = []
+    private(set) var hasStreamedFirstResponse = false
+
     // MARK: - Initialization
 
     init(
@@ -302,7 +314,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
         case .processingStateChanged(let processing):
-            // Delegate to SessionUIState
+            // Update StateCoordinator's cache first (source of truth)
+            isProcessingSync = processing
+            // Then delegate to SessionUIState
             await uiState.setProcessingState(processing, emitEvent: false)
 
         case .waitingStateChanged(let waiting):
@@ -493,6 +507,76 @@ actor StateCoordinator: OnboardingEventEmitter {
         default:
             break
         }
+    }
+
+    // MARK: - Stream Queue Management
+
+    /// Enqueue a stream request to be processed serially
+    func enqueueStreamRequest(_ requestType: StreamRequestType) {
+        streamQueue.append(requestType)
+        Logger.debug("📥 Stream request enqueued (queue size: \(streamQueue.count))", category: .ai)
+
+        // If not currently streaming, start processing
+        if !isStreaming {
+            Task {
+                await processStreamQueue()
+            }
+        }
+    }
+
+    /// Process the stream queue serially
+    private func processStreamQueue() async {
+        while !streamQueue.isEmpty {
+            guard !isStreaming else {
+                Logger.debug("⏸️ Queue processing paused (stream in progress)", category: .ai)
+                return
+            }
+
+            isStreaming = true
+            let request = streamQueue.removeFirst()
+            Logger.debug("▶️ Processing stream request from queue (\(streamQueue.count) remaining)", category: .ai)
+
+            // Emit event for LLMMessenger to react to
+            await emitStreamRequest(request)
+
+            // Note: isStreaming will be set to false when .streamCompleted event is received
+        }
+    }
+
+    /// Emit the appropriate stream request event for LLMMessenger to handle
+    private func emitStreamRequest(_ requestType: StreamRequestType) async {
+        switch requestType {
+        case .userMessage(let payload, let isSystemGenerated):
+            await emit(.llmExecuteUserMessage(payload: payload, isSystemGenerated: isSystemGenerated))
+        case .developerMessage(let payload):
+            await emit(.llmExecuteDeveloperMessage(payload: payload))
+        case .toolResponse(let payload):
+            await emit(.llmExecuteToolResponse(payload: payload))
+        }
+    }
+
+    /// Mark stream as completed and process next in queue
+    func markStreamCompleted() {
+        guard isStreaming else {
+            Logger.warning("markStreamCompleted called but isStreaming=false", category: .ai)
+            return
+        }
+
+        isStreaming = false
+        hasStreamedFirstResponse = true
+        Logger.debug("✅ Stream completed (queue size: \(streamQueue.count))", category: .ai)
+
+        // Process next item in queue if any
+        if !streamQueue.isEmpty {
+            Task {
+                await processStreamQueue()
+            }
+        }
+    }
+
+    /// Check if this is the first response (for toolChoice logic)
+    func getHasStreamedFirstResponse() -> Bool {
+        return hasStreamedFirstResponse
     }
 
     // MARK: - Snapshot Management

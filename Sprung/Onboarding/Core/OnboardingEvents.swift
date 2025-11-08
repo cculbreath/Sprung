@@ -103,6 +103,10 @@ enum OnboardingEvent {
     case llmSendDeveloperMessage(payload: JSON)
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
+    // Stream execution events (for serial processing via StateCoordinator)
+    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool)
+    case llmExecuteDeveloperMessage(payload: JSON)
+    case llmExecuteToolResponse(payload: JSON)
     // Sidebar reasoning (ChatGPT-style, not attached to messages)
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
     case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
@@ -259,6 +263,7 @@ actor EventCoordinator {
         // LLM events
         case .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
+             .llmExecuteUserMessage, .llmExecuteDeveloperMessage, .llmExecuteToolResponse,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
@@ -438,6 +443,12 @@ actor EventCoordinator {
             description = "LLM send developer message requested"
         case .llmToolResponseMessage:
             description = "LLM tool response requested"
+        case .llmExecuteUserMessage(_, let isSystemGenerated):
+            description = "LLM execute user message (system: \(isSystemGenerated))"
+        case .llmExecuteDeveloperMessage:
+            description = "LLM execute developer message"
+        case .llmExecuteToolResponse:
+            description = "LLM execute tool response"
         case .llmStatus(let status):
             description = "LLM status: \(status.rawValue)"
         case .llmReasoningSummaryDelta(let delta):

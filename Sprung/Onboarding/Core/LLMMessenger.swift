@@ -25,6 +25,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     private var systemPrompt: String
     private let toolRegistry: ToolRegistry
     private let contextAssembler: ConversationContextAssembler
+    private let stateCoordinator: StateCoordinator
 
     // Conversation tracking
     private var conversationId: String?
@@ -39,11 +40,6 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     // Phase 3: Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
-
-    // Request serialization: ensure only one stream runs at a time
-    private var isStreaming = false
-    private var requestQueue: [() async -> Void] = []
-    private var hasStreamedFirstResponse = false  // Track if we've had at least one response
 
     // MARK: - Initialization
 
@@ -60,6 +56,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         self.eventBus = eventBus
         self.networkRouter = networkRouter
         self.toolRegistry = toolRegistry
+        self.stateCoordinator = state
         self.contextAssembler = ConversationContextAssembler(state: state)
         Logger.info("📬 LLMMessenger initialized with ConversationContextAssembler", category: .ai)
     }
@@ -106,6 +103,18 @@ actor LLMMessenger: OnboardingEventEmitter {
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
 
+        case .llmExecuteUserMessage(let payload, let isSystemGenerated):
+            // Execute stream directly (called from StateCoordinator queue)
+            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated)
+
+        case .llmExecuteDeveloperMessage(let payload):
+            // Execute stream directly (called from StateCoordinator queue)
+            await executeDeveloperMessage(payload)
+
+        case .llmExecuteToolResponse(let payload):
+            // Execute stream directly (called from StateCoordinator queue)
+            await executeToolResponse(payload)
+
         case .llmCancelRequested:
             // Phase 3: Cancel current stream
             await cancelCurrentStream()
@@ -134,21 +143,18 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     // MARK: - Message Sending
 
-    /// Send user message to LLM
+    /// Send user message to LLM (enqueues via StateCoordinator)
     private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
             return
         }
 
-        // Enqueue the request to serialize with other streaming calls
-        enqueueRequest { [weak self] in
-            guard let self else { return }
-            await self.executeUserMessage(payload, isSystemGenerated: isSystemGenerated)
-        }
+        // Enqueue via StateCoordinator for serial processing
+        await stateCoordinator.enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
     }
 
-    /// Execute user message (called from queue)
+    /// Execute user message (called from StateCoordinator queue via event)
     private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool) async {
         await emit(.llmStatus(status: .busy))
 
@@ -173,7 +179,6 @@ actor LLMMessenger: OnboardingEventEmitter {
                         lastResponseId = completed.response.id
                         // Store in conversation context for next request
                         await contextAssembler.storePreviousResponseId(completed.response.id)
-                        hasStreamedFirstResponse = true
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -182,33 +187,36 @@ actor LLMMessenger: OnboardingEventEmitter {
             try await currentStreamTask?.value
             currentStreamTask = nil
 
+            // Notify StateCoordinator that stream completed
+            await stateCoordinator.markStreamCompleted()
+
         } catch is CancellationError {
             Logger.info("User message stream cancelled", category: .ai)
-            // Status already set to idle by cancelCurrentStream()
+            // Notify StateCoordinator even on cancellation
+            await stateCoordinator.markStreamCompleted()
         } catch {
             Logger.error("❌ Failed to send message: \(error)", category: .ai)
             await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
             // Surface error as visible assistant message
             await surfaceErrorToUI(error: error)
+            // Notify StateCoordinator even on error
+            await stateCoordinator.markStreamCompleted()
         }
     }
 
-    /// Send developer message (system instructions)
+    /// Send developer message (system instructions) - enqueues via StateCoordinator
     private func sendDeveloperMessage(_ payload: JSON) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring developer message", category: .ai)
             return
         }
 
-        // Enqueue the request to serialize with other streaming calls
-        enqueueRequest { [weak self] in
-            guard let self else { return }
-            await self.executeDeveloperMessage(payload)
-        }
+        // Enqueue via StateCoordinator for serial processing
+        await stateCoordinator.enqueueStreamRequest(.developerMessage(payload: payload))
     }
 
-    /// Execute developer message (called from queue)
+    /// Execute developer message (called from StateCoordinator queue via event)
     private func executeDeveloperMessage(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
 
@@ -237,7 +245,6 @@ actor LLMMessenger: OnboardingEventEmitter {
                         lastResponseId = completed.response.id
                         // Store in conversation context for next request
                         await contextAssembler.storePreviousResponseId(completed.response.id)
-                        hasStreamedFirstResponse = true
                     }
                 }
                 await emit(.llmStatus(status: .idle))
@@ -248,20 +255,32 @@ actor LLMMessenger: OnboardingEventEmitter {
 
             Logger.info("✅ Developer message completed successfully", category: .ai)
 
+            // Notify StateCoordinator that stream completed
+            await stateCoordinator.markStreamCompleted()
+
         } catch is CancellationError {
             Logger.info("Developer message stream cancelled", category: .ai)
-            // Status already set to idle by cancelCurrentStream()
+            // Notify StateCoordinator even on cancellation
+            await stateCoordinator.markStreamCompleted()
         } catch {
             Logger.error("❌ Failed to send developer message: \(error)", category: .ai)
             await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
             // Surface error as visible assistant message
             await surfaceErrorToUI(error: error)
+            // Notify StateCoordinator even on error
+            await stateCoordinator.markStreamCompleted()
         }
     }
 
-    /// Send tool response back to LLM
+    /// Send tool response back to LLM - enqueues via StateCoordinator
     private func sendToolResponse(_ payload: JSON) async {
+        // Enqueue via StateCoordinator for serial processing
+        await stateCoordinator.enqueueStreamRequest(.toolResponse(payload: payload))
+    }
+
+    /// Execute tool response (called from StateCoordinator queue via event)
+    private func executeToolResponse(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
 
         do {
@@ -291,12 +310,18 @@ actor LLMMessenger: OnboardingEventEmitter {
             try await currentStreamTask?.value
             currentStreamTask = nil
 
+            // Notify StateCoordinator that stream completed
+            await stateCoordinator.markStreamCompleted()
+
         } catch is CancellationError {
             Logger.info("Tool response stream cancelled", category: .ai)
-            // Status already set to idle by cancelCurrentStream()
+            // Notify StateCoordinator even on cancellation
+            await stateCoordinator.markStreamCompleted()
         } catch {
             await emit(.errorOccurred("Failed to send tool response: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
+            // Notify StateCoordinator even on error
+            await stateCoordinator.markStreamCompleted()
         }
     }
 
@@ -313,7 +338,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         // Determine tool_choice based on context
-        let toolChoice = determineToolChoice(for: text)
+        let toolChoice = await determineToolChoice(for: text)
 
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
@@ -335,9 +360,10 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     /// Determine appropriate tool_choice for the given message context
-    private func determineToolChoice(for text: String) -> ToolChoiceMode {
+    private func determineToolChoice(for text: String) async -> ToolChoiceMode {
         // Force .none on the very first request to guarantee a textual greeting before tools
-        if !hasStreamedFirstResponse {
+        let hasStreamed = await stateCoordinator.getHasStreamedFirstResponse()
+        if !hasStreamed {
             Logger.info("🚫 Forcing toolChoice=.none for first request to ensure greeting", category: .ai)
             return .none
         }
@@ -486,40 +512,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         await emit(.llmStatus(status: .idle))
 
         Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
-    }
-
-    // MARK: - Request Queue Management
-
-    /// Enqueue a request to ensure serial processing
-    private func enqueueRequest(_ request: @escaping () async -> Void) {
-        requestQueue.append(request)
-        Logger.debug("📥 Request enqueued (queue size: \(requestQueue.count))", category: .ai)
-
-        // If not currently streaming, process the queue
-        if !isStreaming {
-            Task {
-                await processQueue()
-            }
-        }
-    }
-
-    /// Process the request queue serially
-    private func processQueue() async {
-        while !requestQueue.isEmpty {
-            guard !isStreaming else {
-                Logger.debug("⏸️ Queue processing paused (stream in progress)", category: .ai)
-                return
-            }
-
-            isStreaming = true
-            let request = requestQueue.removeFirst()
-            Logger.debug("▶️ Processing request from queue (\(requestQueue.count) remaining)", category: .ai)
-
-            await request()
-
-            isStreaming = false
-            Logger.debug("✅ Request completed (queue size: \(requestQueue.count))", category: .ai)
-        }
     }
 
     // MARK: - Error Handling
