@@ -154,8 +154,7 @@ actor ConversationContextAssembler {
 
     /// Build scratchpad summary for request metadata.
     func buildScratchpadSummary() async -> String {
-        // Scratchpad summary not currently used with Responses API
-        return ""
+        await state.scratchpadSummary()
     }
 
     /// Get previous response ID for Responses API threading

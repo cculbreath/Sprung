@@ -301,16 +301,19 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .checkpointRequested:
             await emitSnapshot(reason: "checkpoint")
 
-        case .applicantProfileStored(let profile):
-            await artifactRepository.setApplicantProfile(profile)
+        case .applicantProfileStored:
+            // Event notification only - data already stored in ArtifactRepository
+            // Do NOT call setApplicantProfile here as it would create an infinite event loop
             Logger.info("👤 Applicant profile stored via event", category: .ai)
 
-        case .skeletonTimelineStored(let timeline):
-            await artifactRepository.setSkeletonTimeline(timeline)
+        case .skeletonTimelineStored:
+            // Event notification only - data already stored in ArtifactRepository
+            // Do NOT call setSkeletonTimeline here as it would create an infinite event loop
             Logger.info("📅 Skeleton timeline stored via event", category: .ai)
 
-        case .enabledSectionsUpdated(let sections):
-            await artifactRepository.setEnabledSections(sections)
+        case .enabledSectionsUpdated:
+            // Event notification only - data already stored in ArtifactRepository
+            // Do NOT call setEnabledSections here as it would create an infinite event loop
             Logger.info("📑 Enabled sections updated via event", category: .ai)
 
         case .stateAllowedToolsUpdated(let tools):

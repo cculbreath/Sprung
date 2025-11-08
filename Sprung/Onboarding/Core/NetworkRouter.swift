@@ -152,7 +152,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         var completeText = ""
         var toolCalls: [OnboardingMessage.ToolCallInfo] = []
 
-        // Process all output items
+        // First pass: collect message text and tool calls
         for outputItem in response.output {
             switch outputItem {
             case .message(let message):
@@ -166,25 +166,10 @@ actor NetworkRouter: OnboardingEventEmitter {
             case .functionCall(let toolCall):
                 // Collect tool call info for the assistant message
                 toolCalls.append(OnboardingMessage.ToolCallInfo(
-                    id: toolCall.id,
+                    id: toolCall.id ?? UUID().uuidString,
                     name: toolCall.name,
                     arguments: toolCall.arguments
                 ))
-
-                // Emit tool call event directly (don't call processToolCall which expects buffers)
-                let functionName = toolCall.name
-                let arguments = toolCall.arguments
-                let argsJSON = JSON(parseJSON: arguments)
-
-                let call = ToolCall(
-                    id: UUID().uuidString,
-                    name: functionName,
-                    arguments: argsJSON,
-                    callId: toolCall.callId
-                )
-
-                await emit(.toolCallRequested(call))
-                Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
 
             case .reasoning(let reasoning):
                 await processReasoningItem(reasoning)
@@ -194,17 +179,22 @@ actor NetworkRouter: OnboardingEventEmitter {
             }
         }
 
-        // Only emit message events if there's actual text content
-        // Tool-only responses shouldn't create empty chat bubbles
-        if !completeText.isEmpty {
-            let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: completeText, reasoningExpected: false))
-            await emit(.streamingMessageFinalized(id: messageId, finalText: completeText, toolCalls: toolCalls.isEmpty ? nil : toolCalls))
-            Logger.info("📝 Extracted complete message (\(completeText.count) chars, \(toolCalls.count) tool calls) from completed response", category: .ai)
-        } else if !toolCalls.isEmpty {
-            Logger.info("🔧 Tool-only response (\(toolCalls.count) tool calls, no text) from completed response", category: .ai)
-        } else {
+        // Emit assistant message with tool calls
+        let messageId = UUID()
+        await emit(.streamingMessageBegan(id: messageId, text: completeText, reasoningExpected: false))
+        await emit(.streamingMessageFinalized(id: messageId, finalText: completeText, toolCalls: toolCalls.isEmpty ? nil : toolCalls))
+
+        if completeText.isEmpty && toolCalls.isEmpty {
             Logger.warning("⚠️ No text or tool calls in LLM response", category: .ai)
+        } else {
+            Logger.info("📝 Extracted complete message (\(completeText.count) chars, \(toolCalls.count) tool calls) from completed response", category: .ai)
+        }
+
+        // Second pass: process tool calls
+        for outputItem in response.output {
+            if case .functionCall(let toolCall) = outputItem {
+                await processToolCall(toolCall)
+            }
         }
     }
 
@@ -249,7 +239,7 @@ actor NetworkRouter: OnboardingEventEmitter {
             id: UUID().uuidString,
             name: functionName,
             arguments: argsJSON,
-            callId: toolCall.callId
+            callId: toolCall.id ?? UUID().uuidString
         )
 
         // Store tool call info in the current message buffer
@@ -257,7 +247,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         let itemId = "message_0"
         if var buffer = streamingBuffers[itemId] {
             buffer.toolCalls.append(OnboardingMessage.ToolCallInfo(
-                id: toolCall.id,
+                id: toolCall.id ?? UUID().uuidString,
                 name: functionName,
                 arguments: arguments
             ))
