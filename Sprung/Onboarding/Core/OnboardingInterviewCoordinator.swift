@@ -629,6 +629,10 @@ final class OnboardingInterviewCoordinator {
             await resetStore()
         }
 
+        // Re-initialize phase to register objectives and update wizard step
+        // reset() sets phase directly without calling setPhase(), so we need to do it here
+        await state.setPhase(.phase1CoreFacts)
+
         await phaseTransitionController.registerObjectivesForCurrentPhase()
 
         // Subscribe to state updates BEFORE starting interview

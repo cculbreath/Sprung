@@ -28,6 +28,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         var pendingFragment: String
         let startedAt: Date
         var firstDeltaLogged: Bool
+        var toolCalls: [OnboardingMessage.ToolCallInfo]
     }
 
     private var streamingBuffers: [String: StreamBuffer] = [:]
@@ -117,7 +118,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                 text: "",
                 pendingFragment: "",
                 startedAt: Date(),
-                firstDeltaLogged: false
+                firstDeltaLogged: false,
+                toolCalls: []
             )
             messageIds[itemId] = messageId
             lastMessageUUID = messageId
@@ -135,7 +137,8 @@ actor NetworkRouter: OnboardingEventEmitter {
 
     private func finalizePendingMessages() async {
         for (_, buffer) in streamingBuffers {
-            await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: buffer.text))
+            let toolCalls = buffer.toolCalls.isEmpty ? nil : buffer.toolCalls
+            await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: buffer.text, toolCalls: toolCalls))
         }
 
         streamingBuffers.removeAll()
@@ -238,6 +241,21 @@ actor NetworkRouter: OnboardingEventEmitter {
             arguments: argsJSON,
             callId: toolCall.id ?? UUID().uuidString
         )
+
+        // Store tool call info in the current message buffer
+        // Assumes tool calls arrive for message_0 (standard assistant message index)
+        let itemId = "message_0"
+        if var buffer = streamingBuffers[itemId] {
+            buffer.toolCalls.append(OnboardingMessage.ToolCallInfo(
+                id: toolCall.id ?? UUID().uuidString,
+                name: functionName,
+                arguments: arguments
+            ))
+            streamingBuffers[itemId] = buffer
+            Logger.debug("📎 Tool call stored in buffer: \(functionName)", category: .ai)
+        } else {
+            Logger.warning("⚠️ Tool call received but no message buffer exists: \(functionName)", category: .ai)
+        }
 
         // Emit tool call event (Spec §6: LLM.toolCallReceived)
         // Orchestrator will subscribe to this and manage continuations

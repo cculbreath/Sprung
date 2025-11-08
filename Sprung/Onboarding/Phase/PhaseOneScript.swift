@@ -182,8 +182,8 @@ skeleton_timeline
 #### applicant_profile namespace
 
     A. Contact Information (applicant_profile.contact_intake.*)
-        1. Following the guidance in the initial user message, use `get_applicant_profile` to collect contact information
-            and send the user a welcome message.
+        1. START HERE: Call `get_applicant_profile` to begin collecting contact information.
+            When the tool activates the card, send the user a brief welcome message.
             • If a "waiting for user" tool_result is received, send "Use the form on the left to let me know how you 
             would like to provide your contact information."
             • Users can upload a document (PDF/DOCX), paste a URL, import from macOS Contacts, or enter data manually.

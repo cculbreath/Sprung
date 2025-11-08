@@ -11,19 +11,17 @@ import SwiftyJSON
 import SwiftOpenAI
 
 /// Assembles conversation context for LLM requests
-/// Includes rolling message window + state cues (allowed tools, objectives, phase)
+/// Includes full conversation history + state cues (allowed tools, objectives, phase)
 actor ConversationContextAssembler {
     // MARK: - Properties
 
     private let state: StateCoordinator
-    private let maxConversationTurns: Int
 
     // MARK: - Initialization
 
-    init(state: StateCoordinator, maxConversationTurns: Int = 8) {
+    init(state: StateCoordinator) {
         self.state = state
-        self.maxConversationTurns = maxConversationTurns
-        Logger.info("📝 ConversationContextAssembler initialized (max turns: \(maxConversationTurns))", category: .ai)
+        Logger.info("📝 ConversationContextAssembler initialized (full conversation history mode)", category: .ai)
     }
 
     // MARK: - Context Assembly
@@ -34,7 +32,11 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // 1. State cues developer message (only if we have conversation history)
+        // 1. Conversation history (stateless mode - include full history)
+        let history = await buildConversationHistory()
+        items.append(contentsOf: history)
+
+        // 2. State cues developer message (only if we have conversation history)
         // Skip for the very first message to encourage natural conversation
         // Note: Tool management is now handled via API's tools parameter
         let messages = await state.messages
@@ -48,7 +50,7 @@ actor ConversationContextAssembler {
             }
         }
 
-        // 2. Current user message (conversation history handled via previous_response_id)
+        // 3. Current user message
         items.append(.message(InputMessage(
             role: "user",
             content: .text(text)
@@ -64,7 +66,11 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // Current developer message (conversation history handled via previous_response_id)
+        // 1. Conversation history (stateless mode - include full history)
+        let history = await buildConversationHistory()
+        items.append(contentsOf: history)
+
+        // 2. Current developer message
         items.append(.message(InputMessage(
             role: "developer",
             content: .text(text)
@@ -81,7 +87,11 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // Tool response (conversation history handled via previous_response_id)
+        // 1. Conversation history (stateless mode - include full history)
+        let history = await buildConversationHistory()
+        items.append(contentsOf: history)
+
+        // 2. Tool response
         let outputString = output.rawString() ?? "{}"
         let status = output["status"].string // Extract status if tool provided it
 
@@ -122,12 +132,11 @@ actor ConversationContextAssembler {
         return "State update:\n" + cues.joined(separator: "\n")
     }
 
-    /// Build rolling conversation history (last N user/assistant turns)
+    /// Build full conversation history (all messages from the interview)
     private func buildConversationHistory() async -> [InputItem] {
         let messages = await state.messages
-        let recentMessages = Array(messages.suffix(maxConversationTurns * 2)) // user + assistant pairs
 
-        return recentMessages.compactMap { message -> InputItem? in
+        return messages.compactMap { message -> InputItem? in
             let role: String
             switch message.role {
             case .user:
