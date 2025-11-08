@@ -138,9 +138,9 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func updateWizardProgress() async {
         // Query objective statuses from ObjectiveStore
-        let hasProfile = await objectiveStore.getObjectiveStatus("P1.1") == .completed
-        let hasTimeline = await objectiveStore.getObjectiveStatus("P1.2") == .completed
-        let hasSections = await objectiveStore.getObjectiveStatus("P1.3") == .completed
+        let hasProfile = await objectiveStore.getObjectiveStatus("applicant_profile") == .completed
+        let hasTimeline = await objectiveStore.getObjectiveStatus("skeleton_timeline") == .completed
+        let hasSections = await objectiveStore.getObjectiveStatus("enabled_sections") == .completed
 
         let hasExperienceInterview = await objectiveStore.getObjectiveStatus("interviewed_one_experience") == .completed
         let hasKnowledgeCard = await objectiveStore.getObjectiveStatus("one_card_generated") == .completed

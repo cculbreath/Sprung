@@ -54,53 +54,64 @@ struct PhaseThreeScript: PhaseScript {
         """
         ## PHASE 3: WRITING CORPUS
 
-        **Objective**: Collect writing samples and finalize the candidate dossier.
+        **Objective**: Collect writing samples, analyze style when consented, and finalize the candidate dossier.
 
-        ### Primary Objectives:
-        1. **one_writing_sample**: Collect at least one writing sample (cover letter, email, proposal, etc.)
-        2. **dossier_complete**: Finalize the comprehensive candidate dossier
+        ### Primary Objectives (ID namespace)
+            one_writing_sample — Collect at least one writing sample (cover letter, email, proposal, etc.)
+                one_writing_sample.collection_setup — Confirm what the user is willing to share and capture consent/preferences
+                one_writing_sample.ingest_sample — Gather the actual sample via upload or paste
+                one_writing_sample.style_analysis — Analyze tone/voice when the user has opted in
 
-        ### Workflow:
-        1. Request writing samples from the user:
-           - Use `get_user_upload` to collect existing samples (PDFs, documents)
-           - Ask user to provide samples via paste or upload
-           - Look for cover letters, professional correspondence, technical writing, etc.
+            dossier_complete — Assemble and validate the comprehensive candidate dossier
+                dossier_complete.compile_assets — Combine Phase 1–3 assets into a coherent dossier
+                dossier_complete.validation — Present the dossier summary for user review
+                dossier_complete.persisted — Persist the approved dossier and wrap up the interview
 
-        2. If user consents to writing analysis (check preferences), analyze samples for:
-           - Writing style and voice
-           - Tone and formality level
-           - Vocabulary preferences
-           - Structural patterns
+        ### Workflow & Sub-objectives
 
-        3. Create a writing style profile that can inform future resume/cover letter generation.
+        #### one_writing_sample.*
+        1. `one_writing_sample.collection_setup`
+           - Ask the user what type of writing sample they can provide and confirm any privacy constraints.
+           - Capture whether they consent to style analysis (check stored preferences if available).
+           - Mark this sub-objective completed when expectations and consent are clear.
 
-        4. Compile the complete candidate dossier:
-           - ApplicantProfile (from Phase 1)
-           - Skeleton timeline (from Phase 1)
-           - Knowledge cards (from Phase 2)
-           - Writing samples and style profile (from Phase 3)
-           - Any additional artifacts collected
+        2. `one_writing_sample.ingest_sample`
+           - Use `get_user_upload` (or accept pasted text) to collect the sample.
+           - Typical targets: cover letters, professional correspondence, technical writing, etc.
+           - Set the sub-objective to completed once at least one sample is stored as an artifact.
 
-        5. Present the dossier summary using `submit_for_validation` for final review.
+        3. `one_writing_sample.style_analysis`
+           - If the user consented, analyze tone, structure, vocabulary, and other style cues.
+           - Summarize findings for future drafting workflows (store via `persist_data` if needed).
+           - Complete this sub-objective after analysis notes are captured (skip it if consent not given).
 
-        6. Save the complete dossier with `persist_data`.
+        #### dossier_complete.*
+        4. `dossier_complete.compile_assets`
+           - Combine ApplicantProfile, skeleton timeline, knowledge cards, writing samples, and any additional artifacts.
+           - Assemble a narrative summary plus key data needed for downstream resume/cover-letter generation.
+           - Set this sub-objective completed when the dossier draft reflects up-to-date data from all phases.
 
-        7. Mark objectives complete with `set_objective_status`.
+        5. `dossier_complete.validation`
+           - Use `submit_for_validation` to show the dossier summary and confirm the user is satisfied.
+           - Address any revisions before proceeding.
+           - Mark this sub-objective completed after the user signs off.
 
-        8. Call `next_phase` to mark the interview as complete.
+        6. `dossier_complete.persisted`
+           - Save the finalized dossier via `persist_data`.
+           - Congratulate the user, summarize next steps, and set both the sub-objective and parent objective to completed.
 
         ### Tools Available:
         - `get_user_upload`: Request file uploads
         - `submit_for_validation`: Show dossier summary for approval
-        - `persist_data`: Save writing samples and dossier
-        - `set_objective_status`: Mark objectives as completed
-        - `next_phase`: Mark interview complete
+        - `persist_data`: Save writing samples, style analysis notes, and the final dossier
+        - `set_objective_status`: Mark sub-objectives and parents as completed
+        - `list_artifacts`, `get_artifact`, `request_raw_file`: Reference previously collected materials
+        - `next_phase`: Mark the interview complete
 
         ### Key Constraints:
-        - Respect user's writing analysis consent preferences
-        - Writing analysis is optional—focus on collection if consent not given
-        - Dossier should be comprehensive but not overwhelming
-        - Congratulate user on completion and explain next steps (resume/cover letter generation)
+        - Respect the user's writing-analysis consent preferences; skip the analysis sub-objective when consent is not provided
+        - Keep the dossier comprehensive but approachable—highlight actionable insights rather than dumping raw data
+        - Celebrate completion and explain what happens next (resume/cover-letter drafting pipelines)
         """
     }
 }

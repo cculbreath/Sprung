@@ -68,7 +68,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         var source: String
         var completedAt: Date?
         var notes: String?
-        let parentId: String?      // Parent objective ID (e.g., "P1.1" for "P1.1.A")
+        let parentId: String?      // Parent objective ID (e.g., "applicant_profile" for "applicant_profile.contact_intake")
         let level: Int              // Hierarchy level: 0=top, 1=sub, 2=sub-sub, etc.
 
         init(
@@ -195,34 +195,29 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// The phasePolicy (from PhaseScriptRegistry) provides required objectives and allowed tools.
     private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String, parentId: String?)]] = [
         .phase1CoreFacts: [
-            // P1.1 applicant_profile (top-level)
-            ("P1.1", "Applicant profile", nil),
-            ("P1.1.A", "Contact Information", "P1.1"),
-            ("P1.1.A.1", "Activate applicant profile card", "P1.1.A"),
-            ("P1.1.A.2", "ApplicantProfile updated with user-validated data", "P1.1.A"),
-            ("P1.1.B", "Optional Profile Photo", "P1.1"),
-            ("P1.1.B.1", "Retrieve ApplicantProfile", "P1.1.B"),
-            ("P1.1.B.2", "Check if photo upload required", "P1.1.B"),
-            ("P1.1.B.3", "Activate photo upload card", "P1.1.B"),
+            // applicant_profile (top-level)
+            ("applicant_profile", "Applicant profile", nil),
+            ("applicant_profile.contact_intake", "Contact information intake", "applicant_profile"),
+            ("applicant_profile.contact_intake.activate_card", "Activate applicant profile card", "applicant_profile.contact_intake"),
+            ("applicant_profile.contact_intake.persisted", "ApplicantProfile updated with user-validated data", "applicant_profile.contact_intake"),
+            ("applicant_profile.profile_photo", "Optional profile photo", "applicant_profile"),
+            ("applicant_profile.profile_photo.retrieve_profile", "Retrieve ApplicantProfile", "applicant_profile.profile_photo"),
+            ("applicant_profile.profile_photo.evaluate_need", "Check if photo upload required", "applicant_profile.profile_photo"),
+            ("applicant_profile.profile_photo.collect_upload", "Activate photo upload card", "applicant_profile.profile_photo"),
 
-            // P1.2 skeleton_timeline (top-level)
-            ("P1.2", "Skeleton timeline", nil),
-            ("P1.2.A", "Use get_user_upload and chat interview to gather timeline data", "P1.2"),
-            ("P1.2.B", "Use TimelineEntry UI to collaborate with user", "P1.2"),
-            ("P1.2.C", "Use chat interview to understand gaps and narrative structure", "P1.2"),
-            ("P1.2.D", "Set status when skeleton timeline data gathering is complete", "P1.2"),
+            // skeleton_timeline (top-level)
+            ("skeleton_timeline", "Skeleton timeline", nil),
+            ("skeleton_timeline.intake_artifacts", "Use get_user_upload and chat interview to gather timeline data", "skeleton_timeline"),
+            ("skeleton_timeline.timeline_editor", "Use TimelineEntry UI to collaborate with user", "skeleton_timeline"),
+            ("skeleton_timeline.context_interview", "Use chat interview to understand gaps and narrative structure", "skeleton_timeline"),
+            ("skeleton_timeline.completeness_signal", "Set status when skeleton timeline data gathering is complete", "skeleton_timeline"),
 
-            // P1.3 enabled_sections (top-level)
-            ("P1.3", "Enabled sections", nil),
+            // enabled_sections (top-level)
+            ("enabled_sections", "Enabled sections", nil),
 
-            // P1.4 dossier_seed (top-level)
-            ("P1.4", "Dossier seed questions", nil),
+            // dossier_seed (top-level)
+            ("dossier_seed", "Dossier seed questions", nil),
 
-            // Legacy flat IDs for backward compatibility (mapped to hierarchical)
-            ("applicant_profile", "Applicant profile (legacy)", nil),
-            ("skeleton_timeline", "Skeleton timeline (legacy)", nil),
-            ("enabled_sections", "Enabled sections (legacy)", nil),
-            ("dossier_seed", "Dossier seed (legacy)", nil),
             ("contact_source_selected", "Contact source selected", nil),
             ("contact_data_collected", "Contact data collected", nil),
             ("contact_data_validated", "Contact data validated", nil),
@@ -306,12 +301,12 @@ actor StateCoordinator: OnboardingEventEmitter {
     ) {
         guard objectives[id] == nil else { return }
 
-        // Auto-detect level from ID format if not provided (e.g., "P1.1.A.2" → level 3)
+        // Auto-detect level from ID format if not provided (e.g., "applicant_profile.contact_intake.persisted" → level 3)
         let detectedLevel: Int
         if let level = level {
             detectedLevel = level
         } else {
-            // Count dots in ID: P1.1 = 1 dot = level 1, P1.1.A = 2 parts after P = level 2
+            // Count dots in ID: applicant_profile = level 0, applicant_profile.contact_intake = level 1, etc.
             let parts = id.split(separator: ".")
             detectedLevel = max(0, parts.count - 1)
         }
@@ -868,9 +863,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func updateWizardProgress() {
         // Determine current step based on hierarchical objectives
         // Phase 1 objectives (hierarchical IDs)
-        let hasProfile = objectives["P1.1"]?.status == .completed
-        let hasTimeline = objectives["P1.2"]?.status == .completed
-        let hasSections = objectives["P1.3"]?.status == .completed
+        let hasProfile = objectives["applicant_profile"]?.status == .completed
+        let hasTimeline = objectives["skeleton_timeline"]?.status == .completed
+        let hasSections = objectives["enabled_sections"]?.status == .completed
 
         // Phase 2 objectives
         let hasExperienceInterview = objectives["interviewed_one_experience"]?.status == .completed
