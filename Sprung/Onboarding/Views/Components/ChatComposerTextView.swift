@@ -21,6 +21,9 @@ struct ChatComposerTextView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
+        scrollView.wantsLayer = true
+        scrollView.layer?.cornerRadius = 12
+        scrollView.layer?.masksToBounds = true
 
         let textView = ChatNSTextView()
         textView.delegate = context.coordinator
@@ -37,7 +40,8 @@ struct ChatComposerTextView: NSViewRepresentable {
         }
         textView.textContainerInset = NSSize(width: 6, height: 6)
         textView.font = NSFont.preferredFont(forTextStyle: .body)
-        textView.backgroundColor = NSColor.controlBackgroundColor
+        textView.backgroundColor = NSColor.textBackgroundColor
+        textView.drawsBackground = true
         let coordinator = context.coordinator
         textView.onReturn = { [weak coordinator] in
             coordinator?.submit()
