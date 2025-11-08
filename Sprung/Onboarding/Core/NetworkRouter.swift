@@ -55,6 +55,22 @@ actor NetworkRouter: OnboardingEventEmitter {
             // Handle streaming text deltas for real-time message display
             await processContentDelta(0, delta.delta)
 
+        case .outputItemDone(let done):
+            // Handle completed output items (messages, function calls, etc.)
+            switch done.item {
+            case .functionCall(let toolCall):
+                await processToolCall(toolCall)
+
+            case .message(let message):
+                await processMessageContent(message)
+
+            case .reasoning(let reasoning):
+                await processReasoningItem(reasoning)
+
+            default:
+                break
+            }
+
         case .responseCompleted(let completed):
             // If we have buffered messages from streaming, finalize them
             if !streamingBuffers.isEmpty {
