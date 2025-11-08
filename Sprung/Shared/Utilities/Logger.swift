@@ -157,6 +157,14 @@ final class Logger {
         }
 #endif
     }
+
+    static func updateConsoleOutput(isEnabled: Bool) {
+#if DEBUG
+        configurationQueue.async(flags: .barrier) {
+            configuration.enableConsoleOutput = isEnabled
+        }
+#endif
+    }
     
     // MARK: - Logging Methods
     
@@ -183,10 +191,12 @@ final class Logger {
         let formattedMessage = "[\(timestamp)] \(level.emoji) [\(level.label)] [\(category.rawValue)] [\(fileName):\(line)] \(function): \(sanitizedMessage)"
         
         
+#if DEBUG
         let shouldPrint = configurationQueue.sync { configuration.enableConsoleOutput }
         if shouldPrint {
             print(formattedMessage)
         }
+#endif
         
         let backend = currentBackend()
         backend.log(
@@ -285,7 +295,7 @@ final class Logger {
         return Configuration(
             minimumLevel: minimumLevel,
             enableFileLogging: fileLogging,
-            enableConsoleOutput: true,
+            enableConsoleOutput: false,
             subsystem: subsystem
         )
     }

@@ -69,11 +69,14 @@ actor SessionUIState: OnboardingEventEmitter {
     // MARK: - Session State
 
     /// Set processing state
-    func setProcessingState(_ processing: Bool) async {
+    func setProcessingState(_ processing: Bool, emitEvent: Bool = true) async {
+        let didChange = isProcessing != processing
         isProcessing = processing
         isProcessingSync = processing
 
-        // Emit event for other coordinators
+        guard emitEvent, didChange else { return }
+
+        // Emit event for other coordinators only when the value changes
         await emit(.processingStateChanged(processing))
     }
 
