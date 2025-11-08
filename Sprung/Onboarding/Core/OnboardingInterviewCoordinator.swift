@@ -1075,9 +1075,31 @@ final class OnboardingInterviewCoordinator {
         if let phone = profileJSON["phone"].string, !phone.isEmpty {
             profileText += "Phone: \(phone)\n"
         }
-        if let location = profileJSON["location"].string, !location.isEmpty {
-            profileText += "Location: \(location)\n"
+
+        // Handle location object structure
+        let location = profileJSON["location"]
+        if location.exists() && location.type != .null {
+            var locationParts: [String] = []
+            if let address = location["address"].string, !address.isEmpty {
+                locationParts.append(address)
+            }
+            if let city = location["city"].string, !city.isEmpty {
+                locationParts.append(city)
+            }
+            if let region = location["region"].string, !region.isEmpty {
+                locationParts.append(region)
+            }
+            if let postalCode = location["postalCode"].string, !postalCode.isEmpty {
+                locationParts.append(postalCode)
+            }
+            if let countryCode = location["countryCode"].string, !countryCode.isEmpty {
+                locationParts.append(countryCode)
+            }
+            if !locationParts.isEmpty {
+                profileText += "Location: \(locationParts.joined(separator: ", "))\n"
+            }
         }
+
         if let url = profileJSON["url"].string, !url.isEmpty {
             profileText += "Personal URL: \(url)\n"
         }
