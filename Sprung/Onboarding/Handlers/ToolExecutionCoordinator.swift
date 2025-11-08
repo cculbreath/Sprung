@@ -127,12 +127,9 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             }
 
             // Tool completed - send response to LLM
-            // Never send responses for fire-and-forget status tools or UI presentation tools
+            // Never send responses for fire-and-forget status tools
             if toolName == "set_objective_status" {
                 Logger.info("📝 Tool response for set_objective_status suppressed (fire-and-forget status update)", category: .ai)
-            }
-            else if toolName == "get_applicant_profile" || toolName == "configure_enabled_sections" {
-                Logger.info("📝 Tool response for \(toolName!) suppressed (UI presentation tool - continuation path will provide result)", category: .ai)
             }
             // Skip sending if there are pending user input continuations (to prevent duplicate LLM responses)
             else if pendingContinuations.isEmpty {
