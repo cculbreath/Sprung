@@ -365,16 +365,6 @@ final class OnboardingInterviewCoordinator {
         toolRegistry.register(GetUserUploadTool(coordinator: self))
         toolRegistry.register(CancelUserUploadTool(coordinator: self))
         toolRegistry.register(GetApplicantProfileTool(coordinator: self))
-        toolRegistry.register(GetMacOSContactCardTool())
-        toolRegistry.register(ExtractDocumentTool(
-            extractionService: documentExtractionService,
-            progressHandler: { [weak self] update in
-                await MainActor.run {
-                    guard let self else { return }
-                    self.updateExtractionProgress(with: update)
-                }
-            }
-        ))
         toolRegistry.register(CreateTimelineCardTool(coordinator: self))
         toolRegistry.register(UpdateTimelineCardTool(coordinator: self))
         toolRegistry.register(DeleteTimelineCardTool(coordinator: self))
@@ -1075,72 +1065,13 @@ final class OnboardingInterviewCoordinator {
         let profileJSON = draft.toSafeJSON()
         await eventBus.publish(.applicantProfileStored(profileJSON))
 
-        // Format profile data as readable text for the LLM
-        var profileText = "Here is my contact information"
+        // Complete the profile intake and get continuation result
+        let result = toolRouter.completeApplicantProfileDraft(draft, source: source)
 
-        // Add source indication
-        if source == .contacts {
-            profileText += " (imported from macOS Contacts)"
-        }
-        profileText += ":\n\n"
+        // Resume the tool continuation (sends tool response to LLM)
+        await continuationTracker.resumeToolContinuation(from: result)
 
-        // Format profile fields
-        if let name = profileJSON["name"].string, !name.isEmpty {
-            profileText += "Name: \(name)\n"
-        }
-        if let email = profileJSON["email"].string, !email.isEmpty {
-            profileText += "Email: \(email)\n"
-        }
-        if let phone = profileJSON["phone"].string, !phone.isEmpty {
-            profileText += "Phone: \(phone)\n"
-        }
-
-        // Handle location object structure
-        let location = profileJSON["location"]
-        if location.exists() && location.type != .null {
-            var locationParts: [String] = []
-            if let address = location["address"].string, !address.isEmpty {
-                locationParts.append(address)
-            }
-            if let city = location["city"].string, !city.isEmpty {
-                locationParts.append(city)
-            }
-            if let region = location["region"].string, !region.isEmpty {
-                locationParts.append(region)
-            }
-            if let postalCode = location["postalCode"].string, !postalCode.isEmpty {
-                locationParts.append(postalCode)
-            }
-            if let countryCode = location["countryCode"].string, !countryCode.isEmpty {
-                locationParts.append(countryCode)
-            }
-            if !locationParts.isEmpty {
-                profileText += "Location: \(locationParts.joined(separator: ", "))\n"
-            }
-        }
-
-        if let url = profileJSON["url"].string, !url.isEmpty {
-            profileText += "Personal URL: \(url)\n"
-        }
-
-        // Add social profiles if present
-        let profiles = profileJSON["profiles"].arrayValue
-        if !profiles.isEmpty {
-            profileText += "\nSocial Profiles:\n"
-            for profile in profiles {
-                if let network = profile["network"].string,
-                   let username = profile["username"].string {
-                    profileText += "- \(network): \(username)\n"
-                }
-            }
-        }
-
-        // Send the profile data as a user message with formatted text
-        var payload = JSON()
-        payload["text"].string = profileText
-
-        await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
-        Logger.info("✅ Profile submitted as user message (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
+        Logger.info("✅ Profile submitted and tool continuation resumed (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
 
     /// Submit profile URL and automatically resume tool execution.

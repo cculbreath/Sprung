@@ -22,7 +22,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     let eventBus: EventCoordinator
     private let networkRouter: NetworkRouter
     private let service: OpenAIService
-    private var systemPrompt: String
+    private let baseDeveloperMessage: String  // Sent once as developer message on first request, persists via previous_response_id
     private let toolRegistry: ToolRegistry
     private let contextAssembler: ConversationContextAssembler
     private let stateCoordinator: StateCoordinator
@@ -37,20 +37,20 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     init(
         service: OpenAIService,
-        systemPrompt: String,
+        baseDeveloperMessage: String,
         eventBus: EventCoordinator,
         networkRouter: NetworkRouter,
         toolRegistry: ToolRegistry,
         state: StateCoordinator
     ) {
         self.service = service
-        self.systemPrompt = systemPrompt
+        self.baseDeveloperMessage = baseDeveloperMessage
         self.eventBus = eventBus
         self.networkRouter = networkRouter
         self.toolRegistry = toolRegistry
         self.stateCoordinator = state
         self.contextAssembler = ConversationContextAssembler(state: state)
-        Logger.info("📬 LLMMessenger initialized with ConversationContextAssembler", category: .ai)
+        Logger.info("📬 LLMMessenger initialized", category: .ai)
     }
 
     // MARK: - Event Subscription
@@ -338,19 +338,27 @@ actor LLMMessenger: OnboardingEventEmitter {
     // MARK: - Request Building
 
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
-        // Hybrid approach: Use previous_response_id when available,
-        // but don't include conversation history (let OpenAI manage it)
+        // Use previous_response_id for context management (OpenAI manages conversation history)
         let previousResponseId = await contextAssembler.getPreviousResponseId()
 
-        // Build input - just the current message, not full history
-        let inputItems: [InputItem] = [.message(InputMessage(
+        var inputItems: [InputItem] = []
+
+        // On FIRST request only: send base developer message (persists via previous_response_id)
+        if previousResponseId == nil {
+            inputItems.append(.message(InputMessage(
+                role: "developer",
+                content: .text(baseDeveloperMessage)
+            )))
+            Logger.info("📋 Including base developer message (first request)", category: .ai)
+        }
+
+        // Current user message
+        inputItems.append(.message(InputMessage(
             role: "user",
             content: .text(text)
-        ))]
+        )))
 
         let tools = await getToolSchemas()
-
-        // Determine tool_choice based on context
         let toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
         let modelId = await stateCoordinator.getCurrentModelId()
 
@@ -358,9 +366,9 @@ actor LLMMessenger: OnboardingEventEmitter {
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: systemPrompt,
-            previousResponseId: previousResponseId,  // Include if available (nil for first request)
-            store: true,  // Let OpenAI manage conversation state
+            instructions: nil,  // No instructions - using developer messages for persistent behavior
+            previousResponseId: previousResponseId,
+            store: true,
             temperature: 1.0,
             text: TextConfiguration(format: .text)
         )
@@ -369,7 +377,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.tools = tools
         parameters.parallelToolCalls = false
 
-        Logger.info("📝 Built request: previousResponseId=\(previousResponseId ?? "nil"), store=true", category: .ai)
+        Logger.info("📝 Built request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count)", category: .ai)
         return parameters
     }
 
@@ -416,15 +424,13 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
 
         let modelId = await stateCoordinator.getCurrentModelId()
-
-        // Include previous_response_id for conversation continuity
         let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: systemPrompt,
+            instructions: nil,  // Base developer message already sent on first request, persists via previous_response_id
             previousResponseId: previousResponseId,
             store: true,
             temperature: 1.0,
@@ -446,15 +452,13 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         let tools = await getToolSchemas()
         let modelId = await stateCoordinator.getCurrentModelId()
-
-        // Include previous_response_id for conversation continuity
         let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: systemPrompt,
+            instructions: nil,  // Base developer message already sent on first request, persists via previous_response_id
             previousResponseId: previousResponseId,
             store: true,
             temperature: 1.0,
@@ -491,13 +495,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         await stateCoordinator.setModelId(modelId)
     }
 
-    // MARK: - Dynamic Prompt Update (Phase 3)
-
-    /// Update the system prompt (used when phases transition)
-    func updateSystemPrompt(_ text: String) {
-        systemPrompt = text
-        Logger.info("📝 LLMMessenger system prompt updated (\(text.count) chars)", category: .ai)
-    }
 
     // MARK: - Stream Cancellation (Phase 2)
 

@@ -22,7 +22,6 @@ struct PhaseOneScript: PhaseScript {
         "get_applicant_profile",
         "get_user_upload",
         "cancel_user_upload",
-        "get_macos_contact_card",
         "create_timeline_card",
         "update_timeline_card",
         "reorder_timeline_cards",
