@@ -14,9 +14,9 @@ struct GetApplicantProfileTool: InterviewTool {
             - Import from macOS Contacts app
             - Enter data manually in the form
 
-            RETURNS: Waiting state while UI card is active: { "status": "waiting_for_user_input", "message": "Waiting for user to complete profile intake" }
+            RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
 
-            When user completes the intake, continuation resumes with: { "status": "<completed|cancelled>", "mode": "<upload|url|manual|contacts>", "message": "Profile intake completed." }
+            The tool completes immediately after presenting UI. When user completes the intake, you receive a new user message with the completion status and mode.
 
             USAGE: Call once at the start of Phase 1 after sending welcome message. The card remains active until user submits. Guide user to complete the card in the tool pane rather than requesting details via chat.
 
@@ -36,36 +36,21 @@ struct GetApplicantProfileTool: InterviewTool {
     }
 
     var name: String { "get_applicant_profile" }
-    var description: String { "Present profile intake UI card (upload/URL/manual/contacts). Returns waiting state. Guide user to complete card in tool pane." }
+    var description: String { "Present profile intake UI card (upload/URL/manual/contacts). Returns immediately - intake completion arrives as user message." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
         let continuationId = UUID()
 
-        // Create continuation for user input
-        let continuation = ContinuationToken(
-            id: continuationId,
-            toolName: name,
-            uiRequest: .applicantProfileIntake
-        ) { userInput in
-            // When user completes the profile intake, return the status
-            var response = JSON()
-            response["status"] = userInput["status"]
-            response["mode"] = userInput["mode"]
+        // Emit UI request to show the profile intake card
+        await coordinator.eventBus.publish(.applicantProfileIntakeRequested(continuationId: continuationId))
 
-            if userInput["cancelled"].bool == true {
-                response["message"].string = "Profile intake cancelled by user."
-            } else {
-                response["message"].string = "Profile intake completed."
-            }
+        // Return completed - the tool's job is to present UI, which it has done
+        // User's profile intake completion will arrive as a new user message
+        var response = JSON()
+        response["message"].string = "UI presented. Awaiting user input."
+        response["status"].string = "completed"
 
-            return .immediate(response)
-        }
-
-        // Return waiting state - tool response will be sent when continuation is resumed
-        return .waiting(
-            message: "Waiting for user to complete profile intake",
-            continuation: continuation
-        )
+        return .immediate(response)
     }
 }
