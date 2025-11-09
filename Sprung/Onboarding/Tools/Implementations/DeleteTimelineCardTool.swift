@@ -5,9 +5,21 @@ import SwiftOpenAI
 struct DeleteTimelineCardTool: InterviewTool {
     private static let schema: JSONSchema = JSONSchema(
         type: .object,
-        description: "Remove a skeleton timeline card by identifier.",
+        description: """
+            Remove a skeleton timeline card by its unique identifier.
+
+            Use this when user indicates a timeline entry is incorrect, irrelevant, or was created by mistake. The card is immediately removed from the timeline.
+
+            RETURNS: { "success": true, "id": "<deleted-card-id>" }
+
+            USAGE: Call when user requests removal of a specific timeline entry during timeline building or review phase. Common scenarios: duplicate entries, test data, positions user doesn't want to include.
+
+            WORKFLOW: After deletion, the timeline is updated immediately. If you're in a review/validation cycle, the UI will reflect the removal.
+
+            ERROR: Will fail if id doesn't match an existing timeline card.
+            """,
         properties: [
-            "id": JSONSchema(type: .string, description: "Identifier of the card to delete.")
+            "id": JSONSchema(type: .string, description: "Unique identifier of the timeline card to delete. Must match an existing card ID.")
         ],
         required: ["id"],
         additionalProperties: false
@@ -20,7 +32,7 @@ struct DeleteTimelineCardTool: InterviewTool {
     }
 
     var name: String { "delete_timeline_card" }
-    var description: String { "Delete a skeleton timeline card." }
+    var description: String { "Remove timeline card by ID. Returns {success, id}. Use when user wants to remove an entry." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {

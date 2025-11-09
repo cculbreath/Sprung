@@ -25,7 +25,36 @@ struct NextPhaseTool: InterviewTool {
 
         return JSONSchema(
             type: .object,
-            properties: properties
+            description: """
+                Request transition to the next interview phase (Phase 1 → Phase 2 → Phase 3 → Complete).
+
+                Use this when all required objectives for the current phase are completed. If objectives are missing, presents user approval dialog.
+
+                RETURNS:
+                - All objectives met: { "status": "success", "previous_phase": "phase1_core_facts", "new_phase": "phase2_deep_dive", "message": "Phase transition completed" }
+                - Objectives missing: { "message": "UI presented. Awaiting user input.", "status": "completed" } (dialog shown to user)
+                - Already complete: { "status": "complete", "message": "Interview is already complete" }
+
+                USAGE: Call when Phase 1 objectives (applicant_profile, skeleton_timeline, enabled_sections) are completed. Ideally also complete dossier_seed before advancing.
+
+                WORKFLOW:
+                1. Complete all required Phase 1 objectives
+                2. Optionally complete dossier_seed for better Phase 2 context
+                3. Call next_phase to advance
+                4. If all objectives met: Transition happens immediately
+                5. If objectives missing: User sees approval dialog with list of incomplete items
+                6. User approves/denies transition
+                7. If approved, phase advances despite incomplete objectives
+
+                Phase transitions:
+                - Phase 1 (Core Facts) → Phase 2 (Deep Dive)
+                - Phase 2 (Deep Dive) → Phase 3 (Writing Corpus)
+                - Phase 3 (Writing Corpus) → Complete
+
+                DO NOT: Call before required objectives are complete unless user explicitly requests moving forward despite incompleteness.
+                """,
+            properties: properties,
+            additionalProperties: false
         )
     }()
 
@@ -36,7 +65,7 @@ struct NextPhaseTool: InterviewTool {
     }
 
     var name: String { "next_phase" }
-    var description: String { "Request advancing to the next interview phase." }
+    var description: String { "Request phase transition. If objectives complete, transitions immediately. If not, presents user approval dialog. Returns {status, new_phase}." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {

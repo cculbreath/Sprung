@@ -6,11 +6,29 @@ struct CancelUserUploadTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: "Dismiss the current upload request without providing files.",
+            description: """
+                Dismiss the currently active upload request card without requiring user to provide files.
+
+                Use this when user indicates they don't have files to upload or want to skip the upload step. The upload card is removed and workflow continues.
+
+                RETURNS: { "status": "cancelled", "upload_id": "<id>", "cancel_message": "<message-if-provided>" }
+
+                USAGE: Call when user explicitly declines upload ("I don't have that", "skip this", "do it manually instead"). Allows workflow to proceed without files.
+
+                WORKFLOW:
+                1. get_user_upload presented upload card
+                2. User indicates they want to skip ("I don't have a resume")
+                3. Call cancel_user_upload to dismiss card
+                4. Proceed with alternative data collection (chat interview, manual entry, etc.)
+
+                ERROR: Will fail if no upload request is currently active. Only call when an upload card is on screen.
+
+                DO NOT: Cancel uploads preemptively - wait for user signal. Some users need time to locate files.
+                """,
             properties: [
                 "reason": JSONSchema(
                     type: .string,
-                    description: "Optional explanation for cancelling the upload."
+                    description: "Optional explanation for why upload is being cancelled (for logging/debugging)."
                 )
             ],
             required: [],
@@ -25,7 +43,7 @@ struct CancelUserUploadTool: InterviewTool {
     }
 
     var name: String { "cancel_user_upload" }
-    var description: String { "Dismiss the active upload card and continue without collecting files." }
+    var description: String { "Dismiss active upload card. Returns {status: cancelled}. Use when user wants to skip upload and provide data via chat instead." }
     var parameters: JSONSchema { Self.schema }
 
     func isAvailable() async -> Bool {

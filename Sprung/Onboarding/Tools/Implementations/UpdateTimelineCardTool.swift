@@ -3,23 +3,73 @@ import SwiftyJSON
 import SwiftOpenAI
 
 struct UpdateTimelineCardTool: InterviewTool {
-    private static let schema: JSONSchema = JSONSchema(
-        type: .object,
-        properties: [
-            "id": JSONSchema(type: .string),
-            "fields": JSONSchema(type: .object)
-        ],
-        required: ["id", "fields"]
-    )
-    
+    private static let schema: JSONSchema = {
+        let fieldsSchema = JSONSchema(
+            type: .object,
+            description: "Timeline card fields to update (PATCH semantics - only include fields you want to change). Maps to JSON Resume work entry schema.",
+            properties: [
+                "title": JSONSchema(
+                    type: .string,
+                    description: "Position or role title (e.g., 'Senior Software Engineer', 'Graduate Student')"
+                ),
+                "organization": JSONSchema(
+                    type: .string,
+                    description: "Company or institution name (e.g., 'Acme Corp', 'Stanford University')"
+                ),
+                "location": JSONSchema(
+                    type: .string,
+                    description: "City, State format (e.g., 'San Francisco, CA'). Optional."
+                ),
+                "start": JSONSchema(
+                    type: .string,
+                    description: "ISO 8601 date when position began. Accepts YYYY-MM-DD, YYYY-MM, or YYYY formats."
+                ),
+                "end": JSONSchema(
+                    type: .string,
+                    description: "ISO 8601 date when position ended. Accepts YYYY-MM-DD, YYYY-MM, or YYYY formats. Use empty string \"\" for current/ongoing positions."
+                ),
+                "url": JSONSchema(
+                    type: .string,
+                    description: "Organization website URL."
+                )
+            ],
+            required: [],
+            additionalProperties: false
+        )
+
+        return JSONSchema(
+            type: .object,
+            description: """
+                Update an existing timeline card with partial field changes (PATCH semantics).
+
+                Only include fields you want to change - omitted fields remain unchanged. Use this to correct errors or add missing information to existing cards.
+
+                RETURNS: { "success": true, "id": "<card-id>" }
+
+                USAGE: Call when user provides corrections or additional details for an existing timeline entry. The UI will reflect changes immediately.
+
+                DO NOT: Include summary or highlights in Phase 1 - skeleton cards contain only basic facts.
+                """,
+            properties: [
+                "id": JSONSchema(
+                    type: .string,
+                    description: "Unique identifier of the timeline card to update"
+                ),
+                "fields": fieldsSchema
+            ],
+            required: ["id", "fields"],
+            additionalProperties: false
+        )
+    }()
+
     private unowned let coordinator: OnboardingInterviewCoordinator
 
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    
+
     var name: String { "update_timeline_card" }
-    var description: String { "Update timeline card" }
+    var description: String { "Update existing timeline card with partial changes (PATCH). Returns {success, id}. Only include changed fields." }
     var parameters: JSONSchema { Self.schema }
     
     func execute(_ params: JSON) async throws -> ToolResult {

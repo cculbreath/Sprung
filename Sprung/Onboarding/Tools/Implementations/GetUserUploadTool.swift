@@ -14,41 +14,62 @@ struct GetUserUploadTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: "Request one or more files from the user.",
+            description: """
+                Present an upload card in the tool pane to request files or URLs from the user.
+
+                Users can upload files directly or paste URLs. Uploaded files are automatically processed - text is extracted and packaged as ArtifactRecords.
+
+                RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
+
+                The tool completes immediately after presenting UI. User uploads arrive as new user messages with artifact metadata.
+
+                USAGE: Use during skeleton_timeline to gather resume/LinkedIn/transcripts, or for profile photos. Always set target_phase_objectives to help route artifacts to correct workflow stages.
+
+                WORKFLOW:
+                1. Call get_user_upload with appropriate prompt
+                2. Tool returns immediately - card is now active in tool pane
+                3. User uploads file(s) or pastes URL
+                4. System extracts text and creates ArtifactRecord(s)
+                5. You receive artifact notification and can process contents
+
+                ERROR: Will fail if prompt_to_user is empty or upload_type is invalid.
+                """,
             properties: [
                 "upload_type": JSONSchema(
                     type: .string,
-                    description: "Expected file category (resume, coverletter, portfolio, transcript, certificate, other)."
+                    description: "Expected file category. Valid types: resume, artifact, coverletter, portfolio, transcript, certificate, writingSample, generic, linkedIn",
+                    enum: ["resume", "artifact", "coverletter", "portfolio", "transcript", "certificate", "writingSample", "generic", "linkedIn"]
                 ),
                 "title": JSONSchema(
                     type: .string,
-                    description: "Optional custom title for the upload card (e.g., 'Upload Photo'). If not provided, a title will be auto-generated from upload_type."
+                    description: "Optional custom title for the upload card (e.g., 'Upload Photo'). If omitted, auto-generated from upload_type."
                 ),
                 "prompt_to_user": JSONSchema(
                     type: .string,
-                    description: "Instructions to display alongside the upload UI."
+                    description: "Instructions shown to user in upload card UI. Required. Be specific about what you're requesting."
                 ),
                 "allowed_types": JSONSchema(
                     type: .array,
-                    description: "Allowed file extensions (without dot).",
+                    description: "Allowed file extensions without dots (e.g., ['pdf', 'docx', 'jpg']). Defaults: pdf, txt, rtf, doc, docx, jpg, jpeg, png, gif, md, html, htm",
                     items: JSONSchema(type: .string),
                     additionalProperties: false
                 ),
                 "allow_multiple": JSONSchema(
                     type: .boolean,
-                    description: "Allow selecting multiple files in one submission."
+                    description: "Allow selecting multiple files in one upload. Defaults to true except for resume uploads."
                 ),
                 "allow_url": JSONSchema(
                     type: .boolean,
-                    description: "Allow the user to provide a URL instead of uploading a file."
+                    description: "Allow user to paste URL instead of uploading file. Defaults to true."
                 ),
                 "target_key": JSONSchema(
                     type: .string,
-                    description: "Optional JSON Resume key path this upload should populate (e.g., basics.image)."
+                    description: "JSON Resume key path this upload should populate (e.g., 'basics.image'). Currently only 'basics.image' is supported.",
+                    enum: ["basics.image"]
                 ),
                 "cancel_message": JSONSchema(
                     type: .string,
-                    description: "Optional message the assistant should send if the upload is dismissed without files."
+                    description: "Optional message to send if user dismisses upload card without providing files."
                 )
             ],
             required: ["prompt_to_user"],
@@ -64,7 +85,7 @@ struct GetUserUploadTool: InterviewTool {
     }
 
     var name: String { "get_user_upload" }
-    var description: String { "Present a file picker to collect resume or supporting documents from the user." }
+    var description: String { "Present upload card for files/URLs. Returns immediately - uploads arrive as artifacts. Use for resume, LinkedIn, transcripts, photos." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {

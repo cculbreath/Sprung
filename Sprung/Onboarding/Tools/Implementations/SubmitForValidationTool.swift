@@ -14,21 +14,47 @@ struct SubmitForValidationTool: InterviewTool {
         let properties: [String: JSONSchema] = [
             "validation_type": JSONSchema(
                 type: .string,
-                description: "Type of validation to perform",
+                description: "Type of data being validated. Each type presents specialized validation UI.",
                 enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card"]
             ),
             "data": JSONSchema(
                 type: .object,
-                description: "The data to validate"
+                description: "The complete data payload to validate. Schema varies by validation_type."
             ),
             "summary": JSONSchema(
                 type: .string,
-                description: "Summary of what was collected for the user"
+                description: "Human-readable summary shown to user in validation card. Explain what was collected and what they're confirming."
             )
         ]
 
         return JSONSchema(
             type: .object,
+            description: """
+                Present validation card in the tool pane for user review and confirmation of collected data.
+
+                This is the primary confirmation surface for most Phase 1 objectives. Use this at the end of a sub-phase to get user sign-off before persisting data.
+
+                RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
+
+                The tool completes immediately after presenting UI. User validation response arrives as a new user message with status: "confirmed", "rejected", or "modified".
+
+                USAGE: Call at sub-phase boundaries to confirm collected data before persisting. Provides user control and prevents storing incorrect/incomplete data. The summary parameter should explain what they're reviewing.
+
+                WORKFLOW:
+                1. Collect data for a sub-phase (e.g., skeleton timeline cards)
+                2. Call submit_for_validation with validation_type, data, and summary
+                3. Tool returns immediately - validation card is now active
+                4. User reviews, edits if needed, and confirms/rejects
+                5. You receive validation response with status and (potentially modified) data
+                6. If confirmed, call persist_data with the validated data
+
+                Phase 1 validation_types:
+                - applicant_profile: Contact info validation
+                - skeleton_timeline: Timeline cards review before persisting
+                - enabled_sections: Resume sections confirmation
+
+                DO NOT: Re-validate already confirmed data unless new information is introduced. Once meta.validation_state = "user_validated", trust it.
+                """,
             properties: properties,
             required: ["validation_type", "data", "summary"]
         )
@@ -41,7 +67,7 @@ struct SubmitForValidationTool: InterviewTool {
     }
 
     var name: String { "submit_for_validation" }
-    var description: String { "Submit collected data for user validation" }
+    var description: String { "Present validation card for user review. Returns immediately - response arrives as user message. Use at sub-phase boundaries." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {

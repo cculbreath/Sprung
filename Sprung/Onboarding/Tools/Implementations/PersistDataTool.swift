@@ -14,18 +14,49 @@ struct PersistDataTool: InterviewTool {
         let properties: [String: JSONSchema] = [
             "dataType": JSONSchema(
                 type: .string,
-                description: "Logical type of the data being persisted."
+                description: """
+                    Type of data being persisted. Each type triggers specific coordinator events and state updates.
+
+                    Valid types:
+                    - applicant_profile: Contact info (name, email, phone, location, URLs, social profiles)
+                    - skeleton_timeline: Complete timeline of positions/education entries
+                    - experience_defaults: Enabled resume sections configuration
+                    - enabled_sections: Alternative format for enabled sections (array of section names)
+                    - candidate_dossier_entry: Single Q&A entry for dossier seed (requires: question, answer, asked_at)
+                    - knowledge_card: Deep dive expertise card from Phase 2
+                    """,
+                enum: [
+                    "applicant_profile",
+                    "skeleton_timeline",
+                    "experience_defaults",
+                    "enabled_sections",
+                    "candidate_dossier_entry",
+                    "knowledge_card"
+                ]
             ),
             "data": JSONSchema(
                 type: .object,
-                description: "Arbitrary JSON payload to store.",
+                description: "JSON payload containing the data to persist. Schema varies by dataType.",
                 additionalProperties: true
             )
         ]
 
         return JSONSchema(
             type: .object,
-            description: "Parameters for the persist_data tool.",
+            description: """
+                Persist validated interview data to disk and trigger state updates.
+
+                Use this after user validation confirms data accuracy. Each dataType has specific schema requirements and triggers corresponding coordinator events.
+
+                RETURNS: { "persisted": { "id": "<uuid>", "type": "<dataType>", "status": "created" } }
+
+                USAGE: Call after submit_for_validation returns user_validated status, or when persisting incremental data like candidate_dossier_entry.
+
+                Phase 1 dataTypes: applicant_profile, skeleton_timeline, experience_defaults, candidate_dossier_entry
+                Phase 2+ dataTypes: knowledge_card
+
+                ERROR: Will fail if dataType is not in the enum or if required fields are missing from payload.
+                """,
             properties: properties,
             required: ["dataType", "data"],
             additionalProperties: false
@@ -36,7 +67,7 @@ struct PersistDataTool: InterviewTool {
     private let eventBus: EventCoordinator
 
     var name: String { "persist_data" }
-    var description: String { "Persist structured interview data for later phases of the onboarding process." }
+    var description: String { "Persist validated data to disk (applicant_profile, skeleton_timeline, enabled_sections, candidate_dossier_entry, etc). Returns {persisted: {id, type, status}}." }
     var parameters: JSONSchema { Self.schema }
 
     init(dataStore: InterviewDataStore, eventBus: EventCoordinator) {
