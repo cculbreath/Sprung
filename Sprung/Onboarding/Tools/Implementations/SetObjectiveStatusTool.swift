@@ -9,23 +9,59 @@ struct SetObjectiveStatusTool: InterviewTool {
             description: """
                 Update the internal status of an onboarding objective (pending, in_progress, completed, skipped).
 
-                CRITICAL: Responses from this tool are for internal tracking only and must NEVER be communicated to the user. The tool response confirms status was recorded and is only to inform you indirectly with updated state knowledge. Do not acknowledge status changes in chat - they are silent background operations invisible to the user.
+                Use this to signal workflow progress to the coordinator. The coordinator uses these status updates to manage phase transitions, trigger objective workflows, and maintain the ledger.
 
-                This tool must be called ALONE without any assistant message in the same turn. Status updates are fire-and-forget operations.
+                RETURNS: { "objective_id": "<id>", "status": "<status>", "updated": true }
+
+                CRITICAL CONSTRAINT: This tool must be called ALONE without any assistant message in the same turn. Status updates are atomic, fire-and-forget operations.
+
+                USAGE:
+                - Mark objectives "in_progress" when starting work
+                - Mark "completed" when finished (coordinator may auto-complete parent objectives)
+                - Mark "skipped" when user declines optional steps
+                - Do NOT communicate status changes to user in chat - these are silent background operations
+
+                WORKFLOW: Tool responses are for internal tracking only. The coordinator sends developer messages when objectives complete; you don't need to echo status changes.
                 """,
             properties: [
                 "objective_id": JSONSchema(
                     type: .string,
-                    description: "Identifier of the objective (e.g., applicant_profile)."
+                    description: "Identifier of the objective to update. Must match Phase 1 objective namespace.",
+                    enum: [
+                        // Top-level Phase 1 objectives
+                        "applicant_profile",
+                        "skeleton_timeline",
+                        "enabled_sections",
+                        "dossier_seed",
+
+                        // Applicant profile sub-objectives
+                        "contact_source_selected",
+                        "contact_data_collected",
+                        "contact_data_validated",
+                        "contact_photo_collected",
+                        "applicant_profile.contact_intake",
+                        "applicant_profile.contact_intake.activate_card",
+                        "applicant_profile.contact_intake.persisted",
+                        "applicant_profile.profile_photo",
+                        "applicant_profile.profile_photo.retrieve_profile",
+                        "applicant_profile.profile_photo.evaluate_need",
+                        "applicant_profile.profile_photo.collect_upload",
+
+                        // Skeleton timeline sub-objectives
+                        "skeleton_timeline.intake_artifacts",
+                        "skeleton_timeline.timeline_editor",
+                        "skeleton_timeline.context_interview",
+                        "skeleton_timeline.completeness_signal"
+                    ]
                 ),
                 "status": JSONSchema(
                     type: .string,
-                    description: "Desired status (pending, in_progress, completed, skipped).",
+                    description: "Desired status for this objective.",
                     enum: ["pending", "in_progress", "completed", "skipped"]
                 ),
                 "notes": JSONSchema(
                     type: .string,
-                    description: "Optional notes about this status change."
+                    description: "Optional notes about this status change for debugging/logging."
                 ),
                 "details": JSONSchema(
                     type: .object,
@@ -45,7 +81,7 @@ struct SetObjectiveStatusTool: InterviewTool {
     }
 
     var name: String { "set_objective_status" }
-    var description: String { "Update internal objective status. Response is for internal tracking only - do not communicate status changes to user. Silent background operation." }
+    var description: String { "Update objective status (atomic operation - call alone, no assistant message). Returns {objective_id, status, updated}. Silent background operation." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {

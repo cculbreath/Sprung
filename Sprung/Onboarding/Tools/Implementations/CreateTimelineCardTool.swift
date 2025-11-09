@@ -6,13 +6,50 @@ struct CreateTimelineCardTool: InterviewTool {
     private static let schema: JSONSchema = {
         let fieldsSchema = JSONSchema(
             type: .object,
-            description: "Timeline card fields (title, organization, location, start, end, summary, highlights).",
-            additionalProperties: true
+            description: "Timeline card fields mapping to JSON Resume work entry schema. Phase 1 skeleton entries contain only basic facts (who, what, where, when) - no descriptions or highlights.",
+            properties: [
+                "title": JSONSchema(
+                    type: .string,
+                    description: "Position or role title (e.g., 'Senior Software Engineer', 'Graduate Student')"
+                ),
+                "organization": JSONSchema(
+                    type: .string,
+                    description: "Company or institution name (e.g., 'Acme Corp', 'Stanford University')"
+                ),
+                "location": JSONSchema(
+                    type: .string,
+                    description: "City, State format (e.g., 'San Francisco, CA'). Optional."
+                ),
+                "start": JSONSchema(
+                    type: .string,
+                    description: "ISO 8601 date when position began. Accepts YYYY-MM-DD, YYYY-MM, or YYYY formats. Required."
+                ),
+                "end": JSONSchema(
+                    type: .string,
+                    description: "ISO 8601 date when position ended. Accepts YYYY-MM-DD, YYYY-MM, or YYYY formats. Use empty string \"\" for current/ongoing positions. Optional."
+                ),
+                "url": JSONSchema(
+                    type: .string,
+                    description: "Organization website URL. Optional."
+                )
+            ],
+            required: ["title", "organization", "start"],
+            additionalProperties: false
         )
 
         return JSONSchema(
             type: .object,
-            description: "Create a new skeleton timeline card.",
+            description: """
+                Create a skeleton timeline card for a position, role, or educational experience.
+
+                Phase 1 cards capture only basic timeline facts - title, organization, dates, and location. Summary and highlights are added in later phases.
+
+                RETURNS: { "success": true, "id": "<card-id>" }
+
+                USAGE: Call after gathering position details via chat or artifact extraction. Cards are displayed in the timeline editor UI where users can review and edit them.
+
+                DO NOT: Generate descriptions or bullet points in Phase 1 - defer to Phase 2 deep dive.
+                """,
             properties: ["fields": fieldsSchema],
             required: ["fields"],
             additionalProperties: false
@@ -26,7 +63,7 @@ struct CreateTimelineCardTool: InterviewTool {
     }
 
     var name: String { "create_timeline_card" }
-    var description: String { "Append a new skeleton timeline card with the supplied fields." }
+    var description: String { "Create skeleton timeline card with basic facts (title, org, dates, location). Returns {success, id}. Phase 1 only - no descriptions." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {

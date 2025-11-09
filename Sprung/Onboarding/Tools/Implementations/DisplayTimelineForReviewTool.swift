@@ -14,12 +14,35 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         let properties: [String: JSONSchema] = [
             "summary": JSONSchema(
                 type: .string,
-                description: "Optional summary message to display with the timeline review"
+                description: "Optional summary message shown to user in timeline review card. Explain what they're reviewing and what to check for."
             )
         ]
 
         return JSONSchema(
             type: .object,
+            description: """
+                Present the current skeleton timeline in an editable review UI card for user validation and corrections.
+
+                Use this at the end of timeline building to get user confirmation before persisting. User can review all entries, make edits, and confirm accuracy.
+
+                RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
+
+                The tool completes immediately after presenting UI. User validation response arrives as a new user message with status and (potentially modified) timeline data.
+
+                USAGE: Call after collecting all timeline entries via create_timeline_card and user confirms data gathering is complete. This is the validation checkpoint before calling persist_data.
+
+                WORKFLOW:
+                1. Collect timeline cards via chat interview + create_timeline_card
+                2. When timeline feels complete, call display_timeline_entries_for_review
+                3. Tool returns immediately - review card is now active
+                4. User reviews timeline, makes corrections in UI if needed, confirms/rejects
+                5. You receive validation response with status and timeline data
+                6. If confirmed, call persist_data(dataType: "skeleton_timeline", data: <timeline>)
+
+                ERROR: Will fail if no timeline cards exist yet. Create at least one card before requesting review.
+
+                DO NOT: Call this before timeline collection is reasonably complete - premature validation wastes user time.
+                """,
             properties: properties,
             required: [],
             additionalProperties: false
@@ -33,7 +56,7 @@ struct DisplayTimelineForReviewTool: InterviewTool {
     }
 
     var name: String { "display_timeline_entries_for_review" }
-    var description: String { "Display the current skeleton timeline entries for user review and confirmation" }
+    var description: String { "Present timeline review UI with all cards. Returns immediately - validation response arrives as user message. Use before persisting." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
