@@ -95,6 +95,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     private var lastResponseId: String?
     private var currentModelId: String = "gpt-5"
 
+    // Reasoning items from most recent response - must be passed back with tool outputs
+    private var pendingReasoningItems: [String] = []
+
     // MARK: - Initialization
 
     init(
@@ -390,6 +393,10 @@ actor StateCoordinator: OnboardingEventEmitter {
             await chatStore.completeReasoningSummary(finalText: text)
             currentReasoningSummarySync = await chatStore.getCurrentReasoningSummary()
             isReasoningActiveSync = false
+
+        case .llmReasoningItemsForToolCalls(let ids):
+            // Store reasoning items to pass back with next tool response
+            storePendingReasoningItems(ids)
 
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
             enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
@@ -877,6 +884,21 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func setPreviousResponseId(_ responseId: String?) async {
         await chatStore.setPreviousResponseId(responseId)
+    }
+
+    // Reasoning items management
+    func storePendingReasoningItems(_ items: [String]) {
+        pendingReasoningItems = items
+        Logger.debug("🧠 Stored \(items.count) reasoning item(s) for next tool response", category: .ai)
+    }
+
+    func getPendingReasoningItems() -> [String] {
+        return pendingReasoningItems
+    }
+
+    func clearPendingReasoningItems() {
+        Logger.debug("🧠 Cleared \(pendingReasoningItems.count) pending reasoning item(s)", category: .ai)
+        pendingReasoningItems = []
     }
 
     // UI State delegation

@@ -69,8 +69,8 @@ final class InterviewLifecycleController {
 
         // Build orchestrator
         let phase = await state.phase
-        let systemPrompt = phaseRegistry.buildSystemPrompt(for: phase)
-        let orchestrator = makeOrchestrator(service: service, systemPrompt: systemPrompt)
+        let baseDeveloperMessage = phaseRegistry.buildSystemPrompt(for: phase)
+        let orchestrator = makeOrchestrator(service: service, baseDeveloperMessage: baseDeveloperMessage)
         self.orchestrator = orchestrator
 
         // Initialize orchestrator subscriptions FIRST
@@ -217,11 +217,11 @@ final class InterviewLifecycleController {
 
     private func makeOrchestrator(
         service: OpenAIService,
-        systemPrompt: String
+        baseDeveloperMessage: String
     ) -> InterviewOrchestrator {
         return InterviewOrchestrator(
             service: service,
-            systemPrompt: systemPrompt,
+            baseDeveloperMessage: baseDeveloperMessage,
             eventBus: eventBus,
             toolRegistry: toolRegistry,
             state: state

@@ -85,12 +85,19 @@ actor ConversationContextAssembler {
     ) async -> [InputItem] {
         var items: [InputItem] = []
 
-        // Note: We're back to using previous_response_id, so OpenAI manages conversation history
-        // We only need to send the tool response
+        // Include reasoning items - OpenAI requires passing them back with tool outputs
+        let reasoningIds = await state.getPendingReasoningItems()
+        for reasoningId in reasoningIds {
+            items.append(.reasoningItem(ReasoningItemReference(id: reasoningId)))
+        }
+        if !reasoningIds.isEmpty {
+            Logger.debug("🧠 Including \(reasoningIds.count) reasoning item(s) with tool response", category: .ai)
+            await state.clearPendingReasoningItems()
+        }
 
         // Tool response
         let outputString = output.rawString() ?? "{}"
-        let status = output["status"].string // Extract status if tool provided it
+        let status = output["status"].string
 
         items.append(.functionToolCallOutput(FunctionToolCallOutput(
             callId: callId,
@@ -98,7 +105,7 @@ actor ConversationContextAssembler {
             status: status
         )))
 
-        Logger.debug("📦 Assembled tool response context: \(items.count) items (status: \(status ?? "nil"))", category: .ai)
+        Logger.debug("📦 Assembled tool response: \(items.count) items (status: \(status ?? "nil"))", category: .ai)
         return items
     }
 

@@ -21,7 +21,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     private let llmMessenger: LLMMessenger
     private let networkRouter: NetworkRouter
     private let service: OpenAIService
-    private let systemPrompt: String
+    private let baseDeveloperMessage: String  // Sent once on first request, persists via previous_response_id
 
     private var isActive = false
 
@@ -29,25 +29,25 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
 
     init(
         service: OpenAIService,
-        systemPrompt: String,
+        baseDeveloperMessage: String,
         eventBus: EventCoordinator,
         toolRegistry: ToolRegistry,
         state: StateCoordinator
     ) {
         self.service = service
-        self.systemPrompt = systemPrompt
+        self.baseDeveloperMessage = baseDeveloperMessage
         self.eventBus = eventBus
         self.state = state
         self.networkRouter = NetworkRouter(eventBus: eventBus)
         self.llmMessenger = LLMMessenger(
             service: service,
-            systemPrompt: systemPrompt,
+            baseDeveloperMessage: baseDeveloperMessage,
             eventBus: eventBus,
             networkRouter: networkRouter,
             toolRegistry: toolRegistry,
             state: state
         )
-        Logger.info("🎯 InterviewOrchestrator initialized with LLMMessenger and ConversationContextAssembler", category: .ai)
+        Logger.info("🎯 InterviewOrchestrator initialized", category: .ai)
     }
 
     // MARK: - Interview Control

@@ -35,15 +35,15 @@ final class PhaseScriptRegistry {
         script(for: phase)
     }
 
-    /// Returns the base system prompt (does not include phase-specific prompts).
-    /// Phase introductory prompts are sent as developer messages at phase start instead.
+    /// Returns the base developer message text (sent once on first request, persists via previous_response_id).
+    /// Phase introductory prompts are sent as additional developer messages at phase start.
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
-        Self.baseSystemPrompt()
+        Self.baseDeveloperMessage()
     }
 
-    // MARK: - Base System Prompt
+    // MARK: - Base Developer Message
 
-    private static func baseSystemPrompt() -> String {
+    private static func baseDeveloperMessage() -> String {
         """
         SYSTEM INSTRUCTIONS
         You are the Sprung onboarding interviewer. Guide applicants through a conversational, dynamic, multi‑phase interview that assembles the facts needed for future resume and cover‑letter generation. Treat developer instructions as the workflow authority and keep your focus on the active phase only—phase introductory prompts will be delivered as developer messages when phases begin.

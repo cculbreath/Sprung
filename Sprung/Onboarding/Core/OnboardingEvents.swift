@@ -116,6 +116,7 @@ enum OnboardingEvent {
     // Sidebar reasoning (ChatGPT-style, not attached to messages)
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
     case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
+    case llmReasoningItemsForToolCalls(ids: [String])  // Reasoning item IDs to pass back with tool outputs
 
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
@@ -271,7 +272,7 @@ actor EventCoordinator {
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .llmEnqueueUserMessage, .llmEnqueueDeveloperMessage, .llmEnqueueToolResponse,
              .llmExecuteUserMessage, .llmExecuteDeveloperMessage, .llmExecuteToolResponse,
-             .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmCancelRequested,
+             .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
 
@@ -304,7 +305,7 @@ actor EventCoordinator {
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
-             .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
+             .applicantProfileIntakeRequested, .profileSummaryUpdateRequested(_), .applicantProfileIntakeCleared, .profileSummaryDismissRequested,
              .sectionToggleRequested, .sectionToggleCleared:
             return .toolpane
 
@@ -468,6 +469,8 @@ actor EventCoordinator {
             description = "LLM reasoning summary delta (\(delta.prefix(50))...)"
         case .llmReasoningSummaryComplete(let text):
             description = "LLM reasoning summary complete (\(text.count) chars)"
+        case .llmReasoningItemsForToolCalls(let ids):
+            description = "LLM reasoning items for tool calls (\(ids.count) item(s))"
         case .phaseTransitionRequested(let from, let to, _):
             description = "Phase transition requested: \(from) → \(to)"
         case .phaseTransitionApplied(let phase, _):
@@ -482,6 +485,10 @@ actor EventCoordinator {
             }
         case .uploadCompleted(let files, let requestKind, _, _):
             description = "Upload completed: \(files.count) file(s), kind: \(requestKind)"
+            case .profileSummaryUpdateRequested(profile:_):
+                description = "Profile Summary Update Requested"
+            case .profileSummaryDismissRequested:
+                description = "Dismiss Profile Summary Requested"
         }
 
         Logger.debug("[Event] \(description)", category: .ai)
@@ -525,3 +532,4 @@ extension TimelineDiff {
         return parts.isEmpty ? "no changes" : parts.joined(separator: ", ")
     }
 }
+
