@@ -88,7 +88,11 @@ actor ConversationContextAssembler {
         // Include reasoning items - OpenAI requires passing them back with tool outputs
         let reasoningIds = await state.getPendingReasoningItems()
         for reasoningId in reasoningIds {
-            items.append(.reasoningItem(ReasoningItemReference(id: reasoningId)))
+            // OpenAI requires summary field - provide empty array as we're just referencing the item
+            items.append(.reasoningItem(ReasoningItemReference(
+                id: reasoningId,
+                summary: []
+            )))
         }
         if !reasoningIds.isEmpty {
             Logger.debug("🧠 Including \(reasoningIds.count) reasoning item(s) with tool response", category: .ai)
