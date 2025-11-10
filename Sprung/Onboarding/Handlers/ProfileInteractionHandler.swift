@@ -22,9 +22,6 @@ final class ProfileInteractionHandler {
 
     // MARK: - Private State
 
-    private var applicantProfileContinuationId: UUID?
-    private var applicantIntakeContinuationId: UUID?
-
     private let isoFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -49,22 +46,19 @@ final class ProfileInteractionHandler {
     // MARK: - Validation Flow (Approve/Reject)
 
     /// Presents a validation request for an applicant profile.
-    func presentProfileRequest(_ request: OnboardingApplicantProfileRequest, continuationId: UUID) {
+    func presentProfileRequest(_ request: OnboardingApplicantProfileRequest) {
         pendingApplicantProfileRequest = request
-        applicantProfileContinuationId = continuationId
         Logger.info("📋 Profile validation request presented", category: .ai)
     }
 
-    /// Clears the current profile request if the continuation matches.
-    func clearProfileRequest(continuationId: UUID) {
-        guard applicantProfileContinuationId == continuationId else { return }
-        clearProfileRequest()
+    /// Clears the current profile request.
+    func clearProfileRequest() {
+        pendingApplicantProfileRequest = nil
     }
 
     /// Resolves an applicant profile validation with user-approved or modified draft.
-    func resolveProfile(with draft: ApplicantProfileDraft) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = applicantProfileContinuationId,
-              let request = pendingApplicantProfileRequest else {
+    func resolveProfile(with draft: ApplicantProfileDraft) -> JSON? {
+        guard let request = pendingApplicantProfileRequest else {
             Logger.warning("⚠️ No pending profile request to resolve", category: .ai)
             return nil
         }
@@ -85,12 +79,12 @@ final class ProfileInteractionHandler {
         // @Observable will handle UI updates automatically
         showProfileSummary(profile: enriched)
 
-        return (continuationId, payload)
+        return payload
     }
 
     /// Rejects an applicant profile validation.
-    func rejectProfile(reason: String) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = applicantProfileContinuationId else {
+    func rejectProfile(reason: String) -> JSON? {
+        guard pendingApplicantProfileRequest != nil else {
             Logger.warning("⚠️ No pending profile request to reject", category: .ai)
             return nil
         }
@@ -103,21 +97,19 @@ final class ProfileInteractionHandler {
 
         clearProfileRequest()
         Logger.info("❌ Profile rejected", category: .ai)
-        return (continuationId, payload)
+        return payload
     }
 
     // MARK: - Intake Flow (Collect Profile)
 
     /// Presents the profile intake UI (shows mode picker: manual/URL/upload/contacts).
-    func presentProfileIntake(continuationId: UUID) {
+    func presentProfileIntake() {
         pendingApplicantProfileIntake = .options()
-        applicantIntakeContinuationId = continuationId
         Logger.info("📝 Profile intake presented", category: .ai)
     }
 
     /// Resets intake state to show mode picker again.
     func resetIntakeToOptions() {
-        guard applicantIntakeContinuationId != nil else { return }
         pendingApplicantProfileIntake = .options()
     }
 
@@ -125,7 +117,6 @@ final class ProfileInteractionHandler {
 
     /// Begins manual entry mode.
     func beginManualEntry() {
-        guard applicantIntakeContinuationId != nil else { return }
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
             mode: .manual(source: .manual),
             draft: ApplicantProfileDraft(),
@@ -137,7 +128,6 @@ final class ProfileInteractionHandler {
 
     /// Begins URL entry mode.
     func beginURLEntry() {
-        guard applicantIntakeContinuationId != nil else { return }
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
             mode: .urlEntry,
             draft: ApplicantProfileDraft(),
@@ -148,9 +138,7 @@ final class ProfileInteractionHandler {
     }
 
     /// Begins upload mode (returns an upload request for the router to present).
-    func beginUpload() -> (request: OnboardingUploadRequest, continuationId: UUID)? {
-        guard let continuationId = applicantIntakeContinuationId else { return nil }
-
+    func beginUpload() -> OnboardingUploadRequest {
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
             mode: .loading("Processing uploaded document…"),
             draft: ApplicantProfileDraft(),
@@ -169,16 +157,11 @@ final class ProfileInteractionHandler {
         )
 
         Logger.info("📤 Upload mode activated", category: .ai)
-        return (
-            OnboardingUploadRequest(kind: .resume, metadata: metadata),
-            continuationId
-        )
+        return OnboardingUploadRequest(kind: .resume, metadata: metadata)
     }
 
     /// Begins contacts fetch mode (imports from macOS Contacts).
     func beginContactsFetch() {
-        guard applicantIntakeContinuationId != nil else { return }
-
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
             mode: .loading("Fetching your contact card…"),
             draft: ApplicantProfileDraft(),
@@ -256,14 +239,15 @@ final class ProfileInteractionHandler {
     }
 
     /// Cancels profile intake.
-    func cancelIntake(reason: String) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = applicantIntakeContinuationId else { return nil }
+    func cancelIntake(reason: String) -> JSON? {
+        guard pendingApplicantProfileIntake != nil else { return nil }
 
         Logger.info("❌ Profile intake cancelled: \(reason)", category: .ai)
         var payload = JSON()
         payload["cancelled"].boolValue = true
 
-        return completeIntake(continuationId: continuationId, payload: payload)
+        pendingApplicantProfileIntake = nil
+        return payload
     }
 
     /// Clears the applicant profile intake state without completing it.
@@ -274,15 +258,8 @@ final class ProfileInteractionHandler {
 
     // MARK: - Private Helpers
 
-    private func completeIntake(continuationId: UUID, payload: JSON) -> (continuationId: UUID, payload: JSON) {
-        pendingApplicantProfileIntake = nil
-        applicantIntakeContinuationId = nil
-        return (continuationId, payload)
-    }
-
     private func clearProfileRequest() {
         pendingApplicantProfileRequest = nil
-        applicantProfileContinuationId = nil
     }
 
     // MARK: - Lifecycle
@@ -291,8 +268,6 @@ final class ProfileInteractionHandler {
     func reset() {
         pendingApplicantProfileRequest = nil
         pendingApplicantProfileIntake = nil
-        applicantProfileContinuationId = nil
-        applicantIntakeContinuationId = nil
         lastSubmittedDraft = nil
     }
 

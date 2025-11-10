@@ -18,10 +18,6 @@ final class UploadInteractionHandler {
     private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
     private(set) var uploadedItems: [OnboardingUploadedItem] = []
 
-    // MARK: - Private State
-
-    private var uploadContinuationIds: [UUID: UUID] = [:]
-
     // MARK: - Dependencies
 
     private let uploadFileService: UploadFileService
@@ -56,22 +52,21 @@ final class UploadInteractionHandler {
     // MARK: - Presentation
 
     /// Presents an upload request to the user.
-    func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
+    func presentUploadRequest(_ request: OnboardingUploadRequest) {
         removeUploadRequest(id: request.id)
         pendingUploadRequests.append(request)
-        uploadContinuationIds[request.id] = continuationId
         Logger.info("📤 Upload request presented: \(request.metadata.title)", category: .ai)
     }
 
     // MARK: - Resolution
 
     /// Completes an upload with local file URLs.
-    func completeUpload(id: UUID, fileURLs: [URL]) async -> (continuationId: UUID, payload: JSON)? {
+    func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         await handleUploadCompletion(id: id, fileURLs: fileURLs, originalURL: nil, cancelReason: nil)
     }
 
     /// Completes an upload by downloading from a remote URL.
-    func completeUpload(id: UUID, link: URL) async -> (continuationId: UUID, payload: JSON)? {
+    func completeUpload(id: UUID, link: URL) async -> JSON? {
         do {
             let temporaryURL = try await uploadFileService.downloadRemoteFile(from: link)
             defer { uploadFileService.cleanupTemporaryFile(at: temporaryURL) }
@@ -82,16 +77,16 @@ final class UploadInteractionHandler {
     }
 
     /// Skips an upload request (user chose not to upload).
-    func skipUpload(id: UUID) async -> (continuationId: UUID, payload: JSON)? {
+    func skipUpload(id: UUID) async -> JSON? {
         await handleUploadCompletion(id: id, fileURLs: [], originalURL: nil, cancelReason: nil)
     }
 
     /// Cancels an upload request (assistant dismissed the card).
-    func cancelUpload(id: UUID, reason: String?) async -> (continuationId: UUID, payload: JSON)? {
+    func cancelUpload(id: UUID, reason: String?) async -> JSON? {
         await handleUploadCompletion(id: id, fileURLs: [], originalURL: nil, cancelReason: reason)
     }
 
-    func cancelPendingUpload(reason: String?) async -> (continuationId: UUID, payload: JSON)? {
+    func cancelPendingUpload(reason: String?) async -> JSON? {
         guard let request = pendingUploadRequests.first else { return nil }
         return await cancelUpload(id: request.id, reason: reason)
     }
@@ -103,11 +98,7 @@ final class UploadInteractionHandler {
         fileURLs: [URL],
         originalURL: URL?,
         cancelReason: String?
-    ) async -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = uploadContinuationIds[id] else {
-            Logger.warning("⚠️ No continuation ID for upload \(id.uuidString)", category: .ai)
-            return nil
-        }
+    ) async -> JSON? {
         guard let requestIndex = pendingUploadRequests.firstIndex(where: { $0.id == id }) else {
             Logger.warning("⚠️ No pending request for upload \(id.uuidString)", category: .ai)
             return nil
@@ -115,7 +106,6 @@ final class UploadInteractionHandler {
 
         let request = pendingUploadRequests[requestIndex]
         pendingUploadRequests.remove(at: requestIndex)
-        uploadContinuationIds.removeValue(forKey: id)
         let uploadStart = Date()
         Logger.info(
             "📤 Upload handling started",
@@ -225,7 +215,7 @@ final class UploadInteractionHandler {
                 await eventBus.publish(.uploadCompleted(
                     files: uploadInfos,
                     requestKind: request.kind.rawValue,
-                    callId: continuationId.uuidString,
+                    callId: nil,
                     metadata: uploadMetadata
                 ))
 
@@ -287,21 +277,20 @@ final class UploadInteractionHandler {
                 "duration_ms": "\(totalMs)"
             ]
         )
-        return (continuationId, payload)
+        return payload
     }
 
-    private func resumeUpload(id: UUID, withError message: String) async -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = uploadContinuationIds[id] else { return nil }
+    private func resumeUpload(id: UUID, withError message: String) async -> JSON? {
+        guard pendingUploadRequests.contains(where: { $0.id == id }) else { return nil }
 
         removeUploadRequest(id: id)
-        uploadContinuationIds.removeValue(forKey: id)
 
         var payload = JSON()
         payload["status"].string = "failed"
         payload["error"].string = message
 
         Logger.error("❌ Upload failed: \(message)", category: .ai)
-        return (continuationId, payload)
+        return payload
     }
 
     private func handleTargetedUpload(target: String, processed: [OnboardingProcessedUpload]) async throws {
@@ -332,10 +321,9 @@ final class UploadInteractionHandler {
 
     // MARK: - Lifecycle
 
-    /// Clears all pending uploads and continuation state (for interview reset).
+    /// Clears all pending uploads (for interview reset).
     func reset() {
         pendingUploadRequests.removeAll()
-        uploadContinuationIds.removeAll()
         uploadedItems.removeAll()
     }
 }
