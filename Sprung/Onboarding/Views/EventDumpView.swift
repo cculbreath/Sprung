@@ -101,16 +101,14 @@ struct EventDumpView: View {
                     }
                 }
 
-                ToolbarItem(placement: .destructiveAction) {
+                ToolbarItemGroup(placement: .destructiveAction) {
                     Button("Clear History") {
                         Task {
                             await coordinator.clearEventHistory()
                             loadEvents()
                         }
                     }
-                }
 
-                ToolbarItem(placement: .destructiveAction) {
                     Button("Reset All Data", role: .destructive) {
                         Task {
                             await coordinator.resetAllOnboardingData()
