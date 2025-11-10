@@ -24,31 +24,20 @@ struct AgentReadyTool: InterviewTool {
         )
     }()
 
-    private let eventBus: EventCoordinator
-
-    init(eventBus: EventCoordinator) {
-        self.eventBus = eventBus
-    }
+    init() {}
 
     var name: String { "agent_ready" }
     var description: String { "Signal that you are ready to begin after receiving phase instructions. Returns {status: completed, content: ok}." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // Trigger "I am ready to begin" user message with tool_choice=auto
-        var readyPayload = JSON()
-        readyPayload["text"].string = "I am ready to begin"
-        await eventBus.publish(.llmSendUserMessage(
-            payload: readyPayload,
-            isSystemGenerated: true
-        ))
-
-        Logger.info("🚀 Agent acknowledged readiness - sending 'I am ready to begin'", category: .ai)
-
         // Return simple acknowledgment
+        // The "I am ready to begin" message will be sent AFTER the tool response
+        // is delivered to the LLM (handled in ToolExecutionCoordinator)
         var result = JSON()
         result["status"].string = "completed"
         result["content"].string = "ok"
+        result["trigger_ready_message"].bool = true
         return .immediate(result)
     }
 }

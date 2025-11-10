@@ -376,7 +376,7 @@ final class OnboardingInterviewCoordinator {
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: self))
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: self))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: self))
-        toolRegistry.register(AgentReadyTool(eventBus: eventBus))
+        toolRegistry.register(AgentReadyTool())
 
         if let agent = knowledgeCardAgent {
             toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))
