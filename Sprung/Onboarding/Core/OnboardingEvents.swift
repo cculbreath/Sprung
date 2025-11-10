@@ -59,6 +59,8 @@ enum OnboardingEvent {
     case sectionToggleCleared
     case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest)
     case phaseAdvanceDismissed
+    case phaseAdvanceApproved(request: OnboardingPhaseAdvanceRequest)
+    case phaseAdvanceDenied(feedback: String?)
 
     // MARK: - Artifact Management (§4.8 spec)
     case artifactGetRequested(id: UUID)
@@ -282,7 +284,8 @@ actor EventCoordinator {
             return .state
 
         // Phase events
-        case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested, .phaseAdvanceDismissed:
+        case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested, .phaseAdvanceDismissed,
+             .phaseAdvanceApproved, .phaseAdvanceDenied:
             return .phase
 
         // Objective events
@@ -392,6 +395,10 @@ actor EventCoordinator {
             description = "Phase advance requested"
         case .phaseAdvanceDismissed:
             description = "Phase advance dismissed"
+        case .phaseAdvanceApproved:
+            description = "Phase advance approved"
+        case .phaseAdvanceDenied:
+            description = "Phase advance denied"
         case .artifactGetRequested(let id):
             description = "Artifact get requested: \(id)"
         case .artifactNewRequested:
