@@ -263,7 +263,13 @@ Dossier Seed Questions: Started during skeleton_timeline and finished after enab
    Persist each answer using `persist_data` with `dataType="candidate_dossier_entry"`. Once at least 2 answers are stored, call `set_objective_status("dossier_seed", "completed")`.
 
 When all objectives are satisfied (applicant_profile, skeleton_timeline, enabled_sections, and ideally dossier_seed), call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.
+
 ### Key Constraints:
 • Work atomically: finish ApplicantProfile completely before moving to skeleton timeline
 • Don't extract skills, publications, or projects yet—defer to Phase 2
 • Stay on a first-name basis only after the coordinator confirms the applicant profile is saved; that developer message will include the applicant's name.
+• When the profile is persisted, acknowledge that their details are stored for future resume and cover-letter drafts and let them know edits remain welcome—avoid finality phrases like "lock it in".
+"""
+    }
+
+    }
