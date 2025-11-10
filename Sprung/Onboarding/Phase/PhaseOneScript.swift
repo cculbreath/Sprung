@@ -18,6 +18,7 @@ struct PhaseOneScript: PhaseScript {
     ]
 
     let allowedTools: [String] = [
+        "agent_ready",
         "get_user_option",
         "get_applicant_profile",
         "get_user_upload",
@@ -181,10 +182,12 @@ skeleton_timeline
 #### applicant_profile namespace
 
     A. Contact Information (applicant_profile.contact_intake.*)
-        1. START HERE: Send this welcome message to the user:
+        1. START HERE: Wait for an inital "I am ready to begin" message from the user. In response to the user's ready message, do two things:
+            a. call `get_applicant_profile` to begin collecting contact information. Follow the tool's response guidance.
+            b. Send this welcome message to the user
             "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later."
 
-            Then call `get_applicant_profile` to begin collecting contact information. Follow the tool's response guidance.
+            Then 
 
             • Users can upload a document (PDF/DOCX), paste a URL, import from macOS Contacts, or enter data manually.
             • If the user uploads a document, the text is extracted automatically and packaged as an ArtifactRecord:
