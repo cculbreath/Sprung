@@ -1002,14 +1002,51 @@ final class OnboardingInterviewCoordinator {
         // Emit artifact record for traceability
         toolRouter.completeApplicantProfileDraft(draft, source: source)
 
-        // Send user message to LLM indicating profile intake completion
+        // Build user message with the actual profile information
         var userMessage = JSON()
         userMessage["role"].string = "user"
-        userMessage["content"].string = "Profile intake completed via \(source == .contacts ? "contacts import" : "manual entry"). Artifact record created with contact information."
+
+        // Format profile data for the LLM
+        var contentParts: [String] = ["I have provided my contact information via \(source == .contacts ? "contacts import" : "manual entry"):"]
+
+        if !draft.name.isEmpty {
+            contentParts.append("- Name: \(draft.name)")
+        }
+        if !draft.email.isEmpty {
+            contentParts.append("- Email: \(draft.email)")
+        }
+        if !draft.phone.isEmpty {
+            contentParts.append("- Phone: \(draft.phone)")
+        }
+
+        // Format location
+        var locationParts: [String] = []
+        if !draft.city.isEmpty {
+            locationParts.append(draft.city)
+        }
+        if !draft.state.isEmpty {
+            locationParts.append(draft.state)
+        }
+        if !locationParts.isEmpty {
+            contentParts.append("- Location: \(locationParts.joined(separator: ", "))")
+        }
+
+        if !draft.website.isEmpty {
+            contentParts.append("- Website: \(draft.website)")
+        }
+
+        // Add social profiles if present
+        if !draft.socialProfiles.isEmpty {
+            contentParts.append("- Social profiles: \(draft.socialProfiles.count) profile(s)")
+        }
+
+        contentParts.append("\nAn artifact record has been created with this contact information.")
+
+        userMessage["content"].string = contentParts.joined(separator: "\n")
 
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
 
-        Logger.info("✅ Profile submitted and user message sent to LLM (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
+        Logger.info("✅ Profile submitted with detailed data sent to LLM (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
 
     /// Submit profile URL and send user message to LLM.
