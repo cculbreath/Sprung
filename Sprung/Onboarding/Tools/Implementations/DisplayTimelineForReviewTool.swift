@@ -82,7 +82,7 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         )
 
         // Emit UI request to show the validation prompt
-        await coordinator.eventBus.publish(.validationPromptRequested(prompt: validationPrompt, continuationId: UUID()))
+        await coordinator.eventBus.publish(.validationPromptRequested(prompt: validationPrompt))
 
         // Return completed - the tool's job is to present UI, which it has done
         // User's validation response will arrive as a new user message
