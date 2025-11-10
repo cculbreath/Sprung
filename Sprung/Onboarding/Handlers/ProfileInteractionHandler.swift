@@ -219,9 +219,7 @@ final class ProfileInteractionHandler {
     // MARK: - Intake Completion
 
     /// Submits a URL for profile intake.
-    func submitURL(_ urlString: String) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = applicantIntakeContinuationId else { return nil }
-
+    func submitURL(_ urlString: String) -> URL? {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed), url.scheme != nil else {
             pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
@@ -234,19 +232,12 @@ final class ProfileInteractionHandler {
             return nil
         }
 
-        var payload = JSON()
-        payload["mode"].string = "url"
-        payload["status"].string = "provided"
-        payload["url"].string = url.absoluteString
-
         Logger.info("🔗 URL submitted: \(url.absoluteString)", category: .ai)
-        return completeIntake(continuationId: continuationId, payload: payload)
+        return url
     }
 
     /// Completes profile intake with a user-filled draft.
-    func completeDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) -> (continuationId: UUID, payload: JSON)? {
-        guard let continuationId = applicantIntakeContinuationId else { return nil }
-
+    func completeDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) {
         let dataJSON = attachingValidationMetadata(
             to: draft.toSafeJSON(),
             via: source == .contacts ? "contacts" : "manual"
@@ -262,13 +253,6 @@ final class ProfileInteractionHandler {
         }
 
         Logger.info("✅ Draft completed (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
-
-        // Return success payload
-        var payload = JSON()
-        payload["mode"].string = source == .contacts ? "contacts" : "manual"
-        payload["status"].string = "completed"
-
-        return completeIntake(continuationId: continuationId, payload: payload)
     }
 
     /// Cancels profile intake.
