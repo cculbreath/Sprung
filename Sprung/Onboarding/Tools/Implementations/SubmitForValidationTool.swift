@@ -74,7 +74,7 @@ struct SubmitForValidationTool: InterviewTool {
         let payload = try ValidationPayload(json: params)
 
         // Emit UI request to show the validation prompt
-        await coordinator.eventBus.publish(.validationPromptRequested(prompt: payload.toValidationPrompt(), continuationId: UUID()))
+        await coordinator.eventBus.publish(.validationPromptRequested(prompt: payload.toValidationPrompt()))
 
         // Return completed - the tool's job is to present UI, which it has done
         // User's validation response will arrive as a new user message
