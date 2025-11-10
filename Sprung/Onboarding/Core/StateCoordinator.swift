@@ -439,7 +439,7 @@ actor StateCoordinator: OnboardingEventEmitter {
                 }
             }
 
-        case .phaseAdvanceRequested(let request, _):
+        case .phaseAdvanceRequested(let request):
             await uiState.setPendingPhaseAdvanceRequest(request)
             pendingPhaseAdvanceRequestSync = request
 
@@ -509,19 +509,19 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handleToolpaneEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .choicePromptRequested(let prompt, _):
+        case .choicePromptRequested(let prompt):
             await uiState.setPendingChoice(prompt)
 
         case .choicePromptCleared:
             await uiState.setPendingChoice(nil)
 
-        case .uploadRequestPresented(let request, _):
+        case .uploadRequestPresented(let request):
             await uiState.setPendingUpload(request)
 
         case .uploadRequestCancelled:
             await uiState.setPendingUpload(nil)
 
-        case .validationPromptRequested(let prompt, _):
+        case .validationPromptRequested(let prompt):
             await uiState.setPendingValidation(prompt)
 
         case .validationPromptCleared:
