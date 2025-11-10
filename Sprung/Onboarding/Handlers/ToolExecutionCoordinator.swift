@@ -117,8 +117,16 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 await emit(.llmSendDeveloperMessage(payload: devPayload))
             }
 
+            // Determine reasoning effort for specific tools
+            let reasoningEffort: String? = {
+                if toolName == "agent_ready" || toolName == "get_applicant_profile" {
+                    return "minimal"
+                }
+                return nil
+            }()
+
             // Tool completed - send response to LLM
-            await emitToolResponse(callId: callId, output: output)
+            await emitToolResponse(callId: callId, output: output, reasoningEffort: reasoningEffort)
 
             // Special handling for agent_ready tool - remove from allowed tools after use
             if toolName == "agent_ready", output["disable_after_use"].bool == true {
@@ -139,10 +147,14 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Event Emission
 
     /// Emit tool response to LLM
-    private func emitToolResponse(callId: String, output: JSON) async {
+    private func emitToolResponse(callId: String, output: JSON, reasoningEffort: String? = nil) async {
         var payload = JSON()
         payload["callId"].string = callId
         payload["output"] = output
+
+        if let effort = reasoningEffort {
+            payload["reasoningEffort"].string = effort
+        }
 
         await emit(.llmToolResponseMessage(payload: payload))
         Logger.info("📤 Tool response sent to LLM (call: \(callId.prefix(8)))", category: .ai)

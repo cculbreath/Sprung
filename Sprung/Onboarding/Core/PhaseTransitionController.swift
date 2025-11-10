@@ -51,6 +51,7 @@ final class PhaseTransitionController {
         var introPayload = JSON()
         introPayload["text"].string = introPrompt
         introPayload["toolChoice"].string = "agent_ready"
+        introPayload["reasoningEffort"].string = "minimal"
         await eventBus.publish(.llmSendDeveloperMessage(
             payload: introPayload
         ))

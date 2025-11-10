@@ -311,7 +311,10 @@ struct OnboardingInterviewToolPane: View {
     private func hasSummaryCard(
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
-        // Note: Summary cards removed during event-driven migration
+        // ApplicantProfileSummaryCard occupies the pane and should prevent spinner
+        if coordinator.pendingApplicantProfileSummary != nil {
+            return true
+        }
         return false
     }
 }

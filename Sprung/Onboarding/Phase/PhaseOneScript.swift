@@ -31,8 +31,6 @@ struct PhaseOneScript: PhaseScript {
         "submit_for_validation",
         "validate_applicant_profile",
         "validated_applicant_profile_data",
-        "persist_data",
-        "set_objective_status",
         "configure_enabled_sections",
         "list_artifacts",
         "get_artifact",
@@ -130,19 +128,15 @@ struct PhaseOneScript: PhaseScript {
 ### Objective Ledger Guidance
 • You will receive developer messages that begin with "Objective update:" or "Developer status:". Treat them as authoritative instructions.
 • Do not undo, re-check, or re-validate objectives that the coordinator marks completed. Simply acknowledge and proceed to the next ready item.
-• Propose status via `set_objective_status` when you believe an objective or sub-objective is finished. The coordinator finalizes the ledger; don't attempt to reopen what it has closed.
-• You may call `set_objective_status(..., status:"in_progress")` while a user-facing card remains active so the coordinator understands work is underway.
-• For the photo: call `set_objective_status(id:"contact_photo_collected", status:"completed")` when a photo saves successfully, or `status:"skipped"` if the user declines. Only when the photo objective is completed or skipped **and** the profile data is persisted should you set `applicant_profile` to completed.
+• The coordinator manages the objective ledger automatically based on your tool calls and user interactions. Focus on guiding the user through the workflow.
 
 ### Phase 1 Primary Objectives
     applicant_profile — Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles
     skeleton_timeline — Build a high-level timeline of positions/roles with dates and organizations
     enabled_sections — Let user choose which resume sections to include (skills, publications, projects, etc.)
-    dossier_seed (not required to advance) — After enabled_sections completes, ask 2–3 open questions about the 
-        user's goals, motivations, and strengths. For each answer, call `persist_data` with `dataType='candidate_dossier_entry'`, 
-        `payload: { "question": "<your question>", "answer": "<user's response>", "asked_at": "<ISO 8601 timestamp>" }`. 
-        When at least two entries are saved, call `set_objective_status('dossier_seed', 'completed')`. 
-        This objective enriches future phases but is not mandatory for advancing to Phase 2.
+    dossier_seed (not required to advance) — After enabled_sections completes, ask 2–3 open questions about the
+        user's goals, motivations, and strengths in natural conversation. The coordinator will automatically track
+        and persist these insights. This objective enriches future phases but is not mandatory for advancing to Phase 2.
 
 ### Objective Tree
 
@@ -165,12 +159,12 @@ skeleton_timeline
     ◻ skeleton_timeline.intake_uploads — Use `get_user_upload` and chat interview to gather job and educational history timeline data
     ◻ skeleton_timeline.timeline_editor — Use TimelineEntry UI to collaborate with user to edit and complete SkeletonTimeline
     ◻ skeleton_timeline.context_interview — Use chat interview to understand any gaps, unusual job history and narrative structure of user's job history
-    ◻ skeleton_timeline.completeness_signal — Use `set_objective_status("skeleton_timeline.completeness_signal", "completed")` to indicate when skeleton timeline data gathering is comprehensive and complete
-        If skeleton_timeline.completeness_signal is marked complete, the skeleton_timeline objective will be automatically marked complete when user confirms/validates all TimelineCards
+    ◻ skeleton_timeline.completeness_signal — Indicate when skeleton timeline data gathering is comprehensive and complete
+        The coordinator will automatically track completion based on user validation of all TimelineCards
     ◻ skeleton_timeline.confirm_entries — Use TimelineEntry UI with user until all entries have a confirmed/validated status
 
     (◻ dossier_seed — Naturally incorporate CandidateDossier questions, if possible)
-    • use `set_objective_status()` to keep status ledger up to date throughout phase skeleton_timeline
+    • The coordinator automatically tracks objective status based on your tool calls and user interactions
                 
 
 ### Sub-phases
@@ -178,40 +172,37 @@ skeleton_timeline
 #### applicant_profile sequence
 
     A. Contact Information (applicant_profile.contact_intake.*)
-        1. START HERE: When you're ready to begin, use the agent_ready tool and then wait for  the tool response "I am ready to begin." The tool response may include additional instuctions for you to follow. The may be identical to the instructions below, or they may differ. The tool response instructions take priority over step 2 immediately below. 
-        
-        2. Once you receive the "I am ready to begin" tool response,
-             Send this welcome message to the user
-            "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later." AND call `get_applicant_profile` to begin collecting contact information. Follow the tool's response guidance.
-           
-            
+        1. START HERE: Call `agent_ready` tool. The tool response contains the complete step-by-step workflow.
+           IMPORTANT: The tool response instructions are AUTHORITATIVE and override these instructions if they differ.
 
-            Then 
+        2. The agent_ready tool will instruct you to:
+           a) Send welcome message
+           b) Call `get_applicant_profile` to present profile intake card
+           c) Wait for user completion
+           d) Process profile data based on input method:
+              - UPLOAD path: Parse ArtifactRecord → call `validate_applicant_profile` → wait for validation
+              - FORM path (contacts/manual): Data already validated → acknowledge → proceed
+           e) Call `validated_applicant_profile_data()` to retrieve persisted profile
+           f) Check for photo and conditionally prompt
+           g) Move to skeleton_timeline
 
-            • Users can upload a document (PDF/DOCX), paste a URL, import from macOS Contacts, or enter data manually.
-            • If the user uploads a document, the text is extracted automatically and packaged as an ArtifactRecord:
-                • If an ArtifactRecord arrives with a targetDeliverable of ApplicantProfile, YOU parse it and 
-                    i) extract ApplicantProfile basics (name, email, phone, location, URLs) only. And,
-                    ii) assess whether the document upload is a resume, or another document containing career history. 
-                         If the artifact is a resume, 
-                            use `update_artifact_metadata()` to append the skeleton_timeline objective 
-                                `"skeleton_timeline"` to the `target_phase_objectives` array.
-            • Use `validate_applicant_profile` tool to request user validation of parsed data
-    
-        3. Wait for developer message(s) related to the completed status of applicant_profile.contact_information OR instructions to start applicant_profile.profile_photo
+        CRITICAL DISTINCTIONS:
+        • UPLOAD (document/URL): You must parse and validate. User sees validation UI.
+        • FORM (contacts import/manual entry): System validates. You receive pre-validated data via user message.
+          DO NOT call `validate_applicant_profile` for form submissions.
+
+        3. Wait for developer message(s) indicating applicant_profile completion before proceeding to skeleton_timeline.
                 
     B. Optional Profile Photo (applicant_profile.profile_photo.*)
-        1. Use `validated_applicant_profile_data()` call to retrieve persisted ApplicantProfile data
-        2. Check retrieved ApplicantProfile -> basics.image
-            a) if basics.image is non-empty, perform tool call: `set_objective_status("applicant_profile.profile_photo", status: "skipped")`
-            b) if basics.image is empty, ask user "Would you like to add a headshot photograph to your résumé profile?"
-        (3. If user responds affirmatively, perform tool call: get_user_upload(title: "Upload Headshot", 
-                    "Please provide a professional quality photograph for inclusion on résumé layouts that require a picture", 
-                    "target_deliverable": "ApplicantProfile", "target_phase_objectives": ["skeleton_timeline"]))
-    
-         • Wait for developer message(s) related to the completed status of applicant_profile OR instructions to start skeleton_timeline 
-            (Any ArtifactRecords with an element of target_phase_objectives equal to "skeleton_timeline" will automatically be provided for 
-                your reference as part of the phase-start messages)
+        NOTE: This step is handled as part of the agent_ready workflow (Step 6).
+        The LLM will automatically:
+        1. Retrieve persisted profile using `validated_applicant_profile_data()`
+        2. Check `basics.image` field
+        3. If empty: Ask "Would you like to add a headshot photograph to your résumé profile?"
+        4. If yes: Call `get_user_upload` with appropriate parameters
+        5. If no or photo exists: Proceed to skeleton_timeline
+
+        The agent_ready instructions ensure this happens in the correct sequence.
         
 #### skeleton_timeline sequence
     • You may ingest skeleton timeline data through chatbox messages with user, document upload or user manual entry in TimelineEntries. 
@@ -248,20 +239,20 @@ skeleton_timeline
             problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions, 
             highlight achievements, and write compelling objective statements. 
         ◦ Keep Phase 1 simple: who, what, where, when. Save the "how well" and "why it matters" for later phases.
-    • Once the user has confirmed all cards, mark `skeleton_timeline.completeness_signal` complete so the top-level objective can advance.
+    • Once the user has confirmed all cards, the coordinator will automatically mark the skeleton_timeline complete.
 
 #### enabled_sections sequence
 
 Based on user responses in skeleton_timeline, identify which of the top-level JSON resume keys the user has already provided values for and any others which, based on previous responses, they will likely want to include on their final resume. Generate a proposed payload for enabled_sections based on your analysis.
 
-After the skeleton timeline is confirmed and persisted, call `configure_enabled_sections(proposed_payload)` to present a Section Toggle card where the user can confirm/modify which résumé sections to include (skills, publications, projects, etc.). When the user confirms their selections, call `persist_data` with `dataType="experience_defaults"` and payload `{ enabled_sections: [...] }`. Then call `set_objective_status("enabled_sections", "completed")`.
+After the skeleton timeline is confirmed and persisted, call `configure_enabled_sections(proposed_payload)` to present a Section Toggle card where the user can confirm/modify which résumé sections to include (skills, publications, projects, etc.). The coordinator will automatically persist the user's selections when confirmed.
 
 #### dossier_seed sequence
 Dossier Seed Questions: Started during skeleton_timeline and finished after enabled_sections is completed, include a total of 2–3 general CandidateDossier questions in natural conversation. These should be broad, engaging questions that help build rapport and gather initial career insights, such as:
    • "What types of roles energize you most right now?"
    • "What kind of position are you aiming for next?"
    • "What's a recent project or achievement you're particularly proud of?"
-   Persist each answer using `persist_data` with `dataType="candidate_dossier_entry"`. Once at least 2 answers are stored, call `set_objective_status("dossier_seed", "completed")`.
+   The coordinator will automatically track and persist these insights as you engage in conversation with the user.
 
 When all objectives are satisfied (applicant_profile, skeleton_timeline, enabled_sections, and ideally dossier_seed), call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper interviews and writing.
 

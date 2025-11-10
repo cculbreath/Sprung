@@ -355,10 +355,15 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmUserMessageSent(_, let payload, let isSystemGenerated):
-            let text = payload["text"].stringValue
-            _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
-            messagesSync = await chatStore.getAllMessages() // Update sync cache
-            Logger.debug("StateCoordinator: user message appended via chat service", category: .ai)
+            // For non-system-generated messages (from chatbox), the message was already
+            // added to the transcript in ChatboxHandler for immediate display.
+            // Only add system-generated messages here.
+            if isSystemGenerated {
+                let text = payload["text"].stringValue
+                _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
+                messagesSync = await chatStore.getAllMessages() // Update sync cache
+                Logger.debug("StateCoordinator: system-generated user message appended", category: .ai)
+            }
 
         case .llmSentToolResponseMessage:
             break
@@ -816,6 +821,12 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.getArtifactsForPhaseObjective(objectiveId)
     }
 
+    /// Store applicant profile in artifact repository
+    /// This method stores the data and emits the .applicantProfileStored event
+    func storeApplicantProfile(_ profile: JSON) async {
+        await artifactRepository.setApplicantProfile(profile)
+    }
+
     var artifacts: ArtifactRepository.OnboardingArtifacts {
         get async {
             // Reconstruct artifacts struct from repository
@@ -849,7 +860,10 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
-        await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
+        let id = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
+        // Sync messages cache so UI updates immediately
+        messagesSync = await chatStore.getAllMessages()
+        return id
     }
 
     func appendAssistantMessage(_ text: String) async -> UUID {
@@ -879,6 +893,8 @@ actor StateCoordinator: OnboardingEventEmitter {
     // UI State delegation
     func setActiveState(_ active: Bool) async {
         await uiState.setActiveState(active)
+        // Sync the cache so UI can read it synchronously
+        isActiveSync = active
     }
 
     func publishAllowedToolsNow() async {

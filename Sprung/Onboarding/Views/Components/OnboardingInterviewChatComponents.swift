@@ -56,9 +56,30 @@ struct MessageBubble: View {
         switch message.role {
         case .assistant:
             return parseAssistantReply(from: message.text)
-        case .user, .system:
+        case .user:
+            return stripChatboxTags(from: message.text)
+        case .system:
             return message.text
         }
+    }
+
+    private func stripChatboxTags(from text: String) -> String {
+        // Remove <chatbox> and </chatbox> tags that are added for LLM context
+        // Also handle HTML-encoded versions in case they were encoded somewhere
+        let stripped = text
+            .replacingOccurrences(of: "<chatbox>", with: "")
+            .replacingOccurrences(of: "</chatbox>", with: "")
+            .replacingOccurrences(of: "&lt;chatbox&gt;", with: "")
+            .replacingOccurrences(of: "&lt;/chatbox&gt;", with: "")
+
+        // Debug logging to help diagnose the issue
+        if text != stripped {
+            Logger.debug("🏷️ Stripped chatbox tags from: '\(text.prefix(100))'", category: .ai)
+        } else if text.contains("chatbox") {
+            Logger.warning("⚠️ Text contains 'chatbox' but wasn't stripped: '\(text.prefix(100))'", category: .ai)
+        }
+
+        return stripped
     }
 
     private func parseAssistantReply(from text: String) -> String {

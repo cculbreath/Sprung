@@ -221,8 +221,11 @@ final class UploadInteractionHandler {
 
                 // Handle targeted uploads (e.g., basics.image)
                 if let target = request.metadata.targetKey {
+                    Logger.info("🎯 Handling targeted upload: \(target)", category: .ai)
                     try await handleTargetedUpload(target: target, processed: processed)
                     payload["updates"] = JSON([target])
+                } else {
+                    Logger.debug("ℹ️ Upload has no target_key (generic upload)", category: .ai)
                 }
             }
 
@@ -307,6 +310,11 @@ final class UploadInteractionHandler {
             profile.pictureData = data
             profile.pictureMimeType = first.contentType
             applicantProfileStore.save(profile)
+
+            // Convert to JSON and emit event to trigger summary card update
+            let draft = ApplicantProfileDraft(profile: profile)
+            let profileJSON = draft.toSafeJSON()
+            await eventBus.publish(.applicantProfileStored(profileJSON))
 
             Logger.debug("📸 Applicant profile image updated (\(data.count) bytes, mime: \(first.contentType ?? "unknown"))", category: .ai)
 
