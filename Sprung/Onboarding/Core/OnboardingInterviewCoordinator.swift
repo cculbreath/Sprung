@@ -29,7 +29,6 @@ final class OnboardingInterviewCoordinator {
     private let lifecycleController: InterviewLifecycleController
     private let checkpointManager: CheckpointManager
     private let phaseTransitionController: PhaseTransitionController
-    private let continuationTracker: ContinuationTracker
 
     // MARK: - Services (Phase 3 Decomposition)
 
@@ -301,10 +300,6 @@ final class OnboardingInterviewCoordinator {
             phaseRegistry: registry
         )
 
-        self.continuationTracker = ContinuationTracker(
-            toolExecutionCoordinator: toolExecutionCoordinator
-        )
-
         // Initialize services (Phase 3)
         self.extractionManagementService = ExtractionManagementService(
             eventBus: eventBus,
@@ -473,10 +468,6 @@ final class OnboardingInterviewCoordinator {
         case .toolCallCompleted:
             // Tool completion is handled by toolContinuationNeeded
             break
-
-        case .toolContinuationNeeded(let id, let toolName):
-            continuationTracker.trackContinuation(id: id, toolName: toolName)
-            // no UI side effects here; UI is driven by separate events (.choicePromptRequested, etc.)
 
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
