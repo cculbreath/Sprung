@@ -206,13 +206,13 @@ actor LLMMessenger: OnboardingEventEmitter {
         await emit(.llmStatus(status: .busy))
 
         let text = payload["text"].stringValue
-        let forceToolName = payload["forceToolName"].string
+        let toolChoiceName = payload["toolChoice"].string
 
         // Add telemetry
         Logger.info("📨 Sending developer message (\(text.prefix(100))...)", category: .ai)
 
         do {
-            let request = await buildDeveloperMessageRequest(text: text, forceToolName: forceToolName)
+            let request = await buildDeveloperMessageRequest(text: text, toolChoice: toolChoiceName)
             let messageId = UUID().uuidString
 
             // Emit message sent event
@@ -403,7 +403,7 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     private func buildDeveloperMessageRequest(
         text: String,
-        forceToolName: String? = nil
+        toolChoice toolChoiceName: String? = nil
     ) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForDeveloperMessage(
             text: text
@@ -413,7 +413,7 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
-        if let toolName = forceToolName {
+        if let toolName = toolChoiceName {
             // Force the model to call this specific function using the tool_choice parameter
             toolChoice = .functionTool(FunctionTool(name: toolName))
             Logger.debug("Tool choice set to force function: \(toolName)", category: .ai)
