@@ -12,9 +12,9 @@ struct AgentReadyTool: InterviewTool {
             description: """
                 Signal that you have received and understood the phase instructions and are ready to begin the interview.
 
-                This is a bootstrap tool used only during conversation initialization. After receiving developer instructions for a new phase, call this tool to acknowledge receipt and signal readiness. The system will then send the user-ready message to begin the conversation.
+                This is a bootstrap tool used only during conversation initialization. After receiving developer instructions for a new phase, call this tool to acknowledge receipt and signal readiness. Proceeed to steps in interview when tool response is received.
 
-                RETURNS: { "status": "completed", "content": "ok" }
+                RETURNS: { "status": "completed", "content": "I am ready to begin. + {{instructions}}" }
 
                 USAGE: Call this immediately after receiving phase instructions, before attempting any other actions.
                 """,
@@ -27,7 +27,7 @@ struct AgentReadyTool: InterviewTool {
     init() {}
 
     var name: String { "agent_ready" }
-    var description: String { "Signal that you are ready to begin after receiving phase instructions. Returns {status: completed, content: ok}." }
+    var description: String { "Signal that you are ready to begin after receiving phase instructions. Returns {status: completed, content: I am ready to begin {{instructions}}}." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
@@ -36,8 +36,8 @@ struct AgentReadyTool: InterviewTool {
         // is delivered to the LLM (handled in ToolExecutionCoordinator)
         var result = JSON()
         result["status"].string = "completed"
-        result["content"].string = "ok"
-        result["trigger_ready_message"].bool = true
+        result["content"].string = "I am ready to begin. Please do the followig two things: 1) send this welcome message to the user: \"Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.\" AND 2) call the `get_applicant_profile` tool to begin collecting contact information. Follow the tool's response guidance."
+        result["disable_after_use"].bool = true
         return .immediate(result)
     }
 }
