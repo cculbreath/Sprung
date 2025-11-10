@@ -120,13 +120,11 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Tool completed - send response to LLM
             await emitToolResponse(callId: callId, output: output)
 
-            // Special handling for agent_ready tool - trigger "I am ready to begin" AFTER tool response is sent
+            // Special handling for agent_ready tool - remove from allowed tools after use
             if toolName == "agent_ready", output["disable_after_use"].bool == true {
                 // Remove agent_ready from allowed tools (one-time bootstrap tool)
                 await stateCoordinator.excludeTool("agent_ready")
-
-//              x`x``
-                Logger.info("🚀 Agent ready acknowledged - sending 'I am ready to begin' after tool response", category: .ai)
+                Logger.info("🚀 Agent ready acknowledged and excluded from future tool calls", category: .ai)
             }
 
         case .error(let error):
