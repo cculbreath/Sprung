@@ -109,7 +109,7 @@ final class PhaseTransitionController {
             Logger.info("📦 Surfaced \(targetedArtifacts.count) targeted artifacts for phase: \(phaseName)", category: .ai)
         }
 
-        Logger.info("🔄 Phase introductory prompt sent as developer message, followed by 'I am ready to begin' user message for phase: \(phaseName)", category: .ai)
+        Logger.info("🔄 Phase introductory prompt sent as developer message for phase: \(phaseName)", category: .ai)
     }
 
     // MARK: - Phase Advancement

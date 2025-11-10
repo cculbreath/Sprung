@@ -178,12 +178,13 @@ skeleton_timeline
 #### applicant_profile sequence
 
     A. Contact Information (applicant_profile.contact_intake.*)
-        1. START HERE: When you're ready to begin, use the agent_ready tool and then wait for an inital "I am ready to begin" message from the user. 
+        1. START HERE: When you're ready to begin, use the agent_ready tool and then wait for  the tool response "I am ready to begin." The tool response may include additional instuctions for you to follow. The may be identical to the instructions below, or they may differ. The tool response instructions take priority over step 2 immediately below. 
         
-        2. In response to the user's ready message, do two things:
-            a. call `get_applicant_profile` to begin collecting contact information. Follow the tool's response guidance.
-            b. Send this welcome message to the user
-            "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later."
+        2. Once you receive the "I am ready to begin" tool response,
+             Send this welcome message to the user
+            "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later." AND call `get_applicant_profile` to begin collecting contact information. Follow the tool's response guidance.
+           
+            
 
             Then 
 

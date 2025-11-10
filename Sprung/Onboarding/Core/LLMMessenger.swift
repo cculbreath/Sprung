@@ -84,7 +84,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             await sendUserMessage(payload, isSystemGenerated: isSystemGenerated)
 
         case .llmSendDeveloperMessage(let payload):
-            await sendDeveloperMessage(payload)
+            // Developer messages sent directly (no queueing needed - internally generated)
+            await executeDeveloperMessage(payload)
 
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
@@ -92,10 +93,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         case .llmExecuteUserMessage(let payload, let isSystemGenerated):
             // Execute stream directly (called from StateCoordinator queue)
             await executeUserMessage(payload, isSystemGenerated: isSystemGenerated)
-
-        case .llmExecuteDeveloperMessage(let payload):
-            // Execute stream directly (called from StateCoordinator queue)
-            await executeDeveloperMessage(payload)
 
         case .llmExecuteToolResponse(let payload):
             // Execute stream directly (called from StateCoordinator queue)
@@ -190,19 +187,12 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
     }
 
-    /// Send developer message (system instructions) - enqueues via event publication
-    private func sendDeveloperMessage(_ payload: JSON) async {
+    /// Execute developer message directly (no queueing - developer messages are internally generated)
+    private func executeDeveloperMessage(_ payload: JSON) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring developer message", category: .ai)
             return
         }
-
-        // Publish enqueue event for StateCoordinator to handle
-        await emit(.llmEnqueueDeveloperMessage(payload: payload))
-    }
-
-    /// Execute developer message (called from StateCoordinator queue via event)
-    private func executeDeveloperMessage(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
 
         let text = payload["text"].stringValue

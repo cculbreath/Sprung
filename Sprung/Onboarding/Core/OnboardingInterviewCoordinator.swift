@@ -515,8 +515,8 @@ final class OnboardingInterviewCoordinator {
              .artifactMetadataUpdated,
              .llmReasoningItemsForToolCalls,
              .pendingExtractionUpdated,
-             .llmEnqueueUserMessage, .llmEnqueueDeveloperMessage, .llmEnqueueToolResponse,
-             .llmExecuteUserMessage, .llmExecuteDeveloperMessage, .llmExecuteToolResponse,
+             .llmEnqueueUserMessage, .llmEnqueueToolResponse,
+             .llmExecuteUserMessage, .llmExecuteToolResponse,
              .llmCancelRequested,
              .skeletonTimelineReplaced:
             // These events are handled by StateCoordinator/handlers

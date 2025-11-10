@@ -83,7 +83,6 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     enum StreamRequestType {
         case userMessage(payload: JSON, isSystemGenerated: Bool)
-        case developerMessage(payload: JSON)
         case toolResponse(payload: JSON)
     }
 
@@ -397,9 +396,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
             enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
 
-        case .llmEnqueueDeveloperMessage(let payload):
-            enqueueStreamRequest(.developerMessage(payload: payload))
-
         case .llmEnqueueToolResponse(let payload):
             enqueueStreamRequest(.toolResponse(payload: payload))
 
@@ -574,8 +570,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch requestType {
         case .userMessage(let payload, let isSystemGenerated):
             await emit(.llmExecuteUserMessage(payload: payload, isSystemGenerated: isSystemGenerated))
-        case .developerMessage(let payload):
-            await emit(.llmExecuteDeveloperMessage(payload: payload))
         case .toolResponse(let payload):
             await emit(.llmExecuteToolResponse(payload: payload))
         }

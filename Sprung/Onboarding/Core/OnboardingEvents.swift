@@ -108,11 +108,9 @@ enum OnboardingEvent {
     case llmStatus(status: LLMStatus)
     // Stream request events (for enqueueing via StateCoordinator)
     case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool)
-    case llmEnqueueDeveloperMessage(payload: JSON)
     case llmEnqueueToolResponse(payload: JSON)
     // Stream execution events (for serial processing via StateCoordinator)
     case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool)
-    case llmExecuteDeveloperMessage(payload: JSON)
     case llmExecuteToolResponse(payload: JSON)
     // Sidebar reasoning (ChatGPT-style, not attached to messages)
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
@@ -271,8 +269,8 @@ actor EventCoordinator {
         // LLM events
         case .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
-             .llmEnqueueUserMessage, .llmEnqueueDeveloperMessage, .llmEnqueueToolResponse,
-             .llmExecuteUserMessage, .llmExecuteDeveloperMessage, .llmExecuteToolResponse,
+             .llmEnqueueUserMessage, .llmEnqueueToolResponse,
+             .llmExecuteUserMessage, .llmExecuteToolResponse,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
@@ -457,14 +455,10 @@ actor EventCoordinator {
             description = "LLM tool response requested"
         case .llmEnqueueUserMessage(_, let isSystemGenerated):
             description = "LLM enqueue user message (system: \(isSystemGenerated))"
-        case .llmEnqueueDeveloperMessage:
-            description = "LLM enqueue developer message"
         case .llmEnqueueToolResponse:
             description = "LLM enqueue tool response"
         case .llmExecuteUserMessage(_, let isSystemGenerated):
             description = "LLM execute user message (system: \(isSystemGenerated))"
-        case .llmExecuteDeveloperMessage:
-            description = "LLM execute developer message"
         case .llmExecuteToolResponse:
             description = "LLM execute tool response"
         case .llmStatus(let status):

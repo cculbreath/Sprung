@@ -121,17 +121,11 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await emitToolResponse(callId: callId, output: output)
 
             // Special handling for agent_ready tool - trigger "I am ready to begin" AFTER tool response is sent
-            if toolName == "agent_ready", output["trigger_ready_message"].bool == true {
+            if toolName == "agent_ready", output["disable_after_use"].bool == true {
                 // Remove agent_ready from allowed tools (one-time bootstrap tool)
                 await stateCoordinator.excludeTool("agent_ready")
 
-                // Send "I am ready to begin" user message
-                var readyPayload = JSON()
-                readyPayload["text"].string = "I am ready to begin"
-                await emit(.llmSendUserMessage(
-                    payload: readyPayload,
-                    isSystemGenerated: true
-                ))
+//              x`x``
                 Logger.info("🚀 Agent ready acknowledged - sending 'I am ready to begin' after tool response", category: .ai)
             }
 
