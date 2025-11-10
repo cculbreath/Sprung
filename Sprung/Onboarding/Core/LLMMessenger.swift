@@ -130,7 +130,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool) async {
         await emit(.llmStatus(status: .busy))
 
-        let text = payload["text"].stringValue
+        // Support both "content" (system-generated) and "text" (chatbox) fields
+        let text = payload["content"].string ?? payload["text"].stringValue
 
         do {
             let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated)
