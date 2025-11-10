@@ -256,12 +256,6 @@ final class ProfileInteractionHandler {
         pendingApplicantProfileIntake = nil
     }
 
-    // MARK: - Private Helpers
-
-    private func clearProfileRequest() {
-        pendingApplicantProfileRequest = nil
-    }
-
     // MARK: - Lifecycle
 
     /// Clears all pending profile state (for interview reset).

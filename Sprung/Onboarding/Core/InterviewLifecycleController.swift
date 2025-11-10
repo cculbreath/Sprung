@@ -112,8 +112,8 @@ final class InterviewLifecycleController {
         await transcriptHandler.start()
 
         // Send phase introductory prompt for the current phase
-        // This ensures the LLM receives phase-specific instructions on first launch
-        // The phase prompt alone is sufficient to start the conversation - no need for "I'm ready to begin"
+        // This sends the phase-specific instructions as a developer message,
+        // followed by "I am ready to begin" as a user message to trigger the conversation
         let currentPhase = await state.phase
         await eventBus.publish(.phaseTransitionApplied(phase: currentPhase.rawValue, timestamp: Date()))
 

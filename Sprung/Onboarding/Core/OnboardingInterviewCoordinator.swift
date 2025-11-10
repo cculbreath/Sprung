@@ -376,6 +376,7 @@ final class OnboardingInterviewCoordinator {
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: self))
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: self))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: self))
+        toolRegistry.register(AgentReadyTool(eventBus: eventBus))
 
         if let agent = knowledgeCardAgent {
             toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))
@@ -475,6 +476,14 @@ final class OnboardingInterviewCoordinator {
 
         case .phaseAdvanceRequested:
             // Handled by state sync - trigger sync of pendingPhaseAdvanceRequest
+            break
+
+        case .phaseAdvanceDismissed:
+            // User dismissed phase advance request
+            break
+
+        case .phaseAdvanceApproved, .phaseAdvanceDenied:
+            // Phase advance approval/denial now handled by event handlers (step 6)
             break
 
         // Tool UI events - handled by ToolHandler
@@ -1007,7 +1016,7 @@ final class OnboardingInterviewCoordinator {
     /// Views should call this instead of manually submitting.
     func submitProfileURL(_ urlString: String) async {
         // Process URL submission (creates artifact if needed)
-        toolRouter.submitApplicantProfileURL(urlString)
+        guard toolRouter.submitApplicantProfileURL(urlString) != nil else { return }
 
         // Send user message to LLM indicating URL submission
         var userMessage = JSON()
@@ -1099,6 +1108,54 @@ final class OnboardingInterviewCoordinator {
 
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Validation response submitted and user message sent to LLM", category: .ai)
+    }
+
+    /// Confirm applicant profile and send user message to LLM.
+    func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
+        guard toolRouter.resolveApplicantProfile(with: draft) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Applicant profile confirmed and validated."
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Applicant profile confirmed and user message sent to LLM", category: .ai)
+    }
+
+    /// Reject applicant profile and send user message to LLM.
+    func rejectApplicantProfile(reason: String) async {
+        guard toolRouter.rejectApplicantProfile(reason: reason) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Applicant profile rejected. Reason: \(reason)"
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Applicant profile rejected and user message sent to LLM", category: .ai)
+    }
+
+    /// Confirm section toggle and send user message to LLM.
+    func confirmSectionToggle(enabled: [String]) async {
+        guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Section toggle confirmed and user message sent to LLM", category: .ai)
+    }
+
+    /// Reject section toggle and send user message to LLM.
+    func rejectSectionToggle(reason: String) async {
+        guard toolRouter.rejectSectionToggle(reason: reason) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Section toggle rejected. Reason: \(reason)"
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Section toggle rejected and user message sent to LLM", category: .ai)
     }
 
     // MARK: - Checkpoint Management (Delegated to CheckpointManager)
