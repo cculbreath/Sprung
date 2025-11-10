@@ -40,10 +40,8 @@ struct GetApplicantProfileTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let continuationId = UUID()
-
         // Emit UI request to show the profile intake card
-        await coordinator.eventBus.publish(.applicantProfileIntakeRequested(continuationId: continuationId))
+        await coordinator.eventBus.publish(.applicantProfileIntakeRequested)
 
         // Return completed - the tool's job is to present UI, which it has done
         // User's profile intake completion will arrive as a new user message

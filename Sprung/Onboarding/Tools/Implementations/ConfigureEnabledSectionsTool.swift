@@ -106,7 +106,7 @@ struct ConfigureEnabledSectionsTool: InterviewTool {
         )
 
         // Emit UI request to show the section toggle UI
-        await coordinator.eventBus.publish(.sectionToggleRequested(request: request, continuationId: UUID()))
+        await coordinator.eventBus.publish(.sectionToggleRequested(request: request))
 
         // Return completed - the tool's job is to present UI, which it has done
         // User's section selection will arrive as a new user message

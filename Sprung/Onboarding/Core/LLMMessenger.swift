@@ -149,7 +149,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 // Debug: Log request details
                 Logger.debug("📋 Request model: \(request.model)", category: .ai)
                 Logger.debug("📋 Request has previousResponseId: \(request.previousResponseId != nil)", category: .ai)
-                Logger.debug("📋 Request store: \(request.store)", category: .ai)
+                Logger.debug("📋 Request store: \(String(describing: request.store))", category: .ai)
 
                 let stream = try await service.responseCreateStream(request)
                 for try await streamEvent in stream {

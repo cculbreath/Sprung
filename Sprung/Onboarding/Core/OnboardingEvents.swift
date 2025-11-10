@@ -43,22 +43,21 @@ enum OnboardingEvent {
     // MARK: - Tool Execution
     case toolCallRequested(ToolCall)
     case toolCallCompleted(id: UUID, result: JSON)
-    case toolContinuationNeeded(id: UUID, toolName: String)
 
     // MARK: - Tool UI Requests
-    case choicePromptRequested(prompt: OnboardingChoicePrompt, continuationId: UUID)
-    case choicePromptCleared(continuationId: UUID)
-    case uploadRequestPresented(request: OnboardingUploadRequest, continuationId: UUID)
+    case choicePromptRequested(prompt: OnboardingChoicePrompt)
+    case choicePromptCleared
+    case uploadRequestPresented(request: OnboardingUploadRequest)
     case uploadRequestCancelled(id: UUID)
-    case validationPromptRequested(prompt: OnboardingValidationPrompt, continuationId: UUID)
-    case validationPromptCleared(continuationId: UUID)
-    case applicantProfileIntakeRequested(continuationId: UUID)
+    case validationPromptRequested(prompt: OnboardingValidationPrompt)
+    case validationPromptCleared
+    case applicantProfileIntakeRequested
     case applicantProfileIntakeCleared
     case profileSummaryUpdateRequested(profile: JSON)
     case profileSummaryDismissRequested
-    case sectionToggleRequested(request: OnboardingSectionToggleRequest, continuationId: UUID)
-    case sectionToggleCleared(continuationId: UUID)
-    case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest, continuationId: UUID)
+    case sectionToggleRequested(request: OnboardingSectionToggleRequest)
+    case sectionToggleCleared
+    case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest)
     case phaseAdvanceDismissed
 
     // MARK: - Artifact Management (§4.8 spec)
@@ -291,7 +290,7 @@ actor EventCoordinator {
             return .objective
 
         // Tool events
-        case .toolCallRequested, .toolCallCompleted, .toolContinuationNeeded:
+        case .toolCallRequested, .toolCallCompleted:
             return .tool
 
         // Artifact events
@@ -369,8 +368,6 @@ actor EventCoordinator {
             description = "Tool call requested"
         case .toolCallCompleted:
             description = "Tool call completed"
-        case .toolContinuationNeeded:
-            description = "Tool continuation needed"
         case .choicePromptRequested:
             description = "Choice prompt requested"
         case .choicePromptCleared:
