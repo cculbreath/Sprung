@@ -9,12 +9,11 @@
 import Foundation
 import SwiftyJSON
 
-/// Coordinates tool execution and continuation management
+/// Coordinates tool execution
 /// Responsibilities (Spec §4.6):
 /// - Subscribe to LLM.toolCallReceived events
 /// - Validate tool names against State.allowedTools
 /// - Execute tools via ToolExecutor
-/// - Manage continuation tokens
 /// - Emit Tool.result and LLM.toolResponseMessage events
 actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Properties
@@ -22,9 +21,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     let eventBus: EventCoordinator
     private let toolExecutor: ToolExecutor
     private let stateCoordinator: StateCoordinator
-
-    // Track pending continuations
-    private var pendingContinuations: [UUID: String] = [:] // continuationId -> callId
 
     // MARK: - Initialization
 
@@ -61,11 +57,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         switch event {
         case .toolCallRequested(let call):
             await handleToolCall(call)
-
-        case .toolContinuationNeeded(let id, let toolName):
-            // This event is emitted by InterviewOrchestrator for continuations
-            // The actual continuation resumption happens via resumeToolContinuation
-            Logger.debug("Tool continuation needed: \(toolName) (\(id))", category: .ai)
 
         default:
             break
@@ -127,25 +118,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             }
 
             // Tool completed - send response to LLM
-            // Skip sending if there are pending user input continuations (to prevent duplicate LLM responses)
-            if pendingContinuations.isEmpty {
-                await emitToolResponse(callId: callId, output: output)
-            } else {
-                Logger.info("📝 Tool response for \(toolName ?? "unknown") suppressed (waiting for user input on \(pendingContinuations.count) continuation(s))", category: .ai)
-            }
-
-        case .waiting(_, let continuation):
-            // Tool needs user input - store continuation and emit UI event
-            // DO NOT send tool response to LLM - waiting tools don't need LLM acknowledgment
-            pendingContinuations[continuation.id] = callId
-
-            // Emit UI-specific events based on the tool's UI request
-            if let uiRequest = continuation.uiRequest {
-                await emitUIRequest(uiRequest, continuationId: continuation.id)
-            }
-
-            await emit(.toolContinuationNeeded(id: continuation.id, toolName: continuation.toolName))
-            Logger.info("🔄 Tool waiting for user input: \(continuation.toolName) - NO tool response sent to LLM", category: .ai)
+            await emitToolResponse(callId: callId, output: output)
 
         case .error(let error):
             // Tool execution error
@@ -153,24 +126,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             errorOutput["error"].string = error.localizedDescription
             errorOutput["status"].string = "error"
             await emitToolResponse(callId: callId, output: errorOutput)
-        }
-    }
-
-    // MARK: - Continuation Management
-
-    /// Resume a tool continuation with user input
-    func resumeToolContinuation(id: UUID, userInput: JSON) async throws {
-        guard let callId = pendingContinuations.removeValue(forKey: id) else {
-            throw ToolError.invalidParameters("No pending continuation for id: \(id)")
-        }
-
-        // Resume the continuation
-        do {
-            let result = try await toolExecutor.resumeContinuation(id: id, with: userInput)
-            await handleToolResult(result, callId: callId, toolName: nil)
-        } catch {
-            Logger.error("Continuation resumption failed: \(error)", category: .ai)
-            await emitToolError(callId: callId, message: "Continuation failed: \(error.localizedDescription)")
         }
     }
 
@@ -193,30 +148,5 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         errorOutput["error"].string = message
         errorOutput["status"].string = "error"
         await emitToolResponse(callId: callId, output: errorOutput)
-    }
-
-    /// Emit UI request events based on tool's UI needs
-    private func emitUIRequest(_ request: ToolUIRequest, continuationId: UUID) async {
-        switch request {
-        case .choicePrompt(let prompt):
-            await emit(.choicePromptRequested(prompt: prompt, continuationId: continuationId))
-            Logger.info("📋 Choice prompt requested", category: .ai)
-
-        case .uploadRequest(let uploadRequest):
-            await emit(.uploadRequestPresented(request: uploadRequest, continuationId: continuationId))
-            Logger.info("📤 Upload request presented", category: .ai)
-
-        case .validationPrompt(let validationPrompt):
-            await emit(.validationPromptRequested(prompt: validationPrompt, continuationId: continuationId))
-            Logger.info("✅ Validation prompt requested", category: .ai)
-
-        case .applicantProfileIntake:
-            await emit(.applicantProfileIntakeRequested(continuationId: continuationId))
-            Logger.info("👤 Applicant profile intake requested", category: .ai)
-
-        case .sectionToggle(let request):
-            await emit(.sectionToggleRequested(request: request, continuationId: continuationId))
-            Logger.info("🔀 Section toggle requested", category: .ai)
-        }
     }
 }
