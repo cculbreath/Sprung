@@ -12,8 +12,8 @@ struct GetArtifactRecordTool: InterviewTool {
                 Use this to access the actual content of uploaded files/URLs. The artifact contains extracted text (from PDFs, DOCX, etc.) that you can parse for interview data.
 
                 RETURNS:
-                - If found: { "status": "found", "artifact": { "id", "filename", "extracted_text", "content_type", "uploaded_at", "target_phase_objectives", "file_url", ... } }
-                - If not found: { "status": "not_found", "artifact_id": "<id>", "message": "No artifact found..." }
+                - If found: { "artifact": { "id", "filename", "extracted_text", "content_type", "uploaded_at", "target_phase_objectives", "file_url", ... } }
+                - If not found: Returns error
 
                 USAGE: Call after list_artifacts identifies relevant artifacts. Parse extracted_text to extract ApplicantProfile, timeline entries, or other structured data.
 
@@ -49,7 +49,7 @@ struct GetArtifactRecordTool: InterviewTool {
     }
 
     var name: String { "get_artifact" }
-    var description: String { "Retrieve full artifact with extracted text content. Returns {status, artifact: {extracted_text, ...}}. Use to process uploaded files." }
+    var description: String { "Retrieve full artifact with extracted text content. Returns {artifact: {extracted_text, ...}}. Use to process uploaded files." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
@@ -61,15 +61,10 @@ struct GetArtifactRecordTool: InterviewTool {
         // Get artifact record from coordinator state
         if let artifact = await coordinator.getArtifactRecord(id: artifactId) {
             var response = JSON()
-            response["status"].string = "found"
             response["artifact"] = artifact
             return .immediate(response)
         } else {
-            var response = JSON()
-            response["status"].string = "not_found"
-            response["artifact_id"].string = artifactId
-            response["message"].string = "No artifact found with ID: \(artifactId)"
-            return .immediate(response)
+            throw ToolError.executionFailed("No artifact found with ID: \(artifactId)")
         }
     }
 }
