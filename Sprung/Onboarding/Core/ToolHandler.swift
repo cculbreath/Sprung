@@ -97,32 +97,32 @@ final class ToolHandler {
 
     private func handleToolUIEvent(_ event: OnboardingEvent) {
         switch event {
-        case .choicePromptRequested(let prompt, let continuationId):
-            presentChoicePrompt(prompt, continuationId: continuationId)
+        case .choicePromptRequested(let prompt):
+            presentChoicePrompt(prompt)
 
-        case .choicePromptCleared(let continuationId):
-            clearChoicePrompt(continuationId: continuationId)
+        case .choicePromptCleared:
+            clearChoicePrompt()
 
-        case .uploadRequestPresented(let request, let continuationId):
-            presentUploadRequest(request, continuationId: continuationId)
+        case .uploadRequestPresented(let request):
+            presentUploadRequest(request)
 
-        case .validationPromptRequested(let prompt, let continuationId):
-            presentValidationPrompt(prompt, continuationId: continuationId)
+        case .validationPromptRequested(let prompt):
+            presentValidationPrompt(prompt)
 
-        case .validationPromptCleared(let continuationId):
-            clearValidationPrompt(continuationId: continuationId)
+        case .validationPromptCleared:
+            clearValidationPrompt()
 
-        case .applicantProfileIntakeRequested(let continuationId):
-            presentApplicantProfileIntake(continuationId: continuationId)
+        case .applicantProfileIntakeRequested:
+            presentApplicantProfileIntake()
 
         case .applicantProfileIntakeCleared:
             clearApplicantProfileIntake()
 
-        case .sectionToggleRequested(let request, let continuationId):
-            presentSectionToggle(request, continuationId: continuationId)
+        case .sectionToggleRequested(let request):
+            presentSectionToggle(request)
 
-        case .sectionToggleCleared(let continuationId):
-            clearSectionToggle(continuationId: continuationId)
+        case .sectionToggleCleared:
+            clearSectionToggle()
 
         default:
             break
@@ -174,30 +174,30 @@ final class ToolHandler {
 
     // MARK: - Choice Prompts
 
-    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt, continuationId: UUID) {
-        promptHandler.presentChoicePrompt(prompt, continuationId: continuationId)
+    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
+        promptHandler.presentChoicePrompt(prompt)
     }
 
-    func clearChoicePrompt(continuationId: UUID) {
-        promptHandler.clearChoicePrompt(continuationId: continuationId)
+    func clearChoicePrompt() {
+        promptHandler.clearChoicePrompt()
     }
 
-    func resolveChoice(selectionIds: [String]) -> (UUID, JSON)? {
+    func resolveChoice(selectionIds: [String]) -> JSON? {
         promptHandler.resolveChoice(selectionIds: selectionIds)
     }
 
-    func cancelChoicePrompt(reason: String) -> (UUID, JSON)? {
+    func cancelChoicePrompt(reason: String) -> JSON? {
         promptHandler.cancelChoicePrompt(reason: reason)
     }
 
     // MARK: - Validation Prompts
 
-    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt, continuationId: UUID) {
-        promptHandler.presentValidationPrompt(prompt, continuationId: continuationId)
+    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
+        promptHandler.presentValidationPrompt(prompt)
     }
 
-    func clearValidationPrompt(continuationId: UUID) {
-        promptHandler.clearValidationPrompt(continuationId: continuationId)
+    func clearValidationPrompt() {
+        promptHandler.clearValidationPrompt()
     }
 
     func submitValidationResponse(
@@ -205,7 +205,7 @@ final class ToolHandler {
         updatedData: JSON?,
         changes: JSON?,
         notes: String?
-    ) -> (UUID, JSON)? {
+    ) -> JSON? {
         promptHandler.submitValidationResponse(
             status: status,
             updatedData: updatedData,
@@ -214,32 +214,32 @@ final class ToolHandler {
         )
     }
 
-    func cancelValidation(reason: String) -> (UUID, JSON)? {
+    func cancelValidation(reason: String) -> JSON? {
         promptHandler.cancelValidation(reason: reason)
     }
 
     // MARK: - Applicant Profile Validation
 
-    func presentApplicantProfileRequest(_ request: OnboardingApplicantProfileRequest, continuationId: UUID) {
-        profileHandler.presentProfileRequest(request, continuationId: continuationId)
+    func presentApplicantProfileRequest(_ request: OnboardingApplicantProfileRequest) {
+        profileHandler.presentProfileRequest(request)
     }
 
-    func clearApplicantProfileRequest(continuationId: UUID) {
-        profileHandler.clearProfileRequest(continuationId: continuationId)
+    func clearApplicantProfileRequest() {
+        profileHandler.clearProfileRequest()
     }
 
-    func resolveApplicantProfile(with draft: ApplicantProfileDraft) -> (UUID, JSON)? {
+    func resolveApplicantProfile(with draft: ApplicantProfileDraft) -> JSON? {
         profileHandler.resolveProfile(with: draft)
     }
 
-    func rejectApplicantProfile(reason: String) -> (UUID, JSON)? {
+    func rejectApplicantProfile(reason: String) -> JSON? {
         profileHandler.rejectProfile(reason: reason)
     }
 
     // MARK: - Applicant Profile Intake
 
-    func presentApplicantProfileIntake(continuationId: UUID) {
-        profileHandler.presentProfileIntake(continuationId: continuationId)
+    func presentApplicantProfileIntake() {
+        profileHandler.presentProfileIntake()
     }
 
     func resetApplicantProfileIntakeToOptions() {
@@ -254,7 +254,7 @@ final class ToolHandler {
         profileHandler.beginURLEntry()
     }
 
-    func beginApplicantProfileUpload() -> (request: OnboardingUploadRequest, continuationId: UUID)? {
+    func beginApplicantProfileUpload() -> OnboardingUploadRequest {
         profileHandler.beginUpload()
     }
 
@@ -270,7 +270,7 @@ final class ToolHandler {
         profileHandler.completeDraft(draft, source: source)
     }
 
-    func cancelApplicantProfileIntake(reason: String) -> (UUID, JSON)? {
+    func cancelApplicantProfileIntake(reason: String) -> JSON? {
         profileHandler.cancelIntake(reason: reason)
     }
 
@@ -280,48 +280,45 @@ final class ToolHandler {
 
     // MARK: - Upload Handling
 
-    func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
-        uploadHandler.presentUploadRequest(request, continuationId: continuationId)
+    func presentUploadRequest(_ request: OnboardingUploadRequest) {
+        uploadHandler.presentUploadRequest(request)
     }
 
-    func completeUpload(id: UUID, fileURLs: [URL]) async -> (UUID, JSON)? {
+    func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         await uploadHandler.completeUpload(id: id, fileURLs: fileURLs)
     }
 
-    func completeUpload(id: UUID, link: URL) async -> (UUID, JSON)? {
+    func completeUpload(id: UUID, link: URL) async -> JSON? {
         await uploadHandler.completeUpload(id: id, link: link)
     }
 
-    func skipUpload(id: UUID) async -> (UUID, JSON)? {
+    func skipUpload(id: UUID) async -> JSON? {
         await uploadHandler.skipUpload(id: id)
     }
 
-    func cancelUpload(id: UUID, reason: String?) async -> (UUID, JSON)? {
+    func cancelUpload(id: UUID, reason: String?) async -> JSON? {
         await uploadHandler.cancelUpload(id: id, reason: reason)
     }
 
-    func cancelPendingUpload(reason: String?) async -> (UUID, JSON)? {
+    func cancelPendingUpload(reason: String?) async -> JSON? {
         await uploadHandler.cancelPendingUpload(reason: reason)
     }
 
     // MARK: - Section Toggle Handling
 
-    func presentSectionToggle(_ request: OnboardingSectionToggleRequest, continuationId: UUID) {
-        sectionHandler.presentToggleRequest(request, continuationId: continuationId)
+    func presentSectionToggle(_ request: OnboardingSectionToggleRequest) {
+        sectionHandler.presentToggleRequest(request)
     }
 
-    func clearSectionToggle(continuationId: UUID) {
-        // Clear the section toggle if the continuation ID matches
-        if sectionHandler.pendingSectionToggleRequest?.id == continuationId {
-            sectionHandler.reset()
-        }
+    func clearSectionToggle() {
+        sectionHandler.reset()
     }
 
-    func resolveSectionToggle(enabled: [String]) -> (UUID, JSON)? {
+    func resolveSectionToggle(enabled: [String]) -> JSON? {
         sectionHandler.resolveToggle(enabled: enabled)
     }
 
-    func rejectSectionToggle(reason: String) -> (UUID, JSON)? {
+    func rejectSectionToggle(reason: String) -> JSON? {
         sectionHandler.rejectToggle(reason: reason)
     }
 
