@@ -341,22 +341,13 @@ actor LLMMessenger: OnboardingEventEmitter {
         // Use previous_response_id for context management (OpenAI manages conversation history)
         let previousResponseId = await contextAssembler.getPreviousResponseId()
 
-        var inputItems: [InputItem] = []
-
-        // On FIRST request only: send base developer message (persists via previous_response_id)
-        if previousResponseId == nil {
-            inputItems.append(.message(InputMessage(
-                role: "developer",
-                content: .text(baseDeveloperMessage)
-            )))
-            Logger.info("📋 Including base developer message (first request)", category: .ai)
-        }
-
         // Current user message
-        inputItems.append(.message(InputMessage(
-            role: "user",
-            content: .text(text)
-        )))
+        let inputItems: [InputItem] = [
+            .message(InputMessage(
+                role: "user",
+                content: .text(text)
+            ))
+        ]
 
         let tools = await getToolSchemas()
         let toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
@@ -405,9 +396,24 @@ actor LLMMessenger: OnboardingEventEmitter {
         text: String,
         toolChoice toolChoiceName: String? = nil
     ) async -> ModelResponseParameter {
-        let inputItems = await contextAssembler.buildForDeveloperMessage(
-            text: text
-        )
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
+
+        var inputItems: [InputItem] = []
+
+        // On FIRST request only: prepend base developer message before phase instructions
+        if previousResponseId == nil {
+            inputItems.append(.message(InputMessage(
+                role: "developer",
+                content: .text(baseDeveloperMessage)
+            )))
+            Logger.info("📋 Including base developer message (first request)", category: .ai)
+        }
+
+        // Current developer message (phase instructions)
+        inputItems.append(.message(InputMessage(
+            role: "developer",
+            content: .text(text)
+        )))
 
         let tools = await getToolSchemas()
 
@@ -422,13 +428,12 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
 
         let modelId = await stateCoordinator.getCurrentModelId()
-        let previousResponseId = await contextAssembler.getPreviousResponseId()
 
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: nil,  // Base developer message already sent on first request, persists via previous_response_id
+            instructions: nil,  // Base developer message sent in first request, persists via previous_response_id
             previousResponseId: previousResponseId,
             store: true,
             temperature: 1.0,
@@ -439,6 +444,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.tools = tools
         parameters.parallelToolCalls = false
 
+        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count)", category: .ai)
         return parameters
     }
 
