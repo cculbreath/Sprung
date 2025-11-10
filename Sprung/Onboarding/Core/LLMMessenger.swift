@@ -414,11 +414,9 @@ actor LLMMessenger: OnboardingEventEmitter {
         // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
         if let toolName = forceToolName {
-            // Use .auto to allow both text and tool calls
-            // The developer instruction explicitly tells the LLM which tool to call
-            // and that it "MUST" call it, which is sufficient guidance
-            toolChoice = .auto
-            Logger.debug("Tool choice set to auto (developer instruction specifies: \(toolName))", category: .ai)
+            // Force the model to call this specific function using the tool_choice parameter
+            toolChoice = .functionTool(FunctionTool(name: toolName))
+            Logger.debug("Tool choice set to force function: \(toolName)", category: .ai)
         } else {
             toolChoice = .auto
         }
