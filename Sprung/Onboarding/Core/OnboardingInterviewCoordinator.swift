@@ -1110,16 +1110,48 @@ final class OnboardingInterviewCoordinator {
         Logger.info("✅ Validation response submitted and user message sent to LLM", category: .ai)
     }
 
-    /// Confirm applicant profile and send user message to LLM.
+    /// Confirm applicant profile and send user message to LLM with actual profile data.
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
-        guard toolRouter.resolveApplicantProfile(with: draft) != nil else { return }
+        guard let resolution = toolRouter.resolveApplicantProfile(with: draft) else { return }
 
+        // Extract the actual profile data from the resolution
+        let profileData = resolution["data"]
+        let status = resolution["status"].stringValue
+
+        // Build user message with the validated profile information
         var userMessage = JSON()
         userMessage["role"].string = "user"
-        userMessage["content"].string = "Applicant profile confirmed and validated."
+
+        // Format profile data for the LLM
+        var contentParts: [String] = ["I have provided my contact information:"]
+
+        if let name = profileData["name"].string {
+            contentParts.append("- Name: \(name)")
+        }
+        if let email = profileData["email"].string {
+            contentParts.append("- Email: \(email)")
+        }
+        if let phone = profileData["phone"].string {
+            contentParts.append("- Phone: \(phone)")
+        }
+        if let location = profileData["location"].string {
+            contentParts.append("- Location: \(location)")
+        }
+        if let personalURL = profileData["personal_url"].string {
+            contentParts.append("- Website: \(personalURL)")
+        }
+
+        // Add social profiles if present
+        if let social = profileData["social_profiles"].array, !social.isEmpty {
+            contentParts.append("- Social profiles: \(social.count) profile(s)")
+        }
+
+        contentParts.append("\nThis information has been validated and is ready for use.")
+
+        userMessage["content"].string = contentParts.joined(separator: "\n")
 
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Applicant profile confirmed and user message sent to LLM", category: .ai)
+        Logger.info("✅ Applicant profile confirmed (\(status)) and data sent to LLM", category: .ai)
     }
 
     /// Reject applicant profile and send user message to LLM.
