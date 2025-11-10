@@ -85,7 +85,7 @@ final class ToolHandler {
 
         Task {
             for await event in await eventBus.stream(topic: .toolpane) {
-                await handleToolUIEvent(event)
+                handleToolUIEvent(event)
             }
         }
 
@@ -262,11 +262,11 @@ final class ToolHandler {
         profileHandler.beginContactsFetch()
     }
 
-    func submitApplicantProfileURL(_ urlString: String) -> (UUID, JSON)? {
+    func submitApplicantProfileURL(_ urlString: String) -> URL? {
         profileHandler.submitURL(urlString)
     }
 
-    func completeApplicantProfileDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) -> (UUID, JSON)? {
+    func completeApplicantProfileDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) {
         profileHandler.completeDraft(draft, source: source)
     }
 

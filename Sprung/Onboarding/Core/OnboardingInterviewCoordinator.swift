@@ -510,6 +510,18 @@ final class OnboardingInterviewCoordinator {
             // Update the system prompt when phase transitions (delegated to PhaseTransitionController)
             await phaseTransitionController.handlePhaseTransition(phaseName)
 
+        case .profileSummaryUpdateRequested, .profileSummaryDismissRequested,
+             .sectionToggleRequested, .sectionToggleCleared,
+             .artifactMetadataUpdated,
+             .llmReasoningItemsForToolCalls,
+             .pendingExtractionUpdated,
+             .llmEnqueueUserMessage, .llmEnqueueDeveloperMessage, .llmEnqueueToolResponse,
+             .llmExecuteUserMessage, .llmExecuteDeveloperMessage, .llmExecuteToolResponse,
+             .llmCancelRequested,
+             .skeletonTimelineReplaced:
+            // These events are handled by StateCoordinator/handlers
+            break
+
         @unknown default:
             // Handle any new cases that might be added in the future
             break
@@ -921,7 +933,7 @@ final class OnboardingInterviewCoordinator {
            ["approved", "modified"].contains(status.lowercased()) {
             Task {
                 do {
-                    try await dataStore.persist(dataType: "knowledge_card", payload: data)
+                    _ = try await dataStore.persist(dataType: "knowledge_card", payload: data)
                 } catch {
                     Logger.error("Failed to persist knowledge card: \(error)", category: .ai)
                 }
@@ -1055,8 +1067,8 @@ final class OnboardingInterviewCoordinator {
         toolRouter.resetApplicantProfileIntakeToOptions()
     }
 
-    /// Submit profile draft and automatically resume tool execution.
-    /// Views should call this instead of manually completing and resuming.
+    /// Submit profile draft and send user message to LLM.
+    /// Views should call this instead of manually completing.
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         // Close the profile intake UI via event
         await eventBus.publish(.applicantProfileIntakeCleared)
@@ -1065,20 +1077,33 @@ final class OnboardingInterviewCoordinator {
         let profileJSON = draft.toSafeJSON()
         await eventBus.publish(.applicantProfileStored(profileJSON))
 
-        // Complete the profile intake and get continuation result
-        let result = toolRouter.completeApplicantProfileDraft(draft, source: source)
+        // Emit artifact record for traceability
+        toolRouter.completeApplicantProfileDraft(draft, source: source)
 
-        // Resume the tool continuation (sends tool response to LLM)
-        await continuationTracker.resumeToolContinuation(from: result)
+        // Send user message to LLM indicating profile intake completion
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Profile intake completed via \(source == .contacts ? "contacts import" : "manual entry"). Artifact record created with contact information."
 
-        Logger.info("✅ Profile submitted and tool continuation resumed (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+
+        Logger.info("✅ Profile submitted and user message sent to LLM (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
 
-    /// Submit profile URL and automatically resume tool execution.
-    /// Views should call this instead of manually submitting and resuming.
+    /// Submit profile URL and send user message to LLM.
+    /// Views should call this instead of manually submitting.
     func submitProfileURL(_ urlString: String) async {
-        let result = toolRouter.submitApplicantProfileURL(urlString)
-        await continuationTracker.resumeToolContinuation(from: result)
+        // Process URL submission (creates artifact if needed)
+        toolRouter.submitApplicantProfileURL(urlString)
+
+        // Send user message to LLM indicating URL submission
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Profile URL submitted: \(urlString). Processing for contact information extraction."
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+
+        Logger.info("✅ Profile URL submitted and user message sent to LLM", category: .ai)
     }
 
     // MARK: - Phase Advance
