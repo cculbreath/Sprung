@@ -10,7 +10,7 @@ struct GetValidatedApplicantProfileTool: InterviewTool {
     }
 
     var name: String { "validated_applicant_profile_data" }
-    var description: String { "Retrieve validated and persisted ApplicantProfile. Returns {status, data: {name, email, phone, ...}} or not_found." }
+    var description: String { "Retrieve validated and persisted ApplicantProfile. Returns {found: true/false, data: {name, email, phone, ...}, message}." }
     var parameters: JSONSchema {
         JSONSchema(
             type: .object,
@@ -20,8 +20,8 @@ struct GetValidatedApplicantProfileTool: InterviewTool {
                 Use this to access the user's confirmed contact information after it has been validated and stored. The profile contains name, email, phone, location, URLs, and social profiles.
 
                 RETURNS:
-                - If persisted: { "status": "success", "data": { "name": "...", "email": "...", "phone": "...", "location": "...", "url": "...", "profiles": [...] }, "message": "Retrieved validated..." }
-                - If not persisted: { "status": "not_found", "message": "No validated applicant profile found..." }
+                - If persisted: { "found": true, "data": { "name": "...", "email": "...", "phone": "...", "location": "...", "url": "...", "profiles": [...] }, "message": "Retrieved validated..." }
+                - If not persisted: { "found": false, "message": "No validated applicant profile found..." }
 
                 USAGE: Call when you need to reference the user's contact info after it has been persisted. Common scenarios:
                 - Checking if profile photo exists (data.basics.image)
@@ -40,19 +40,32 @@ struct GetValidatedApplicantProfileTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         // Retrieve persisted applicant profile using public accessor
-        let profile = await coordinator.applicantProfileJSON
+        let profileExists = await coordinator.applicantProfileJSON != nil
 
-        var response = JSON()
+        if profileExists {
+            // Regenerate JSON from SwiftData to ensure image is included
+            let freshJSON = await MainActor.run {
+                let swiftDataProfile = coordinator.currentApplicantProfile()
+                let draft = ApplicantProfileDraft(profile: swiftDataProfile)
+                return draft.toSafeJSON()
+            }
 
-        if let profile = profile {
-            response["status"].string = "success"
-            response["data"] = profile
+            // Strip base64 image data for LLM context (keep metadata but omit binary data)
+            var llmSafeJSON = freshJSON
+            if let basicsImage = llmSafeJSON["basics"]["image"].string, !basicsImage.isEmpty {
+                llmSafeJSON["basics"]["image"].string = "[Image uploaded - binary data omitted]"
+            }
+
+            var response = JSON()
+            response["found"].bool = true
+            response["data"] = llmSafeJSON
             response["message"].string = "Retrieved validated applicant profile data"
+            return .immediate(response)
         } else {
-            response["status"].string = "not_found"
+            var response = JSON()
+            response["found"].bool = false
             response["message"].string = "No validated applicant profile found. Profile has not been persisted yet."
+            return .immediate(response)
         }
-
-        return .immediate(response)
     }
 }

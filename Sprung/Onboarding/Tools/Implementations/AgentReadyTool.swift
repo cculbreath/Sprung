@@ -36,7 +36,71 @@ struct AgentReadyTool: InterviewTool {
         // is delivered to the LLM (handled in ToolExecutionCoordinator)
         var result = JSON()
         result["status"].string = "completed"
-        result["content"].string = "I am ready to begin. Please do the followig two things: 1) send this welcome message to the user: \"Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later.\" AND 2) call the `get_applicant_profile` tool to begin collecting contact information. Follow the tool's response guidance."
+        result["content"].string = """
+I am ready to begin. Follow this EXACT sequence ONE STEP AT A TIME:
+
+STEP 1: In a SINGLE response, do BOTH of these:
+   a) Send this welcome message to the user:
+      "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test; it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later."
+   b) Call `get_applicant_profile` tool to present the profile intake card.
+
+   Then STOP. Do not proceed further in this message.
+
+STEP 2: WAIT for user to complete profile intake. When completed, you will receive a user message indicating completion.
+
+STEP 3: Process the profile data based on how user provided it:
+   - If user UPLOADED a document: Parse the provided ArtifactRecord to extract contact info, then call `validate_applicant_profile` for user confirmation.
+   - If user entered data via FORM (contacts import or manual entry): The data arrives already validated. DO NOT call `validate_applicant_profile`. Acknowledge receipt and proceed to STEP 4.
+
+STEP 4: After profile is validated and persisted (you'll receive confirmation), call `validated_applicant_profile_data()` to retrieve the persisted profile.
+
+STEP 5: Check the retrieved profile's `basics.image` field:
+   - If image is present: Acknowledge existing photo, then immediately proceed to STEP 6 (skeleton_timeline) in the SAME message.
+   - If image is empty: Ask user ONLY this question: "Would you like to add a headshot photograph to your résumé profile?"
+
+   CRITICAL: After asking about photo, STOP your message. DO NOT ask about skeleton_timeline yet.
+
+   WAIT for user response to photo question:
+     - If user says yes: Call `get_user_upload` with these EXACT parameters:
+       - title: "Upload Headshot"
+       - prompt_to_user: "Please provide a professional quality photograph for inclusion on résumé layouts that require a picture"
+       - target_key: "basics.image" (REQUIRED - saves photo to profile)
+       - target_deliverable: "ApplicantProfile"
+       - target_phase_objectives: ["skeleton_timeline"]
+       - allowed_types: ["jpg", "jpeg", "png"]
+       Then WAIT for upload completion. After upload completes, proceed to STEP 6.
+     - If user says no: Proceed to STEP 6.
+
+STEP 6: Begin skeleton_timeline workflow.
+
+   First, check if a resume/CV was already uploaded during the applicant_profile workflow (STEP 3):
+   - If YES (artifact exists): Use that document to extract timeline data and proceed directly to timeline card workflow below.
+   - If NO (no resume artifact): Continue to resume upload step.
+
+   If no resume exists yet:
+   - Send chat message: "I've opened an upload form for your resume or CV. If you prefer to skip the upload and build your timeline conversationally instead, you can cancel the form and we'll do it through chat."
+   - Immediately call `get_user_upload` with:
+     - title: "Upload Resume/CV"
+     - prompt_to_user: "Please upload your resume or CV for timeline extraction"
+     - target_phase_objectives: ["skeleton_timeline"]
+   - WAIT for user action:
+     - If they UPLOAD: Extract timeline data and proceed to timeline card workflow
+     - If they SKIP/CANCEL: Begin conversational interview about work history (most recent first)
+
+   Timeline card workflow (applies to BOTH document extraction AND conversational paths):
+   - Call `display_timeline_entries_for_review` first to activate timeline UI in Tool Pane
+   - For EACH position, call `create_timeline_card` with: title, organization, location, start, end
+   - One card per previous position/role
+   - Cards appear in Tool Pane immediately when created
+   - User can edit, delete, or approve cards through the UI
+   - Continue refining cards until user confirms timeline is complete
+
+RULES:
+- Process ONE STEP per message cycle
+- NEVER combine the photo question with skeleton_timeline questions
+- WAIT for user response before proceeding to next step
+- DO NOT ask for contact details via chat - use the profile intake card UI
+"""
         result["disable_after_use"].bool = true
         return .immediate(result)
     }

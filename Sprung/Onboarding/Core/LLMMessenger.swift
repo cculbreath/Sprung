@@ -198,12 +198,13 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         let text = payload["text"].stringValue
         let toolChoiceName = payload["toolChoice"].string
+        let reasoningEffort = payload["reasoningEffort"].string
 
         // Add telemetry
         Logger.info("📨 Sending developer message (\(text.prefix(100))...)", category: .ai)
 
         do {
-            let request = await buildDeveloperMessageRequest(text: text, toolChoice: toolChoiceName)
+            let request = await buildDeveloperMessageRequest(text: text, toolChoice: toolChoiceName, reasoningEffort: reasoningEffort)
             let messageId = UUID().uuidString
 
             // Emit message sent event
@@ -265,12 +266,13 @@ actor LLMMessenger: OnboardingEventEmitter {
         do {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
+            let reasoningEffort = payload["reasoningEffort"].string
 
             // Log the tool response at appropriate levels
             Logger.debug("📤 Tool response payload: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
             Logger.info("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
-            let request = await buildToolResponseRequest(output: output, callId: callId)
+            let request = await buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort)
 
             // Log request details
             Logger.debug("📦 Tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
@@ -385,7 +387,8 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     private func buildDeveloperMessageRequest(
         text: String,
-        toolChoice toolChoiceName: String? = nil
+        toolChoice toolChoiceName: String? = nil,
+        reasoningEffort: String? = nil
     ) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
 
@@ -435,11 +438,16 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.tools = tools
         parameters.parallelToolCalls = false
 
-        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count)", category: .ai)
+        // Set reasoning effort if provided
+        if let effort = reasoningEffort {
+            parameters.reasoning = Reasoning(effort: effort)
+        }
+
+        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count), reasoningEffort=\(reasoningEffort ?? "default")", category: .ai)
         return parameters
     }
 
-    private func buildToolResponseRequest(output: JSON, callId: String) async -> ModelResponseParameter {
+    private func buildToolResponseRequest(output: JSON, callId: String, reasoningEffort: String? = nil) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForToolResponse(
             output: output,
             callId: callId
@@ -463,6 +471,11 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = .auto
         parameters.tools = tools
         parameters.parallelToolCalls = false
+
+        // Set reasoning effort if provided
+        if let effort = reasoningEffort {
+            parameters.reasoning = Reasoning(effort: effort)
+        }
 
         return parameters
     }

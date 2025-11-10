@@ -91,6 +91,11 @@ final class OnboardingInterviewCoordinator {
         get async { await state.artifacts.applicantProfile }
     }
 
+    /// Returns the current ApplicantProfile from SwiftData storage
+    func currentApplicantProfile() -> ApplicantProfile {
+        applicantProfileStore.currentProfile()
+    }
+
     var skeletonTimelineJSON: JSON? {
         get async { await state.artifacts.skeletonTimeline }
     }
@@ -449,8 +454,11 @@ final class OnboardingInterviewCoordinator {
                 Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
 
                 // Update summary card if showing (e.g., when photo is added)
+                // Regenerate JSON from SwiftData model to include any new image data
                 if toolRouter.profileHandler.pendingApplicantProfileSummary != nil {
-                    toolRouter.profileHandler.updateProfileSummary(profile: json)
+                    let updatedDraft = ApplicantProfileDraft(profile: profile)
+                    let updatedJSON = updatedDraft.toSafeJSON()
+                    toolRouter.profileHandler.updateProfileSummary(profile: updatedJSON)
                 }
             }
             await checkpointManager.saveCheckpoint()
@@ -518,6 +526,7 @@ final class OnboardingInterviewCoordinator {
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
              .llmExecuteUserMessage, .llmExecuteToolResponse,
              .llmCancelRequested,
+             .chatboxUserMessageAdded,
              .skeletonTimelineReplaced:
             // These events are handled by StateCoordinator/handlers
             break
@@ -591,6 +600,10 @@ final class OnboardingInterviewCoordinator {
         case .llmStatus:
             // Sync cache now maintained by StateCoordinator
             break
+
+        case .chatboxUserMessageAdded:
+            // User message added to transcript by ChatboxHandler - sync immediately
+            messages = await state.messages
 
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized,
              .llmUserMessageSent:
@@ -995,20 +1008,29 @@ final class OnboardingInterviewCoordinator {
         // Close the profile intake UI via event
         await eventBus.publish(.applicantProfileIntakeCleared)
 
-        // Persist profile immediately via event (StateCoordinator or handler will process)
+        // Store profile in StateCoordinator/ArtifactRepository (which will emit the event)
         let profileJSON = draft.toSafeJSON()
-        await eventBus.publish(.applicantProfileStored(profileJSON))
+        await state.storeApplicantProfile(profileJSON)
 
         // Emit artifact record for traceability
         toolRouter.completeApplicantProfileDraft(draft, source: source)
 
-        // Build user message with the full profile JSON
+        // Show the profile summary card in the tool pane
+        toolRouter.profileHandler.showProfileSummary(profile: profileJSON)
+
+        // Build user message with the full profile JSON wrapped with validation status
         var userMessage = JSON()
         userMessage["role"].string = "user"
 
-        // Create message with full JSON data
+        // Create message with full JSON data including validation_status hint
         let introText = "I have provided my contact information via \(source == .contacts ? "contacts import" : "manual entry"). This data has been validated by me through the UI and is ready to use."
-        let jsonText = profileJSON.rawString() ?? "{}"
+
+        // Wrap profile data with validation_status
+        var wrappedData = JSON()
+        wrappedData["applicant_profile"] = profileJSON
+        wrappedData["validation_status"].string = "validated_by_user"
+
+        let jsonText = wrappedData.rawString() ?? "{}"
 
         userMessage["content"].string = """
         \(introText)
@@ -1131,6 +1153,9 @@ final class OnboardingInterviewCoordinator {
         // Extract the actual profile data from the resolution
         let profileData = resolution["data"]
         let status = resolution["status"].stringValue
+
+        // Store profile in StateCoordinator/ArtifactRepository (persists the data)
+        await state.storeApplicantProfile(profileData)
 
         // Build user message with the validated profile information
         var userMessage = JSON()

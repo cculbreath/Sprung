@@ -66,8 +66,14 @@ actor ChatboxHandler: OnboardingEventEmitter {
 
     /// Send user message to LLM
     func sendUserMessage(_ text: String) async {
+        // Add the ORIGINAL message (without tags) to chat transcript IMMEDIATELY so user sees it right away
+        let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
+
+        // Emit a custom event so coordinator can sync its messages array
+        await emit(.chatboxUserMessageAdded(messageId: messageId.uuidString))
+
+        // Wrap user chatbox messages in <chatbox> tags for LLM context
         var payload = JSON()
-        // Wrap user chatbox messages in <chatbox> tags per system prompt
         payload["text"].string = "<chatbox>\(text)</chatbox>"
 
         // Emit processing state change for UI feedback

@@ -99,6 +99,7 @@ enum OnboardingEvent {
     case stateAllowedToolsUpdated(tools: Set<String>)
 
     // MARK: - LLM Topics (§6 spec)
+    case chatboxUserMessageAdded(messageId: String)  // Emitted when chatbox adds message to transcript immediately
     case llmUserMessageSent(messageId: String, payload: JSON, isSystemGenerated: Bool = false)
     case llmDeveloperMessageSent(messageId: String, payload: JSON)
     case llmSentToolResponseMessage(messageId: String, payload: JSON)
@@ -267,7 +268,7 @@ actor EventCoordinator {
     private func extractTopic(from event: OnboardingEvent) -> EventTopic {
         switch event {
         // LLM events
-        case .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
+        case .chatboxUserMessageAdded, .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
              .llmExecuteUserMessage, .llmExecuteToolResponse,
@@ -441,6 +442,8 @@ actor EventCoordinator {
             description = "State snapshot (\(keys.count) keys updated)"
         case .stateAllowedToolsUpdated(let tools):
             description = "Allowed tools updated (\(tools.count) tools)"
+        case .chatboxUserMessageAdded:
+            description = "Chatbox user message added"
         case .llmUserMessageSent:
             description = "LLM user message sent"
         case .llmDeveloperMessageSent:
