@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftyJSON
 
-/// Handles choice and validation prompts, managing continuation IDs and payload construction.
+/// Handles choice and validation prompts.
 @MainActor
 @Observable
 final class PromptInteractionHandler {
@@ -11,27 +11,19 @@ final class PromptInteractionHandler {
     private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
     private(set) var pendingValidationPrompt: OnboardingValidationPrompt?
 
-    // MARK: - Private State
-
-    private var choiceContinuationId: UUID?
-    private var validationContinuationId: UUID?
-
     // MARK: - Choice Prompts
 
-    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt, continuationId: UUID) {
+    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
         pendingChoicePrompt = prompt
-        choiceContinuationId = continuationId
         Logger.info("📝 Choice prompt presented (id: \(prompt.id))", category: .ai)
     }
 
-    func clearChoicePrompt(continuationId: UUID) {
-        guard choiceContinuationId == continuationId else { return }
+    func clearChoicePrompt() {
         pendingChoicePrompt = nil
-        choiceContinuationId = nil
     }
 
-    func resolveChoice(selectionIds: [String]) -> (UUID, JSON)? {
-        guard let continuationId = choiceContinuationId, !selectionIds.isEmpty else {
+    func resolveChoice(selectionIds: [String]) -> JSON? {
+        guard pendingChoicePrompt != nil, !selectionIds.isEmpty else {
             Logger.warning("⚠️ Attempted to resolve choice prompt without selections", category: .ai)
             return nil
         }
@@ -40,14 +32,13 @@ final class PromptInteractionHandler {
         payload["selectedIds"] = JSON(selectionIds)
 
         pendingChoicePrompt = nil
-        choiceContinuationId = nil
 
         Logger.info("✅ Choice prompt resolved (ids: \(selectionIds.joined(separator: ", ")))", category: .ai)
-        return (continuationId, payload)
+        return payload
     }
 
-    func cancelChoicePrompt(reason: String) -> (UUID, JSON)? {
-        guard let continuationId = choiceContinuationId else { return nil }
+    func cancelChoicePrompt(reason: String) -> JSON? {
+        guard pendingChoicePrompt != nil else { return nil }
 
         var payload = JSON()
         payload["cancelled"].boolValue = true
@@ -56,24 +47,20 @@ final class PromptInteractionHandler {
         }
 
         pendingChoicePrompt = nil
-        choiceContinuationId = nil
 
         Logger.info("❌ Choice prompt cancelled: \(reason)", category: .ai)
-        return (continuationId, payload)
+        return payload
     }
 
     // MARK: - Validation Prompts
 
-    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt, continuationId: UUID) {
+    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
         pendingValidationPrompt = prompt
-        validationContinuationId = continuationId
         Logger.info("🧾 Validation prompt presented (id: \(prompt.id))", category: .ai)
     }
 
-    func clearValidationPrompt(continuationId: UUID) {
-        guard validationContinuationId == continuationId else { return }
+    func clearValidationPrompt() {
         pendingValidationPrompt = nil
-        validationContinuationId = nil
     }
 
     func submitValidationResponse(
@@ -81,8 +68,8 @@ final class PromptInteractionHandler {
         updatedData: JSON?,
         changes: JSON?,
         notes: String?
-    ) -> (UUID, JSON)? {
-        guard let continuationId = validationContinuationId else { return nil }
+    ) -> JSON? {
+        guard pendingValidationPrompt != nil else { return nil }
 
         var payload = JSON()
         payload["status"].string = status
@@ -97,14 +84,13 @@ final class PromptInteractionHandler {
         }
 
         pendingValidationPrompt = nil
-        validationContinuationId = nil
 
         Logger.info("✅ Validation response submitted (status: \(status))", category: .ai)
-        return (continuationId, payload)
+        return payload
     }
 
-    func cancelValidation(reason: String) -> (UUID, JSON)? {
-        guard let continuationId = validationContinuationId else { return nil }
+    func cancelValidation(reason: String) -> JSON? {
+        guard pendingValidationPrompt != nil else { return nil }
 
         Logger.info("❌ Validation prompt cancelled: \(reason)", category: .ai)
 
@@ -115,9 +101,8 @@ final class PromptInteractionHandler {
         }
 
         pendingValidationPrompt = nil
-        validationContinuationId = nil
 
-        return (continuationId, payload)
+        return payload
     }
 
     // MARK: - Lifecycle
@@ -125,7 +110,5 @@ final class PromptInteractionHandler {
     func reset() {
         pendingChoicePrompt = nil
         pendingValidationPrompt = nil
-        choiceContinuationId = nil
-        validationContinuationId = nil
     }
 }
