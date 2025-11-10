@@ -10,30 +10,36 @@ struct ValidateApplicantProfileTool: InterviewTool {
     }
 
     var name: String { "validate_applicant_profile" }
-    var description: String { "Present applicant profile validation UI card. Returns immediately - validation response arrives as user message." }
+    var description: String { "Present validation UI for profile data extracted from DOCUMENTS or URLS ONLY. Do NOT use for contact card or manual form submissions - those are pre-validated." }
     var parameters: JSONSchema {
         JSONSchema(
             type: .object,
             description: """
-                Present applicant profile validation card in the tool pane for user review and confirmation.
+                Present validation UI for profile data extracted from UPLOADED DOCUMENTS or PASTED URLS ONLY.
 
-                Displays the extracted/collected profile data in an editable UI where user can verify accuracy and make corrections before persisting.
+                CRITICAL: Do NOT use this tool when user submits via:
+                - Contact card import (already validated by user through UI)
+                - Manual form entry (already validated by user through UI)
+
+                ONLY use when profile data was extracted from:
+                - Uploaded PDF/DOCX resume
+                - Pasted LinkedIn/website URL
+
+                These automated extractions require user validation to confirm accuracy.
 
                 RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
 
-                The tool completes immediately after presenting UI. User validation response arrives as a new user message with status: "confirmed" or "rejected".
+                The tool completes immediately after presenting UI. User validation response arrives as a new user message.
 
-                USAGE: Call after extracting contact info from uploaded documents or manual entry. Always validate before calling persist_data. This is the confirmation surface that prevents storing incorrect data.
-
-                WORKFLOW:
-                1. Extract ApplicantProfile data from artifact or user input
+                WORKFLOW FOR DOCUMENT/URL EXTRACTIONS:
+                1. Extract ApplicantProfile data from uploaded document or URL
                 2. Call validate_applicant_profile with extracted data
                 3. Tool returns immediately - validation card is now active
                 4. User reviews, corrects if needed, and confirms/rejects
                 5. You receive validation response message
-                6. If confirmed, call persist_data(dataType: "applicant_profile", data: <validated-data>)
+                6. If confirmed, data is persisted automatically
 
-                DO NOT: Skip validation or call persist_data before user confirmation. Validation prevents data quality issues.
+                DO NOT call this tool for contact card imports or manual form submissions.
                 """,
             properties: [
                 "data": JSONSchema(
