@@ -1002,47 +1002,24 @@ final class OnboardingInterviewCoordinator {
         // Emit artifact record for traceability
         toolRouter.completeApplicantProfileDraft(draft, source: source)
 
-        // Build user message with the actual profile information
+        // Build user message with the full profile JSON
         var userMessage = JSON()
         userMessage["role"].string = "user"
 
-        // Format profile data for the LLM
-        var contentParts: [String] = ["I have provided my contact information via \(source == .contacts ? "contacts import" : "manual entry"):"]
+        // Create message with full JSON data
+        let introText = "I have provided my contact information via \(source == .contacts ? "contacts import" : "manual entry"). This data has been validated by me through the UI and is ready to use."
+        let jsonText = profileJSON.rawString() ?? "{}"
 
-        if !draft.name.isEmpty {
-            contentParts.append("- Name: \(draft.name)")
-        }
-        if !draft.email.isEmpty {
-            contentParts.append("- Email: \(draft.email)")
-        }
-        if !draft.phone.isEmpty {
-            contentParts.append("- Phone: \(draft.phone)")
-        }
+        userMessage["content"].string = """
+        \(introText)
 
-        // Format location
-        var locationParts: [String] = []
-        if !draft.city.isEmpty {
-            locationParts.append(draft.city)
-        }
-        if !draft.state.isEmpty {
-            locationParts.append(draft.state)
-        }
-        if !locationParts.isEmpty {
-            contentParts.append("- Location: \(locationParts.joined(separator: ", "))")
-        }
+        Profile data (JSON):
+        ```json
+        \(jsonText)
+        ```
 
-        if !draft.website.isEmpty {
-            contentParts.append("- Website: \(draft.website)")
-        }
-
-        // Add social profiles if present
-        if !draft.socialProfiles.isEmpty {
-            contentParts.append("- Social profiles: \(draft.socialProfiles.count) profile(s)")
-        }
-
-        contentParts.append("\nAn artifact record has been created with this contact information.")
-
-        userMessage["content"].string = contentParts.joined(separator: "\n")
+        An artifact record has been created with this contact information. Do NOT call validate_applicant_profile - this data is already validated.
+        """
 
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
 
