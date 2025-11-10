@@ -50,7 +50,7 @@ final class PhaseTransitionController {
         let introPrompt = script.introductoryPrompt
         var introPayload = JSON()
         introPayload["text"].string = introPrompt
-        introPayload["forceToolName"].string = "agent_ready"
+        introPayload["toolChoice"].string = "agent_ready"
         await eventBus.publish(.llmSendDeveloperMessage(
             payload: introPayload
         ))
