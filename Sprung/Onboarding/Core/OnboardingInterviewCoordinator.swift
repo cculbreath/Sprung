@@ -1030,6 +1030,77 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.phaseAdvanceDenied(feedback: feedback))
     }
 
+    // MARK: - UI Response Handling (Send User Messages)
+
+    /// Submit choice selection and send user message to LLM.
+    func submitChoiceSelection(_ selectionIds: [String]) async {
+        guard toolRouter.resolveChoice(selectionIds: selectionIds) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Selected option(s): \(selectionIds.joined(separator: ", "))"
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Choice selection submitted and user message sent to LLM", category: .ai)
+    }
+
+    /// Complete upload and send user message to LLM.
+    func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
+        guard await completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Uploaded \(fileURLs.count) file(s) successfully."
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Upload completed and user message sent to LLM", category: .ai)
+    }
+
+    /// Complete upload with link and send user message to LLM.
+    func completeUploadAndResume(id: UUID, link: URL) async {
+        guard await toolRouter.completeUpload(id: id, link: link) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Uploaded file from URL: \(link.absoluteString)"
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Upload from URL completed and user message sent to LLM", category: .ai)
+    }
+
+    /// Skip upload and send user message to LLM.
+    func skipUploadAndResume(id: UUID) async {
+        guard await skipUpload(id: id) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = "Skipped upload."
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Upload skipped and user message sent to LLM", category: .ai)
+    }
+
+    /// Submit validation response and send user message to LLM.
+    func submitValidationAndResume(
+        status: String,
+        updatedData: JSON?,
+        changes: JSON?,
+        notes: String?
+    ) async {
+        guard submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        let statusDescription = status.lowercased() == "approved" ? "approved" : (status.lowercased() == "modified" ? "modified" : "rejected")
+        userMessage["content"].string = "Validation response: \(statusDescription)"
+        if let notes = notes, !notes.isEmpty {
+            userMessage["content"].string = userMessage["content"].stringValue + ". Notes: \(notes)"
+        }
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Validation response submitted and user message sent to LLM", category: .ai)
+    }
+
     // MARK: - Checkpoint Management (Delegated to CheckpointManager)
     // No methods needed here - all delegated to checkpointManager
 
