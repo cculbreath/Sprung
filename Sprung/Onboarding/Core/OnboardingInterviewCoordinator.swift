@@ -873,13 +873,13 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Tool Management
 
-    func presentUploadRequest(_ request: OnboardingUploadRequest, continuationId: UUID) {
+    func presentUploadRequest(_ request: OnboardingUploadRequest) {
         Task {
-            await eventBus.publish(.uploadRequestPresented(request: request, continuationId: continuationId))
+            await eventBus.publish(.uploadRequestPresented(request: request))
         }
     }
 
-    func completeUpload(id: UUID, fileURLs: [URL]) async -> (UUID, JSON)? {
+    func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         let result = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
         Task {
             await eventBus.publish(.uploadRequestCancelled(id: id))
@@ -887,7 +887,7 @@ final class OnboardingInterviewCoordinator {
         return result
     }
 
-    func skipUpload(id: UUID) async -> (UUID, JSON)? {
+    func skipUpload(id: UUID) async -> JSON? {
         let result = await toolRouter.skipUpload(id: id)
         Task {
             await eventBus.publish(.uploadRequestCancelled(id: id))
@@ -895,25 +895,25 @@ final class OnboardingInterviewCoordinator {
         return result
     }
 
-    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt, continuationId: UUID) {
+    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
         Task {
-            await eventBus.publish(.choicePromptRequested(prompt: prompt, continuationId: continuationId))
+            await eventBus.publish(.choicePromptRequested(prompt: prompt))
         }
     }
 
-    func submitChoice(optionId: String) -> (UUID, JSON)? {
+    func submitChoice(optionId: String) -> JSON? {
         let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId])
-        if let (continuationId, _) = result {
+        if result != nil {
             Task {
-                await eventBus.publish(.choicePromptCleared(continuationId: continuationId))
+                await eventBus.publish(.choicePromptCleared)
             }
         }
         return result
     }
 
-    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt, continuationId: UUID) {
+    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
         Task {
-            await eventBus.publish(.validationPromptRequested(prompt: prompt, continuationId: continuationId))
+            await eventBus.publish(.validationPromptRequested(prompt: prompt))
         }
     }
 
@@ -922,7 +922,7 @@ final class OnboardingInterviewCoordinator {
         updatedData: JSON?,
         changes: JSON?,
         notes: String?
-    ) -> (UUID, JSON)? {
+    ) -> JSON? {
         // Get pending validation before clearing it
         let pendingValidation = pendingValidationPrompt
 
@@ -948,89 +948,12 @@ final class OnboardingInterviewCoordinator {
             changes: changes,
             notes: notes
         )
-        if let (continuationId, _) = result {
+        if result != nil {
             Task {
-                await eventBus.publish(.validationPromptCleared(continuationId: continuationId))
+                await eventBus.publish(.validationPromptCleared)
             }
         }
         return result
-    }
-
-    // MARK: - UI Continuation Facade Methods (Architecture-Compliant)
-    // These methods provide simple interfaces for views to submit user input
-    // without exposing internal coordination logic or requiring direct continuation calls.
-
-    /// Submit a user's choice selection and automatically resume tool execution.
-    /// Views should call this instead of manually resolving and resuming.
-    func submitChoiceSelection(_ selectionIds: [String]) async {
-        let result = toolRouter.promptHandler.resolveChoice(selectionIds: selectionIds)
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Submit validation response and automatically resume tool execution.
-    /// Views should call this instead of manually submitting and resuming.
-    func submitValidationAndResume(
-        status: String,
-        updatedData: JSON?,
-        changes: JSON?,
-        notes: String?
-    ) async {
-        let result = submitValidationResponse(
-            status: status,
-            updatedData: updatedData,
-            changes: changes,
-            notes: notes
-        )
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Complete an upload with file URLs and automatically resume tool execution.
-    /// Views should call this instead of manually completing and resuming.
-    func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
-        let result = await completeUpload(id: id, fileURLs: fileURLs)
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Complete an upload with a link and automatically resume tool execution.
-    /// Views should call this instead of manually completing and resuming.
-    func completeUploadAndResume(id: UUID, link: URL) async {
-        let result = await toolRouter.completeUpload(id: id, link: link)
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Skip an upload and automatically resume tool execution.
-    /// Views should call this instead of manually skipping and resuming.
-    func skipUploadAndResume(id: UUID) async {
-        let result = await skipUpload(id: id)
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Confirm applicant profile and automatically resume tool execution.
-    /// Views should call this instead of manually resolving and resuming.
-    func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
-        let result = toolRouter.resolveApplicantProfile(with: draft)
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Reject applicant profile and automatically resume tool execution.
-    /// Views should call this instead of manually rejecting and resuming.
-    func rejectApplicantProfile(reason: String) async {
-        let result = toolRouter.rejectApplicantProfile(reason: reason)
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Confirm section toggle and automatically resume tool execution.
-    /// Views should call this instead of manually resolving and resuming.
-    func confirmSectionToggle(enabled: [String]) async {
-        let result = toolRouter.resolveSectionToggle(enabled: enabled)
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    /// Reject section toggle and automatically resume tool execution.
-    /// Views should call this instead of manually rejecting and resuming.
-    func rejectSectionToggle(reason: String) async {
-        let result = toolRouter.rejectSectionToggle(reason: reason)
-        await continuationTracker.resumeToolContinuation(from: result)
     }
 
     // MARK: - Applicant Profile Intake Facade Methods
@@ -1038,9 +961,8 @@ final class OnboardingInterviewCoordinator {
     /// Begin profile upload flow.
     /// Views should call this instead of accessing toolRouter directly.
     func beginProfileUpload() {
-        if let (request, continuationId) = toolRouter.beginApplicantProfileUpload() {
-            presentUploadRequest(request, continuationId: continuationId)
-        }
+        let request = toolRouter.beginApplicantProfileUpload()
+        presentUploadRequest(request)
     }
 
     /// Begin profile URL entry flow.
@@ -1108,104 +1030,13 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Phase Advance
 
-    func presentPhaseAdvanceRequest(
-        _ request: OnboardingPhaseAdvanceRequest,
-        continuationId: UUID
-    ) {
-        Task {
-            continuationTracker.trackPhaseAdvanceContinuation(id: continuationId)
-            // Emit event to notify UI about the request
-            // StateCoordinator will set pendingPhaseAdvanceRequest when reducing this event
-            await eventBus.publish(.phaseAdvanceRequested(request: request, continuationId: continuationId))
-        }
-    }
-
     func approvePhaseAdvance() async {
-        guard let continuationId = continuationTracker.getPhaseAdvanceContinuationId(),
-              let request = await state.pendingPhaseAdvanceRequest else { return }
-
-        // Perform the actual phase transition
-        await requestPhaseTransition(
-            from: request.currentPhase.rawValue,
-            to: request.nextPhase.rawValue,
-            reason: request.reason ?? "User approved phase advance"
-        )
-
-        // Wait a moment for the transition to complete
-        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-
-        // Get the new phase after transition
-        let newPhase = await state.phase
-
-        // Clear the continuation tracker
-        // Note: StateCoordinator will clear pendingPhaseAdvanceRequest when reducing .phaseTransitionApplied
-        continuationTracker.clearPhaseAdvanceContinuation()
-
-        // Resume the tool continuation
-        var payload = JSON()
-        payload["approved"].boolValue = true
-        payload["new_phase"].stringValue = newPhase.rawValue
-
-        await continuationTracker.resumeToolContinuation(id: continuationId, payload: payload)
+        guard let request = await state.pendingPhaseAdvanceRequest else { return }
+        await eventBus.publish(.phaseAdvanceApproved(request: request))
     }
 
     func denyPhaseAdvance(feedback: String?) async {
-        guard let continuationId = continuationTracker.getPhaseAdvanceContinuationId() else { return }
-
-        // Emit event to clear pending phase advance request
-        // StateCoordinator will clear pendingPhaseAdvanceRequest when reducing this event
-        await eventBus.publish(.phaseAdvanceDismissed)
-
-        continuationTracker.clearPhaseAdvanceContinuation()
-
-        var payload = JSON()
-        payload["approved"].boolValue = false
-        if let feedback = feedback {
-            payload["feedback"].stringValue = feedback
-        }
-
-        await continuationTracker.resumeToolContinuation(id: continuationId, payload: payload)
-    }
-
-    // MARK: - Tool Execution
-
-    func resumeToolContinuation(from result: (UUID, JSON)?) async {
-        await continuationTracker.resumeToolContinuation(from: result)
-    }
-
-    func resumeToolContinuation(
-        from result: (UUID, JSON)?,
-        waitingState: WaitingStateChange,
-        persistCheckpoint: Bool = false
-    ) async {
-        guard let (id, payload) = result else { return }
-
-        if case .set(let state) = waitingState {
-            // Publish event instead of direct mutation
-            await eventBus.publish(.waitingStateChanged(state))
-        }
-
-        if persistCheckpoint {
-            await checkpointManager.saveCheckpoint()
-        }
-
-        await continuationTracker.resumeToolContinuation(id: id, payload: payload)
-    }
-
-    func resumeToolContinuation(id: UUID, payload: JSON) async {
-        do {
-            try await toolExecutionCoordinator.resumeToolContinuation(
-                id: id,
-                userInput: payload
-            )
-        } catch {
-            Logger.error("Failed to resume tool continuation \(id): \(error)", category: .ai)
-        }
-    }
-
-    enum WaitingStateChange {
-        case keep
-        case set(String?)
+        await eventBus.publish(.phaseAdvanceDenied(feedback: feedback))
     }
 
     // MARK: - Checkpoint Management (Delegated to CheckpointManager)
