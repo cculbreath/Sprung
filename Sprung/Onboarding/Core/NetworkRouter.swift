@@ -36,10 +36,6 @@ actor NetworkRouter: OnboardingEventEmitter {
     private var lastMessageUUID: UUID?
     private var receivedOutputItemDone = false
 
-    // Reasoning items tracking - must be passed back with tool outputs
-    private var currentResponseReasoningItemIds: [String] = []
-    private var currentResponseHasToolCalls = false
-
     // MARK: - Initialization
 
     init(eventBus: EventCoordinator) {
@@ -93,16 +89,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                 await processCompletedResponse(completed.response)
             }
 
-            // Store reasoning items if this response had tool calls
-            if currentResponseHasToolCalls {
-                await emit(.llmReasoningItemsForToolCalls(ids: currentResponseReasoningItemIds))
-                Logger.info("🧠 Stored \(currentResponseReasoningItemIds.count) reasoning item(s) for tool response", category: .ai)
-            }
-
             // Reset state for next response
             receivedOutputItemDone = false
-            currentResponseReasoningItemIds = []
-            currentResponseHasToolCalls = false
 
             // Emit completion event with response ID
             Logger.info("📨 Response completed: \(completed.response.id)", category: .ai)
@@ -284,9 +272,6 @@ actor NetworkRouter: OnboardingEventEmitter {
         let functionName = toolCall.name
         let arguments = toolCall.arguments
 
-        // Mark that this response has tool calls (for reasoning item tracking)
-        currentResponseHasToolCalls = true
-
         // Convert arguments string to JSON
         let argsJSON = JSON(parseJSON: arguments)
 
@@ -324,8 +309,8 @@ actor NetworkRouter: OnboardingEventEmitter {
 
     /// Process reasoning item from output (indicates reasoning is present)
     private func processReasoningItem(_ reasoning: OutputItem.Reasoning) async {
-        // Store reasoning item ID to pass back with tool responses
-        currentResponseReasoningItemIds.append(reasoning.id)
+        // Reasoning items are handled automatically by previous_response_id
+        // No need to track or pass them back with tool responses
         Logger.debug("🧠 Reasoning output: \(reasoning.id)", category: .ai)
     }
 

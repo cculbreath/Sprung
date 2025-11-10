@@ -83,27 +83,19 @@ actor ConversationContextAssembler {
         output: JSON,
         callId: String
     ) async -> [InputItem] {
-        var items: [InputItem] = []
-
-        // Clear any pending reasoning items (they're already in conversation history)
-        let reasoningIds = await state.getPendingReasoningItems()
-        if !reasoningIds.isEmpty {
-            Logger.debug("🧠 Clearing \(reasoningIds.count) pending reasoning item(s) - not included in tool response", category: .ai)
-            await state.clearPendingReasoningItems()
-        }
-
-        // Tool response - OpenAI expects ONLY the tool output in tool response requests
+        // OpenAI Responses API with previous_response_id handles reasoning continuity automatically
+        // Tool response requests should contain ONLY the function call output
         let outputString = output.rawString() ?? "{}"
         let status = output["status"].string
 
-        items.append(.functionToolCallOutput(FunctionToolCallOutput(
+        let toolOutput = InputItem.functionToolCallOutput(FunctionToolCallOutput(
             callId: callId,
             output: outputString,
             status: status
-        )))
+        ))
 
-        Logger.debug("📦 Assembled tool response: \(items.count) items (status: \(status ?? "nil"))", category: .ai)
-        return items
+        Logger.debug("📦 Assembled tool response: 1 item (status: \(status ?? "nil"))", category: .ai)
+        return [toolOutput]
     }
 
     // MARK: - Private Helpers

@@ -95,9 +95,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     private var lastResponseId: String?
     private var currentModelId: String = "gpt-5"
 
-    // Reasoning items from most recent response - must be passed back with tool outputs
-    private var pendingReasoningItems: [String] = []
-
     // MARK: - Initialization
 
     init(
@@ -355,7 +352,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmUserMessageSent(let messageId, let payload, let isSystemGenerated):
+        case .llmUserMessageSent(_, let payload, let isSystemGenerated):
             let text = payload["text"].stringValue
             _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
             messagesSync = await chatStore.getAllMessages() // Update sync cache
@@ -394,10 +391,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             currentReasoningSummarySync = await chatStore.getCurrentReasoningSummary()
             isReasoningActiveSync = false
 
-        case .llmReasoningItemsForToolCalls(let ids):
-            // Store reasoning items to pass back with next tool response
-            storePendingReasoningItems(ids)
-
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
             enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
 
@@ -427,7 +420,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         case .objectiveStatusChanged:
             // Update sync cache when objectives change
-            objectivesSync = await objectiveStore.objectivesSync
+            objectivesSync = objectiveStore.objectivesSync
             // Update wizard progress
             await updateWizardProgress()
 
@@ -489,11 +482,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .artifactRecordProduced(let record):
             await artifactRepository.upsertArtifactRecord(record)
-            artifactRecordsSync = await artifactRepository.artifactRecordsSync
+            artifactRecordsSync = artifactRepository.artifactRecordsSync
 
         case .artifactRecordPersisted(let record):
             await artifactRepository.upsertArtifactRecord(record)
-            artifactRecordsSync = await artifactRepository.artifactRecordsSync
+            artifactRecordsSync = artifactRepository.artifactRecordsSync
 
         case .artifactRecordsReplaced(let records):
             await artifactRepository.setArtifactRecords(records)
@@ -501,7 +494,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
             await artifactRepository.updateArtifactMetadata(artifactId: artifactId, updates: updates)
-            artifactRecordsSync = await artifactRepository.artifactRecordsSync
+            artifactRecordsSync = artifactRepository.artifactRecordsSync
 
         case .knowledgeCardPersisted(let card):
             await artifactRepository.addKnowledgeCard(card)
@@ -708,7 +701,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         completedWizardSteps = Set(snapshot.completedWizardSteps.compactMap { WizardStep(rawValue: $0) })
 
         // Update sync caches
-        objectivesSync = await objectiveStore.objectivesSync
+        objectivesSync = objectiveStore.objectivesSync
 
         Logger.info("📥 State restored from snapshot (version: \(snapshot.version))", category: .ai)
     }
@@ -884,21 +877,6 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func setPreviousResponseId(_ responseId: String?) async {
         await chatStore.setPreviousResponseId(responseId)
-    }
-
-    // Reasoning items management
-    func storePendingReasoningItems(_ items: [String]) {
-        pendingReasoningItems = items
-        Logger.debug("🧠 Stored \(items.count) reasoning item(s) for next tool response", category: .ai)
-    }
-
-    func getPendingReasoningItems() -> [String] {
-        return pendingReasoningItems
-    }
-
-    func clearPendingReasoningItems() {
-        Logger.debug("🧠 Cleared \(pendingReasoningItems.count) pending reasoning item(s)", category: .ai)
-        pendingReasoningItems = []
     }
 
     // UI State delegation
