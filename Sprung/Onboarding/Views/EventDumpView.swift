@@ -101,14 +101,7 @@ struct EventDumpView: View {
                     }
                 }
 
-                ToolbarItemGroup(placement: .destructiveAction) {
-                    Button("Clear History") {
-                        Task {
-                            await coordinator.clearEventHistory()
-                            loadEvents()
-                        }
-                    }
-
+                ToolbarItem(placement: .automatic) {
                     Button("Reset All Data", role: .destructive) {
                         Task {
                             await coordinator.resetAllOnboardingData()
@@ -116,6 +109,15 @@ struct EventDumpView: View {
                         }
                     }
                     .help("Reset ApplicantProfile, remove photo, delete uploads, and clear all interview data")
+                }
+
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Clear History") {
+                        Task {
+                            await coordinator.clearEventHistory()
+                            loadEvents()
+                        }
+                    }
                 }
             }
             .task {
