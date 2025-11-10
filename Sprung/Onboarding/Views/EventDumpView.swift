@@ -109,6 +109,16 @@ struct EventDumpView: View {
                         }
                     }
                 }
+
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Reset All Data", role: .destructive) {
+                        Task {
+                            await coordinator.resetAllOnboardingData()
+                            loadEvents()
+                        }
+                    }
+                    .help("Reset ApplicantProfile, remove photo, delete uploads, and clear all interview data")
+                }
             }
             .task {
                 loadEvents()

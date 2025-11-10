@@ -1282,5 +1282,56 @@ final class OnboardingInterviewCoordinator {
     func clearEventHistory() async {
         await eventBus.clearHistory()
     }
+
+    /// Reset all onboarding data for testing from a clean slate
+    func resetAllOnboardingData() async {
+        Logger.info("🗑️ Resetting all onboarding data", category: .ai)
+
+        // 1. Reset ApplicantProfile and remove photo
+        await MainActor.run {
+            let profile = applicantProfileStore.currentProfile()
+            profile.name = "John Doe"
+            profile.email = "applicant@example.com"
+            profile.phone = "(555) 123-4567"
+            profile.address = "123 Main Street"
+            profile.city = "Austin"
+            profile.state = "Texas"
+            profile.zip = "78701"
+            profile.websites = "example.com"
+            profile.pictureData = nil
+            profile.pictureMimeType = nil
+            profile.profiles.removeAll()
+            applicantProfileStore.save(profile)
+            applicantProfileStore.clearCache()
+            Logger.info("✅ ApplicantProfile reset and photo removed", category: .ai)
+        }
+
+        // 2. Clear all upload artifacts and their records
+        clearArtifacts()
+        Logger.info("✅ Upload artifacts cleared", category: .ai)
+
+        // 3. Delete all uploaded files from storage
+        let uploadsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Onboarding")
+            .appendingPathComponent("Uploads")
+
+        if FileManager.default.fileExists(atPath: uploadsDir.path) {
+            do {
+                let files = try FileManager.default.contentsOfDirectory(at: uploadsDir, includingPropertiesForKeys: nil)
+                for file in files {
+                    try FileManager.default.removeItem(at: file)
+                }
+                Logger.info("✅ Deleted \(files.count) uploaded files from storage", category: .ai)
+            } catch {
+                Logger.error("❌ Failed to delete uploaded files: \(error.localizedDescription)", category: .ai)
+            }
+        }
+
+        // 4. Reset the interview state (this resets StateCoordinator and all handlers)
+        await resetStore()
+        Logger.info("✅ Interview state reset", category: .ai)
+
+        Logger.info("🎉 All onboarding data has been reset", category: .ai)
+    }
     #endif
 }
