@@ -11,7 +11,6 @@ import SwiftyJSON
 
 actor ToolExecutor {
     private let registry: ToolRegistry
-    private var continuations: [UUID: ContinuationToken] = [:]
 
     init(registry: ToolRegistry) {
         self.registry = registry
@@ -34,27 +33,11 @@ actor ToolExecutor {
         }
     }
 
-    func resumeContinuation(id: UUID, with input: JSON) async throws -> ToolResult {
-        guard let token = continuations.removeValue(forKey: id) else {
-            throw ToolError.invalidParameters("Unknown continuation: \(id)")
-        }
-        let result = await token.resumeHandler(input)
-        return normalize(result, toolName: token.toolName)
-    }
-
-    /// Get a continuation token (without removing it)
-    func getContinuation(id: UUID) -> ContinuationToken? {
-        continuations[id]
-    }
-
     // MARK: - Helpers
 
     private func normalize(_ result: ToolResult, toolName: String) -> ToolResult {
         switch result {
         case .immediate:
-            return result
-        case .waiting(_, let token):
-            continuations[token.id] = token
             return result
         case .error(let error):
             return errorResult(for: toolName, error: error)
