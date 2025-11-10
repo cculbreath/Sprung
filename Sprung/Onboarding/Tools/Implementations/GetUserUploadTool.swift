@@ -99,7 +99,7 @@ struct GetUserUploadTool: InterviewTool {
         )
 
         // Emit UI request to show the upload picker
-        await coordinator.eventBus.publish(.uploadRequestPresented(request: uploadRequest, continuationId: UUID()))
+        await coordinator.eventBus.publish(.uploadRequestPresented(request: uploadRequest))
 
         // Return completed - the tool's job is to present UI, which it has done
         // User's upload will arrive as a new user message

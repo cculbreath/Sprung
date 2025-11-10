@@ -59,7 +59,7 @@ struct ValidateApplicantProfileTool: InterviewTool {
         )
 
         // Emit UI request to show the validation prompt
-        await coordinator.eventBus.publish(.validationPromptRequested(prompt: prompt, continuationId: UUID()))
+        await coordinator.eventBus.publish(.validationPromptRequested(prompt: prompt))
 
         // Return completed - the tool's job is to present UI, which it has done
         // User's validation response will arrive as a new user message

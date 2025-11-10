@@ -15,16 +15,9 @@ private class SprungOpenAILogger: OpenAILoggerProtocol {
     func debug(_ message: String) {
         guard SwiftOpenAIClient.shouldEmitDebug(message) else { return }
 
-        switch SwiftOpenAIClient.currentLogLevel {
-        case .debug:
-            Logger.debug(message, category: .ai)
-        case .verbose:
-            Logger.debug(message, category: .ai)
-        case .info:
-            Logger.info(message, category: .ai)
-        case .quiet:
-            break
-        }
+        // All SwiftOpenAI debug messages should use Sprung's debug level
+        // This ensures JSON payloads only appear when user explicitly wants debug detail
+        Logger.debug(message, category: .ai)
     }
 
     func error(_ message: String) {

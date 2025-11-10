@@ -1,0 +1,48 @@
+# Claude file picker
+# macOS and tooling artifacts
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+# Ignore vendored and generated artifacts
+weasy-dist/
+weasy/
+.build/
+physcloudresume/scripts/
+test_*
+# Local tooling databases
+.opencode/
+.opencode.json
+
+# Private assets and notes (relocated outside the repo)
+debug/
+draft-archer/
+
+
+.swiftpm/
+DerivedData/
+**/xcuserdata/
+old-code-reports/
+
+!Sprung/Resources/TemplateDefaults/**
+
+# Ignore root-level generated files
+Sprung.zip
+backup.txt
+combined_model_code.txt
+combined_output.txt
+output.txt
+
+build/
+clean-commit-msg.sh
+
+agents.md
+
+.swift-module-cache/
+.periphery.yml
+
+build.log
+
+Sprung/flattened_output/
+consolelog.pid

@@ -86,7 +86,7 @@ struct GetUserOptionTool: InterviewTool {
         let payload = try OptionPromptPayload(json: params)
 
         // Emit UI request to show the choice prompt
-        await coordinator.eventBus.publish(.choicePromptRequested(prompt: payload.toChoicePrompt(), continuationId: UUID()))
+        await coordinator.eventBus.publish(.choicePromptRequested(prompt: payload.toChoicePrompt()))
 
         // Return completed - the tool's job is to present UI, which it has done
         // User's selection will arrive as a new user message

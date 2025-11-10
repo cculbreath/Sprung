@@ -270,7 +270,9 @@ class MenuNotificationHandler {
             Logger.info("📨 Received startOnboardingInterview notification", category: .ui)
             if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
                 Logger.debug("🎯 Dispatching to AppDelegate.showOnboardingInterviewWindow", category: .ui)
-                appDelegate.showOnboardingInterviewWindow()
+                Task { @MainActor in
+                    appDelegate.showOnboardingInterviewWindow()
+                }
             }
         }
     }

@@ -449,13 +449,7 @@ private extension OnboardingInterviewView {
         Task { @MainActor in
             guard interviewCoordinator.isActiveSync == false else { return }
             // Note: Checkpoint detection is handled by CheckpointManager in coordinator
-            let hasCheckpoint = false
-            if hasCheckpoint {
-                pendingStartModelId = modelId
-                showResumeOptions = true
-            } else {
-                await launchInterview(modelId: modelId, resume: false)
-            }
+            await launchInterview(modelId: modelId, resume: false)
         }
     }
 
