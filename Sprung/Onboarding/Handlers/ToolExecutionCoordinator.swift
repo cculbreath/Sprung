@@ -120,6 +120,17 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Tool completed - send response to LLM
             await emitToolResponse(callId: callId, output: output)
 
+            // Special handling for agent_ready tool - trigger "I am ready to begin" AFTER tool response is sent
+            if toolName == "agent_ready", output["trigger_ready_message"].bool == true {
+                var readyPayload = JSON()
+                readyPayload["text"].string = "I am ready to begin"
+                await emit(.llmSendUserMessage(
+                    payload: readyPayload,
+                    isSystemGenerated: true
+                ))
+                Logger.info("🚀 Agent ready acknowledged - sending 'I am ready to begin' after tool response", category: .ai)
+            }
+
         case .error(let error):
             // Tool execution error
             var errorOutput = JSON()
