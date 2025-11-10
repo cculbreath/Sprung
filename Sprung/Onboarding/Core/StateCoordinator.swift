@@ -31,6 +31,9 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private let phasePolicy: PhasePolicy
 
+    // Runtime tool exclusions (e.g., one-time bootstrap tools)
+    private var excludedTools: Set<String> = []
+
     // MARK: - Core Interview State
 
     private(set) var phase: InterviewPhase = .phase1CoreFacts
@@ -895,7 +898,19 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     func getAllowedToolsForCurrentPhase() -> Set<String> {
-        phasePolicy.allowedTools[phase] ?? []
+        let phaseTools = phasePolicy.allowedTools[phase] ?? []
+        return phaseTools.subtracting(excludedTools)
+    }
+
+    /// Remove a tool from the allowed tools list (e.g., after one-time use)
+    func excludeTool(_ toolName: String) {
+        excludedTools.insert(toolName)
+        Logger.info("🚫 Tool excluded from future calls: \(toolName)", category: .ai)
+
+        // Republish allowed tools to update subscribers
+        Task {
+            await publishAllowedToolsNow()
+        }
     }
 
     var isProcessing: Bool {
