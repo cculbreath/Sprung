@@ -3,7 +3,7 @@ import SwiftyJSON
 
 struct TimelineCardEditorView: View {
     let timeline: JSON
-    let coordinator: OnboardingInterviewCoordinator
+    @Bindable var coordinator: OnboardingInterviewCoordinator
 
     @State private var drafts: [WorkExperienceDraft] = []
     @State private var baselineCards: [TimelineCard] = []
