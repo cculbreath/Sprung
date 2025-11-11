@@ -96,8 +96,11 @@ struct UploadRequestCard: View {
             var collected: [URL] = []
             for provider in supportingProviders {
                 if let url = await loadURL(from: provider) {
-                    collected.append(url)
-                    if !request.metadata.allowMultiple { break }
+                    // Validate file type if accepts list is specified
+                    if isFileTypeAllowed(url) {
+                        collected.append(url)
+                        if !request.metadata.allowMultiple { break }
+                    }
                 }
             }
 
@@ -110,6 +113,16 @@ struct UploadRequestCard: View {
         }
 
         return true
+    }
+
+    private func isFileTypeAllowed(_ url: URL) -> Bool {
+        // If no specific types are specified, allow all
+        guard !request.metadata.accepts.isEmpty else { return true }
+
+        let fileExtension = url.pathExtension.lowercased()
+        return request.metadata.accepts.contains { acceptedType in
+            acceptedType.lowercased() == fileExtension
+        }
     }
 
     private func loadURL(from provider: NSItemProvider) async -> URL? {
