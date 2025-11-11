@@ -129,6 +129,7 @@ final class OnboardingInterviewCoordinator {
     var pendingExtractionSync: OnboardingPendingExtraction? { state.pendingExtractionSync }
     var pendingStreamingStatusSync: String? { state.pendingStreamingStatusSync }
     var artifactRecordsSync: [JSON] { state.artifactRecordsSync }
+    var skeletonTimelineSync: JSON? { state.skeletonTimelineSync }
     var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest? { state.pendingPhaseAdvanceRequestSync }
 
     // MARK: - UI State Properties (from ToolRouter)
