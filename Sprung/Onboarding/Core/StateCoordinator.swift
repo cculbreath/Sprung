@@ -644,46 +644,32 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Snapshot Management
 
     struct StateSnapshot: Codable {
-        let version: Int
         let phase: InterviewPhase
         let objectives: [String: ObjectiveStore.ObjectiveEntry]
         let wizardStep: String
         let completedWizardSteps: Set<String>
-
-        // Custom decoding to handle legacy snapshots without version field
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 0
-            phase = try container.decode(InterviewPhase.self, forKey: .phase)
-            objectives = try container.decode([String: ObjectiveStore.ObjectiveEntry].self, forKey: .objectives)
-            wizardStep = try container.decode(String.self, forKey: .wizardStep)
-            completedWizardSteps = try container.decode(Set<String>.self, forKey: .completedWizardSteps)
-        }
-
-        // Regular initializer for creating new snapshots
-        init(version: Int = 1, phase: InterviewPhase, objectives: [String: ObjectiveStore.ObjectiveEntry], wizardStep: String, completedWizardSteps: Set<String>) {
-            self.version = version
-            self.phase = phase
-            self.objectives = objectives
-            self.wizardStep = wizardStep
-            self.completedWizardSteps = completedWizardSteps
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case version, phase, objectives, wizardStep, completedWizardSteps
-        }
+        // Conversation state for resume
+        let previousResponseId: String?
+        let currentModelId: String
+        let messages: [OnboardingMessage]
     }
 
     func createSnapshot() async -> StateSnapshot {
         let allObjectives = await objectiveStore.getAllObjectives()
         let objectivesDict = Dictionary(uniqueKeysWithValues: allObjectives.map { ($0.id, $0) })
 
+        // Get conversation state
+        let previousResponseId = await chatTranscriptStore.getPreviousResponseId()
+        let currentMessages = await chatTranscriptStore.messages
+
         return StateSnapshot(
-            version: 1,
             phase: phase,
             objectives: objectivesDict,
             wizardStep: currentWizardStep.rawValue,
-            completedWizardSteps: Set(completedWizardSteps.map { $0.rawValue })
+            completedWizardSteps: Set(completedWizardSteps.map { $0.rawValue }),
+            previousResponseId: previousResponseId,
+            currentModelId: currentModelId,
+            messages: currentMessages
         )
     }
 
@@ -693,26 +679,31 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Restore objectives to ObjectiveStore
         await objectiveStore.restore(objectives: snapshot.objectives)
 
-        // MIGRATION: Re-register canonical objectives for the current phase
-        // This ensures any newly added objectives are present after restore
-        if snapshot.version == 0 {
-            Logger.info("🔄 Migrating legacy snapshot (version 0) - re-registering canonical objectives", category: .ai)
-            await objectiveStore.registerDefaultObjectives(for: phase)
-
-            // Backfill statuses for known migration scenarios
-            await backfillObjectiveStatuses(snapshot: snapshot)
-        }
-
         // Restore wizard progress
         if let step = WizardStep(rawValue: snapshot.wizardStep) {
             currentWizardStep = step
         }
         completedWizardSteps = Set(snapshot.completedWizardSteps.compactMap { WizardStep(rawValue: $0) })
 
+        // Restore conversation state
+        if let previousResponseId = snapshot.previousResponseId {
+            await chatTranscriptStore.setPreviousResponseId(previousResponseId)
+            lastResponseId = previousResponseId
+            Logger.info("📝 Restored previousResponseId: \(previousResponseId)", category: .ai)
+        }
+
+        // Restore model ID
+        currentModelId = snapshot.currentModelId
+
+        // Restore chat messages for UI display
+        await chatTranscriptStore.restoreMessages(snapshot.messages)
+        messagesSync = snapshot.messages
+        Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
+
         // Update sync caches
         objectivesSync = objectiveStore.objectivesSync
 
-        Logger.info("📥 State restored from snapshot (version: \(snapshot.version))", category: .ai)
+        Logger.info("📥 State restored from snapshot with conversation history", category: .ai)
     }
 
     /// Backfill objective statuses when migrating from legacy snapshots

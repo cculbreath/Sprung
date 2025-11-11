@@ -366,6 +366,13 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     // MARK: - Request Building
 
+    /// Determine if parallel tool calls should be enabled based on current state
+    /// Enable for skeleton_timeline to allow LLM to create multiple cards at once
+    private func shouldEnableParallelToolCalls() async -> Bool {
+        let validation = await stateCoordinator.pendingValidationPrompt
+        return validation?.dataType == "skeleton_timeline"
+    }
+
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
         // Use previous_response_id for context management (OpenAI manages conversation history)
         let previousResponseId = await contextAssembler.getPreviousResponseId()
@@ -395,9 +402,9 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.stream = true
         parameters.toolChoice = toolChoice
         parameters.tools = tools
-        parameters.parallelToolCalls = false
+        parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
 
-        Logger.info("📝 Built request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count)", category: .ai)
+        Logger.info("📝 Built request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls)", category: .ai)
         return parameters
     }
 
@@ -472,14 +479,14 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.stream = true
         parameters.toolChoice = toolChoice
         parameters.tools = tools
-        parameters.parallelToolCalls = false
+        parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
 
         // Set reasoning effort if provided
         if let effort = reasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
 
-        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count), reasoningEffort=\(reasoningEffort ?? "default")", category: .ai)
+        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls), reasoningEffort=\(reasoningEffort ?? "default")", category: .ai)
         return parameters
     }
 
@@ -506,13 +513,14 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.stream = true
         parameters.toolChoice = .auto
         parameters.tools = tools
-        parameters.parallelToolCalls = false
+        parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
 
         // Set reasoning effort if provided
         if let effort = reasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
 
+        Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls)", category: .ai)
         return parameters
     }
 
