@@ -16,15 +16,22 @@ struct TimelineCardEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
-            WorkExperienceSectionView(items: $drafts, callbacks: callbacks())
-                .padding(.horizontal, 4)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
+
+            // Scrollable cards section
+            ScrollView {
+                WorkExperienceSectionView(items: $drafts, callbacks: callbacks())
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 4)
+            }
+            .frame(maxHeight: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+
             footerButtons
         }
+        .frame(maxHeight: .infinity)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
