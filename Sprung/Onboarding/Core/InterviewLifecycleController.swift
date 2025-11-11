@@ -55,8 +55,8 @@ final class InterviewLifecycleController {
 
     // MARK: - Interview Lifecycle
 
-    func startInterview() async -> Bool {
-        Logger.info("🚀 Starting interview (lifecycle controller)", category: .ai)
+    func startInterview(isResuming: Bool = false) async -> Bool {
+        Logger.info("🚀 Starting interview (lifecycle controller, resuming: \(isResuming))", category: .ai)
 
         // Verify we have an OpenAI service
         guard let service = openAIService else {
@@ -73,9 +73,14 @@ final class InterviewLifecycleController {
         let orchestrator = makeOrchestrator(service: service, baseDeveloperMessage: baseDeveloperMessage)
         self.orchestrator = orchestrator
 
-        // Initialize orchestrator subscriptions FIRST
-        // This ensures LLMMessenger is subscribed before we publish allowed tools
-        await orchestrator.initializeSubscriptions()
+        // Initialize orchestrator with resume flag
+        do {
+            try await orchestrator.startInterview(isResuming: isResuming)
+        } catch {
+            Logger.error("Failed to start orchestrator: \(error)", category: .ai)
+            await state.setActiveState(false)
+            return false
+        }
 
         // Start event subscriptions for all other handlers
         await chatboxHandler.startEventSubscriptions()
@@ -111,11 +116,13 @@ final class InterviewLifecycleController {
         transcriptPersistenceHandler = transcriptHandler
         await transcriptHandler.start()
 
-        // Send phase introductory prompt for the current phase
+        // Send phase introductory prompt for the current phase (only if not resuming)
         // This sends the phase-specific instructions as a developer message,
         // followed by "I am ready to begin" as a user message to trigger the conversation
-        let currentPhase = await state.phase
-        await eventBus.publish(.phaseTransitionApplied(phase: currentPhase.rawValue, timestamp: Date()))
+        if !isResuming {
+            let currentPhase = await state.phase
+            await eventBus.publish(.phaseTransitionApplied(phase: currentPhase.rawValue, timestamp: Date()))
+        }
 
         return true
     }

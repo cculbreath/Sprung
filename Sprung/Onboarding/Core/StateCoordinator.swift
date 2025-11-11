@@ -659,8 +659,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         let objectivesDict = Dictionary(uniqueKeysWithValues: allObjectives.map { ($0.id, $0) })
 
         // Get conversation state
-        let previousResponseId = await chatTranscriptStore.getPreviousResponseId()
-        let currentMessages = await chatTranscriptStore.messages
+        let previousResponseId = await chatStore.getPreviousResponseId()
+        let currentMessages = await chatStore.getAllMessages()
 
         return StateSnapshot(
             phase: phase,
@@ -687,7 +687,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         // Restore conversation state
         if let previousResponseId = snapshot.previousResponseId {
-            await chatTranscriptStore.setPreviousResponseId(previousResponseId)
+            await chatStore.setPreviousResponseId(previousResponseId)
             lastResponseId = previousResponseId
             Logger.info("📝 Restored previousResponseId: \(previousResponseId)", category: .ai)
         }
@@ -696,7 +696,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         currentModelId = snapshot.currentModelId
 
         // Restore chat messages for UI display
-        await chatTranscriptStore.restoreMessages(snapshot.messages)
+        await chatStore.restoreMessages(snapshot.messages)
         messagesSync = snapshot.messages
         Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
 

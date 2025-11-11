@@ -203,6 +203,13 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
 
     // MARK: - State Management
 
+    /// Restore messages from checkpoint
+    func restoreMessages(_ restoredMessages: [OnboardingMessage]) {
+        messages = restoredMessages
+        messagesSync = messages
+        Logger.info("📥 Restored \(messages.count) messages to ChatTranscriptStore", category: .ai)
+    }
+
     /// Reset all messages and state
     func reset() {
         messages.removeAll()

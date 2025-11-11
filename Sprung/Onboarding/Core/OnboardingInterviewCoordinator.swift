@@ -709,11 +709,24 @@ final class OnboardingInterviewCoordinator {
     func startInterview(resumeExisting: Bool = false) async -> Bool {
         Logger.info("🚀 Starting interview (resume: \(resumeExisting))", category: .ai)
 
+        // Track if we actually restored from checkpoint
+        var isActuallyResuming = false
+
         // Reset or restore state
         if resumeExisting {
             await loadPersistedArtifacts()
             let didRestore = await checkpointManager.restoreFromCheckpointIfAvailable()
-            if !didRestore {
+            if didRestore {
+                isActuallyResuming = true
+                // Check if we have a previousResponseId to confirm we can resume conversation
+                let hasPreviousResponseId = await state.getPreviousResponseId() != nil
+                if hasPreviousResponseId {
+                    Logger.info("✅ Found previousResponseId - will resume conversation context", category: .ai)
+                } else {
+                    Logger.info("⚠️ No previousResponseId - will start fresh conversation", category: .ai)
+                    isActuallyResuming = false
+                }
+            } else {
                 await state.reset()
                 checkpointManager.clearCheckpoints()
                 clearArtifacts()
@@ -728,7 +741,9 @@ final class OnboardingInterviewCoordinator {
 
         // Re-initialize phase to register objectives and update wizard step
         // reset() sets phase directly without calling setPhase(), so we need to do it here
-        await state.setPhase(.phase1CoreFacts)
+        if !isActuallyResuming {
+            await state.setPhase(.phase1CoreFacts)
+        }
 
         await phaseTransitionController.registerObjectivesForCurrentPhase()
 
@@ -740,8 +755,8 @@ final class OnboardingInterviewCoordinator {
         await documentArtifactHandler.start()
         await documentArtifactMessenger.start()
 
-        // Start interview through lifecycle controller
-        let success = await lifecycleController.startInterview()
+        // Start interview through lifecycle controller with resume flag
+        let success = await lifecycleController.startInterview(isResuming: isActuallyResuming)
         if success {
             // Get the orchestrator created by lifecycleController
             self.orchestrator = lifecycleController.orchestrator

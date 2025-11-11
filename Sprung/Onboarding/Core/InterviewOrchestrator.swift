@@ -84,9 +84,15 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         Logger.info("📤 Initial user message sent to trigger greeting and get_applicant_profile", category: .ai)
     }
 
-    func startInterview() async throws {
+    func startInterview(isResuming: Bool = false) async throws {
         await initializeSubscriptions()
-        await sendInitialMessage()
+
+        // Only send initial greeting if not resuming from checkpoint
+        if !isResuming {
+            await sendInitialMessage()
+        } else {
+            Logger.info("📝 Resuming interview with existing conversation context", category: .ai)
+        }
     }
 
     func endInterview() {
