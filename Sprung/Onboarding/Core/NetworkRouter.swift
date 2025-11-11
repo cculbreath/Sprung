@@ -142,7 +142,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         // Initialize buffer for new message
         if streamingBuffers[itemId] == nil {
             let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: "", reasoningExpected: false))
+            await emit(.streamingMessageBegan(id: messageId, text: "", reasoningExpected: false, statusMessage: "Receiving response..."))
             streamingBuffers[itemId] = StreamBuffer(
                 messageId: messageId,
                 text: "",

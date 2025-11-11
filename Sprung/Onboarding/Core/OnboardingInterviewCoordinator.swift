@@ -568,8 +568,13 @@ final class OnboardingInterviewCoordinator {
         case .processingStateChanged(let isProcessing, let statusMessage):
             // Sync processing state for UI reactivity
             self.isProcessingSync = isProcessing
-            self.currentStatusMessage = statusMessage
-            Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessingSync=\(isProcessing), status: \(statusMessage ?? "none")", category: .ai)
+            // Only update status message if provided, or clear if processing is done
+            if let statusMessage = statusMessage {
+                self.currentStatusMessage = statusMessage
+            } else if !isProcessing {
+                self.currentStatusMessage = nil
+            }
+            Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessingSync=\(isProcessing), status: \(self.currentStatusMessage ?? "none")", category: .ai)
             await syncWizardProgressFromState()
 
         case .streamingStatusUpdated(_, let statusMessage):
