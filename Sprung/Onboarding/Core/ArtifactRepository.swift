@@ -222,9 +222,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
         skeletonTimelineSync = artifacts.skeletonTimeline
         Logger.info("📅 Timeline card \(id) updated", category: .ai)
-
-        // Emit event to notify state coordinator
-        await emit(.timelineCardUpdated(id: id, fields: fields))
     }
 
     /// Delete a timeline card
@@ -235,9 +232,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
         skeletonTimelineSync = artifacts.skeletonTimeline
         Logger.info("📅 Timeline card \(id) deleted", category: .ai)
-
-        // Emit event to notify state coordinator
-        await emit(.timelineCardDeleted(id: id))
     }
 
     /// Reorder timeline cards
@@ -250,9 +244,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: reordered, meta: meta)
         skeletonTimelineSync = artifacts.skeletonTimeline
         Logger.info("📅 Timeline cards reordered", category: .ai)
-
-        // Emit event to notify state coordinator
-        await emit(.timelineCardsReordered(ids: orderedIds))
     }
 
     /// Replace entire skeleton timeline (user edit in UI)
