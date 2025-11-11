@@ -147,6 +147,10 @@ struct OnboardingInterviewChatPanel: View {
                     MessageBubble(message: message)
                         .id(message.id)
                 }
+                // Add invisible spacer at the bottom for smooth scrolling
+                Color.clear
+                    .frame(height: 1)
+                    .id("bottom")
             }
             .padding(20)
         }
@@ -162,11 +166,7 @@ struct OnboardingInterviewChatPanel: View {
         .onChange(of: coordinator.messages.count, initial: true) { _, newValue in
             handleMessageCountChange(newValue: newValue, proxy: proxy)
         }
-        .onChange(of: coordinator.isProcessingSync, initial: false) { _, isProcessing in
-            guard isProcessing == false else { return }
-            guard state.shouldAutoScroll else { return }
-            scrollToLatestMessage(proxy)
-        }
+        // Remove the onChange for isProcessingSync as it was causing unwanted scrolling
         .onAppear {
             lastMessageCount = coordinator.messages.count
             scrollToLatestMessage(proxy)
@@ -209,8 +209,17 @@ struct OnboardingInterviewChatPanel: View {
     private func handleMessageCountChange(newValue: Int, proxy: ScrollViewProxy) {
         defer { lastMessageCount = newValue }
         guard newValue > lastMessageCount else { return }
-        guard state.shouldAutoScroll else { return }
-        scrollToLatestMessage(proxy)
+
+        // Always scroll to bottom when a new message is added, regardless of current position
+        // This ensures user messages trigger scroll even if user had scrolled up slightly
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            withAnimation(.easeInOut(duration: 0.3)) {
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
+            // Re-enable auto-scroll when we scroll to bottom after a new message
+            state.shouldAutoScroll = true
+        }
     }
 
     private func exportTranscriptContextMenu() -> some View {
@@ -239,9 +248,11 @@ struct OnboardingInterviewChatPanel: View {
     }
 
     private func scrollToLatestMessage(_ proxy: ScrollViewProxy) {
-        guard state.shouldAutoScroll,
-              let lastId = coordinator.messages.last?.id else { return }
-        proxy.scrollTo(lastId, anchor: .bottom)
+        guard state.shouldAutoScroll else { return }
+        // Use the "bottom" anchor we added for more reliable scrolling
+        withAnimation(.easeInOut(duration: 0.3)) {
+            proxy.scrollTo("bottom", anchor: .bottom)
+        }
     }
 
     private func exportTranscript() {

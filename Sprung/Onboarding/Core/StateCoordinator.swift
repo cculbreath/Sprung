@@ -329,21 +329,21 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .processingStateChanged(let processing):
+        case .processingStateChanged(let processing, _):
             // Update StateCoordinator's cache first (source of truth)
             isProcessingSync = processing
             // Then delegate to SessionUIState
             await uiState.setProcessingState(processing, emitEvent: false)
 
-        case .waitingStateChanged(let waiting):
+        case .waitingStateChanged(let waiting, _):
             // SessionUIState handles this internally, just log
             Logger.debug("Waiting state changed: \(waiting ?? "nil")", category: .ai)
 
-        case .pendingExtractionUpdated(let extraction):
+        case .pendingExtractionUpdated(let extraction, _):
             await uiState.setPendingExtraction(extraction)
             pendingExtractionSync = extraction // Update sync cache
 
-        case .streamingStatusUpdated(let status):
+        case .streamingStatusUpdated(let status, _):
             await uiState.setStreamingStatus(status)
             pendingStreamingStatusSync = status // Update sync cache
 
@@ -373,17 +373,17 @@ actor StateCoordinator: OnboardingEventEmitter {
             await uiState.setProcessingState(newProcessingState)
             isProcessingSync = newProcessingState // Update sync cache
 
-        case .streamingMessageBegan(let id, let text, let reasoningExpected):
+        case .streamingMessageBegan(let id, let text, let reasoningExpected, _):
             _ = await chatStore.beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
             messagesSync = await chatStore.getAllMessages()
             streamingMessageSync = await chatStore.getStreamingMessage()
 
-        case .streamingMessageUpdated(let id, let delta):
+        case .streamingMessageUpdated(let id, let delta, _):
             await chatStore.updateStreamingMessage(id: id, delta: delta)
             messagesSync = await chatStore.getAllMessages()
             streamingMessageSync = await chatStore.getStreamingMessage()
 
-        case .streamingMessageFinalized(let id, let finalText, let toolCalls):
+        case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
             await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
             messagesSync = await chatStore.getAllMessages()
             streamingMessageSync = nil
