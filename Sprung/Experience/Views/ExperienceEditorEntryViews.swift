@@ -5,12 +5,12 @@ struct ExperienceEntryHeader: View {
     let subtitle: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.headline)
             if let subtitle, subtitle.isEmpty == false {
                 Text(subtitle)
-                    .font(.callout)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
