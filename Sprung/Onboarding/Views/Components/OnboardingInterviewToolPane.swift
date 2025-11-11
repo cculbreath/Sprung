@@ -144,13 +144,25 @@ struct OnboardingInterviewToolPane: View {
                 let statusText = coordinator.currentStatusMessage ?? coordinator.pendingStreamingStatusSync?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
-                AnimatedThinkingText(statusMessage: statusText)
-                    .padding(.vertical, 24)
-                    .padding(.horizontal, 24)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .scale))
-                    .zIndex(1)
+                VStack {
+                    AnimatedThinkingText(statusMessage: statusText)
+                        .padding(.vertical, 32)
+                        .padding(.horizontal, 32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(.regularMaterial)
+                                .shadow(color: Color.black.opacity(0.15), radius: 20, y: 10)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+                                .blendMode(.plusLighter)
+                        )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+                .transition(.opacity.combined(with: .scale))
+                .zIndex(1)
             }
         }
         .animation(
