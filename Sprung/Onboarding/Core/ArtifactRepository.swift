@@ -257,8 +257,8 @@ actor ArtifactRepository: OnboardingEventEmitter {
             Logger.info("📅 Skeleton timeline replaced by user", category: .ai)
         }
 
-        // Emit event for state coordinator to mark objective complete
-        await emit(.skeletonTimelineReplaced(timeline: timeline, diff: diff, meta: nil))
+        // DO NOT emit the event here - this method is called IN RESPONSE to the event
+        // The TimelineManagementService already published the event that triggered this
     }
 
     // MARK: - Experience & Knowledge Cards

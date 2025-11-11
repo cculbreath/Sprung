@@ -12,6 +12,7 @@ struct TimelineCardEditorView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var editingEntries: Set<UUID> = []
+    @State private var lastLoadedToken: Int = -1  // Track last loaded version to prevent redundant loads
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -57,12 +58,25 @@ struct TimelineCardEditorView: View {
                 load(from: newValue)
             }
         }
-        .onChange(of: coordinator.timelineUIChangeToken) { _, _ in
+        .onChange(of: coordinator.timelineUIChangeToken) { _, newToken in
             // React to timeline changes via UI change token
+            // Skip if we're currently saving to prevent infinite loops
+            guard !isSaving else {
+                Logger.info("🔄 TimelineCardEditorView: onChange skipped (currently saving)", category: .ai)
+                return
+            }
+
+            // Skip if we've already loaded this version
+            guard newToken != lastLoadedToken else {
+                Logger.info("🔄 TimelineCardEditorView: onChange skipped (already loaded token \(newToken))", category: .ai)
+                return
+            }
+
             let newTimeline = coordinator.skeletonTimelineSync
-            Logger.info("🔄 TimelineCardEditorView: onChange fired (UI token \(coordinator.timelineUIChangeToken)). New timeline has \(newTimeline?["experiences"].array?.count ?? 0) cards", category: .ai)
+            Logger.info("🔄 TimelineCardEditorView: onChange fired (UI token \(newToken)). New timeline has \(newTimeline?["experiences"].array?.count ?? 0) cards", category: .ai)
             if let newTimeline {
                 load(from: newTimeline)
+                lastLoadedToken = newToken
             }
         }
         .onChange(of: drafts) { _, _ in
