@@ -41,7 +41,11 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
         Task {
             // Publish event instead of direct state mutation
-            let statusMessage = extraction.map { "Extracting content from \($0.title)..." }
+            let statusMessage = extraction.map {
+                $0.title.lowercased().contains("pdf") || $0.title.lowercased().contains("resume")
+                    ? "Processing PDF with Gemini AI..."
+                    : "Extracting content from \($0.title)..."
+            }
             await eventBus.publish(.pendingExtractionUpdated(extraction, statusMessage: statusMessage))
             // StateCoordinator maintains sync cache
 
@@ -100,12 +104,35 @@ final class ExtractionManagementService: OnboardingEventEmitter {
         Task {
             if var extraction = await state.pendingExtraction {
                 extraction.applyProgressUpdate(update)
-                // Publish event instead of direct state mutation
-                await eventBus.publish(.pendingExtractionUpdated(extraction))
+
+                // Create status message based on the update
+                let statusMessage = createStatusMessage(for: update)
+
+                // Publish event with status message
+                await eventBus.publish(.pendingExtractionUpdated(extraction, statusMessage: statusMessage))
                 // StateCoordinator maintains sync cache
             } else {
                 pendingExtractionProgressBuffer.append(update)
             }
+        }
+    }
+
+    private func createStatusMessage(for update: ExtractionProgressUpdate) -> String? {
+        switch (update.stage, update.state) {
+        case (.fileAnalysis, .active):
+            return update.detail ?? "Analyzing PDF document..."
+        case (.aiExtraction, .active):
+            return "Processing with Gemini AI..."
+        case (.artifactSave, .active):
+            return "Saving extracted content..."
+        case (.assistantHandoff, .active):
+            return "Preparing for interview..."
+        case (_, .completed):
+            return nil // Clear message when stage completes
+        case (_, .failed):
+            return "Processing failed: \(update.detail ?? "Unknown error")"
+        default:
+            return nil
         }
     }
 

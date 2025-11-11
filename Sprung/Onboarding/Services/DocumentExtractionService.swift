@@ -131,8 +131,8 @@ actor DocumentExtractionService {
 
         let llmStart = Date()
         let aiStageDetail = request.purpose == "resume_timeline"
-            ? "Extracting resume details"
-            : "Extracting document text"
+            ? "Extracting resume details with Gemini AI..."
+            : "Processing document with Gemini AI..."
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
         let (markdown, markdownIssues) = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)

@@ -207,9 +207,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.skeletonTimeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
         skeletonTimelineSync = artifacts.skeletonTimeline
         Logger.info("📅 Timeline card created", category: .ai)
-
-        // Emit event to notify state coordinator
-        await emit(.timelineCardCreated(card: card))
     }
 
     /// Update an existing timeline card
