@@ -10,6 +10,7 @@ struct TimelineCardEditorView: View {
     @State private var meta: JSON?
     @State private var hasChanges = false
     @State private var isSaving = false
+    @State private var isLoadingFromCoordinator = false  // Track when loading from coordinator to prevent drafts onChange interference
     @State private var errorMessage: String?
     @State private var editingEntries: Set<UUID> = []
     @State private var lastLoadedToken: Int = -1  // Track last loaded version to prevent redundant loads
@@ -81,6 +82,9 @@ struct TimelineCardEditorView: View {
                 let newCards = state.cards
                 let needsConfirmation = !newCards.isEmpty && (baselineCards.isEmpty || newCards != baselineCards)
 
+                // Set loading flag to prevent drafts onChange from overwriting hasChanges
+                isLoadingFromCoordinator = true
+
                 // Load the new timeline
                 baselineCards = state.cards
                 drafts = TimelineCardAdapter.workDrafts(from: state.cards)
@@ -93,10 +97,16 @@ struct TimelineCardEditorView: View {
                 editingEntries.removeAll()
                 lastLoadedToken = newToken
 
+                // Clear loading flag
+                isLoadingFromCoordinator = false
+
                 Logger.info("🔄 TimelineCardEditorView: Loaded \(newCards.count) cards, hasChanges=\(needsConfirmation)", category: .ai)
             }
         }
         .onChange(of: drafts) { _, _ in
+            // Skip recalculation if we're actively loading from coordinator
+            // to prevent overwriting hasChanges that was just set in token onChange
+            guard !isLoadingFromCoordinator else { return }
             hasChanges = TimelineCardAdapter.cards(from: drafts) != baselineCards
         }
     }
@@ -151,19 +161,32 @@ struct TimelineCardEditorView: View {
 
     private func load(from timeline: JSON) {
         let state = TimelineCardAdapter.cards(from: timeline)
+
+        // Set loading flag to prevent drafts onChange from interfering
+        isLoadingFromCoordinator = true
+
         baselineCards = state.cards
         drafts = TimelineCardAdapter.workDrafts(from: state.cards)
         meta = state.meta
         hasChanges = false
         errorMessage = nil
         editingEntries.removeAll()
+
+        // Clear loading flag
+        isLoadingFromCoordinator = false
     }
 
     private func discardChanges() {
         withAnimation {
+            // Set loading flag to prevent drafts onChange from interfering
+            isLoadingFromCoordinator = true
+
             drafts = TimelineCardAdapter.workDrafts(from: baselineCards)
             hasChanges = false
             editingEntries.removeAll()
+
+            // Clear loading flag
+            isLoadingFromCoordinator = false
         }
         errorMessage = nil
     }

@@ -149,7 +149,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Tool execution error
             var errorOutput = JSON()
             errorOutput["error"].string = error.localizedDescription
-            errorOutput["status"].string = "error"
+            errorOutput["status"].string = "incomplete"
             await emitToolResponse(callId: callId, output: errorOutput)
         }
     }
@@ -175,7 +175,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     private func emitToolError(callId: String, message: String) async {
         var errorOutput = JSON()
         errorOutput["error"].string = message
-        errorOutput["status"].string = "error"
+        errorOutput["status"].string = "incomplete"
         await emitToolResponse(callId: callId, output: errorOutput)
     }
 }
