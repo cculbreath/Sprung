@@ -37,7 +37,7 @@ struct TimelineCardEditorView: View {
         .onAppear {
             // Load from coordinator's sync cache, not the initial empty timeline
             if let syncTimeline = coordinator.skeletonTimelineSync {
-                Logger.info("🔄 TimelineCardEditorView: onAppear loading from sync cache with \(syncTimeline["timeline"].array?.count ?? 0) cards", category: .ai)
+                Logger.info("🔄 TimelineCardEditorView: onAppear loading from sync cache with \(syncTimeline["experiences"].array?.count ?? 0) cards", category: .ai)
                 load(from: syncTimeline)
             } else {
                 Logger.info("🔄 TimelineCardEditorView: onAppear - no sync cache yet, loading from timeline param", category: .ai)
@@ -52,7 +52,7 @@ struct TimelineCardEditorView: View {
         }
         .onChange(of: coordinator.skeletonTimelineSync) { _, newTimeline in
             // React to timeline changes via @Observable (hybrid architecture pattern)
-            Logger.info("🔄 TimelineCardEditorView: onChange fired. New timeline has \(newTimeline?["timeline"].array?.count ?? 0) cards", category: .ai)
+            Logger.info("🔄 TimelineCardEditorView: onChange fired. New timeline has \(newTimeline?["experiences"].array?.count ?? 0) cards", category: .ai)
             if let newTimeline {
                 load(from: newTimeline)
             }
