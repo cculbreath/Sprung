@@ -50,9 +50,10 @@ struct TimelineCardEditorView: View {
                 load(from: newValue)
             }
         }
-        .onChange(of: coordinator.skeletonTimelineSync) { _, newTimeline in
-            // React to timeline changes via @Observable (hybrid architecture pattern)
-            Logger.info("🔄 TimelineCardEditorView: onChange fired. New timeline has \(newTimeline?["experiences"].array?.count ?? 0) cards", category: .ai)
+        .onChange(of: coordinator.timelineUIChangeToken) { _, _ in
+            // React to timeline changes via UI change token
+            let newTimeline = coordinator.skeletonTimelineSync
+            Logger.info("🔄 TimelineCardEditorView: onChange fired (UI token \(coordinator.timelineUIChangeToken)). New timeline has \(newTimeline?["experiences"].array?.count ?? 0) cards", category: .ai)
             if let newTimeline {
                 load(from: newTimeline)
             }
