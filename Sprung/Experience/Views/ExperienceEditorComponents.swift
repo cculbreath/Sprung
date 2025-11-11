@@ -25,10 +25,10 @@ struct ExperienceCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             content
         }
-        .padding(16)
+        .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(NSColor.controlBackgroundColor))
@@ -163,9 +163,9 @@ struct ExperienceTextEditor: View {
 
 @ViewBuilder
 func sectionContainer<Content: View>(title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) -> some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: 12) {
         ExperienceSectionHeader(title, subtitle: subtitle)
-        VStack(alignment: .leading, spacing: 16, content: content)
+        VStack(alignment: .leading, spacing: 8, content: content)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
 }
