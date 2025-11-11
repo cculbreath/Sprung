@@ -448,8 +448,18 @@ private extension OnboardingInterviewView {
         let modelId = viewModel.currentModelId
         Task { @MainActor in
             guard interviewCoordinator.isActiveSync == false else { return }
-            // Note: Checkpoint detection is handled by CheckpointManager in coordinator
-            await launchInterview(modelId: modelId, resume: false)
+
+            // Check if there's an existing checkpoint to resume
+            if interviewCoordinator.checkpoints.hasCheckpoint() {
+                Logger.info("✅ Found existing checkpoint - showing resume dialog", category: .ai)
+                // Show resume dialog
+                pendingStartModelId = modelId
+                showResumeOptions = true
+            } else {
+                Logger.info("📝 No checkpoint found - starting fresh interview", category: .ai)
+                // No checkpoint, start fresh
+                await launchInterview(modelId: modelId, resume: false)
+            }
         }
     }
 
@@ -464,6 +474,7 @@ private extension OnboardingInterviewView {
 
     func respondToResumeChoice(resume: Bool) {
         guard let modelId = pendingStartModelId else { return }
+        Logger.info("📝 User chose to \(resume ? "resume" : "start fresh") interview", category: .ai)
         pendingStartModelId = nil
         showResumeOptions = false
 
