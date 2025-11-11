@@ -53,6 +53,7 @@ struct ListArtifactsTool: InterviewTool {
         let summaries = await coordinator.listArtifactSummaries()
 
         var response = JSON()
+        response["status"].string = "completed"
         response["count"].int = summaries.count
         response["artifacts"] = JSON(summaries)
         return .immediate(response)

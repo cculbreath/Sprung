@@ -80,6 +80,7 @@ struct UpdateArtifactMetadataTool: InterviewTool {
 
         // Return success response
         var result = JSON()
+        result["status"].string = "completed"
         result["success"].boolValue = true
         result["artifact_id"].stringValue = artifactId
         result["updated_fields"] = JSON(metadataUpdates.keys.map { $0 })

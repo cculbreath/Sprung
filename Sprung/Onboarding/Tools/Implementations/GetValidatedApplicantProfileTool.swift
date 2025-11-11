@@ -52,17 +52,19 @@ struct GetValidatedApplicantProfileTool: InterviewTool {
 
             // Strip base64 image data for LLM context (keep metadata but omit binary data)
             var llmSafeJSON = freshJSON
-            if let basicsImage = llmSafeJSON["basics"]["image"].string, !basicsImage.isEmpty {
-                llmSafeJSON["basics"]["image"].string = "[Image uploaded - binary data omitted]"
+            if let imageData = llmSafeJSON["image"].string, !imageData.isEmpty {
+                llmSafeJSON["image"].string = "[Image uploaded - binary data omitted]"
             }
 
             var response = JSON()
+            response["status"].string = "completed"
             response["found"].bool = true
             response["data"] = llmSafeJSON
             response["message"].string = "Retrieved validated applicant profile data"
             return .immediate(response)
         } else {
             var response = JSON()
+            response["status"].string = "completed"
             response["found"].bool = false
             response["message"].string = "No validated applicant profile found. Profile has not been persisted yet."
             return .immediate(response)

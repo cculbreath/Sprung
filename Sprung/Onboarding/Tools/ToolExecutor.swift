@@ -73,7 +73,8 @@ actor ToolExecutor {
         }
 
         var payload = JSON()
-        payload["status"].string = "error"
+        payload["status"].string = "completed"
+        payload["error"].bool = true
         payload["reason"].string = reason
         payload["message"].string = message
         payload["tool"].string = toolName

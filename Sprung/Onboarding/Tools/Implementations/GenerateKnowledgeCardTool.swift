@@ -63,6 +63,7 @@ struct GenerateKnowledgeCardTool: InterviewTool {
             var response = draft.toJSON()
 
             // Add validation nudge to guide LLM to validate the card
+            response["status"] = JSON("completed")
             response["next_action_hint"] = JSON("Call submit_for_validation(validation_type: \"knowledge_card\", data: <this draft>) to show the user and capture their feedback.")
 
             return .immediate(response)
