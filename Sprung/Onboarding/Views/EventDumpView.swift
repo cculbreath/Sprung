@@ -129,7 +129,7 @@ struct EventDumpView: View {
 
     private func loadEvents() {
         Task {
-            let recentEvents = await coordinator.getRecentEvents(count: 250)
+            let recentEvents = await coordinator.getRecentEvents(count: 1000)
             events = recentEvents.map { formatEvent($0) }
 
             let metrics = await coordinator.getEventMetrics()
