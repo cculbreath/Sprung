@@ -34,9 +34,21 @@ struct TimelineCardEditorView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
-        .onAppear { load(from: timeline) }
+        .onAppear {
+            // Load from coordinator's sync cache, not the initial empty timeline
+            if let syncTimeline = coordinator.skeletonTimelineSync {
+                Logger.info("🔄 TimelineCardEditorView: onAppear loading from sync cache with \(syncTimeline["timeline"].array?.count ?? 0) cards", category: .ai)
+                load(from: syncTimeline)
+            } else {
+                Logger.info("🔄 TimelineCardEditorView: onAppear - no sync cache yet, loading from timeline param", category: .ai)
+                load(from: timeline)
+            }
+        }
         .onChange(of: timeline) { _, newValue in
-            load(from: newValue)
+            // Only load if coordinator sync is not available
+            if coordinator.skeletonTimelineSync == nil {
+                load(from: newValue)
+            }
         }
         .onChange(of: coordinator.skeletonTimelineSync) { _, newTimeline in
             // React to timeline changes via @Observable (hybrid architecture pattern)

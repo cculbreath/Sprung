@@ -63,7 +63,7 @@ struct DisplayTimelineForReviewTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         // Get current timeline from coordinator (may be nil or empty - that's OK!)
-        let timelineJSON = await coordinator.skeletonTimelineJSON ?? JSON()
+        let timelineJSON = coordinator.skeletonTimelineSync ?? JSON()
 
         // Get optional summary message
         let summary = params["summary"].string ?? "Timeline review activated. Cards will appear here as you create them."
