@@ -425,8 +425,10 @@ final class OnboardingInterviewCoordinator {
 
         case .timelineCardCreated, .timelineCardUpdated,
              .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced:
-            // Update UI change token for SwiftUI reactivity (UI state, not business state)
-            // This follows the hybrid pattern where @Observable is used for UI reactivity
+            // Update UI state for SwiftUI reactivity
+            // Keep stored cache in sync with StateCoordinator
+            skeletonTimelineSync = state.skeletonTimelineSync
+            // Update UI change token for additional reactivity guarantee
             timelineUIChangeToken += 1
             checkpointManager.scheduleCheckpoint()
 
