@@ -783,6 +783,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Reset sync caches
         objectivesSync = [:]
         artifactRecordsSync = []
+        skeletonTimelineSync = nil
         messagesSync = []
         streamingMessageSync = nil
         currentReasoningSummarySync = nil
