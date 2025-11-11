@@ -52,6 +52,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // From ArtifactRepository
     nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
+    nonisolated(unsafe) private(set) var skeletonTimelineSync: JSON?
 
     // From ChatTranscriptStore
     nonisolated(unsafe) private(set) var messagesSync: [OnboardingMessage] = []
@@ -464,18 +465,23 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .timelineCardCreated(let card):
             await artifactRepository.createTimelineCard(card)
+            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         case .timelineCardUpdated(let id, let fields):
             await artifactRepository.updateTimelineCard(id: id, fields: fields)
+            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         case .timelineCardDeleted(let id):
             await artifactRepository.deleteTimelineCard(id: id)
+            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         case .timelineCardsReordered(let orderedIds):
             await artifactRepository.reorderTimelineCards(orderedIds: orderedIds)
+            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         case .skeletonTimelineReplaced(let timeline, let diff, _):
             await artifactRepository.replaceSkeletonTimeline(timeline, diff: diff)
+            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         default:
             break
