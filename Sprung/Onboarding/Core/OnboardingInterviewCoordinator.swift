@@ -113,6 +113,12 @@ final class OnboardingInterviewCoordinator {
     private(set) var isProcessingSync: Bool = false
     private(set) var currentStatusMessage: String? = nil
 
+    // MARK: - UI Change Detection
+
+    /// UI-only counter for SwiftUI change detection when timeline updates occur
+    /// This is pure UI state for reactivity, not business state
+    private(set) var timelineUIChangeToken: Int = 0
+
     func sendChatMessage(_ text: String) async {
         await chatboxHandler.sendUserMessage(text)
     }
@@ -129,7 +135,7 @@ final class OnboardingInterviewCoordinator {
     var pendingExtractionSync: OnboardingPendingExtraction? { state.pendingExtractionSync }
     var pendingStreamingStatusSync: String? { state.pendingStreamingStatusSync }
     var artifactRecordsSync: [JSON] { state.artifactRecordsSync }
-    var skeletonTimelineSync: JSON? { state.skeletonTimelineSync }
+    private(set) var skeletonTimelineSync: JSON?  // Now a stored property for @Observable reactivity
     var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest? { state.pendingPhaseAdvanceRequestSync }
 
     // MARK: - UI State Properties (from ToolRouter)
@@ -339,6 +345,9 @@ final class OnboardingInterviewCoordinator {
             }
         }
 
+        // Initialize sync cache from state
+        self.skeletonTimelineSync = state.skeletonTimelineSync
+
         // Register all tools
         registerTools()
 
@@ -415,8 +424,13 @@ final class OnboardingInterviewCoordinator {
             }
 
         case .timelineCardCreated, .timelineCardUpdated,
-             .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced,
-             .artifactRecordPersisted, .phaseTransitionApplied:
+             .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced:
+            // Update UI change token for SwiftUI reactivity (UI state, not business state)
+            // This follows the hybrid pattern where @Observable is used for UI reactivity
+            timelineUIChangeToken += 1
+            checkpointManager.scheduleCheckpoint()
+
+        case .artifactRecordPersisted, .phaseTransitionApplied:
             checkpointManager.scheduleCheckpoint()
         default:
             break
