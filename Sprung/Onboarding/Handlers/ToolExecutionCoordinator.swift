@@ -70,12 +70,22 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         // First, check if we're in a waiting state
         let waitingState = await stateCoordinator.waitingState
         if let waitingState = waitingState {
-            Logger.warning("🚫 Tool call '\(call.name)' blocked - system in waiting state: \(waitingState.rawValue)", category: .ai)
-            await emitToolError(
-                callId: call.callId,
-                message: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue)). Please respond to the pending request first."
-            )
-            return
+            // Allow timeline tools during validation state (for real-time card creation)
+            let timelineTools = ["create_timeline_card", "update_timeline_card", "delete_timeline_card", "reorder_timeline_cards"]
+            let isTimelineTool = timelineTools.contains(call.name)
+            let isValidationState = waitingState == .validation
+
+            // Block non-timeline tools during validation, and all tools during other waiting states
+            if !isTimelineTool || !isValidationState {
+                Logger.warning("🚫 Tool call '\(call.name)' blocked - system in waiting state: \(waitingState.rawValue)", category: .ai)
+                await emitToolError(
+                    callId: call.callId,
+                    message: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue)). Please respond to the pending request first."
+                )
+                return
+            }
+
+            Logger.info("✅ Timeline tool '\(call.name)' allowed during validation state", category: .ai)
         }
 
         // Validate against allowed tools
