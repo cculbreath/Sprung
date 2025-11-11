@@ -466,6 +466,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .timelineCardCreated(let card):
             await artifactRepository.createTimelineCard(card)
             skeletonTimelineSync = artifactRepository.skeletonTimelineSync
+            Logger.info("📊 StateCoordinator: Timeline sync updated. Cards count: \(artifactRepository.skeletonTimelineSync?["timeline"].array?.count ?? 0)", category: .ai)
 
         case .timelineCardUpdated(let id, let fields):
             await artifactRepository.updateTimelineCard(id: id, fields: fields)
