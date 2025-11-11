@@ -26,6 +26,7 @@ struct OnboardingInterviewChatPanel: View {
     @State private var exportErrorMessage: String?
     @State private var lastMessageCount: Int = 0
     @State private var composerHeight: CGFloat = ChatComposerTextView.minimumHeight
+    @State private var isStreamingMessage = false
 
     var body: some View {
         let horizontalPadding: CGFloat = 32
@@ -166,7 +167,23 @@ struct OnboardingInterviewChatPanel: View {
         .onChange(of: coordinator.messages.count, initial: true) { _, newValue in
             handleMessageCountChange(newValue: newValue, proxy: proxy)
         }
-        // Remove the onChange for isProcessingSync as it was causing unwanted scrolling
+        .onChange(of: coordinator.isProcessingSync) { oldValue, newValue in
+            // Track when streaming ends (processing goes from true to false)
+            if oldValue == true && newValue == false && isStreamingMessage {
+                // LLM message was finalized, scroll to bottom
+                isStreamingMessage = false
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(100))
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                    state.shouldAutoScroll = true
+                }
+            } else if newValue == true {
+                // Processing started, might be streaming
+                isStreamingMessage = true
+            }
+        }
         .onAppear {
             lastMessageCount = coordinator.messages.count
             scrollToLatestMessage(proxy)
@@ -210,16 +227,20 @@ struct OnboardingInterviewChatPanel: View {
         defer { lastMessageCount = newValue }
         guard newValue > lastMessageCount else { return }
 
-        // Always scroll to bottom when a new message is added, regardless of current position
-        // This ensures user messages trigger scroll even if user had scrolled up slightly
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(100))
-            withAnimation(.easeInOut(duration: 0.3)) {
-                proxy.scrollTo("bottom", anchor: .bottom)
+        // Check if this is a user message (not streaming)
+        // User messages are added when not processing, or at the start of processing
+        if !coordinator.isProcessingSync || !isStreamingMessage {
+            // This is likely a user message, scroll to bottom
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(100))
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+                // Re-enable auto-scroll when we scroll to bottom after a new message
+                state.shouldAutoScroll = true
             }
-            // Re-enable auto-scroll when we scroll to bottom after a new message
-            state.shouldAutoScroll = true
         }
+        // For streaming messages, we'll scroll when processing ends (handled in onChange of isProcessingSync)
     }
 
     private func exportTranscriptContextMenu() -> some View {
