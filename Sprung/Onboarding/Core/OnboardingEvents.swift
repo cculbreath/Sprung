@@ -154,7 +154,7 @@ actor EventCoordinator {
 
     // Event history for debugging
     private var eventHistory: [OnboardingEvent] = []
-    private let maxHistorySize = 100
+    private let maxHistorySize = 1000  // Increased from 100 to capture full timeline events
 
     // Metrics
     private var metrics = EventMetrics()
