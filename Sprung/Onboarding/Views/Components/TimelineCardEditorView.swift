@@ -75,8 +75,25 @@ struct TimelineCardEditorView: View {
             let newTimeline = coordinator.skeletonTimelineSync
             Logger.info("🔄 TimelineCardEditorView: onChange fired (UI token \(newToken)). New timeline has \(newTimeline?["experiences"].array?.count ?? 0) cards", category: .ai)
             if let newTimeline {
-                load(from: newTimeline)
+                let state = TimelineCardAdapter.cards(from: newTimeline)
+
+                // Check if this represents new LLM-created content that needs user confirmation
+                let newCards = state.cards
+                let needsConfirmation = !newCards.isEmpty && (baselineCards.isEmpty || newCards != baselineCards)
+
+                // Load the new timeline
+                baselineCards = state.cards
+                drafts = TimelineCardAdapter.workDrafts(from: state.cards)
+                meta = state.meta
+
+                // If LLM created/modified cards, they need user confirmation
+                hasChanges = needsConfirmation
+
+                errorMessage = nil
+                editingEntries.removeAll()
                 lastLoadedToken = newToken
+
+                Logger.info("🔄 TimelineCardEditorView: Loaded \(newCards.count) cards, hasChanges=\(needsConfirmation)", category: .ai)
             }
         }
         .onChange(of: drafts) { _, _ in
