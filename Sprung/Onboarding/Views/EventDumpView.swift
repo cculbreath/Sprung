@@ -140,23 +140,28 @@ struct EventDumpView: View {
     private func formatEvent(_ event: OnboardingEvent) -> String {
         // Simple format - just use the enum case name and basic info
         switch event {
-        case .processingStateChanged(let processing):
-            return "processingStateChanged(\(processing))"
-        case .streamingMessageBegan(let id, _, let reasoningExpected):
-            return "streamingMessageBegan(id: \(id.uuidString.prefix(8)), reasoningExpected: \(reasoningExpected))"
-        case .streamingMessageUpdated(let id, let delta):
-            return "streamingMessageUpdated(id: \(id.uuidString.prefix(8)), delta: \(delta.count) chars)"
-        case .streamingMessageFinalized(let id, let text, let toolCalls):
+        case .processingStateChanged(let processing, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            return "processingStateChanged(\(processing))\(statusInfo)"
+        case .streamingMessageBegan(let id, _, let reasoningExpected, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            return "streamingMessageBegan(id: \(id.uuidString.prefix(8)), reasoningExpected: \(reasoningExpected))\(statusInfo)"
+        case .streamingMessageUpdated(let id, let delta, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            return "streamingMessageUpdated(id: \(id.uuidString.prefix(8)), delta: \(delta.count) chars)\(statusInfo)"
+        case .streamingMessageFinalized(let id, let text, let toolCalls, let statusMessage):
             let toolInfo = toolCalls.map { " toolCalls: \($0.count)" } ?? ""
             return "streamingMessageFinalized(id: \(id.uuidString.prefix(8)), text: \(text.count) chars\(toolInfo))"
         case .llmReasoningSummaryDelta(let delta):
             return "llmReasoningSummaryDelta(\(delta.prefix(50))...)"
         case .llmReasoningSummaryComplete(let text):
             return "llmReasoningSummaryComplete(\(text.count) chars)"
-        case .toolCallRequested(let call):
-            return "toolCallRequested(\(call.name))"
-        case .toolCallCompleted(let id, _):
-            return "toolCallCompleted(\(id.uuidString.prefix(8)))"
+        case .toolCallRequested(let call, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            return "toolCallRequested(\(call.name))\(statusInfo)"
+        case .toolCallCompleted(let id, _, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            return "toolCallCompleted(\(id.uuidString.prefix(8)))\(statusInfo)"
         case .objectiveStatusChanged(let id, let oldStatus, let newStatus, let phase, _, _, _):
             return "objectiveStatusChanged(\(id): \(oldStatus ?? "nil") → \(newStatus), phase: \(phase))"
         case .phaseTransitionApplied(let phase, let timestamp):

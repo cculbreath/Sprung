@@ -111,6 +111,7 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Processing State
 
     private(set) var isProcessingSync: Bool = false
+    private(set) var currentStatusMessage: String? = nil
 
     func sendChatMessage(_ text: String) async {
         await chatboxHandler.sendUserMessage(text)
@@ -563,18 +564,39 @@ final class OnboardingInterviewCoordinator {
 
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .processingStateChanged(let isProcessing):
+        case .processingStateChanged(let isProcessing, let statusMessage):
             // Sync processing state for UI reactivity
             self.isProcessingSync = isProcessing
-            Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessingSync=\(isProcessing)", category: .ai)
+            self.currentStatusMessage = statusMessage
+            Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessingSync=\(isProcessing), status: \(statusMessage ?? "none")", category: .ai)
             await syncWizardProgressFromState()
 
-        case .streamingStatusUpdated:
-            // Sync cache now maintained by StateCoordinator
+        case .streamingStatusUpdated(_, let statusMessage):
+            // Update status message if provided
+            if let statusMessage = statusMessage {
+                self.currentStatusMessage = statusMessage
+            }
             break
 
-        case .waitingStateChanged:
-            // Sync cache now maintained by StateCoordinator
+        case .waitingStateChanged(_, let statusMessage):
+            // Update status message if provided
+            if let statusMessage = statusMessage {
+                self.currentStatusMessage = statusMessage
+            }
+            break
+
+        case .toolCallRequested(_, let statusMessage):
+            // Update status message for tool calls
+            if let statusMessage = statusMessage {
+                self.currentStatusMessage = statusMessage
+            }
+            break
+
+        case .toolCallCompleted(_, _, let statusMessage):
+            // Update status message for tool completion
+            if let statusMessage = statusMessage {
+                self.currentStatusMessage = statusMessage
+            }
             break
 
         default:
@@ -605,8 +627,27 @@ final class OnboardingInterviewCoordinator {
             // User message added to transcript by ChatboxHandler - sync immediately
             messages = await state.messages
 
-        case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized,
-             .llmUserMessageSent:
+        case .streamingMessageBegan(_, _, _, let statusMessage):
+            // Sync messages and update status
+            messages = await state.messages
+            if let statusMessage = statusMessage {
+                self.currentStatusMessage = statusMessage
+            }
+
+        case .streamingMessageUpdated(_, _, let statusMessage):
+            // Sync messages and update status
+            messages = await state.messages
+            if let statusMessage = statusMessage {
+                self.currentStatusMessage = statusMessage
+            }
+
+        case .streamingMessageFinalized(_, _, _, let statusMessage):
+            // Sync messages and clear status on completion
+            messages = await state.messages
+            // Clear status message when streaming completes
+            self.currentStatusMessage = statusMessage ?? nil
+
+        case .llmUserMessageSent:
             // Sync messages from StateCoordinator to trigger UI updates
             messages = await state.messages
 

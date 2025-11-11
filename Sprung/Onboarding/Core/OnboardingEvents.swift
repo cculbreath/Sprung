@@ -21,17 +21,17 @@ struct ProcessedUploadInfo {
 /// All events that can occur during the onboarding interview
 enum OnboardingEvent {
     // MARK: - Processing State
-    case processingStateChanged(Bool)
+    case processingStateChanged(Bool, statusMessage: String? = nil)
 
     // MARK: - Messages
-    case streamingMessageBegan(id: UUID, text: String, reasoningExpected: Bool)
-    case streamingMessageUpdated(id: UUID, delta: String)
-    case streamingMessageFinalized(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil)
+    case streamingMessageBegan(id: UUID, text: String, reasoningExpected: Bool, statusMessage: String? = nil)
+    case streamingMessageUpdated(id: UUID, delta: String, statusMessage: String? = nil)
+    case streamingMessageFinalized(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil, statusMessage: String? = nil)
 
     // MARK: - Status Updates
-    case streamingStatusUpdated(String?)
-    case waitingStateChanged(String?)
-    case pendingExtractionUpdated(OnboardingPendingExtraction?)
+    case streamingStatusUpdated(String?, statusMessage: String? = nil)
+    case waitingStateChanged(String?, statusMessage: String? = nil)
+    case pendingExtractionUpdated(OnboardingPendingExtraction?, statusMessage: String? = nil)
     case errorOccurred(String)
 
     // MARK: - Data Storage
@@ -41,8 +41,8 @@ enum OnboardingEvent {
     case checkpointRequested
 
     // MARK: - Tool Execution
-    case toolCallRequested(ToolCall)
-    case toolCallCompleted(id: UUID, result: JSON)
+    case toolCallRequested(ToolCall, statusMessage: String? = nil)
+    case toolCallCompleted(id: UUID, result: JSON, statusMessage: String? = nil)
 
     // MARK: - Tool UI Requests
     case choicePromptRequested(prompt: OnboardingChoicePrompt)
@@ -342,20 +342,27 @@ actor EventCoordinator {
     private func logEvent(_ event: OnboardingEvent) {
         let description: String
         switch event {
-        case .processingStateChanged(let processing):
-            description = "Processing: \(processing)"
-        case .streamingMessageBegan:
-            description = "Streaming began"
-        case .streamingMessageUpdated:
-            description = "Streaming update"
-        case .streamingMessageFinalized:
-            description = "Streaming finalized"
-        case .streamingStatusUpdated(let status):
-            description = "Status: \(status ?? "nil")"
-        case .waitingStateChanged(let state):
-            description = "Waiting: \(state ?? "nil")"
-        case .pendingExtractionUpdated(let extraction):
-            description = "Pending extraction: \(extraction?.title ?? "nil")"
+        case .processingStateChanged(let processing, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Processing: \(processing)\(statusInfo)"
+        case .streamingMessageBegan(_, _, _, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Streaming began\(statusInfo)"
+        case .streamingMessageUpdated(_, _, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Streaming update\(statusInfo)"
+        case .streamingMessageFinalized(_, _, _, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Streaming finalized\(statusInfo)"
+        case .streamingStatusUpdated(let status, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Status: \(status ?? "nil")\(statusInfo)"
+        case .waitingStateChanged(let state, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Waiting: \(state ?? "nil")\(statusInfo)"
+        case .pendingExtractionUpdated(let extraction, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Pending extraction: \(extraction?.title ?? "nil")\(statusInfo)"
         case .errorOccurred(let error):
             description = "Error: \(error)"
         case .applicantProfileStored:
@@ -366,10 +373,12 @@ actor EventCoordinator {
             description = "Sections updated"
         case .checkpointRequested:
             description = "Checkpoint requested"
-        case .toolCallRequested:
-            description = "Tool call requested"
-        case .toolCallCompleted:
-            description = "Tool call completed"
+        case .toolCallRequested(_, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Tool call requested\(statusInfo)"
+        case .toolCallCompleted(_, _, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Tool call completed\(statusInfo)"
         case .choicePromptRequested:
             description = "Choice prompt requested"
         case .choicePromptCleared:

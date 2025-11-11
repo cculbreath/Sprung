@@ -41,7 +41,8 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
         Task {
             // Publish event instead of direct state mutation
-            await eventBus.publish(.pendingExtractionUpdated(extraction))
+            let statusMessage = extraction.map { "Extracting content from \($0.title)..." }
+            await eventBus.publish(.pendingExtractionUpdated(extraction, statusMessage: statusMessage))
             // StateCoordinator maintains sync cache
 
             guard let extraction else { return }

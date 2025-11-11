@@ -213,7 +213,7 @@ actor NetworkRouter: OnboardingEventEmitter {
                     callId: toolCall.callId
                 )
 
-                await emit(.toolCallRequested(call))
+                await emit(.toolCallRequested(call, statusMessage: "Executing \(functionName)..."))
                 Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
 
             case .reasoning(let reasoning):
@@ -300,7 +300,7 @@ actor NetworkRouter: OnboardingEventEmitter {
 
         // Emit tool call event (Spec §6: LLM.toolCallReceived)
         // Orchestrator will subscribe to this and manage continuations
-        await emit(.toolCallRequested(call))
+        await emit(.toolCallRequested(call, statusMessage: "Processing \(functionName)..."))
 
         Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
     }

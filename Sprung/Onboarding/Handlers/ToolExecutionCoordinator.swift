@@ -55,7 +55,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
 
     private func handleToolEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .toolCallRequested(let call):
+        case .toolCallRequested(let call, _):
             await handleToolCall(call)
 
         default:

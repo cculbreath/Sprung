@@ -71,7 +71,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             return
         }
 
-        await emit(.processingStateChanged(true))
+        await emit(.processingStateChanged(true, statusMessage: "Starting interview..."))
 
         // Send user message to trigger conversational response
         // The system prompt's OPENING SEQUENCE section instructs the LLM to:
@@ -99,7 +99,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     func sendUserMessage(_ text: String) async throws {
         guard isActive else { return }
 
-        await emit(.processingStateChanged(true))
+        await emit(.processingStateChanged(true, statusMessage: "Sending message..."))
 
         // Emit message request event (§4.3)
         var payload = JSON()
