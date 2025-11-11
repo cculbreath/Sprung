@@ -130,38 +130,40 @@ struct OnboardingInterviewToolPane: View {
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .center) {
-            if let extraction = coordinator.pendingExtractionSync {
-                ExtractionProgressOverlay(
-                    items: extraction.progressItems,
-                    statusText: coordinator.currentStatusMessage
-                )
-                .transition(.opacity.combined(with: .scale))
-                .zIndex(1)
-            } else if showSpinner {
-                // Use currentStatusMessage if available, otherwise fall back to pendingStreamingStatusSync
-                let statusText = coordinator.currentStatusMessage ?? coordinator.pendingStreamingStatusSync?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                AnimatedThinkingText(statusMessage: statusText)
-                    .padding(.vertical, 32)
-                    .padding(.horizontal, 32)
-                    .background(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(.regularMaterial)
-                            .shadow(color: Color.black.opacity(0.15), radius: 20, y: 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .overlay {
+            ZStack {
+                if let extraction = coordinator.pendingExtractionSync {
+                    ExtractionProgressOverlay(
+                        items: extraction.progressItems,
+                        statusText: coordinator.currentStatusMessage
                     )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-                            .blendMode(.plusLighter)
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale))
                     .zIndex(1)
+                } else if showSpinner {
+                    // Use currentStatusMessage if available, otherwise fall back to pendingStreamingStatusSync
+                    let statusText = coordinator.currentStatusMessage ?? coordinator.pendingStreamingStatusSync?
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    AnimatedThinkingText(statusMessage: statusText)
+                        .padding(.vertical, 32)
+                        .padding(.horizontal, 32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(.regularMaterial)
+                                .shadow(color: Color.black.opacity(0.15), radius: 20, y: 10)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+                                .blendMode(.plusLighter)
+                        )
+                        .allowsHitTesting(false)
+                        .transition(.opacity.combined(with: .scale))
+                        .zIndex(1)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .animation(
             .easeInOut(duration: 0.2),
