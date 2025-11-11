@@ -5,7 +5,7 @@ struct ExperienceEntryHeader: View {
     let subtitle: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(.headline)
             if let subtitle, subtitle.isEmpty == false {
