@@ -38,6 +38,12 @@ struct TimelineCardEditorView: View {
         .onChange(of: timeline) { _, newValue in
             load(from: newValue)
         }
+        .onChange(of: coordinator.skeletonTimelineSync) { _, newTimeline in
+            // Reload when timeline cards are created/updated in real-time
+            if let newTimeline {
+                load(from: newTimeline)
+            }
+        }
         .onChange(of: drafts) { _, _ in
             hasChanges = TimelineCardAdapter.cards(from: drafts) != baselineCards
         }

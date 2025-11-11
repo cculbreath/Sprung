@@ -13,7 +13,8 @@ struct OnboardingInterviewToolPane: View {
     var body: some View {
         let paneOccupied = isPaneOccupied(coordinator: coordinator)
         let isLLMActive = coordinator.isProcessingSync || coordinator.pendingStreamingStatusSync != nil
-        let showSpinner = coordinator.pendingExtractionSync != nil || (!paneOccupied && isLLMActive)
+        // Always show spinner during any busy state, regardless of what cards are shown
+        let showSpinner = coordinator.pendingExtractionSync != nil || isLLMActive
 
         return VStack(alignment: .leading, spacing: 16) {
             if coordinator.pendingExtractionSync != nil {
@@ -45,6 +46,11 @@ struct OnboardingInterviewToolPane: View {
                         KnowledgeCardValidationHost(
                             prompt: validation,
                             artifactsJSON: coordinator.artifactRecordsSync,
+                            coordinator: coordinator
+                        )
+                    } else if validation.dataType == "skeleton_timeline" {
+                        TimelineCardEditorView(
+                            timeline: validation.payload,
                             coordinator: coordinator
                         )
                     } else {
@@ -129,29 +135,22 @@ struct OnboardingInterviewToolPane: View {
             if let extraction = coordinator.pendingExtractionSync {
                 ExtractionProgressOverlay(
                     items: extraction.progressItems,
-                    statusText: nil
+                    statusText: coordinator.currentStatusMessage
                 )
                 .transition(.opacity.combined(with: .scale))
                 .zIndex(1)
             } else if showSpinner {
-                VStack(spacing: 12) {
-                    AnimatedThinkingText()
-                    if let status = coordinator.pendingStreamingStatusSync?
-                        .trimmingCharacters(in: .whitespacesAndNewlines),
-                       !status.isEmpty {
-                        Text(status)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .transition(.opacity)
-                    }
-                }
-                .padding(.vertical, 24)
-                .padding(.horizontal, 24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-                .transition(.opacity.combined(with: .scale))
-                .zIndex(1)
+                // Use currentStatusMessage if available, otherwise fall back to pendingStreamingStatusSync
+                let statusText = coordinator.currentStatusMessage ?? coordinator.pendingStreamingStatusSync?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                AnimatedThinkingText(statusMessage: statusText)
+                    .padding(.vertical, 24)
+                    .padding(.horizontal, 24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale))
+                    .zIndex(1)
             }
         }
         .animation(
@@ -331,23 +330,13 @@ private struct ExtractionProgressOverlay: View {
 
     var body: some View {
         VStack(spacing: 28) {
-            AnimatedThinkingText()
+            AnimatedThinkingText(statusMessage: statusText)
 
             VStack(alignment: .leading, spacing: 18) {
                 Text("Processing résumé…")
                     .font(.headline)
 
                 ExtractionProgressChecklistView(items: items)
-
-                if let trimmedStatus {
-                    Divider()
-                        .padding(.vertical, 4)
-
-                    Text(trimmedStatus)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                }
             }
             .padding(.vertical, 26)
             .padding(.horizontal, 26)

@@ -62,21 +62,14 @@ struct DisplayTimelineForReviewTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // Query current timeline from coordinator
-        guard let timelineJSON = await coordinator.skeletonTimelineJSON else {
-            throw ToolError.invalidParameters("No skeleton timeline exists yet. Create timeline cards first.")
-        }
-
-        // Validate that timeline has at least one entry
-        let timelineArray = timelineJSON["timeline"].array ?? []
-        guard !timelineArray.isEmpty else {
-            throw ToolError.invalidParameters("Timeline is empty. Create timeline cards before requesting review.")
-        }
+        // Get current timeline from coordinator (may be nil or empty - that's OK!)
+        let timelineJSON = await coordinator.skeletonTimelineJSON ?? JSON()
 
         // Get optional summary message
-        let summary = params["summary"].string ?? "Please review the timeline entries below and confirm they are accurate."
+        let summary = params["summary"].string ?? "Timeline review activated. Cards will appear here as you create them."
 
-        // Build validation prompt
+        // Build validation prompt - even if timeline is empty, we activate the UI
+        // Cards created afterward will appear in this UI in real-time
         let validationPrompt = OnboardingValidationPrompt(
             dataType: "skeleton_timeline",
             payload: timelineJSON,
@@ -86,10 +79,10 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         // Emit UI request to show the validation prompt
         await coordinator.eventBus.publish(.validationPromptRequested(prompt: validationPrompt))
 
-        // Return completed - the tool's job is to present UI, which it has done
-        // User's validation response will arrive as a new user message
+        // Return completed - the tool's job is to activate UI, which it has done
+        // Timeline cards created afterward will appear in this UI automatically
         var response = JSON()
-        response["message"].string = "UI presented. Awaiting user input."
+        response["message"].string = "Timeline review UI activated. Cards will appear as you create them."
         response["status"].string = "completed"
 
         return .immediate(response)
