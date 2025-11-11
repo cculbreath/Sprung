@@ -61,6 +61,7 @@ struct GetArtifactRecordTool: InterviewTool {
         // Get artifact record from coordinator state
         if let artifact = await coordinator.getArtifactRecord(id: artifactId) {
             var response = JSON()
+            response["status"].string = "completed"
             response["artifact"] = artifact
             return .immediate(response)
         } else {

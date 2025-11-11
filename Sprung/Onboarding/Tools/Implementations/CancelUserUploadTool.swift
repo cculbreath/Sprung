@@ -61,7 +61,8 @@ struct CancelUserUploadTool: InterviewTool {
 
         guard let firstRequest = uploadRequests.first else {
             var response = JSON()
-            response["status"].string = "error"
+            response["status"].string = "completed"
+            response["error"].bool = true
             response["message"].string = "No active upload request to cancel."
             return .immediate(response)
         }
@@ -71,7 +72,8 @@ struct CancelUserUploadTool: InterviewTool {
 
         // Build response
         var response = JSON()
-        response["status"].string = "cancelled"
+        response["status"].string = "completed"
+        response["cancelled"].bool = true
         response["upload_id"].string = firstRequest.id.uuidString
         if let reason {
             response["reason"].string = reason

@@ -735,6 +735,7 @@ final class OnboardingInterviewCoordinator {
         ))
 
         var result = JSON()
+        result["status"].string = "completed"
         result["success"].boolValue = true
         result["objective_id"].stringValue = objectiveId
         result["new_status"].stringValue = status.lowercased()
@@ -1092,6 +1093,21 @@ final class OnboardingInterviewCoordinator {
     /// Complete upload and send user message to LLM.
     func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
         guard await completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
+
+        // Check if any uploaded files require async extraction (PDF, DOCX, HTML, etc.)
+        // For these, skip sending immediate "upload successful" message - the DocumentArtifactMessenger
+        // will send a more informative message with the extracted content once processing completes
+        // Plain text formats (txt, md, rtf) are packaged immediately and don't need to wait
+        // HTML requires extraction to remove scripts, CSS, and other noise
+        let requiresAsyncExtraction = fileURLs.contains { url in
+            let ext = url.pathExtension.lowercased()
+            return ["pdf", "doc", "docx", "html", "htm"].contains(ext)
+        }
+
+        if requiresAsyncExtraction {
+            Logger.info("📄 Upload completed - async document extraction in progress, skipping immediate message", category: .ai)
+            return
+        }
 
         var userMessage = JSON()
         userMessage["role"].string = "user"

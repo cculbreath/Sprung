@@ -92,6 +92,7 @@ struct PersistDataTool: InterviewTool {
             await emitDomainEvent(for: dataType, payload: payload)
 
             var response = JSON()
+            response["status"].string = "completed"
             response["persisted"]["id"].string = identifier
             response["persisted"]["type"].string = dataType
             response["persisted"]["status"].string = "created"

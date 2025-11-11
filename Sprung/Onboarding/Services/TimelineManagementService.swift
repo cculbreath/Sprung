@@ -67,6 +67,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
         await eventBus.publish(.timelineCardCreated(card: card))
 
         var result = JSON()
+        result["status"].string = "completed"
         result["success"].boolValue = true
         result["id"].string = card["id"].string
         return result
@@ -77,6 +78,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
         await eventBus.publish(.timelineCardUpdated(id: id, fields: fields))
 
         var result = JSON()
+        result["status"].string = "completed"
         result["success"].boolValue = true
         result["id"].string = id
         return result
@@ -87,6 +89,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
         await eventBus.publish(.timelineCardDeleted(id: id))
 
         var result = JSON()
+        result["status"].string = "completed"
         result["success"].boolValue = true
         result["id"].string = id
         return result
@@ -97,6 +100,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
         await eventBus.publish(.timelineCardsReordered(ids: orderedIds))
 
         var result = JSON()
+        result["status"].string = "completed"
         result["success"].boolValue = true
         result["count"].int = orderedIds.count
         return result

@@ -21,27 +21,29 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         return JSONSchema(
             type: .object,
             description: """
-                Present the current skeleton timeline in an editable review UI card for user validation and corrections.
+                Activate the timeline review UI in the Tool Pane so timeline cards become visible to the user as you create them.
 
-                Use this at the end of timeline building to get user confirmation before persisting. User can review all entries, make edits, and confirm accuracy.
+                CRITICAL WORKFLOW SEQUENCE:
+                1. FIRST: Call this tool to activate the timeline UI (even before creating any cards)
+                2. THEN: Create timeline cards using create_timeline_card - cards appear in UI immediately
+                3. FINALLY: User can review, edit, delete, or approve cards through the UI in real-time
 
                 RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
 
-                The tool completes immediately after presenting UI. User validation response arrives as a new user message with status and (potentially modified) timeline data.
+                The tool completes immediately after activating the timeline UI. Timeline cards you create afterward will appear in this UI automatically.
 
-                USAGE: Call after collecting all timeline entries via create_timeline_card and user confirms data gathering is complete. This is the validation checkpoint before calling persist_data.
+                USAGE: Call this BEFORE creating timeline cards when starting skeleton_timeline workflow. This activates the UI container where cards will appear.
 
                 WORKFLOW:
-                1. Collect timeline cards via chat interview + create_timeline_card
-                2. When timeline feels complete, call display_timeline_entries_for_review
-                3. Tool returns immediately - review card is now active
-                4. User reviews timeline, makes corrections in UI if needed, confirms/rejects
-                5. You receive validation response with status and timeline data
-                6. If confirmed, call persist_data(dataType: "skeleton_timeline", data: <timeline>)
+                1. Call display_timeline_entries_for_review to activate timeline UI
+                2. Create cards with create_timeline_card - each appears immediately in the UI
+                3. User can edit/delete/approve cards in real-time as you create them
+                4. Refine cards based on user feedback until timeline is complete
+                5. User confirms timeline completeness through the UI
 
-                ERROR: Will fail if no timeline cards exist yet. Create at least one card before requesting review.
+                ERROR: Will fail if called when timeline UI is already active or if skeleton timeline has already been validated/persisted.
 
-                DO NOT: Call this before timeline collection is reasonably complete - premature validation wastes user time.
+                DO NOT: Wait to create all cards before calling this - call it FIRST to activate the UI, then create cards one by one.
                 """,
             properties: properties,
             required: [],

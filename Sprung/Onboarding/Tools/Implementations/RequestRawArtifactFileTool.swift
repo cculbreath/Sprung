@@ -58,7 +58,8 @@ struct RequestRawArtifactFileTool: InterviewTool {
         // Get the artifact record to find the file URL
         guard let artifact = await coordinator.getArtifactRecord(id: artifactId) else {
             var response = JSON()
-            response["status"].string = "not_found"
+            response["status"].string = "completed"
+            response["error"].bool = true
             response["artifact_id"].string = artifactId
             response["message"].string = "No artifact found with ID: \(artifactId)"
             return .immediate(response)
@@ -71,7 +72,8 @@ struct RequestRawArtifactFileTool: InterviewTool {
 
         guard let fileURL, !fileURL.isEmpty else {
             var response = JSON()
-            response["status"].string = "error"
+            response["status"].string = "completed"
+            response["error"].bool = true
             response["artifact_id"].string = artifactId
             response["message"].string = "Artifact does not have an associated file URL."
             return .immediate(response)
@@ -82,7 +84,8 @@ struct RequestRawArtifactFileTool: InterviewTool {
             let fileExists = FileManager.default.fileExists(atPath: url.path)
             if !fileExists {
                 var response = JSON()
-                response["status"].string = "file_not_found"
+                response["status"].string = "completed"
+                response["error"].bool = true
                 response["artifact_id"].string = artifactId
                 response["file_url"].string = fileURL
                 response["message"].string = "The file referenced by this artifact no longer exists."
@@ -92,7 +95,7 @@ struct RequestRawArtifactFileTool: InterviewTool {
 
         // Return the file information
         var response = JSON()
-        response["status"].string = "success"
+        response["status"].string = "completed"
         response["artifact_id"].string = artifactId
         response["file_url"].string = fileURL
         response["filename"].string = artifact["filename"].string ?? "unknown"

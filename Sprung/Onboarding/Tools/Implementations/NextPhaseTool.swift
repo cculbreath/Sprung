@@ -84,7 +84,7 @@ struct NextPhaseTool: InterviewTool {
             nextPhase = .complete
         case .complete:
             var response = JSON()
-            response["status"].string = "complete"
+            response["status"].string = "completed"
             response["message"].string = "Interview is already complete"
             return .immediate(response)
         }
@@ -99,7 +99,7 @@ struct NextPhaseTool: InterviewTool {
             )
 
             var response = JSON()
-            response["status"].string = "success"
+            response["status"].string = "completed"
             response["previous_phase"].string = currentPhase.rawValue
             response["new_phase"].string = nextPhase.rawValue
             response["message"].string = "Phase transition completed"
