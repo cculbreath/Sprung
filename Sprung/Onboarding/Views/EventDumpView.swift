@@ -309,10 +309,14 @@ struct EventDumpView: View {
             output += metricsText + "\n\n"
             output += String(repeating: "=", count: 80) + "\n\n"
 
-            // Consolidate consecutive streaming events
+            // Note: Streaming events are now consolidated at source in EventCoordinator
+            // The consolidation function below is kept for backward compatibility
             let consolidatedEvents = self.consolidateStreamingEvents(events)
 
-            output += "Recent Events (\(consolidatedEvents.count) consolidated from \(events.count)):\n\n"
+            let countInfo = consolidatedEvents.count < events.count
+                ? " (consolidated from \(events.count))"
+                : ""
+            output += "Recent Events (\(consolidatedEvents.count)\(countInfo)):\n\n"
             for (index, event) in consolidatedEvents.enumerated() {
                 output += "#\(consolidatedEvents.count - index)\n"
                 output += event + "\n\n"
