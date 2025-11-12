@@ -94,7 +94,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - LLM State (Single Source of Truth)
 
     private var allowedToolNames: Set<String> = []
-    private var conversationId: String?
     private var lastResponseId: String?
     private var currentModelId: String = "gpt-5"
     private var currentToolPaneCard: OnboardingToolPaneCard = .none
@@ -639,8 +638,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     /// Update conversation state (called by LLMMessenger when response completes)
-    func updateConversationState(conversationId: String, responseId: String) {
-        self.conversationId = conversationId
+    func updateConversationState(responseId: String) {
         self.lastResponseId = responseId
         Logger.debug("💬 Conversation state updated: \(responseId.prefix(8))", category: .ai)
     }
