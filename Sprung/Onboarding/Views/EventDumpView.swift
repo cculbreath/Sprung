@@ -245,7 +245,7 @@ struct EventDumpView: View {
         case .streamingMessageUpdated(let id, let delta, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             return "streamingMessageUpdated(id: \(id.uuidString.prefix(8)), delta: \(delta.count) chars)\(statusInfo)"
-        case .streamingMessageFinalized(let id, let text, let toolCalls, let statusMessage):
+        case .streamingMessageFinalized(let id, let text, let toolCalls, _):
             let toolInfo = toolCalls.map { " toolCalls: \($0.count)" } ?? ""
             return "streamingMessageFinalized(id: \(id.uuidString.prefix(8)), text: \(text.count) chars\(toolInfo))"
         case .llmReasoningSummaryDelta(let delta):

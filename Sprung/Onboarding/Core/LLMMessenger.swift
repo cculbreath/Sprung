@@ -310,7 +310,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         var isRetriableError = false
                         if let apiError = error as? APIError {
                             switch apiError {
-                            case .responseUnsuccessful(let description, let statusCode, _):
+                            case .responseUnsuccessful(_, let statusCode, _):
                                 // Retry on 503 (Service Unavailable), 502 (Bad Gateway), 504 (Gateway Timeout)
                                 if statusCode == 503 || statusCode == 502 || statusCode == 504 {
                                     isRetriableError = true
@@ -406,7 +406,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
 
-        Logger.info("📝 Built request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls)", category: .ai)
+        Logger.info("📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
         return parameters
     }
 
@@ -488,7 +488,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             parameters.reasoning = Reasoning(effort: effort)
         }
 
-        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls), reasoningEffort=\(reasoningEffort ?? "default")", category: .ai)
+        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), reasoningEffort=\(reasoningEffort ?? "default")", category: .ai)
         return parameters
     }
 
@@ -522,7 +522,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             parameters.reasoning = Reasoning(effort: effort)
         }
 
-        Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls)", category: .ai)
+        Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
         return parameters
     }
 
