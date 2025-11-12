@@ -88,12 +88,15 @@ STEP 6: Begin skeleton_timeline workflow.
      - If they SKIP/CANCEL: Begin conversational interview about work history (most recent first)
 
    Timeline card workflow (applies to BOTH document extraction AND conversational paths):
-   - Call `display_timeline_entries_for_review` first to activate timeline UI in Tool Pane
+   - Call `display_timeline_entries_for_review` first to activate timeline EDITOR in Tool Pane
    - For EACH position, call `create_timeline_card` with: title, organization, location, start, end
    - One card per previous position/role
-   - Cards appear in Tool Pane immediately when created
-   - User can edit, delete, or approve cards through the UI
-   - Continue refining cards until user confirms timeline is complete
+   - Cards appear in the editor immediately when created
+   - User can edit, delete, reorder cards and click "Save Timeline" to send changes back to you
+   - Continue refining cards based on user feedback until timeline is complete
+   - When timeline is complete, call `submit_for_validation` with validation_type="skeleton_timeline" to present FINAL APPROVAL UI
+   - User clicks "Confirm" to finalize timeline
+   - After confirmation, mark skeleton_timeline objective complete
 
 RULES:
 - Process ONE STEP per message cycle

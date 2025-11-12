@@ -21,29 +21,32 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         return JSONSchema(
             type: .object,
             description: """
-                Activate the timeline review UI in the Tool Pane so timeline cards become visible to the user as you create them.
+                Activate the timeline EDITOR UI in the Tool Pane so timeline cards become visible and editable as you create them.
+
+                PURPOSE: This opens an EDITOR interface (NOT final approval). The user can make live edits, delete cards, or click "Save Timeline" to send changes back to you. This allows iterative refinement.
 
                 CRITICAL WORKFLOW SEQUENCE:
-                1. FIRST: Call this tool to activate the timeline UI (even before creating any cards)
-                2. THEN: Create timeline cards using create_timeline_card - cards appear in UI immediately
-                3. FINALLY: User can review, edit, delete, or approve cards through the UI in real-time
+                1. FIRST: Call this tool to activate the timeline editor (even before creating any cards)
+                2. THEN: Create timeline cards using create_timeline_card - cards appear in editor immediately
+                3. DURING: User can edit, delete, reorder cards and click "Save Timeline" to send updates
+                4. FINALLY: When timeline is complete, call submit_for_validation to present FINAL APPROVAL UI
 
-                RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
+                RETURNS: { "message": "Timeline review UI activated.", "status": "completed" }
 
-                The tool completes immediately after activating the timeline UI. Timeline cards you create afterward will appear in this UI automatically.
+                The tool completes immediately after activating the editor. Timeline cards you create afterward will appear in this UI automatically.
 
-                USAGE: Call this BEFORE creating timeline cards when starting skeleton_timeline workflow. This activates the UI container where cards will appear.
+                USAGE: Call this BEFORE creating timeline cards when starting skeleton_timeline workflow. This activates the editor where cards will appear.
 
                 WORKFLOW:
-                1. Call display_timeline_entries_for_review to activate timeline UI
-                2. Create cards with create_timeline_card - each appears immediately in the UI
-                3. User can edit/delete/approve cards in real-time as you create them
-                4. Refine cards based on user feedback until timeline is complete
-                5. User confirms timeline completeness through the UI
+                1. Call display_timeline_entries_for_review to activate editor UI
+                2. Create cards with create_timeline_card - each appears immediately
+                3. User makes live edits and clicks "Save Timeline" when ready
+                4. You receive user's changes as a developer message
+                5. When timeline is complete, call submit_for_validation for FINAL approval
+
+                IMPORTANT: This is the EDITOR, not the final approval step. After timeline is complete, you must call submit_for_validation to get user's final confirmation.
 
                 ERROR: Will fail if called when timeline UI is already active or if skeleton timeline has already been validated/persisted.
-
-                DO NOT: Wait to create all cards before calling this - call it FIRST to activate the UI, then create cards one by one.
                 """,
             properties: properties,
             required: [],
@@ -58,7 +61,7 @@ struct DisplayTimelineForReviewTool: InterviewTool {
     }
 
     var name: String { "display_timeline_entries_for_review" }
-    var description: String { "Present timeline review UI with all cards. Returns immediately - validation response arrives as user message. Use before persisting." }
+    var description: String { "Activate timeline EDITOR UI before creating cards. User can edit/save changes. NOT final approval - use submit_for_validation afterward." }
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
