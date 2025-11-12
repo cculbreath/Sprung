@@ -672,6 +672,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         let previousResponseId: String?
         let currentModelId: String
         let messages: [OnboardingMessage]
+        let hasStreamedFirstResponse: Bool
         // ToolPane UI state for resume
         let currentToolPaneCard: OnboardingToolPaneCard
     }
@@ -692,6 +693,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             previousResponseId: previousResponseId,
             currentModelId: currentModelId,
             messages: currentMessages,
+            hasStreamedFirstResponse: hasStreamedFirstResponse,
             currentToolPaneCard: currentToolPaneCard
         )
     }
@@ -722,6 +724,12 @@ actor StateCoordinator: OnboardingEventEmitter {
         await chatStore.restoreMessages(snapshot.messages)
         messagesSync = snapshot.messages
         Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
+
+        // Restore streaming state
+        hasStreamedFirstResponse = snapshot.hasStreamedFirstResponse
+        if hasStreamedFirstResponse {
+            Logger.info("✅ Restored hasStreamedFirstResponse=true (conversation in progress)", category: .ai)
+        }
 
         // Restore ToolPane card state
         currentToolPaneCard = snapshot.currentToolPaneCard
