@@ -49,10 +49,32 @@ struct OnboardingInterviewToolPane: View {
                             coordinator: coordinator
                         )
                     } else if validation.dataType == "skeleton_timeline" {
-                        TimelineCardEditorView(
-                            timeline: validation.payload,
-                            coordinator: coordinator
-                        )
+                        // Check mode to determine which UI to show
+                        if validation.mode == .editor {
+                            // Editor mode: Show timeline card editor with Save button
+                            TimelineCardEditorView(
+                                timeline: validation.payload,
+                                coordinator: coordinator
+                            )
+                        } else {
+                            // Validation mode: Show approval card with Confirm/Reject buttons
+                            OnboardingValidationReviewCard(
+                                prompt: validation,
+                                onSubmit: { decision, updated, notes in
+                                    Task {
+                                        await coordinator.submitValidationAndResume(
+                                            status: decision.rawValue,
+                                            updatedData: updated,
+                                            changes: nil,
+                                            notes: notes
+                                        )
+                                    }
+                                },
+                                onCancel: {
+                                    // Note: Validation cancellation not implemented - user must approve or reject
+                                }
+                            )
+                        }
                     } else {
                         OnboardingValidationReviewCard(
                             prompt: validation,
