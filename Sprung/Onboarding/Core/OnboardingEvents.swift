@@ -57,6 +57,7 @@ enum OnboardingEvent {
     case profileSummaryDismissRequested
     case sectionToggleRequested(request: OnboardingSectionToggleRequest)
     case sectionToggleCleared
+    case toolPaneCardRestored(OnboardingToolPaneCard)
     case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest)
     case phaseAdvanceDismissed
     case phaseAdvanceApproved(request: OnboardingPhaseAdvanceRequest)
@@ -307,7 +308,7 @@ actor EventCoordinator {
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
              .applicantProfileIntakeRequested, .profileSummaryUpdateRequested(_), .applicantProfileIntakeCleared, .profileSummaryDismissRequested,
-             .sectionToggleRequested, .sectionToggleCleared:
+             .sectionToggleRequested, .sectionToggleCleared, .toolPaneCardRestored:
             return .toolpane
 
         // Timeline events
@@ -499,6 +500,8 @@ actor EventCoordinator {
                 description = "Profile Summary Update Requested"
             case .profileSummaryDismissRequested:
                 description = "Dismiss Profile Summary Requested"
+            case .toolPaneCardRestored(let card):
+                description = "ToolPane card restored: \(card.rawValue)"
         }
 
         Logger.debug("[Event] \(description)", category: .ai)
