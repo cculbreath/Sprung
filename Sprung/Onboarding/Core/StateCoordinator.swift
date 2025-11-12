@@ -727,8 +727,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         currentToolPaneCard = snapshot.currentToolPaneCard
         if currentToolPaneCard != .none {
             Logger.info("🎴 Restored ToolPane card: \(currentToolPaneCard.rawValue)", category: .ai)
-            // Emit event to trigger UI restoration
-            await eventBus.publish(.toolPaneCardRestored(currentToolPaneCard))
+            // Note: UI reads currentToolPaneCard directly, no event emission needed during restore
         }
 
         // Update sync caches
