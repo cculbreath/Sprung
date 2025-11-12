@@ -131,7 +131,7 @@ final class OnboardingInterviewCoordinator {
 
     /// Sync cache access for SwiftUI views
     /// StateCoordinator is the single source of truth with nonisolated(unsafe) sync caches
-    var isActiveSync: Bool { state.isActiveSync }
+    private(set) var isActiveSync: Bool = false  // Stored property for @Observable reactivity
     var pendingExtractionSync: OnboardingPendingExtraction? { state.pendingExtractionSync }
     var pendingStreamingStatusSync: String? { state.pendingStreamingStatusSync }
     var artifactRecordsSync: [JSON] { state.artifactRecordsSync }
@@ -769,7 +769,9 @@ final class OnboardingInterviewCoordinator {
         if success {
             // Get the orchestrator created by lifecycleController
             self.orchestrator = lifecycleController.orchestrator
-            // StateCoordinator maintains sync cache for isActive
+            // Sync active state for UI reactivity
+            self.isActiveSync = state.isActiveSync
+            Logger.info("🎛️ Coordinator isActiveSync synced: \(self.isActiveSync)", category: .ai)
         }
 
         // Set model ID from preferences or ModelProvider default
@@ -784,7 +786,9 @@ final class OnboardingInterviewCoordinator {
     func endInterview() async {
         // Delegate to lifecycle controller
         await lifecycleController.endInterview()
-        // StateCoordinator maintains sync cache for isActive
+        // Sync active state for UI reactivity
+        self.isActiveSync = state.isActiveSync
+        Logger.info("🎛️ Coordinator isActiveSync synced: \(self.isActiveSync)", category: .ai)
     }
 
     /// Restore from a specific checkpoint (used by debug UI)
