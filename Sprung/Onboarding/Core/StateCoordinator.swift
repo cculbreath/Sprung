@@ -97,6 +97,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private var conversationId: String?
     private var lastResponseId: String?
     private var currentModelId: String = "gpt-5"
+    private var currentToolPaneCard: OnboardingToolPaneCard = .none
 
     // MARK: - Initialization
 
@@ -522,21 +523,40 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .choicePromptRequested(let prompt):
             await uiState.setPendingChoice(prompt)
+            currentToolPaneCard = .choicePrompt
 
         case .choicePromptCleared:
             await uiState.setPendingChoice(nil)
+            currentToolPaneCard = .none
 
         case .uploadRequestPresented(let request):
             await uiState.setPendingUpload(request)
+            currentToolPaneCard = .uploadRequest
 
         case .uploadRequestCancelled:
             await uiState.setPendingUpload(nil)
+            currentToolPaneCard = .none
 
         case .validationPromptRequested(let prompt):
             await uiState.setPendingValidation(prompt)
+            // Determine card type based on prompt mode
+            currentToolPaneCard = prompt.mode == .editor ? .editTimelineCards : .confirmTimelineCards
 
         case .validationPromptCleared:
             await uiState.setPendingValidation(nil)
+            currentToolPaneCard = .none
+
+        case .applicantProfileIntakeRequested:
+            currentToolPaneCard = .applicantProfileRequest
+
+        case .applicantProfileIntakeCleared:
+            currentToolPaneCard = .none
+
+        case .sectionToggleRequested:
+            currentToolPaneCard = .sectionToggle
+
+        case .sectionToggleCleared:
+            currentToolPaneCard = .none
 
         default:
             break
@@ -652,6 +672,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         let previousResponseId: String?
         let currentModelId: String
         let messages: [OnboardingMessage]
+        // ToolPane UI state for resume
+        let currentToolPaneCard: OnboardingToolPaneCard
     }
 
     func createSnapshot() async -> StateSnapshot {
@@ -669,7 +691,8 @@ actor StateCoordinator: OnboardingEventEmitter {
             completedWizardSteps: Set(completedWizardSteps.map { $0.rawValue }),
             previousResponseId: previousResponseId,
             currentModelId: currentModelId,
-            messages: currentMessages
+            messages: currentMessages,
+            currentToolPaneCard: currentToolPaneCard
         )
     }
 
@@ -699,6 +722,14 @@ actor StateCoordinator: OnboardingEventEmitter {
         await chatStore.restoreMessages(snapshot.messages)
         messagesSync = snapshot.messages
         Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
+
+        // Restore ToolPane card state
+        currentToolPaneCard = snapshot.currentToolPaneCard
+        if currentToolPaneCard != .none {
+            Logger.info("🎴 Restored ToolPane card: \(currentToolPaneCard.rawValue)", category: .ai)
+            // Emit event to trigger UI restoration
+            await eventBus.publish(.toolPaneCardRestored(currentToolPaneCard))
+        }
 
         // Update sync caches
         objectivesSync = objectiveStore.objectivesSync
@@ -785,8 +816,19 @@ actor StateCoordinator: OnboardingEventEmitter {
         pendingExtractionSync = nil
         pendingStreamingStatusSync = nil
         pendingPhaseAdvanceRequestSync = nil
+        currentToolPaneCard = .none
 
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
+    }
+
+    // MARK: - ToolPane Card Tracking
+
+    func setToolPaneCard(_ card: OnboardingToolPaneCard) {
+        currentToolPaneCard = card
+    }
+
+    func getCurrentToolPaneCard() -> OnboardingToolPaneCard {
+        currentToolPaneCard
     }
 
     // MARK: - Delegation Methods (Convenience APIs)

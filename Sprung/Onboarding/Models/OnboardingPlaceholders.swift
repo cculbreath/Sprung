@@ -221,8 +221,21 @@ struct OnboardingPhaseAdvanceRequest: Identifiable {
     }
 }
 
-struct OnboardingValidationPrompt: Identifiable {
-    enum Mode {
+/// Tracks which type of card is currently visible in the ToolPane
+enum OnboardingToolPaneCard: String, Codable {
+    case none
+    case choicePrompt
+    case validationPrompt
+    case uploadRequest
+    case applicantProfileRequest
+    case applicantProfileIntake
+    case sectionToggle
+    case editTimelineCards
+    case confirmTimelineCards
+}
+
+struct OnboardingValidationPrompt: Identifiable, Codable {
+    enum Mode: String, Codable {
         case editor      // Editor UI (Save button, no waiting state, tools allowed)
         case validation  // Validation UI (Approve/Reject buttons, waiting state, tools blocked)
     }
