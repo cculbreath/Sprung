@@ -2,8 +2,15 @@ import SwiftUI
 import SwiftyJSON
 
 struct TimelineCardEditorView: View {
+    enum Mode {
+        case editor      // Save/Discard buttons, auto-sync with coordinator
+        case validation  // Confirm/Reject buttons, final approval
+    }
+
     let timeline: JSON
     @Bindable var coordinator: OnboardingInterviewCoordinator
+    var mode: Mode = .editor
+    var onValidationSubmit: ((String) -> Void)? = nil  // Callback for validation mode: "confirmed" or "rejected"
 
     @State private var drafts: [WorkExperienceDraft] = []
     @State private var baselineCards: [TimelineCard] = []
@@ -60,6 +67,10 @@ struct TimelineCardEditorView: View {
             }
         }
         .onChange(of: coordinator.timelineUIChangeToken) { _, newToken in
+            // Only watch coordinator changes in editor mode
+            // In validation mode, we're showing a snapshot for final approval
+            guard mode == .editor else { return }
+
             // React to timeline changes via UI change token
             // Skip if we're currently saving to prevent infinite loops
             guard !isSaving else {
@@ -145,16 +156,31 @@ struct TimelineCardEditorView: View {
             }
 
             HStack(spacing: 12) {
-                Button("Discard Changes", role: .cancel, action: discardChanges)
-                    .disabled(!hasChanges || isSaving)
+                if mode == .editor {
+                    // Editor mode: Save/Discard
+                    Button("Discard Changes", role: .cancel, action: discardChanges)
+                        .disabled(!hasChanges || isSaving)
 
-                Button {
-                    saveChanges()
-                } label: {
-                    Label(isSaving ? "Saving…" : "Save Timeline", systemImage: "tray.and.arrow.down")
+                    Button {
+                        saveChanges()
+                    } label: {
+                        Label(isSaving ? "Saving…" : "Save Timeline", systemImage: "tray.and.arrow.down")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!hasChanges || isSaving)
+                } else {
+                    // Validation mode: Reject/Confirm
+                    Button("Reject", role: .destructive) {
+                        onValidationSubmit?("rejected")
+                    }
+
+                    Spacer()
+
+                    Button("Confirm") {
+                        onValidationSubmit?("confirmed")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!hasChanges || isSaving)
             }
         }
     }
