@@ -15,10 +15,76 @@ struct EventDumpView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var events: [String] = []
     @State private var metricsText: String = ""
+    @State private var checkpoints: [OnboardingCheckpoint] = []
+    @State private var showingRestoreConfirmation = false
+    @State private var checkpointToRestore: OnboardingCheckpoint?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Checkpoints section
+                GroupBox {
+                    if checkpoints.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Checkpoints", systemImage: "bookmark.slash")
+                        } description: {
+                            Text("No saved checkpoints available")
+                        }
+                        .frame(maxHeight: 120)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 8) {
+                                ForEach(Array(checkpoints.enumerated()), id: \.element.timestamp) { index, checkpoint in
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(checkpoint.timestamp.formatted(date: .abbreviated, time: .shortened))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+
+                                            if index == 0 {
+                                                Text("Latest checkpoint")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.blue)
+                                            }
+
+                                            Text("\(checkpoint.snapshot.messages.count) messages")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer()
+
+                                        Button("Restore") {
+                                            checkpointToRestore = checkpoint
+                                            showingRestoreConfirmation = true
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .controlSize(.small)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(8)
+                                }
+                            }
+                            .padding(8)
+                        }
+                        .frame(maxHeight: 200)
+                    }
+                } label: {
+                    HStack {
+                        Text("Saved Checkpoints")
+                            .font(.headline)
+
+                        Spacer()
+
+                        Text("\(checkpoints.count) available")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding()
+
                 // Metrics section
                 GroupBox {
                     ScrollView {
@@ -123,6 +189,20 @@ struct EventDumpView: View {
             .task {
                 loadEvents()
             }
+            .alert("Restore Checkpoint?", isPresented: $showingRestoreConfirmation, presenting: checkpointToRestore) { checkpoint in
+                Button("Cancel", role: .cancel) {
+                    checkpointToRestore = nil
+                }
+                Button("Restore") {
+                    Task {
+                        await restoreCheckpoint(checkpoint)
+                        checkpointToRestore = nil
+                        dismiss()
+                    }
+                }
+            } message: { checkpoint in
+                Text("This will restore the interview state from \(checkpoint.timestamp.formatted(date: .abbreviated, time: .shortened)). The current interview will be stopped and restarted with the saved state.")
+            }
         }
         .frame(width: 800, height: 600)
     }
@@ -134,7 +214,23 @@ struct EventDumpView: View {
 
             let metrics = await coordinator.getEventMetrics()
             metricsText = formatMetrics(metrics)
+
+            // Load checkpoints
+            checkpoints = coordinator.checkpoints.getRecentCheckpoints(count: 5)
         }
+    }
+
+    private func restoreCheckpoint(_ checkpoint: OnboardingCheckpoint) async {
+        // End current interview if active
+        if coordinator.isActiveSync {
+            await coordinator.endInterview()
+        }
+
+        // Restore from the specific checkpoint
+        await coordinator.restoreFromSpecificCheckpoint(checkpoint)
+
+        // Restart interview with restored state
+        _ = await coordinator.startInterview(resumeExisting: true)
     }
 
     private func formatEvent(_ event: OnboardingEvent) -> String {

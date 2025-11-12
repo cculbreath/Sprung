@@ -86,6 +86,29 @@ final class CheckpointManager {
         return true
     }
 
+    func restoreFromSpecificCheckpoint(_ checkpoint: OnboardingCheckpoint) async -> Bool {
+        let data = checkpoints.restore(checkpoint: checkpoint)
+
+        await state.restoreFromSnapshot(data.snapshot)
+
+        // Restore artifacts from checkpoint via events
+        if let profile = data.profileJSON {
+            await eventBus.publish(.applicantProfileStored(profile))
+            persistApplicantProfileToSwiftData(json: profile)
+        }
+
+        if let timeline = data.timelineJSON {
+            await eventBus.publish(.skeletonTimelineStored(timeline))
+        }
+
+        if !data.enabledSections.isEmpty {
+            await eventBus.publish(.enabledSectionsUpdated(data.enabledSections))
+        }
+
+        Logger.info("✅ Restored from specific checkpoint (\(checkpoint.timestamp))", category: .ai)
+        return true
+    }
+
     func clearCheckpoints() {
         checkpoints.clear()
     }

@@ -97,6 +97,30 @@ final class Checkpoints {
         !history.isEmpty
     }
 
+    /// Get the last N checkpoints (most recent first)
+    func getRecentCheckpoints(count: Int = 5) -> [OnboardingCheckpoint] {
+        let sorted = history.sorted(by: { $0.timestamp > $1.timestamp })
+        return Array(sorted.prefix(count))
+    }
+
+    /// Restore from a specific checkpoint
+    func restore(checkpoint: OnboardingCheckpoint) -> (
+        snapshot: StateCoordinator.StateSnapshot,
+        profileJSON: JSON?,
+        timelineJSON: JSON?,
+        enabledSections: Set<String>
+    ) {
+        let profileJSON = checkpoint.profileJSON.flatMap { JSON(parseJSON: $0) }
+        let timelineJSON = checkpoint.timelineJSON.flatMap { JSON(parseJSON: $0) }
+
+        return (
+            snapshot: checkpoint.snapshot,
+            profileJSON: profileJSON,
+            timelineJSON: timelineJSON,
+            enabledSections: checkpoint.enabledSections
+        )
+    }
+
     /// Clears all checkpoints
     func clear() {
         history.removeAll()

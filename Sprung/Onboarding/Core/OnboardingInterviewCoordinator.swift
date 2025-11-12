@@ -648,6 +648,8 @@ final class OnboardingInterviewCoordinator {
         case .chatboxUserMessageAdded:
             // User message added to transcript by ChatboxHandler - sync immediately
             messages = await state.messages
+            // Save checkpoint after user message
+            checkpointManager.scheduleCheckpoint()
 
         case .streamingMessageBegan(_, _, _, let statusMessage):
             // Sync messages and update status
@@ -668,6 +670,8 @@ final class OnboardingInterviewCoordinator {
             messages = await state.messages
             // Clear status message when streaming completes
             self.currentStatusMessage = statusMessage ?? nil
+            // Save checkpoint after assistant message completes
+            checkpointManager.scheduleCheckpoint()
 
         case .llmUserMessageSent:
             // Sync messages from StateCoordinator to trigger UI updates
@@ -702,6 +706,10 @@ final class OnboardingInterviewCoordinator {
     private func initialStateSync() async {
         // Sync caches now maintained by StateCoordinator
         await syncWizardProgressFromState()
+
+        // Sync messages from state (important for resume from checkpoint)
+        messages = await state.messages
+        Logger.info("📥 Initial state sync: loaded \(messages.count) messages", category: .ai)
     }
 
     // MARK: - Interview Lifecycle
@@ -776,6 +784,17 @@ final class OnboardingInterviewCoordinator {
         // Delegate to lifecycle controller
         await lifecycleController.endInterview()
         // StateCoordinator maintains sync cache for isActive
+    }
+
+    /// Restore from a specific checkpoint (used by debug UI)
+    func restoreFromSpecificCheckpoint(_ checkpoint: OnboardingCheckpoint) async {
+        await loadPersistedArtifacts()
+        let didRestore = await checkpointManager.restoreFromSpecificCheckpoint(checkpoint)
+        if didRestore {
+            Logger.info("✅ Restored from specific checkpoint", category: .ai)
+        } else {
+            Logger.warning("⚠️ Failed to restore from specific checkpoint", category: .ai)
+        }
     }
 
     // MARK: - Phase Management
