@@ -70,12 +70,13 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         // Get optional summary message
         let summary = params["summary"].string ?? "Timeline review activated. Cards will appear here as you create them."
 
-        // Build validation prompt - even if timeline is empty, we activate the UI
+        // Build editor prompt - even if timeline is empty, we activate the UI
         // Cards created afterward will appear in this UI in real-time
         let validationPrompt = OnboardingValidationPrompt(
             dataType: "skeleton_timeline",
             payload: timelineJSON,
-            message: summary
+            message: summary,
+            mode: .editor  // Editor mode: allows tools, shows Save button
         )
 
         // Emit UI request to show the validation prompt

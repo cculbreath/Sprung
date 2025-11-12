@@ -222,16 +222,23 @@ struct OnboardingPhaseAdvanceRequest: Identifiable {
 }
 
 struct OnboardingValidationPrompt: Identifiable {
+    enum Mode {
+        case editor      // Editor UI (Save button, no waiting state, tools allowed)
+        case validation  // Validation UI (Approve/Reject buttons, waiting state, tools blocked)
+    }
+
     var id: UUID
     var dataType: String
     var payload: JSON
     var message: String?
+    var mode: Mode
 
-    init(id: UUID = UUID(), dataType: String, payload: JSON, message: String?) {
+    init(id: UUID = UUID(), dataType: String, payload: JSON, message: String?, mode: Mode = .validation) {
         self.id = id
         self.dataType = dataType
         self.payload = payload
         self.message = message
+        self.mode = mode
     }
 }
 
