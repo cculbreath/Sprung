@@ -38,7 +38,7 @@ struct SubmitForValidationTool: InterviewTool {
 
                 RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
 
-                The tool completes immediately after presenting UI. User validation response arrives as a new user message with status: "confirmed", "rejected", or "modified".
+                The tool completes immediately after presenting UI. User validation response arrives as a new user message.
 
                 USAGE: Call at sub-phase boundaries to confirm collected data before persisting. This BLOCKS non-timeline tools until user responds.
 
@@ -46,14 +46,24 @@ struct SubmitForValidationTool: InterviewTool {
                 1. Collect data for a sub-phase (e.g., after user finishes editing timeline cards)
                 2. Call submit_for_validation with validation_type, data, and summary
                 3. Tool returns immediately - validation card is now active (approval UI shown)
-                4. User clicks "Confirm" or "Reject"
-                5. You receive validation response with status and (potentially modified) data
-                6. If confirmed, call persist_data or set_objective_status to mark objective complete
+                4. User reviews and responds in one of three ways:
+                   a) Clicks "Confirm" - Data is finalized, you receive "Validation response: confirmed"
+                   b) Clicks "Reject" - Data is rejected, you receive "Validation response: rejected"
+                   c) Makes edits and clicks "Submit Changes Only" - Validation prompt closes, you receive message explaining changes were made
+                5. If user submits changes during validation, reassess the updated data, ask clarifying questions if needed, then call submit_for_validation again when ready
+                6. If confirmed, mark objective complete
+
+                USER CAN EDIT DURING VALIDATION (skeleton_timeline only):
+                For timeline validation, the user sees timeline cards and can make edits. If they do:
+                - They can click "Submit Changes Only" to save changes and return to chat for your reassessment
+                - OR click "Confirm with Changes" to finalize the timeline with their edits
+                When user submits changes only, you'll receive: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
+                This is NORMAL workflow - acknowledge their changes, discuss if needed, then re-submit for final validation.
 
                 Phase 1 validation_types:
-                - applicant_profile: Contact info validation
-                - skeleton_timeline: Timeline cards final approval (call AFTER user finishes editing in display_timeline_entries_for_review). Data is auto-fetched from current timeline state.
-                - enabled_sections: Resume sections confirmation
+                - applicant_profile: Contact info validation (no editing during validation)
+                - skeleton_timeline: Timeline cards final approval with optional editing. Data is auto-fetched from current timeline state.
+                - enabled_sections: Resume sections confirmation (no editing during validation)
 
                 IMPORTANT FOR TIMELINE: Call display_timeline_entries_for_review FIRST (opens editor), let user edit/save, THEN call submit_for_validation(validation_type="skeleton_timeline", summary="...", data={}) for final approval. The current timeline data will be automatically retrieved.
 

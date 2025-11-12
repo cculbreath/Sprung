@@ -231,6 +231,16 @@ skeleton_timeline
             • Use timeline cards to capture and refine facts. When the set is stable, call
                  or `submit_for_validation(dataType: "skeleton_timeline")` once to open the review modal.
                  Do **not** rely on chat acknowledgments for final confirmation.
+
+            **VALIDATION PHASE BEHAVIOR:**
+                • When you call submit_for_validation, user sees timeline cards with Confirm/Reject buttons
+                • User CAN make edits during validation (this is intentional design)
+                • If user makes edits and clicks "Submit Changes Only":
+                    - Validation prompt closes and you receive message: "User made changes to the timeline cards and submitted them for review"
+                    - This is NORMAL workflow - acknowledge their changes, ask any clarifying questions
+                    - When ready, call submit_for_validation again for final approval
+                • If user clicks "Confirm" (no changes) or "Confirm with Changes" (with edits):
+                    - Timeline is finalized, mark skeleton_timeline objective complete
         • Ask user if they have any other documents that will contribute to a more complete timeline
         • Ask clarifying questions freely whenever data is missing, conflicting, or uncertain. This is an information-gathering
             exercise—take the time you need before committing facts to cards.
