@@ -19,7 +19,7 @@ struct SubmitForValidationTool: InterviewTool {
             ),
             "data": JSONSchema(
                 type: .object,
-                description: "The complete data payload to validate. Schema varies by validation_type."
+                description: "The complete data payload to validate. For skeleton_timeline, this is optional and will be auto-fetched from current timeline state. For other types, provide the complete data object."
             ),
             "summary": JSONSchema(
                 type: .string,
@@ -52,10 +52,10 @@ struct SubmitForValidationTool: InterviewTool {
 
                 Phase 1 validation_types:
                 - applicant_profile: Contact info validation
-                - skeleton_timeline: Timeline cards final approval (call AFTER user finishes editing in display_timeline_entries_for_review)
+                - skeleton_timeline: Timeline cards final approval (call AFTER user finishes editing in display_timeline_entries_for_review). Data is auto-fetched from current timeline state.
                 - enabled_sections: Resume sections confirmation
 
-                IMPORTANT FOR TIMELINE: Call display_timeline_entries_for_review FIRST (opens editor), let user edit/save, THEN call submit_for_validation for final approval.
+                IMPORTANT FOR TIMELINE: Call display_timeline_entries_for_review FIRST (opens editor), let user edit/save, THEN call submit_for_validation(validation_type="skeleton_timeline", summary="...", data={}) for final approval. The current timeline data will be automatically retrieved.
 
                 DO NOT: Re-validate already confirmed data unless new information is introduced. Once meta.validation_state = "user_validated", trust it.
                 """,
@@ -75,7 +75,20 @@ struct SubmitForValidationTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let payload = try ValidationPayload(json: params)
+        var payload = try ValidationPayload(json: params)
+
+        // Auto-fetch current data from coordinator for certain validation types
+        if payload.validationType == "skeleton_timeline" {
+            // Use the coordinator's current skeleton timeline as the data payload
+            let currentTimeline = await MainActor.run {
+                coordinator.skeletonTimelineSync ?? JSON()
+            }
+            payload = ValidationPayload(
+                validationType: payload.validationType,
+                data: currentTimeline,
+                summary: payload.summary
+            )
+        }
 
         // Emit UI request to show the validation prompt
         await coordinator.eventBus.publish(.validationPromptRequested(prompt: payload.toValidationPrompt()))
@@ -107,14 +120,27 @@ private struct ValidationPayload {
 
         self.validationType = type
 
-        guard let data = json["data"].dictionary, !data.isEmpty else {
-            throw ToolError.invalidParameters("data must be a non-empty object")
+        // For skeleton_timeline, data is optional (will be auto-fetched from coordinator)
+        // For other types, data must be provided
+        if type == "skeleton_timeline" {
+            self.data = json["data"]
+        } else {
+            guard let data = json["data"].dictionary, !data.isEmpty else {
+                throw ToolError.invalidParameters("data must be a non-empty object")
+            }
+            self.data = json["data"]
         }
-        self.data = json["data"]
 
         guard let summary = json["summary"].string, !summary.isEmpty else {
             throw ToolError.invalidParameters("summary must be provided")
         }
+        self.summary = summary
+    }
+
+    // Direct initializer for creating payload with explicit values
+    init(validationType: String, data: JSON, summary: String) {
+        self.validationType = validationType
+        self.data = data
         self.summary = summary
     }
 
