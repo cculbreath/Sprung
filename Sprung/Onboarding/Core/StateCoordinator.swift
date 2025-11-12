@@ -941,6 +941,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         await uiState.setActiveState(active)
         // Sync the cache so UI can read it synchronously
         isActiveSync = active
+        Logger.info("🎛️ Interview active state set to: \(active) (chatbox \(active ? "enabled" : "disabled"))", category: .ai)
     }
 
     func publishAllowedToolsNow() async {
