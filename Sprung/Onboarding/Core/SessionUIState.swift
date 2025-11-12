@@ -137,7 +137,9 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Set pending validation prompt
     func setPendingValidation(_ prompt: OnboardingValidationPrompt?) async {
         pendingValidationPrompt = prompt
-        let newWaitingState: WaitingState? = prompt != nil ? .validation : nil
+        // Only set waiting state for validation mode, not editor mode
+        // Editor mode allows tools to continue (e.g., timeline card creation)
+        let newWaitingState: WaitingState? = (prompt != nil && prompt?.mode == .validation) ? .validation : nil
         await setWaitingState(newWaitingState)
     }
 
