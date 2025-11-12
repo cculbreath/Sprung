@@ -157,7 +157,6 @@ actor LLMMessenger: OnboardingEventEmitter {
                     if case .responseCompleted(let completed) = streamEvent {
                         // Update StateCoordinator (single source of truth)
                         await stateCoordinator.updateConversationState(
-                            conversationId: completed.response.id,
                             responseId: completed.response.id
                         )
                         // Store in conversation context for next request
@@ -220,7 +219,6 @@ actor LLMMessenger: OnboardingEventEmitter {
                     if case .responseCompleted(let completed) = streamEvent {
                         // Update StateCoordinator (single source of truth)
                         await stateCoordinator.updateConversationState(
-                            conversationId: completed.response.id,
                             responseId: completed.response.id
                         )
                         // Store in conversation context for next request
@@ -297,7 +295,6 @@ actor LLMMessenger: OnboardingEventEmitter {
                             if case .responseCompleted(let completed) = streamEvent {
                                 // Update StateCoordinator (single source of truth)
                                 await stateCoordinator.updateConversationState(
-                                    conversationId: completed.response.id,
                                     responseId: completed.response.id
                                 )
                                 // Store in conversation context for next request
