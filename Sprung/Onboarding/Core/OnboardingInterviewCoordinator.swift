@@ -517,6 +517,7 @@ final class OnboardingInterviewCoordinator {
              .uploadRequestPresented, .uploadRequestCancelled,
              .validationPromptRequested, .validationPromptCleared,
              .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
+             .toolPaneCardRestored,
              .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered,
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
