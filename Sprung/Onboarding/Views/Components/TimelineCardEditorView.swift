@@ -10,7 +10,8 @@ struct TimelineCardEditorView: View {
     let timeline: JSON
     @Bindable var coordinator: OnboardingInterviewCoordinator
     var mode: Mode = .editor
-    var onValidationSubmit: ((String) -> Void)? = nil  // Callback for validation mode: "confirmed" or "rejected"
+    var onValidationSubmit: ((String) -> Void)? = nil  // Callback for validation mode: "confirmed" or "confirmed_with_changes"
+    var onSubmitChangesOnly: (() -> Void)? = nil  // Callback for "Submit Changes Only" - saves and lets LLM reassess
 
     @State private var drafts: [WorkExperienceDraft] = []
     @State private var baselineCards: [TimelineCard] = []
@@ -169,17 +170,33 @@ struct TimelineCardEditorView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(!hasChanges || isSaving)
                 } else {
-                    // Validation mode: Reject/Confirm
-                    Button("Reject", role: .destructive) {
-                        onValidationSubmit?("rejected")
-                    }
+                    // Validation mode: Buttons change based on whether user made edits
+                    if hasChanges {
+                        // User made changes - different options
+                        Button("Submit Changes Only") {
+                            submitChangesOnly()
+                        }
+                        .buttonStyle(.bordered)
 
-                    Spacer()
+                        Spacer()
 
-                    Button("Confirm") {
-                        onValidationSubmit?("confirmed")
+                        Button("Confirm with Changes") {
+                            onValidationSubmit?("confirmed_with_changes")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    } else {
+                        // No changes - simple confirm/reject
+                        Button("Reject", role: .destructive) {
+                            onValidationSubmit?("rejected")
+                        }
+
+                        Spacer()
+
+                        Button("Confirm") {
+                            onValidationSubmit?("confirmed")
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             }
         }
@@ -236,6 +253,32 @@ struct TimelineCardEditorView: View {
                 baselineCards = updatedCards
                 hasChanges = false
                 isSaving = false
+            }
+        }
+    }
+
+    private func submitChangesOnly() {
+        guard hasChanges, !isSaving else { return }
+        let updatedCards = TimelineCardAdapter.cards(from: drafts)
+        let diff = TimelineDiffBuilder.diff(original: baselineCards, updated: updatedCards)
+        guard diff.isEmpty == false else {
+            hasChanges = false
+            errorMessage = nil
+            return
+        }
+
+        isSaving = true
+        errorMessage = nil
+
+        Task {
+            // Save the changes to coordinator
+            await coordinator.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
+            await MainActor.run {
+                baselineCards = updatedCards
+                hasChanges = false
+                isSaving = false
+                // Notify callback that changes were submitted
+                onSubmitChangesOnly?()
             }
         }
     }

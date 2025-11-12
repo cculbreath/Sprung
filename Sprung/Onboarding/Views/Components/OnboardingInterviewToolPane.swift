@@ -63,6 +63,14 @@ struct OnboardingInterviewToolPane: View {
                                         notes: nil
                                     )
                                 }
+                            } : nil,
+                            onSubmitChangesOnly: validation.mode == .validation ? {
+                                Task {
+                                    // Clear validation prompt and let LLM reassess changes
+                                    await coordinator.clearValidationPromptAndNotifyLLM(
+                                        message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
+                                    )
+                                }
                             } : nil
                         )
                     } else {

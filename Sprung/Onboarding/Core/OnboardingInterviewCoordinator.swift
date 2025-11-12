@@ -1343,6 +1343,21 @@ final class OnboardingInterviewCoordinator {
         Logger.info("✅ Section toggle rejected and user message sent to LLM", category: .ai)
     }
 
+    /// Clear validation prompt and notify LLM (used when user makes changes during validation)
+    func clearValidationPromptAndNotifyLLM(message: String) async {
+        // Clear the validation prompt
+        toolRouter.clearValidationPrompt()
+        await eventBus.publish(.validationPromptCleared)
+
+        // Send user message to LLM
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = message
+
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        Logger.info("✅ Validation prompt cleared and user message sent to LLM", category: .ai)
+    }
+
     // MARK: - Checkpoint Management (Delegated to CheckpointManager)
     // No methods needed here - all delegated to checkpointManager
 
