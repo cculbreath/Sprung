@@ -155,7 +155,12 @@ actor EventCoordinator {
 
     // Event history for debugging
     private var eventHistory: [OnboardingEvent] = []
-    private let maxHistorySize = 1000  // Increased from 100 to capture full timeline events
+    private let maxHistorySize = 10000  // Large enough to capture full sessions without losing important events
+
+    // Streaming consolidation state
+    private var lastStreamingMessageId: UUID?
+    private var consolidatedStreamingUpdates = 0
+    private var consolidatedStreamingChars = 0
 
     // Metrics
     private var metrics = EventMetrics()
@@ -249,11 +254,8 @@ actor EventCoordinator {
         metrics.publishedCount[topic, default: 0] += 1
         metrics.lastPublishTime[topic] = Date()
 
-        // Add to history
-        eventHistory.append(event)
-        if eventHistory.count > maxHistorySize {
-            eventHistory.removeFirst(eventHistory.count - maxHistorySize)
-        }
+        // Add to history with streaming event consolidation
+        addToHistoryWithConsolidation(event)
 
         // Broadcast to ALL subscriber continuations for this topic
         if let continuations = subscriberContinuations[topic] {
@@ -262,6 +264,53 @@ actor EventCoordinator {
             }
         } else {
             Logger.warning("[EventBus] No subscribers for topic: \(topic)", category: .ai)
+        }
+    }
+
+    /// Add event to history with consolidation of streaming delta events
+    private func addToHistoryWithConsolidation(_ event: OnboardingEvent) {
+        // Check if this is a streaming message update
+        if case .streamingMessageUpdated(let id, let delta, let statusMessage) = event {
+            // Same message as previous streaming update?
+            if lastStreamingMessageId == id {
+                // Consolidate: increment counter and accumulate chars
+                consolidatedStreamingUpdates += 1
+                consolidatedStreamingChars += delta.count
+
+                // Replace the last event with updated consolidation
+                if let lastIndex = eventHistory.lastIndex(where: {
+                    if case .streamingMessageUpdated(let lastId, _, _) = $0 {
+                        return lastId == id
+                    }
+                    return false
+                }) {
+                    // Create consolidated event showing total updates and chars
+                    let consolidatedEvent = OnboardingEvent.streamingMessageUpdated(
+                        id: id,
+                        delta: "[\(consolidatedStreamingUpdates) updates, \(consolidatedStreamingChars) chars total]",
+                        statusMessage: statusMessage
+                    )
+                    eventHistory[lastIndex] = consolidatedEvent
+                }
+                return
+            } else {
+                // Different message - flush previous consolidation state and start new
+                lastStreamingMessageId = id
+                consolidatedStreamingUpdates = 1
+                consolidatedStreamingChars = delta.count
+                // Fall through to append this first update
+            }
+        } else {
+            // Not a streaming update - reset consolidation state
+            lastStreamingMessageId = nil
+            consolidatedStreamingUpdates = 0
+            consolidatedStreamingChars = 0
+        }
+
+        // Append event to history
+        eventHistory.append(event)
+        if eventHistory.count > maxHistorySize {
+            eventHistory.removeFirst(eventHistory.count - maxHistorySize)
         }
     }
 
