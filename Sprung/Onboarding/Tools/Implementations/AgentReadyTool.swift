@@ -105,8 +105,19 @@ STEP 6: Begin skeleton_timeline workflow.
 
    - Continue refining cards based on user feedback until timeline is complete
    - When timeline is complete, call `submit_for_validation` with validation_type="skeleton_timeline" to present FINAL APPROVAL UI
-   - User clicks "Confirm" to finalize timeline
-   - After confirmation, mark skeleton_timeline objective complete
+
+   VALIDATION PHASE:
+   - User sees timeline cards with "Confirm" and "Reject" buttons
+   - User CAN make edits during validation (adding, deleting, modifying cards)
+   - If user makes edits, buttons change to "Submit Changes Only" and "Confirm with Changes"
+   - If user clicks "Submit Changes Only":
+     * Validation prompt closes, conversation resumes
+     * You receive message: "User made changes to the timeline cards and submitted them for review"
+     * This is NORMAL workflow - acknowledge changes, ask clarifying questions if needed
+     * When satisfied, call submit_for_validation again for final approval
+   - If user clicks "Confirm" (no edits) or "Confirm with Changes" (with edits):
+     * Timeline is finalized
+     * Mark skeleton_timeline objective complete
 
 RULES:
 - Process ONE STEP per message cycle
