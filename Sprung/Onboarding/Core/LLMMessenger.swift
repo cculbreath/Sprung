@@ -140,30 +140,64 @@ actor LLMMessenger: OnboardingEventEmitter {
             // Emit message sent event
             await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
 
-            // Process stream via NetworkRouter
+            // Process stream via NetworkRouter with retry logic
             currentStreamTask = Task {
-                Logger.info("🔍 About to call service.responseCreateStream, service type: \(type(of: service))", category: .ai)
+                var retryCount = 0
+                let maxRetries = 3
+                var lastError: Error?
 
-                // Debug: Log request details
-                Logger.debug("📋 Request model: \(request.model)", category: .ai)
-                Logger.debug("📋 Request has previousResponseId: \(request.previousResponseId != nil)", category: .ai)
-                Logger.debug("📋 Request store: \(String(describing: request.store))", category: .ai)
+                while retryCount <= maxRetries {
+                    do {
+                        Logger.info("🔍 About to call service.responseCreateStream, service type: \(type(of: service))", category: .ai)
 
-                let stream = try await service.responseCreateStream(request)
-                for try await streamEvent in stream {
-                    await networkRouter.handleResponseEvent(streamEvent)
+                        // Debug: Log request details
+                        Logger.debug("📋 Request model: \(request.model)", category: .ai)
+                        Logger.debug("📋 Request has previousResponseId: \(request.previousResponseId != nil)", category: .ai)
+                        Logger.debug("📋 Request store: \(String(describing: request.store))", category: .ai)
 
-                    // Track conversation state
-                    if case .responseCompleted(let completed) = streamEvent {
-                        // Update StateCoordinator (single source of truth)
-                        await stateCoordinator.updateConversationState(
-                            responseId: completed.response.id
-                        )
-                        // Store in conversation context for next request
-                        await contextAssembler.storePreviousResponseId(completed.response.id)
+                        let stream = try await service.responseCreateStream(request)
+                        for try await streamEvent in stream {
+                            await networkRouter.handleResponseEvent(streamEvent)
+
+                            // Track conversation state
+                            if case .responseCompleted(let completed) = streamEvent {
+                                // Update StateCoordinator (single source of truth)
+                                await stateCoordinator.updateConversationState(
+                                    responseId: completed.response.id
+                                )
+                                // Store in conversation context for next request
+                                await contextAssembler.storePreviousResponseId(completed.response.id)
+                            }
+                        }
+                        await emit(.llmStatus(status: .idle))
+                        return // Success - exit retry loop
+                    } catch {
+                        lastError = error
+
+                        // Check if this is a retriable error
+                        let isRetriableError = isRetriable(error)
+
+                        if isRetriableError && retryCount < maxRetries {
+                            retryCount += 1
+                            let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
+                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        } else {
+                            // Non-retriable error or max retries reached
+                            Logger.error("❌ User message stream failed: \(error)", category: .ai)
+                            if let apiError = error as? APIError {
+                                Logger.error("❌ API Error details: \(apiError)", category: .ai)
+                            }
+                            throw error
+                        }
                     }
                 }
-                await emit(.llmStatus(status: .idle))
+
+                // If we get here, we've exhausted all retries
+                if let error = lastError {
+                    Logger.error("❌ User message failed after \(maxRetries) retries: \(error)", category: .ai)
+                    throw error
+                }
             }
 
             try await currentStreamTask?.value
@@ -209,23 +243,57 @@ actor LLMMessenger: OnboardingEventEmitter {
             // Emit message sent event
             await emit(.llmDeveloperMessageSent(messageId: messageId, payload: payload))
 
-            // Process stream via NetworkRouter
+            // Process stream via NetworkRouter with retry logic
             currentStreamTask = Task {
-                let stream = try await service.responseCreateStream(request)
-                for try await streamEvent in stream {
-                    await networkRouter.handleResponseEvent(streamEvent)
+                var retryCount = 0
+                let maxRetries = 3
+                var lastError: Error?
 
-                    // Track conversation state
-                    if case .responseCompleted(let completed) = streamEvent {
-                        // Update StateCoordinator (single source of truth)
-                        await stateCoordinator.updateConversationState(
-                            responseId: completed.response.id
-                        )
-                        // Store in conversation context for next request
-                        await contextAssembler.storePreviousResponseId(completed.response.id)
+                while retryCount <= maxRetries {
+                    do {
+                        let stream = try await service.responseCreateStream(request)
+                        for try await streamEvent in stream {
+                            await networkRouter.handleResponseEvent(streamEvent)
+
+                            // Track conversation state
+                            if case .responseCompleted(let completed) = streamEvent {
+                                // Update StateCoordinator (single source of truth)
+                                await stateCoordinator.updateConversationState(
+                                    responseId: completed.response.id
+                                )
+                                // Store in conversation context for next request
+                                await contextAssembler.storePreviousResponseId(completed.response.id)
+                            }
+                        }
+                        await emit(.llmStatus(status: .idle))
+                        return // Success - exit retry loop
+                    } catch {
+                        lastError = error
+
+                        // Check if this is a retriable error
+                        let isRetriableError = isRetriable(error)
+
+                        if isRetriableError && retryCount < maxRetries {
+                            retryCount += 1
+                            let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
+                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        } else {
+                            // Non-retriable error or max retries reached
+                            Logger.error("❌ Developer message stream failed: \(error)", category: .ai)
+                            if let apiError = error as? APIError {
+                                Logger.error("❌ API Error details: \(apiError)", category: .ai)
+                            }
+                            throw error
+                        }
                     }
                 }
-                await emit(.llmStatus(status: .idle))
+
+                // If we get here, we've exhausted all retries
+                if let error = lastError {
+                    Logger.error("❌ Developer message failed after \(maxRetries) retries: \(error)", category: .ai)
+                    throw error
+                }
             }
 
             try await currentStreamTask?.value
@@ -306,24 +374,13 @@ actor LLMMessenger: OnboardingEventEmitter {
                     } catch {
                         lastError = error
 
-                        // Check if this is a retriable server error
-                        var isRetriableError = false
-                        if let apiError = error as? APIError {
-                            switch apiError {
-                            case .responseUnsuccessful(_, let statusCode, _):
-                                // Retry on 503 (Service Unavailable), 502 (Bad Gateway), 504 (Gateway Timeout)
-                                if statusCode == 503 || statusCode == 502 || statusCode == 504 {
-                                    isRetriableError = true
-                                }
-                            default:
-                                break
-                            }
-                        }
+                        // Check if this is a retriable error
+                        let isRetriableError = isRetriable(error)
 
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
-                            Logger.warning("⚠️ Server error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
                             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         } else {
                             // Non-retriable error or max retries reached
@@ -584,6 +641,46 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Error Handling
+
+    /// Determine if an error is retriable (transient failure vs permanent error)
+    private func isRetriable(_ error: Error) -> Bool {
+        // Check for APIError from SwiftOpenAI
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .responseUnsuccessful(_, let statusCode, _):
+                // Retry on server errors (5xx) and specific client errors
+                // 503 Service Unavailable, 502 Bad Gateway, 504 Gateway Timeout
+                return statusCode == 503 || statusCode == 502 || statusCode == 504 || statusCode >= 500
+            case .jsonDecodingFailure, .bothDecodingStrategiesFailed:
+                // Retry on decoding errors - these often indicate malformed API responses
+                // which can be transient (e.g., partial/corrupted streaming chunks)
+                return true
+            case .timeOutError:
+                // Retry on timeout errors
+                return true
+            case .requestFailed, .invalidData, .dataCouldNotBeReadMissingData:
+                // Don't retry on permanent errors
+                return false
+            }
+        }
+
+        // Check for network-related errors in the error description
+        let errorDescription = error.localizedDescription.lowercased()
+        if errorDescription.contains("network") ||
+           errorDescription.contains("connection") ||
+           errorDescription.contains("timeout") ||
+           errorDescription.contains("lost connection") {
+            return true
+        }
+
+        // Don't retry on CancellationError
+        if error is CancellationError {
+            return false
+        }
+
+        // Default to non-retriable for unknown errors
+        return false
+    }
 
     /// Surface bootstrap and API errors as visible assistant messages
     private func surfaceErrorToUI(error: Error) async {
