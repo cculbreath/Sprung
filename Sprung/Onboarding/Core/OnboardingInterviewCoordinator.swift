@@ -1254,7 +1254,18 @@ final class OnboardingInterviewCoordinator {
 
         var userMessage = JSON()
         userMessage["role"].string = "user"
-        let statusDescription = status.lowercased() == "approved" ? "approved" : (status.lowercased() == "modified" ? "modified" : "rejected")
+
+        // Map status values from UI buttons to LLM messages
+        let statusDescription: String
+        switch status.lowercased() {
+        case "confirmed", "confirmed_with_changes", "approved", "modified":
+            statusDescription = "confirmed"
+        case "rejected":
+            statusDescription = "rejected"
+        default:
+            statusDescription = status.lowercased()
+        }
+
         userMessage["content"].string = "Validation response: \(statusDescription)"
         if let notes = notes, !notes.isEmpty {
             userMessage["content"].string = userMessage["content"].stringValue + ". Notes: \(notes)"
