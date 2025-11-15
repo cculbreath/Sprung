@@ -26,13 +26,13 @@ struct ModelProvider {
         switch type {
         case .orchestrator:
             return Config(
-                id: "gpt-5",
+                id: "gpt-5.1",
                 defaultVerbosity: "medium",
                 defaultReasoningEffort: userReasoningEffort(defaultValue: "medium")
             )
         case .knowledgeCard:
             return Config(
-                id: "gpt-5",
+                id: "gpt-5.1",
                 defaultVerbosity: "medium",
                 defaultReasoningEffort: nil
             )

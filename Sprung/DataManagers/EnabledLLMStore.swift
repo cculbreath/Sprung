@@ -25,6 +25,7 @@ class EnabledLLMStore: SwiftDataStore {
         ("google/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", "Google"),
         ("google/gemini-2.5-pro", "Gemini 2.5 Pro", "Google"),
         ("openai/gpt-4.1", "GPT-4.1", "OpenAI"),
+        ("openai/gpt-5.1", "GPT-5.1", "OpenAI"),
         ("openai/gpt-5", "GPT-5", "OpenAI"),
         ("openai/gpt-5-chat", "GPT-5 Chat", "OpenAI"),
         ("openai/gpt-5-pro", "GPT-5 Pro", "OpenAI"),

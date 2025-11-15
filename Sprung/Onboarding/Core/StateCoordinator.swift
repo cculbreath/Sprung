@@ -95,7 +95,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     private var allowedToolNames: Set<String> = []
     private var lastResponseId: String?
-    private var currentModelId: String = "gpt-5"
+    private var currentModelId: String = "gpt-5.1"
     private var currentToolPaneCard: OnboardingToolPaneCard = .none
 
     // MARK: - Initialization
