@@ -6,7 +6,7 @@ import SwiftData
 struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
-    @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "openai/gpt-5"
+    @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "openai/gpt-5.1"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
@@ -23,7 +23,7 @@ struct SettingsView: View {
     @State private var resetError: String?
     @State private var isResetting = false
     private let dataResetService = DataResetService()
-    private let onboardingDefaultModelFallback = "openai/gpt-5"
+    private let onboardingDefaultModelFallback = "openai/gpt-5.1"
     private let pdfExtractionFallbackModelId = "google/gemini-2.0-flash-001"
 
     private let reasoningOptions: [(value: String, label: String, detail: String)] = [
@@ -238,7 +238,7 @@ private extension SettingsView {
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if onboardingInterviewModels.isEmpty {
-                Label("Enable GPT-5 in Options… to use the onboarding interview.", systemImage: "exclamationmark.triangle.fill")
+                Label("Enable GPT-5.1 in Options… to use the onboarding interview.", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.callout)
             } else {
@@ -267,7 +267,7 @@ private extension SettingsView {
                 .pickerStyle(.menu)
                 .disabled(onboardingInterviewModels.count == 1)
 
-                Text("Currently, only GPT-5 is supported for onboarding interviews.")
+                Text("Currently, only GPT-5.1 is supported for onboarding interviews.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
@@ -305,9 +305,9 @@ private extension SettingsView {
     }
 
     var onboardingInterviewModels: [EnabledLLM] {
-        // For now, only GPT-5 is supported for onboarding interviews
+        // For now, only GPT-5.1 is supported for onboarding interviews
         enabledLLMStore.enabledModels
-            .filter { $0.modelId == "openai/gpt-5" }
+            .filter { $0.modelId == "openai/gpt-5.1" }
     }
 
     var openAIModels: [EnabledLLM] {

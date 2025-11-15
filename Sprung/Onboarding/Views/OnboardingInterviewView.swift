@@ -3,25 +3,23 @@ import SwiftUI
 
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
-    @Environment(ToolHandler.self) private var toolRouter
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(DebugSettingsStore.self) private var debugSettings
-    private let onboardingFallbackModelId = "openai/gpt-5"
+    private let onboardingFallbackModelId = "openai/gpt-5.1"
 
     @State private var viewModel = OnboardingInterviewViewModel(
-        fallbackModelId: "openai/gpt-5"
+        fallbackModelId: "openai/gpt-5.1"
     )
 
     @State private var showResumeOptions = false
     @State private var pendingStartModelId: String?
-    @State private var loggedToolStatuses: [String: String] = [:]
 
     #if DEBUG
     @State private var showEventDump = false
     #endif
 
-    @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5"
+    @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5.1"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
 
@@ -33,7 +31,6 @@ struct OnboardingInterviewView: View {
 
     private var bodyContent: some View {
         @Bindable var coordinator = interviewCoordinator
-        @Bindable var router = toolRouter
         @Bindable var uiState = viewModel
 
         // --- Card visual constants ---
@@ -53,7 +50,6 @@ struct OnboardingInterviewView: View {
             VStack(spacing: 8) {
                 mainCard(
                     coordinator: coordinator,
-                    router: router,
                     state: uiState
                 )
                 .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardTracker.currentStep)
@@ -206,16 +202,6 @@ struct OnboardingInterviewView: View {
             }
 
         return withSheets
-            .onAppear {
-                let initialStatuses = router.statusSnapshot.rawValueMap
-                loggedToolStatuses = initialStatuses
-                Logger.info("📊 Tool status update", category: .ai, metadata: initialStatuses)
-            }
-            .onChange(of: router.statusSnapshot.rawValueMap) { _, newValue in
-                guard newValue != loggedToolStatuses else { return }
-                Logger.info("📊 Tool status update", category: .ai, metadata: newValue)
-                loggedToolStatuses = newValue
-            }
             #if DEBUG
             .overlay(alignment: .bottomTrailing) {
                 if debugSettings.showOnboardingDebugButton {
@@ -309,7 +295,6 @@ private struct ResumeInterviewPromptView: View {
 private extension OnboardingInterviewView {
     func mainCard(
         coordinator: OnboardingInterviewCoordinator,
-        router: ToolHandler,
         state: OnboardingInterviewViewModel
     ) -> some View {
         Group {
@@ -323,7 +308,6 @@ private extension OnboardingInterviewView {
             } else {
                 OnboardingInterviewInteractiveCard(
                     coordinator: coordinator,
-                    router: router,
                     state: state,
                     modelStatusDescription: modelStatusDescription(coordinator: coordinator),
                     onOpenSettings: openSettings
